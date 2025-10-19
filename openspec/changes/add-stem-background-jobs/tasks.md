@@ -14,9 +14,9 @@
 - [x] 3.3 Expose middleware hooks, idempotency helpers, and rate limiter interfaces
 
 ## 4. Scheduler (Beat)
-- [ ] 4.1 Implement schedule store (Redis ZSET) with lock and jitter support
-- [ ] 4.2 Add cron/interval parser and dynamic reload of schedule entries
-- [ ] 4.3 Provide CLI commands for schedule CRUD and dry-run verification
+- [x] 4.1 Implement schedule store (Redis ZSET) with lock and jitter support
+- [x] 4.2 Add cron/interval parser and dynamic reload of schedule entries
+- [x] 4.3 Provide CLI commands for schedule CRUD and dry-run verification
 
 ## 5. Canvas & Observability
 - [ ] 5.1 Implement chain, group, and chord primitives leveraging result backend

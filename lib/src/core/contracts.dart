@@ -185,6 +185,60 @@ class ScheduleEntry {
 
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
+
+  ScheduleEntry copyWith({
+    String? id,
+    String? taskName,
+    String? queue,
+    String? spec,
+    Map<String, Object?>? args,
+    bool? enabled,
+    Duration? jitter,
+    DateTime? lastRunAt,
+    Map<String, Object?>? meta,
+  }) {
+    return ScheduleEntry(
+      id: id ?? this.id,
+      taskName: taskName ?? this.taskName,
+      queue: queue ?? this.queue,
+      spec: spec ?? this.spec,
+      args: args ?? this.args,
+      enabled: enabled ?? this.enabled,
+      jitter: jitter ?? this.jitter,
+      lastRunAt: lastRunAt ?? this.lastRunAt,
+      meta: meta ?? this.meta,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'taskName': taskName,
+    'queue': queue,
+    'spec': spec,
+    'args': args,
+    'enabled': enabled,
+    'jitterMs': jitter?.inMilliseconds,
+    'lastRunAt': lastRunAt?.toIso8601String(),
+    'meta': meta,
+  };
+
+  factory ScheduleEntry.fromJson(Map<String, Object?> json) {
+    return ScheduleEntry(
+      id: json['id'] as String,
+      taskName: json['taskName'] as String,
+      queue: json['queue'] as String,
+      spec: json['spec'] as String,
+      args: (json['args'] as Map?)?.cast<String, Object?>() ?? const {},
+      enabled: json['enabled'] as bool? ?? true,
+      jitter: json['jitterMs'] != null
+          ? Duration(milliseconds: (json['jitterMs'] as num).toInt())
+          : null,
+      lastRunAt: json['lastRunAt'] != null
+          ? DateTime.parse(json['lastRunAt'] as String)
+          : null,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+    );
+  }
 }
 
 /// Storage abstraction used by the scheduler to fetch due entries.

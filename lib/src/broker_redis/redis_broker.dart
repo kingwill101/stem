@@ -350,8 +350,8 @@ class _PendingEntry {
   _PendingEntry({
     required this.delivery,
     required this.consumer,
-    required DateTime? leaseExpiresAt,
-  }) : leaseExpiresAt = leaseExpiresAt;
+    required this.leaseExpiresAt,
+  });
 
   final Delivery delivery;
   final String consumer;
