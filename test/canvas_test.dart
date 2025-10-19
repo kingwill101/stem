@@ -4,7 +4,6 @@ import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
 import 'package:untitled6/src/backend_redis/redis_backend.dart';
 import 'package:untitled6/src/broker_redis/redis_broker.dart';
-import 'package:untitled6/src/canvas/canvas.dart';
 
 void main() {
   group('Canvas', () {

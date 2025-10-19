@@ -103,9 +103,7 @@ class Envelope {
     'priority': priority,
     'attempt': attempt,
     'maxRetries': maxRetries,
-    'visibilityTimeout': visibilityTimeout != null
-        ? visibilityTimeout!.inMilliseconds
-        : null,
+    'visibilityTimeout': visibilityTimeout?.inMilliseconds,
     'queue': queue,
     'meta': meta,
   };

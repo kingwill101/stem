@@ -1,8 +1,7 @@
-/// Stem public library entry point.
-///
-/// Exposes core contracts and client helpers for orchestrating background
-/// work. Workers, brokers, and adapters live in their respective packages.
-library stem;
+// Stem public library entry point.
+//
+// Exposes core contracts and client helpers for orchestrating background
+// work. Workers, brokers, and adapters live in their respective packages.
 
 export 'src/core/config.dart';
 export 'src/core/contracts.dart';

@@ -14,7 +14,6 @@ void main() {
       final broker = RedisStreamsBroker();
       final backend = RedisResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
-      final stem = Stem(broker: broker, registry: registry, backend: backend);
       final store = RedisScheduleStore();
       final beat = Beat(
         store: store,

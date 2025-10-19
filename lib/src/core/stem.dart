@@ -7,10 +7,9 @@ class Stem {
   Stem({
     required this.broker,
     required this.registry,
-    ResultBackend? backend,
+    this.backend,
     RetryStrategy? retryStrategy,
-  }) : backend = backend,
-       retryStrategy =
+  }) : retryStrategy =
            retryStrategy ??
            ExponentialJitterRetryStrategy(base: const Duration(seconds: 2));
 

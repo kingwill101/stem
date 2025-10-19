@@ -1,5 +1,3 @@
-import 'dart:collection';
-
 import '../core/contracts.dart';
 import 'schedule_calculator.dart';
 

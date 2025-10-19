@@ -1,7 +1,15 @@
-version: '3.8'
+version: "3.8"
 
 services:
   redis:
+    networks:
+      - default
     image: redis:latest
     ports:
       - "6379:6379"
+
+networks:
+  default:
+    driver: slirp4netns
+    driver_opts:
+      allow_host_loopback: "true"

@@ -25,7 +25,8 @@ Future<int> runStemCli(
 
   scheduleParser.addCommand('list');
 
-  final addCommand = scheduleParser.addCommand('add')
+  final addParser = scheduleParser.addCommand('add');
+  addParser
     ..addOption('id', help: 'Unique identifier', valueHelp: 'id')
     ..addOption('task', help: 'Task name', valueHelp: 'task-name')
     ..addOption('queue', help: 'Queue name', defaultsTo: 'default')
@@ -41,10 +42,11 @@ Future<int> runStemCli(
     )
     ..addOption('jitter', help: 'Jitter duration (e.g. 500ms, 5s)');
 
-  final removeCommand = scheduleParser.addCommand('remove')
-    ..addOption('id', help: 'Schedule identifier', valueHelp: 'id');
+  final removeParser = scheduleParser.addCommand('remove');
+  removeParser.addOption('id', help: 'Schedule identifier', valueHelp: 'id');
 
-  final dryRunCommand = scheduleParser.addCommand('dry-run')
+  final dryRunParser = scheduleParser.addCommand('dry-run');
+  dryRunParser
     ..addOption('spec', help: 'Schedule spec', valueHelp: 'spec')
     ..addOption('count', help: 'Number of occurrences', defaultsTo: '5')
     ..addOption('from', help: 'Start timestamp ISO8601', valueHelp: 'time');
@@ -52,14 +54,22 @@ Future<int> runStemCli(
   parser.addCommand('schedule', scheduleParser);
 
   observeParser.addCommand('metrics');
-  observeParser.addCommand('queues')
-    ..addOption('file', abbr: 'f', help: 'Path to queue snapshot JSON');
-  observeParser.addCommand('workers')
-    ..addOption('file', abbr: 'f', help: 'Path to worker snapshot JSON');
-  observeParser.addCommand('dlq')
-    ..addOption('file', abbr: 'f', help: 'Path to DLQ snapshot JSON');
-  observeParser.addCommand('schedules')
-    ..addOption('file', abbr: 'f', help: 'Path to schedules file');
+  final queuesParser = observeParser.addCommand('queues');
+  queuesParser.addOption(
+    'file',
+    abbr: 'f',
+    help: 'Path to queue snapshot JSON',
+  );
+  final workersParser = observeParser.addCommand('workers');
+  workersParser.addOption(
+    'file',
+    abbr: 'f',
+    help: 'Path to worker snapshot JSON',
+  );
+  final dlqParser = observeParser.addCommand('dlq');
+  dlqParser.addOption('file', abbr: 'f', help: 'Path to DLQ snapshot JSON');
+  final schedulesParser = observeParser.addCommand('schedules');
+  schedulesParser.addOption('file', abbr: 'f', help: 'Path to schedules file');
 
   parser.addCommand('observe', observeParser);
 
