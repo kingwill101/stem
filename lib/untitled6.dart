@@ -9,4 +9,5 @@ export 'src/core/contracts.dart';
 export 'src/core/envelope.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';
+export 'src/canvas/canvas.dart';
 export 'src/worker/worker.dart';

@@ -19,7 +19,7 @@
 - [x] 4.3 Provide CLI commands for schedule CRUD and dry-run verification
 
 ## 5. Canvas & Observability
-- [ ] 5.1 Implement chain, group, and chord primitives leveraging result backend
+- [x] 5.1 Implement chain, group, and chord primitives leveraging result backend
 - [ ] 5.2 Emit structured logs, metrics, and traces (OpenTelemetry integration)
 - [ ] 5.3 Deliver minimal dashboard or CLI views for queues, workers, DLQ, and schedules
 

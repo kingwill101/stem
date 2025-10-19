@@ -135,6 +135,8 @@ class Worker {
       }
     }
 
+    final groupId = envelope.headers['stem-group-id'];
+
     await backend.set(
       envelope.id,
       TaskState.running,
@@ -174,17 +176,31 @@ class Worker {
       _cancelLeaseTimer(delivery.receipt);
       _heartbeatTimers.remove(envelope.id)?.cancel();
 
+      final successMeta = {
+        ...envelope.meta,
+        'queue': envelope.queue,
+        'worker': consumerName,
+        'completedAt': DateTime.now().toIso8601String(),
+      };
+      final successStatus = TaskStatus(
+        id: envelope.id,
+        state: TaskState.succeeded,
+        payload: result,
+        error: null,
+        attempt: envelope.attempt,
+        meta: successMeta,
+      );
       await broker.ack(delivery);
       await backend.set(
         envelope.id,
         TaskState.succeeded,
         payload: result,
         attempt: envelope.attempt,
-        meta: {
-          ...envelope.meta,
-          'completedAt': DateTime.now().toIso8601String(),
-        },
+        meta: successMeta,
       );
+      if (groupId != null) {
+        await backend.addGroupResult(groupId, successStatus);
+      }
       _events.add(
         WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
       );
@@ -192,7 +208,7 @@ class Worker {
       await _notifyErrorMiddleware(context, error, stack);
       _cancelLeaseTimer(delivery.receipt);
       _heartbeatTimers.remove(envelope.id)?.cancel();
-      await _handleFailure(handler, delivery, envelope, error, stack);
+      await _handleFailure(handler, delivery, envelope, error, stack, groupId);
     } finally {
       heartbeatTimer?.cancel();
       softTimer?.cancel();
@@ -313,6 +329,7 @@ class Worker {
     Envelope envelope,
     Object error,
     StackTrace stack,
+    String? groupId,
   ) async {
     final canRetry = envelope.attempt < handler.options.maxRetries;
     if (canRetry) {
@@ -346,6 +363,25 @@ class Worker {
         ),
       );
     } else {
+      final failureMeta = {
+        ...envelope.meta,
+        'queue': envelope.queue,
+        'worker': consumerName,
+        'failedAt': DateTime.now().toIso8601String(),
+      };
+      final failureStatus = TaskStatus(
+        id: envelope.id,
+        state: TaskState.failed,
+        payload: null,
+        error: TaskError(
+          type: error.runtimeType.toString(),
+          message: error.toString(),
+          stack: stack.toString(),
+          retryable: false,
+        ),
+        attempt: envelope.attempt,
+        meta: failureMeta,
+      );
       await broker.deadLetter(
         delivery,
         reason: 'max-retries-exhausted',
@@ -355,13 +391,12 @@ class Worker {
         envelope.id,
         TaskState.failed,
         attempt: envelope.attempt,
-        error: TaskError(
-          type: error.runtimeType.toString(),
-          message: error.toString(),
-          stack: stack.toString(),
-          retryable: false,
-        ),
+        error: failureStatus.error,
+        meta: failureMeta,
       );
+      if (groupId != null) {
+        await backend.addGroupResult(groupId, failureStatus);
+      }
       _events.add(
         WorkerEvent(
           type: WorkerEventType.failed,
