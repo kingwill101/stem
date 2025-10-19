@@ -1,8 +1,12 @@
 import 'dart:io';
 
+import 'dart:convert';
+
 import 'package:args/args.dart';
 
 import '../core/contracts.dart';
+import '../observability/metrics.dart';
+import '../observability/snapshots.dart';
 import '../scheduler/schedule_calculator.dart';
 import 'file_schedule_repository.dart';
 
@@ -17,6 +21,7 @@ Future<int> runStemCli(
 
   final parser = ArgParser();
   final scheduleParser = ArgParser();
+  final observeParser = ArgParser();
 
   scheduleParser.addCommand('list');
 
@@ -46,6 +51,18 @@ Future<int> runStemCli(
 
   parser.addCommand('schedule', scheduleParser);
 
+  observeParser.addCommand('metrics');
+  observeParser.addCommand('queues')
+    ..addOption('file', abbr: 'f', help: 'Path to queue snapshot JSON');
+  observeParser.addCommand('workers')
+    ..addOption('file', abbr: 'f', help: 'Path to worker snapshot JSON');
+  observeParser.addCommand('dlq')
+    ..addOption('file', abbr: 'f', help: 'Path to DLQ snapshot JSON');
+  observeParser.addCommand('schedules')
+    ..addOption('file', abbr: 'f', help: 'Path to schedules file');
+
+  parser.addCommand('observe', observeParser);
+
   ArgResults results;
   try {
     results = parser.parse(arguments);
@@ -61,38 +78,65 @@ Future<int> runStemCli(
     return 64;
   }
 
-  if (command.name != 'schedule') {
-    stderrSink.writeln('Unknown command: ${command.name}');
-    stderrSink.writeln(_usage(parser));
-    return 64;
-  }
-
-  final sub = command.command;
-  if (sub == null) {
-    stdoutSink.writeln(_scheduleUsage(scheduleParser));
-    return 64;
-  }
-
-  final repo = FileScheduleRepository(path: scheduleFilePath);
-  switch (sub.name) {
-    case 'list':
-      return _listSchedules(repo, stdoutSink);
-    case 'add':
-      return _addSchedule(repo, sub, stdoutSink, stderrSink);
-    case 'remove':
-      return _removeSchedule(repo, sub, stdoutSink, stderrSink);
-    case 'dry-run':
-      return _dryRun(sub, stdoutSink, stderrSink);
-    default:
-      stderrSink.writeln('Unknown schedule subcommand: ${sub.name}');
+  if (command.name == 'schedule') {
+    final sub = command.command;
+    if (sub == null) {
       stdoutSink.writeln(_scheduleUsage(scheduleParser));
       return 64;
+    }
+
+    final repo = FileScheduleRepository(path: scheduleFilePath);
+    switch (sub.name) {
+      case 'list':
+        return _listSchedules(repo, stdoutSink);
+      case 'add':
+        return _addSchedule(repo, sub, stdoutSink, stderrSink);
+      case 'remove':
+        return _removeSchedule(repo, sub, stdoutSink, stderrSink);
+      case 'dry-run':
+        return _dryRun(sub, stdoutSink, stderrSink);
+      default:
+        stderrSink.writeln('Unknown schedule subcommand: ${sub.name}');
+        stdoutSink.writeln(_scheduleUsage(scheduleParser));
+        return 64;
+    }
   }
+
+  if (command.name == 'observe') {
+    final sub = command.command;
+    if (sub == null) {
+      stdoutSink.writeln(_observeUsage(observeParser));
+      return 64;
+    }
+
+    switch (sub.name) {
+      case 'metrics':
+        return _observeMetrics(stdoutSink);
+      case 'queues':
+        return _observeQueues(sub, stdoutSink, stderrSink);
+      case 'workers':
+        return _observeWorkers(sub, stdoutSink, stderrSink);
+      case 'dlq':
+        return _observeDlq(sub, stdoutSink, stderrSink);
+      case 'schedules':
+        return _observeSchedules(sub, stdoutSink, stderrSink, scheduleFilePath);
+      default:
+        stderrSink.writeln('Unknown observe subcommand: ${sub.name}');
+        stdoutSink.writeln(_observeUsage(observeParser));
+        return 64;
+    }
+  }
+
+  stderrSink.writeln('Unknown command: ${command.name}');
+  stderrSink.writeln(_usage(parser));
+  return 64;
 }
 
 String _usage(ArgParser parser) => 'Usage: stem <command>\n${parser.usage}';
 String _scheduleUsage(ArgParser parser) =>
     'Usage: stem schedule <subcommand>\n${parser.usage}';
+String _observeUsage(ArgParser parser) =>
+    'Usage: stem observe <subcommand>\n${parser.usage}';
 
 Future<int> _listSchedules(FileScheduleRepository repo, StringSink out) async {
   final entries = await repo.load();
@@ -241,4 +285,116 @@ Duration? _parseOptionalDuration(String? value) {
       return Duration(hours: number);
   }
   return null;
+}
+
+Future<int> _observeMetrics(StringSink out) async {
+  final snapshot = StemMetrics.instance.snapshot();
+  out.writeln(jsonEncode(snapshot));
+  return 0;
+}
+
+Future<int> _observeQueues(
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+) async {
+  final path = args['file'] as String?;
+  if (path == null) {
+    err.writeln('Missing --file pointing to queue snapshot JSON.');
+    return 64;
+  }
+  final report = ObservabilityReport.fromFile(path);
+  if (report.queues.isEmpty) {
+    out.writeln('No queue data.');
+    return 0;
+  }
+  out.writeln('Queue     | Pending | Inflight');
+  out.writeln('----------+---------+---------');
+  for (final queue in report.queues) {
+    out.writeln(
+      '${queue.queue.padRight(10)}| '
+      '${queue.pending.toString().padLeft(7)} | '
+      '${queue.inflight.toString().padLeft(7)}',
+    );
+  }
+  return 0;
+}
+
+Future<int> _observeWorkers(
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+) async {
+  final path = args['file'] as String?;
+  if (path == null) {
+    err.writeln('Missing --file pointing to worker snapshot JSON.');
+    return 64;
+  }
+  final report = ObservabilityReport.fromFile(path);
+  if (report.workers.isEmpty) {
+    out.writeln('No worker data.');
+    return 0;
+  }
+  out.writeln('Worker        | Active | Last Heartbeat');
+  out.writeln('--------------+--------+----------------');
+  for (final worker in report.workers) {
+    out.writeln(
+      '${worker.id.padRight(14)}| '
+      '${worker.active.toString().padLeft(6)} | '
+      '${worker.lastHeartbeat.toIso8601String()}',
+    );
+  }
+  return 0;
+}
+
+Future<int> _observeDlq(ArgResults args, StringSink out, StringSink err) async {
+  final path = args['file'] as String?;
+  if (path == null) {
+    err.writeln('Missing --file pointing to DLQ snapshot JSON.');
+    return 64;
+  }
+  final report = ObservabilityReport.fromFile(path);
+  if (report.dlq.isEmpty) {
+    out.writeln('Dead letter queue is empty.');
+    return 0;
+  }
+  out.writeln('Queue     | Task ID                        | Reason');
+  out.writeln('----------+--------------------------------+----------------');
+  for (final entry in report.dlq) {
+    out.writeln(
+      '${entry.queue.padRight(10)}| '
+      '${entry.taskId.padRight(32)}| '
+      '${entry.reason}',
+    );
+  }
+  return 0;
+}
+
+Future<int> _observeSchedules(
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+  String? defaultFile,
+) async {
+  final repoPath = args['file'] as String? ?? defaultFile;
+  final repo = FileScheduleRepository(path: repoPath);
+  final entries = await repo.load();
+  if (entries.isEmpty) {
+    out.writeln('No schedules found.');
+    return 0;
+  }
+  final calculator = ScheduleCalculator();
+  out.writeln('ID        | Task           | Next Run           | Queue');
+  out.writeln('----------+----------------+--------------------+----------');
+  final now = DateTime.now();
+  for (final entry in entries) {
+    final next = calculator.nextRun(entry, entry.lastRunAt ?? now);
+    out.writeln(
+      '${entry.id.padRight(10)}| '
+      '${entry.taskName.padRight(16)}| '
+      '${next.toIso8601String()} | '
+      '${entry.queue}',
+    );
+  }
+  return 0;
 }

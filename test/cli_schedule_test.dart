@@ -1,8 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:untitled6/src/cli/cli_runner.dart';
 import 'package:untitled6/src/cli/file_schedule_repository.dart';
+import 'package:untitled6/src/observability/metrics.dart';
+import 'package:untitled6/src/observability/snapshots.dart';
+import 'package:untitled6/untitled6.dart';
 
 void main() {
   group('schedule CLI', () {
@@ -96,6 +102,117 @@ void main() {
       final repo = FileScheduleRepository(path: scheduleFile);
       final entries = await repo.load();
       expect(entries, isEmpty);
+    });
+  });
+
+  group('observe CLI', () {
+    late Directory tempDir;
+    late String snapshotFile;
+
+    setUp(() async {
+      tempDir = await Directory.systemTemp.createTemp('stem_observe_cli_test');
+      snapshotFile = '${tempDir.path}/snapshot.json';
+      StemMetrics.instance.reset();
+    });
+
+    tearDown(() async {
+      await tempDir.delete(recursive: true);
+    });
+
+    test('metrics prints JSON snapshot', () async {
+      StemMetrics.instance.reset();
+      StemMetrics.instance.increment('tasks.succeeded', tags: {'task': 'demo'});
+
+      final out = StringBuffer();
+      final code = await runStemCli(['observe', 'metrics'], out: out);
+      expect(code, equals(0));
+      expect(out.toString(), contains('tasks.succeeded'));
+    });
+
+    test('queues prints table from snapshot', () async {
+      final report = ObservabilityReport(
+        queues: [QueueSnapshot(queue: 'default', pending: 3, inflight: 1)],
+      );
+      File(snapshotFile).writeAsStringSync(jsonEncode(report.toJson()));
+
+      final out = StringBuffer();
+      final err = StringBuffer();
+      final code = await runStemCli(
+        ['observe', 'queues', '--file', snapshotFile],
+        out: out,
+        err: err,
+      );
+      expect(code, equals(0));
+      expect(out.toString(), contains('default'));
+    });
+
+    test('workers prints table from snapshot', () async {
+      final report = ObservabilityReport(
+        workers: [
+          WorkerSnapshot(
+            id: 'worker-1',
+            active: 2,
+            lastHeartbeat: DateTime.utc(2024, 1, 1),
+          ),
+        ],
+      );
+      File(snapshotFile).writeAsStringSync(jsonEncode(report.toJson()));
+
+      final out = StringBuffer();
+      final code = await runStemCli([
+        'observe',
+        'workers',
+        '--file',
+        snapshotFile,
+      ], out: out);
+      expect(code, equals(0));
+      expect(out.toString(), contains('worker-1'));
+    });
+
+    test('dlq prints entries from snapshot', () async {
+      final report = ObservabilityReport(
+        dlq: [
+          DlqEntrySnapshot(
+            queue: 'default',
+            taskId: 'task-123',
+            reason: 'error',
+            deadAt: DateTime.utc(2024, 1, 1),
+          ),
+        ],
+      );
+      File(snapshotFile).writeAsStringSync(jsonEncode(report.toJson()));
+
+      final out = StringBuffer();
+      final code = await runStemCli([
+        'observe',
+        'dlq',
+        '--file',
+        snapshotFile,
+      ], out: out);
+      expect(code, equals(0));
+      expect(out.toString(), contains('task-123'));
+    });
+
+    test('schedules prints next runs', () async {
+      final repo = FileScheduleRepository(path: snapshotFile);
+      await repo.save([
+        ScheduleEntry(
+          id: 'nightly',
+          taskName: 'cleanup',
+          queue: 'default',
+          spec: 'every:1m',
+        ),
+      ]);
+
+      final out = StringBuffer();
+      final code = await runStemCli([
+        'observe',
+        'schedules',
+        '--file',
+        snapshotFile,
+      ], out: out);
+      expect(code, equals(0));
+      expect(out.toString(), contains('nightly'));
     });
   });
 }

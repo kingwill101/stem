@@ -20,6 +20,8 @@ class StemMetrics {
   Map<String, Object> snapshot() {
     return {'counters': _counters.values.map((c) => c.toJson()).toList()};
   }
+
+  void reset() => _counters.clear();
 }
 
 class _Counter {
