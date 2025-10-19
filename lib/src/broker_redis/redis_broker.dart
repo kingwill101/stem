@@ -151,6 +151,12 @@ class RedisStreamsBroker implements Broker {
 
   List<DeadLetterEntry> deadLetters(String queue) =>
       List.unmodifiable(_state(queue).deadLetters);
+
+  @override
+  Future<int?> pendingCount(String queue) async => _state(queue).pending;
+
+  @override
+  Future<int?> inflightCount(String queue) async => _state(queue).inflight;
 }
 
 class _QueueState {
@@ -327,6 +333,10 @@ class _QueueState {
   }
 
   String _nextReceipt() => '$name:${_sequence++}';
+
+  int get pending => _ready.length + _delayed.length;
+
+  int get inflight => _pending.length;
 
   void _notify() {
     if (_waiters.isEmpty) return;

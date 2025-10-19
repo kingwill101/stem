@@ -43,6 +43,12 @@ abstract class Broker {
   /// Extends the lease for the [delivery] by the [by] duration.
   Future<void> extendLease(Delivery delivery, Duration by);
 
+  /// Returns the number of pending messages for [queue], if supported.
+  Future<int?> pendingCount(String queue) async => null;
+
+  /// Returns the number of in-flight messages for [queue], if supported.
+  Future<int?> inflightCount(String queue) async => null;
+
   /// Whether this broker supports delayed message delivery.
   bool get supportsDelayed;
 

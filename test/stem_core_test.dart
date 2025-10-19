@@ -127,6 +127,12 @@ class _RecordingBroker implements Broker {
   Future<void> extendLease(Delivery delivery, Duration by) async {}
 
   @override
+  Future<int?> pendingCount(String queue) async => published.length;
+
+  @override
+  Future<int?> inflightCount(String queue) async => 0;
+
+  @override
   bool get supportsDelayed => true;
 
   @override
