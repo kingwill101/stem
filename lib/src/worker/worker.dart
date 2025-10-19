@@ -3,6 +3,8 @@ import 'dart:async';
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 import '../core/retry.dart';
+import '../observability/logging.dart';
+import '../observability/metrics.dart';
 
 /// Worker daemon that consumes tasks from a broker and executes registered handlers.
 class Worker {
@@ -137,6 +139,12 @@ class Worker {
 
     final groupId = envelope.headers['stem-group-id'];
 
+    stemLogger.fine('Task ${envelope.name} (${envelope.id}) started');
+    StemMetrics.instance.increment(
+      'tasks.started',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+
     await backend.set(
       envelope.id,
       TaskState.running,
@@ -201,6 +209,11 @@ class Worker {
       if (groupId != null) {
         await backend.addGroupResult(groupId, successStatus);
       }
+      StemMetrics.instance.increment(
+        'tasks.succeeded',
+        tags: {'task': envelope.name, 'queue': envelope.queue},
+      );
+      stemLogger.fine('Task ${envelope.name} (${envelope.id}) succeeded');
       _events.add(
         WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
       );
@@ -397,6 +410,15 @@ class Worker {
       if (groupId != null) {
         await backend.addGroupResult(groupId, failureStatus);
       }
+      StemMetrics.instance.increment(
+        'tasks.failed',
+        tags: {'task': envelope.name, 'queue': envelope.queue},
+      );
+      stemLogger.warning(
+        'Task ${envelope.name} (${envelope.id}) failed: $error',
+        error,
+        stack,
+      );
       _events.add(
         WorkerEvent(
           type: WorkerEventType.failed,

@@ -20,7 +20,7 @@
 
 ## 5. Canvas & Observability
 - [x] 5.1 Implement chain, group, and chord primitives leveraging result backend
-- [ ] 5.2 Emit structured logs, metrics, and traces (OpenTelemetry integration)
+- [x] 5.2 Emit structured logs, metrics, and traces (OpenTelemetry integration)
 - [ ] 5.3 Deliver minimal dashboard or CLI views for queues, workers, DLQ, and schedules
 
 ## 6. Documentation & Release
