@@ -24,7 +24,8 @@ void main() {
       ..register(
         FunctionTaskHandler<void>(
           name: 'metrics.test',
-          entrypoint: (_, unusedArgs) async {
+          entrypoint: (context, unusedArgs) async {
+            await context.extendLease(const Duration(milliseconds: 10));
             await Future<void>.delayed(const Duration(milliseconds: 20));
             return;
           },
@@ -70,9 +71,21 @@ void main() {
 
     final gauges = exporter.events
         .where((event) => event.type == MetricType.gauge)
-        .where((event) => event.name == 'stem.worker.inflight')
         .toList();
-    expect(gauges, isNotEmpty);
+    expect(
+      gauges.where((event) => event.name == 'stem.worker.inflight'),
+      isNotEmpty,
+    );
+    expect(
+      gauges.where((event) => event.name == 'stem.queue.depth'),
+      isNotEmpty,
+    );
+
+    final leaseRenewals = exporter.events
+        .where((event) => event.type == MetricType.counter)
+        .where((event) => event.name == 'stem.lease.renewed')
+        .toList();
+    expect(leaseRenewals, isNotEmpty);
 
     final snapshot = StemMetrics.instance.snapshot();
     final counterSnapshot = snapshot['counters'] as List<dynamic>;

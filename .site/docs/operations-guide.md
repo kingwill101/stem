@@ -54,15 +54,15 @@ Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Man
 
 Stem emits metrics and heartbeats via the observability module:
 
-- **Counters**: task started/succeeded/failed/retried, DLQ replays.
+- **Counters**: task started/succeeded/failed/retried, lease renewals, DLQ replays.
 - **Histograms**: task execution latency.
-- **Gauges**: active isolates, in-flight deliveries.
+- **Gauges**: active isolates, in-flight deliveries, per-queue depth.
 
 Plumb OpenTelemetry exporters into your APM of choice. The CLI command `stem worker status --follow` subscribes to heartbeat streams for live debugging.
 
 Use `stem worker status --once` to dump the latest snapshot from the result backend, or `stem worker status --follow --timeout 60s` to stream updates with a timeout guard. Override connection targets with `--backend` / `--broker`, and adjust expectations with `--heartbeat-interval`.
 
-Example wiring for OTLP/HTTP metrics export:
+Example wiring for OTLP/HTTP metrics export (Jaeger all-in-one via Docker Compose is included in `examples/otel_metrics`):
 
 ```dart
 import 'package:stem/stem.dart';

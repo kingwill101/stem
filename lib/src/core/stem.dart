@@ -1,3 +1,6 @@
+import 'package:opentelemetry/api.dart' as otel;
+
+import '../observability/tracing.dart';
 import 'contracts.dart';
 import 'envelope.dart';
 import 'retry.dart';
@@ -30,38 +33,54 @@ class Stem {
     DateTime? notBefore,
     Map<String, Object?> meta = const {},
   }) async {
-    final handler = registry.resolve(name);
-    if (handler == null) {
-      throw ArgumentError.value(name, 'name', 'Task is not registered');
-    }
-    final envelope = Envelope(
-      name: name,
-      args: args,
-      headers: headers,
-      queue: options.queue,
-      notBefore: notBefore,
-      priority: options.priority,
-      maxRetries: options.maxRetries,
-      visibilityTimeout: options.visibilityTimeout,
-      meta: meta,
-    );
+    final tracer = StemTracer.instance;
+    return tracer.trace(
+      'stem.enqueue',
+      () async {
+        final handler = registry.resolve(name);
+        if (handler == null) {
+          throw ArgumentError.value(name, 'name', 'Task is not registered');
+        }
 
-    await _runEnqueueMiddleware(envelope, () async {
-      await broker.publish(envelope);
-      if (backend != null) {
-        await backend!.set(
-          envelope.id,
-          TaskState.queued,
-          attempt: envelope.attempt,
-          meta: {
-            ...meta,
-            'queue': envelope.queue,
-            'maxRetries': envelope.maxRetries,
-          },
+        final traceHeaders = Map<String, String>.from(headers);
+        tracer.injectTraceContext(traceHeaders);
+
+        final envelope = Envelope(
+          name: name,
+          args: args,
+          headers: traceHeaders,
+          queue: options.queue,
+          notBefore: notBefore,
+          priority: options.priority,
+          maxRetries: options.maxRetries,
+          visibilityTimeout: options.visibilityTimeout,
+          meta: meta,
         );
-      }
-    });
-    return envelope.id;
+
+        await _runEnqueueMiddleware(envelope, () async {
+          await broker.publish(envelope);
+          if (backend != null) {
+            await backend!.set(
+              envelope.id,
+              TaskState.queued,
+              attempt: envelope.attempt,
+              meta: {
+                ...meta,
+                'queue': envelope.queue,
+                'maxRetries': envelope.maxRetries,
+              },
+            );
+          }
+        });
+
+        return envelope.id;
+      },
+      spanKind: otel.SpanKind.producer,
+      attributes: [
+        otel.Attribute.fromString('stem.task', name),
+        otel.Attribute.fromString('stem.queue', options.queue),
+      ],
+    );
   }
 
   Future<void> _runEnqueueMiddleware(

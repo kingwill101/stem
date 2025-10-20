@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
+import 'package:opentelemetry/api.dart' as otel;
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
@@ -12,6 +13,7 @@ import '../observability/metrics.dart';
 import '../observability/config.dart';
 import '../observability/heartbeat.dart';
 import '../observability/heartbeat_transport.dart';
+import '../observability/tracing.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
 
@@ -109,6 +111,7 @@ class Worker {
   int _inflight = 0;
   Timer? _workerHeartbeatTimer;
   DateTime? _lastLeaseRenewal;
+  int? _lastQueueDepth;
 
   /// A stream of events emitted during task processing.
   ///
@@ -193,174 +196,215 @@ class Worker {
 
   Future<void> _handle(Delivery delivery) async {
     final envelope = delivery.envelope;
-    final handler = registry.resolve(envelope.name);
-    if (handler == null) {
-      await broker.deadLetter(delivery, reason: 'unregistered-task');
-      return;
-    }
+    final tracer = StemTracer.instance;
+    final parentContext = tracer.extractTraceContext(envelope.headers);
+    final spanAttributes = [
+      otel.Attribute.fromString('stem.task', envelope.name),
+      otel.Attribute.fromString('stem.queue', envelope.queue),
+    ];
 
-    await _runConsumeMiddleware(delivery);
+    await tracer.trace(
+      'stem.consume',
+      () async {
+        final handler = registry.resolve(envelope.name);
+        if (handler == null) {
+          await broker.deadLetter(delivery, reason: 'unregistered-task');
+          return;
+        }
 
-    final rateSpec = handler.options.rateLimit != null
-        ? _parseRate(handler.options.rateLimit!)
-        : null;
-    if (rateLimiter != null && rateSpec != null) {
-      final decision = await rateLimiter!.acquire(
-        _rateLimitKey(handler.options, envelope),
-        tokens: rateSpec.tokens,
-        interval: rateSpec.period,
-        meta: {'task': envelope.name},
-      );
-      if (!decision.allowed) {
-        final backoff =
-            decision.retryAfter ??
-            retryStrategy.nextDelay(
-              envelope.attempt,
-              StateError('rate-limit'),
-              StackTrace.current,
+        await _runConsumeMiddleware(delivery);
+
+        final rateSpec = handler.options.rateLimit != null
+            ? _parseRate(handler.options.rateLimit!)
+            : null;
+        if (rateLimiter != null && rateSpec != null) {
+          final decision = await rateLimiter!.acquire(
+            _rateLimitKey(handler.options, envelope),
+            tokens: rateSpec.tokens,
+            interval: rateSpec.period,
+            meta: {'task': envelope.name},
+          );
+          if (!decision.allowed) {
+            final backoff =
+                decision.retryAfter ??
+                retryStrategy.nextDelay(
+                  envelope.attempt,
+                  StateError('rate-limit'),
+                  StackTrace.current,
+                );
+            await broker.nack(delivery, requeue: false);
+            await broker.publish(
+              envelope.copyWith(notBefore: DateTime.now().add(backoff)),
             );
-        await broker.nack(delivery, requeue: false);
-        await broker.publish(
-          envelope.copyWith(notBefore: DateTime.now().add(backoff)),
+            await backend.set(
+              envelope.id,
+              TaskState.retried,
+              attempt: envelope.attempt,
+              meta: {
+                ...envelope.meta,
+                'rateLimited': true,
+                'retryAfterMs': backoff.inMilliseconds,
+              },
+            );
+            _events.add(
+              WorkerEvent(
+                type: WorkerEventType.retried,
+                envelope: envelope,
+                data: {
+                  'rateLimited': true,
+                  'retryAfterMs': backoff.inMilliseconds,
+                },
+              ),
+            );
+            return;
+          }
+        }
+
+        _trackDelivery(delivery);
+        final groupId = envelope.headers['stem-group-id'];
+
+        stemLogger.debug(
+          'Task {task} started',
+          Context(
+            _logContext({
+              'task': envelope.name,
+              'id': envelope.id,
+              'attempt': envelope.attempt,
+              'queue': envelope.queue,
+            }),
+          ),
         );
+        StemMetrics.instance.increment(
+          'stem.tasks.started',
+          tags: {'task': envelope.name, 'queue': envelope.queue},
+        );
+
         await backend.set(
           envelope.id,
-          TaskState.retried,
+          TaskState.running,
           attempt: envelope.attempt,
           meta: {
             ...envelope.meta,
-            'rateLimited': true,
-            'retryAfterMs': backoff.inMilliseconds,
+            'queue': envelope.queue,
+            'worker': consumerName,
           },
         );
-        _events.add(
-          WorkerEvent(
-            type: WorkerEventType.retried,
-            envelope: envelope,
-            data: {'rateLimited': true, 'retryAfterMs': backoff.inMilliseconds},
-          ),
+
+        final context = TaskContext(
+          id: envelope.id,
+          attempt: envelope.attempt,
+          headers: envelope.headers,
+          meta: envelope.meta,
+          heartbeat: () => _sendHeartbeat(envelope.id),
+          extendLease: (duration) async {
+            await broker.extendLease(delivery, duration);
+            _recordLeaseRenewal(delivery);
+            _restartLeaseTimer(delivery, duration);
+            _noteLeaseRenewal(delivery);
+          },
+          progress: (progress, {data}) async =>
+              _reportProgress(envelope, progress, data: data),
         );
-        return;
-      }
-    }
 
-    _trackDelivery(delivery);
-    final groupId = envelope.headers['stem-group-id'];
+        Timer? heartbeatTimer;
+        Timer? softTimer;
+        _scheduleLeaseRenewal(delivery);
 
-    stemLogger.debug(
-      'Task {task} started',
-      Context({
-        'task': envelope.name,
-        'id': envelope.id,
-        'attempt': envelope.attempt,
-        'queue': envelope.queue,
-      }),
-    );
-    StemMetrics.instance.increment(
-      'stem.tasks.started',
-      tags: {'task': envelope.name, 'queue': envelope.queue},
-    );
+        dynamic result;
 
-    await backend.set(
-      envelope.id,
-      TaskState.running,
-      attempt: envelope.attempt,
-      meta: {...envelope.meta, 'queue': envelope.queue, 'worker': consumerName},
-    );
+        try {
+          heartbeatTimer = _startHeartbeat(envelope.id);
+          softTimer = _scheduleSoftLimit(envelope, handler.options);
 
-    final context = TaskContext(
-      id: envelope.id,
-      attempt: envelope.attempt,
-      headers: envelope.headers,
-      meta: envelope.meta,
-      heartbeat: () => _sendHeartbeat(envelope.id),
-      extendLease: (duration) async {
-        await broker.extendLease(delivery, duration);
-        _restartLeaseTimer(delivery, duration);
-        _noteLeaseRenewal(delivery);
+          result = await tracer.trace(
+            'stem.execute.${envelope.name}',
+            () => _invokeWithMiddleware(
+              context,
+              () => _executeWithHardLimit(handler, context, envelope),
+            ),
+            spanKind: otel.SpanKind.internal,
+            attributes: spanAttributes,
+          );
+
+          _cancelLeaseTimer(delivery.receipt);
+          _heartbeatTimers.remove(envelope.id)?.cancel();
+
+          final successMeta = {
+            ...envelope.meta,
+            'queue': envelope.queue,
+            'worker': consumerName,
+            'completedAt': DateTime.now().toIso8601String(),
+          };
+          final successStatus = TaskStatus(
+            id: envelope.id,
+            state: TaskState.succeeded,
+            payload: result,
+            error: null,
+            attempt: envelope.attempt,
+            meta: successMeta,
+          );
+          await broker.ack(delivery);
+          await backend.set(
+            envelope.id,
+            TaskState.succeeded,
+            payload: result,
+            attempt: envelope.attempt,
+            meta: successMeta,
+          );
+          if (groupId != null) {
+            await backend.addGroupResult(groupId, successStatus);
+          }
+          StemMetrics.instance.increment(
+            'stem.tasks.succeeded',
+            tags: {'task': envelope.name, 'queue': envelope.queue},
+          );
+          stemLogger.debug(
+            'Task {task} succeeded',
+            Context(
+              _logContext({
+                'task': envelope.name,
+                'id': envelope.id,
+                'attempt': envelope.attempt,
+                'queue': envelope.queue,
+                'worker': consumerName ?? 'unknown',
+              }),
+            ),
+          );
+          _events.add(
+            WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
+          );
+        } catch (error, stack) {
+          await _notifyErrorMiddleware(context, error, stack);
+          _cancelLeaseTimer(delivery.receipt);
+          _heartbeatTimers.remove(envelope.id)?.cancel();
+          await _handleFailure(
+            handler,
+            delivery,
+            envelope,
+            error,
+            stack,
+            groupId,
+          );
+        } finally {
+          heartbeatTimer?.cancel();
+          softTimer?.cancel();
+          final completed = _releaseDelivery(envelope);
+          if (completed != null) {
+            final duration = DateTime.now().toUtc().difference(
+              completed.startedAt,
+            );
+            StemMetrics.instance.recordDuration(
+              'stem.task.duration',
+              duration,
+              tags: {'task': envelope.name, 'queue': envelope.queue},
+            );
+          }
+        }
       },
-      progress: (progress, {data}) async =>
-          _reportProgress(envelope, progress, data: data),
+      context: parentContext,
+      spanKind: otel.SpanKind.consumer,
+      attributes: spanAttributes,
     );
-
-    Timer? heartbeatTimer;
-    Timer? softTimer;
-    _scheduleLeaseRenewal(delivery);
-
-    dynamic result;
-
-    try {
-      heartbeatTimer = _startHeartbeat(envelope.id);
-      softTimer = _scheduleSoftLimit(envelope, handler.options);
-
-      result = await _invokeWithMiddleware(
-        context,
-        () => _executeWithHardLimit(handler, context, envelope),
-      );
-
-      _cancelLeaseTimer(delivery.receipt);
-      _heartbeatTimers.remove(envelope.id)?.cancel();
-
-      final successMeta = {
-        ...envelope.meta,
-        'queue': envelope.queue,
-        'worker': consumerName,
-        'completedAt': DateTime.now().toIso8601String(),
-      };
-      final successStatus = TaskStatus(
-        id: envelope.id,
-        state: TaskState.succeeded,
-        payload: result,
-        error: null,
-        attempt: envelope.attempt,
-        meta: successMeta,
-      );
-      await broker.ack(delivery);
-      await backend.set(
-        envelope.id,
-        TaskState.succeeded,
-        payload: result,
-        attempt: envelope.attempt,
-        meta: successMeta,
-      );
-      if (groupId != null) {
-        await backend.addGroupResult(groupId, successStatus);
-      }
-      StemMetrics.instance.increment(
-        'stem.tasks.succeeded',
-        tags: {'task': envelope.name, 'queue': envelope.queue},
-      );
-      stemLogger.debug(
-        'Task {task} succeeded',
-        Context({
-          'task': envelope.name,
-          'id': envelope.id,
-          'attempt': envelope.attempt,
-          'queue': envelope.queue,
-          'worker': consumerName ?? 'unknown',
-        }),
-      );
-      _events.add(
-        WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
-      );
-    } catch (error, stack) {
-      await _notifyErrorMiddleware(context, error, stack);
-      _cancelLeaseTimer(delivery.receipt);
-      _heartbeatTimers.remove(envelope.id)?.cancel();
-      await _handleFailure(handler, delivery, envelope, error, stack, groupId);
-    } finally {
-      heartbeatTimer?.cancel();
-      softTimer?.cancel();
-      final completed = _releaseDelivery(envelope);
-      if (completed != null) {
-        final duration = DateTime.now().toUtc().difference(completed.startedAt);
-        StemMetrics.instance.recordDuration(
-          'stem.task.duration',
-          duration,
-          tags: {'task': envelope.name, 'queue': envelope.queue},
-        );
-      }
-    }
   }
 
   Future<void> _runConsumeMiddleware(Delivery delivery) async {
@@ -469,6 +513,7 @@ class Worker {
     _leaseTimers[delivery.receipt]?.cancel();
     final timer = Timer.periodic(interval, (_) async {
       await broker.extendLease(delivery, interval);
+      _recordLeaseRenewal(delivery);
       _noteLeaseRenewal(delivery);
     });
     _leaseTimers[delivery.receipt] = timer;
@@ -571,15 +616,17 @@ class Worker {
       );
       stemLogger.warning(
         'Task {task} failed: {error}',
-        Context({
-          'task': envelope.name,
-          'id': envelope.id,
-          'attempt': envelope.attempt,
-          'queue': envelope.queue,
-          'worker': consumerName ?? 'unknown',
-          'error': error.toString(),
-          'stack': stack.toString(),
-        }),
+        Context(
+          _logContext({
+            'task': envelope.name,
+            'id': envelope.id,
+            'attempt': envelope.attempt,
+            'queue': envelope.queue,
+            'worker': consumerName ?? 'unknown',
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+        ),
       );
       _events.add(
         WorkerEvent(
@@ -656,6 +703,43 @@ class Worker {
     );
   }
 
+  Future<void> _recordQueueDepth() async {
+    try {
+      final depth = await broker.pendingCount(queue);
+      if (depth == null) return;
+      _lastQueueDepth = depth;
+      StemMetrics.instance.setGauge(
+        'stem.queue.depth',
+        depth.toDouble(),
+        tags: {
+          'queue': queue,
+          'worker': _workerIdentifier,
+          'namespace': namespace,
+        },
+      );
+    } catch (_) {
+      // Swallow errors to avoid impacting worker loops; rely on logging elsewhere.
+    }
+  }
+
+  void _recordLeaseRenewal(Delivery delivery) {
+    final envelope = delivery.envelope;
+    StemMetrics.instance.increment(
+      'stem.lease.renewed',
+      tags: {
+        'queue': envelope.queue,
+        'task': envelope.name,
+        'worker': _workerIdentifier,
+      },
+    );
+  }
+
+  Map<String, Object> _logContext(Map<String, Object> base) {
+    final traceFields = StemTracer.instance.traceFields();
+    if (traceFields.isEmpty) return base;
+    return {...base, ...traceFields};
+  }
+
   void _startWorkerHeartbeatLoop() {
     _workerHeartbeatTimer?.cancel();
     if (workerHeartbeatInterval <= Duration.zero) return;
@@ -667,6 +751,7 @@ class Worker {
 
   Future<void> _publishWorkerHeartbeat() async {
     if (!_running) return;
+    await _recordQueueDepth();
     final heartbeat = _buildHeartbeat();
     try {
       await heartbeatTransport.publish(heartbeat);
@@ -711,12 +796,18 @@ class Worker {
       inflight: _inflight,
       lastLeaseRenewal: _lastLeaseRenewal,
       queues: queues,
-      extras: {
-        'host': Platform.localHostname,
-        'pid': pid,
-        'concurrency': concurrency,
-        'prefetch': prefetch,
-      },
+      extras: () {
+        final extras = {
+          'host': Platform.localHostname,
+          'pid': pid,
+          'concurrency': concurrency,
+          'prefetch': prefetch,
+        };
+        if (_lastQueueDepth != null) {
+          extras['queueDepth'] = _lastQueueDepth!;
+        }
+        return extras;
+      }(),
     );
   }
 
