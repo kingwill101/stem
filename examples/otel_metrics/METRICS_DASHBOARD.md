@@ -51,6 +51,16 @@
 5. Customize the visualization (graph, gauge, stat, etc.)
 6. Click **Save** to save your dashboard
 
+## 🚨 Built-in SLO Panels & Alerts
+
+The pre-provisioned dashboard now includes SLO-focused panels:
+
+- **Queue Depth** – Highlights sustained backlog growth with a 100-message warning threshold.
+- **Task Success Rate** – Plots the ratio of succeeded vs. started tasks, with a 99.5% target.
+- **Task Latency p95** – Reuses the latency percentile panel; cross-check against the 3-second alert.
+
+Grafana provisions matching alerts from `examples/otel_metrics/grafana-alerts.yml`. Update the contact points via Grafana’s Alerting UI to route pages to your own PagerDuty or Slack integrations. The Prometheus queries align with the SLO definitions documented in `docs/process/observability-runbook.md`.
+
 ### Example Dashboard Panel Queries
 
 **Task Execution Rate:**

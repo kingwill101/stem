@@ -101,9 +101,15 @@ This configuration batches metrics through the OTLP HTTP collector while heartbe
 
 ### Alerts
 
-- Alert on heartbeat gaps (`stem.worker.inflight` stale data) to detect stalled workers.
-- Alert on DLQ growth and retry spikes.
-- Alert on scheduler lock contention metrics.
+- Primary SLO alerts are provisioned in Grafana (see `examples/otel_metrics/grafana-alerts.yml`):
+  | Signal | Threshold | Severity | Notes |
+  | --- | --- | --- | --- |
+  | Task success rate | < 99.5% over 15 minutes | Critical | Uses Prometheus query `sum(rate(stem_tasks_succeeded_total[5m]))/sum(rate(stem_tasks_started_total[5m]))` |
+  | Task latency p95 | ≥ 3 seconds over 5 minutes | Critical | Samples the duration histogram via `histogram_quantile(0.95, ...)` |
+  | Queue depth | ≥ 100 messages sustained for 10 minutes | Warning | Flags backlog growth on default queue via `max(stem_queue_depth)` |
+- Configure notification policies in Grafana to page `pagerduty://stem-sre-primary` and post to `#stem-ops`.
+- Legacy Prometheus alerts for heartbeat gaps, DLQ age, reclaim spikes, and scheduler skew remain until they are migrated to Grafana.
+- Full remediation steps live in `docs/process/observability-runbook.md`.
 
 ## Dead Letter Queue Operations
 

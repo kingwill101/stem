@@ -6,16 +6,21 @@ services:
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
 
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports:
       - "8025:8025"
+    restart: unless-stopped
 
   enqueuer:
     build:
       context: ../..
       dockerfile: examples/email_service/Dockerfile.enqueuer
+      target: dev
     env_file:
       - .env.example
     environment:
@@ -25,13 +30,19 @@ services:
     depends_on:
       - redis
       - mailhog
+    restart: unless-stopped
 
   worker:
     build:
       context: ../..
       dockerfile: examples/email_service/Dockerfile.worker
+      target: dev
     env_file:
       - .env.example
     depends_on:
       - redis
       - mailhog
+    restart: unless-stopped
+
+volumes:
+  redis-data:

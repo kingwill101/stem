@@ -257,7 +257,7 @@
       "type": "graph",
       "targets": [
         {
-      "expr": "sum by (queue) (rate(stem_tasks_started_total[1m]))",
+          "expr": "sum by (queue) (rate(stem_tasks_started_total[1m]))",
           "legendFormat": "{{queue}}",
           "refId": "A"
         }
@@ -287,7 +287,7 @@
       "type": "graph",
       "targets": [
         {
-      "expr": "sum by (worker) (rate(stem_tasks_started_total[1m]))",
+          "expr": "sum by (worker) (rate(stem_tasks_started_total[1m]))",
           "legendFormat": "{{worker}}",
           "refId": "A"
         }
@@ -296,6 +296,96 @@
         {
           "format": "short",
           "label": "Tasks/sec"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "xaxis": {
+        "mode": "time"
+      }
+    },
+    {
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 32
+      },
+      "id": 9,
+      "title": "Queue Depth",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "stem_queue_depth",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "Messages"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "xaxis": {
+        "mode": "time"
+      }
+    },
+    {
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "id": 10,
+      "title": "Task Success Rate",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "sum(rate(stem_tasks_succeeded_total[5m])) / sum(rate(stem_tasks_started_total[5m]))",
+          "legendFormat": "success rate",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "percent",
+          "label": "Ratio"
+        },
+        {
+          "format": "short"
+        }
+      ],
+      "xaxis": {
+        "mode": "time"
+      }
+    },
+    {
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "id": 11,
+      "title": "Task Latency p95",
+      "type": "graph",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(stem_task_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "yaxes": [
+        {
+          "format": "s",
+          "label": "Seconds"
         },
         {
           "format": "short"

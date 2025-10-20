@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1
 
+FROM dart:stable AS dev
+WORKDIR /app
+COPY . .
+WORKDIR /app/examples/microservice/worker
+RUN dart pub get
+CMD ["dart", "run", "bin/worker.dart"]
+
 FROM dart:stable AS build
 WORKDIR /app
 COPY . .

@@ -1,0 +1,133 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: stem-slo-alerts
+    folder: STEM
+    interval: 1m
+    rules:
+      - uid: stem-task-success-rate
+        title: Task Success Rate
+        condition: success_rate
+        data:
+          - refId: success_rate
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: Prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: Prometheus
+              expr: |
+                sum(rate(stem_tasks_succeeded_total[5m]))
+                /
+                sum(rate(stem_tasks_started_total[5m]))
+              format: time_series
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: success_rate
+        annotations:
+          severity: critical
+          runbook: docs/process/observability-runbook.md
+        labels:
+          service: stem-worker
+        for: 300s
+        noDataState: OK
+        executionErrorState: ALERTING
+        isPaused: false
+        conditions:
+          - evaluator:
+              params:
+                - 0.995
+              type: lt
+            operator:
+              type: and
+            query:
+              params:
+                - success_rate
+            reducer:
+              type: last
+            type: query
+
+      - uid: stem-queue-depth
+        title: Queue Depth Growth
+        condition: queue_depth
+        data:
+          - refId: queue_depth
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: Prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: Prometheus
+              expr: max(stem_queue_depth)
+              format: time_series
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: queue_depth
+        annotations:
+          severity: warning
+          runbook: docs/process/observability-runbook.md
+        labels:
+          service: stem-worker
+        for: 600s
+        noDataState: OK
+        executionErrorState: ALERTING
+        isPaused: false
+        conditions:
+          - evaluator:
+              params:
+                - 100
+              type: gt
+            operator:
+              type: and
+            query:
+              params:
+                - queue_depth
+            reducer:
+              type: last
+            type: query
+
+      - uid: stem-task-latency
+        title: Task Latency p95
+        condition: task_latency
+        data:
+          - refId: task_latency
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: Prometheus
+            model:
+              datasource:
+                type: prometheus
+                uid: Prometheus
+              expr: histogram_quantile(0.95, sum(rate(stem_task_duration_seconds_bucket[5m])) by (le))
+              format: time_series
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: task_latency
+        annotations:
+          severity: critical
+          runbook: docs/process/observability-runbook.md
+        labels:
+          service: stem-worker
+        for: 300s
+        noDataState: OK
+        executionErrorState: ALERTING
+        isPaused: false
+        conditions:
+          - evaluator:
+              params:
+                - 3
+              type: gt
+            operator:
+              type: and
+            query:
+              params:
+                - task_latency
+            reducer:
+              type: last
+            type: query

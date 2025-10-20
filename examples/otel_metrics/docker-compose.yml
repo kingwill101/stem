@@ -49,6 +49,7 @@ services:
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/stem-dashboard.json:ro
       - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./grafana-alerts.yml:/etc/grafana/provisioning/alerting/stem-alerts.yml:ro
     networks:
       - otel-network
     depends_on:

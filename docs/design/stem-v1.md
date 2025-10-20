@@ -103,9 +103,9 @@ Precedence: code overrides > config file > env vars.
 - Traces: enqueue → consume → execute spans with W3C context propagation.
 - Logs: structured with `traceId`, `spanId`, task metadata.
 - Example SLOs:
-  - p95 enqueue-to-start < 1s steady load (Redis-backed).
-  - p99 task duration accounting within 100ms.
-  - DLQ oldest age < 10 minutes for critical queues.
+  - Success rate ≥ 99.5% over a 15-minute window.
+  - Worker task latency p95 < 3 seconds over 5 minutes.
+  - Default queue depth < 100 messages sustained for 10 minutes.
 
 ## Risks & Mitigations
 | Risk | Mitigation |

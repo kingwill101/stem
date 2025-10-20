@@ -82,3 +82,6 @@ Prometheus scrape endpoint and forwards spans to Jaeger.
   example uses in-memory components.
 - After pulling changes, rebuild the stack (`docker compose down && docker compose up --build`)
   so Prometheus/Grafana pick up the latest dashboards and metric names.
+- Grafana alerting is provisioned from `grafana-alerts.yml`. Update notification
+  policies inside Grafana to target your PagerDuty or Slack channels so SLO
+  alerts reach the right on-call engineers.

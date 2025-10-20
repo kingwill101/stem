@@ -6,11 +6,15 @@ services:
     ports:
       - '6379:6379'
     command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
 
   api:
     build:
       context: ../..
       dockerfile: examples/image_processor/Dockerfile.api
+      target: dev
     env_file:
       - .env
     environment:
@@ -19,12 +23,18 @@ services:
       - "${PORT:-8083}:8083"
     depends_on:
       - redis
+    restart: unless-stopped
 
   worker:
     build:
       context: ../..
       dockerfile: examples/image_processor/Dockerfile.worker
+      target: dev
     env_file:
       - .env
     depends_on:
       - redis
+    restart: unless-stopped
+
+volumes:
+  redis-data:
