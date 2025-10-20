@@ -92,6 +92,35 @@ class TaskStatus {
 
   /// The timestamp when this status was last updated.
   final DateTime updatedAt;
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'state': state.name,
+    'payload': payload,
+    'error': error?.toJson(),
+    'meta': meta,
+    'attempt': attempt,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
+
+  factory TaskStatus.fromJson(Map<String, Object?> json) {
+    return TaskStatus(
+      id: json['id'] as String,
+      state: TaskState.values.firstWhere(
+        (value) => value.name == json['state'],
+        orElse: () => TaskState.queued,
+      ),
+      payload: json['payload'],
+      error: json['error'] != null
+          ? TaskError.fromJson((json['error'] as Map).cast<String, Object?>())
+          : null,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
+    );
+  }
 }
 
 /// Error metadata captured for failures.
@@ -118,6 +147,24 @@ class TaskError {
 
   /// Additional metadata for this error.
   final Map<String, Object?> meta;
+
+  Map<String, Object?> toJson() => {
+    'type': type,
+    'message': message,
+    'stack': stack,
+    'retryable': retryable,
+    'meta': meta,
+  };
+
+  factory TaskError.fromJson(Map<String, Object?> json) {
+    return TaskError(
+      type: json['type'] as String? ?? 'Unknown',
+      message: json['message'] as String? ?? '',
+      stack: json['stack'] as String?,
+      retryable: json['retryable'] as bool? ?? false,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+    );
+  }
 }
 
 /// Result backend describes how task states are persisted and retrieved.
@@ -149,6 +196,9 @@ abstract class ResultBackend {
 
   /// Retrieves the [GroupStatus] for the group with the given [groupId], or null if not found.
   Future<GroupStatus?> getGroup(String groupId);
+
+  /// Updates the expiration for the given [taskId].
+  Future<void> expire(String taskId, Duration ttl);
 }
 
 /// Schedule entry persisted by a Beat-like scheduler.

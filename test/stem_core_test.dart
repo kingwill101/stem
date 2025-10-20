@@ -208,4 +208,7 @@ class _RecordingBackend implements ResultBackend {
 
   @override
   Future<GroupStatus?> getGroup(String groupId) async => _groups[groupId];
+
+  @override
+  Future<void> expire(String taskId, Duration ttl) async {}
 }

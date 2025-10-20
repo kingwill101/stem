@@ -9,14 +9,17 @@ class Stem {
     required this.registry,
     this.backend,
     RetryStrategy? retryStrategy,
+    List<Middleware> middleware = const [],
   }) : retryStrategy =
            retryStrategy ??
-           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2));
+           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+       middleware = List.unmodifiable(middleware);
 
   final Broker broker;
   final TaskRegistry registry;
   final ResultBackend? backend;
   final RetryStrategy retryStrategy;
+  final List<Middleware> middleware;
 
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -65,7 +68,14 @@ class Stem {
     Envelope envelope,
     Future<void> Function() action,
   ) async {
-    // Middleware support can be added once the pipeline infrastructure exists.
-    await action();
+    Future<void> run(int index) async {
+      if (index >= middleware.length) {
+        await action();
+        return;
+      }
+      await middleware[index].onEnqueue(envelope, () => run(index + 1));
+    }
+
+    await run(0);
   }
 }

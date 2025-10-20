@@ -2,19 +2,19 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend_redis/redis_backend.dart';
-import 'package:untitled6/src/broker_redis/redis_broker.dart';
+import 'package:untitled6/src/backend/in_memory_backend.dart';
+import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 import 'package:untitled6/src/scheduler/beat.dart';
 import 'package:untitled6/src/scheduler/in_memory_lock_store.dart';
-import 'package:untitled6/src/scheduler/redis_schedule_store.dart';
+import 'package:untitled6/src/scheduler/in_memory_schedule_store.dart';
 
 void main() {
   group('Beat', () {
     test('fires schedule once per interval', () async {
-      final broker = RedisStreamsBroker();
-      final backend = RedisResultBackend();
+      final broker = InMemoryRedisBroker();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
-      final store = RedisScheduleStore();
+      final store = InMemoryScheduleStore();
       final beat = Beat(
         store: store,
         broker: broker,
@@ -53,10 +53,10 @@ void main() {
     });
 
     test('only one beat instance dispatches when locks used', () async {
-      final broker = RedisStreamsBroker();
-      final backend = RedisResultBackend();
+      final broker = InMemoryRedisBroker();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
-      final store = RedisScheduleStore();
+      final store = InMemoryScheduleStore();
       final lockStore = InMemoryLockStore();
       final beatA = Beat(
         store: store,

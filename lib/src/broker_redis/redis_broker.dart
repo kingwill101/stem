@@ -1,41 +1,94 @@
 import 'dart:async';
-import 'dart:collection';
+import 'dart:convert';
 
-import 'package:collection/collection.dart';
+import 'package:redis/redis.dart';
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 
 class RedisStreamsBroker implements Broker {
-  RedisStreamsBroker({
+  RedisStreamsBroker._(
+    this._connection,
+    this._command, {
     this.namespace = 'stem',
-    this.delayedInterval = const Duration(milliseconds: 200),
-    this.claimInterval = const Duration(seconds: 5),
+    this.blockTime = const Duration(seconds: 5),
+    this.delayedDrainBatch = 128,
     this.defaultVisibilityTimeout = const Duration(seconds: 30),
-  }) {
-    _delayedTimer = Timer.periodic(
-      delayedInterval,
-      (_) => _drainDelayed(DateTime.now()),
-    );
-    _claimTimer = Timer.periodic(
-      claimInterval,
-      (_) => _reclaimExpired(DateTime.now()),
+    this.claimInterval = const Duration(seconds: 30),
+  });
+
+  final String namespace;
+  final Duration blockTime;
+  final int delayedDrainBatch;
+  final Duration defaultVisibilityTimeout;
+  final Duration claimInterval;
+
+  final RedisConnection _connection;
+  final Command _command;
+
+  final Map<String, Timer> _claimTimers = {};
+  final Set<StreamController<Delivery>> _controllers = {};
+  final Set<String> _groupsCreated = {};
+
+  bool _closed = false;
+
+  static Future<RedisStreamsBroker> connect(
+    String uri, {
+    String namespace = 'stem',
+    Duration blockTime = const Duration(seconds: 5),
+    int delayedDrainBatch = 128,
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration claimInterval = const Duration(seconds: 30),
+  }) async {
+    final parsed = Uri.parse(uri);
+    final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
+    final port = parsed.hasPort ? parsed.port : 6379;
+    final connection = RedisConnection();
+    final command = await connection.connect(host, port);
+
+    if (parsed.userInfo.isNotEmpty) {
+      final parts = parsed.userInfo.split(':');
+      final password = parts.length == 2 ? parts[1] : parts[0];
+      await command.send_object(['AUTH', password]);
+    }
+
+    if (parsed.pathSegments.isNotEmpty) {
+      final db = int.tryParse(parsed.pathSegments.first);
+      if (db != null) {
+        await command.send_object(['SELECT', db]);
+      }
+    }
+
+    return RedisStreamsBroker._(
+      connection,
+      command,
+      namespace: namespace,
+      blockTime: blockTime,
+      delayedDrainBatch: delayedDrainBatch,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      claimInterval: claimInterval,
     );
   }
 
-  final String namespace;
-  final Duration delayedInterval;
-  final Duration claimInterval;
-  final Duration defaultVisibilityTimeout;
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    for (final controller in _controllers) {
+      await controller.close();
+    }
+    _controllers.clear();
+    for (final timer in _claimTimers.values) {
+      timer.cancel();
+    }
+    await _connection.close();
+  }
 
-  final Map<String, _QueueState> _queues = {};
+  String _streamKey(String queue) => '$namespace:stream:$queue';
+  String _groupKey(String queue) => '$namespace:group:$queue';
+  String _delayedKey(String queue) => '$namespace:delayed:$queue';
+  String _deadKey(String queue) => '$namespace:dead:$queue';
 
-  Timer? _delayedTimer;
-  Timer? _claimTimer;
-  bool _disposed = false;
-
-  _QueueState _state(String queue) =>
-      _queues.putIfAbsent(queue, () => _QueueState(queue));
+  Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 
   @override
   bool get supportsDelayed => true;
@@ -43,40 +96,103 @@ class RedisStreamsBroker implements Broker {
   @override
   bool get supportsPriority => false;
 
-  void dispose() {
-    if (_disposed) return;
-    _disposed = true;
-    _delayedTimer?.cancel();
-    _claimTimer?.cancel();
-    for (final q in _queues.values) {
-      q.dispose();
+  Future<void> _ensureGroup(String queue) async {
+    final key = '${_streamKey(queue)}|${_groupKey(queue)}';
+    if (_groupsCreated.contains(key)) return;
+    try {
+      await _send([
+        'XGROUP',
+        'CREATE',
+        _streamKey(queue),
+        _groupKey(queue),
+        '0', // use special ID to avoid delivering old entries
+        'MKSTREAM',
+      ]);
+    } catch (e) {
+      if ('$e'.contains('BUSYGROUP')) {
+        // already created
+      } else {
+        rethrow;
+      }
     }
+    _groupsCreated.add(key);
   }
 
   @override
   Future<void> publish(Envelope envelope, {String? queue}) async {
-    final targetQueue = queue ?? envelope.queue;
-    final state = _state(targetQueue);
-    final msg = envelope.copyWith(queue: targetQueue);
-
-    if (msg.notBefore != null && msg.notBefore!.isAfter(DateTime.now())) {
-      state.addDelayed(msg);
-    } else {
-      state.enqueue(msg);
+    final target = queue ?? envelope.queue;
+    if (envelope.notBefore != null &&
+        envelope.notBefore!.isAfter(DateTime.now())) {
+      await _send([
+        'ZADD',
+        _delayedKey(target),
+        envelope.notBefore!.millisecondsSinceEpoch.toString(),
+        jsonEncode(envelope.toJson()),
+      ]);
+      return;
     }
+    await _enqueue(target, envelope);
   }
 
-  Future<void> _drainDelayed(DateTime now) async {
-    if (_disposed) return;
-    for (final state in _queues.values) {
-      state.moveDue(now);
-    }
+  Future<void> _enqueue(String queue, Envelope envelope) async {
+    await _ensureGroup(queue);
+    await _send([
+      'XADD',
+      _streamKey(queue),
+      '*',
+      ..._serializeEnvelope(envelope),
+    ]);
   }
 
-  Future<void> _reclaimExpired(DateTime now) async {
-    if (_disposed) return;
-    for (final state in _queues.values) {
-      state.reclaimExpired(now);
+  List<String> _serializeEnvelope(Envelope envelope) {
+    return [
+      'id',
+      envelope.id,
+      'name',
+      envelope.name,
+      'args',
+      jsonEncode(envelope.args),
+      'headers',
+      jsonEncode(envelope.headers),
+      'enqueuedAt',
+      envelope.enqueuedAt.toIso8601String(),
+      'notBefore',
+      envelope.notBefore?.toIso8601String() ?? '',
+      'priority',
+      envelope.priority.toString(),
+      'attempt',
+      envelope.attempt.toString(),
+      'maxRetries',
+      envelope.maxRetries.toString(),
+      'visibilityTimeout',
+      envelope.visibilityTimeout?.inMilliseconds.toString() ?? '',
+      'queue',
+      envelope.queue,
+      'meta',
+      jsonEncode(envelope.meta),
+    ];
+  }
+
+  Future<void> _drainDelayed(String queue) async {
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final result = await _send([
+      'ZRANGEBYSCORE',
+      _delayedKey(queue),
+      '-inf',
+      nowMs.toString(),
+      'LIMIT',
+      '0',
+      delayedDrainBatch.toString(),
+    ]);
+    if (result is List && result.isNotEmpty) {
+      for (final entry in result.cast<String>()) {
+        final removed = await _send(['ZREM', _delayedKey(queue), entry]);
+        if (_asInt(removed) > 0) {
+          final map = jsonDecode(entry) as Map<String, Object?>;
+          final env = Envelope.fromJson(map).copyWith(notBefore: null);
+          await _enqueue(queue, env);
+        }
+      }
     }
   }
 
@@ -87,43 +203,182 @@ class RedisStreamsBroker implements Broker {
     String? consumerGroup,
     String? consumerName,
   }) {
-    final state = _state(queue);
     final consumer =
         consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
+    final group = consumerGroup ?? _groupKey(queue);
 
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>.broadcast(
-      onListen: () async {
-        while (!controller.isClosed) {
-          final delivery = await state.nextDelivery(
-            consumer: consumer,
-            prefetch: prefetch,
-            defaultVisibilityTimeout: defaultVisibilityTimeout,
-          );
-          if (controller.isClosed) break;
-          controller.add(delivery);
+      onCancel: () {
+        _controllers.remove(controller);
+        if (!controller.isClosed) {
+          unawaited(controller.close());
         }
       },
-      onCancel: () {
-        state.cancelWaiters(consumer);
-        controller.close();
-      },
     );
+    _controllers.add(controller);
+
+    Future<void> loop() async {
+      while (!controller.isClosed && !_closed) {
+        await _ensureGroup(queue);
+        await _drainDelayed(queue);
+        dynamic result;
+        try {
+          result = await _send([
+            'XREADGROUP',
+            'GROUP',
+            group,
+            consumer,
+            'BLOCK',
+            blockTime.inMilliseconds.toString(),
+            'COUNT',
+            prefetch.toString(),
+            'STREAMS',
+            _streamKey(queue),
+            '>',
+          ]);
+        } catch (error) {
+          if ('$error'.contains('NOGROUP')) {
+            final defaultKey = '${_streamKey(queue)}|${_groupKey(queue)}';
+            _groupsCreated.remove(defaultKey);
+            _groupsCreated.remove('${_streamKey(queue)}|$group');
+            await _ensureGroup(queue);
+            continue;
+          }
+          rethrow;
+        }
+        if (result == null) {
+          continue;
+        }
+        final deliveries = _parseDeliveries(queue, group, consumer, result);
+        for (final delivery in deliveries) {
+          if (controller.isClosed) {
+            break;
+          }
+          controller.add(delivery);
+        }
+      }
+    }
+
+    loop();
+    _scheduleClaim(queue, group, consumer);
     return controller.stream;
+  }
+
+  List<Delivery> _parseDeliveries(
+    String queue,
+    String group,
+    String consumer,
+    dynamic raw,
+  ) {
+    final deliveries = <Delivery>[];
+    if (raw is! List || raw.isEmpty) return deliveries;
+    for (final streamEntry in raw) {
+      if (streamEntry is! List || streamEntry.length != 2) continue;
+      final entries = streamEntry[1];
+      if (entries is! List) continue;
+      for (final entry in entries) {
+        if (entry is! List || entry.length != 2) continue;
+        final id = entry[0] as String;
+        final fields = entry[1];
+        if (fields is! List) continue;
+        final map = <String, String>{};
+        for (var i = 0; i < fields.length; i += 2) {
+          final field = fields[i] as String;
+          final value = fields[i + 1] as String;
+          map[field] = value;
+        }
+        final envelope = _envelopeFromMap(map);
+        final receipt = '${_streamKey(queue)}|$group|$consumer|$id';
+        final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
+        deliveries.add(
+          Delivery(
+            envelope: envelope,
+            receipt: receipt,
+            leaseExpiresAt: lease == Duration.zero
+                ? null
+                : DateTime.now().add(lease),
+          ),
+        );
+      }
+    }
+    return deliveries;
+  }
+
+  Envelope _envelopeFromMap(Map<String, String> map) {
+    return Envelope(
+      id: map['id'],
+      name: map['name']!,
+      args: jsonDecode(map['args'] ?? '{}') as Map<String, Object?>,
+      headers: (jsonDecode(map['headers'] ?? '{}') as Map)
+          .cast<String, String>(),
+      enqueuedAt: DateTime.parse(
+        map['enqueuedAt'] ?? DateTime.now().toIso8601String(),
+      ),
+      notBefore: (map['notBefore']?.isEmpty ?? true)
+          ? null
+          : DateTime.parse(map['notBefore']!),
+      priority: int.tryParse(map['priority'] ?? '0') ?? 0,
+      attempt: int.tryParse(map['attempt'] ?? '0') ?? 0,
+      maxRetries: int.tryParse(map['maxRetries'] ?? '0') ?? 0,
+      visibilityTimeout: (map['visibilityTimeout']?.isEmpty ?? true)
+          ? null
+          : Duration(milliseconds: int.parse(map['visibilityTimeout']!)),
+      queue: map['queue'] ?? 'default',
+      meta: jsonDecode(map['meta'] ?? '{}') as Map<String, Object?>,
+    );
+  }
+
+  void _scheduleClaim(String queue, String group, String consumer) {
+    _claimTimers['$queue|$consumer']?.cancel();
+    _claimTimers['$queue|$consumer'] = Timer.periodic(claimInterval, (_) async {
+      await _ensureGroup(queue);
+      final result = await _send([
+        'XAUTOCLAIM',
+        _streamKey(queue),
+        group,
+        consumer,
+        claimInterval.inMilliseconds.toString(),
+        '0-0',
+        'COUNT',
+        delayedDrainBatch.toString(),
+        'JUSTID',
+      ]);
+      if (result is List && result.length >= 2) {
+        final ids = result[1];
+        if (ids is List && ids.isNotEmpty) {
+          // Requeue claimed ids with the same consumer for immediate delivery
+          for (final id in ids) {
+            await _send([
+              'XCLAIM',
+              _streamKey(queue),
+              group,
+              consumer,
+              '0',
+              id,
+              'JUSTID',
+            ]);
+          }
+        }
+      }
+    });
   }
 
   @override
   Future<void> ack(Delivery delivery) async {
-    final state = _state(delivery.envelope.queue);
-    state.ack(delivery.receipt);
+    final info = _parseReceipt(delivery.receipt);
+    await _send(['XACK', info.stream, info.group, info.id]);
   }
 
   @override
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
-    final state = _state(delivery.envelope.queue);
-    final envelope = state.ack(delivery.receipt);
-    if (envelope != null && requeue) {
-      state.enqueue(envelope);
+    final info = _parseReceipt(delivery.receipt);
+    await _send(['XACK', info.stream, info.group, info.id]);
+    if (requeue) {
+      await _enqueue(
+        delivery.envelope.queue,
+        delivery.envelope.copyWith(attempt: delivery.envelope.attempt + 1),
+      );
     }
   }
 
@@ -133,239 +388,117 @@ class RedisStreamsBroker implements Broker {
     String? reason,
     Map<String, Object?>? meta,
   }) async {
-    final state = _state(delivery.envelope.queue);
-    state.deadLetter(delivery.receipt, reason: reason, meta: meta);
+    final info = _parseReceipt(delivery.receipt);
+    await _send(['XACK', info.stream, info.group, info.id]);
+    await _send([
+      'LPUSH',
+      _deadKey(delivery.envelope.queue),
+      jsonEncode({
+        'envelope': delivery.envelope.toJson(),
+        'reason': reason,
+        'meta': meta,
+        'deadAt': DateTime.now().toIso8601String(),
+      }),
+    ]);
+  }
+
+  Future<List<DeadLetterEntry>> deadLetters(String queue) async {
+    final result = await _send(['LRANGE', _deadKey(queue), '0', '-1']);
+    if (result is! List) return const [];
+    return result.map((entry) {
+      final obj = jsonDecode(entry as String) as Map<String, Object?>;
+      return DeadLetterEntry(
+        envelope: Envelope.fromJson(obj['envelope'] as Map<String, Object?>),
+        reason: obj['reason'] as String?,
+        meta: (obj['meta'] as Map?)?.cast<String, Object?>(),
+        deadAt: DateTime.parse(obj['deadAt'] as String),
+      );
+    }).toList();
   }
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
-    final state = _state(delivery.envelope.queue);
-    state.extendLease(delivery.receipt, by);
+    final info = _parseReceipt(delivery.receipt);
+    await _send([
+      'XCLAIM',
+      info.stream,
+      info.group,
+      info.consumer,
+      '0',
+      info.id,
+      'JUSTID',
+    ]);
   }
 
   @override
   Future<void> purge(String queue) async {
-    final state = _state(queue);
-    state.purge();
+    await _send(['DEL', _streamKey(queue)]);
+    await _send(['DEL', _delayedKey(queue)]);
+    await _send(['DEL', _deadKey(queue)]);
+    try {
+      await _send(['XGROUP', 'DESTROY', _streamKey(queue), _groupKey(queue)]);
+    } catch (_) {
+      // Group may not exist; ignore.
+    }
+    _groupsCreated.remove('${_streamKey(queue)}|${_groupKey(queue)}');
   }
-
-  List<DeadLetterEntry> deadLetters(String queue) =>
-      List.unmodifiable(_state(queue).deadLetters);
 
   @override
-  Future<int?> pendingCount(String queue) async => _state(queue).pending;
+  Future<int?> pendingCount(String queue) async {
+    final length = await _send(['XLEN', _streamKey(queue)]);
+    final delayed = await _send(['ZCARD', _delayedKey(queue)]);
+    return _asInt(length) + _asInt(delayed);
+  }
 
   @override
-  Future<int?> inflightCount(String queue) async => _state(queue).inflight;
-}
-
-class _QueueState {
-  _QueueState(this.name);
-
-  final String name;
-
-  final ListQueue<Envelope> _ready = ListQueue();
-  final PriorityQueue<_DelayedEntry> _delayed = HeapPriorityQueue(
-    (a, b) => a.availableAt.compareTo(b.availableAt),
-  );
-  final Map<String, _PendingEntry> _pending = {};
-  final List<DeadLetterEntry> deadLetters = [];
-  final Map<String, int> _consumerInFlight = {};
-  final List<Completer<void>> _waiters = [];
-
-  int _sequence = 0;
-
-  void dispose() {
-    for (final completer in _waiters) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
+  Future<int?> inflightCount(String queue) async {
+    final result = await _send([
+      'XPENDING',
+      _streamKey(queue),
+      _groupKey(queue),
+    ]);
+    if (result is List && result.isNotEmpty) {
+      return _asInt(result.first);
     }
-    _waiters.clear();
+    return 0;
   }
 
-  void cancelWaiters(String consumer) {
-    _consumerInFlight.remove(consumer);
-    for (final completer in _waiters) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
+  ReceiptInfo _parseReceipt(String receipt) {
+    final parts = receipt.split('|');
+    if (parts.length != 4) {
+      throw StateError('Invalid receipt format: $receipt');
     }
-    _waiters.clear();
-  }
-
-  void enqueue(Envelope envelope) {
-    _ready.add(envelope);
-    _notify();
-  }
-
-  void addDelayed(Envelope envelope) {
-    _delayed.add(
-      _DelayedEntry(envelope: envelope, availableAt: envelope.notBefore!),
+    return ReceiptInfo(
+      stream: parts[0],
+      group: parts[1],
+      consumer: parts[2],
+      id: parts[3],
     );
   }
 
-  void moveDue(DateTime now) {
-    var moved = false;
-    while (_delayed.isNotEmpty) {
-      final entry = _delayed.first;
-      if (entry.availableAt.isAfter(now)) {
-        break;
-      }
-      _delayed.removeFirst();
-      _ready.add(entry.envelope.copyWith(notBefore: null));
-      moved = true;
+  int _asInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    if (value is List && value.isNotEmpty) {
+      return _asInt(value.first);
     }
-    if (moved) {
-      _notify();
-    }
-  }
-
-  Future<Delivery> nextDelivery({
-    required String consumer,
-    required int prefetch,
-    required Duration defaultVisibilityTimeout,
-  }) async {
-    while (true) {
-      moveDue(DateTime.now());
-
-      final inFlight = _consumerInFlight[consumer] ?? 0;
-      if (inFlight < prefetch && _ready.isNotEmpty) {
-        final envelope = _ready.removeFirst();
-        final receipt = _nextReceipt();
-        final visibility =
-            envelope.visibilityTimeout ?? defaultVisibilityTimeout;
-        final expiresAt = visibility == Duration.zero
-            ? null
-            : DateTime.now().add(visibility);
-        final delivery = Delivery(
-          envelope: envelope,
-          receipt: receipt,
-          leaseExpiresAt: expiresAt,
-        );
-        _pending[receipt] = _PendingEntry(
-          delivery: delivery,
-          consumer: consumer,
-          leaseExpiresAt: expiresAt,
-        );
-        _consumerInFlight[consumer] = inFlight + 1;
-        return delivery;
-      }
-
-      final completer = Completer<void>();
-      _waiters.add(completer);
-      await completer.future;
-    }
-  }
-
-  Envelope? ack(String receipt) {
-    final entry = _pending.remove(receipt);
-    if (entry == null) {
-      return null;
-    }
-    final consumer = entry.consumer;
-    final count = _consumerInFlight[consumer] ?? 0;
-    if (count > 0) {
-      _consumerInFlight[consumer] = count - 1;
-    }
-    _notify();
-    return entry.delivery.envelope;
-  }
-
-  void deadLetter(
-    String receipt, {
-    String? reason,
-    Map<String, Object?>? meta,
-  }) {
-    final envelope = ack(receipt);
-    if (envelope == null) {
-      return;
-    }
-    deadLetters.add(
-      DeadLetterEntry(
-        envelope: envelope,
-        reason: reason,
-        meta: meta ?? const {},
-        deadAt: DateTime.now(),
-      ),
-    );
-  }
-
-  void reclaimExpired(DateTime now) {
-    final expired = _pending.entries
-        .where(
-          (entry) =>
-              entry.value.leaseExpiresAt != null &&
-              !entry.value.leaseExpiresAt!.isAfter(now),
-        )
-        .map((entry) => entry.key)
-        .toList();
-
-    for (final receipt in expired) {
-      final entry = _pending.remove(receipt);
-      if (entry == null) continue;
-      final consumer = entry.consumer;
-      final count = _consumerInFlight[consumer] ?? 0;
-      if (count > 0) {
-        _consumerInFlight[consumer] = count - 1;
-      }
-      _ready.add(entry.delivery.envelope);
-    }
-
-    if (expired.isNotEmpty) {
-      _notify();
-    }
-  }
-
-  void extendLease(String receipt, Duration by) {
-    final entry = _pending[receipt];
-    if (entry == null) return;
-    entry.leaseExpiresAt = DateTime.now().add(by);
-  }
-
-  void purge() {
-    _ready.clear();
-    _delayed.clear();
-    _pending.clear();
-    deadLetters.clear();
-    _consumerInFlight.clear();
-    _notify();
-  }
-
-  String _nextReceipt() => '$name:${_sequence++}';
-
-  int get pending => _ready.length + _delayed.length;
-
-  int get inflight => _pending.length;
-
-  void _notify() {
-    if (_waiters.isEmpty) return;
-    for (final completer in _waiters) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    }
-    _waiters.clear();
+    return 0;
   }
 }
 
-class _DelayedEntry {
-  _DelayedEntry({required this.envelope, required this.availableAt});
-
-  final Envelope envelope;
-  final DateTime availableAt;
-}
-
-class _PendingEntry {
-  _PendingEntry({
-    required this.delivery,
+class ReceiptInfo {
+  ReceiptInfo({
+    required this.stream,
+    required this.group,
     required this.consumer,
-    required this.leaseExpiresAt,
+    required this.id,
   });
 
-  final Delivery delivery;
+  final String stream;
+  final String group;
   final String consumer;
-  DateTime? leaseExpiresAt;
+  final String id;
 }
 
 class DeadLetterEntry {

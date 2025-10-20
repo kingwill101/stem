@@ -2,17 +2,17 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend_redis/redis_backend.dart';
-import 'package:untitled6/src/broker_redis/redis_broker.dart';
+import 'package:untitled6/src/backend/in_memory_backend.dart';
+import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('Worker', () {
     test('executes task and records success', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 40),
       );
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
@@ -55,11 +55,11 @@ void main() {
     });
 
     test('retries failing task then succeeds', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 40),
       );
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_FlakyTask());
       final worker = Worker(
         broker: broker,
@@ -111,11 +111,11 @@ void main() {
     });
 
     test('moves task to dead letter after max retries', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 40),
       );
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_AlwaysFailTask());
       final worker = Worker(
         broker: broker,

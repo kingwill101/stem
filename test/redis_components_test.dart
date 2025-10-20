@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend_redis/redis_backend.dart';
-import 'package:untitled6/src/broker_redis/redis_broker.dart';
+import 'package:untitled6/src/backend/in_memory_backend.dart';
+import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 
 void main() {
-  group('RedisStreamsBroker', () {
+  group('InMemoryRedisBroker', () {
     test('delivers published messages to consumers', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 50),
         defaultVisibilityTimeout: const Duration(seconds: 1),
@@ -28,7 +28,7 @@ void main() {
     });
 
     test('delayed messages become available after ETA', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 50),
       );
@@ -48,7 +48,7 @@ void main() {
     });
 
     test('expired leases are reclaimed and re-delivered', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 5),
         claimInterval: const Duration(milliseconds: 20),
         defaultVisibilityTimeout: const Duration(milliseconds: 30),
@@ -79,9 +79,9 @@ void main() {
     });
   });
 
-  group('RedisResultBackend', () {
+  group('InMemoryResultBackend', () {
     test('stores and expires task statuses', () async {
-      final backend = RedisResultBackend(
+      final backend = InMemoryResultBackend(
         defaultTtl: const Duration(milliseconds: 50),
       );
 
@@ -102,7 +102,7 @@ void main() {
     });
 
     test('aggregates group results', () async {
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
 
       await backend.initGroup(GroupDescriptor(id: 'g1', expected: 2));
 
@@ -124,11 +124,11 @@ void main() {
 
   group('Integration', () {
     test('publish -> consume -> ack success', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 30),
       );
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 
@@ -145,11 +145,11 @@ void main() {
     });
 
     test('failed task moves to dead letter', () async {
-      final broker = RedisStreamsBroker(
+      final broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 30),
       );
-      final backend = RedisResultBackend();
+      final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 

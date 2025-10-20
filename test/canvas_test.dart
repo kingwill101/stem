@@ -2,23 +2,23 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend_redis/redis_backend.dart';
-import 'package:untitled6/src/broker_redis/redis_broker.dart';
+import 'package:untitled6/src/backend/in_memory_backend.dart';
+import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('Canvas', () {
-    late RedisStreamsBroker broker;
-    late RedisResultBackend backend;
+    late InMemoryRedisBroker broker;
+    late InMemoryResultBackend backend;
     late SimpleTaskRegistry registry;
     late Worker worker;
     late Canvas canvas;
 
     setUp(() async {
-      broker = RedisStreamsBroker(
+      broker = InMemoryRedisBroker(
         delayedInterval: const Duration(milliseconds: 5),
         claimInterval: const Duration(milliseconds: 20),
       );
-      backend = RedisResultBackend();
+      backend = InMemoryResultBackend();
       registry = SimpleTaskRegistry()
         ..register(_EchoTask())
         ..register(_SumTask());
