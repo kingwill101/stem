@@ -1,24 +1,58 @@
 services:
   collector:
-    image: otel/opentelemetry-collector:0.109.0
-    container_name: otel-collector
+    image: otel/opentelemetry-collector-contrib:0.109.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
       - "4318:4318"
+      - "8888:8888" # Prometheus metrics endpoint
+    networks:
+      - otel-network
     depends_on:
       - jaeger
 
   jaeger:
     image: jaegertracing/all-in-one:1.56
-    container_name: jaeger-ui
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "16686:16686"
       - "4317:4317"
       - "4319:4318"
+    networks:
+      - otel-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - otel-network
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/stem-dashboard.json:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+    networks:
+      - otel-network
+    depends_on:
+      - prometheus
 
   worker:
     build:
@@ -26,7 +60,16 @@ services:
       dockerfile: examples/otel_metrics/Dockerfile
     environment:
       STEM_OTLP_ENDPOINT: http://collector:4318/v1/metrics
+    networks:
+      - otel-network
     depends_on:
       - collector
       - jaeger
     command: ["dart", "run", "bin/worker.dart"]
+
+volumes:
+  grafana-storage:
+
+networks:
+  otel-network:
+    driver: bridge

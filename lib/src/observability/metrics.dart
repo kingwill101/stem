@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
+import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
+    as dotel_api;
 import 'package:opentelemetry/api.dart' as otel;
 
 /// Known metric aggregation types supported by the exporters.
@@ -335,39 +338,30 @@ class ConsoleMetricsExporter extends MetricsExporter {
   }
 }
 
-/// OTLP HTTP exporter that POSTs each event to [endpoint].
-class OtlpHttpMetricsExporter extends MetricsExporter {
-  OtlpHttpMetricsExporter(this.endpoint);
+/// Metrics exporter that relays events through Dartastic's OTLP pipeline.
+class DartasticMetricsExporter extends MetricsExporter {
+  DartasticMetricsExporter({
+    required Uri endpoint,
+    required String serviceName,
+    Duration exportInterval = const Duration(seconds: 15),
+  }) : _runtime = _DartasticMetricsRuntimeRegistry.instance.obtain(
+         endpoint: endpoint,
+         serviceName: serviceName,
+         exportInterval: exportInterval,
+       );
 
-  /// Destination OTLP endpoint accepting HTTP POST requests.
-  final Uri endpoint;
-
-  /// Client reused across requests to avoid reconnect overhead.
-  final _client = HttpClient();
+  final _DartasticMetricsRuntime _runtime;
 
   @override
-  /// Sends [event] asynchronously without blocking the caller.
   void record(MetricEvent event) {
-    unawaited(_send(event));
-  }
-
-  /// Performs the HTTP POST for [event], swallowing network failures.
-  Future<void> _send(MetricEvent event) async {
-    try {
-      final request = await _client.postUrl(endpoint);
-      request.headers.set('content-type', 'application/json');
-      request.write(jsonEncode(event.toJson()));
-      await request.close();
-    } catch (_) {
-      // swallow network errors to avoid impacting worker loops
-    }
+    _runtime.record(event);
   }
 
   @override
-  /// Closes the underlying HTTP client.
-  Future<void> shutdown() async {
-    _client.close(force: true);
-  }
+  Future<void> flush() => _runtime.flush();
+
+  @override
+  Future<void> shutdown() => _runtime.flush();
 }
 
 /// Exporter that accumulates metrics into Prometheus exposition format.
@@ -467,4 +461,249 @@ class _PrometheusSample {
             '${name}_avg{$tagString} $avg';
     }
   }
+}
+
+/// Registry caching Dartastic metric runtimes by endpoint/service key.
+class _DartasticMetricsRuntimeRegistry {
+  _DartasticMetricsRuntimeRegistry._();
+
+  static final _DartasticMetricsRuntimeRegistry instance =
+      _DartasticMetricsRuntimeRegistry._();
+
+  final Map<_DartasticRuntimeKey, _DartasticMetricsRuntime> _runtimes = {};
+
+  _DartasticMetricsRuntime obtain({
+    required Uri endpoint,
+    required String serviceName,
+    required Duration exportInterval,
+  }) {
+    final key = _DartasticRuntimeKey(
+      endpoint: endpoint,
+      serviceName: serviceName,
+      exportInterval: exportInterval,
+    );
+    return _runtimes.putIfAbsent(
+      key,
+      () => _DartasticMetricsRuntime(
+        endpoint: endpoint,
+        serviceName: serviceName,
+        exportInterval: exportInterval,
+      ),
+    );
+  }
+}
+
+/// Unique key for runtime lookup based on exporter configuration.
+class _DartasticRuntimeKey {
+  _DartasticRuntimeKey({
+    required this.endpoint,
+    required this.serviceName,
+    required this.exportInterval,
+  });
+
+  final Uri endpoint;
+  final String serviceName;
+  final Duration exportInterval;
+
+  @override
+  int get hashCode =>
+      Object.hash(endpoint.toString(), serviceName, exportInterval);
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is _DartasticRuntimeKey &&
+        other.endpoint == endpoint &&
+        other.serviceName == serviceName &&
+        other.exportInterval == exportInterval;
+  }
+}
+
+/// Runtime that initializes Dartastic OTLP pipeline and records measurements.
+class _DartasticMetricsRuntime {
+  _DartasticMetricsRuntime({
+    required this.endpoint,
+    required this.serviceName,
+    required this.exportInterval,
+  }) {
+    _ensureInitialized();
+  }
+
+  final Uri endpoint;
+  final String serviceName;
+  final Duration exportInterval;
+
+  dotel_api.APIMeter? _meter;
+  bool _initialized = false;
+  Future<void>? _initializing;
+  final List<MetricEvent> _buffer = [];
+  final Map<String, dotel_api.APICounter<double>> _counters = {};
+  final Map<String, dotel_api.APIHistogram<double>> _histograms = {};
+  final Map<String, dotel_api.APIGauge<double>> _gauges = {};
+
+  Future<void> _ensureInitialized() {
+    if (_initialized) {
+      return Future.value();
+    }
+    if (_initializing != null) {
+      return _initializing!;
+    }
+    return _initializing = _start();
+  }
+
+  Future<void> _start() async {
+    try {
+      final grpcEndpoint = _normaliseGrpcEndpoint(endpoint);
+      final exporter = dotel.OtlpGrpcMetricExporter(
+        dotel.OtlpGrpcMetricExporterConfig(
+          endpoint: grpcEndpoint.toString(),
+          insecure: grpcEndpoint.scheme != 'https',
+        ),
+      );
+      final reader = dotel.PeriodicExportingMetricReader(
+        exporter,
+        interval: exportInterval,
+      );
+      await dotel.OTel.initialize(
+        serviceName: serviceName,
+        endpoint: grpcEndpoint.toString(),
+        secure: grpcEndpoint.scheme == 'https',
+        enableMetrics: true,
+        metricExporter: exporter,
+        metricReader: reader,
+        spanProcessor: _NoopSpanProcessor(),
+      );
+      _meter = dotel.OTel.meterProvider().getMeter(name: 'stem');
+      _initialized = true;
+      if (_buffer.isNotEmpty) {
+        final pending = List<MetricEvent>.from(_buffer);
+        _buffer.clear();
+        for (final event in pending) {
+          _record(event);
+        }
+      }
+    } catch (_) {
+      // If initialization fails, keep events buffered for a later attempt.
+      _initializing = null;
+    }
+  }
+
+  void record(MetricEvent event) {
+    if (!_initialized) {
+      _buffer.add(event);
+      _ensureInitialized();
+      return;
+    }
+
+    if (_meter == null) {
+      return;
+    }
+
+    _record(event);
+  }
+
+  void _record(MetricEvent event) {
+    if (_meter == null) return;
+    final instrumentName = _instrumentNameFor(event.name);
+    final attributes = event.tags.isEmpty
+        ? const <String, Object>{}
+        : Map<String, Object>.from(event.tags);
+    switch (event.type) {
+      case MetricType.counter:
+        final counter = _counters.putIfAbsent(instrumentName, () {
+          return _meter!.createCounter<double>(
+            name: instrumentName,
+            unit: event.unit == 'count' ? null : event.unit,
+          );
+        });
+        counter.addWithMap(event.value, attributes);
+        break;
+      case MetricType.histogram:
+        final histogram = _histograms.putIfAbsent(instrumentName, () {
+          return _meter!.createHistogram<double>(
+            name: instrumentName,
+            unit: _normalizedHistogramUnit(event.unit),
+          );
+        });
+        histogram.recordWithMap(
+          _normalizedHistogramValue(event.value, event.unit),
+          attributes,
+        );
+        break;
+      case MetricType.gauge:
+        final gauge = _gauges.putIfAbsent(instrumentName, () {
+          return _meter!.createGauge<double>(
+            name: instrumentName,
+            unit: event.unit,
+          );
+        });
+        gauge.recordWithMap(event.value, attributes);
+        break;
+    }
+  }
+
+  Future<void> flush() async {
+    await _ensureInitialized();
+    await dotel.OTel.meterProvider().forceFlush();
+  }
+}
+
+/// Span processor that drops all tracing data (metrics-only usage).
+class _NoopSpanProcessor extends dotel.SpanProcessor {
+  _NoopSpanProcessor();
+
+  @override
+  Future<void> onStart(dotel.Span span, dotel.Context? parentContext) async {}
+
+  @override
+  Future<void> onEnd(dotel.Span span) async {}
+
+  @override
+  Future<void> onNameUpdate(dotel.Span span, String newName) async {}
+
+  @override
+  Future<void> shutdown() async {}
+
+  @override
+  Future<void> forceFlush() async {}
+}
+
+Uri _normaliseGrpcEndpoint(Uri endpoint) {
+  final useHttps = endpoint.scheme == 'https';
+  final defaultPort = useHttps ? 443 : 80;
+  var port = endpoint.hasPort ? endpoint.port : defaultPort;
+
+  // Many configurations point at the HTTP OTLP port 4318 with a /v1/metrics path.
+  // When using gRPC we need to target the gRPC port (4317) with no path.
+  if (endpoint.path.contains('/v1/metrics') && port == 4318) {
+    port = 4317;
+  }
+
+  return Uri(
+    scheme: useHttps ? 'https' : 'http',
+    host: endpoint.host,
+    port: port,
+  );
+}
+
+String _instrumentNameFor(String rawName) {
+  var name = rawName;
+  if (name.startsWith('stem.')) {
+    name = name.substring('stem.'.length);
+  }
+  return name.replaceAll('.', '_');
+}
+
+double _normalizedHistogramValue(double value, String? unit) {
+  if (unit == 'ms') {
+    return value / 1000.0;
+  }
+  return value;
+}
+
+String? _normalizedHistogramUnit(String? unit) {
+  if (unit == 'ms') {
+    return 's';
+  }
+  return unit;
 }

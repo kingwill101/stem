@@ -85,7 +85,12 @@ class ObservabilityConfig {
       if (normalized.toLowerCase().startsWith('otlp')) {
         final endpoint = _endpointFromSpec(normalized) ?? otlpEndpoint;
         if (endpoint != null) {
-          exporters.add(OtlpHttpMetricsExporter(endpoint));
+          exporters.add(
+            DartasticMetricsExporter(
+              endpoint: endpoint,
+              serviceName: namespace,
+            ),
+          );
         }
       }
     }

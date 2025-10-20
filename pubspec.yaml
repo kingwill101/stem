@@ -11,6 +11,8 @@ dependencies:
   collection: ^1.18.0
   args: ^2.5.0
   opentelemetry: ^0.18.10
+  dartastic_opentelemetry: ^0.8.6
+  dartastic_opentelemetry_api: ^0.8.8
   redis: ^4.0.0
   contextual: ^2.0.0
   yaml: ^3.1.2
