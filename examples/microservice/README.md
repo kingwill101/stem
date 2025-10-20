@@ -21,7 +21,13 @@ All services expect the following environment variables:
 | `STEM_TLS_ALLOW_INSECURE` | `true` | Accept self-signed certs (set to `false` in production). |
 | `PORT` | `8081` | HTTP port for the enqueue API. |
 
-Copy `.env.example` to `.env` and adjust values as needed when using Docker.
+Several ready-made security profiles live alongside this README:
+
+- `.env.hmac` – HMAC signing without TLS (local development)
+- `.env.hmac_tls` – HMAC signing with TLS-enabled Redis
+- `.env.ed25519_tls` – Ed25519 signing with TLS-enabled Redis
+
+Copy the variant you want to `.env` before starting the stack and adjust values as needed. The [Security Configuration Examples](../../docs/process/security-examples.md) page walks through each option step by step.
 
 Generate a fresh signing secret before production use:
 
@@ -69,7 +75,7 @@ and copy the printed environment variables into your `.env` file.
 
 ```bash
 cd examples/microservice
-cp .env.example .env # optional override
+cp .env.hmac_tls .env   # or .env.hmac / .env.ed25519_tls
 docker compose up --build
 ```
 
@@ -103,6 +109,8 @@ Stop the stack with `docker compose down`.
    export STEM_SIGNING_KEYS=primary:$(openssl rand -base64 32)
    export STEM_SIGNING_ACTIVE_KEY=primary
    ```
+
+   > For the HMAC/no-TLS profile use `redis://` URLs and omit the TLS variables.
 
 3. Run the worker:
 
