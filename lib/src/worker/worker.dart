@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 import '../core/retry.dart';
 import '../observability/logging.dart';
 import '../observability/metrics.dart';
+import '../core/task_invocation.dart';
+import 'isolate_pool.dart';
 
 /// Worker daemon that consumes tasks from a broker and executes registered handlers.
 class Worker {
@@ -17,9 +21,18 @@ class Worker {
     RetryStrategy? retryStrategy,
     this.queue = 'default',
     this.consumerName,
-    this.prefetch = 1,
+    int? concurrency,
+    int prefetchMultiplier = 2,
+    int? prefetch,
     this.heartbeatInterval = const Duration(seconds: 15),
-  }) : retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy();
+  }) : concurrency = _normalizeConcurrency(concurrency),
+       prefetchMultiplier = math.max(1, prefetchMultiplier),
+       prefetch = _calculatePrefetch(
+         prefetch,
+         _normalizeConcurrency(concurrency),
+         math.max(1, prefetchMultiplier),
+       ),
+       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy();
 
   final Broker broker;
   final TaskRegistry registry;
@@ -29,6 +42,8 @@ class Worker {
   final RetryStrategy retryStrategy;
   final String queue;
   final String? consumerName;
+  final int concurrency;
+  final int prefetchMultiplier;
   final int prefetch;
   final Duration heartbeatInterval;
 
@@ -36,6 +51,8 @@ class Worker {
   final Map<String, Timer> _heartbeatTimers = {};
   final Map<String, StreamSubscription<Delivery>> _subscriptions = {};
   final StreamController<WorkerEvent> _events = StreamController.broadcast();
+  TaskIsolatePool? _isolatePool;
+  Future<TaskIsolatePool>? _poolFuture;
 
   bool _running = false;
 
@@ -49,7 +66,19 @@ class Worker {
         .listen(
           (delivery) {
             // Fire-and-forget; handler manages its own lifecycle.
-            unawaited(_handle(delivery));
+            final task = _handle(delivery);
+            unawaited(
+              task.catchError((Object error, StackTrace stack) {
+                _events.add(
+                  WorkerEvent(
+                    type: WorkerEventType.error,
+                    envelope: delivery.envelope,
+                    error: error,
+                    stackTrace: stack,
+                  ),
+                );
+              }),
+            );
           },
           onError: (Object error, StackTrace stack) {
             _events.add(
@@ -66,6 +95,10 @@ class Worker {
 
   Future<void> shutdown() async {
     _running = false;
+    final pool = _isolatePool;
+    _isolatePool = null;
+    _poolFuture = null;
+    await pool?.dispose();
     for (final sub in _subscriptions.values) {
       await sub.cancel();
     }
@@ -178,7 +211,7 @@ class Worker {
 
       result = await _invokeWithMiddleware(
         context,
-        () => _executeWithHardLimit(handler, context, envelope.args),
+        () => _executeWithHardLimit(handler, context, envelope),
       );
 
       _cancelLeaseTimer(delivery.receipt);
@@ -268,10 +301,14 @@ class Worker {
   Future<dynamic> _executeWithHardLimit(
     TaskHandler handler,
     TaskContext context,
-    Map<String, Object?> args,
+    Envelope envelope,
   ) {
     final hard = handler.options.hardTimeLimit;
-    final future = handler.call(context, args);
+    if (_shouldUseIsolate(handler)) {
+      return _runInIsolate(handler, context, envelope, hardTimeout: hard);
+    }
+
+    final future = handler.call(context, envelope.args);
     if (hard == null) {
       return future;
     }
@@ -468,6 +505,85 @@ class Worker {
       ),
     );
   }
+
+  bool _shouldUseIsolate(TaskHandler handler) =>
+      handler.isolateEntrypoint != null;
+
+  Future<Object?> _runInIsolate(
+    TaskHandler handler,
+    TaskContext context,
+    Envelope envelope, {
+    Duration? hardTimeout,
+  }) async {
+    final entrypoint = handler.isolateEntrypoint;
+    if (entrypoint == null) {
+      return handler.call(context, envelope.args);
+    }
+
+    final pool = await _ensureIsolatePool();
+
+    final outcome = await pool.execute(
+      entrypoint,
+      envelope.args,
+      envelope.headers,
+      envelope.meta,
+      envelope.attempt,
+      _controlHandler(context),
+      hardTimeout: hardTimeout,
+      taskName: handler.name,
+    );
+
+    if (outcome is TaskExecutionSuccess) {
+      return outcome.value;
+    } else if (outcome is TaskExecutionFailure) {
+      Error.throwWithStackTrace(outcome.error, outcome.stackTrace);
+    } else if (outcome is TaskExecutionTimeout) {
+      throw TimeoutException(
+        'hard time limit exceeded for ${outcome.taskName}',
+        outcome.limit,
+      );
+    }
+
+    throw StateError('Unexpected execution outcome: $outcome');
+  }
+
+  TaskControlHandler _controlHandler(TaskContext context) {
+    return (signal) async {
+      if (signal is HeartbeatSignal) {
+        context.heartbeat();
+      } else if (signal is ExtendLeaseSignal) {
+        await context.extendLease(signal.by);
+      } else if (signal is ProgressSignal) {
+        await context.progress(signal.percentComplete, data: signal.data);
+      }
+    };
+  }
+
+  Future<TaskIsolatePool> _ensureIsolatePool() {
+    final existing = _isolatePool;
+    if (existing != null) return Future.value(existing);
+    final future = _poolFuture;
+    if (future != null) return future;
+    final creation = _createPool();
+    _poolFuture = creation;
+    return creation;
+  }
+
+  Future<TaskIsolatePool> _createPool() async {
+    final pool = TaskIsolatePool(size: concurrency);
+    await pool.start();
+    _isolatePool = pool;
+    return pool;
+  }
+
+  static int _normalizeConcurrency(int? value) =>
+      math.max(1, value ?? Platform.numberOfProcessors);
+
+  static int _calculatePrefetch(
+    int? provided,
+    int concurrency,
+    int multiplier,
+  ) => math.max(1, provided ?? concurrency * multiplier);
 }
 
 class WorkerEvent {

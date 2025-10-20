@@ -86,6 +86,9 @@ class _StubTaskHandler implements TaskHandler<void> {
   TaskOptions get options => const TaskOptions();
 
   @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {}
 }
 

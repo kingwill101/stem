@@ -6,6 +6,8 @@
 export 'src/core/config.dart';
 export 'src/core/contracts.dart';
 export 'src/core/envelope.dart';
+export 'src/core/function_task_handler.dart';
+export 'src/core/task_invocation.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';
 export 'src/backend/in_memory_backend.dart';

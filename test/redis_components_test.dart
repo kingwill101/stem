@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend/in_memory_backend.dart';
 import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 
 void main() {
@@ -183,6 +182,9 @@ class _NoopTask implements TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {}

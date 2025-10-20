@@ -1,6 +1,9 @@
 import 'package:logging/logging.dart';
+import 'package:contextual/contextual.dart' as txtual;
 
 final stemLogger = Logger('stem');
+final ctxualLogger = txtual.Logger()
+  ..addChannel("console", txtual.ConsoleLogDriver());
 
 void configureStemLogging({Level level = Level.INFO}) {
   Logger.root.level = level;

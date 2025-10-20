@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'envelope.dart';
+import 'task_invocation.dart';
 
 /// Abstract broker interface implemented by queue adapters (Redis, SQS, etc).
 abstract class Broker {
@@ -403,6 +404,10 @@ abstract class TaskHandler<R> {
 
   /// Executes the task with the given [context] and [args].
   Future<R> call(TaskContext context, Map<String, Object?> args);
+
+  /// Optional entrypoint that allows this task to execute inside an isolate
+  /// worker. When `null`, the handler runs in the coordinator isolate.
+  TaskEntrypoint? get isolateEntrypoint => null;
 }
 
 /// Registry mapping task names to handler implementations.

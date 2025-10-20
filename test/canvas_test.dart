@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend/in_memory_backend.dart';
 import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 
 void main() {
@@ -28,6 +27,8 @@ void main() {
         registry: registry,
         backend: backend,
         consumerName: 'canvas-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
       );
       await worker.start();
     });
@@ -100,6 +101,9 @@ class _EchoTask implements TaskHandler<int> {
   TaskOptions get options => const TaskOptions();
 
   @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
   Future<int> call(TaskContext context, Map<String, Object?> args) async {
     return args['value'] as int? ?? 0;
   }
@@ -111,6 +115,9 @@ class _SumTask implements TaskHandler<int> {
 
   @override
   TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
   Future<int> call(TaskContext context, Map<String, Object?> args) async {

@@ -2,11 +2,9 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/backend/in_memory_backend.dart';
 import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
 import 'package:untitled6/src/scheduler/beat.dart';
 import 'package:untitled6/src/scheduler/in_memory_lock_store.dart';
-import 'package:untitled6/src/scheduler/in_memory_schedule_store.dart';
 
 void main() {
   group('Beat', () {
@@ -37,6 +35,8 @@ void main() {
         registry: registry,
         backend: backend,
         consumerName: 'worker-beat',
+        concurrency: 1,
+        prefetchMultiplier: 1,
       );
       worker.events.listen(events.add);
       await worker.start();
@@ -86,6 +86,8 @@ void main() {
         registry: registry,
         backend: backend,
         consumerName: 'worker-lock',
+        concurrency: 1,
+        prefetchMultiplier: 1,
       );
       worker.events.listen((e) {
         if (e.type == WorkerEventType.completed && e.envelope != null) {
@@ -115,6 +117,9 @@ class _NoopTask implements TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {}
