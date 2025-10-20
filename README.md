@@ -38,6 +38,22 @@ Stem follows semantic versioning. Public interfaces (`Broker`, `ResultBackend`,
 changes will only occur with a major version bump. See the release process doc
 for details.
 
+### Quality Suite
+
+Run formatting, analysis, tests, and coverage with:
+
+```bash
+tool/quality/run_quality_checks.sh
+```
+
+Set `RUN_COVERAGE=0` to skip coverage locally or override the threshold (default
+60%) with `COVERAGE_THRESHOLD`. Long-running soak tests are tagged and can be executed
+explicitly:
+
+```bash
+dart test --tags soak
+```
+
 ### Examples
 
 Three runnable example apps demonstrate common topologies:

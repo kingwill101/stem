@@ -25,7 +25,7 @@ docker compose up --build
 This launches:
 
 - **collector** – OpenTelemetry Collector forwarding metrics to Jaeger & logs
-- **jaeger-ui** – Jaeger all-in-one UI at <http://localhost:16686>
+- **jaeger-ui** – Jaeger all-in-one UI at [http://localhost:16686](http://localhost:16686)
 - **worker** – Stem worker enqueueing demo tasks every second
 
 Watch the collector logs for `stem.*` metrics and inspect traces in Jaeger.
