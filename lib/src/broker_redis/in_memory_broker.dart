@@ -143,13 +143,96 @@ class InMemoryRedisBroker implements Broker {
   }
 
   @override
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final state = _state(queue);
+    final entries = List<DeadLetterEntry>.from(state.deadLetters)
+      ..sort((a, b) => b.deadAt.compareTo(a.deadAt));
+    if (entries.isEmpty || limit <= 0) {
+      return const DeadLetterPage(entries: []);
+    }
+    final total = entries.length;
+    final start = offset < 0 ? 0 : offset;
+    if (start >= total) {
+      return const DeadLetterPage(entries: []);
+    }
+    var end = start + limit;
+    if (end > total) {
+      end = total;
+    }
+    final slice = entries.sublist(start, end);
+    final nextOffset = end < total ? end : null;
+    return DeadLetterPage(entries: slice, nextOffset: nextOffset);
+  }
+
+  @override
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
+    final state = _state(queue);
+    return state.deadLetters.firstWhereOrNull(
+      (entry) => entry.envelope.id == id,
+    );
+  }
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  }) async {
+    if (limit <= 0) {
+      return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+    }
+    final state = _state(queue);
+    final candidates = state.deadLetters.where((entry) {
+      if (since == null) return true;
+      return !entry.deadAt.isBefore(since);
+    }).toList()..sort((a, b) => a.deadAt.compareTo(b.deadAt));
+    final selected = candidates.take(limit).toList();
+    if (dryRun || selected.isEmpty) {
+      return DeadLetterReplayResult(entries: selected, dryRun: true);
+    }
+    final now = DateTime.now();
+    for (final entry in selected) {
+      state.deadLetters.remove(entry);
+      final replayEnvelope = entry.envelope.copyWith(
+        attempt: entry.envelope.attempt + 1,
+        notBefore: delay != null ? now.add(delay) : null,
+      );
+      await publish(replayEnvelope.copyWith(queue: queue), queue: queue);
+    }
+    return DeadLetterReplayResult(entries: selected, dryRun: false);
+  }
+
+  @override
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) async {
+    final state = _state(queue);
+    final candidates = state.deadLetters.where((entry) {
+      if (since == null) return true;
+      return !entry.deadAt.isBefore(since);
+    }).toList()..sort((a, b) => b.deadAt.compareTo(a.deadAt));
+    final toRemove = limit != null && limit >= 0
+        ? candidates.take(limit).toList()
+        : candidates;
+    for (final entry in toRemove) {
+      state.deadLetters.remove(entry);
+    }
+    return toRemove.length;
+  }
+
+  @override
   Future<void> purge(String queue) async {
     final state = _state(queue);
     state.purge();
   }
-
-  List<DeadLetterEntry> deadLetters(String queue) =>
-      List.unmodifiable(_state(queue).deadLetters);
 
   @override
   Future<int?> pendingCount(String queue) async => _state(queue).pending;
@@ -365,18 +448,4 @@ class _PendingEntry {
   final Delivery delivery;
   final String consumer;
   DateTime? leaseExpiresAt;
-}
-
-class DeadLetterEntry {
-  DeadLetterEntry({
-    required this.envelope,
-    this.reason,
-    Map<String, Object?>? meta,
-    required this.deadAt,
-  }) : meta = Map.unmodifiable(meta ?? const {});
-
-  final Envelope envelope;
-  final String? reason;
-  final Map<String, Object?> meta;
-  final DateTime deadAt;
 }

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
+import 'package:stem/stem.dart';
 
 Future<bool> _canConnect(String uri) async {
   try {

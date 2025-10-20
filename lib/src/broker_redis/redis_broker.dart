@@ -402,18 +402,107 @@ class RedisStreamsBroker implements Broker {
     ]);
   }
 
-  Future<List<DeadLetterEntry>> deadLetters(String queue) async {
-    final result = await _send(['LRANGE', _deadKey(queue), '0', '-1']);
-    if (result is! List) return const [];
-    return result.map((entry) {
-      final obj = jsonDecode(entry as String) as Map<String, Object?>;
-      return DeadLetterEntry(
-        envelope: Envelope.fromJson(obj['envelope'] as Map<String, Object?>),
-        reason: obj['reason'] as String?,
-        meta: (obj['meta'] as Map?)?.cast<String, Object?>(),
-        deadAt: DateTime.parse(obj['deadAt'] as String),
+  @override
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    if (limit <= 0) {
+      return const DeadLetterPage(entries: []);
+    }
+    final start = offset < 0 ? 0 : offset;
+    final stop = start + limit - 1;
+    final result = await _send([
+      'LRANGE',
+      _deadKey(queue),
+      start.toString(),
+      stop.toString(),
+    ]);
+    if (result is! List) {
+      return const DeadLetterPage(entries: []);
+    }
+    final entries = result
+        .cast<String>()
+        .map(_decodeDeadLetter)
+        .whereType<DeadLetterEntry>()
+        .toList();
+    final nextOffset = entries.length == limit ? start + entries.length : null;
+    return DeadLetterPage(entries: entries, nextOffset: nextOffset);
+  }
+
+  @override
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
+    final stored = await _fetchDeadLetters(queue);
+    try {
+      return stored.firstWhere((entry) => entry.entry.envelope.id == id).entry;
+    } on StateError {
+      return null;
+    }
+  }
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  }) async {
+    if (limit <= 0) {
+      return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+    }
+    final stored = await _fetchDeadLetters(queue);
+    final candidates = stored.where((entry) {
+      if (since == null) return true;
+      return !entry.entry.deadAt.isBefore(since);
+    }).toList()..sort((a, b) => a.entry.deadAt.compareTo(b.entry.deadAt));
+    final selected = candidates.take(limit).toList();
+    if (dryRun || selected.isEmpty) {
+      return DeadLetterReplayResult(
+        entries: selected.map((e) => e.entry).toList(),
+        dryRun: true,
       );
-    }).toList();
+    }
+    final now = DateTime.now();
+    for (final candidate in selected) {
+      await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
+      final replayEnvelope = candidate.entry.envelope.copyWith(
+        attempt: candidate.entry.envelope.attempt + 1,
+        notBefore: delay != null ? now.add(delay) : null,
+      );
+      await _enqueue(queue, replayEnvelope.copyWith(queue: queue));
+    }
+    return DeadLetterReplayResult(
+      entries: selected.map((e) => e.entry).toList(),
+      dryRun: false,
+    );
+  }
+
+  @override
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) async {
+    if (since == null && (limit == null || limit < 0)) {
+      final length = await _send(['LLEN', _deadKey(queue)]);
+      await _send(['DEL', _deadKey(queue)]);
+      return _asInt(length);
+    }
+
+    final stored = await _fetchDeadLetters(queue);
+    final candidates = stored.where((entry) {
+      if (since == null) return true;
+      return !entry.entry.deadAt.isBefore(since);
+    }).toList()..sort((a, b) => b.entry.deadAt.compareTo(a.entry.deadAt));
+    final selected = limit != null && limit >= 0
+        ? candidates.take(limit).toList()
+        : candidates;
+    for (final candidate in selected) {
+      await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
+    }
+    return selected.length;
   }
 
   @override
@@ -463,6 +552,35 @@ class RedisStreamsBroker implements Broker {
     return 0;
   }
 
+  DeadLetterEntry? _decodeDeadLetter(String raw) {
+    try {
+      final obj = jsonDecode(raw) as Map<String, Object?>;
+      return DeadLetterEntry(
+        envelope: Envelope.fromJson(
+          (obj['envelope'] as Map).cast<String, Object?>(),
+        ),
+        reason: obj['reason'] as String?,
+        meta: (obj['meta'] as Map?)?.cast<String, Object?>(),
+        deadAt: DateTime.parse(obj['deadAt'] as String),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<_StoredDeadLetter>> _fetchDeadLetters(String queue) async {
+    final result = await _send(['LRANGE', _deadKey(queue), '0', '-1']);
+    if (result is! List) return const <_StoredDeadLetter>[];
+    final entries = <_StoredDeadLetter>[];
+    for (final raw in result.cast<String>()) {
+      final decoded = _decodeDeadLetter(raw);
+      if (decoded != null) {
+        entries.add(_StoredDeadLetter(raw, decoded));
+      }
+    }
+    return entries;
+  }
+
   ReceiptInfo _parseReceipt(String receipt) {
     final parts = receipt.split('|');
     if (parts.length != 4) {
@@ -501,16 +619,9 @@ class ReceiptInfo {
   final String id;
 }
 
-class DeadLetterEntry {
-  DeadLetterEntry({
-    required this.envelope,
-    this.reason,
-    Map<String, Object?>? meta,
-    required this.deadAt,
-  }) : meta = Map.unmodifiable(meta ?? const {});
+class _StoredDeadLetter {
+  _StoredDeadLetter(this.raw, this.entry);
 
-  final Envelope envelope;
-  final String? reason;
-  final Map<String, Object?> meta;
-  final DateTime deadAt;
+  final String raw;
+  final DeadLetterEntry entry;
 }

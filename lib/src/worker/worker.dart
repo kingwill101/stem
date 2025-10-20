@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:contextual/contextual.dart';
+
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 import '../core/retry.dart';
@@ -172,7 +174,15 @@ class Worker {
 
     final groupId = envelope.headers['stem-group-id'];
 
-    stemLogger.fine('Task ${envelope.name} (${envelope.id}) started');
+    stemLogger.debug(
+      'Task {task} started',
+      Context({
+        'task': envelope.name,
+        'id': envelope.id,
+        'attempt': envelope.attempt,
+        'queue': envelope.queue,
+      }),
+    );
     StemMetrics.instance.increment(
       'tasks.started',
       tags: {'task': envelope.name, 'queue': envelope.queue},
@@ -246,7 +256,16 @@ class Worker {
         'tasks.succeeded',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
-      stemLogger.fine('Task ${envelope.name} (${envelope.id}) succeeded');
+      stemLogger.debug(
+        'Task {task} succeeded',
+        Context({
+          'task': envelope.name,
+          'id': envelope.id,
+          'attempt': envelope.attempt,
+          'queue': envelope.queue,
+          'worker': consumerName ?? 'unknown',
+        }),
+      );
       _events.add(
         WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
       );
@@ -452,9 +471,16 @@ class Worker {
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
       stemLogger.warning(
-        'Task ${envelope.name} (${envelope.id}) failed: $error',
-        error,
-        stack,
+        'Task {task} failed: {error}',
+        Context({
+          'task': envelope.name,
+          'id': envelope.id,
+          'attempt': envelope.attempt,
+          'queue': envelope.queue,
+          'worker': consumerName ?? 'unknown',
+          'error': error.toString(),
+          'stack': stack.toString(),
+        }),
       );
       _events.add(
         WorkerEvent(

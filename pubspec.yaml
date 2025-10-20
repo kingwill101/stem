@@ -1,4 +1,4 @@
-name: untitled6
+name: stem
 description: A starting point for Dart libraries or applications.
 version: 1.0.0
 # repository: https://github.com/my_org/my_repo
@@ -11,8 +11,8 @@ dependencies:
   collection: ^1.18.0
   args: ^2.5.0
   opentelemetry: ^0.18.10
-  logging: ^1.3.0
   redis: ^4.0.0
+  contextual: ^2.0.0
 
 dev_dependencies:
   lints: ^6.0.0

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
+import 'package:stem/stem.dart';
+import 'package:stem/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('Worker', () {
@@ -106,7 +106,8 @@ void main() {
         isTrue,
       );
 
-      expect(broker.deadLetters('default'), isEmpty);
+      final deadPage = await broker.listDeadLetters('default');
+      expect(deadPage.entries, isEmpty);
 
       await sub.cancel();
       await worker.shutdown();
@@ -150,9 +151,9 @@ void main() {
       final status = await backend.get(taskId);
       expect(status?.state, TaskState.failed);
 
-      final dead = broker.deadLetters('default');
-      expect(dead, hasLength(1));
-      expect(dead.single.envelope.id, equals(taskId));
+      final deadPage = await broker.listDeadLetters('default');
+      expect(deadPage.entries, hasLength(1));
+      expect(deadPage.entries.single.envelope.id, equals(taskId));
 
       await sub.cancel();
       await worker.shutdown();
@@ -271,7 +272,8 @@ void main() {
       expect(status?.state, TaskState.succeeded);
       expect(status?.attempt, equals(1));
 
-      expect(broker.deadLetters('default'), isEmpty);
+      final deadPage = await broker.listDeadLetters('default');
+      expect(deadPage.entries, isEmpty);
 
       await sub.cancel();
       await worker.shutdown();

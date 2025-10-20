@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('Envelope', () {
@@ -140,6 +140,32 @@ class _RecordingBroker implements Broker {
 
   @override
   bool get supportsPriority => false;
+
+  @override
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  }) async => const DeadLetterPage(entries: []);
+
+  @override
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async => null;
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  }) async => DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+
+  @override
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) async => 0;
 }
 
 class _RecordingBackend implements ResultBackend {

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
+import 'package:stem/stem.dart';
+import 'package:stem/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('Canvas', () {

@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
-import 'package:untitled6/src/cli/cli_runner.dart';
-import 'package:untitled6/src/cli/file_schedule_repository.dart';
-import 'package:untitled6/src/observability/metrics.dart';
-import 'package:untitled6/src/observability/snapshots.dart';
-import 'package:untitled6/untitled6.dart';
+import 'package:stem/src/cli/cli_runner.dart';
+import 'package:stem/src/cli/file_schedule_repository.dart';
+import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/observability/snapshots.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('schedule CLI', () {

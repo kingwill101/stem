@@ -7,9 +7,3 @@ services:
     image: redis:latest
     ports:
       - "6379:6379"
-
-networks:
-  default:
-    driver: slirp4netns
-    driver_opts:
-      allow_host_loopback: "true"

@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:untitled6/src/observability/metrics.dart';
+import 'package:stem/src/observability/metrics.dart';
 
 void main() {
   test('metrics counter aggregates by name and tags', () {

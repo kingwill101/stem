@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:untitled6/src/cli/cli_runner.dart';
+import 'package:stem/src/cli/cli_runner.dart';
 
 Future<void> main(List<String> arguments) async {
   final code = await runStemCli(arguments);

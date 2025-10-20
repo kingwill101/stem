@@ -1,39 +1,49 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+## Stem
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+Stem is a spec-driven background job platform for Dart. It provides task
+registration, Redis Streams integration, isolate-aware workers, retries, a beat
+scheduler, and CLI tooling for observability and dead-letter remediation.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
+### Highlights
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+- At-least-once delivery semantics with configurable retry strategies.
+- Isolate pool execution with soft and hard time limits.
+- Redis Streams broker (plus in-memory adapters for tests).
+- Result backend with group/chord primitives.
+- CLI support for schedules, observability snapshots, and DLQ replay.
+- OpenTelemetry metrics and heartbeat events.
 
-## Features
+### Documentation
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+The full documentation lives in the Docusaurus site under `.site/`.
 
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
-```dart
-const like = 'sample';
+```bash
+cd .site
+npm install
+npm start
 ```
 
-## Additional information
+You'll find guides covering developer onboarding, operations, scaling, and
+runbooks for the new `stem dlq` tooling.
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+### Examples
+
+Two runnable example apps demonstrate common topologies:
+
+- `examples/monolith_service` – single process service using in-memory adapters.
+- `examples/microservice` – enqueue API and worker communicating through Redis.
+
+Each example has a README with setup instructions.
+
+### CLI Quick Reference
+
+```bash
+stem schedule list
+stem observe metrics
+stem dlq list --queue default --limit 20
+stem dlq replay --queue default --limit 10 --yes
+```
+
+See `openspec/changes/` for the spec deltas that drive the implementation. Pull
+requests should include updated specs and passing `openspec validate --strict`,
+`dart format`, and `dart test` runs.

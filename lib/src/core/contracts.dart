@@ -55,6 +55,41 @@ abstract class Broker {
 
   /// Whether this broker supports message priorities.
   bool get supportsPriority;
+
+  /// Lists dead letter queue entries for [queue], returning up to [limit]
+  /// results starting at [offset]. Entries are typically ordered from newest
+  /// to oldest unless documented otherwise by the implementation.
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  });
+
+  /// Retrieves a single dead letter entry by envelope [id], or `null` if not
+  /// found.
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id);
+
+  /// Replays at most [limit] dead letter entries back onto the active queue.
+  ///
+  /// When [since] is provided, only entries with a `deadAt` greater than or
+  /// equal to the timestamp are considered. If [delay] is specified, replayed
+  /// envelopes are scheduled with the provided delay. When [dryRun] is `true`,
+  /// the method MUST NOT modify broker state and instead return the entries
+  /// that would have been replayed.
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  });
+
+  /// Removes dead letter entries from [queue].
+  ///
+  /// When [since] is provided, only entries with `deadAt` greater than or equal
+  /// to the timestamp must be removed. When [limit] is set, at most that many
+  /// entries are purged. Returns the number of entries removed.
+  Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit});
 }
 
 /// Logical task status across enqueue, running, success, failure states.
@@ -166,6 +201,74 @@ class TaskError {
       meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
     );
   }
+}
+
+/// Dead letter queue entry containing the failed [envelope] and metadata.
+class DeadLetterEntry {
+  DeadLetterEntry({
+    required this.envelope,
+    this.reason,
+    Map<String, Object?>? meta,
+    required this.deadAt,
+  }) : meta = Map.unmodifiable(meta ?? const {});
+
+  /// Envelope that failed processing.
+  final Envelope envelope;
+
+  /// Optional reason describing the failure.
+  final String? reason;
+
+  /// Additional metadata captured at failure time.
+  final Map<String, Object?> meta;
+
+  /// Timestamp when the task was dead-lettered.
+  final DateTime deadAt;
+
+  Map<String, Object?> toJson() => {
+    'envelope': envelope.toJson(),
+    'reason': reason,
+    'meta': meta,
+    'deadAt': deadAt.toIso8601String(),
+  };
+
+  factory DeadLetterEntry.fromJson(Map<String, Object?> json) {
+    return DeadLetterEntry(
+      envelope: Envelope.fromJson(
+        (json['envelope'] as Map).cast<String, Object?>(),
+      ),
+      reason: json['reason'] as String?,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+      deadAt: DateTime.parse(json['deadAt'] as String),
+    );
+  }
+}
+
+/// Page of dead letter results with optional continuation offset.
+class DeadLetterPage {
+  const DeadLetterPage({required this.entries, this.nextOffset});
+
+  /// Entries included in this page.
+  final List<DeadLetterEntry> entries;
+
+  /// Next offset to continue pagination, or `null` if no more entries.
+  final int? nextOffset;
+
+  /// Whether additional entries are available.
+  bool get hasMore => nextOffset != null;
+}
+
+/// Result describing entries considered for replay.
+class DeadLetterReplayResult {
+  const DeadLetterReplayResult({required this.entries, required this.dryRun});
+
+  /// Entries that matched the replay filters.
+  final List<DeadLetterEntry> entries;
+
+  /// Whether this invocation was a dry run (no mutations performed).
+  final bool dryRun;
+
+  /// Number of entries touched.
+  int get count => entries.length;
 }
 
 /// Result backend describes how task states are persisted and retrieved.

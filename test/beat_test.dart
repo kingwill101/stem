@@ -1,10 +1,7 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
-import 'package:untitled6/src/scheduler/beat.dart';
-import 'package:untitled6/src/scheduler/in_memory_lock_store.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('Beat', () {

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:untitled6/untitled6.dart';
-import 'package:untitled6/src/broker_redis/in_memory_broker.dart';
+import 'package:stem/stem.dart';
+import 'package:stem/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('InMemoryRedisBroker', () {
@@ -167,9 +167,9 @@ void main() {
       );
       await broker.deadLetter(delivery, reason: 'test');
 
-      final dead = broker.deadLetters('default');
-      expect(dead, hasLength(1));
-      expect(dead.single.reason, equals('test'));
+      final deadPage = await broker.listDeadLetters('default');
+      expect(deadPage.entries, hasLength(1));
+      expect(deadPage.entries.single.reason, equals('test'));
 
       broker.dispose();
     });
