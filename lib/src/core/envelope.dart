@@ -9,6 +9,7 @@ String generateEnvelopeId() {
 }
 
 /// Task payload persisted inside a broker.
+/// Since: 0.1.0
 class Envelope {
   Envelope({
     String? id,

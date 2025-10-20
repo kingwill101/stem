@@ -31,6 +31,13 @@ Quick links:
 - [Broker Comparison](.site/docs/broker-comparison.md)
 - [Release Process](.site/docs/release-process.md)
 
+### Compatibility
+
+Stem follows semantic versioning. Public interfaces (`Broker`, `ResultBackend`,
+`ScheduleStore`, etc.) are marked as stable starting from `0.1.0`; breaking
+changes will only occur with a major version bump. See the release process doc
+for details.
+
 ### Examples
 
 Three runnable example apps demonstrate common topologies:

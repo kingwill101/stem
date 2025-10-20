@@ -5,6 +5,7 @@ import 'task_invocation.dart';
 import '../observability/heartbeat.dart';
 
 /// Abstract broker interface implemented by queue adapters (Redis, SQS, etc).
+/// Since: 0.1.0
 abstract class Broker {
   /// Publishes the given [envelope] to the specified [queue].
   ///
@@ -273,6 +274,7 @@ class DeadLetterReplayResult {
 }
 
 /// Result backend describes how task states are persisted and retrieved.
+/// Since: 0.1.0
 abstract class ResultBackend {
   /// Sets the status for the task with the given [taskId].
   ///
@@ -451,6 +453,7 @@ class ScheduleEntry {
 }
 
 /// Storage abstraction used by the scheduler to fetch due entries.
+/// Since: 0.1.0
 abstract class ScheduleStore {
   /// Returns a list of [ScheduleEntry] instances that are due at the given [now] time, limited to [limit].
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100});
@@ -561,6 +564,7 @@ class TaskContext {
 }
 
 /// Runtime task handler.
+/// Since: 0.1.0
 abstract class TaskHandler<R> {
   /// The name of this task handler.
   String get name;
@@ -601,12 +605,14 @@ class SimpleTaskRegistry implements TaskRegistry {
 }
 
 /// Retry strategy used to compute the next backoff delay.
+/// Since: 0.1.0
 abstract class RetryStrategy {
   /// Computes the next delay duration for the given [attempt], [error], and [stackTrace].
   Duration nextDelay(int attempt, Object error, StackTrace stackTrace);
 }
 
 /// Optional rate limiter interface shared across workers.
+/// Since: 0.1.0
 abstract class RateLimiter {
   /// Attempts to acquire [tokens] for the given [key], with optional [interval] and [meta].
   Future<RateLimitDecision> acquire(
@@ -636,6 +642,7 @@ class RateLimitDecision {
 }
 
 /// Lock store used for unique jobs or scheduling coordination.
+/// Since: 0.1.0
 abstract class LockStore {
   /// Attempts to acquire a lock for the given [key], with [ttl] and optional [owner].
   Future<Lock?> acquire(
@@ -657,6 +664,7 @@ abstract class Lock {
 }
 
 /// Middleware hook invoked for lifecycle events around enqueue/consume/execute.
+/// Since: 0.1.0
 abstract class Middleware {
   /// Called when enqueuing an [envelope]. Call [next] to proceed.
   Future<void> onEnqueue(Envelope envelope, Future<void> Function() next);
