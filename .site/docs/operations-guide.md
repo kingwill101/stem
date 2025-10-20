@@ -113,7 +113,7 @@ This configuration batches metrics through the OTLP HTTP collector while heartbe
 
 ### Security
 
-- **Payload signing**: set `STEM_SIGNING_KEYS` to a comma separated list of `keyId:base64Secret` pairs and `STEM_SIGNING_ACTIVE_KEY` to the key used for new tasks. Enqueuers automatically sign envelopes and workers verify them, dead-lettering any tampered payloads. Follow the rotation steps in `docs/process/security-runbook.md` to phase keys in/out without downtime.
+- **Payload signing**: HMAC-SHA256 remains the default (`STEM_SIGNING_KEYS=primary:<base64 secret>` + `STEM_SIGNING_ACTIVE_KEY=primary`). For asymmetric signing, switch to Ed25519 by setting `STEM_SIGNING_ALGORITHM=ed25519` alongside `STEM_SIGNING_PUBLIC_KEYS` and (for producers) `STEM_SIGNING_PRIVATE_KEYS`. Run `dart run scripts/security/generate_ed25519_keys.dart` to produce ready-to-paste env values. Workers verify signatures automatically and dead-letter tampered payloads; see `docs/process/security-runbook.md` for rotation guidance.
 - **TLS bootstrap**: generate self-signed certificates for Redis or HTTP examples with `scripts/security/generate_tls_assets.sh <output-dir> <hostname>` and mount them via Docker Compose. Once certs are installed, set the relevant `redis://` URLs to `rediss://` and configure clients with the generated CA bundle.
 - **Vulnerability scanning**: run `scripts/security/run_vulnerability_scan.sh` as part of CI (or weekly locally). The script wraps `aquasec/trivy` against the repository and surfaces dependency CVEs that must be triaged.
 

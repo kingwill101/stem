@@ -1,6 +1,8 @@
 # Security Runbook
 
 ## Payload Signing Key Rotation
+
+### HMAC-SHA256 (default)
 1. Export the current signing configuration from the secrets manager.
 2. Generate a new random secret (32 bytes) and base64 encode it.
 3. Update `STEM_SIGNING_KEYS` to include both the existing and new `keyId:base64Secret` pairs.
@@ -8,6 +10,15 @@
 5. Redeploy workers with the updated `STEM_SIGNING_KEYS`. They will accept both keys during the overlap window.
 6. After the rollout completes and backlog drains, remove the old key from `STEM_SIGNING_KEYS` and redeploy once more.
 7. Verify `stem.tasks.signature_invalid` metrics remain flat and audit the dead-letter queue for unexpected errors.
+
+### Ed25519 (public/private)
+1. Generate a new key pair using `dart run scripts/security/generate_ed25519_keys.dart` (or your secrets pipeline). The script prints ready-to-use environment entries.
+2. Append the new public key to `STEM_SIGNING_PUBLIC_KEYS` across all workers.
+3. Append the new private key to `STEM_SIGNING_PRIVATE_KEYS` on every producer and set `STEM_SIGNING_ACTIVE_KEY` to the new key id.
+4. Redeploy producers first (they will sign with the new key while workers still trust both public keys).
+5. Redeploy workers after the producers rollout to ensure they load the updated public key list.
+6. Once traffic confirms successful verification, remove the old key id from both `STEM_SIGNING_PUBLIC_KEYS` and `STEM_SIGNING_PRIVATE_KEYS` and redeploy.
+7. Monitor `stem.tasks.signature_invalid` and DLQ entries for anomalies throughout the rotation.
 
 ## TLS Certificate Bootstrap
 1. Run `scripts/security/generate_tls_assets.sh .certs your-hostname` to generate a self-signed certificate bundle.

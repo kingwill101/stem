@@ -221,7 +221,7 @@ class Worker {
 
         if (signer != null) {
           try {
-            signer!.verify(envelope);
+            await signer!.verify(envelope);
           } on SignatureVerificationException catch (error, stack) {
             await _handleSignatureFailure(
               delivery,

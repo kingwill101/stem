@@ -60,7 +60,7 @@ class Stem {
           meta: meta,
         );
         if (signer != null) {
-          envelope = signer!.sign(envelope);
+          envelope = await signer!.sign(envelope);
         }
 
         await _runEnqueueMiddleware(envelope, () async {

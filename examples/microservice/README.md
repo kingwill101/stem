@@ -31,6 +31,14 @@ openssl rand -base64 32
 ```
 Replace the placeholder secret in `.env` with the generated value and update `STEM_SIGNING_ACTIVE_KEY` when rotating keys.
 
+To migrate to Ed25519 signing (public/private), run:
+
+```bash
+dart run ../../scripts/security/generate_ed25519_keys.dart
+```
+
+and copy the printed environment variables into your `.env` file.
+
 ### Enabling TLS for Redis
 
 1. Generate local certificates (from the example directory):

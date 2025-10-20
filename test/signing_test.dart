@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:cryptography/cryptography.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -17,7 +18,7 @@ void main() {
 
       expect(config.isEnabled, isTrue);
       expect(config.activeKeyId, equals('current'));
-      expect(config.keys.containsKey('old'), isTrue);
+      expect(config.hmacSecrets.containsKey('old'), isTrue);
       expect(config.algorithm, equals(SigningAlgorithm.hmacSha256));
     });
 
@@ -27,7 +28,7 @@ void main() {
     });
   });
 
-  group('PayloadSigner', () {
+  group('PayloadSigner (HMAC)', () {
     final secret = base64.encode(utf8.encode('another-secret'));
     final config = SigningConfig.fromEnvironment({
       'STEM_SIGNING_KEYS': 'primary:$secret',
@@ -35,35 +36,84 @@ void main() {
     });
     final signer = PayloadSigner(config);
 
-    test('sign attaches headers and verify succeeds', () {
+    test('sign attaches headers and verify succeeds', () async {
       final envelope = Envelope(name: 'demo.task', args: const {'value': 1});
-      final signed = signer.sign(envelope);
+      final signed = await signer.sign(envelope);
 
       expect(signed.headers.containsKey(signatureHeader), isTrue);
       expect(signed.headers.containsKey(signatureKeyHeader), isTrue);
-      expect(() => signer.verify(signed), returnsNormally);
+      await signer.verify(signed);
     });
 
-    test('verify fails when payload is tampered', () {
+    test('verify fails when payload is tampered', () async {
       final envelope = Envelope(name: 'demo.task', args: const {'value': 1});
-      final signed = signer.sign(envelope);
+      final signed = await signer.sign(envelope);
       final tampered = signed.copyWith(args: const {'value': 2});
 
-      expect(
-        () => signer.verify(tampered),
+      await expectLater(
+        signer.verify(tampered),
         throwsA(isA<SignatureVerificationException>()),
       );
     });
 
-    test('verify fails for unknown key', () {
+    test('verify fails for unknown key', () async {
       final envelope = Envelope(name: 'demo.task', args: const {});
-      final signed = signer.sign(envelope);
+      final signed = await signer.sign(envelope);
       final headers = Map<String, String>.from(signed.headers)
         ..[signatureKeyHeader] = 'missing';
       final mutated = signed.copyWith(headers: headers);
 
-      expect(
-        () => signer.verify(mutated),
+      await expectLater(
+        signer.verify(mutated),
+        throwsA(isA<SignatureVerificationException>()),
+      );
+    });
+  });
+
+  group('PayloadSigner (Ed25519)', () {
+    late SigningConfig config;
+    late PayloadSigner signer;
+
+    setUpAll(() async {
+      final keyPair = await Ed25519().newKeyPair();
+      final privateKey = await keyPair.extractPrivateKeyBytes();
+      final publicKey = (await keyPair.extractPublicKey()).bytes;
+
+      config = SigningConfig.fromEnvironment({
+        'STEM_SIGNING_ALGORITHM': 'ed25519',
+        'STEM_SIGNING_PUBLIC_KEYS': 'primary:${base64.encode(publicKey)}',
+        'STEM_SIGNING_PRIVATE_KEYS': 'primary:${base64.encode(privateKey)}',
+        'STEM_SIGNING_ACTIVE_KEY': 'primary',
+      });
+      signer = PayloadSigner(config);
+    });
+
+    test('sign and verify succeeds', () async {
+      final envelope = Envelope(name: 'demo.task', args: const {'value': 42});
+      final signed = await signer.sign(envelope);
+      await signer.verify(signed);
+    });
+
+    test('verify fails with tampered payload', () async {
+      final envelope = Envelope(name: 'demo.task', args: const {'value': 1});
+      final signed = await signer.sign(envelope);
+      final tampered = signed.copyWith(args: const {'value': 2});
+
+      await expectLater(
+        signer.verify(tampered),
+        throwsA(isA<SignatureVerificationException>()),
+      );
+    });
+
+    test('verify fails for unknown public key', () async {
+      final envelope = Envelope(name: 'demo.task', args: const {'value': 1});
+      final signed = await signer.sign(envelope);
+      final headers = Map<String, String>.from(signed.headers)
+        ..[signatureKeyHeader] = 'unknown';
+      final mutated = signed.copyWith(headers: headers);
+
+      await expectLater(
+        signer.verify(mutated),
         throwsA(isA<SignatureVerificationException>()),
       );
     });

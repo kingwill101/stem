@@ -1,7 +1,9 @@
 import 'dart:collection';
 import 'dart:convert';
+
 import 'package:collection/collection.dart';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as legacy_crypto show Hmac, sha256;
+import 'package:cryptography/cryptography.dart' as crypt;
 
 import '../core/envelope.dart';
 
@@ -13,7 +15,8 @@ const String signatureKeyHeader = 'stem-signature-key';
 
 /// Supported signing algorithms.
 enum SigningAlgorithm {
-  hmacSha256('hmac-sha256');
+  hmacSha256('hmac-sha256'),
+  ed25519('ed25519');
 
   const SigningAlgorithm(this.label);
 
@@ -23,13 +26,13 @@ enum SigningAlgorithm {
     if (raw == null || raw.isEmpty) {
       return SigningAlgorithm.hmacSha256;
     }
-    final match = SigningAlgorithm.values.firstWhere(
-      (alg) => alg.label == raw.toLowerCase(),
-      orElse: () {
-        throw FormatException('Unsupported signing algorithm "$raw"');
-      },
-    );
-    return match;
+    final lower = raw.toLowerCase();
+    for (final algorithm in SigningAlgorithm.values) {
+      if (algorithm.label == lower) {
+        return algorithm;
+      }
+    }
+    throw FormatException('Unsupported signing algorithm "$raw"');
   }
 }
 
@@ -37,118 +40,238 @@ enum SigningAlgorithm {
 class SigningConfig {
   const SigningConfig._({
     required this.activeKeyId,
-    required this.keys,
     required this.algorithm,
+    required this.hmacSecrets,
+    required this.ed25519PublicKeys,
+    required this.ed25519PrivateKeys,
   });
 
   /// Disabled configuration (no signing).
   const SigningConfig.disabled()
     : activeKeyId = null,
-      keys = const {},
-      algorithm = SigningAlgorithm.hmacSha256;
+      algorithm = SigningAlgorithm.hmacSha256,
+      hmacSecrets = const {},
+      ed25519PublicKeys = const {},
+      ed25519PrivateKeys = const {};
 
   /// The active signing key used for new envelopes.
   final String? activeKeyId;
 
-  /// Map of key identifier to secret bytes that workers accept.
-  final Map<String, List<int>> keys;
-
   /// Algorithm used to generate signatures.
   final SigningAlgorithm algorithm;
 
-  /// Whether signing/verification should be performed.
-  bool get isEnabled => activeKeyId != null && keys.isNotEmpty;
+  /// HMAC shared secrets keyed by identifier.
+  final Map<String, List<int>> hmacSecrets;
 
-  /// Returns the secret for [keyId] if known.
-  List<int>? secretFor(String keyId) => keys[keyId];
+  /// Ed25519 public keys keyed by identifier.
+  final Map<String, List<int>> ed25519PublicKeys;
+
+  /// Ed25519 private keys keyed by identifier.
+  final Map<String, List<int>> ed25519PrivateKeys;
+
+  /// Whether signing/verification should be performed.
+  bool get isEnabled {
+    switch (algorithm) {
+      case SigningAlgorithm.hmacSha256:
+        return activeKeyId != null && hmacSecrets.isNotEmpty;
+      case SigningAlgorithm.ed25519:
+        return ed25519PublicKeys.isNotEmpty;
+    }
+  }
+
+  /// Whether the current configuration can sign new envelopes.
+  bool get canSign {
+    switch (algorithm) {
+      case SigningAlgorithm.hmacSha256:
+        return isEnabled;
+      case SigningAlgorithm.ed25519:
+        if (activeKeyId == null) return false;
+        return ed25519PrivateKeys.containsKey(activeKeyId);
+    }
+  }
+
+  List<int>? sharedSecretFor(String keyId) => hmacSecrets[keyId];
+
+  List<int>? publicKeyFor(String keyId) => ed25519PublicKeys[keyId];
+
+  List<int>? privateKeyFor(String keyId) => ed25519PrivateKeys[keyId];
 
   /// Parses config from environment variables.
   factory SigningConfig.fromEnvironment(Map<String, String> env) {
-    final rawKeys = env[_SigningEnv.keys]?.trim();
-    if (rawKeys == null || rawKeys.isEmpty) {
-      return const SigningConfig.disabled();
+    final algorithm = SigningAlgorithm.parse(
+      env[_SigningEnv.algorithm]?.trim(),
+    );
+    final activeValue = env[_SigningEnv.activeKey]?.trim();
+    final activeKeyId = (activeValue == null || activeValue.isEmpty)
+        ? null
+        : activeValue;
+
+    if (algorithm == SigningAlgorithm.hmacSha256) {
+      final rawKeys = env[_SigningEnv.keys]?.trim();
+      if (rawKeys == null || rawKeys.isEmpty) {
+        return const SigningConfig.disabled();
+      }
+      final parsed = _parseKeyList(rawKeys, 'signing key');
+      if (parsed.isEmpty) {
+        return const SigningConfig.disabled();
+      }
+      if (activeKeyId == null || activeKeyId.isEmpty) {
+        throw StateError(
+          'Missing ${_SigningEnv.activeKey}; required when signing keys are provided.',
+        );
+      }
+      if (!parsed.containsKey(activeKeyId)) {
+        throw StateError(
+          'Active signing key "$activeKeyId" not present in ${_SigningEnv.keys}.',
+        );
+      }
+      return SigningConfig._(
+        activeKeyId: activeKeyId,
+        algorithm: algorithm,
+        hmacSecrets: Map.unmodifiable(parsed),
+        ed25519PublicKeys: const {},
+        ed25519PrivateKeys: const {},
+      );
     }
 
-    final parsedKeys = <String, List<int>>{};
-    for (final entry in rawKeys.split(',')) {
+    final publicRaw = env[_SigningEnv.publicKeys]?.trim();
+    if (publicRaw == null || publicRaw.isEmpty) {
+      return const SigningConfig.disabled();
+    }
+    final publicKeys = _parseKeyList(publicRaw, 'public key');
+    final privateRaw = env[_SigningEnv.privateKeys]?.trim();
+    final privateKeys = privateRaw == null || privateRaw.isEmpty
+        ? <String, List<int>>{}
+        : _parseKeyList(privateRaw, 'private key');
+
+    if (activeKeyId != null && privateKeys.isNotEmpty) {
+      if (!privateKeys.containsKey(activeKeyId)) {
+        throw StateError(
+          'Active signing key "$activeKeyId" missing from ${_SigningEnv.privateKeys}.',
+        );
+      }
+    }
+
+    return SigningConfig._(
+      activeKeyId: activeKeyId,
+      algorithm: algorithm,
+      hmacSecrets: const {},
+      ed25519PublicKeys: Map.unmodifiable(publicKeys),
+      ed25519PrivateKeys: Map.unmodifiable(privateKeys),
+    );
+  }
+
+  static Map<String, List<int>> _parseKeyList(String raw, String description) {
+    final map = <String, List<int>>{};
+    for (final entry in raw.split(',')) {
       final trimmed = entry.trim();
       if (trimmed.isEmpty) continue;
       final parts = trimmed.split(':');
       if (parts.length != 2) {
         throw FormatException(
-          'Invalid signing key entry "$trimmed". Expected format keyId:base64Secret',
+          'Invalid $description entry "$trimmed". Expected format keyId:base64Value',
         );
       }
       final keyId = parts[0].trim();
       if (keyId.isEmpty) {
-        throw FormatException('Signing key id cannot be empty.');
+        throw FormatException('$description id cannot be empty.');
       }
       try {
-        parsedKeys[keyId] = base64.decode(parts[1].trim());
+        map[keyId] = base64.decode(parts[1].trim());
       } on FormatException {
-        throw FormatException('Signing key "$keyId" must be base64 encoded.');
+        throw FormatException('$description "$keyId" must be base64 encoded.');
       }
     }
-
-    if (parsedKeys.isEmpty) {
-      return const SigningConfig.disabled();
-    }
-
-    final algorithm = SigningAlgorithm.parse(
-      env[_SigningEnv.algorithm]?.trim(),
-    );
-
-    final activeKeyId = env[_SigningEnv.activeKey]?.trim();
-    if (activeKeyId == null || activeKeyId.isEmpty) {
-      throw StateError(
-        'Missing ${_SigningEnv.activeKey}; required when signing keys are provided.',
-      );
-    }
-    if (!parsedKeys.containsKey(activeKeyId)) {
-      throw StateError(
-        'Active signing key "$activeKeyId" not present in ${_SigningEnv.keys}.',
-      );
-    }
-
-    return SigningConfig._(
-      activeKeyId: activeKeyId,
-      keys: Map.unmodifiable(parsedKeys),
-      algorithm: algorithm,
-    );
+    return map;
   }
 }
 
 /// Handles signing and verification of envelope payloads.
 class PayloadSigner {
-  PayloadSigner(this.config) {
-    if (!config.isEnabled) {
-      throw ArgumentError('Signing config must be enabled to create signer.');
-    }
-  }
+  PayloadSigner(this.config);
 
   final SigningConfig config;
+  static final _ed25519 = crypt.Ed25519();
 
   static PayloadSigner? maybe(SigningConfig config) =>
       config.isEnabled ? PayloadSigner(config) : null;
 
   /// Returns a copy of [envelope] with signature headers attached.
-  Envelope sign(Envelope envelope) {
+  Future<Envelope> sign(Envelope envelope) async {
+    if (!config.isEnabled) {
+      return envelope;
+    }
+    switch (config.algorithm) {
+      case SigningAlgorithm.hmacSha256:
+        return _signHmac(envelope);
+      case SigningAlgorithm.ed25519:
+        return _signEd25519(envelope);
+    }
+  }
+
+  Future<Envelope> _signHmac(Envelope envelope) async {
     final keyId = config.activeKeyId!;
-    final secret = config.secretFor(keyId);
+    final secret = config.sharedSecretFor(keyId);
     if (secret == null) {
       throw StateError('Active signing key "$keyId" is not configured.');
     }
     final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
-    final digest = _digest(secret, canonical);
+    final digest = legacy_crypto.Hmac(
+      legacy_crypto.sha256,
+      secret,
+    ).convert(utf8.encode(canonical));
     final headers = Map<String, String>.from(envelope.headers)
       ..[signatureHeader] = base64.encode(digest.bytes)
       ..[signatureKeyHeader] = keyId;
     return envelope.copyWith(headers: headers);
   }
 
+  Future<Envelope> _signEd25519(Envelope envelope) async {
+    if (config.activeKeyId == null) {
+      throw StateError(
+        '${_SigningEnv.activeKey} must be provided to sign with Ed25519.',
+      );
+    }
+    final keyId = config.activeKeyId!;
+    final privateKey = config.privateKeyFor(keyId);
+    if (privateKey == null) {
+      throw StateError('Missing private key for "$keyId".');
+    }
+    final publicKey = config.publicKeyFor(keyId);
+    if (publicKey == null) {
+      throw StateError('Missing public key for "$keyId".');
+    }
+    final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
+    final keyPair = crypt.SimpleKeyPairData(
+      privateKey,
+      publicKey: crypt.SimplePublicKey(
+        publicKey,
+        type: crypt.KeyPairType.ed25519,
+      ),
+      type: crypt.KeyPairType.ed25519,
+    );
+    final signature = await _ed25519.sign(
+      utf8.encode(canonical),
+      keyPair: keyPair,
+    );
+    final headers = Map<String, String>.from(envelope.headers)
+      ..[signatureHeader] = base64.encode(signature.bytes)
+      ..[signatureKeyHeader] = keyId;
+    return envelope.copyWith(headers: headers);
+  }
+
   /// Validates the envelope signature.
-  void verify(Envelope envelope) {
+  Future<void> verify(Envelope envelope) async {
     if (!config.isEnabled) return;
+    switch (config.algorithm) {
+      case SigningAlgorithm.hmacSha256:
+        return _verifyHmac(envelope);
+      case SigningAlgorithm.ed25519:
+        return _verifyEd25519(envelope);
+    }
+  }
+
+  Future<void> _verifyHmac(Envelope envelope) async {
     final headers = envelope.headers;
     final signatureB64 = headers[signatureHeader];
     final keyId = headers[signatureKeyHeader];
@@ -158,7 +281,7 @@ class PayloadSigner {
         keyId: keyId,
       );
     }
-    final secret = config.secretFor(keyId);
+    final secret = config.sharedSecretFor(keyId);
     if (secret == null) {
       throw SignatureVerificationException(
         'unknown signing key "$keyId"',
@@ -177,7 +300,10 @@ class PayloadSigner {
     }
 
     final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
-    final expected = _digest(secret, canonical);
+    final expected = legacy_crypto.Hmac(
+      legacy_crypto.sha256,
+      secret,
+    ).convert(utf8.encode(canonical));
 
     final eq = const ListEquality<int>();
     if (!eq.equals(actual, expected.bytes)) {
@@ -185,10 +311,47 @@ class PayloadSigner {
     }
   }
 
-  Digest _digest(List<int> secret, String canonical) {
-    switch (config.algorithm) {
-      case SigningAlgorithm.hmacSha256:
-        return Hmac(sha256, secret).convert(utf8.encode(canonical));
+  Future<void> _verifyEd25519(Envelope envelope) async {
+    final headers = envelope.headers;
+    final signatureB64 = headers[signatureHeader];
+    final keyId = headers[signatureKeyHeader];
+    if (signatureB64 == null || keyId == null) {
+      throw SignatureVerificationException(
+        'missing signature headers',
+        keyId: keyId,
+      );
+    }
+    final publicKeyBytes = config.publicKeyFor(keyId);
+    if (publicKeyBytes == null) {
+      throw SignatureVerificationException(
+        'unknown signing key "$keyId"',
+        keyId: keyId,
+      );
+    }
+    List<int> signatureBytes;
+    try {
+      signatureBytes = base64.decode(signatureB64);
+    } on FormatException {
+      throw SignatureVerificationException(
+        'signature header is not base64 encoded',
+        keyId: keyId,
+      );
+    }
+
+    final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
+    final signature = crypt.Signature(
+      signatureBytes,
+      publicKey: crypt.SimplePublicKey(
+        publicKeyBytes,
+        type: crypt.KeyPairType.ed25519,
+      ),
+    );
+    final ok = await _ed25519.verify(
+      utf8.encode(canonical),
+      signature: signature,
+    );
+    if (!ok) {
+      throw SignatureVerificationException('signature mismatch', keyId: keyId);
     }
   }
 
@@ -263,6 +426,8 @@ class SignatureVerificationException implements Exception {
 
 class _SigningEnv {
   static const keys = 'STEM_SIGNING_KEYS';
+  static const publicKeys = 'STEM_SIGNING_PUBLIC_KEYS';
+  static const privateKeys = 'STEM_SIGNING_PRIVATE_KEYS';
   static const activeKey = 'STEM_SIGNING_ACTIVE_KEY';
   static const algorithm = 'STEM_SIGNING_ALGORITHM';
 }
