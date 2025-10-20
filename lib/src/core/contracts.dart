@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'envelope.dart';
 import 'task_invocation.dart';
+import '../observability/heartbeat.dart';
 
 /// Abstract broker interface implemented by queue adapters (Redis, SQS, etc).
 abstract class Broker {
@@ -291,6 +292,14 @@ abstract class ResultBackend {
 
   /// Returns a stream of [TaskStatus] updates for the task with the given [taskId].
   Stream<TaskStatus> watch(String taskId);
+
+  /// Persist the latest [heartbeat] snapshot for a worker.
+  Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
+
+  /// Retrieve the last persisted heartbeat snapshot for [workerId], or null if
+  /// no heartbeat has been recorded within the retention window.
+  Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId);
+  Future<List<WorkerHeartbeat>> listWorkerHeartbeats();
 
   /// Initializes a group with the given [descriptor].
   Future<void> initGroup(GroupDescriptor descriptor);

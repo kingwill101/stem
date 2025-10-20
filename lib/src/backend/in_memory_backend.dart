@@ -1,16 +1,19 @@
 import 'dart:async';
 
 import '../core/contracts.dart';
+import '../observability/heartbeat.dart';
 
 /// Simple in-memory result backend used for tests and local development.
 class InMemoryResultBackend implements ResultBackend {
   InMemoryResultBackend({
     this.defaultTtl = const Duration(days: 1),
     this.groupDefaultTtl = const Duration(days: 1),
+    this.heartbeatTtl = const Duration(seconds: 60),
   });
 
   final Duration defaultTtl;
   final Duration groupDefaultTtl;
+  final Duration heartbeatTtl;
 
   final Map<String, _Entry> _entries = {};
   final Map<String, Timer> _expiryTimers = {};
@@ -18,6 +21,8 @@ class InMemoryResultBackend implements ResultBackend {
 
   final Map<String, _GroupEntry> _groups = {};
   final Map<String, Timer> _groupExpiry = {};
+  final Map<String, _HeartbeatEntry> _heartbeats = {};
+  final Map<String, Timer> _heartbeatExpiry = {};
 
   @override
   Future<void> set(
@@ -119,6 +124,35 @@ class InMemoryResultBackend implements ResultBackend {
     _scheduleExpiry(taskId, ttl);
   }
 
+  @override
+  Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
+    final expiresAt = DateTime.now().add(heartbeatTtl);
+    _heartbeats[heartbeat.workerId] = _HeartbeatEntry(
+      heartbeat: heartbeat,
+      expiresAt: expiresAt,
+    );
+    _scheduleHeartbeatExpiry(heartbeat.workerId, heartbeatTtl);
+  }
+
+  @override
+  Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
+    final entry = _heartbeats[workerId];
+    if (entry == null) return null;
+    if (entry.expiresAt.isBefore(DateTime.now())) {
+      _removeHeartbeat(workerId);
+      return null;
+    }
+    return entry.heartbeat;
+  }
+
+  @override
+  Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
+    _pruneExpiredHeartbeats();
+    return _heartbeats.values
+        .map((entry) => entry.heartbeat)
+        .toList(growable: false);
+  }
+
   void _scheduleExpiry(String key, Duration ttl) {
     _expiryTimers[key]?.cancel();
     _expiryTimers[key] = Timer(ttl, () => _remove(key));
@@ -139,6 +173,27 @@ class InMemoryResultBackend implements ResultBackend {
     _groupExpiry.remove(key)?.cancel();
     _groups.remove(key);
   }
+
+  void _scheduleHeartbeatExpiry(String key, Duration ttl) {
+    _heartbeatExpiry[key]?.cancel();
+    _heartbeatExpiry[key] = Timer(ttl, () => _removeHeartbeat(key));
+  }
+
+  void _removeHeartbeat(String key) {
+    _heartbeatExpiry.remove(key)?.cancel();
+    _heartbeats.remove(key);
+  }
+
+  void _pruneExpiredHeartbeats() {
+    final now = DateTime.now();
+    final stale = _heartbeats.entries
+        .where((entry) => entry.value.expiresAt.isBefore(now))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final key in stale) {
+      _removeHeartbeat(key);
+    }
+  }
 }
 
 class _Entry {
@@ -153,5 +208,12 @@ class _GroupEntry {
 
   final GroupDescriptor descriptor;
   final Map<String, TaskStatus> results = {};
+  DateTime expiresAt;
+}
+
+class _HeartbeatEntry {
+  _HeartbeatEntry({required this.heartbeat, required this.expiresAt});
+
+  final WorkerHeartbeat heartbeat;
   DateTime expiresAt;
 }

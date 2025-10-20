@@ -1,0 +1,32 @@
+services:
+  collector:
+    image: otel/opentelemetry-collector:0.109.0
+    container_name: otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4318:4318"
+    depends_on:
+      - jaeger
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    container_name: jaeger-ui
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4319:4318"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: examples/otel_metrics/Dockerfile
+    environment:
+      STEM_OTLP_ENDPOINT: http://collector:4318/v1/metrics
+    depends_on:
+      - collector
+      - jaeger
+    command: ["dart", "run", "bin/worker.dart"]

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:redis/redis.dart';
 
 import '../core/contracts.dart';
+import '../observability/heartbeat.dart';
 
 /// Redis-backed implementation of [ResultBackend].
 class RedisResultBackend implements ResultBackend {
@@ -13,6 +14,7 @@ class RedisResultBackend implements ResultBackend {
     this.namespace = 'stem',
     this.defaultTtl = const Duration(days: 1),
     this.groupDefaultTtl = const Duration(days: 1),
+    this.heartbeatTtl = const Duration(seconds: 60),
   });
 
   final RedisConnection _connection;
@@ -20,6 +22,7 @@ class RedisResultBackend implements ResultBackend {
   final String namespace;
   final Duration defaultTtl;
   final Duration groupDefaultTtl;
+  final Duration heartbeatTtl;
 
   final Map<String, StreamController<TaskStatus>> _watchers = {};
   bool _closed = false;
@@ -29,6 +32,7 @@ class RedisResultBackend implements ResultBackend {
     String namespace = 'stem',
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
@@ -55,6 +59,7 @@ class RedisResultBackend implements ResultBackend {
       namespace: namespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
     );
   }
 
@@ -71,6 +76,8 @@ class RedisResultBackend implements ResultBackend {
   String _taskKey(String id) => '$namespace:result:$id';
   String _groupKey(String id) => '$namespace:group:$id';
   String _groupResultsKey(String id) => '$namespace:group:$id:results';
+  String _workerHeartbeatKey(String id) => '$namespace:worker:heartbeat:$id';
+  String _workerHeartbeatIndexKey() => '$namespace:worker:heartbeats';
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 
@@ -200,6 +207,42 @@ class RedisResultBackend implements ResultBackend {
   @override
   Future<void> expire(String taskId, Duration ttl) async {
     await _send(['PEXPIRE', _taskKey(taskId), ttl.inMilliseconds.toString()]);
+  }
+
+  @override
+  Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
+    await _send([
+      'SET',
+      _workerHeartbeatKey(heartbeat.workerId),
+      jsonEncode(heartbeat.toJson()),
+      'PX',
+      heartbeatTtl.inMilliseconds.toString(),
+    ]);
+    await _send(['SADD', _workerHeartbeatIndexKey(), heartbeat.workerId]);
+  }
+
+  @override
+  Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
+    final raw = await _send(['GET', _workerHeartbeatKey(workerId)]);
+    if (raw == null) return null;
+    final map = jsonDecode(raw as String) as Map<String, Object?>;
+    return WorkerHeartbeat.fromJson(map);
+  }
+
+  @override
+  Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
+    final raw = await _send(['SMEMBERS', _workerHeartbeatIndexKey()]);
+    if (raw is! List) return const [];
+    final heartbeats = <WorkerHeartbeat>[];
+    for (final id in raw.cast<String>()) {
+      final heartbeat = await getWorkerHeartbeat(id);
+      if (heartbeat != null) {
+        heartbeats.add(heartbeat);
+      } else {
+        await _send(['SREM', _workerHeartbeatIndexKey(), id]);
+      }
+    }
+    return heartbeats;
   }
 
   int _asInt(dynamic value) {

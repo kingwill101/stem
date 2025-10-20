@@ -9,11 +9,42 @@ import '../core/envelope.dart';
 import '../core/retry.dart';
 import '../observability/logging.dart';
 import '../observability/metrics.dart';
+import '../observability/config.dart';
+import '../observability/heartbeat.dart';
+import '../observability/heartbeat_transport.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
 
-/// Worker daemon that consumes tasks from a broker and executes registered handlers.
+/// A daemon that consumes tasks from a broker and executes registered handlers.
+///
+/// Manages task execution with features like concurrency control, rate limiting,
+/// retries, heartbeats, and observability. Supports running tasks in isolates
+/// for isolation and performance.
+///
+/// ```dart
+/// final worker = Worker(
+///   broker: myBroker,
+///   registry: myRegistry,
+///   backend: myBackend,
+/// );
+/// await worker.start();
+/// ```
 class Worker {
+  /// Creates a worker instance.
+  ///
+  /// The [broker] handles message consumption and publishing. The [registry]
+  /// provides task handlers. The [backend] stores task results and state.
+  /// Optional [rateLimiter] enforces rate limits per task. [middleware] allows
+  /// intercepting task lifecycle events. [retryStrategy] determines retry
+  /// delays on failure. [queue] specifies the queue to consume from, defaulting
+  /// to 'default'. [consumerName] identifies this worker instance. [concurrency]
+  /// sets the maximum concurrent tasks, defaulting to the number of processors.
+  /// [prefetchMultiplier] scales prefetch count relative to concurrency.
+  /// [prefetch] overrides the calculated prefetch count. [heartbeatInterval]
+  /// sets the interval for task heartbeats. [workerHeartbeatInterval] sets the
+  /// interval for worker-level heartbeats. [heartbeatTransport] handles
+  /// heartbeat publishing. [heartbeatNamespace] provides the namespace for
+  /// heartbeats. [observability] configures metrics and logging.
   Worker({
     required this.broker,
     required this.registry,
@@ -26,15 +57,28 @@ class Worker {
     int? concurrency,
     int prefetchMultiplier = 2,
     int? prefetch,
-    this.heartbeatInterval = const Duration(seconds: 15),
-  }) : concurrency = _normalizeConcurrency(concurrency),
+    this.heartbeatInterval = const Duration(seconds: 10),
+    Duration? workerHeartbeatInterval,
+    HeartbeatTransport? heartbeatTransport,
+    String heartbeatNamespace = 'stem',
+    ObservabilityConfig? observability,
+  }) : workerHeartbeatInterval =
+           observability?.heartbeatInterval ??
+           workerHeartbeatInterval ??
+           heartbeatInterval,
+       heartbeatTransport =
+           heartbeatTransport ?? const NoopHeartbeatTransport(),
+       namespace = observability?.namespace ?? heartbeatNamespace,
+       concurrency = _normalizeConcurrency(concurrency),
        prefetchMultiplier = math.max(1, prefetchMultiplier),
        prefetch = _calculatePrefetch(
          prefetch,
          _normalizeConcurrency(concurrency),
          math.max(1, prefetchMultiplier),
        ),
-       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy();
+       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
+    observability?.applyMetricExporters();
+  }
 
   final Broker broker;
   final TaskRegistry registry;
@@ -48,6 +92,9 @@ class Worker {
   final int prefetchMultiplier;
   final int prefetch;
   final Duration heartbeatInterval;
+  final Duration workerHeartbeatInterval;
+  final HeartbeatTransport heartbeatTransport;
+  final String namespace;
 
   final Map<String, Timer> _leaseTimers = {};
   final Map<String, Timer> _heartbeatTimers = {};
@@ -57,12 +104,27 @@ class Worker {
   Future<TaskIsolatePool>? _poolFuture;
 
   bool _running = false;
+  final Map<String, _ActiveDelivery> _activeDeliveries = {};
+  final Map<String, int> _inflightPerQueue = {};
+  int _inflight = 0;
+  Timer? _workerHeartbeatTimer;
+  DateTime? _lastLeaseRenewal;
 
+  /// A stream of events emitted during task processing.
+  ///
+  /// Includes events like task start, completion, failure, and heartbeats.
   Stream<WorkerEvent> get events => _events.stream;
 
+  /// Starts the worker, beginning task consumption and processing.
+  ///
+  /// Initializes heartbeat loops and subscribes to the queue. Throws if already
+  /// running.
   Future<void> start() async {
     if (_running) return;
     _running = true;
+    _startWorkerHeartbeatLoop();
+    _recordInflightGauge();
+    unawaited(_publishWorkerHeartbeat());
     final subscription = broker
         .consume(queue, prefetch: prefetch, consumerName: consumerName)
         .listen(
@@ -95,6 +157,9 @@ class Worker {
     _subscriptions[queue] = subscription;
   }
 
+  /// Stops the worker, canceling subscriptions, timers, and cleaning up resources.
+  ///
+  /// Waits for active tasks to complete before shutting down.
   Future<void> shutdown() async {
     _running = false;
     final pool = _isolatePool;
@@ -115,6 +180,13 @@ class Worker {
       timer.cancel();
     }
     _heartbeatTimers.clear();
+
+    _workerHeartbeatTimer?.cancel();
+    _workerHeartbeatTimer = null;
+    _activeDeliveries.clear();
+    _inflightPerQueue.clear();
+    _inflight = 0;
+    await heartbeatTransport.close();
 
     await _events.close();
   }
@@ -172,6 +244,7 @@ class Worker {
       }
     }
 
+    _trackDelivery(delivery);
     final groupId = envelope.headers['stem-group-id'];
 
     stemLogger.debug(
@@ -184,7 +257,7 @@ class Worker {
       }),
     );
     StemMetrics.instance.increment(
-      'tasks.started',
+      'stem.tasks.started',
       tags: {'task': envelope.name, 'queue': envelope.queue},
     );
 
@@ -204,6 +277,7 @@ class Worker {
       extendLease: (duration) async {
         await broker.extendLease(delivery, duration);
         _restartLeaseTimer(delivery, duration);
+        _noteLeaseRenewal(delivery);
       },
       progress: (progress, {data}) async =>
           _reportProgress(envelope, progress, data: data),
@@ -253,7 +327,7 @@ class Worker {
         await backend.addGroupResult(groupId, successStatus);
       }
       StemMetrics.instance.increment(
-        'tasks.succeeded',
+        'stem.tasks.succeeded',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
       stemLogger.debug(
@@ -277,6 +351,15 @@ class Worker {
     } finally {
       heartbeatTimer?.cancel();
       softTimer?.cancel();
+      final completed = _releaseDelivery(envelope);
+      if (completed != null) {
+        final duration = DateTime.now().toUtc().difference(completed.startedAt);
+        StemMetrics.instance.recordDuration(
+          'stem.task.duration',
+          duration,
+          tags: {'task': envelope.name, 'queue': envelope.queue},
+        );
+      }
     }
   }
 
@@ -373,23 +456,35 @@ class Worker {
       milliseconds: (remainingMs ~/ 2).clamp(1000, 30000),
     );
     _startLeaseTimer(delivery, interval);
+    _noteLeaseRenewal(delivery);
   }
 
   void _restartLeaseTimer(Delivery delivery, Duration duration) {
     final intervalMs = (duration.inMilliseconds ~/ 2).clamp(1000, 30000);
     _startLeaseTimer(delivery, Duration(milliseconds: intervalMs));
+    _noteLeaseRenewal(delivery);
   }
 
   void _startLeaseTimer(Delivery delivery, Duration interval) {
     _leaseTimers[delivery.receipt]?.cancel();
     final timer = Timer.periodic(interval, (_) async {
       await broker.extendLease(delivery, interval);
+      _noteLeaseRenewal(delivery);
     });
     _leaseTimers[delivery.receipt] = timer;
   }
 
   void _cancelLeaseTimer(String receipt) {
     _leaseTimers.remove(receipt)?.cancel();
+  }
+
+  void _noteLeaseRenewal(Delivery delivery) {
+    final now = DateTime.now().toUtc();
+    _lastLeaseRenewal = now;
+    final active = _activeDeliveries[delivery.envelope.id];
+    if (active != null) {
+      active.lastLeaseRenewal = now;
+    }
   }
 
   Future<void> _handleFailure(
@@ -421,6 +516,10 @@ class Worker {
           retryable: true,
         ),
         meta: {...envelope.meta, 'retryDelayMs': delay.inMilliseconds},
+      );
+      StemMetrics.instance.increment(
+        'stem.tasks.retried',
+        tags: {'task': envelope.name, 'queue': envelope.queue},
       );
       _events.add(
         WorkerEvent(
@@ -467,7 +566,7 @@ class Worker {
         await backend.addGroupResult(groupId, failureStatus);
       }
       StemMetrics.instance.increment(
-        'tasks.failed',
+        'stem.tasks.failed',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
       stemLogger.warning(
@@ -516,6 +615,115 @@ class Worker {
   void _sendHeartbeat(String id) {
     _events.add(WorkerEvent(type: WorkerEventType.heartbeat, envelopeId: id));
   }
+
+  void _trackDelivery(Delivery delivery) {
+    final envelope = delivery.envelope;
+    final id = envelope.id;
+    final queueName = envelope.queue;
+    final startedAt = DateTime.now().toUtc();
+    _activeDeliveries[id] = _ActiveDelivery(
+      queue: queueName,
+      startedAt: startedAt,
+    );
+    _inflight += 1;
+    _inflightPerQueue[queueName] = (_inflightPerQueue[queueName] ?? 0) + 1;
+    _recordInflightGauge();
+  }
+
+  _ActiveDelivery? _releaseDelivery(Envelope envelope) {
+    final entry = _activeDeliveries.remove(envelope.id);
+    if (entry != null) {
+      _inflight = math.max(0, _inflight - 1);
+      final queueCount = (_inflightPerQueue[entry.queue] ?? 0) - 1;
+      if (queueCount <= 0) {
+        _inflightPerQueue.remove(entry.queue);
+      } else {
+        _inflightPerQueue[entry.queue] = queueCount;
+      }
+      if (_activeDeliveries.isEmpty) {
+        _lastLeaseRenewal = null;
+      }
+      _recordInflightGauge();
+    }
+    return entry;
+  }
+
+  void _recordInflightGauge() {
+    StemMetrics.instance.setGauge(
+      'stem.worker.inflight',
+      _inflight.toDouble(),
+      tags: {'worker': _workerIdentifier, 'namespace': namespace},
+    );
+  }
+
+  void _startWorkerHeartbeatLoop() {
+    _workerHeartbeatTimer?.cancel();
+    if (workerHeartbeatInterval <= Duration.zero) return;
+    _workerHeartbeatTimer = Timer.periodic(
+      workerHeartbeatInterval,
+      (_) => unawaited(_publishWorkerHeartbeat()),
+    );
+  }
+
+  Future<void> _publishWorkerHeartbeat() async {
+    if (!_running) return;
+    final heartbeat = _buildHeartbeat();
+    try {
+      await heartbeatTransport.publish(heartbeat);
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Worker heartbeat publish failed: $error',
+        Context({
+          'worker': _workerIdentifier,
+          'channel': WorkerHeartbeat.topic(namespace),
+          'stack': stack.toString(),
+        }),
+      );
+    }
+    try {
+      await backend.setWorkerHeartbeat(heartbeat);
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Failed to persist worker heartbeat to backend: $error',
+        Context({'worker': _workerIdentifier, 'stack': stack.toString()}),
+      );
+    }
+  }
+
+  WorkerHeartbeat _buildHeartbeat() {
+    final now = DateTime.now().toUtc();
+    final isolatePool = _isolatePool;
+    final activeIsolates =
+        isolatePool?.activeCount ?? math.min(_inflight, concurrency);
+    final queues =
+        _inflightPerQueue.entries
+            .where((entry) => entry.value > 0)
+            .map(
+              (entry) => QueueHeartbeat(name: entry.key, inflight: entry.value),
+            )
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+    return WorkerHeartbeat(
+      workerId: _workerIdentifier,
+      namespace: namespace,
+      timestamp: now,
+      isolateCount: activeIsolates,
+      inflight: _inflight,
+      lastLeaseRenewal: _lastLeaseRenewal,
+      queues: queues,
+      extras: {
+        'host': Platform.localHostname,
+        'pid': pid,
+        'concurrency': concurrency,
+        'prefetch': prefetch,
+      },
+    );
+  }
+
+  String get _workerIdentifier =>
+      consumerName != null && consumerName!.isNotEmpty
+      ? consumerName!
+      : 'stem-worker-$pid';
 
   void _reportProgress(
     Envelope envelope,
@@ -612,7 +820,16 @@ class Worker {
   ) => math.max(1, provided ?? concurrency * multiplier);
 }
 
+/// An event emitted during worker operation.
+///
+/// Provides details about task lifecycle, errors, and progress.
 class WorkerEvent {
+  /// Creates a worker event.
+  ///
+  /// [type] indicates the event kind. [envelope] provides task details for
+  /// relevant events. [envelopeId] identifies the task for heartbeats.
+  /// [error] and [stackTrace] capture exceptions. [progress] shows completion
+  /// percentage. [data] holds additional event-specific information.
   WorkerEvent({
     required this.type,
     this.envelope,
@@ -623,28 +840,79 @@ class WorkerEvent {
     this.data,
   });
 
+  /// The type of event.
   final WorkerEventType type;
+
+  /// The envelope associated with the event, if applicable.
   final Envelope? envelope;
+
+  /// The envelope ID for heartbeat events.
   final String? envelopeId;
+
+  /// The error that occurred, if any.
   final Object? error;
+
+  /// The stack trace for the error.
   final StackTrace? stackTrace;
+
+  /// The progress percentage, if reporting progress.
   final double? progress;
+
+  /// Additional data for the event.
   final Map<String, Object?>? data;
 }
 
+/// Types of events a worker can emit.
 enum WorkerEventType {
+  /// A heartbeat signal for an active task.
   heartbeat,
+
+  /// Progress update for a task.
   progress,
+
+  /// Soft timeout warning for a task.
   timeout,
+
+  /// Task completed successfully.
   completed,
+
+  /// Task was retried after failure.
   retried,
+
+  /// Task failed permanently.
   failed,
+
+  /// An error occurred outside task execution.
   error,
 }
 
+/// Parsed rate limit specification.
 class _RateSpec {
+  /// Creates a rate spec.
+  ///
+  /// [tokens] is the number allowed per [period].
   const _RateSpec({required this.tokens, required this.period});
 
+  /// The number of tokens allowed.
   final int tokens;
+
+  /// The period over which tokens apply.
   final Duration period;
+}
+
+/// Tracks an active task delivery.
+class _ActiveDelivery {
+  /// Creates an active delivery record.
+  ///
+  /// [queue] is the queue name. [startedAt] is the start time.
+  _ActiveDelivery({required this.queue, required this.startedAt});
+
+  /// The queue this delivery belongs to.
+  final String queue;
+
+  /// When the task started.
+  final DateTime startedAt;
+
+  /// The last lease renewal time.
+  DateTime? lastLeaseRenewal;
 }

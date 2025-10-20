@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:args/args.dart';
 import 'package:yaml/yaml.dart';
+import 'package:redis/redis.dart';
 
 import '../backend/in_memory_backend.dart';
 import '../backend/redis_backend.dart';
@@ -13,10 +15,15 @@ import '../core/config.dart';
 import '../core/contracts.dart';
 import '../observability/metrics.dart';
 import '../observability/snapshots.dart';
+import '../observability/config.dart';
+import '../observability/heartbeat.dart';
 import '../scheduler/schedule_calculator.dart';
 import '../scheduler/in_memory_schedule_store.dart';
 import '../scheduler/redis_schedule_store.dart';
 import 'file_schedule_repository.dart';
+
+const _brokerEnvKey = 'STEM_BROKER_URL';
+const _backendEnvKey = 'STEM_RESULT_BACKEND_URL';
 
 Future<int> runStemCli(
   List<String> arguments, {
@@ -103,6 +110,61 @@ Future<int> runStemCli(
   schedulesParser.addOption('file', abbr: 'f', help: 'Path to schedules file');
 
   parser.addCommand('observe', observeParser);
+
+  final workerParser = ArgParser();
+  final workerStatusParser = workerParser.addCommand('status');
+  workerStatusParser
+    ..addMultiOption(
+      'worker',
+      abbr: 'w',
+      help: 'Filter by worker identifier (repeatable).',
+    )
+    ..addFlag(
+      'follow',
+      abbr: 'f',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Stream live heartbeats from the broker.',
+    )
+    ..addFlag(
+      'json',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Render heartbeat output as JSON.',
+    )
+    ..addOption(
+      'namespace',
+      defaultsTo: 'stem',
+      help: 'Heartbeat namespace used by workers.',
+    )
+    ..addOption(
+      'broker',
+      help: 'Override broker URL (defaults to STEM_BROKER_URL).',
+      valueHelp: 'redis://host:port',
+    )
+    ..addOption(
+      'backend',
+      help: 'Override result backend URL.',
+      valueHelp: 'redis://host:port',
+    )
+    ..addOption(
+      'timeout',
+      defaultsTo: '30s',
+      help: 'Follow mode timeout without heartbeat before exiting.',
+      valueHelp: 'duration',
+    )
+    ..addOption(
+      'heartbeat-interval',
+      help: 'Expected heartbeat interval (e.g. 10s).',
+      valueHelp: 'duration',
+    )
+    ..addOption(
+      'metrics-exporters',
+      help:
+          'Comma separated metrics exporters (console,otlp:http://host,prometheus).',
+    );
+  parser.addCommand('worker', workerParser);
+
   final dlqList = dlqCommandParser.addCommand('list');
   dlqList
     ..addOption(
@@ -271,6 +333,35 @@ Future<int> runStemCli(
       default:
         stderrSink.writeln('Unknown observe subcommand: ${sub.name}');
         stdoutSink.writeln(_observeUsage(observeParser));
+        return 64;
+    }
+  }
+
+  if (command.name == 'worker') {
+    final sub = command.command;
+    if (sub == null) {
+      stderrSink.writeln('Usage: stem worker status [options]');
+      return 64;
+    }
+    switch (sub.name) {
+      case 'status':
+        CliContext? ctx;
+        if (contextBuilder != null) {
+          try {
+            ctx = await contextBuilder();
+          } catch (error, stack) {
+            stderrSink.writeln('Failed to initialize Stem context: $error');
+            stderrSink.writeln(stack);
+            return 70;
+          }
+        }
+        try {
+          return _workerStatus(sub, stdoutSink, stderrSink, context: ctx);
+        } finally {
+          await ctx?.dispose();
+        }
+      default:
+        stderrSink.writeln('Unknown worker subcommand: ${sub.name}');
         return 64;
     }
   }
@@ -908,6 +999,11 @@ Future<int> _dlqReplay(
   }
   if (!result.dryRun) {
     await _annotateReplayMeta(ctx, result.entries, delay, err);
+    StemMetrics.instance.increment(
+      'stem.replay.count',
+      tags: {'queue': queue},
+      value: result.entries.length,
+    );
   }
   final verb = result.dryRun ? 'Would replay' : 'Replayed';
   out.writeln(
@@ -1123,6 +1219,344 @@ Future<int> _observeMetrics(StringSink out) async {
   final snapshot = StemMetrics.instance.snapshot();
   out.writeln(jsonEncode(snapshot));
   return 0;
+}
+
+Future<int> _workerStatus(
+  ArgResults args,
+  StringSink out,
+  StringSink err, {
+  CliContext? context,
+}) async {
+  final namespaceInput = (args['namespace'] as String?)?.trim();
+  final filters = ((args['worker'] as List?) ?? const [])
+      .cast<String>()
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet();
+  final follow = args['follow'] as bool? ?? false;
+  final jsonOutput = args['json'] as bool? ?? false;
+  final heartbeatInterval =
+      ObservabilityConfig.parseDuration(
+        args['heartbeat-interval'] as String?,
+      ) ??
+      const Duration(seconds: 10);
+  final timeout =
+      ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
+      const Duration(seconds: 30);
+  final exportersOverride = args['metrics-exporters'] as String?;
+  if (exportersOverride != null && exportersOverride.trim().isNotEmpty) {
+    final exporters = exportersOverride
+        .split(',')
+        .map((entry) => entry.trim())
+        .where((entry) => entry.isNotEmpty)
+        .toList();
+    ObservabilityConfig(metricExporters: exporters).applyMetricExporters();
+  }
+
+  final env = Platform.environment;
+  final brokerUrl = (args['broker'] as String?) ?? env[_brokerEnvKey] ?? '';
+  final backendUrl = (args['backend'] as String?) ?? env[_backendEnvKey];
+  final namespace = namespaceInput == null || namespaceInput.isEmpty
+      ? 'stem'
+      : namespaceInput;
+
+  if (follow) {
+    if (brokerUrl.isEmpty) {
+      err.writeln(
+        'Broker URL is required for follow mode (set STEM_BROKER_URL or use --broker).',
+      );
+      return 64;
+    }
+    return _streamHeartbeats(
+      brokerUrl,
+      namespace,
+      filters,
+      timeout,
+      heartbeatInterval,
+      jsonOutput,
+      out,
+      err,
+    );
+  }
+
+  return _printHeartbeatSnapshot(
+    backendUrl,
+    namespace,
+    filters,
+    jsonOutput,
+    heartbeatInterval,
+    out,
+    err,
+    contextBackend: context?.backend,
+  );
+}
+
+Future<int> _streamHeartbeats(
+  String brokerUrl,
+  String namespace,
+  Set<String> filters,
+  Duration timeout,
+  Duration expectedInterval,
+  bool jsonOutput,
+  StringSink out,
+  StringSink err,
+) async {
+  final uri = Uri.parse(brokerUrl);
+  if (uri.scheme != 'redis' && uri.scheme != 'rediss') {
+    err.writeln('Heartbeat streaming requires a Redis broker.');
+    return 64;
+  }
+
+  late final _PubSubHandle handle;
+  try {
+    handle = await _connectPubSub(uri);
+  } catch (error) {
+    err.writeln('Failed to connect to broker: $error');
+    return 70;
+  }
+
+  final channel = WorkerHeartbeat.topic(namespace);
+  final stream = handle.stream;
+  final completer = Completer<int>();
+  late final StreamSubscription<List> subscription;
+  Timer? timeoutTimer;
+
+  void startTimer() {
+    if (timeout <= Duration.zero) return;
+    timeoutTimer?.cancel();
+    timeoutTimer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        err.writeln(
+          'No heartbeat received within ${_formatReadableDuration(timeout)} '
+          '(channel: $channel).',
+        );
+        completer.complete(1);
+      }
+      subscription.cancel();
+    });
+  }
+
+  subscription = stream.listen(
+    (message) {
+      if (message.length < 3) {
+        return;
+      }
+      if (message[0] != 'message') return;
+      final payload = message[2];
+      if (payload is! String) return;
+      try {
+        final json = jsonDecode(payload) as Map<String, Object?>;
+        final heartbeat = WorkerHeartbeat.fromJson(json);
+        if (heartbeat.namespace != namespace) return;
+        if (filters.isNotEmpty && !filters.contains(heartbeat.workerId)) return;
+        startTimer();
+        _renderHeartbeat(
+          heartbeat,
+          out,
+          jsonOutput: jsonOutput,
+          expectedInterval: expectedInterval,
+        );
+      } catch (error) {
+        err.writeln('Failed to parse heartbeat payload: $error');
+      }
+    },
+    onError: (error) {
+      if (!completer.isCompleted) {
+        err.writeln('Heartbeat stream error: $error');
+        completer.complete(70);
+      }
+    },
+    onDone: () {
+      if (!completer.isCompleted) {
+        completer.complete(0);
+      }
+    },
+  );
+
+  startTimer();
+
+  handle.pubSub.subscribe([channel]);
+  final code = await completer.future;
+  final timer = timeoutTimer;
+  if (timer != null) {
+    timer.cancel();
+  }
+  await subscription.cancel();
+  await handle.close(channel: channel);
+  return code;
+}
+
+Future<int> _printHeartbeatSnapshot(
+  String? backendUrl,
+  String namespace,
+  Set<String> filters,
+  bool jsonOutput,
+  Duration expectedInterval,
+  StringSink out,
+  StringSink err, {
+  ResultBackend? contextBackend,
+}) async {
+  late final ResultBackend backend;
+  _BackendHandle? handle;
+  if (contextBackend != null) {
+    backend = contextBackend;
+  } else {
+    if (backendUrl == null || backendUrl.isEmpty) {
+      err.writeln(
+        'Result backend URL is required for snapshot mode (set STEM_RESULT_BACKEND_URL or use --backend).',
+      );
+      return 64;
+    }
+    try {
+      handle = await _connectBackend(backendUrl);
+      backend = handle.backend;
+    } catch (error) {
+      err.writeln('Failed to connect to result backend: $error');
+      return 70;
+    }
+  }
+
+  try {
+    final snapshots = await backend.listWorkerHeartbeats();
+    final filtered = snapshots.where((heartbeat) {
+      if (heartbeat.namespace != namespace) return false;
+      if (filters.isNotEmpty && !filters.contains(heartbeat.workerId)) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => a.workerId.compareTo(b.workerId));
+    if (filtered.isEmpty) {
+      out.writeln('No worker heartbeats found for namespace "$namespace".');
+      return 0;
+    }
+    for (final heartbeat in filtered) {
+      _renderHeartbeat(
+        heartbeat,
+        out,
+        jsonOutput: jsonOutput,
+        expectedInterval: expectedInterval,
+      );
+    }
+    return 0;
+  } finally {
+    await handle?.dispose?.call();
+  }
+}
+
+void _renderHeartbeat(
+  WorkerHeartbeat heartbeat,
+  StringSink out, {
+  required bool jsonOutput,
+  Duration? expectedInterval,
+}) {
+  if (jsonOutput) {
+    out.writeln(jsonEncode(heartbeat.toJson()));
+    return;
+  }
+  final now = DateTime.now().toUtc();
+  final age = now.difference(heartbeat.timestamp);
+  final isStale = expectedInterval != null && expectedInterval > Duration.zero
+      ? age > expectedInterval
+      : false;
+  out.writeln(
+    'Worker ${heartbeat.workerId} '
+    '(namespace: ${heartbeat.namespace}) '
+    '@ ${heartbeat.timestamp.toIso8601String()} '
+    'isolate=${heartbeat.isolateCount} inflight=${heartbeat.inflight}'
+    '${isStale ? ' [stale ${_formatReadableDuration(age)}]' : ''}',
+  );
+  if (heartbeat.lastLeaseRenewal != null) {
+    out.writeln(
+      '  lastLeaseRenewal: '
+      '${heartbeat.lastLeaseRenewal!.toIso8601String()}',
+    );
+  }
+  if (heartbeat.queues.isNotEmpty) {
+    out.writeln('  queues:');
+    for (final queue in heartbeat.queues) {
+      out.writeln('    - ${queue.name}: inflight=${queue.inflight}');
+    }
+  }
+  out.writeln('');
+}
+
+String _formatReadableDuration(Duration duration) {
+  if (duration.inSeconds == 0) {
+    return '${duration.inMilliseconds}ms';
+  }
+  if (duration.inMinutes >= 1) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return seconds == 0 ? '${minutes}m' : '${minutes}m${seconds}s';
+  }
+  return '${duration.inSeconds}s';
+}
+
+Future<_BackendHandle> _connectBackend(String url) async {
+  final uri = Uri.parse(url);
+  switch (uri.scheme) {
+    case 'redis':
+    case 'rediss':
+      final backend = await RedisResultBackend.connect(url);
+      return _BackendHandle(backend: backend, dispose: () => backend.close());
+    case 'memory':
+      final backend = InMemoryResultBackend();
+      return _BackendHandle(backend: backend);
+    default:
+      throw StateError('Unsupported backend scheme: ${uri.scheme}');
+  }
+}
+
+Future<_PubSubHandle> _connectPubSub(Uri uri) async {
+  if (uri.scheme != 'redis' && uri.scheme != 'rediss') {
+    throw StateError('Unsupported broker scheme: ${uri.scheme}');
+  }
+  final host = uri.host.isNotEmpty ? uri.host : 'localhost';
+  final port = uri.hasPort ? uri.port : 6379;
+  final connection = RedisConnection();
+  final command = await connection.connect(host, port);
+
+  if (uri.userInfo.isNotEmpty) {
+    final parts = uri.userInfo.split(':');
+    final password = parts.length == 2 ? parts[1] : parts[0];
+    await command.send_object(['AUTH', password]);
+  }
+
+  if (uri.pathSegments.isNotEmpty) {
+    final db = int.tryParse(uri.pathSegments.first);
+    if (db != null) {
+      await command.send_object(['SELECT', db]);
+    }
+  }
+
+  final pubSub = PubSub(command);
+  return _PubSubHandle(connection, command, pubSub);
+}
+
+class _BackendHandle {
+  _BackendHandle({required this.backend, this.dispose});
+
+  final ResultBackend backend;
+  final Future<void> Function()? dispose;
+}
+
+class _PubSubHandle {
+  _PubSubHandle(this.connection, this.command, this.pubSub);
+
+  final RedisConnection connection;
+  final Command command;
+  final PubSub pubSub;
+
+  Stream<List> get stream => pubSub.getStream().cast<List>();
+
+  Future<void> close({String? channel}) async {
+    if (channel != null) {
+      try {
+        pubSub.unsubscribe([channel]);
+      } catch (_) {}
+    }
+    await connection.close();
+  }
 }
 
 Future<int> _observeQueues(

@@ -18,6 +18,10 @@ Stem reads configuration from environment variables. The most common settings ar
 | `STEM_DEFAULT_QUEUE` | Queue name for tasks without explicit routing |
 | `STEM_PREFETCH_MULTIPLIER` | Prefetch factor relative to `Worker.concurrency` |
 | `STEM_DEFAULT_MAX_RETRIES` | Global fallback retry limit |
+| `STEM_HEARTBEAT_INTERVAL` | Worker heartbeat cadence (e.g. `10s`) |
+| `STEM_WORKER_NAMESPACE` | Namespace prefix for Redis channels and worker IDs |
+| `STEM_METRIC_EXPORTERS` | Comma separated exporters (`console`, `otlp:http://host:4318/v1/metrics`, `prometheus`) |
+| `STEM_OTLP_ENDPOINT` | Default OTLP HTTP endpoint used when exporters omit a target |
 
 Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Manager) and inject them as environment variables.
 
@@ -55,6 +59,40 @@ Stem emits metrics and heartbeats via the observability module:
 - **Gauges**: active isolates, in-flight deliveries.
 
 Plumb OpenTelemetry exporters into your APM of choice. The CLI command `stem worker status --follow` subscribes to heartbeat streams for live debugging.
+
+Use `stem worker status --once` to dump the latest snapshot from the result backend, or `stem worker status --follow --timeout 60s` to stream updates with a timeout guard. Override connection targets with `--backend` / `--broker`, and adjust expectations with `--heartbeat-interval`.
+
+Example wiring for OTLP/HTTP metrics export:
+
+```dart
+import 'package:stem/stem.dart';
+
+Future<void> main() async {
+  final observability = ObservabilityConfig(
+    namespace: 'prod-us-east',
+    heartbeatInterval: const Duration(seconds: 5),
+    metricExporters: const [
+      'otlp:http://otel-collector:4318/v1/metrics',
+    ],
+  );
+
+  final worker = Worker(
+    broker: await RedisStreamsBroker.connect('redis://redis:6379'),
+    registry: taskRegistry,
+    backend: await RedisResultBackend.connect('redis://redis:6379'),
+    consumerName: 'payments-worker-1',
+    observability: observability,
+    heartbeatTransport: await RedisHeartbeatTransport.connect(
+      'redis://redis:6379',
+      namespace: observability.namespace,
+    ),
+  );
+
+  await worker.start();
+}
+```
+
+This configuration batches metrics through the OTLP HTTP collector while heartbeats publish over Redis using the same namespace. Set `STEM_METRIC_EXPORTERS="otlp:http://otel-collector:4318/v1/metrics"` in production for parity with the sample code.
 
 ### Logs
 

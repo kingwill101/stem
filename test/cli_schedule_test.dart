@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/cli/file_schedule_repository.dart';
-import 'package:stem/src/observability/metrics.dart';
 import 'package:stem/src/observability/snapshots.dart';
 import 'package:stem/stem.dart';
 
@@ -121,12 +120,15 @@ void main() {
 
     test('metrics prints JSON snapshot', () async {
       StemMetrics.instance.reset();
-      StemMetrics.instance.increment('tasks.succeeded', tags: {'task': 'demo'});
+      StemMetrics.instance.increment(
+        'stem.tasks.succeeded',
+        tags: {'task': 'demo'},
+      );
 
       final out = StringBuffer();
       final code = await runStemCli(['observe', 'metrics'], out: out);
       expect(code, equals(0));
-      expect(out.toString(), contains('tasks.succeeded'));
+      expect(out.toString(), contains('stem.tasks.succeeded'));
     });
 
     test('queues prints table from snapshot', () async {

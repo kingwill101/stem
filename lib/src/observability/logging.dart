@@ -1,5 +1,6 @@
 import 'package:contextual/contextual.dart';
 
+/// Shared logger configured with console output suitable for worker diagnostics.
 final stemLogger = Logger()
   ..addChannel(
     'console',
@@ -14,6 +15,7 @@ final stemLogger = Logger()
     ),
   );
 
+/// Sets the minimum log [level] for the shared [stemLogger].
 void configureStemLogging({Level level = Level.info}) {
   stemLogger.setLevel(level);
 }

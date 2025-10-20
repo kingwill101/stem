@@ -1,10 +1,8 @@
-version: '3.9'
-
 services:
   redis:
-    image: redis:7.2
+    image: quay.io/opstree/redis:latest
     ports:
-      - '6379:6379'
+      - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
 
   enqueuer:
@@ -12,7 +10,7 @@ services:
       context: ../..
       dockerfile: examples/microservice/enqueuer/Dockerfile
     env_file:
-      - .env
+      - .env.example
     environment:
       PORT: ${PORT:-8081}
     ports:
@@ -25,6 +23,6 @@ services:
       context: ../..
       dockerfile: examples/microservice/worker/Dockerfile
     env_file:
-      - .env
+      - .env.example
     depends_on:
       - redis

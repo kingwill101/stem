@@ -1,0 +1,14 @@
+name: stem_otel_metrics_example
+description: Minimal example streaming Stem metrics to an OpenTelemetry collector.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../..
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0

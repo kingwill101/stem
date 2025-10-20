@@ -65,13 +65,13 @@ class Beat {
       );
       if (lock == null) {
         StemMetrics.instance.increment(
-          'scheduler.lock.contended',
+          'stem.scheduler.lock.contended',
           tags: {'schedule': entry.id},
         );
         return;
       }
       StemMetrics.instance.increment(
-        'scheduler.lock.acquired',
+        'stem.scheduler.lock.acquired',
         tags: {'schedule': entry.id},
       );
       final renewMs = (lockTtl.inMilliseconds ~/ 2).clamp(
@@ -82,7 +82,7 @@ class Beat {
         final renewed = await lock!.renew(lockTtl);
         if (!renewed) {
           StemMetrics.instance.increment(
-            'scheduler.lock.renew_failed',
+            'stem.scheduler.lock.renew_failed',
             tags: {'schedule': entry.id},
           );
         }

@@ -172,6 +172,7 @@ class _RecordingBackend implements ResultBackend {
   final List<TaskStatus> records = [];
   final Map<String, StreamController<TaskStatus>> _controllers = {};
   final Map<String, GroupStatus> _groups = {};
+  WorkerHeartbeat? lastHeartbeat;
 
   @override
   Future<TaskStatus?> get(String taskId) async => records
@@ -217,6 +218,21 @@ class _RecordingBackend implements ResultBackend {
       expected: descriptor.expected,
       meta: descriptor.meta,
     );
+  }
+
+  @override
+  Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
+    lastHeartbeat = heartbeat;
+  }
+
+  @override
+  Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
+    return lastHeartbeat?.workerId == workerId ? lastHeartbeat : null;
+  }
+
+  @override
+  Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
+    return lastHeartbeat == null ? const [] : [lastHeartbeat!];
   }
 
   @override

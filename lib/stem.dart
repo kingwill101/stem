@@ -22,3 +22,8 @@ export 'src/scheduler/in_memory_schedule_store.dart';
 export 'src/scheduler/redis_lock_store.dart';
 export 'src/scheduler/redis_schedule_store.dart';
 export 'src/worker/worker.dart';
+export 'src/observability/config.dart';
+export 'src/observability/heartbeat.dart';
+export 'src/observability/heartbeat_transport.dart';
+export 'src/observability/metrics.dart';
+export 'src/observability/logging.dart';
