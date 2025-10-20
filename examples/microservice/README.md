@@ -17,6 +17,8 @@ All services expect the following environment variables:
 | `STEM_RESULT_BACKEND_URL` | `redis://redis:6379/1` | Redis result backend connection string. |
 | `STEM_SIGNING_KEYS` | `primary:<base64 secret>` | Comma-separated list of `keyId:base64Secret` pairs accepted by workers. |
 | `STEM_SIGNING_ACTIVE_KEY` | `primary` | Key id used by enqueuers to sign new envelopes. |
+| `STEM_TLS_CA_CERT` | `/certs/server.crt` | CA/leaf certificate trusted by clients (mounted via Docker). |
+| `STEM_TLS_ALLOW_INSECURE` | `true` | Accept self-signed certs (set to `false` in production). |
 | `PORT` | `8081` | HTTP port for the enqueue API. |
 
 Copy `.env.example` to `.env` and adjust values as needed when using Docker.
@@ -28,6 +30,32 @@ openssl rand -base64 32
 # or ./scripts/security/generate_tls_assets.sh to create TLS assets as well
 ```
 Replace the placeholder secret in `.env` with the generated value and update `STEM_SIGNING_ACTIVE_KEY` when rotating keys.
+
+### Enabling TLS for Redis
+
+1. Generate local certificates (from the example directory):
+
+   ```bash
+   cd examples/microservice
+   ../../scripts/security/generate_tls_assets.sh certs redis
+   ```
+
+   This creates `certs/server.crt` and `certs/server.key`, which the compose stack mounts into the Redis and app containers.
+
+2. Ensure your `.env` includes the TLS variables (already present in `.env.example`):
+
+   ```
+   STEM_TLS_CA_CERT=/certs/server.crt
+   STEM_TLS_ALLOW_INSECURE=true
+   STEM_BROKER_URL=rediss://redis:6379/0
+   STEM_RESULT_BACKEND_URL=rediss://redis:6379/1
+   ```
+
+3. Start the stack (Docker will configure Redis to listen only on TLS):
+
+   ```bash
+   docker compose up --build
+   ```
 
 ## Running with Docker Compose
 
@@ -60,8 +88,10 @@ Stop the stack with `docker compose down`.
 2. Export the environment variables:
 
    ```bash
-   export STEM_BROKER_URL=redis://localhost:6379/0
-   export STEM_RESULT_BACKEND_URL=redis://localhost:6379/1
+   export STEM_BROKER_URL=rediss://localhost:6379/0
+   export STEM_RESULT_BACKEND_URL=rediss://localhost:6379/1
+   export STEM_TLS_CA_CERT=certs/server.crt
+   export STEM_TLS_ALLOW_INSECURE=true       # accept self-signed certs for local testing
    export STEM_SIGNING_KEYS=primary:$(openssl rand -base64 32)
    export STEM_SIGNING_ACTIVE_KEY=primary
    ```

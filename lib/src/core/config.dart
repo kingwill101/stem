@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import '../security/signing.dart';
+import '../security/tls.dart';
 
 /// Configuration source for Stem clients and worker processes.
 class StemConfig {
@@ -12,7 +13,9 @@ class StemConfig {
     this.prefetchMultiplier = 2,
     this.defaultMaxRetries = 3,
     SigningConfig? signing,
-  }) : signing = signing ?? const SigningConfig.disabled();
+    TlsConfig? tls,
+  }) : signing = signing ?? const SigningConfig.disabled(),
+       tls = tls ?? const TlsConfig.disabled();
 
   /// Broker connection string (e.g. redis://localhost:6379).
   final String brokerUrl;
@@ -34,6 +37,9 @@ class StemConfig {
 
   /// Payload signing configuration.
   final SigningConfig signing;
+
+  /// TLS configuration for broker/backends.
+  final TlsConfig tls;
 
   /// Construct configuration from environment variables.
   factory StemConfig.fromEnvironment([Map<String, String>? env]) {
@@ -62,6 +68,7 @@ class StemConfig {
         min: 0,
       ),
       signing: SigningConfig.fromEnvironment(environment),
+      tls: TlsConfig.fromEnvironment(environment),
     );
   }
 
@@ -90,6 +97,7 @@ class StemConfig {
     int? prefetchMultiplier,
     int? defaultMaxRetries,
     SigningConfig? signing,
+    TlsConfig? tls,
   }) {
     return StemConfig(
       brokerUrl: brokerUrl ?? this.brokerUrl,
@@ -99,6 +107,7 @@ class StemConfig {
       prefetchMultiplier: prefetchMultiplier ?? this.prefetchMultiplier,
       defaultMaxRetries: defaultMaxRetries ?? this.defaultMaxRetries,
       signing: signing ?? this.signing,
+      tls: tls ?? this.tls,
     );
   }
 }

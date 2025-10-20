@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:redis/redis.dart';
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
+import '../security/tls.dart';
 
 class RedisStreamsBroker implements Broker {
   RedisStreamsBroker._(
@@ -39,12 +41,26 @@ class RedisStreamsBroker implements Broker {
     int delayedDrainBatch = 128,
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration claimInterval = const Duration(seconds: 30),
+    TlsConfig? tls,
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
     final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
-    final command = await connection.connect(host, port);
+    final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
+    Command command;
+    if (scheme == 'rediss') {
+      final securityContext = tls?.toSecurityContext();
+      final socket = await SecureSocket.connect(
+        host,
+        port,
+        context: securityContext,
+        onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+      );
+      command = await connection.connectWithSocket(socket);
+    } else {
+      command = await connection.connect(host, port);
+    }
 
     if (parsed.userInfo.isNotEmpty) {
       final parts = parsed.userInfo.split(':');

@@ -8,7 +8,10 @@ import 'package:stem/stem.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
-  final broker = await RedisStreamsBroker.connect(config.brokerUrl);
+  final broker = await RedisStreamsBroker.connect(
+    config.brokerUrl,
+    tls: config.tls,
+  );
   final backend = config.resultBackendUrl != null
       ? await RedisResultBackend.connect(config.resultBackendUrl!)
       : null;

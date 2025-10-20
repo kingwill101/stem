@@ -1108,7 +1108,10 @@ Future<CliContext> _createDefaultContext() async {
   final disposables = <Future<void> Function()>[];
   late Broker broker;
   if (brokerUri.scheme == 'redis' || brokerUri.scheme == 'rediss') {
-    final redisBroker = await RedisStreamsBroker.connect(config.brokerUrl);
+    final redisBroker = await RedisStreamsBroker.connect(
+      config.brokerUrl,
+      tls: config.tls,
+    );
     broker = redisBroker;
     disposables.add(() => redisBroker.close());
   } else if (brokerUri.scheme == 'memory') {
