@@ -13,6 +13,7 @@ Future<void> main(List<String> args) async {
   final backend = config.resultBackendUrl != null
       ? await RedisResultBackend.connect(config.resultBackendUrl!)
       : null;
+  final signer = PayloadSigner.maybe(config.signing);
 
   if (backend == null) {
     stderr.writeln(
@@ -30,7 +31,12 @@ Future<void> main(List<String> args) async {
       ),
     );
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(
+    broker: broker,
+    registry: registry,
+    backend: backend,
+    signer: signer,
+  );
 
   final router = Router()
     ..post('/process-image', (Request request) async {

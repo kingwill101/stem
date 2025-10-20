@@ -3,6 +3,7 @@
 .packages
 pubspec.lock
 build/
+textwrap/
 # IDE / OS
 .idea/
 .vscode/

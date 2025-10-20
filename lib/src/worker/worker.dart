@@ -14,6 +14,7 @@ import '../observability/config.dart';
 import '../observability/heartbeat.dart';
 import '../observability/heartbeat_transport.dart';
 import '../observability/tracing.dart';
+import '../security/signing.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
 
@@ -64,6 +65,7 @@ class Worker {
     HeartbeatTransport? heartbeatTransport,
     String heartbeatNamespace = 'stem',
     ObservabilityConfig? observability,
+    this.signer,
   }) : workerHeartbeatInterval =
            observability?.heartbeatInterval ??
            workerHeartbeatInterval ??
@@ -97,6 +99,7 @@ class Worker {
   final Duration workerHeartbeatInterval;
   final HeartbeatTransport heartbeatTransport;
   final String namespace;
+  final PayloadSigner? signer;
 
   final Map<String, Timer> _leaseTimers = {};
   final Map<String, Timer> _heartbeatTimers = {};
@@ -214,6 +217,23 @@ class Worker {
 
         await _runConsumeMiddleware(delivery);
 
+        final groupId = envelope.headers['stem-group-id'];
+
+        if (signer != null) {
+          try {
+            signer!.verify(envelope);
+          } on SignatureVerificationException catch (error, stack) {
+            await _handleSignatureFailure(
+              delivery,
+              envelope,
+              error,
+              stack,
+              groupId,
+            );
+            return;
+          }
+        }
+
         final rateSpec = handler.options.rateLimit != null
             ? _parseRate(handler.options.rateLimit!)
             : null;
@@ -261,7 +281,6 @@ class Worker {
         }
 
         _trackDelivery(delivery);
-        final groupId = envelope.headers['stem-group-id'];
 
         stemLogger.debug(
           'Task {task} started',
@@ -530,6 +549,93 @@ class Worker {
     if (active != null) {
       active.lastLeaseRenewal = now;
     }
+  }
+
+  Future<void> _handleSignatureFailure(
+    Delivery delivery,
+    Envelope envelope,
+    SignatureVerificationException error,
+    StackTrace stack,
+    String? groupId,
+  ) async {
+    await broker.deadLetter(
+      delivery,
+      reason: 'signature-invalid',
+      meta: {
+        'error': error.message,
+        if (error.keyId != null) 'keyId': error.keyId!,
+      },
+    );
+
+    final failureMeta = {
+      ...envelope.meta,
+      'queue': envelope.queue,
+      'worker': consumerName,
+      'failedAt': DateTime.now().toIso8601String(),
+      'security': 'signature-invalid',
+    };
+
+    final failureStatus = TaskStatus(
+      id: envelope.id,
+      state: TaskState.failed,
+      payload: null,
+      error: TaskError(
+        type: error.runtimeType.toString(),
+        message: error.toString(),
+        stack: stack.toString(),
+        retryable: false,
+        meta: {
+          'reason': error.message,
+          if (error.keyId != null) 'keyId': error.keyId!,
+        },
+      ),
+      attempt: envelope.attempt,
+      meta: failureMeta,
+    );
+
+    await backend.set(
+      envelope.id,
+      TaskState.failed,
+      attempt: envelope.attempt,
+      error: failureStatus.error,
+      meta: failureMeta,
+    );
+    if (groupId != null) {
+      await backend.addGroupResult(groupId, failureStatus);
+    }
+
+    StemMetrics.instance.increment(
+      'stem.tasks.signature_invalid',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+    StemMetrics.instance.increment(
+      'stem.tasks.failed',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+
+    stemLogger.error(
+      'Task {task} signature verification failed',
+      Context(
+        _logContext({
+          'task': envelope.name,
+          'id': envelope.id,
+          'queue': envelope.queue,
+          'worker': consumerName ?? 'unknown',
+          'error': error.message,
+          if (error.keyId != null) 'keyId': error.keyId!,
+        }),
+      ),
+    );
+
+    _events.add(
+      WorkerEvent(
+        type: WorkerEventType.failed,
+        envelope: envelope,
+        error: error,
+        stackTrace: stack,
+        data: {'security': 'signature-invalid'},
+      ),
+    );
   }
 
   Future<void> _handleFailure(

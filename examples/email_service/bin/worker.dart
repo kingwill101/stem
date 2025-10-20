@@ -10,6 +10,7 @@ Future<void> main(List<String> args) async {
   final backend = config.resultBackendUrl != null
       ? await RedisResultBackend.connect(config.resultBackendUrl!)
       : null;
+  final signer = PayloadSigner.maybe(config.signing);
 
   if (backend == null) {
     stderr.writeln(
@@ -32,6 +33,7 @@ Future<void> main(List<String> args) async {
     registry: registry,
     backend: backend,
     concurrency: 2, // Allow parallel email sending
+    signer: signer,
   );
 
   await worker.start();

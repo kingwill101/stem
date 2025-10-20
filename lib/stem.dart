@@ -27,3 +27,4 @@ export 'src/observability/heartbeat.dart';
 export 'src/observability/heartbeat_transport.dart';
 export 'src/observability/metrics.dart';
 export 'src/observability/logging.dart';
+export 'src/security/signing.dart';

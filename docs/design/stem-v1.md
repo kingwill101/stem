@@ -93,10 +93,10 @@ with configurable retries, time limits, and a CLI-first operator surface.
 Precedence: code overrides > config file > env vars.
 
 ## Security
-- TLS support for Redis URIs; document secret rotation via env vars.
-- Optional payload signing/encryption: future extension (documented as TODO).
-- No admin endpoints; CLI uses same credentials as workers.
-- Threat model highlights: broker compromise (mitigate with ACL/TLS), replay attacks (trace + idempotency), credential leakage (secret rotation policy).
+- TLS support for Redis URIs; automation script in `scripts/security/generate_tls_assets.sh` seeds certs for local stacks.
+- Payload signing via HMAC-SHA256 with key rotation and dead-lettering of invalid signatures; keys provided through `STEM_SIGNING_KEYS` + `STEM_SIGNING_ACTIVE_KEY`.
+- Recurring vulnerability scan guidance (`scripts/security/run_vulnerability_scan.sh`) ensures dependency CVEs are surfaced in CI.
+- No admin endpoints; CLI uses same credentials as workers. Threat model highlights: broker compromise (mitigate with ACL/TLS + signing), replay attacks (trace + idempotency), credential leakage (secret rotation policy).
 
 ## Observability & SLOs
 - Metrics: `stem.tasks.*`, `stem.worker.inflight`, `stem.queue.depth`, `stem.lease.renewed`, beat metrics.

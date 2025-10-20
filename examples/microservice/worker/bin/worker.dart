@@ -9,6 +9,7 @@ Future<void> main(List<String> args) async {
   final backend = config.resultBackendUrl != null
       ? await RedisResultBackend.connect(config.resultBackendUrl!)
       : InMemoryResultBackend();
+  final signer = PayloadSigner.maybe(config.signing);
 
   final registry = SimpleTaskRegistry()
     ..register(
@@ -32,6 +33,7 @@ Future<void> main(List<String> args) async {
     consumerName: 'microservice-worker',
     concurrency: 4,
     prefetchMultiplier: 2,
+    signer: signer,
   );
 
   await worker.start();
@@ -57,7 +59,7 @@ FutureOr<Object?> _greetingEntrypoint(
   final name = (args['name'] as String?) ?? 'friend';
   context.heartbeat();
   await Future<void>.delayed(const Duration(milliseconds: 500));
-  final message = 'Processed greeting for $name';
+  final message = 'Processed greeting for $name ';
   stdout.writeln('👋 $message (attempt ${context.attempt})');
   context.progress(1.0, data: {'message': message});
   return message;

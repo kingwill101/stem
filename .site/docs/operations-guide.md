@@ -111,6 +111,12 @@ This configuration batches metrics through the OTLP HTTP collector while heartbe
 - Legacy Prometheus alerts for heartbeat gaps, DLQ age, reclaim spikes, and scheduler skew remain until they are migrated to Grafana.
 - Full remediation steps live in `docs/process/observability-runbook.md`.
 
+### Security
+
+- **Payload signing**: set `STEM_SIGNING_KEYS` to a comma separated list of `keyId:base64Secret` pairs and `STEM_SIGNING_ACTIVE_KEY` to the key used for new tasks. Enqueuers automatically sign envelopes and workers verify them, dead-lettering any tampered payloads. Follow the rotation steps in `docs/process/security-runbook.md` to phase keys in/out without downtime.
+- **TLS bootstrap**: generate self-signed certificates for Redis or HTTP examples with `scripts/security/generate_tls_assets.sh <output-dir> <hostname>` and mount them via Docker Compose. Once certs are installed, set the relevant `redis://` URLs to `rediss://` and configure clients with the generated CA bundle.
+- **Vulnerability scanning**: run `scripts/security/run_vulnerability_scan.sh` as part of CI (or weekly locally). The script wraps `aquasec/trivy` against the repository and surfaces dependency CVEs that must be triaged.
+
 ## Dead Letter Queue Operations
 
 Use the `stem dlq` command group to inspect and remediate failures:

@@ -1,6 +1,7 @@
 import 'package:opentelemetry/api.dart' as otel;
 
 import '../observability/tracing.dart';
+import '../security/signing.dart';
 import 'contracts.dart';
 import 'envelope.dart';
 import 'retry.dart';
@@ -13,6 +14,7 @@ class Stem {
     this.backend,
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
+    this.signer,
   }) : retryStrategy =
            retryStrategy ??
            ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
@@ -23,6 +25,7 @@ class Stem {
   final ResultBackend? backend;
   final RetryStrategy retryStrategy;
   final List<Middleware> middleware;
+  final PayloadSigner? signer;
 
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -45,7 +48,7 @@ class Stem {
         final traceHeaders = Map<String, String>.from(headers);
         tracer.injectTraceContext(traceHeaders);
 
-        final envelope = Envelope(
+        Envelope envelope = Envelope(
           name: name,
           args: args,
           headers: traceHeaders,
@@ -56,6 +59,9 @@ class Stem {
           visibilityTimeout: options.visibilityTimeout,
           meta: meta,
         );
+        if (signer != null) {
+          envelope = signer!.sign(envelope);
+        }
 
         await _runEnqueueMiddleware(envelope, () async {
           await broker.publish(envelope);

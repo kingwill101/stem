@@ -34,27 +34,27 @@ services:
       - redis
     restart: unless-stopped
 
-  # worker2:
-  #   build:
-  #     context: ../..
-  #     dockerfile: examples/microservice/worker/Dockerfile
-  #     target: dev
-  #   env_file:
-  #     - .env.example
-  #   depends_on:
-  #     - redis
-  #   restart: unless-stopped
+  worker2:
+    build:
+      context: ../..
+      dockerfile: examples/microservice/worker/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    depends_on:
+      - redis
+    restart: unless-stopped
 
-  # worker3:
-  #   build:
-  #     context: ../..
-  #     dockerfile: examples/microservice/worker/Dockerfile
-  #     target: dev
-  #   env_file:
-  #     - .env.example
-  #   depends_on:
-  #     - redis
-  #   restart: unless-stopped
+  worker3:
+    build:
+      context: ../..
+      dockerfile: examples/microservice/worker/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    depends_on:
+      - redis
+    restart: unless-stopped
 
 volumes:
   redis-data:

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../security/signing.dart';
+
 /// Configuration source for Stem clients and worker processes.
 class StemConfig {
   StemConfig({
@@ -9,7 +11,8 @@ class StemConfig {
     this.defaultQueue = 'default',
     this.prefetchMultiplier = 2,
     this.defaultMaxRetries = 3,
-  });
+    SigningConfig? signing,
+  }) : signing = signing ?? const SigningConfig.disabled();
 
   /// Broker connection string (e.g. redis://localhost:6379).
   final String brokerUrl;
@@ -28,6 +31,9 @@ class StemConfig {
 
   /// Global fallback for tasks without explicit max retries.
   final int defaultMaxRetries;
+
+  /// Payload signing configuration.
+  final SigningConfig signing;
 
   /// Construct configuration from environment variables.
   factory StemConfig.fromEnvironment([Map<String, String>? env]) {
@@ -55,6 +61,7 @@ class StemConfig {
         fallback: 3,
         min: 0,
       ),
+      signing: SigningConfig.fromEnvironment(environment),
     );
   }
 
@@ -82,6 +89,7 @@ class StemConfig {
     String? defaultQueue,
     int? prefetchMultiplier,
     int? defaultMaxRetries,
+    SigningConfig? signing,
   }) {
     return StemConfig(
       brokerUrl: brokerUrl ?? this.brokerUrl,
@@ -90,6 +98,7 @@ class StemConfig {
       defaultQueue: defaultQueue ?? this.defaultQueue,
       prefetchMultiplier: prefetchMultiplier ?? this.prefetchMultiplier,
       defaultMaxRetries: defaultMaxRetries ?? this.defaultMaxRetries,
+      signing: signing ?? this.signing,
     );
   }
 }
