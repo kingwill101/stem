@@ -2,6 +2,16 @@
 
 A minimal single-process deployment that exposes an HTTP API for enqueuing greeting tasks, executes them with an in-process worker, and stores task state in the in-memory backend.
 
+## Configuration
+
+The service reads the following environment variables:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP listen port for the REST API. |
+
+Copy `.env.example` to `.env` (or export variables manually) when using Docker.
+
 ## Running locally
 
 ```bash
@@ -26,6 +36,22 @@ curl http://localhost:8080/status/<taskId>
 
 This example uses in-memory adapters, making it ideal for local experimentation or integration tests.
 
+## Running with Docker
+
+Build the container from the repository root:
+
+```bash
+docker build -f examples/monolith_service/Dockerfile -t stem-monolith .
+```
+
+Run it (optionally overriding the port):
+
+```bash
+docker run --rm -p 8080:8080 --env-file examples/monolith_service/.env.example stem-monolith
+```
+
+The HTTP API is now available at `http://localhost:8080`.
+
 ## Cleanup
 
-Press `Ctrl+C` in the service terminal to shut down the worker and HTTP server.
+Press `Ctrl+C` in the service terminal (or `docker stop` the container) to shut down the worker and HTTP server.

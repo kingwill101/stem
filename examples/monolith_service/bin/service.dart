@@ -8,6 +8,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:stem/stem.dart';
 
 Future<void> main(List<String> args) async {
+  final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
   final broker = InMemoryRedisBroker();
   final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()
@@ -62,18 +63,22 @@ Future<void> main(List<String> args) async {
     });
 
   final handler =
-      const Pipeline().addMiddleware(logRequests()).addHandler(router);
+      const Pipeline().addMiddleware(logRequests()).addHandler(router.call);
 
-  final server = await serve(handler, InternetAddress.anyIPv4, 8080);
-  stdout.writeln('HTTP server listening on http://${server.address.host}:8080');
+  final server = await serve(handler, InternetAddress.anyIPv4, port);
+  stdout.writeln(
+      'HTTP server listening on http://${server.address.address}:$port');
 
-  ProcessSignal.sigint.watch().listen((signal) async {
-    stdout.writeln('Received SIGINT, shutting down...');
+  void handleShutdown(ProcessSignal signal) async {
+    stdout.writeln('Received $signal, shutting down...');
     await worker.shutdown();
     await server.close(force: true);
     broker.dispose();
     exit(0);
-  });
+  }
+
+  ProcessSignal.sigint.watch().listen(handleShutdown);
+  ProcessSignal.sigterm.watch().listen(handleShutdown);
 }
 
 FutureOr<Object?> _greetingEntrypoint(

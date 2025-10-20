@@ -94,7 +94,7 @@ class Beat {
       jitterDelay = (jitter != null && jitter > Duration.zero)
           ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
           : Duration.zero;
-      if (jitterDelay != null && jitterDelay > Duration.zero) {
+      if (jitterDelay > Duration.zero) {
         await Future<void>.delayed(jitterDelay);
       }
 

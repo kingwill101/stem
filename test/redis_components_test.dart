@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
-import 'package:stem/src/broker_redis/in_memory_broker.dart';
 
 void main() {
   group('InMemoryRedisBroker', () {

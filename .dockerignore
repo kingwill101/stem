@@ -1,0 +1,9 @@
+.git
+.dockerignore
+.dart_tool
+build
+.pub-cache
+.site/node_modules
+.site/build
+examples/**/.dart_tool
+examples/**/build

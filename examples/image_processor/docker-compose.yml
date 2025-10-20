@@ -7,23 +7,23 @@ services:
       - '6379:6379'
     command: ["redis-server", "--appendonly", "yes"]
 
-  enqueuer:
+  api:
     build:
       context: ../..
-      dockerfile: examples/microservice/enqueuer/Dockerfile
+      dockerfile: examples/image_processor/Dockerfile.api
     env_file:
       - .env
     environment:
-      PORT: ${PORT:-8081}
+      PORT: ${PORT:-8083}
     ports:
-      - "${PORT:-8081}:8081"
+      - "${PORT:-8083}:8083"
     depends_on:
       - redis
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/microservice/worker/Dockerfile
+      dockerfile: examples/image_processor/Dockerfile.worker
     env_file:
       - .env
     depends_on:
