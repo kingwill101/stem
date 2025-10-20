@@ -1,8 +1,9 @@
 # Stem + OpenTelemetry Metrics Example
 
-This example shows how to wire a Stem worker to an OpenTelemetry (OTLP/HTTP)
-collector without spinning up Redis or other infrastructure. It uses the
-in-memory broker/backend so you can focus on the telemetry pipeline.
+This example wires a Stem worker to an OpenTelemetry collector using the
+in-memory broker/backend so you can focus purely on telemetry. The stack now
+includes Prometheus for metrics storage and Grafana for dashboards in addition
+to the collector and Jaeger.
 
 ## Prerequisites
 
@@ -10,8 +11,7 @@ in-memory broker/backend so you can focus on the telemetry pipeline.
 2. Docker with Compose v2
 3. The provided OpenTelemetry collector + Jaeger UI (bundled configuration)
 
-The collector forwards metrics to both a logging exporter and a Jaeger
-all-in-one instance so you can inspect telemetry visually:
+The collector forwards metrics to Prometheus and Jaeger:
 
 ```yaml
 receivers:
@@ -19,39 +19,47 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
 
 processors:
   batch: {}
 
 exporters:
   logging:
-    loglevel: debug
+    verbosity: detailed
+  prometheus:
+    endpoint: 0.0.0.0:8888
+    namespace: stem
 
 service:
   pipelines:
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging]
+      exporters: [logging, prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/jaeger]
 ```
 
 ### Run with Docker Compose
 
 ```bash
+docker compose down      # stop any previous run
 docker compose up --build
 ```
 
-This brings up three containers:
+This brings up:
 
-- `collector`: OpenTelemetry collector listening on port `4318`
-- `jaeger`: Jaeger all-in-one UI available at <http://localhost:16686>
-- `worker`: Stem worker streaming metrics to the collector every second
+- `collector` – OpenTelemetry collector (OTLP on 4317/4318, Prometheus scrape on 8888)
+- `prometheus` – Prometheus UI at <http://localhost:9090>
+- `grafana` – Grafana UI at <http://localhost:3000> (admin/admin)
+- `jaeger` – Jaeger UI at <http://localhost:16686>
+- `worker` – Stem worker streaming metrics every second
 
-Stop the stack with:
-
-```bash
-docker compose down
-```
+Stop the stack with `docker compose down`.
 
 ### Run locally
 
@@ -61,18 +69,16 @@ dart pub get
 dart run bin/worker.dart
 ```
 
-The worker enqueues a task every second, executes it, and emits metrics
-(`stem.tasks.started`, `stem.tasks.succeeded`, `stem.task.duration`, etc.).
-The collector logs the measurements and forwards them to Jaeger, where they
-appear under the `metrics.ping` service.
+The worker enqueues a task every second, executes it, and emits metrics such as
+`stem_tasks_started_total`, `stem_tasks_succeeded_total`, and
+`stem_task_duration_seconds_bucket`. The collector exposes these on the
+Prometheus scrape endpoint and forwards spans to Jaeger.
 
 ## Notes
 
-- `ObservabilityConfig` controls the namespace, heartbeat cadence, and metric
-  exporter list. The example points to the OTLP HTTP endpoint.
-- Heartbeats are disabled (`heartbeatInterval: Duration.zero`) because the
-  example uses in-memory components. Swap in `RedisHeartbeatTransport` and a
-  persistent backend when integrating with a real deployment.
-- The custom OTLP exporter in Stem sends one JSON payload per data point. For
-  production quality exporters consider swapping in a fully featured OTLP
-  client or bridging to your preferred metrics backend.
+- `ObservabilityConfig` controls the namespace, heartbeat cadence, and exporter
+  list. The worker now uses the Dartastic OTLP gRPC exporter automatically.
+- Heartbeats remain disabled (`heartbeatInterval: Duration.zero`) because the
+  example uses in-memory components.
+- After pulling changes, rebuild the stack (`docker compose down && docker compose up --build`)
+  so Prometheus/Grafana pick up the latest dashboards and metric names.

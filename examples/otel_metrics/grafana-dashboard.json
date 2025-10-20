@@ -24,9 +24,14 @@
       "type": "graph",
       "targets": [
         {
-          "expr": "rate(stem_task_duration_seconds_count[1m]) * 60",
-          "legendFormat": "{{task}} - {{status}}",
+          "expr": "rate(stem_tasks_started_total[1m]) * 60",
+          "legendFormat": "started - {{task}}",
           "refId": "A"
+        },
+        {
+          "expr": "rate(stem_tasks_succeeded_total[1m]) * 60",
+          "legendFormat": "succeeded - {{task}}",
+          "refId": "B"
         }
       ],
       "yaxes": [
@@ -84,7 +89,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "sum(stem_task_duration_seconds_count)",
+          "expr": "sum(stem_tasks_succeeded_total)",
           "refId": "A"
         }
       ],
@@ -131,9 +136,14 @@
       "type": "piechart",
       "targets": [
         {
-          "expr": "sum by (status) (stem_task_duration_seconds_count)",
-          "legendFormat": "{{status}}",
+          "expr": "sum(rate(stem_tasks_started_total[5m]))",
+          "legendFormat": "started",
           "refId": "A"
+        },
+        {
+          "expr": "sum(rate(stem_tasks_succeeded_total[5m]))",
+          "legendFormat": "succeeded",
+          "refId": "B"
         }
       ],
       "options": {
@@ -159,7 +169,7 @@
       "type": "stat",
       "targets": [
         {
-          "expr": "rate(stem_task_duration_seconds_count[1m]) * 60",
+          "expr": "sum(rate(stem_tasks_succeeded_total[1m])) * 60",
           "refId": "A"
         }
       ],
@@ -247,7 +257,7 @@
       "type": "graph",
       "targets": [
         {
-          "expr": "sum by (queue) (rate(stem_task_duration_seconds_count[1m]))",
+      "expr": "sum by (queue) (rate(stem_tasks_started_total[1m]))",
           "legendFormat": "{{queue}}",
           "refId": "A"
         }
@@ -277,7 +287,7 @@
       "type": "graph",
       "targets": [
         {
-          "expr": "sum by (worker) (rate(stem_task_duration_seconds_count[1m]))",
+      "expr": "sum by (worker) (rate(stem_tasks_started_total[1m]))",
           "legendFormat": "{{worker}}",
           "refId": "A"
         }

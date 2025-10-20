@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
     { type: "doc", id: "scaling-playbook", label: "Scaling Playbook" },
     { type: "doc", id: "broker-comparison", label: "Broker Comparison" },
     { type: "doc", id: "release-process", label: "Release Process" },
+    { type: "doc", id: "testing-guide", label: "Testing & Quality Gates" },
   ],
 };
 

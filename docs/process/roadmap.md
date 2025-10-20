@@ -40,7 +40,7 @@
 - Review DoR/DoD compliance during grooming.
 
 ## Backlog / Outstanding Phase Work
-- **Phase 5 (Testing)**: integrate chaos tooling against real Redis environments and schedule quality scripts in CI.
+- **Phase 5 (Testing)**: monitor soak/perf dashboards and automate regression alerts.
 - **Phase 6 (Observability)**: implement dashboards/alerts (Grafana) tied to the SLOs and document owners.
 - **Phase 7 (Security)**: payload signing helper, TLS automation scripts, recurring vulnerability scans.
 - **Phase 9 (Release)**: Beta/RC pilot tracking, automated changelog generation.

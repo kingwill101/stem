@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
@@ -7,8 +8,11 @@ import '../support/inline_task_handler.dart';
 
 void main() {
   test('worker recovers from failure and reprocesses task', () async {
-    final broker = InMemoryRedisBroker();
-    final backend = InMemoryResultBackend();
+    final environment = await _ChaosEnvironment.create();
+    addTearDown(environment.dispose);
+
+    final broker = environment.broker;
+    final backend = environment.backend;
 
     final succeeded = Completer<void>();
 
@@ -39,16 +43,73 @@ void main() {
 
     await worker.start();
     final taskId = await stem.enqueue('chaos.resilience');
-    final statusStream = backend.watch(taskId);
 
-    await succeeded.future.timeout(const Duration(seconds: 5));
-    final finalStatus = await statusStream
-        .firstWhere((status) => status.state == TaskState.succeeded)
-        .timeout(const Duration(seconds: 5));
+    await succeeded.future.timeout(const Duration(seconds: 15));
+    final finalStatus = await _waitForSucceededStatus(backend, taskId);
 
     expect(finalStatus.state, equals(TaskState.succeeded));
 
     await worker.shutdown();
-    broker.dispose();
+  }, tags: const ['chaos']);
+}
+
+Future<TaskStatus> _waitForSucceededStatus(
+  ResultBackend backend,
+  String taskId, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await backend.get(taskId);
+    if (status != null && status.state == TaskState.succeeded) {
+      return status;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  throw TimeoutException('Timed out waiting for $taskId to succeed');
+}
+
+class _ChaosEnvironment {
+  _ChaosEnvironment({
+    required this.broker,
+    required this.backend,
+    required this.dispose,
   });
+
+  final Broker broker;
+  final ResultBackend backend;
+  final Future<void> Function() dispose;
+
+  static Future<_ChaosEnvironment> create() async {
+    final redisUrl = Platform.environment['STEM_CHAOS_REDIS_URL'];
+    if (redisUrl != null && redisUrl.isNotEmpty) {
+      final namespace =
+          'stem-chaos-test-${DateTime.now().millisecondsSinceEpoch}';
+      final broker = await RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: namespace,
+      );
+      final backend = await RedisResultBackend.connect(
+        redisUrl,
+        namespace: namespace,
+      );
+      return _ChaosEnvironment(
+        broker: broker,
+        backend: backend,
+        dispose: () async {
+          await backend.close();
+        },
+      );
+    }
+
+    final broker = InMemoryRedisBroker();
+    final backend = InMemoryResultBackend();
+    return _ChaosEnvironment(
+      broker: broker,
+      backend: backend,
+      dispose: () async {
+        broker.dispose();
+      },
+    );
+  }
 }

@@ -47,12 +47,22 @@ tool/quality/run_quality_checks.sh
 ```
 
 Set `RUN_COVERAGE=0` to skip coverage locally or override the threshold (default
-60%) with `COVERAGE_THRESHOLD`. Long-running soak tests are tagged and can be executed
+60%) with `COVERAGE_THRESHOLD`. Provide `STEM_CHAOS_REDIS_URL` (for example,
+`redis://127.0.0.1:6379/15`) to run the chaos suite against a real Redis instance.
+A disposable Redis suitable for chaos tests can be launched with:
+
+```bash
+docker compose -f scripts/docker/redis-chaos.yml up -d
+```
+
+Long-running soak tests are tagged and can be executed
 explicitly:
 
 ```bash
 dart test --tags soak
 ```
+
+See `docs/process/testing.md` for the full testing and CI workflow.
 
 ### Examples
 

@@ -20,8 +20,7 @@ Future<void> main() async {
   final broker = InMemoryRedisBroker();
   final backend = InMemoryResultBackend();
 
-  final otlpEndpoint =
-      Platform.environment['STEM_OTLP_ENDPOINT'] ??
+  final otlpEndpoint = Platform.environment['STEM_OTLP_ENDPOINT'] ??
       'http://localhost:4318/v1/metrics';
 
   final observability = ObservabilityConfig(

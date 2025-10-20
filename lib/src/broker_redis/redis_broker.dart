@@ -73,7 +73,7 @@ class RedisStreamsBroker implements Broker {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    for (final controller in _controllers) {
+    for (final controller in List.of(_controllers)) {
       await controller.close();
     }
     _controllers.clear();

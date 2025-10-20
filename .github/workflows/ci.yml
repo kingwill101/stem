@@ -9,6 +9,16 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,14 +31,11 @@ jobs:
       - name: Fetch dependencies
         run: dart pub get
 
-      - name: Format check
-        run: dart format --set-exit-if-changed .
-
-      - name: Analyze
-        run: dart analyze
-
-      - name: Run tests
-        run: dart test
+      - name: Run quality checks
+        run: tool/quality/run_quality_checks.sh
+        env:
+          STEM_CHAOS_REDIS_URL: redis://127.0.0.1:6379/15
+          COVERAGE_THRESHOLD: 60
 
       - name: Validate OpenSpec changes
         run: |
