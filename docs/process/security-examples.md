@@ -2,7 +2,7 @@
 
 This guide demonstrates a few ready-to-run combinations for the microservice example so you can choose the level of protection that matches your environment.
 
-Each scenario assumes you are in `examples/microservice/`.
+Each scenario has its own ready-to-run directory under `examples/security/`. You can operate from those folders directly (they contain the appropriate `.env` and `docker-compose.yml` files), or work from `examples/microservice` and copy over the matching configuration.
 
 ## 1. HMAC-SHA256 without TLS
 

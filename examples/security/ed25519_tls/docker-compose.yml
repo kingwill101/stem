@@ -1,0 +1,58 @@
+services:
+  redis:
+    image: quay.io/opstree/redis:latest
+    ports:
+      - "6379:6379"
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--tls-port",
+        "6379",
+        "--port",
+        "0",
+        "--tls-cert-file",
+        "/certs/server.crt",
+        "--tls-key-file",
+        "/certs/server.key",
+        "--tls-ca-cert-file",
+        "/certs/server.crt"
+      ]
+    volumes:
+      - redis-data:/data
+      - ./certs:/certs:ro
+    restart: unless-stopped
+
+  enqueuer:
+    build:
+      context: ../../..
+      dockerfile: examples/microservice/enqueuer/Dockerfile
+      target: dev
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-8081}
+    ports:
+      - "${PORT:-8081}:8081"
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./certs:/certs:ro
+
+  worker:
+    build:
+      context: ../../..
+      dockerfile: examples/microservice/worker/Dockerfile
+      target: dev
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./certs:/certs:ro
+
+volumes:
+  redis-data:

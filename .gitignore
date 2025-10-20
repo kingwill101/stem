@@ -5,6 +5,7 @@ pubspec.lock
 build/
 textwrap/
 examples/microservice/certs/
+examples/security/*/certs/
 # IDE / OS
 .idea/
 .vscode/
