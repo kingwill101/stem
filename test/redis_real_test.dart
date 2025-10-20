@@ -30,6 +30,7 @@ void main() async {
   late RedisStreamsBroker broker;
   late RedisResultBackend backend;
   late RedisScheduleStore scheduleStore;
+  late RedisLockStore lockStore;
 
   setUpAll(() async {
     broker = await RedisStreamsBroker.connect(uri);
@@ -39,9 +40,11 @@ void main() async {
       uri,
       namespace: 'stem-test',
     );
+    lockStore = await RedisLockStore.connect(uri, namespace: 'stem-test');
   });
 
   tearDownAll(() async {
+    await lockStore.close();
     await backend.close();
     await scheduleStore.remove('integration-schedule');
     await broker.close();
@@ -119,5 +122,25 @@ void main() async {
 
     await scheduleStore.upsert(entry.copyWith(lastRunAt: DateTime.now()));
     await scheduleStore.remove(entry.id);
+  });
+
+  test('RedisLockStore acquires, renews, and releases locks', () async {
+    final lock = await lockStore.acquire(
+      'integration-lock',
+      ttl: const Duration(milliseconds: 100),
+    );
+    expect(lock, isNotNull);
+
+    final second = await lockStore.acquire('integration-lock');
+    expect(second, isNull, reason: 'second acquisition should fail while held');
+
+    final renewed = await lock!.renew(const Duration(milliseconds: 200));
+    expect(renewed, isTrue);
+
+    await lock.release();
+
+    final afterRelease = await lockStore.acquire('integration-lock');
+    expect(afterRelease, isNotNull);
+    await afterRelease!.release();
   });
 }

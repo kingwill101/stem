@@ -19,5 +19,6 @@ export 'src/canvas/canvas.dart';
 export 'src/scheduler/beat.dart';
 export 'src/scheduler/in_memory_lock_store.dart';
 export 'src/scheduler/in_memory_schedule_store.dart';
+export 'src/scheduler/redis_lock_store.dart';
 export 'src/scheduler/redis_schedule_store.dart';
 export 'src/worker/worker.dart';
