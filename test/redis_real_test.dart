@@ -114,12 +114,20 @@ void main() async {
     expect(due, isNotEmpty);
     expect(due.first.taskName, equals('integration.task'));
 
+    final snapshot = await scheduleStore.get('integration-schedule');
+    expect(snapshot, isNotNull);
+    expect(snapshot!.nextRunAt, isNotNull);
+
     // Subsequent call without upsert should be empty due to lock.
     final again = await scheduleStore.due(
       DateTime.now().add(const Duration(milliseconds: 200)),
     );
     expect(again, isEmpty);
 
+    await scheduleStore.markExecuted(
+      'integration-schedule',
+      executedAt: DateTime.now(),
+    );
     await scheduleStore.upsert(entry.copyWith(lastRunAt: DateTime.now()));
     await scheduleStore.remove(entry.id);
   });

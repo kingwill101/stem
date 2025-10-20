@@ -95,6 +95,17 @@ class RedisScheduleStore implements ScheduleStore {
       lastRunAt: data['lastRunAt'] != null && data['lastRunAt']!.isNotEmpty
           ? DateTime.parse(data['lastRunAt']!)
           : null,
+      nextRunAt: data['nextRunAt'] != null && data['nextRunAt']!.isNotEmpty
+          ? DateTime.parse(data['nextRunAt']!)
+          : null,
+      lastJitter:
+          data['lastJitterMs'] != null && data['lastJitterMs']!.isNotEmpty
+          ? Duration(milliseconds: int.parse(data['lastJitterMs']!))
+          : null,
+      lastError: data['lastError']?.isNotEmpty == true
+          ? data['lastError']
+          : null,
+      timezone: data['timezone']?.isNotEmpty == true ? data['timezone'] : null,
       meta: data['meta'] != null
           ? (jsonDecode(data['meta']!) as Map).cast<String, Object?>()
           : const {},
@@ -149,11 +160,13 @@ class RedisScheduleStore implements ScheduleStore {
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now();
-    final nextRun = _calculator.nextRun(
-      entry,
-      entry.lastRunAt ?? now,
-      includeJitter: false,
-    );
+    final nextRun =
+        entry.nextRunAt ??
+        _calculator.nextRun(
+          entry,
+          entry.lastRunAt ?? now,
+          includeJitter: false,
+        );
 
     final encodedArgs = jsonEncode(entry.args);
     final encodedMeta = jsonEncode(entry.meta);
@@ -174,6 +187,14 @@ class RedisScheduleStore implements ScheduleStore {
       entry.jitter?.inMilliseconds.toString() ?? '',
       'lastRunAt',
       entry.lastRunAt?.toIso8601String() ?? '',
+      'nextRunAt',
+      nextRun.toIso8601String(),
+      'lastJitterMs',
+      entry.lastJitter?.inMilliseconds.toString() ?? '',
+      'lastError',
+      entry.lastError ?? '',
+      'timezone',
+      entry.timezone ?? '',
       'meta',
       encodedMeta,
     ]);
@@ -191,6 +212,67 @@ class RedisScheduleStore implements ScheduleStore {
   Future<void> remove(String id) async {
     await _send(['DEL', _entryKey(id)]);
     await _send(['ZREM', _indexKey, id]);
+    await _send(['DEL', _lockKey(id)]);
+  }
+
+  @override
+  Future<List<ScheduleEntry>> list({int? limit}) async {
+    final stop = limit != null ? (limit - 1).toString() : '-1';
+    final idsRaw = await _send(['ZRANGE', _indexKey, '0', stop]);
+    if (idsRaw is! List || idsRaw.isEmpty) return const [];
+    final entries = <ScheduleEntry>[];
+    for (final id in idsRaw.cast<String>()) {
+      final data = await _send(['HGETALL', _entryKey(id)]);
+      if (data is! List || data.isEmpty) continue;
+      entries.add(_entryFromMap(id, _listToMap(data)));
+    }
+    return entries;
+  }
+
+  @override
+  Future<ScheduleEntry?> get(String id) async {
+    final data = await _send(['HGETALL', _entryKey(id)]);
+    if (data is! List || data.isEmpty) return null;
+    return _entryFromMap(id, _listToMap(data));
+  }
+
+  @override
+  Future<void> markExecuted(
+    String id, {
+    required DateTime executedAt,
+    Duration? jitter,
+    String? lastError,
+  }) async {
+    final data = await _send(['HGETALL', _entryKey(id)]);
+    if (data is! List || data.isEmpty) {
+      await _send(['DEL', _lockKey(id)]);
+      return;
+    }
+    final map = _listToMap(data);
+    final entry = _entryFromMap(id, map);
+    final next = _calculator.nextRun(
+      entry.copyWith(lastRunAt: executedAt),
+      executedAt,
+      includeJitter: false,
+    );
+    await _send([
+      'HSET',
+      _entryKey(id),
+      'lastRunAt',
+      executedAt.toIso8601String(),
+      'nextRunAt',
+      next.toIso8601String(),
+      'lastJitterMs',
+      jitter?.inMilliseconds.toString() ?? '',
+      'lastError',
+      lastError ?? '',
+    ]);
+    await _send([
+      'ZADD',
+      _indexKey,
+      next.millisecondsSinceEpoch.toString(),
+      id,
+    ]);
     await _send(['DEL', _lockKey(id)]);
   }
 }

@@ -17,7 +17,7 @@ class InMemoryScheduleStore implements ScheduleStore {
               (state) =>
                   !state.locked &&
                   state.entry.enabled &&
-                  !state.nextRun.isAfter(now),
+                  !(state.entry.nextRunAt ?? state.nextRun).isAfter(now),
             )
             .toList()
           ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
@@ -25,6 +25,7 @@ class InMemoryScheduleStore implements ScheduleStore {
     final selected = <ScheduleEntry>[];
     for (final state in due.take(limit)) {
       state.locked = true;
+      state.entry = state.entry.copyWith(nextRunAt: state.nextRun);
       selected.add(state.entry);
     }
     return selected;
@@ -38,7 +39,8 @@ class InMemoryScheduleStore implements ScheduleStore {
       entry.lastRunAt ?? now,
       includeJitter: false,
     );
-    _entries[entry.id] = _ScheduleState(entry.copyWith(), next, locked: false);
+    final updated = entry.copyWith(nextRunAt: next);
+    _entries[entry.id] = _ScheduleState(updated, next, locked: false);
   }
 
   @override
@@ -46,7 +48,40 @@ class InMemoryScheduleStore implements ScheduleStore {
     _entries.remove(id);
   }
 
-  ScheduleEntry? get(String id) => _entries[id]?.entry;
+  @override
+  Future<List<ScheduleEntry>> list({int? limit}) async {
+    final values = _entries.values.toList()
+      ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
+    final subset = limit != null ? values.take(limit).toList() : values;
+    return subset.map((state) => state.entry).toList();
+  }
+
+  @override
+  Future<ScheduleEntry?> get(String id) async => _entries[id]?.entry;
+
+  @override
+  Future<void> markExecuted(
+    String id, {
+    required DateTime executedAt,
+    Duration? jitter,
+    String? lastError,
+  }) async {
+    final state = _entries[id];
+    if (state == null) return;
+    final next = _calculator.nextRun(
+      state.entry.copyWith(lastRunAt: executedAt),
+      executedAt,
+      includeJitter: false,
+    );
+    state.entry = state.entry.copyWith(
+      lastRunAt: executedAt,
+      lastError: lastError,
+      lastJitter: jitter,
+      nextRunAt: next,
+    );
+    state.nextRun = next;
+    state.locked = false;
+  }
 }
 
 class _ScheduleState {

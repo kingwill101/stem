@@ -22,21 +22,19 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('add and list schedules', () async {
+    test('apply and list schedules', () async {
       final out = StringBuffer();
       final err = StringBuffer();
 
+      final defs = File('${tempDir.path}/definitions.json')
+        ..writeAsStringSync(
+          jsonEncode([
+            {'id': 'cleanup', 'task': 'noop', 'schedule': 'every:1m'},
+          ]),
+        );
+
       var code = await runStemCli(
-        [
-          'schedule',
-          'add',
-          '--id',
-          'cleanup',
-          '--task',
-          'noop',
-          '--spec',
-          'every:1m',
-        ],
+        ['schedule', 'apply', '--file', defs.path, '--yes'],
         out: out,
         err: err,
         scheduleFilePath: scheduleFile,
@@ -75,22 +73,26 @@ void main() {
       expect(lines, hasLength(3));
     });
 
-    test('remove deletes schedule', () async {
+    test('delete removes schedule', () async {
+      final defs = File('${tempDir.path}/definitions.json')
+        ..writeAsStringSync(
+          jsonEncode([
+            {'id': 'cleanup', 'task': 'noop', 'schedule': 'every:1m'},
+          ]),
+        );
+
       await runStemCli([
         'schedule',
-        'add',
-        '--id',
-        'cleanup',
-        '--task',
-        'noop',
-        '--spec',
-        'every:1m',
+        'apply',
+        '--file',
+        defs.path,
+        '--yes',
       ], scheduleFilePath: scheduleFile);
 
       final out = StringBuffer();
       final err = StringBuffer();
       final code = await runStemCli(
-        ['schedule', 'remove', '--id', 'cleanup'],
+        ['schedule', 'delete', '--id', 'cleanup', '--yes'],
         out: out,
         err: err,
         scheduleFilePath: scheduleFile,

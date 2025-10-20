@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:args/args.dart';
+import 'package:yaml/yaml.dart';
 
 import '../backend/in_memory_backend.dart';
 import '../backend/redis_backend.dart';
@@ -12,6 +14,8 @@ import '../core/contracts.dart';
 import '../observability/metrics.dart';
 import '../observability/snapshots.dart';
 import '../scheduler/schedule_calculator.dart';
+import '../scheduler/in_memory_schedule_store.dart';
+import '../scheduler/redis_schedule_store.dart';
 import 'file_schedule_repository.dart';
 
 Future<int> runStemCli(
@@ -31,29 +35,46 @@ Future<int> runStemCli(
 
   scheduleParser.addCommand('list');
 
-  final addParser = scheduleParser.addCommand('add');
-  addParser
-    ..addOption('id', help: 'Unique identifier', valueHelp: 'id')
-    ..addOption('task', help: 'Task name', valueHelp: 'task-name')
-    ..addOption('queue', help: 'Queue name', defaultsTo: 'default')
-    ..addOption(
-      'spec',
-      help: 'Schedule spec (every:5m or cron)',
-      valueHelp: 'spec',
-    )
-    ..addMultiOption(
-      'arg',
-      help: 'Task argument key=value',
-      valueHelp: 'key=value',
-    )
-    ..addOption('jitter', help: 'Jitter duration (e.g. 500ms, 5s)');
+  final showParser = scheduleParser.addCommand('show');
+  showParser.addOption('id', abbr: 'i', help: 'Schedule identifier');
 
-  final removeParser = scheduleParser.addCommand('remove');
-  removeParser.addOption('id', help: 'Schedule identifier', valueHelp: 'id');
+  final applyParser = scheduleParser.addCommand('apply');
+  applyParser
+    ..addOption(
+      'file',
+      abbr: 'f',
+      valueHelp: 'path',
+      help: 'Path to schedules YAML/JSON file',
+    )
+    ..addFlag(
+      'dry-run',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Validate schedules without applying changes',
+    )
+    ..addFlag(
+      'yes',
+      abbr: 'y',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Apply without interactive confirmation',
+    );
+
+  final deleteParser = scheduleParser.addCommand('delete');
+  deleteParser
+    ..addOption('id', abbr: 'i', help: 'Schedule identifier')
+    ..addFlag(
+      'yes',
+      abbr: 'y',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Confirm deletion without prompt',
+    );
 
   final dryRunParser = scheduleParser.addCommand('dry-run');
   dryRunParser
-    ..addOption('spec', help: 'Schedule spec', valueHelp: 'spec')
+    ..addOption('id', abbr: 'i', help: 'Schedule identifier')
+    ..addOption('spec', help: 'Override schedule spec', valueHelp: 'spec')
     ..addOption('count', help: 'Number of occurrences', defaultsTo: '5')
     ..addOption('from', help: 'Start timestamp ISO8601', valueHelp: 'time');
 
@@ -192,21 +213,40 @@ Future<int> runStemCli(
       stdoutSink.writeln(_scheduleUsage(scheduleParser));
       return 64;
     }
+    late final ScheduleCliContext scheduleCtx;
+    try {
+      scheduleCtx = await _createScheduleCliContext(repoPath: scheduleFilePath);
+    } catch (error, stack) {
+      stderrSink.writeln('Failed to initialize schedule context: $error');
+      stderrSink.writeln(stack);
+      return 70;
+    }
 
-    final repo = FileScheduleRepository(path: scheduleFilePath);
-    switch (sub.name) {
-      case 'list':
-        return _listSchedules(repo, stdoutSink);
-      case 'add':
-        return _addSchedule(repo, sub, stdoutSink, stderrSink);
-      case 'remove':
-        return _removeSchedule(repo, sub, stdoutSink, stderrSink);
-      case 'dry-run':
-        return _dryRun(sub, stdoutSink, stderrSink);
-      default:
-        stderrSink.writeln('Unknown schedule subcommand: ${sub.name}');
-        stdoutSink.writeln(_scheduleUsage(scheduleParser));
-        return 64;
+    try {
+      switch (sub.name) {
+        case 'list':
+          return _scheduleList(scheduleCtx, stdoutSink);
+        case 'show':
+          return _scheduleShow(scheduleCtx, sub, stdoutSink, stderrSink);
+        case 'apply':
+          return _scheduleApply(
+            scheduleCtx,
+            sub,
+            stdoutSink,
+            stderrSink,
+            scheduleFilePath,
+          );
+        case 'delete':
+          return _scheduleDelete(scheduleCtx, sub, stdoutSink, stderrSink);
+        case 'dry-run':
+          return _scheduleDryRun(scheduleCtx, sub, stdoutSink, stderrSink);
+        default:
+          stderrSink.writeln('Unknown schedule subcommand: ${sub.name}');
+          stdoutSink.writeln(_scheduleUsage(scheduleParser));
+          return 64;
+      }
+    } finally {
+      await scheduleCtx.dispose();
     }
   }
 
@@ -283,109 +323,183 @@ String _observeUsage(ArgParser parser) =>
 String _dlqUsage(ArgParser parser) =>
     'Usage: stem dlq <subcommand>\n${parser.usage}';
 
-Future<int> _listSchedules(FileScheduleRepository repo, StringSink out) async {
-  final entries = await repo.load();
+Future<int> _scheduleList(ScheduleCliContext ctx, StringSink out) async {
+  final entries = ctx.store != null
+      ? await ctx.store!.list()
+      : await ctx.repo!.load();
   if (entries.isEmpty) {
     out.writeln('No schedules found.');
     return 0;
   }
+  final calculator = ScheduleCalculator();
+  final now = DateTime.now();
   out.writeln(
-    'ID        | Task           | Queue    | Spec             | Enabled',
+    'ID        | Task           | Queue    | Spec             | Next Run                | Last Run                | Jitter  | Enabled',
   );
   out.writeln(
-    '----------+----------------+----------+------------------+---------',
+    '----------+----------------+----------+------------------+------------------------+------------------------+---------+---------',
   );
   for (final entry in entries) {
+    final reference = entry.lastRunAt ?? now;
+    final next =
+        entry.nextRunAt ??
+        calculator.nextRun(
+          entry.copyWith(lastRunAt: reference),
+          reference,
+          includeJitter: false,
+        );
     out.writeln(
-      '${entry.id.padRight(10)}| '
-      '${entry.taskName.padRight(15)}| '
-      '${entry.queue.padRight(9)}| '
-      '${entry.spec.padRight(17)}| '
+      '${_padCell(entry.id, 10)}| '
+      '${_padCell(entry.taskName, 16)}| '
+      '${_padCell(entry.queue, 10)}| '
+      '${_padCell(entry.spec, 18)}| '
+      '${_padCell(_formatDateTime(next), 24)}| '
+      '${_padCell(_formatDateTime(entry.lastRunAt), 24)}| '
+      '${_padCell(_formatDuration(entry.jitter), 7)} | '
       '${entry.enabled ? 'yes' : 'no'}',
     );
   }
   return 0;
 }
 
-Future<int> _addSchedule(
-  FileScheduleRepository repo,
+Future<int> _scheduleShow(
+  ScheduleCliContext ctx,
   ArgResults args,
   StringSink out,
   StringSink err,
 ) async {
-  final id = args['id'] as String?;
-  final task = args['task'] as String?;
-  final queue = args['queue'] as String? ?? 'default';
-  final spec = args['spec'] as String?;
-  if (id == null || task == null || spec == null) {
-    err.writeln('Missing required options: --id, --task, --spec');
+  final id =
+      args['id'] as String? ?? (args.rest.isNotEmpty ? args.rest.first : null);
+  if (id == null || id.isEmpty) {
+    err.writeln(
+      'Missing schedule identifier (use --id or positional argument).',
+    );
     return 64;
   }
-  final jitter = _parseOptionalDuration(args['jitter'] as String?);
-  if (args['jitter'] != null && jitter == null) {
-    err.writeln('Invalid jitter value: ${args['jitter']}');
-    return 64;
+  ScheduleEntry? entry;
+  if (ctx.store != null) {
+    entry = await ctx.store!.get(id);
+  } else {
+    entry = _findScheduleById(await ctx.repo!.load(), id);
   }
-  final argList = (args['arg'] as List<String>? ?? const []);
-  final argMap = <String, Object?>{};
-  for (final pair in argList) {
-    final parts = pair.split('=');
-    if (parts.length != 2) {
-      err.writeln('Invalid argument format: $pair. Use key=value');
-      return 64;
-    }
-    argMap[parts[0]] = parts[1];
-  }
-
-  final entries = await repo.load();
-  if (entries.any((e) => e.id == id)) {
-    err.writeln('Schedule "$id" already exists.');
-    return 64;
-  }
-
-  final entry = ScheduleEntry(
-    id: id,
-    taskName: task,
-    queue: queue,
-    spec: spec,
-    args: argMap,
-    jitter: jitter,
-  );
-
-  entries.add(entry);
-  await repo.save(entries);
-  out.writeln('Added schedule "$id".');
-  return 0;
-}
-
-Future<int> _removeSchedule(
-  FileScheduleRepository repo,
-  ArgResults args,
-  StringSink out,
-  StringSink err,
-) async {
-  final id = args['id'] as String?;
-  if (id == null) {
-    err.writeln('Missing required option: --id');
-    return 64;
-  }
-  final entries = await repo.load();
-  final removed = entries.where((e) => e.id != id).toList();
-  if (removed.length == entries.length) {
+  if (entry == null) {
     err.writeln('Schedule "$id" not found.');
     return 64;
   }
-  await repo.save(removed);
-  out.writeln('Removed schedule "$id".');
+  final encoder = const JsonEncoder.withIndent('  ');
+  out.writeln(encoder.convert(entry.toJson()));
   return 0;
 }
 
-Future<int> _dryRun(ArgResults args, StringSink out, StringSink err) async {
-  final spec = args['spec'] as String?;
-  if (spec == null) {
-    err.writeln('Missing required option: --spec');
+Future<int> _scheduleApply(
+  ScheduleCliContext ctx,
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+  String? defaultFile,
+) async {
+  final definitionsPath = args['file'] as String? ?? defaultFile;
+  if (definitionsPath == null) {
+    err.writeln('Missing --file pointing to schedule definitions.');
     return 64;
   }
+  final dryRun = args['dry-run'] as bool? ?? false;
+  final confirmed = args['yes'] as bool? ?? false;
+  if (!dryRun && !confirmed) {
+    err.writeln('Apply requires --yes confirmation (or use --dry-run).');
+    return 64;
+  }
+  if (!File(definitionsPath).existsSync()) {
+    err.writeln('Definitions file not found: $definitionsPath');
+    return 64;
+  }
+
+  List<Map<String, Object?>> raw;
+  try {
+    raw = _loadScheduleDefinitions(definitionsPath);
+  } catch (error) {
+    err.writeln('Failed to parse definitions: $error');
+    return 64;
+  }
+  final entries = <ScheduleEntry>[];
+  for (final map in raw) {
+    try {
+      final entry = _definitionToEntry(map);
+      _validateScheduleEntry(entry);
+      entries.add(entry);
+    } catch (error) {
+      err.writeln(error.toString());
+      return 64;
+    }
+  }
+
+  if (dryRun) {
+    out.writeln('Validated ${entries.length} schedule(s).');
+    return 0;
+  }
+
+  if (ctx.store != null) {
+    for (final entry in entries) {
+      await ctx.store!.upsert(entry);
+    }
+  } else {
+    final repo = ctx.repo!;
+    final existing = await repo.load();
+    final byId = {for (final entry in existing) entry.id: entry};
+    for (final entry in entries) {
+      byId[entry.id] = entry;
+    }
+    await repo.save(byId.values.toList());
+  }
+
+  out.writeln('Applied ${entries.length} schedule(s).');
+  return 0;
+}
+
+Future<int> _scheduleDelete(
+  ScheduleCliContext ctx,
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+) async {
+  final id =
+      args['id'] as String? ?? (args.rest.isNotEmpty ? args.rest.first : null);
+  if (id == null || id.isEmpty) {
+    err.writeln(
+      'Missing schedule identifier (use --id or positional argument).',
+    );
+    return 64;
+  }
+  final confirmed = args['yes'] as bool? ?? false;
+  if (!confirmed) {
+    err.writeln('Deletion requires --yes confirmation.');
+    return 64;
+  }
+  if (ctx.store != null) {
+    await ctx.store!.remove(id);
+  } else {
+    final repo = ctx.repo!;
+    final entries = await repo.load();
+    final filtered = entries.where((e) => e.id != id).toList();
+    if (filtered.length == entries.length) {
+      err.writeln('Schedule "$id" not found.');
+      return 64;
+    }
+    await repo.save(filtered);
+  }
+  out.writeln('Deleted schedule "$id".');
+  return 0;
+}
+
+Future<int> _scheduleDryRun(
+  ScheduleCliContext ctx,
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+) async {
+  final id =
+      args['id'] as String? ?? (args.rest.isNotEmpty ? args.rest.first : null);
+  final spec = args['spec'] as String?;
   final count = int.tryParse(args['count'] as String? ?? '5') ?? 5;
   DateTime start;
   if (args['from'] != null) {
@@ -398,20 +512,229 @@ Future<int> _dryRun(ArgResults args, StringSink out, StringSink err) async {
   } else {
     start = DateTime.now();
   }
-  final calculator = ScheduleCalculator();
-  final entry = ScheduleEntry(
+
+  ScheduleEntry? entry;
+  if (ctx.store != null && id != null) {
+    entry = await ctx.store!.get(id);
+  } else if (ctx.repo != null && id != null) {
+    entry = _findScheduleById(await ctx.repo!.load(), id);
+  }
+
+  if (entry == null && spec == null) {
+    err.writeln('Provide an existing schedule id or --spec to evaluate.');
+    return 64;
+  }
+
+  entry ??= ScheduleEntry(
     id: '_dry_',
     taskName: '_dry_',
     queue: 'default',
-    spec: spec,
+    spec: spec!,
   );
+
+  final calculator = ScheduleCalculator(random: Random(0));
   var current = entry.copyWith(lastRunAt: start);
   for (var i = 0; i < count; i++) {
-    final next = calculator.nextRun(current, start, includeJitter: false);
+    final next = calculator.nextRun(current, start, includeJitter: true);
     out.writeln(next.toIso8601String());
     current = current.copyWith(lastRunAt: next);
+    start = next;
   }
   return 0;
+}
+
+List<Map<String, Object?>> _loadScheduleDefinitions(String path) {
+  final contents = File(path).readAsStringSync();
+  dynamic decoded;
+  try {
+    decoded = jsonDecode(contents);
+  } catch (_) {
+    final yamlDoc = loadYaml(contents);
+    decoded = jsonDecode(jsonEncode(yamlDoc));
+  }
+  if (decoded is Map && decoded['schedules'] != null) {
+    decoded = decoded['schedules'];
+  }
+  if (decoded is! List) {
+    throw FormatException('Schedule definitions must be provided as a list.');
+  }
+  return decoded.map<Map<String, Object?>>((item) {
+    if (item is Map) {
+      return _coerceMap(item);
+    }
+    throw FormatException('Schedule definition entries must be objects.');
+  }).toList();
+}
+
+ScheduleEntry _definitionToEntry(Map<String, Object?> def) {
+  final id = (def['id'] ?? def['name']) as String?;
+  if (id == null || id.isEmpty) {
+    throw FormatException('Schedule entry is missing an "id" field.');
+  }
+  final task = (def['task'] ?? def['taskName']) as String?;
+  if (task == null || task.isEmpty) {
+    throw FormatException('Schedule "$id" missing "task" field.');
+  }
+  final spec = (def['schedule'] ?? def['spec']) as String?;
+  if (spec == null || spec.isEmpty) {
+    throw FormatException('Schedule "$id" missing "schedule" field.');
+  }
+  final queue = (def['queue'] as String?) ?? 'default';
+  final enabled = def['enabled'] is bool ? def['enabled'] as bool : true;
+  final args = def['args'] is Map
+      ? _coerceMap(def['args'] as Map)
+      : const <String, Object?>{};
+  final meta = def['meta'] is Map
+      ? _coerceMap(def['meta'] as Map)
+      : const <String, Object?>{};
+
+  Duration? jitter;
+  if (def['jitterMs'] != null) {
+    final jitterMs = (def['jitterMs'] as num).toInt();
+    if (jitterMs < 0) {
+      throw FormatException('Schedule "$id" has negative jitter.');
+    }
+    jitter = Duration(milliseconds: jitterMs);
+  } else if (def['jitter'] is String) {
+    jitter = _parseOptionalDuration(def['jitter'] as String?);
+  }
+
+  DateTime? lastRunAt;
+  if (def['lastRunAt'] is String && (def['lastRunAt'] as String).isNotEmpty) {
+    lastRunAt = DateTime.parse(def['lastRunAt'] as String);
+  }
+  DateTime? nextRunAt;
+  if (def['nextRunAt'] is String && (def['nextRunAt'] as String).isNotEmpty) {
+    nextRunAt = DateTime.parse(def['nextRunAt'] as String);
+  }
+  Duration? lastJitter;
+  if (def['lastJitterMs'] != null) {
+    lastJitter = Duration(milliseconds: (def['lastJitterMs'] as num).toInt());
+  }
+  final lastError = def['lastError'] as String?;
+  final timezone = def['timezone'] as String?;
+
+  return ScheduleEntry(
+    id: id,
+    taskName: task,
+    queue: queue,
+    spec: spec,
+    args: args,
+    enabled: enabled,
+    jitter: jitter,
+    lastRunAt: lastRunAt,
+    nextRunAt: nextRunAt,
+    lastJitter: lastJitter,
+    lastError: lastError?.isEmpty == true ? null : lastError,
+    timezone: timezone,
+    meta: meta,
+  );
+}
+
+Map<String, Object?> _coerceMap(Map<dynamic, dynamic> input) {
+  final result = <String, Object?>{};
+  input.forEach((key, value) {
+    result[key.toString()] = _coerceValue(value);
+  });
+  return result;
+}
+
+Object? _coerceValue(Object? value) {
+  if (value is Map) {
+    return _coerceMap(value);
+  }
+  if (value is List) {
+    return value.map(_coerceValue).toList();
+  }
+  return value;
+}
+
+ScheduleEntry? _findScheduleById(List<ScheduleEntry> entries, String id) {
+  for (final entry in entries) {
+    if (entry.id == id) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+void _validateScheduleEntry(ScheduleEntry entry) {
+  final calculator = ScheduleCalculator();
+  try {
+    final base = entry.lastRunAt ?? DateTime.now();
+    final next = calculator.nextRun(entry, base, includeJitter: false);
+    final interval = next.difference(base);
+    if (interval <= Duration.zero) {
+      throw FormatException('computed non-positive interval');
+    }
+    if (interval < const Duration(seconds: 1)) {
+      throw FormatException('interval must be >= 1 second');
+    }
+    if (entry.jitter != null && entry.jitter! > interval) {
+      throw FormatException('configured jitter exceeds interval');
+    }
+  } catch (error) {
+    throw FormatException('Schedule "${entry.id}": $error');
+  }
+}
+
+String _formatDateTime(DateTime? value) => value?.toIso8601String() ?? '-';
+String _formatDuration(Duration? value) =>
+    value != null ? '${value.inMilliseconds}ms' : '-';
+
+class ScheduleCliContext {
+  ScheduleCliContext.store({
+    required ScheduleStore storeInstance,
+    Future<void> Function()? dispose,
+  }) : store = storeInstance,
+       repo = null,
+       _dispose = dispose ?? (() async {});
+
+  ScheduleCliContext.file({FileScheduleRepository? repo})
+    : store = null,
+      repo = repo ?? FileScheduleRepository(),
+      _dispose = (() async {});
+
+  final ScheduleStore? store;
+  final FileScheduleRepository? repo;
+  final Future<void> Function() _dispose;
+
+  Future<void> dispose() => _dispose();
+}
+
+Future<ScheduleCliContext> _createScheduleCliContext({String? repoPath}) async {
+  final url = Platform.environment['STEM_SCHEDULE_STORE_URL']?.trim();
+  if (url == null || url.isEmpty) {
+    return ScheduleCliContext.file(
+      repo: FileScheduleRepository(path: repoPath),
+    );
+  }
+
+  final uri = Uri.parse(url);
+  final disposables = <Future<void> Function()>[];
+  ScheduleStore store;
+  switch (uri.scheme) {
+    case 'redis':
+    case 'rediss':
+      final redisStore = await RedisScheduleStore.connect(url);
+      store = redisStore;
+      disposables.add(() => redisStore.close());
+      break;
+    case 'memory':
+      store = InMemoryScheduleStore();
+      break;
+    default:
+      throw StateError('Unsupported schedule store scheme: ${uri.scheme}');
+  }
+
+  return ScheduleCliContext.store(
+    storeInstance: store,
+    dispose: () async {
+      for (final disposer in disposables.reversed) {
+        await disposer();
+      }
+    },
+  );
 }
 
 Duration? _parseOptionalDuration(String? value) {

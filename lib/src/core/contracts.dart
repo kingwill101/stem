@@ -316,6 +316,10 @@ class ScheduleEntry {
     this.enabled = true,
     this.jitter,
     this.lastRunAt,
+    this.nextRunAt,
+    this.lastJitter,
+    this.lastError,
+    this.timezone,
     Map<String, Object?>? meta,
   }) : meta = Map.unmodifiable(meta ?? const {});
 
@@ -343,8 +347,22 @@ class ScheduleEntry {
   /// The timestamp of the last run, if any.
   final DateTime? lastRunAt;
 
+  /// The next scheduled run timestamp, if known.
+  final DateTime? nextRunAt;
+
+  /// The jitter applied during the most recent execution.
+  final Duration? lastJitter;
+
+  /// The last error recorded for this schedule, if any.
+  final String? lastError;
+
+  /// Optional timezone identifier (IANA) for cron evaluation.
+  final String? timezone;
+
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
+
+  static const Object _unset = Object();
 
   ScheduleEntry copyWith({
     String? id,
@@ -356,6 +374,10 @@ class ScheduleEntry {
     Duration? jitter,
     DateTime? lastRunAt,
     Map<String, Object?>? meta,
+    Object? nextRunAt = _unset,
+    Object? lastJitter = _unset,
+    Object? lastError = _unset,
+    Object? timezone = _unset,
   }) {
     return ScheduleEntry(
       id: id ?? this.id,
@@ -367,6 +389,12 @@ class ScheduleEntry {
       jitter: jitter ?? this.jitter,
       lastRunAt: lastRunAt ?? this.lastRunAt,
       meta: meta ?? this.meta,
+      nextRunAt: nextRunAt == _unset ? this.nextRunAt : nextRunAt as DateTime?,
+      lastJitter: lastJitter == _unset
+          ? this.lastJitter
+          : lastJitter as Duration?,
+      lastError: lastError == _unset ? this.lastError : lastError as String?,
+      timezone: timezone == _unset ? this.timezone : timezone as String?,
     );
   }
 
@@ -379,6 +407,10 @@ class ScheduleEntry {
     'enabled': enabled,
     'jitterMs': jitter?.inMilliseconds,
     'lastRunAt': lastRunAt?.toIso8601String(),
+    'nextRunAt': nextRunAt?.toIso8601String(),
+    'lastJitterMs': lastJitter?.inMilliseconds,
+    'lastError': lastError,
+    'timezone': timezone,
     'meta': meta,
   };
 
@@ -396,6 +428,14 @@ class ScheduleEntry {
       lastRunAt: json['lastRunAt'] != null
           ? DateTime.parse(json['lastRunAt'] as String)
           : null,
+      nextRunAt: json['nextRunAt'] != null
+          ? DateTime.parse(json['nextRunAt'] as String)
+          : null,
+      lastJitter: json['lastJitterMs'] != null
+          ? Duration(milliseconds: (json['lastJitterMs'] as num).toInt())
+          : null,
+      lastError: json['lastError'] as String?,
+      timezone: json['timezone'] as String?,
       meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
     );
   }
@@ -411,6 +451,20 @@ abstract class ScheduleStore {
 
   /// Removes the schedule entry with the given [id] from the store.
   Future<void> remove(String id);
+
+  /// Returns all schedule entries.
+  Future<List<ScheduleEntry>> list({int? limit});
+
+  /// Retrieves the schedule entry with [id], or null if absent.
+  Future<ScheduleEntry?> get(String id);
+
+  /// Updates execution metadata for the entry [id].
+  Future<void> markExecuted(
+    String id, {
+    required DateTime executedAt,
+    Duration? jitter,
+    String? lastError,
+  });
 }
 
 /// Configuration options attached to task handlers.

@@ -1,8 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:contextual/contextual.dart';
+
 import '../core/contracts.dart';
 import '../core/envelope.dart';
+import '../observability/logging.dart';
+import '../observability/metrics.dart';
 
 class Beat {
   Beat({
@@ -52,22 +56,45 @@ class Beat {
     if (!entry.enabled) return;
 
     Lock? lock;
+    Timer? renewalTimer;
+    Duration? jitterDelay;
     if (lockStore != null) {
       lock = await lockStore!.acquire(
         'stem:schedule:${entry.id}',
         ttl: lockTtl,
       );
       if (lock == null) {
+        StemMetrics.instance.increment(
+          'scheduler.lock.contended',
+          tags: {'schedule': entry.id},
+        );
         return;
       }
+      StemMetrics.instance.increment(
+        'scheduler.lock.acquired',
+        tags: {'schedule': entry.id},
+      );
+      final renewMs = (lockTtl.inMilliseconds ~/ 2).clamp(
+        100,
+        lockTtl.inMilliseconds,
+      );
+      renewalTimer = Timer.periodic(Duration(milliseconds: renewMs), (_) async {
+        final renewed = await lock!.renew(lockTtl);
+        if (!renewed) {
+          StemMetrics.instance.increment(
+            'scheduler.lock.renew_failed',
+            tags: {'schedule': entry.id},
+          );
+        }
+      });
     }
 
     try {
       final jitter = entry.jitter;
-      final jitterDelay = (jitter != null && jitter > Duration.zero)
+      jitterDelay = (jitter != null && jitter > Duration.zero)
           ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
           : Duration.zero;
-      if (jitterDelay > Duration.zero) {
+      if (jitterDelay != null && jitterDelay > Duration.zero) {
         await Future<void>.delayed(jitterDelay);
       }
 
@@ -79,9 +106,41 @@ class Beat {
       );
       await broker.publish(envelope, queue: entry.queue);
 
-      final updated = entry.copyWith(lastRunAt: DateTime.now());
-      await store.upsert(updated);
+      final executedAt = DateTime.now();
+      await store.markExecuted(
+        entry.id,
+        executedAt: executedAt,
+        jitter: jitterDelay == Duration.zero ? null : jitterDelay,
+        lastError: null,
+      );
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Beat dispatch failed for {schedule}: {error}',
+        Context({
+          'schedule': entry.id,
+          'error': error.toString(),
+          'stack': stack.toString(),
+        }),
+      );
+      try {
+        await store.markExecuted(
+          entry.id,
+          executedAt: DateTime.now(),
+          jitter: jitterDelay == Duration.zero ? null : jitterDelay,
+          lastError: error.toString(),
+        );
+      } catch (storeError, storeStack) {
+        stemLogger.warning(
+          'Failed to update schedule metadata for {schedule}',
+          Context({
+            'schedule': entry.id,
+            'error': storeError.toString(),
+            'stack': storeStack.toString(),
+          }),
+        );
+      }
     } finally {
+      renewalTimer?.cancel();
       await lock?.release();
     }
   }

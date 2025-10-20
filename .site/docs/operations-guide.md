@@ -94,14 +94,19 @@ If you rely on custom brokers, implement the new `replayDeadLetters`, `listDeadL
 
 ## Scheduler Management
 
-- Manage schedules with `stem schedule` CLI subcommands.
+- Manage schedules with `stem schedule` commands:
+  - `stem schedule list` - tabular view of id, spec, next/last run, jitter, enabled flag.
+  - `stem schedule show <id>` - detailed JSON snapshot for a specific entry.
+  - `stem schedule apply --file schedules.yaml --yes` - validate and upsert definitions from YAML/JSON (use `--dry-run` to preview).
+  - `stem schedule delete <id> --yes` - remove an entry from the active store.
+  - `stem schedule dry-run <id> --count 5` - preview upcoming fire times (with jitter) for an existing schedule, or provide `--spec` for ad-hoc evaluation.
 - Monitor schedule metadata (next run, last run, jitter) via the `stem observe schedules` report or direct Redis inspection.
 - Ensure beat instances share the same Redis namespace to coordinate locks.
 
 ## Disaster Recovery
 
 1. Backup Redis persistence (RDB/AOF) regularly.
-2. Store schedule definitions and configs in version control (the repo’s `openspec/` change specs act as source of truth).
+2. Store schedule definitions and configs in version control (the repo's `openspec/` change specs act as source of truth).
 3. Test worker crash recovery by killing containers mid-task; the at-least-once semantics should redeliver through leases.
 4. Document replay thresholds and manual replay commands in your runbook.
 
