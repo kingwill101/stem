@@ -28,6 +28,6 @@
 5. Schedule certificate renewal (default validity is 365 days, configurable via the `DAYS` env var).
 
 ## Vulnerability Scanning Cadence
-- Run `scripts/security/run_vulnerability_scan.sh` weekly (or via CI) to execute `trivy` against the repository.
+- Run `scripts/security/run_vulnerability_scan.sh` weekly (or via CI) to execute `trivy` against the repository. The `.github/workflows/security-scan.yml` workflow executes this automatically every Monday at 06:00 UTC and on demand.
 - Triaging responsibilities sit with the on-call security owner (`pagerduty://stem-security-primary`).
 - File an issue for every High/Critical finding and track remediation through completion. Document compensating controls if a vulnerability cannot be resolved immediately.
