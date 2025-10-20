@@ -24,6 +24,6 @@
 - [x] 5.3 Deliver minimal dashboard or CLI views for queues, workers, DLQ, and schedules
 
 ## 6. Documentation & Release
-- [ ] 6.1 Author developer guide, operations handbook, and broker comparison
-- [ ] 6.2 Publish reference examples and Docker-based quick start
-- [ ] 6.3 Define release process, versioning policy, and migration notes
+- [x] 6.1 Author developer guide, operations handbook, and broker comparison
+- [x] 6.2 Publish reference examples and Docker-based quick start
+- [x] 6.3 Define release process, versioning policy, and migration notes

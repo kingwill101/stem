@@ -15,7 +15,7 @@ scheduler, and CLI tooling for observability and dead-letter remediation.
 
 ### Documentation
 
-The full documentation lives in the Docusaurus site under `.site/`.
+The documentation site lives in `.site/`.
 
 ```bash
 cd .site
@@ -23,17 +23,23 @@ npm install
 npm start
 ```
 
-You'll find guides covering developer onboarding, operations, scaling, and
-runbooks for the new `stem dlq` tooling.
+Quick links:
+
+- [Quick Start](.site/docs/quick-start.md)
+- [Developer Guide](.site/docs/developer-guide.md)
+- [Operations Guide](.site/docs/operations-guide.md)
+- [Broker Comparison](.site/docs/broker-comparison.md)
+- [Release Process](.site/docs/release-process.md)
 
 ### Examples
 
-Two runnable example apps demonstrate common topologies:
+Three runnable example apps demonstrate common topologies:
 
 - `examples/monolith_service` – single process service using in-memory adapters.
 - `examples/microservice` – enqueue API and worker communicating through Redis.
+- `examples/otel_metrics` – worker + OpenTelemetry collector + Jaeger via Docker Compose.
 
-Each example has a README with setup instructions.
+Each example has a README with setup instructions and links back to the docs.
 
 ### CLI Quick Reference
 

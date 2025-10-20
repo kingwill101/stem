@@ -20,3 +20,12 @@
 ## Open Questions
 - Do we bundle docker-compose for microservice example? (Proposed: yes, to demonstrate multi-service bootstrapping.)
 - Should docs adopt a site generator immediately? (Optional; start with markdown, leave TODO for doc site conversion.)
+
+## Maintainer Feedback
+
+- Added a **Quick Start** and **Broker Comparison** page to address requests for
+  deployment-ready guidance.
+- Linked documentation directly from the repo README so new contributors can
+  find the guides without running the Docusaurus site first.
+- Captured the release process in a dedicated doc per release-management
+  feedback.

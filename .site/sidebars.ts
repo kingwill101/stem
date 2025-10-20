@@ -1,4 +1,4 @@
-import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
+import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -14,9 +14,12 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
  */
 const sidebars: SidebarsConfig = {
   docs: [
-    {type: 'doc', id: 'developer-guide', label: 'Developer Guide'},
-    {type: 'doc', id: 'operations-guide', label: 'Operations Guide'},
-    {type: 'doc', id: 'scaling-playbook', label: 'Scaling Playbook'},
+    { type: "doc", id: "quick-start", label: "Quick Start" },
+    { type: "doc", id: "developer-guide", label: "Developer Guide" },
+    { type: "doc", id: "operations-guide", label: "Operations Guide" },
+    { type: "doc", id: "scaling-playbook", label: "Scaling Playbook" },
+    { type: "doc", id: "broker-comparison", label: "Broker Comparison" },
+    { type: "doc", id: "release-process", label: "Release Process" },
   ],
 };
 

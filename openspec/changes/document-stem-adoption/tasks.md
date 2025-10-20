@@ -11,4 +11,4 @@
 
 ## 3. Review
 - [x] 3.1 Cross-link docs from README and spec.
-- [ ] 3.2 Collect feedback from maintainers and iterate.
+- [x] 3.2 Collect feedback from maintainers and iterate.
