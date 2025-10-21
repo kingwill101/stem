@@ -11,15 +11,10 @@ void main() {
       'build-and-test': Job(
         name: 'Build and Test',
         runsOn: RunnerSpec.single('ubuntu-latest'),
-        services: {
-          'redis': const ServiceContainer(
+        services: const {
+          'redis': ServiceContainer(
             image: 'redis:7',
             ports: ['6379:6379'],
-            options:
-                '--health-cmd=redis-cli\\ ping '
-                '--health-interval=5s '
-                '--health-timeout=5s '
-                '--health-retries=20',
           ),
         },
         steps: [
