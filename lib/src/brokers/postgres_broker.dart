@@ -66,9 +66,10 @@ class PostgresBroker implements Broker {
   Future<void> publish(Envelope envelope, {String? queue}) async {
     final targetQueue = (queue ?? envelope.queue).trim();
     final stored = envelope.copyWith(queue: targetQueue);
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
 INSERT INTO stem_jobs (
   id,
   queue,
@@ -100,7 +101,8 @@ ON CONFLICT (id) DO UPDATE SET
   locked_by = NULL,
   created_at = EXCLUDED.created_at
 ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'id': stored.id,
           'queue': targetQueue,
           'envelope': jsonEncode(stored.toJson()),
@@ -154,11 +156,14 @@ ON CONFLICT (id) DO UPDATE SET
   @override
   Future<void> ack(Delivery delivery) async {
     final receipt = _Receipt.parse(delivery.receipt);
-    await _client.run((PostgreSQLConnection conn) async {
-      await conn.execute('''
+    await _client.run((Connection conn) async {
+      await conn.execute(
+        Sql.named('''
 DELETE FROM stem_jobs
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-''', substitutionValues: receipt.toMap());
+'''),
+        parameters: receipt.toMap(),
+      );
     });
   }
 
@@ -173,9 +178,10 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
       queue: receipt.queue,
       attempt: delivery.envelope.attempt + 1,
     );
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
 UPDATE stem_jobs
 SET
   envelope = @envelope::jsonb,
@@ -186,7 +192,8 @@ SET
   locked_by = NULL
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
 ''',
-        substitutionValues: {
+        ),
+        parameters: {
           ...receipt.toMap(),
           'envelope': jsonEncode(updatedEnvelope.toJson()),
           'attempt': updatedEnvelope.attempt,
@@ -208,14 +215,18 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
         ? 'unknown'
         : reason.trim();
     final deadAt = DateTime.now().toUtc();
-    await _client.run((PostgreSQLConnection conn) async {
-      await conn.transaction((PostgreSQLExecutionContext tx) async {
-        await tx.execute('''
+    await _client.run((Connection conn) async {
+      await conn.runTx((tx) async {
+        await tx.execute(
+          Sql.named('''
 DELETE FROM stem_jobs
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-''', substitutionValues: receipt.toMap());
+'''),
+          parameters: receipt.toMap(),
+        );
         await tx.execute(
-          '''
+          Sql.named(
+            '''
 INSERT INTO stem_jobs_dead (
   id,
   queue,
@@ -238,7 +249,8 @@ ON CONFLICT (id) DO UPDATE SET
   meta = EXCLUDED.meta,
   dead_lettered_at = EXCLUDED.dead_lettered_at
 ''',
-          substitutionValues: {
+          ),
+          parameters: {
             'id': delivery.envelope.id,
             'queue': receipt.queue,
             'envelope': jsonEncode(delivery.envelope.toJson()),
@@ -253,10 +265,10 @@ ON CONFLICT (id) DO UPDATE SET
 
   @override
   Future<void> purge(String queue) async {
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        'DELETE FROM stem_jobs WHERE queue = @queue',
-        substitutionValues: {'queue': queue},
+        Sql.named('DELETE FROM stem_jobs WHERE queue = @queue'),
+        parameters: {'queue': queue},
       );
     });
   }
@@ -266,31 +278,35 @@ ON CONFLICT (id) DO UPDATE SET
     if (by <= Duration.zero) return;
     final receipt = _Receipt.parse(delivery.receipt);
     final milliseconds = by.inMilliseconds;
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
 UPDATE stem_jobs
 SET locked_until = COALESCE(locked_until, NOW())
   + (@ms * INTERVAL '1 millisecond')
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
 ''',
-        substitutionValues: {...receipt.toMap(), 'ms': milliseconds},
+        ),
+        parameters: {...receipt.toMap(), 'ms': milliseconds},
       );
     });
   }
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final result = await _client.run((PostgreSQLConnection conn) async {
-      final rows = await conn.query(
-        '''
+    final result = await _client.run((Connection conn) async {
+      final rows = await conn.execute(
+        Sql.named(
+          '''
 SELECT COUNT(1)
 FROM stem_jobs
 WHERE queue = @queue
   AND (not_before IS NULL OR not_before <= NOW())
   AND (locked_by IS NULL OR locked_until <= NOW())
 ''',
-        substitutionValues: {'queue': queue},
+        ),
+        parameters: {'queue': queue},
       );
       if (rows.isEmpty) return 0;
       return _asInt(rows.first.first);
@@ -300,16 +316,18 @@ WHERE queue = @queue
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final result = await _client.run((PostgreSQLConnection conn) async {
-      final rows = await conn.query(
-        '''
+    final result = await _client.run((Connection conn) async {
+      final rows = await conn.execute(
+        Sql.named(
+          '''
 SELECT COUNT(1)
 FROM stem_jobs
 WHERE queue = @queue
   AND locked_by IS NOT NULL
   AND (locked_until IS NULL OR locked_until > NOW())
 ''',
-        substitutionValues: {'queue': queue},
+        ),
+        parameters: {'queue': queue},
       );
       if (rows.isEmpty) return 0;
       return _asInt(rows.first.first);
@@ -327,16 +345,18 @@ WHERE queue = @queue
       return const DeadLetterPage(entries: []);
     }
     final normalizedOffset = offset < 0 ? 0 : offset;
-    final rows = await _client.run((PostgreSQLConnection conn) async {
-      return conn.query(
-        '''
+    final rows = await _client.run((Connection conn) async {
+      return conn.execute(
+        Sql.named(
+          '''
 SELECT envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue
 ORDER BY dead_lettered_at DESC
 LIMIT @limit OFFSET @offset
 ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'queue': queue,
           'limit': limit,
           'offset': normalizedOffset,
@@ -363,15 +383,17 @@ LIMIT @limit OFFSET @offset
 
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
-    final rows = await _client.run((PostgreSQLConnection conn) async {
-      return conn.query(
-        '''
+    final rows = await _client.run((Connection conn) async {
+      return conn.execute(
+        Sql.named(
+          '''
 SELECT envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue AND id = @id
 LIMIT 1
 ''',
-        substitutionValues: {'queue': queue, 'id': id},
+        ),
+        parameters: {'queue': queue, 'id': id},
       );
     });
     if (rows.isEmpty) return null;
@@ -395,12 +417,11 @@ LIMIT 1
     if (limit <= 0) {
       return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
     }
-    final result = await _client.run((PostgreSQLConnection conn) async {
-      final dynamic replay = await conn.transaction((
-        PostgreSQLExecutionContext tx,
-      ) async {
-        final rows = await tx.query(
-          '''
+    final result = await _client.run((Connection conn) async {
+      final dynamic replay = await conn.runTx((tx) async {
+        final rows = await tx.execute(
+          Sql.named(
+            '''
 SELECT id, envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue
@@ -409,11 +430,8 @@ ORDER BY dead_lettered_at ASC
 FOR UPDATE SKIP LOCKED
 LIMIT @limit
 ''',
-          substitutionValues: {
-            'queue': queue,
-            'limit': limit,
-            'since': since?.toUtc(),
-          },
+          ),
+          parameters: {'queue': queue, 'limit': limit, 'since': since?.toUtc()},
         );
         if (rows.isEmpty) {
           return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
@@ -440,7 +458,8 @@ LIMIT @limit
             notBefore: delay == null ? null : now.add(delay),
           );
           await tx.execute(
-            '''
+            Sql.named(
+              '''
 INSERT INTO stem_jobs (
   id,
   queue,
@@ -472,7 +491,8 @@ ON CONFLICT (id) DO UPDATE SET
   locked_by = NULL,
   created_at = EXCLUDED.created_at
 ''',
-            substitutionValues: {
+            ),
+            parameters: {
               'id': id,
               'queue': queue,
               'envelope': jsonEncode(replayEnvelope.toJson()),
@@ -483,11 +503,13 @@ ON CONFLICT (id) DO UPDATE SET
             },
           );
           await tx.execute(
-            '''
+            Sql.named(
+              '''
 DELETE FROM stem_jobs_dead
 WHERE id = @id AND queue = @queue
 ''',
-            substitutionValues: {'id': id, 'queue': queue},
+            ),
+            parameters: {'id': id, 'queue': queue},
           );
         }
         return DeadLetterReplayResult(entries: entries, dryRun: false);
@@ -504,10 +526,8 @@ WHERE id = @id AND queue = @queue
     int? limit,
   }) async {
     final effectiveLimit = limit != null && limit >= 0 ? limit : null;
-    final result = await _client.run((PostgreSQLConnection conn) async {
-      final dynamic deletedCount = await conn.transaction((
-        PostgreSQLExecutionContext tx,
-      ) async {
+    final result = await _client.run((Connection conn) async {
+      final dynamic deletedCount = await conn.runTx((tx) async {
         final query = StringBuffer()
           ..writeln('''
 SELECT id
@@ -526,18 +546,20 @@ ORDER BY dead_lettered_at DESC
         if (effectiveLimit != null) {
           params['limit'] = effectiveLimit;
         }
-        final ids = await tx.query(
-          query.toString(),
-          substitutionValues: params,
+        final ids = await tx.execute(
+          Sql.named(query.toString()),
+          parameters: params,
         );
         if (ids.isEmpty) return 0;
         final idList = ids.map((row) => row[0] as String).toList();
         final deleted = await tx.execute(
-          '''
+          Sql.named(
+            '''
 DELETE FROM stem_jobs_dead
 WHERE queue = @queue AND id = ANY(@ids)
 ''',
-          substitutionValues: {'queue': queue, 'ids': idList},
+          ),
+          parameters: {'queue': queue, 'ids': idList},
         );
         return deleted;
       });
@@ -551,12 +573,11 @@ WHERE queue = @queue AND id = ANY(@ids)
     String locker,
     int limit,
   ) async {
-    return _client.run((PostgreSQLConnection conn) async {
-      final dynamic list = await conn.transaction((
-        PostgreSQLExecutionContext tx,
-      ) async {
-        final rows = await tx.query(
-          '''
+    return _client.run((Connection conn) async {
+      final dynamic list = await conn.runTx((tx) async {
+        final rows = await tx.execute(
+          Sql.named(
+            '''
 SELECT id, envelope
 FROM stem_jobs
 WHERE queue = @queue
@@ -566,7 +587,8 @@ ORDER BY not_before NULLS FIRST, created_at
 FOR UPDATE SKIP LOCKED
 LIMIT @limit
 ''',
-          substitutionValues: {'queue': queue, 'limit': limit},
+          ),
+          parameters: {'queue': queue, 'limit': limit},
         );
         if (rows.isEmpty) {
           return const <Delivery>[];
@@ -582,12 +604,14 @@ LIMIT @limit
           final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
           final leaseExpiresAt = lease == Duration.zero ? null : now.add(lease);
           await tx.execute(
-            '''
+            Sql.named(
+              '''
 UPDATE stem_jobs
 SET locked_by = @lockedBy, locked_until = @lockedUntil
 WHERE id = @id
 ''',
-            substitutionValues: {
+            ),
+            parameters: {
               'lockedBy': locker,
               'lockedUntil': leaseExpiresAt,
               'id': id,

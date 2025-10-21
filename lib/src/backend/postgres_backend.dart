@@ -70,7 +70,7 @@ class PostgresResultBackend implements ResultBackend {
   Future<void> _initializeTables() async {
     final prefix = namespace.isNotEmpty ? '${namespace}_' : '';
 
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       // Task results table
       await conn.execute('''
         CREATE TABLE IF NOT EXISTS $schema.${prefix}task_results (
@@ -160,7 +160,7 @@ class PostgresResultBackend implements ResultBackend {
     try {
       final prefix = namespace.isNotEmpty ? '${namespace}_' : '';
 
-      await _client.run((PostgreSQLConnection conn) async {
+      await _client.run((Connection conn) async {
         // Clean up expired task results
         await conn.execute('''
           DELETE FROM $schema.${prefix}task_results
@@ -228,9 +228,10 @@ class PostgresResultBackend implements ResultBackend {
     );
 
     final expiresAt = DateTime.now().add(ttl ?? defaultTtl);
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         INSERT INTO ${_tableName('task_results')}
           (id, state, payload, error, attempt, meta, expires_at, updated_at)
         VALUES
@@ -245,7 +246,8 @@ class PostgresResultBackend implements ResultBackend {
           expires_at = EXCLUDED.expires_at,
           updated_at = NOW()
         ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'id': taskId,
           'state': state.name,
           'payload': payload != null ? jsonEncode(payload) : null,
@@ -262,14 +264,16 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<TaskStatus?> get(String taskId) async {
-    return _client.run((PostgreSQLConnection conn) async {
-      final result = await conn.query(
-        '''
+    return _client.run((Connection conn) async {
+      final result = await conn.execute(
+        Sql.named(
+          '''
         SELECT id, state, payload, error, attempt, meta
         FROM ${_tableName('task_results')}
         WHERE id = @id AND expires_at > NOW()
         ''',
-        substitutionValues: {'id': taskId},
+        ),
+        parameters: {'id': taskId},
       );
 
       if (result.isEmpty) return null;
@@ -310,9 +314,10 @@ class PostgresResultBackend implements ResultBackend {
   @override
   Future<void> initGroup(GroupDescriptor descriptor) async {
     final expiresAt = DateTime.now().add(descriptor.ttl ?? groupDefaultTtl);
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         INSERT INTO ${_tableName('groups')}
           (id, expected, meta, expires_at)
         VALUES
@@ -323,7 +328,8 @@ class PostgresResultBackend implements ResultBackend {
           meta = EXCLUDED.meta,
           expires_at = EXCLUDED.expires_at
         ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'id': descriptor.id,
           'expected': descriptor.expected,
           'meta': jsonEncode(descriptor.meta),
@@ -333,28 +339,31 @@ class PostgresResultBackend implements ResultBackend {
 
       // Clear existing group results
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         DELETE FROM ${_tableName('group_results')}
         WHERE group_id = @group_id
         ''',
-        substitutionValues: {'group_id': descriptor.id},
+        ),
+        parameters: {'group_id': descriptor.id},
       );
     });
   }
 
   @override
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status) async {
-    return _client.run((PostgreSQLConnection conn) async {
+    return _client.run((Connection conn) async {
       final exists = await _groupExists(conn, groupId);
       if (!exists) return null;
 
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         INSERT INTO ${_tableName('group_results')}
           (group_id, task_id, state, payload, error, attempt, meta)
-        VALUES
-          (@group_id, @task_id, @state, @payload::jsonb, @error::jsonb, @attempt, @meta::jsonb)
-        ON CONFLICT (group_id, task_id)
+       VALUES
+         (@group_id, @task_id, @state, @payload::jsonb, @error::jsonb, @attempt, @meta::jsonb)
+       ON CONFLICT (group_id, task_id)
         DO UPDATE SET
           state = EXCLUDED.state,
           payload = EXCLUDED.payload,
@@ -362,7 +371,8 @@ class PostgresResultBackend implements ResultBackend {
           attempt = EXCLUDED.attempt,
           meta = EXCLUDED.meta
         ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'group_id': groupId,
           'task_id': status.id,
           'state': status.state.name,
@@ -381,7 +391,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<GroupStatus?> getGroup(String groupId) async {
-    return _client.run((PostgreSQLConnection conn) async {
+    return _client.run((Connection conn) async {
       return _readGroup(conn, groupId);
     });
   }
@@ -390,14 +400,16 @@ class PostgresResultBackend implements ResultBackend {
   Future<void> expire(String taskId, Duration ttl) async {
     final expiresAt = DateTime.now().add(ttl);
 
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         UPDATE ${_tableName('task_results')}
         SET expires_at = @expires_at
         WHERE id = @id
         ''',
-        substitutionValues: {'id': taskId, 'expires_at': expiresAt},
+        ),
+        parameters: {'id': taskId, 'expires_at': expiresAt},
       );
     });
   }
@@ -405,9 +417,10 @@ class PostgresResultBackend implements ResultBackend {
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
     final expiresAt = DateTime.now().add(heartbeatTtl);
-    await _client.run((PostgreSQLConnection conn) async {
+    await _client.run((Connection conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         INSERT INTO ${_tableName('worker_heartbeats')}
           (worker_id, namespace, timestamp, isolate_count, inflight, queues, last_lease_renewal, version, extras, expires_at)
         VALUES
@@ -424,7 +437,8 @@ class PostgresResultBackend implements ResultBackend {
           extras = EXCLUDED.extras,
           expires_at = EXCLUDED.expires_at
         ''',
-        substitutionValues: {
+        ),
+        parameters: {
           'worker_id': heartbeat.workerId,
           'namespace': heartbeat.namespace,
           'timestamp': heartbeat.timestamp,
@@ -444,14 +458,16 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
-    return _client.run((PostgreSQLConnection conn) async {
-      final result = await conn.query(
-        '''
+    return _client.run((Connection conn) async {
+      final result = await conn.execute(
+        Sql.named(
+          '''
         SELECT worker_id, namespace, timestamp, isolate_count, inflight, queues, last_lease_renewal, version, extras
         FROM ${_tableName('worker_heartbeats')}
         WHERE worker_id = @worker_id AND expires_at > NOW()
         ''',
-        substitutionValues: {'worker_id': workerId},
+        ),
+        parameters: {'worker_id': workerId},
       );
 
       if (result.isEmpty) return null;
@@ -478,8 +494,8 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
-    return _client.run((PostgreSQLConnection conn) async {
-      final result = await conn.query('''
+    return _client.run((Connection conn) async {
+      final result = await conn.execute('''
         SELECT worker_id, namespace, timestamp, isolate_count, inflight, queues, last_lease_renewal, version, extras
         FROM ${_tableName('worker_heartbeats')}
         WHERE expires_at > NOW()
@@ -519,32 +535,30 @@ class PostgresResultBackend implements ResultBackend {
     return value;
   }
 
-  Future<bool> _groupExists(
-    PostgreSQLExecutionContext conn,
-    String groupId,
-  ) async {
-    final result = await conn.query(
-      '''
+  Future<bool> _groupExists(Connection conn, String groupId) async {
+    final result = await conn.execute(
+      Sql.named(
+        '''
       SELECT 1
       FROM ${_tableName('groups')}
       WHERE id = @id AND expires_at > NOW()
       ''',
-      substitutionValues: {'id': groupId},
+      ),
+      parameters: {'id': groupId},
     );
     return result.isNotEmpty;
   }
 
-  Future<GroupStatus?> _readGroup(
-    PostgreSQLExecutionContext conn,
-    String groupId,
-  ) async {
-    final groupResult = await conn.query(
-      '''
+  Future<GroupStatus?> _readGroup(Connection conn, String groupId) async {
+    final groupResult = await conn.execute(
+      Sql.named(
+        '''
       SELECT expected, meta
       FROM ${_tableName('groups')}
       WHERE id = @id AND expires_at > NOW()
       ''',
-      substitutionValues: {'id': groupId},
+      ),
+      parameters: {'id': groupId},
     );
 
     if (groupResult.isEmpty) return null;
@@ -555,13 +569,15 @@ class PostgresResultBackend implements ResultBackend {
         ? (_decodeJson(groupRow[1]) as Map).cast<String, Object?>()
         : const <String, Object?>{};
 
-    final resultsQuery = await conn.query(
-      '''
+    final resultsQuery = await conn.execute(
+      Sql.named(
+        '''
       SELECT task_id, state, payload, error, attempt, meta
       FROM ${_tableName('group_results')}
       WHERE group_id = @group_id
       ''',
-      substitutionValues: {'group_id': groupId},
+      ),
+      parameters: {'group_id': groupId},
     );
 
     final results = <String, TaskStatus>{};

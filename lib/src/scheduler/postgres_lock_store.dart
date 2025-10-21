@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:postgres/postgres.dart';
+
 import '../core/contracts.dart';
 import '../postgres/postgres_client.dart';
 
@@ -91,11 +93,13 @@ class PostgresLockStore implements LockStore {
       // Try to insert a new lock
       try {
         await conn.execute(
-          '''
+          Sql.named(
+            '''
           INSERT INTO ${_tableName()} (key, owner, expires_at)
           VALUES (@key, @owner, @expires_at)
           ''',
-          substitutionValues: {
+          ),
+          parameters: {
             'key': key,
             'owner': ownerValue,
             'expires_at': expiresAt,
@@ -105,22 +109,26 @@ class PostgresLockStore implements LockStore {
       } catch (_) {
         // Lock already exists or expired, try to clean up and acquire
         final deleted = await conn.execute(
-          '''
+          Sql.named(
+            '''
           DELETE FROM ${_tableName()}
           WHERE key = @key AND expires_at < NOW()
           ''',
-          substitutionValues: {'key': key},
+          ),
+          parameters: {'key': key},
         );
 
-        if (deleted > 0) {
+        if (deleted.affectedRows > 0) {
           // Try again after cleanup
           try {
             await conn.execute(
-              '''
+              Sql.named(
+                '''
               INSERT INTO ${_tableName()} (key, owner, expires_at)
               VALUES (@key, @owner, @expires_at)
               ''',
-              substitutionValues: {
+              ),
+              parameters: {
                 'key': key,
                 'owner': ownerValue,
                 'expires_at': expiresAt,
@@ -141,29 +149,29 @@ class PostgresLockStore implements LockStore {
 
     return _client.run((conn) async {
       final result = await conn.execute(
-        '''
+        Sql.named(
+          '''
         UPDATE ${_tableName()}
         SET expires_at = @expires_at
         WHERE key = @key AND owner = @owner AND expires_at > NOW()
         ''',
-        substitutionValues: {
-          'key': key,
-          'owner': owner,
-          'expires_at': expiresAt,
-        },
+        ),
+        parameters: {'key': key, 'owner': owner, 'expires_at': expiresAt},
       );
-      return result > 0;
+      return result.affectedRows > 0;
     });
   }
 
   Future<void> _release(String key, String owner) async {
     await _client.run((conn) async {
       await conn.execute(
-        '''
+        Sql.named(
+          '''
         DELETE FROM ${_tableName()}
         WHERE key = @key AND owner = @owner
         ''',
-        substitutionValues: {'key': key, 'owner': owner},
+        ),
+        parameters: {'key': key, 'owner': owner},
       );
     });
   }

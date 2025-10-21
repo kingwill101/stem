@@ -3,16 +3,16 @@ import 'package:postgres/postgres.dart';
 
 class PostgresClient {
   PostgresClient(String connectionString, {String? applicationName})
-    : _uri = Uri.parse(connectionString),
+    : _connectionString = connectionString,
       _applicationName = applicationName;
 
-  final Uri _uri;
+  final String _connectionString;
   final String? _applicationName;
-  PostgreSQLConnection? _connection;
+  Connection? _connection;
   Future<void>? _opening;
   Future<void> _operationChain = Future<void>.value();
 
-  Future<T> run<T>(Future<T> Function(PostgreSQLConnection conn) action) {
+  Future<T> run<T>(Future<T> Function(Connection conn) action) {
     final completer = Completer<T>();
     _operationChain = _operationChain.then((_) async {
       try {
@@ -28,17 +28,19 @@ class PostgresClient {
 
   Future<void> close() async {
     _operationChain = _operationChain.then((_) async {
-      if (_connection != null && !_connection!.isClosed) {
-        await _connection!.close();
+      final conn = _connection;
+      if (conn != null && conn.isOpen) {
+        await conn.close();
       }
       _connection = null;
     });
     await _operationChain;
   }
 
-  Future<PostgreSQLConnection> _ensureOpen() async {
-    if (_connection != null && !_connection!.isClosed) {
-      return _connection!;
+  Future<Connection> _ensureOpen() async {
+    final existing = _connection;
+    if (existing != null && existing.isOpen) {
+      return existing;
     }
     if (_opening != null) {
       await _opening;
@@ -51,45 +53,32 @@ class PostgresClient {
   }
 
   Future<void> _openConnection() async {
-    final host = _uri.host.isEmpty ? 'localhost' : _uri.host;
-    final port = _uri.hasPort ? _uri.port : 5432;
-    var database = _uri.path.isEmpty ? '' : _uri.path.substring(1);
-    if (database.isEmpty) {
-      database = 'postgres';
-    }
-    String? username;
-    String? password;
-    if (_uri.userInfo.isNotEmpty) {
-      final parts = _uri.userInfo.split(':');
-      username = parts.isNotEmpty ? parts.first : null;
-      password = parts.length > 1 ? parts[1] : null;
-    }
-    final useSSL = _shouldUseSsl(_uri);
-    final conn = PostgreSQLConnection(
-      host,
-      port,
-      database,
-      username: username,
-      password: password,
-      useSSL: useSSL,
-      timeoutInSeconds: 30,
-    );
-    await conn.open();
-    final appName = _applicationName;
-    if (appName != null && appName.isNotEmpty) {
-      await conn.execute(
-        'SET application_name = @appName',
-        substitutionValues: {'appName': appName},
-      );
-    }
-    _connection = conn;
+    final normalized = _normalizeConnectionUri(_connectionString);
+    final withApplicationName = _applyApplicationName(normalized);
+    _connection = await Connection.openFromUrl(withApplicationName.toString());
   }
 
-  bool _shouldUseSsl(Uri uri) {
-    final sslMode = uri.queryParameters['sslmode'];
-    if (sslMode != null) {
-      return sslMode.toLowerCase() == 'require';
+  Uri _normalizeConnectionUri(String connectionString) {
+    var uri = Uri.parse(connectionString);
+    final params = Map<String, String>.from(uri.queryParameters);
+    if (uri.scheme == 'postgresql+ssl' || uri.scheme == 'postgres+ssl') {
+      params.putIfAbsent('sslmode', () => 'require');
+      uri = uri.replace(scheme: 'postgresql');
+    } else if (!params.containsKey('sslmode')) {
+      params['sslmode'] = 'disable';
     }
-    return uri.scheme == 'postgresql+ssl' || uri.scheme == 'postgres+ssl';
+    return uri.replace(queryParameters: params.isEmpty ? null : params);
+  }
+
+  Uri _applyApplicationName(Uri uri) {
+    final appName = _applicationName;
+    if (appName == null || appName.isEmpty) {
+      return uri;
+    }
+    final params = Map<String, String>.from(uri.queryParameters);
+    params['application_name'] = appName;
+    return uri.replace(
+      queryParameters: params.isEmpty ? null : params,
+    );
   }
 }

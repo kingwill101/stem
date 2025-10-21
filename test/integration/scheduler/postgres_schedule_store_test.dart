@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:postgres/postgres.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/postgres/postgres_client.dart';
 import 'package:stem/src/scheduler/postgres_schedule_store.dart';
@@ -57,7 +58,7 @@ void main() {
     await store.upsert(entry);
 
     final rows = await adminClient.run((conn) async {
-      return conn.query(
+      return conn.execute(
         'SELECT id, next_run_at, enabled FROM public.${namespace}_schedule_entries',
       );
     });
@@ -74,7 +75,7 @@ void main() {
     final dueNow = DateTime.now().toUtc();
 
     final manualDueRows = await adminClient.run((conn) async {
-      return conn.query(
+      return conn.execute(
         'SELECT id FROM public.${namespace}_schedule_entries WHERE enabled = true AND next_run_at <= NOW()',
       );
     });
@@ -85,8 +86,9 @@ void main() {
     );
 
     final manualDueWithJoin = await adminClient.run((conn) async {
-      return conn.query(
-        '''
+      return conn.execute(
+        Sql.named(
+          '''
         SELECT e.id
         FROM public.${namespace}_schedule_entries e
         LEFT JOIN public.${namespace}_schedule_locks l ON e.id = l.id
@@ -94,13 +96,14 @@ void main() {
         ORDER BY e.next_run_at ASC
         LIMIT @limit
         ''',
-        substitutionValues: {'now': dueNow, 'limit': 5},
+        ),
+        parameters: {'now': dueNow, 'limit': 5},
       );
     });
     expect(manualDueWithJoin, isNotEmpty);
 
     final lockCountBefore = await adminClient.run((conn) async {
-      final result = await conn.query(
+      final result = await conn.execute(
         'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
       );
       return result.first.first as int;
@@ -109,7 +112,7 @@ void main() {
 
     final first = await store.due(dueNow, limit: 5);
     final lockCountAfter = await adminClient.run((conn) async {
-      final result = await conn.query(
+      final result = await conn.execute(
         'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
       );
       return result.first.first as int;
