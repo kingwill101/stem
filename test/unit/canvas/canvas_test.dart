@@ -5,14 +5,14 @@ import 'package:stem/stem.dart';
 
 void main() {
   group('Canvas', () {
-    late InMemoryRedisBroker broker;
+    late InMemoryBroker broker;
     late InMemoryResultBackend backend;
     late SimpleTaskRegistry registry;
     late Worker worker;
     late Canvas canvas;
 
     setUp(() async {
-      broker = InMemoryRedisBroker(
+      broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 5),
         claimInterval: const Duration(milliseconds: 20),
       );

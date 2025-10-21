@@ -59,9 +59,12 @@ Use task-level `TaskOptions.rateLimit` to prevent hot handlers from overwhelming
 - Use `maxmemory-policy` = `noeviction` to avoid dropping in-flight entries.
 - Monitor `XINFO` metrics for pending and consumer lag.
 
-### Postgres (Planned)
+### Postgres
 
-- When a Postgres result backend is introduced, allocate connection pools per worker to avoid exhausting server resources.
+- The Postgres result backend and schedule store auto-create their schema. Size
+  connection pools per worker (e.g. PgBouncer or pooling in your hosting
+  platform) so each worker + beat instance has at least a handful of dedicated
+  connections without exhausting server resources.
 - Use partitioned tables or TTL jobs for stale task cleanup.
 
 ### Networking

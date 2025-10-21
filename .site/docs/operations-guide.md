@@ -13,8 +13,8 @@ Stem reads configuration from environment variables. The most common settings ar
 | Variable | Description |
 | --- | --- |
 | `STEM_BROKER_URL` | Broker connection string (e.g. `redis://localhost:6379`) |
-| `STEM_RESULT_BACKEND_URL` | Result backend connection string |
-| `STEM_SCHEDULE_STORE_URL` | Schedule store (defaults to Redis when omitted) |
+| `STEM_RESULT_BACKEND_URL` | Result backend connection string (`redis://`, `rediss://`, or `postgres://`) |
+| `STEM_SCHEDULE_STORE_URL` | Schedule store connection (`redis://`/`postgres://`, defaults to broker when omitted) |
 | `STEM_DEFAULT_QUEUE` | Queue name for tasks without explicit routing |
 | `STEM_PREFETCH_MULTIPLIER` | Prefetch factor relative to `Worker.concurrency` |
 | `STEM_DEFAULT_MAX_RETRIES` | Global fallback retry limit |
@@ -22,8 +22,19 @@ Stem reads configuration from environment variables. The most common settings ar
 | `STEM_WORKER_NAMESPACE` | Namespace prefix for Redis channels and worker IDs |
 | `STEM_METRIC_EXPORTERS` | Comma separated exporters (`console`, `otlp:http://host:4318/v1/metrics`, `prometheus`) |
 | `STEM_OTLP_ENDPOINT` | Default OTLP HTTP endpoint used when exporters omit a target |
+| `STEM_SIGNING_KEYS` / `STEM_SIGNING_ACTIVE_KEY` | HMAC signing secrets and active key identifier |
+| `STEM_SIGNING_PUBLIC_KEYS` / `STEM_SIGNING_PRIVATE_KEYS` | Ed25519 verification & signing material |
+| `STEM_SIGNING_ALGORITHM` | `hmac-sha256` (default) or `ed25519` |
+| `STEM_TLS_CA_CERT` | Path to trusted CA bundle for Redis/HTTP connections |
+| `STEM_TLS_CLIENT_CERT` / `STEM_TLS_CLIENT_KEY` | Mutual TLS credentials for Redis/HTTP |
+| `STEM_TLS_ALLOW_INSECURE` | Set to `true` to bypass TLS verification during debugging |
 
 Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Manager) and inject them as environment variables.
+
+For local smoke tests the repository includes `docker/testing/docker-compose.yml`,
+which launches Postgres and Redis with ports exposed at `65432`/`56379`. Export
+`STEM_TEST_POSTGRES_URL` / `STEM_TEST_REDIS_URL` and run `dart test
+test/integration` to exercise adapters against those services.
 
 ## Deployment Topologies
 
@@ -40,7 +51,7 @@ Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Man
 - One or more enqueue services publishing envelopes.
 - A fleet of worker processes (each with isolate pools).
 - One or more beat instances (recommended two for failover).
-- Optional Postgres for advanced result backend / schedule storage (future adapters).
+- Optional Postgres for the result backend and/or schedule store (Postgres adapters auto-create tables).
 
 `examples/microservice` demonstrates an enqueue API and worker process running separately, sharing Redis.
 
@@ -61,6 +72,8 @@ Stem emits metrics and heartbeats via the observability module:
 Plumb OpenTelemetry exporters into your APM of choice. The CLI command `stem worker status --follow` subscribes to heartbeat streams for live debugging.
 
 Use `stem worker status --once` to dump the latest snapshot from the result backend, or `stem worker status --follow --timeout 60s` to stream updates with a timeout guard. Override connection targets with `--backend` / `--broker`, and adjust expectations with `--heartbeat-interval`.
+
+Run `stem health` as part of deployments to verify broker/back-end connectivity and TLS handshakes before flipping traffic. TLS failures include the endpoint, certificate metadata, and troubleshooting hints.
 
 Example wiring for OTLP/HTTP metrics export (Jaeger all-in-one via Docker Compose is included in `examples/otel_metrics`):
 
@@ -114,8 +127,28 @@ This configuration batches metrics through the OTLP HTTP collector while heartbe
 ### Security
 
 - **Payload signing**: HMAC-SHA256 remains the default (`STEM_SIGNING_KEYS=primary:<base64 secret>` + `STEM_SIGNING_ACTIVE_KEY=primary`). For asymmetric signing, switch to Ed25519 by setting `STEM_SIGNING_ALGORITHM=ed25519` alongside `STEM_SIGNING_PUBLIC_KEYS` and (for producers) `STEM_SIGNING_PRIVATE_KEYS`. Run `dart run scripts/security/generate_ed25519_keys.dart` to produce ready-to-paste env values. Workers verify signatures automatically and dead-letter tampered payloads; see `docs/process/security-runbook.md` for rotation guidance. Concrete setups for each profile are documented in `docs/process/security-examples.md`.
-- **TLS bootstrap**: generate self-signed certificates for Redis or HTTP examples with `scripts/security/generate_tls_assets.sh <output-dir> <hostname>` and mount them via Docker Compose. Once certs are installed, set the relevant `redis://` URLs to `rediss://` and configure clients with the generated CA bundle.
-- **Vulnerability scanning**: run `scripts/security/run_vulnerability_scan.sh` as part of CI (or weekly locally). The script wraps `aquasec/trivy` against the repository and surfaces dependency CVEs that must be triaged.
+- Producers emit a warning and throw if the signing configuration is incomplete (for example, the active Ed25519 key lacks a private key). Address the log message before attempting to enqueue tasks.
+- **TLS bootstrap**: generate a CA plus server/client certificates with
+  `scripts/security/generate_tls_assets.sh certs stem.local,redis,api.localhost`.
+  The script emits `ca.crt`, `server.crt/server.key`, and `client.crt/client.key`
+  so you can secure Redis (set `--port 0 --tls-port 6379 --tls-auth-clients
+  yes`) as well as the HTTP enqueue API (set `ENQUEUER_TLS_CERT/KEY`). Once
+  certs are installed, switch `redis://` URLs to `rediss://` and point Stem at
+  the generated CA and client key material. TLS handshake failures are logged
+  with the endpoint and remediation hints; only set
+  `STEM_TLS_ALLOW_INSECURE=true` during short-lived debugging.
+  * `server.crt`/`server.key` stay with Redis and the HTTPS enqueuer container
+    so they can terminate TLS and prove identity to callers.
+  * `client.crt`/`client.key` are mounted by producers/workers when mutual TLS
+    is enabled, ensuring Redis refuses unauthenticated clients.
+  * `ca.crt` is distributed to all Stem processes (via `STEM_TLS_CA_CERT` and
+    optionally `ENQUEUER_TLS_CLIENT_CA`) to keep certificate validation enabled
+    without trusting arbitrary authorities.
+- **Vulnerability scanning**: run `scripts/security/run_vulnerability_scan.sh`
+  weekly (or via the scheduled `security-scan.yml` workflow) to execute Trivy
+  against the repository. The on-call security owner (`pagerduty://stem-security-primary`)
+  triages findings, files issues for High/Critical results, and tracks
+  remediation work to closure.
 
 ## Dead Letter Queue Operations
 

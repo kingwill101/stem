@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
@@ -6,7 +7,7 @@ import 'package:stem/stem.dart';
 void main() {
   group('Beat', () {
     test('fires schedule once per interval', () async {
-      final broker = InMemoryRedisBroker();
+      final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
       final store = InMemoryScheduleStore();
@@ -49,8 +50,65 @@ void main() {
       broker.dispose();
     });
 
+    test('signs scheduled tasks when signer provided', () async {
+      final secret = base64.encode(utf8.encode('beat-secret'));
+      final signingConfig = SigningConfig.fromEnvironment({
+        'STEM_SIGNING_KEYS': 'primary:$secret',
+        'STEM_SIGNING_ACTIVE_KEY': 'primary',
+      });
+
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final store = InMemoryScheduleStore();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        lockStore: InMemoryLockStore(),
+        tickInterval: const Duration(milliseconds: 10),
+        signer: PayloadSigner(signingConfig),
+      )..start();
+
+      await store.upsert(
+        ScheduleEntry(
+          id: 'signed-cleanup',
+          taskName: 'noop',
+          queue: 'default',
+          spec: 'every:100ms',
+        ),
+      );
+
+      final events = <WorkerEvent>[];
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'worker-beat-signed',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        signer: PayloadSigner(signingConfig),
+      );
+      worker.events.listen(events.add);
+      await worker.start();
+
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+
+      expect(
+        events.where((e) => e.type == WorkerEventType.completed).length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(
+        events.where((e) => e.type == WorkerEventType.failed).length,
+        equals(0),
+      );
+
+      await worker.shutdown();
+      await beat.stop();
+      broker.dispose();
+    });
+
     test('only one beat instance dispatches when locks used', () async {
-      final broker = InMemoryRedisBroker();
+      final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
       final registry = SimpleTaskRegistry()..register(_NoopTask());
       final store = InMemoryScheduleStore();

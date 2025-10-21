@@ -102,7 +102,7 @@ class _ChaosEnvironment {
       );
     }
 
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
     return _ChaosEnvironment(
       broker: broker,

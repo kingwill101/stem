@@ -16,7 +16,7 @@ void main() {
       ),
     );
 
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final out = StringBuffer();
     final err = StringBuffer();
 
@@ -51,7 +51,7 @@ void main() {
       ),
     );
 
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final out = StringBuffer();
     final err = StringBuffer();
 

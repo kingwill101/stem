@@ -21,7 +21,7 @@ Future<void> _waitFor(
 
 void main() {
   test('processes 200 tasks within throughput target', () async {
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
     final completed = <int>{};
 

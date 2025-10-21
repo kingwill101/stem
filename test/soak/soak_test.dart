@@ -21,7 +21,7 @@ Future<void> _waitFor(
 
 void main() {
   test('soak: processes extended workload without errors', () async {
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
     final completed = <int>{};
 

@@ -4,9 +4,9 @@ import 'package:test/test.dart';
 import 'package:stem/stem.dart';
 
 void main() {
-  group('InMemoryRedisBroker', () {
+  group('InMemoryBroker', () {
     test('delivers published messages to consumers', () async {
-      final broker = InMemoryRedisBroker(
+      final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 50),
         defaultVisibilityTimeout: const Duration(seconds: 1),
@@ -26,7 +26,7 @@ void main() {
     });
 
     test('delayed messages become available after ETA', () async {
-      final broker = InMemoryRedisBroker(
+      final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 50),
       );
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('expired leases are reclaimed and re-delivered', () async {
-      final broker = InMemoryRedisBroker(
+      final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 5),
         claimInterval: const Duration(milliseconds: 20),
         defaultVisibilityTimeout: const Duration(milliseconds: 30),
@@ -122,7 +122,7 @@ void main() {
 
   group('Integration', () {
     test('publish -> consume -> ack success', () async {
-      final broker = InMemoryRedisBroker(
+      final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 30),
       );
@@ -143,7 +143,7 @@ void main() {
     });
 
     test('failed task moves to dead letter', () async {
-      final broker = InMemoryRedisBroker(
+      final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 30),
       );

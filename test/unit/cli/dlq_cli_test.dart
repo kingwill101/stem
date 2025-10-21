@@ -2,18 +2,18 @@ import 'dart:async';
 
 import 'package:test/test.dart';
 import 'package:stem/src/backend/in_memory_backend.dart';
-import 'package:stem/src/broker_redis/in_memory_broker.dart';
+import 'package:stem/src/brokers/in_memory_broker.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 
 void main() {
   group('stem dlq cli', () {
-    late InMemoryRedisBroker broker;
+    late InMemoryBroker broker;
     late InMemoryResultBackend backend;
 
     setUp(() {
-      broker = InMemoryRedisBroker();
+      broker = InMemoryBroker();
       backend = InMemoryResultBackend();
     });
 
@@ -110,7 +110,7 @@ void main() {
 }
 
 Future<String> _seedDeadLetter(
-  InMemoryRedisBroker broker, {
+  InMemoryBroker broker, {
   InMemoryResultBackend? backend,
   String reason = 'error',
 }) async {

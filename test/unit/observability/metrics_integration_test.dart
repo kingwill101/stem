@@ -18,7 +18,7 @@ void main() {
     StemMetrics.instance.reset();
     StemMetrics.instance.configure(exporters: [exporter]);
 
-    final broker = InMemoryRedisBroker();
+    final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
     final registry = SimpleTaskRegistry()
       ..register(

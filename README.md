@@ -2,14 +2,16 @@
 
 Stem is a spec-driven background job platform for Dart. It provides task
 registration, Redis Streams integration, isolate-aware workers, retries, a beat
-scheduler, and CLI tooling for observability and dead-letter remediation.
+scheduler, CLI tooling for observability and dead-letter remediation, plus
+Postgres adapters for result persistence and schedule coordination.
 
 ### Highlights
 
 - At-least-once delivery semantics with configurable retry strategies.
 - Isolate pool execution with soft and hard time limits.
 - Redis Streams broker (plus in-memory adapters for tests).
-- Result backend with group/chord primitives.
+- Result backends backed by Redis **or Postgres**, including group/chord primitives.
+- Schedule stores backed by Redis **or Postgres** with distributed locking.
 - CLI support for schedules, observability snapshots, and DLQ replay.
 - OpenTelemetry metrics and heartbeat events.
 
@@ -38,6 +40,18 @@ Stem follows semantic versioning. Public interfaces (`Broker`, `ResultBackend`,
 changes will only occur with a major version bump. See the release process doc
 for details.
 
+| Component | Supported versions / notes |
+| --- | --- |
+| Dart SDK | 3.9.2 and newer |
+| Platforms | Linux and macOS verified via CI; Windows support is experimental |
+| TLS dependencies | LibreSSL/OpenSSL available on the host for `rediss://` connections |
+| Redis | 7.x (Streams, XAUTOCLAIM, RediSearch not required) |
+
+When enabling TLS, set `STEM_TLS_CA_CERT`, `STEM_TLS_CLIENT_CERT`, and
+`STEM_TLS_CLIENT_KEY` as needed. Handshake failures log the endpoint, TLS
+options, and suggest using `STEM_TLS_ALLOW_INSECURE=true` temporarily while
+debugging.
+
 ### Quality Suite
 
 Run formatting, analysis, tests, and coverage with:
@@ -64,6 +78,23 @@ dart test --tags soak
 
 See `docs/process/testing.md` for the full testing and CI workflow.
 
+#### Integration Tests
+
+Integration suites live under `test/integration/` and exercise brokers,
+backends, and the scheduler against real services. A convenience Compose file
+spins up the required Postgres and Redis instances:
+
+```bash
+docker compose -f docker/testing/docker-compose.yml up -d
+export STEM_TEST_POSTGRES_URL=postgres://postgres:postgres@127.0.0.1:65432/stem_test
+export STEM_TEST_REDIS_URL=redis://127.0.0.1:56379/0
+dart test test/integration
+docker compose -f docker/testing/docker-compose.yml down
+```
+
+Each suite skips automatically when the corresponding environment variable is
+unset, so CI jobs can opt in selectively.
+
 ### Examples
 
 Three runnable example apps demonstrate common topologies:
@@ -81,7 +112,35 @@ stem schedule list
 stem observe metrics
 stem dlq list --queue default --limit 20
 stem dlq replay --queue default --limit 10 --yes
+stem health
 ```
+
+### Security Utilities
+
+- Generate mutual TLS assets for Redis/HTTP services:
+
+  ```bash
+  scripts/security/generate_tls_assets.sh certs stem.local,redis,api.localhost
+  ```
+
+  Mount `ca.crt`, `server.crt/server.key`, and `client.crt/client.key` into
+  services and configure `STEM_TLS_*` (plus `ENQUEUER_TLS_*` for HTTPS) to refuse
+  plaintext connections.
+  - `server.crt`/`server.key` stay with Redis and the HTTPS enqueuer service to
+    terminate TLS and assert identity.
+  - `client.crt`/`client.key` are mounted by Stem producers/workers so Redis can
+    enforce mutual TLS.
+  - `ca.crt` is distributed to every client via `STEM_TLS_CA_CERT` (and
+    `ENQUEUER_TLS_CLIENT_CA`) so certificate validation remains enabled.
+
+- Run recurring Trivy scans:
+
+  ```bash
+  scripts/security/run_vulnerability_scan.sh
+  ```
+
+  High/Critical findings are triaged by the on-call security owner via the
+  scheduled `security-scan.yml` workflow.
 
 See `openspec/changes/` for the spec deltas that drive the implementation. Pull
 requests should include updated specs and passing `openspec validate --strict`,

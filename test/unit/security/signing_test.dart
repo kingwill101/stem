@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:contextual/contextual.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
@@ -118,4 +119,69 @@ void main() {
       );
     });
   });
+
+  group('PayloadSigner guardrails', () {
+    late _RecordingLogDriver driver;
+
+    setUp(() {
+      driver = _RecordingLogDriver();
+      stemLogger.addChannel('test-signing-guardrails', driver);
+    });
+
+    tearDown(() {
+      stemLogger.removeChannel('test-signing-guardrails');
+    });
+
+    test(
+      'logs warning when private key missing for active Ed25519 key',
+      () async {
+        final keyPair = await Ed25519().newKeyPair();
+        final publicKey = (await keyPair.extractPublicKey()).bytes;
+
+        final config = SigningConfig.fromEnvironment({
+          'STEM_SIGNING_ALGORITHM': 'ed25519',
+          'STEM_SIGNING_PUBLIC_KEYS': 'primary:${base64.encode(publicKey)}',
+          'STEM_SIGNING_ACTIVE_KEY': 'primary',
+        });
+        final signer = PayloadSigner(config);
+
+        await expectLater(
+          () => signer.sign(Envelope(name: 'guardrail.test', args: const {})),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              contains('STEM_SIGNING_PRIVATE_KEYS'),
+            ),
+          ),
+        );
+
+        await Future<void>.delayed(Duration.zero);
+
+        final warnings = driver.entries.where(
+          (entry) => entry.record.level == Level.warning,
+        );
+
+        expect(
+          warnings.any(
+            (entry) => entry.record.message.contains(
+              'Signing configuration incomplete',
+            ),
+          ),
+          isTrue,
+        );
+      },
+    );
+  });
+}
+
+class _RecordingLogDriver extends LogDriver {
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
+
+  final List<LogEntry> entries;
+
+  @override
+  Future<void> log(LogEntry entry) async {
+    entries.add(entry);
+  }
 }
