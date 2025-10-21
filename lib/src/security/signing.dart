@@ -2,10 +2,12 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
+import 'package:contextual/contextual.dart';
 import 'package:crypto/crypto.dart' as legacy_crypto show Hmac, sha256;
 import 'package:cryptography/cryptography.dart' as crypt;
 
 import '../core/envelope.dart';
+import '../observability/logging.dart';
 
 /// Header storing the base64 encoded payload signature.
 const String signatureHeader = 'stem-signature';
@@ -37,6 +39,19 @@ enum SigningAlgorithm {
 }
 
 /// Configuration describing signing keys and behaviour.
+///
+/// This object is typically produced via [SigningConfig.fromEnvironment],
+/// which accepts the standard `STEM_SIGNING_*` environment variables used by
+/// producers and workers:
+///
+/// - `STEM_SIGNING_KEYS` for HMAC secrets (`keyId:base64` pairs)
+/// - `STEM_SIGNING_PUBLIC_KEYS` and `STEM_SIGNING_PRIVATE_KEYS` for Ed25519
+/// - `STEM_SIGNING_ACTIVE_KEY` identifying the key used for new envelopes
+/// - `STEM_SIGNING_ALGORITHM` (`hmac-sha256` or `ed25519`)
+///
+/// Producers leverage this configuration through [PayloadSigner] and will emit
+/// warnings plus fail fast when signatures cannot be generated (for example,
+/// if the private key for the active Ed25519 key is missing).
 class SigningConfig {
   const SigningConfig._({
     required this.activeKeyId,
@@ -97,6 +112,9 @@ class SigningConfig {
   List<int>? privateKeyFor(String keyId) => ed25519PrivateKeys[keyId];
 
   /// Parses config from environment variables.
+  ///
+  /// Unknown or malformed entries throw [FormatException], while missing keys
+  /// fall back to [SigningConfig.disabled].
   factory SigningConfig.fromEnvironment(Map<String, String> env) {
     final algorithm = SigningAlgorithm.parse(
       env[_SigningEnv.algorithm]?.trim(),
@@ -192,6 +210,7 @@ class PayloadSigner {
 
   final SigningConfig config;
   static final _ed25519 = crypt.Ed25519();
+  bool _warnedMisconfiguration = false;
 
   static PayloadSigner? maybe(SigningConfig config) =>
       config.isEnabled ? PayloadSigner(config) : null;
@@ -213,7 +232,15 @@ class PayloadSigner {
     final keyId = config.activeKeyId!;
     final secret = config.sharedSecretFor(keyId);
     if (secret == null) {
-      throw StateError('Active signing key "$keyId" is not configured.');
+      _warnMisconfiguration(
+        'Active signing key "$keyId" is missing from STEM_SIGNING_KEYS.',
+        keyId: keyId,
+      );
+      throw StateError(
+        'Active signing key "$keyId" is not configured. '
+        'Ensure STEM_SIGNING_KEYS includes "$keyId:<base64-secret>" and '
+        'STEM_SIGNING_ACTIVE_KEY="$keyId".',
+      );
     }
     final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
     final digest = legacy_crypto.Hmac(
@@ -228,18 +255,36 @@ class PayloadSigner {
 
   Future<Envelope> _signEd25519(Envelope envelope) async {
     if (config.activeKeyId == null) {
+      _warnMisconfiguration(
+        'STEM_SIGNING_ACTIVE_KEY must be set when signing with Ed25519.',
+      );
       throw StateError(
-        '${_SigningEnv.activeKey} must be provided to sign with Ed25519.',
+        '${_SigningEnv.activeKey} must be provided to sign with Ed25519. '
+        'Set STEM_SIGNING_ACTIVE_KEY to the identifier of a private key.',
       );
     }
     final keyId = config.activeKeyId!;
     final privateKey = config.privateKeyFor(keyId);
     if (privateKey == null) {
-      throw StateError('Missing private key for "$keyId".');
+      _warnMisconfiguration(
+        'Private key for "$keyId" missing from STEM_SIGNING_PRIVATE_KEYS.',
+        keyId: keyId,
+      );
+      throw StateError(
+        'Missing private key for "$keyId". '
+        'Provide STEM_SIGNING_PRIVATE_KEYS="$keyId:<base64-private-key>".',
+      );
     }
     final publicKey = config.publicKeyFor(keyId);
     if (publicKey == null) {
-      throw StateError('Missing public key for "$keyId".');
+      _warnMisconfiguration(
+        'Public key for "$keyId" missing from STEM_SIGNING_PUBLIC_KEYS.',
+        keyId: keyId,
+      );
+      throw StateError(
+        'Missing public key for "$keyId". '
+        'Provide STEM_SIGNING_PUBLIC_KEYS="$keyId:<base64-public-key>".',
+      );
     }
     final canonical = _canonicalize(envelope, excludeSignatureHeaders: true);
     final keyPair = crypt.SimpleKeyPairData(
@@ -353,6 +398,18 @@ class PayloadSigner {
     if (!ok) {
       throw SignatureVerificationException('signature mismatch', keyId: keyId);
     }
+  }
+
+  void _warnMisconfiguration(String message, {String? keyId}) {
+    if (_warnedMisconfiguration) return;
+    _warnedMisconfiguration = true;
+    stemLogger.warning(
+      'Signing configuration incomplete: $message',
+      Context({
+        'algorithm': config.algorithm.label,
+        if (keyId != null) 'keyId': keyId,
+      }),
+    );
   }
 
   String _canonicalize(
