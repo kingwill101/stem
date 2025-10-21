@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:isolate';
 
 import '../core/task_invocation.dart';
@@ -46,10 +47,13 @@ sealed class TaskRunResponse {
 
 /// A successful task run response containing the [result].
 class TaskRunSuccess extends TaskRunResponse {
-  const TaskRunSuccess(this.result);
+  const TaskRunSuccess(this.result, {this.memoryBytes});
 
   /// The result of the task execution.
   final Object? result;
+
+  /// The reported resident set size after execution, when available.
+  final int? memoryBytes;
 }
 
 /// A failed task run response with [errorType], [message], and [stackTrace].
@@ -96,7 +100,11 @@ void taskWorkerIsolate(SendPort handshakePort) {
           invocationContext,
           message.args,
         );
-        message.replyPort.send(TaskRunSuccess(result));
+        int? rssBytes;
+        try {
+          rssBytes = ProcessInfo.currentRss;
+        } catch (_) {}
+        message.replyPort.send(TaskRunSuccess(result, memoryBytes: rssBytes));
       } catch (error, stack) {
         message.replyPort.send(
           TaskRunFailure(

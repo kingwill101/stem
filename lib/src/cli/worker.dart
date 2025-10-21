@@ -18,6 +18,7 @@ class WorkerCommand extends Command<int> {
     addSubcommand(WorkerRevokeCommand(dependencies));
     addSubcommand(WorkerStatsCommand(dependencies));
     addSubcommand(WorkerStatusCommand(dependencies));
+    addSubcommand(WorkerShutdownCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -153,7 +154,8 @@ class WorkerPingCommand extends Command<int> {
           }
         }
       }
-      return replies.isEmpty ? 70 : 0;
+      final hasError = replies.any((reply) => reply.status != 'ok');
+      return hasError ? 70 : 0;
     } finally {
       await ctx.dispose();
     }
@@ -785,6 +787,146 @@ class WorkerRevokeCommand extends Command<int> {
       if (index < ordered.length - 1) {
         dependencies.out.writeln();
       }
+    }
+  }
+}
+
+class WorkerShutdownCommand extends Command<int> {
+  WorkerShutdownCommand(this.dependencies) {
+    argParser
+      ..addMultiOption(
+        'worker',
+        abbr: 'w',
+        help: 'Target worker identifier (repeatable).',
+      )
+      ..addOption(
+        'namespace',
+        defaultsTo: 'stem',
+        help: 'Control namespace used for worker identifiers.',
+      )
+      ..addOption(
+        'mode',
+        defaultsTo: 'warm',
+        allowed: const ['warm', 'soft', 'hard'],
+        help: 'Shutdown mode to request (warm, soft, or hard).',
+      )
+      ..addOption(
+        'timeout',
+        defaultsTo: '5s',
+        help: 'Wait duration for replies (e.g. 3s, 1m).',
+        valueHelp: 'duration',
+      )
+      ..addFlag(
+        'json',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Emit replies as JSON instead of text.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'shutdown';
+
+  @override
+  final String description =
+      'Request warm, soft, or hard shutdown for one or more workers.';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final namespaceInput = (args['namespace'] as String?)?.trim();
+    final namespace = namespaceInput == null || namespaceInput.isEmpty
+        ? 'stem'
+        : namespaceInput;
+    final mode = ((args['mode'] as String?) ?? 'warm').trim().toLowerCase();
+    final timeout =
+        ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
+            const Duration(seconds: 5);
+    final jsonOutput = args['json'] as bool? ?? false;
+    final targets = ((args['worker'] as List?) ?? const [])
+        .cast<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    late CliContext ctx;
+    try {
+      ctx = await dependencies.createCliContext();
+    } catch (error, stack) {
+      dependencies.err.writeln('Failed to initialize Stem context: $error');
+      dependencies.err.writeln(stack);
+      return 70;
+    }
+
+    try {
+      final requestId = generateEnvelopeId();
+      final command = ControlCommandMessage(
+        requestId: requestId,
+        type: 'shutdown',
+        targets: targets.isEmpty ? const ['*'] : targets.toList(),
+        timeoutMs: timeout.inMilliseconds,
+        payload: {'mode': mode},
+      );
+
+      await _publishControlCommand(
+        ctx,
+        namespace: namespace,
+        targets: targets,
+        command: command,
+      );
+
+      final replies = await _collectControlReplies(
+        ctx,
+        namespace: namespace,
+        requestId: requestId,
+        expectedWorkers: targets.isEmpty ? null : targets.length,
+        timeout: timeout,
+      );
+
+      if (jsonOutput) {
+        dependencies.out.writeln(
+          jsonEncode(replies.map((reply) => reply.toMap()).toList()),
+        );
+      } else {
+        if (targets.isNotEmpty) {
+          final missing = targets.difference(
+            replies.map((reply) => reply.workerId).toSet(),
+          );
+          if (missing.isNotEmpty) {
+            dependencies.err.writeln(
+              'No reply from: ${missing.join(', ')}',
+            );
+          }
+        }
+        if (replies.isEmpty) {
+          dependencies.out.writeln(
+            'No replies received within ${timeout.inMilliseconds}ms.',
+          );
+          return 70;
+        }
+        dependencies.out.writeln('Worker        | Status | Mode  | Active');
+        dependencies.out.writeln('--------------+--------+-------+--------');
+        final ordered = [...replies]
+          ..sort((a, b) => a.workerId.compareTo(b.workerId));
+        for (final reply in ordered) {
+          final payload = reply.payload;
+          final statusLabel = (payload['status'] ?? reply.status).toString();
+          final modeLabel = (payload['mode'] ?? mode).toString();
+          final activeLabel = (payload['active'] ?? '-').toString();
+          dependencies.out.writeln(
+            '${reply.workerId.padRight(14)}| '
+            '${statusLabel.padRight(6)} | '
+            '${modeLabel.padRight(5)} | '
+            '${activeLabel.padRight(6)}',
+          );
+        }
+      }
+
+      return replies.isEmpty ? 70 : 0;
+    } finally {
+      await ctx.dispose();
     }
   }
 }

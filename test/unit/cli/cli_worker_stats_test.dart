@@ -48,6 +48,66 @@ void main() {
       broker.dispose();
     });
 
+    test('shutdown command triggers worker shutdown', () async {
+      final release = Completer<void>();
+      final started = Completer<void>();
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(_BlockingTask(started, release));
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-cli-shutdown',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
+      );
+
+      await worker.start();
+
+      final stem = Stem(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+      );
+      await stem.enqueue('tasks.blocking');
+      await started.future;
+
+      final out = StringBuffer();
+      final err = StringBuffer();
+
+      final code = await runStemCli(
+        [
+          'worker',
+          'shutdown',
+          '--worker',
+          'worker-cli-shutdown',
+          '--mode',
+          'soft',
+        ],
+        out: out,
+        err: err,
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          revokeStore: InMemoryRevokeStore(),
+          dispose: () async {},
+        ),
+      );
+
+      expect(code, equals(0));
+      expect(out.toString(), contains('worker-cli-shutdown'));
+      expect(out.toString(), contains('initiated'));
+
+      release.complete();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('includes active task metadata', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();

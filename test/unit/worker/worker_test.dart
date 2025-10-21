@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
@@ -51,6 +52,242 @@ void main() {
       expect(event.envelope?.id, equals(taskId));
       final status = await backend.get(taskId);
       expect(status?.state, TaskState.succeeded);
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('autoscaler scales concurrency up and down', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.autoscale',
+            entrypoint: _autoscaleEntrypoint,
+            options: const TaskOptions(maxRetries: 1),
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-autoscale',
+        concurrency: 4,
+        prefetchMultiplier: 1,
+        autoscale: const WorkerAutoscaleConfig(
+          enabled: true,
+          minConcurrency: 1,
+          maxConcurrency: 4,
+          scaleUpStep: 1,
+          scaleDownStep: 1,
+          backlogPerIsolate: 1.0,
+          tick: Duration(milliseconds: 40),
+          idlePeriod: Duration(milliseconds: 120),
+          scaleUpCooldown: Duration(milliseconds: 40),
+          scaleDownCooldown: Duration(milliseconds: 40),
+        ),
+        lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
+      );
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      for (var i = 0; i < 6; i++) {
+        await stem.enqueue('tasks.autoscale');
+      }
+
+      await _waitFor(
+        () => worker.activeConcurrency >= 3,
+        timeout: const Duration(seconds: 2),
+      );
+      expect(worker.activeConcurrency, greaterThanOrEqualTo(3));
+
+      await _waitFor(
+        () =>
+            events
+                .where((event) => event.type == WorkerEventType.completed)
+                .length >=
+            6,
+        timeout: const Duration(seconds: 5),
+      );
+
+      await _waitFor(
+        () => worker.activeConcurrency == 1,
+        timeout: const Duration(seconds: 6),
+      );
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('warm shutdown drains tasks', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.sleepy',
+            entrypoint: _sleepyEntrypoint,
+            options: const TaskOptions(maxRetries: 1),
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-warm-shutdown',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
+      );
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final taskId = await stem.enqueue('tasks.sleepy');
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      await worker.shutdown(mode: WorkerShutdownMode.warm);
+
+      expect(
+        events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == taskId,
+        ),
+        isTrue,
+      );
+      final status = await backend.get(taskId);
+      expect(status?.state, TaskState.succeeded);
+
+      await sub.cancel();
+      broker.dispose();
+    });
+
+    test('max tasks per isolate triggers recycle', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<int>(
+            name: 'tasks.recycle',
+            entrypoint: _isolateHashEntrypoint,
+            options: const TaskOptions(maxRetries: 1),
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-recycle',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        lifecycle: const WorkerLifecycleConfig(
+          installSignalHandlers: false,
+          maxTasksPerIsolate: 1,
+        ),
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final first = await stem.enqueue('tasks.recycle');
+      final second = await stem.enqueue('tasks.recycle');
+
+      await _waitFor(
+        () =>
+            events
+                .where((event) => event.type == WorkerEventType.completed)
+                .length >=
+            2,
+        timeout: const Duration(seconds: 3),
+      );
+
+      final firstStatus = await backend.get(first);
+      final secondStatus = await backend.get(second);
+      expect(firstStatus?.payload, isNotNull);
+      expect(secondStatus?.payload, isNotNull);
+      expect(firstStatus?.payload, isNot(equals(secondStatus?.payload)));
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('memory recycle threshold replaces isolate', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<int>(
+            name: 'tasks.memory-recycle',
+            entrypoint: _isolateHashEntrypoint,
+            options: const TaskOptions(maxRetries: 1),
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-memory-recycle',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        lifecycle: const WorkerLifecycleConfig(
+          installSignalHandlers: false,
+          maxMemoryPerIsolateBytes: 1,
+        ),
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final first = await stem.enqueue('tasks.memory-recycle');
+      final second = await stem.enqueue('tasks.memory-recycle');
+
+      await _waitFor(
+        () =>
+            events
+                .where((event) => event.type == WorkerEventType.completed)
+                .length >=
+            2,
+        timeout: const Duration(seconds: 3),
+      );
+
+      final firstStatus = await backend.get(first);
+      final secondStatus = await backend.get(second);
+      expect(firstStatus?.payload, isNotNull);
+      expect(secondStatus?.payload, isNotNull);
+      expect(firstStatus?.payload, isNot(equals(secondStatus?.payload)));
 
       await sub.cancel();
       await worker.shutdown();
@@ -543,4 +780,27 @@ FutureOr<Object?> _hardLimitEntrypoint(
     await Future<void>.delayed(const Duration(milliseconds: 80));
   }
   return 'done';
+}
+
+FutureOr<Object?> _autoscaleEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  await Future<void>.delayed(const Duration(milliseconds: 80));
+  return null;
+}
+
+FutureOr<Object?> _sleepyEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  await Future<void>.delayed(const Duration(milliseconds: 150));
+  return null;
+}
+
+FutureOr<int> _isolateHashEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  return Isolate.current.hashCode;
 }

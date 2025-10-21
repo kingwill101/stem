@@ -121,6 +121,7 @@ stem worker ping --namespace stem
 stem worker inspect --worker worker-1
 stem worker stats --namespace stem
 stem worker revoke --task <task-id> [--terminate]
+stem worker shutdown --mode soft
 ```
 
 See `docs/process/worker-control.md` for detailed control-plane usage,

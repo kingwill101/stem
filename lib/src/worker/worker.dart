@@ -19,6 +19,7 @@ import '../observability/tracing.dart';
 import '../security/signing.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
+import 'worker_config.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
 ///
@@ -34,6 +35,8 @@ import 'isolate_pool.dart';
 /// );
 /// await worker.start();
 /// ```
+enum WorkerShutdownMode { warm, soft, hard }
+
 class Worker {
   /// Creates a worker instance.
   ///
@@ -69,6 +72,8 @@ class Worker {
     Duration? workerHeartbeatInterval,
     HeartbeatTransport? heartbeatTransport,
     String heartbeatNamespace = 'stem',
+    WorkerAutoscaleConfig? autoscale,
+    WorkerLifecycleConfig? lifecycle,
     ObservabilityConfig? observability,
     this.signer,
   })  : workerHeartbeatInterval = observability?.heartbeatInterval ??
@@ -78,6 +83,11 @@ class Worker {
             heartbeatTransport ?? const NoopHeartbeatTransport(),
         namespace = observability?.namespace ?? heartbeatNamespace,
         concurrency = _normalizeConcurrency(concurrency),
+        autoscaleConfig = _resolveAutoscaleConfig(
+          autoscale,
+          _normalizeConcurrency(concurrency),
+        ),
+        lifecycleConfig = lifecycle ?? const WorkerLifecycleConfig(),
         prefetchMultiplier = math.max(1, prefetchMultiplier),
         prefetch = _calculatePrefetch(
           prefetch,
@@ -86,6 +96,21 @@ class Worker {
         ),
         retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
+    _maxConcurrency = this.concurrency;
+    final autoscaleMax = autoscaleConfig.maxConcurrency != null &&
+            autoscaleConfig.maxConcurrency! > 0
+        ? math.min(autoscaleConfig.maxConcurrency!, _maxConcurrency)
+        : _maxConcurrency;
+    if (autoscaleConfig.enabled) {
+      _currentConcurrency = math.min(autoscaleMax, _maxConcurrency);
+      if (_currentConcurrency < autoscaleConfig.minConcurrency) {
+        _currentConcurrency = autoscaleConfig.minConcurrency;
+      }
+    } else {
+      _currentConcurrency = _maxConcurrency;
+    }
+    _currentConcurrency = math.max(1, _currentConcurrency);
+    _recordConcurrencyGauge();
   }
 
   final Broker broker;
@@ -99,6 +124,8 @@ class Worker {
   final int concurrency;
   final int prefetchMultiplier;
   final int prefetch;
+  final WorkerAutoscaleConfig autoscaleConfig;
+  final WorkerLifecycleConfig lifecycleConfig;
   final Duration heartbeatInterval;
   final Duration workerHeartbeatInterval;
   final HeartbeatTransport heartbeatTransport;
@@ -112,6 +139,19 @@ class Worker {
   final StreamController<WorkerEvent> _events = StreamController.broadcast();
   TaskIsolatePool? _isolatePool;
   Future<TaskIsolatePool>? _poolFuture;
+  late final int _maxConcurrency;
+  late int _currentConcurrency;
+  Timer? _autoscaleTimer;
+  bool _autoscaleEvaluating = false;
+  DateTime? _lastScaleUp;
+  DateTime? _lastScaleDown;
+  DateTime? _idleSince;
+  Completer<void>? _shutdownCompleter;
+  WorkerShutdownMode? _shutdownMode;
+  Completer<void>? _drainCompleter;
+  StreamSubscription<ProcessSignal>? _sigintSub;
+  StreamSubscription<ProcessSignal>? _sigtermSub;
+  StreamSubscription<ProcessSignal>? _sigquitSub;
 
   bool _running = false;
   final Map<String, _ActiveDelivery> _activeDeliveries = {};
@@ -128,6 +168,9 @@ class Worker {
   /// Includes events like task start, completion, failure, and heartbeats.
   Stream<WorkerEvent> get events => _events.stream;
 
+  /// Current active concurrency for isolate-backed tasks.
+  int get activeConcurrency => _currentConcurrency;
+
   /// Starts the worker, beginning task consumption and processing.
   ///
   /// Initializes heartbeat loops and subscribes to the queue. Throws if already
@@ -135,9 +178,16 @@ class Worker {
   Future<void> start() async {
     if (_running) return;
     _running = true;
+    _shutdownMode = null;
+    _shutdownCompleter = null;
+    _idleSince = null;
+    _lastScaleUp = null;
+    _lastScaleDown = null;
+    _drainCompleter = null;
     await _initializeRevocations();
     _startWorkerHeartbeatLoop();
     _recordInflightGauge();
+    _recordConcurrencyGauge();
     unawaited(_publishWorkerHeartbeat());
     final subscription = broker
         .consume(queue, prefetch: prefetch, consumerName: consumerName)
@@ -170,42 +220,73 @@ class Worker {
     );
     _subscriptions[queue] = subscription;
     _startControlPlane();
+    _startAutoscaler();
+    _installSignalHandlers();
   }
 
-  /// Stops the worker, canceling subscriptions, timers, and cleaning up resources.
+  /// Stops the worker according to [mode], cancelling subscriptions and resources.
   ///
-  /// Waits for active tasks to complete before shutting down.
-  Future<void> shutdown() async {
+  /// Warm shutdown drains in-flight tasks before exiting. Soft shutdown requests
+  /// cooperative termination and escalates to hard shutdown if tasks ignore the
+  /// grace period. Hard shutdown immediately requeues in-flight deliveries.
+  Future<void> shutdown(
+      {WorkerShutdownMode mode = WorkerShutdownMode.hard}) async {
+    if (_shutdownCompleter != null) {
+      if (mode == WorkerShutdownMode.hard &&
+          (_shutdownMode ?? WorkerShutdownMode.warm) !=
+              WorkerShutdownMode.hard) {
+        _shutdownMode = WorkerShutdownMode.hard;
+        await _forceStopActiveTasks();
+      }
+      return _shutdownCompleter!.future;
+    }
+
+    _shutdownMode = mode;
+    final completer = Completer<void>();
+    _shutdownCompleter = completer;
     _running = false;
-    final pool = _isolatePool;
-    _isolatePool = null;
-    _poolFuture = null;
-    await pool?.dispose();
-    for (final sub in _subscriptions.values) {
-      await sub.cancel();
-    }
-    _subscriptions.clear();
 
-    for (final timer in _leaseTimers.values) {
-      timer.cancel();
-    }
-    _leaseTimers.clear();
-
-    for (final timer in _heartbeatTimers.values) {
-      timer.cancel();
-    }
-    _heartbeatTimers.clear();
-
+    _autoscaleTimer?.cancel();
+    _autoscaleTimer = null;
     _workerHeartbeatTimer?.cancel();
     _workerHeartbeatTimer = null;
-    _activeDeliveries.clear();
-    _inflightPerQueue.clear();
-    _inflight = 0;
+
+    await _cancelAllSubscriptions();
+    await _stopSignalWatchers();
+
+    bool drained = false;
+    if (mode == WorkerShutdownMode.hard) {
+      await _forceStopActiveTasks();
+    } else {
+      if (mode == WorkerShutdownMode.soft) {
+        _requestTerminationForActiveTasks(reason: mode.name);
+      }
+      drained = await _awaitDrainWithTimeout(
+        mode == WorkerShutdownMode.soft
+            ? lifecycleConfig.softGracePeriod
+            : null,
+      );
+      if (!drained) {
+        await _forceStopActiveTasks();
+      }
+    }
+
+    await _disposePool();
+    _cancelTimers();
+    await heartbeatTransport.close();
     _revocations.clear();
     _latestRevocationVersion = 0;
-    await heartbeatTransport.close();
+    _inflightPerQueue.clear();
+    _inflight = 0;
+    _idleSince = null;
+    _recordConcurrencyGauge();
 
-    await _events.close();
+    if (!_events.isClosed) {
+      await _events.close();
+    }
+
+    completer.complete();
+    return completer.future;
   }
 
   Future<void> _handle(Delivery delivery) async {
@@ -833,6 +914,11 @@ class Worker {
       }
       if (_activeDeliveries.isEmpty) {
         _lastLeaseRenewal = null;
+        final drain = _drainCompleter;
+        if (drain != null && !drain.isCompleted) {
+          drain.complete();
+        }
+        _drainCompleter = null;
       }
       _recordInflightGauge();
     }
@@ -843,6 +929,14 @@ class Worker {
     StemMetrics.instance.setGauge(
       'stem.worker.inflight',
       _inflight.toDouble(),
+      tags: {'worker': _workerIdentifier, 'namespace': namespace},
+    );
+  }
+
+  void _recordConcurrencyGauge() {
+    StemMetrics.instance.setGauge(
+      'stem.worker.concurrency',
+      _currentConcurrency.toDouble(),
       tags: {'worker': _workerIdentifier, 'namespace': namespace},
     );
   }
@@ -863,6 +957,127 @@ class Worker {
       );
     } catch (_) {
       // Swallow errors to avoid impacting worker loops; rely on logging elsewhere.
+    }
+  }
+
+  Future<void> _cancelAllSubscriptions() async {
+    if (_subscriptions.isEmpty) return;
+    final subs = List<StreamSubscription<Delivery>>.from(_subscriptions.values);
+    _subscriptions.clear();
+    for (final sub in subs) {
+      try {
+        await sub.cancel();
+      } catch (error, stack) {
+        stemLogger.warning(
+          'Failed to cancel subscription: $error',
+          Context(_logContext({'stack': stack.toString()})),
+        );
+      }
+    }
+  }
+
+  void _cancelTimers() {
+    for (final timer in _leaseTimers.values) {
+      timer.cancel();
+    }
+    _leaseTimers.clear();
+    for (final timer in _heartbeatTimers.values) {
+      timer.cancel();
+    }
+    _heartbeatTimers.clear();
+    _workerHeartbeatTimer?.cancel();
+    _workerHeartbeatTimer = null;
+  }
+
+  Future<void> _disposePool() async {
+    final pool = _isolatePool;
+    _isolatePool = null;
+    _poolFuture = null;
+    if (pool != null) {
+      await pool.dispose();
+    }
+  }
+
+  Future<void> _forceStopActiveTasks() async {
+    final deliveries = List<_ActiveDelivery>.from(_activeDeliveries.values);
+    if (deliveries.isEmpty) return;
+    for (final active in deliveries) {
+      _cancelLeaseTimer(active.delivery.receipt);
+      _heartbeatTimers.remove(active.envelope.id)?.cancel();
+      _releaseDelivery(active.envelope);
+      try {
+        await broker.nack(active.delivery, requeue: true);
+      } catch (error, stack) {
+        stemLogger.warning(
+          'Failed to requeue delivery during shutdown: $error',
+          Context(_logContext({
+            'queue': active.queue,
+            'task': active.envelope.name,
+            'stack': stack.toString(),
+          })),
+        );
+      }
+      _revocations.remove(active.envelope.id);
+    }
+  }
+
+  void _requestTerminationForActiveTasks({required String reason}) {
+    if (_activeDeliveries.isEmpty) return;
+    final now = DateTime.now().toUtc();
+    var version = generateRevokeVersion();
+    for (final active in _activeDeliveries.values) {
+      final entry = RevokeEntry(
+        namespace: namespace,
+        taskId: active.envelope.id,
+        version: version++,
+        issuedAt: now,
+        terminate: true,
+        reason: reason,
+        requestedBy: _workerIdentifier,
+      );
+      _applyRevocationEntry(entry, clock: now);
+    }
+  }
+
+  Future<bool> _awaitDrainWithTimeout(Duration? timeout) async {
+    if (_activeDeliveries.isEmpty) return true;
+    final completer = _drainCompleter ??= Completer<void>();
+    if (_activeDeliveries.isEmpty && !completer.isCompleted) {
+      completer.complete();
+    }
+    if (timeout == null) {
+      await completer.future;
+      _drainCompleter = null;
+      return true;
+    }
+    try {
+      await completer.future.timeout(timeout);
+      return true;
+    } on TimeoutException {
+      return false;
+    } finally {
+      if (_drainCompleter != null && _drainCompleter!.isCompleted) {
+        _drainCompleter = null;
+      }
+    }
+  }
+
+  Future<void> _stopSignalWatchers() async {
+    final futures = <Future<void>>[];
+    if (_sigintSub != null) {
+      futures.add(_sigintSub!.cancel());
+      _sigintSub = null;
+    }
+    if (_sigtermSub != null) {
+      futures.add(_sigtermSub!.cancel());
+      _sigtermSub = null;
+    }
+    if (_sigquitSub != null) {
+      futures.add(_sigquitSub!.cancel());
+      _sigquitSub = null;
+    }
+    if (futures.isNotEmpty) {
+      await Future.wait(futures, eagerError: false);
     }
   }
 
@@ -891,6 +1106,217 @@ class Worker {
       workerHeartbeatInterval,
       (_) => unawaited(_publishWorkerHeartbeat()),
     );
+  }
+
+  bool get _autoscaleEnabled => autoscaleConfig.enabled;
+
+  void _startAutoscaler() {
+    _autoscaleTimer?.cancel();
+    if (!_autoscaleEnabled) return;
+    _autoscaleTimer = Timer.periodic(
+      autoscaleConfig.tick,
+      (_) => unawaited(_evaluateAutoscale()),
+    );
+  }
+
+  Future<void> _evaluateAutoscale() async {
+    if (!_running || !_autoscaleEnabled) return;
+    if (_autoscaleEvaluating) return;
+    _autoscaleEvaluating = true;
+    try {
+      final depth = await broker.pendingCount(queue) ?? _lastQueueDepth ?? 0;
+      final inflight = _inflight;
+      final now = DateTime.now();
+      final configuredMax = autoscaleConfig.maxConcurrency ?? _maxConcurrency;
+      final maxAllowed =
+          configuredMax < _maxConcurrency ? configuredMax : _maxConcurrency;
+      final minAllowed = autoscaleConfig.minConcurrency <= maxAllowed
+          ? autoscaleConfig.minConcurrency
+          : maxAllowed;
+
+      if (depth == 0 && inflight == 0) {
+        _idleSince ??= now;
+      } else {
+        _idleSince = null;
+      }
+
+      final current = _currentConcurrency;
+      if (depth > 0 &&
+          current < maxAllowed &&
+          _cooldownElapsed(
+              _lastScaleUp, autoscaleConfig.scaleUpCooldown, now)) {
+        final backlogPerIsolate = depth / math.max(1, current);
+        if (backlogPerIsolate >= autoscaleConfig.backlogPerIsolate) {
+          final step = math.max(1, autoscaleConfig.scaleUpStep);
+          final candidate = current + step;
+          final desired = candidate > maxAllowed ? maxAllowed : candidate;
+          if (desired != current) {
+            await _updateConcurrency(
+              desired,
+              reason: 'scale-up',
+              backlog: depth,
+              inflight: inflight,
+            );
+            _lastScaleUp = now;
+            _idleSince = null;
+          }
+        }
+      }
+
+      final idleSince = _idleSince;
+      if (idleSince != null &&
+          current > minAllowed &&
+          now.difference(idleSince) >= autoscaleConfig.idlePeriod &&
+          _cooldownElapsed(
+              _lastScaleDown, autoscaleConfig.scaleDownCooldown, now)) {
+        final step = math.max(1, autoscaleConfig.scaleDownStep);
+        final candidate = current - step;
+        final desired = candidate < minAllowed ? minAllowed : candidate;
+        if (desired != current) {
+          await _updateConcurrency(
+            desired,
+            reason: 'scale-down',
+            backlog: depth,
+            inflight: inflight,
+          );
+          _lastScaleDown = now;
+        }
+      }
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Autoscale evaluation failed: $error',
+        Context(_logContext({'stack': stack.toString()})),
+      );
+    } finally {
+      _autoscaleEvaluating = false;
+    }
+  }
+
+  Future<void> _updateConcurrency(
+    int newConcurrency, {
+    required String reason,
+    required int backlog,
+    required int inflight,
+  }) async {
+    final clamped = math.max(1, math.min(newConcurrency, _maxConcurrency));
+    if (clamped == _currentConcurrency) return;
+    final previous = _currentConcurrency;
+    _currentConcurrency = clamped;
+    if (_currentConcurrency > previous) {
+      _idleSince = null;
+    }
+
+    final pool = _isolatePool;
+    if (pool != null) {
+      await pool.resize(_currentConcurrency);
+    }
+
+    _recordConcurrencyGauge();
+
+    stemLogger.info(
+      'Adjusted concurrency from {from} to {to} ({reason})',
+      Context(
+        _logContext({
+          'from': previous,
+          'to': _currentConcurrency,
+          'reason': reason,
+          'backlog': backlog,
+          'inflight': inflight,
+        }),
+      ),
+    );
+  }
+
+  bool _cooldownElapsed(DateTime? last, Duration cooldown, DateTime clock) {
+    if (cooldown <= Duration.zero) return true;
+    if (last == null) return true;
+    return clock.difference(last) >= cooldown;
+  }
+
+  void _handleIsolateRecycle(IsolateRecycleEvent event) {
+    final ctx = Context(
+      _logContext({
+        'reason': event.reason.name,
+        'tasks': event.tasksExecuted,
+        if (event.memoryBytes != null) 'memoryBytes': event.memoryBytes!,
+      }),
+    );
+    switch (event.reason) {
+      case IsolateRecycleReason.maxTasks:
+        stemLogger.info('Recycled isolate after max task threshold', ctx);
+        break;
+      case IsolateRecycleReason.memory:
+        stemLogger.info('Recycled isolate after memory threshold', ctx);
+        break;
+      case IsolateRecycleReason.scaleDown:
+      case IsolateRecycleReason.shutdown:
+        stemLogger.debug('Recycled isolate ({reason})', ctx);
+        break;
+    }
+  }
+
+  void _installSignalHandlers() {
+    if (!lifecycleConfig.installSignalHandlers) return;
+    _sigtermSub ??= _safeWatch(ProcessSignal.sigterm, () {
+      if (_running) {
+        unawaited(shutdown(mode: WorkerShutdownMode.warm));
+      }
+    });
+    _sigintSub ??= _safeWatch(ProcessSignal.sigint, () {
+      if (_running) {
+        unawaited(shutdown(mode: WorkerShutdownMode.soft));
+      }
+    });
+    _sigquitSub ??= _safeWatch(ProcessSignal.sigquit, () {
+      if (_running) {
+        unawaited(shutdown(mode: WorkerShutdownMode.hard));
+      }
+    });
+  }
+
+  StreamSubscription<ProcessSignal>? _safeWatch(
+    ProcessSignal signal,
+    void Function() handler,
+  ) {
+    try {
+      return signal.watch().listen((_) => handler());
+    } on SignalException {
+      return null;
+    } on UnsupportedError {
+      return null;
+    }
+  }
+
+  WorkerShutdownMode _parseShutdownMode(String? value) {
+    switch (value?.toLowerCase()) {
+      case 'force':
+      case 'hard':
+        return WorkerShutdownMode.hard;
+      case 'soft':
+        return WorkerShutdownMode.soft;
+      case 'warm':
+      case 'graceful':
+      default:
+        return WorkerShutdownMode.warm;
+    }
+  }
+
+  Future<Map<String, Object?>> _handleShutdownRequest(
+    WorkerShutdownMode mode,
+  ) async {
+    if (_shutdownCompleter != null) {
+      return {
+        'status': 'in-progress',
+        'mode': (_shutdownMode ?? WorkerShutdownMode.warm).name,
+        'active': _activeDeliveries.length,
+      };
+    }
+    unawaited(shutdown(mode: mode));
+    return {
+      'status': 'initiated',
+      'mode': mode.name,
+      'active': _activeDeliveries.length,
+    };
   }
 
   Future<void> _publishWorkerHeartbeat() async {
@@ -923,7 +1349,7 @@ class Worker {
     final now = DateTime.now().toUtc();
     final isolatePool = _isolatePool;
     final activeIsolates =
-        isolatePool?.activeCount ?? math.min(_inflight, concurrency);
+        isolatePool?.activeCount ?? math.min(_inflight, _currentConcurrency);
     final queues = _inflightPerQueue.entries
         .where((entry) => entry.value > 0)
         .map(
@@ -943,8 +1369,10 @@ class Worker {
         final extras = {
           'host': Platform.localHostname,
           'pid': pid,
-          'concurrency': concurrency,
+          'concurrency': _currentConcurrency,
+          'maxConcurrency': concurrency,
           'prefetch': prefetch,
+          'autoscale': autoscaleConfig.enabled,
         };
         if (_lastQueueDepth != null) {
           extras['queueDepth'] = _lastQueueDepth!;
@@ -1374,6 +1802,18 @@ class Worker {
           );
         }
         break;
+      case 'shutdown':
+        final mode = _parseShutdownMode(command.payload['mode'] as String?);
+        final summary = await _handleShutdownRequest(mode);
+        await _sendControlReply(
+          ControlReplyMessage(
+            requestId: command.requestId,
+            workerId: _workerIdentifier,
+            status: 'ok',
+            payload: summary,
+          ),
+        );
+        break;
       default:
         await _sendControlReply(
           ControlReplyMessage(
@@ -1424,7 +1864,9 @@ class Worker {
       'queue': queue,
       'host': Platform.localHostname,
       'pid': pid,
-      'concurrency': concurrency,
+      'concurrency': _currentConcurrency,
+      'maxConcurrency': concurrency,
+      'autoscaleEnabled': autoscaleConfig.enabled,
       'prefetch': prefetch,
       'inflight': _inflight,
       'queues': queues,
@@ -1535,7 +1977,14 @@ class Worker {
   }
 
   Future<TaskIsolatePool> _createPool() async {
-    final pool = TaskIsolatePool(size: concurrency);
+    final pool = TaskIsolatePool(
+      size: _currentConcurrency,
+      onRecycle: _handleIsolateRecycle,
+    );
+    pool.updateRecyclePolicy(
+      maxTasksPerIsolate: lifecycleConfig.maxTasksPerIsolate,
+      maxMemoryBytes: lifecycleConfig.maxMemoryPerIsolateBytes,
+    );
     await pool.start();
     _isolatePool = pool;
     return pool;
@@ -1550,6 +1999,46 @@ class Worker {
     int multiplier,
   ) =>
       math.max(1, provided ?? concurrency * multiplier);
+
+  static WorkerAutoscaleConfig _resolveAutoscaleConfig(
+    WorkerAutoscaleConfig? provided,
+    int normalizedConcurrency,
+  ) {
+    if (provided == null || !provided.enabled) {
+      return const WorkerAutoscaleConfig.disabled();
+    }
+    final min = math.max(1, provided.minConcurrency);
+    final rawMax = provided.maxConcurrency ?? normalizedConcurrency;
+    final max = math.max(min, math.min(rawMax, normalizedConcurrency));
+    final scaleUpStep = math.max(1, provided.scaleUpStep);
+    final scaleDownStep = math.max(1, provided.scaleDownStep);
+    final backlogPerIsolate =
+        provided.backlogPerIsolate <= 0 ? 1.0 : provided.backlogPerIsolate;
+    final tick = provided.tick <= const Duration(milliseconds: 100)
+        ? const Duration(seconds: 1)
+        : provided.tick;
+    final idle = provided.idlePeriod <= Duration.zero
+        ? const Duration(seconds: 30)
+        : provided.idlePeriod;
+    final upCooldown = provided.scaleUpCooldown <= Duration.zero
+        ? const Duration(seconds: 1)
+        : provided.scaleUpCooldown;
+    final downCooldown = provided.scaleDownCooldown <= Duration.zero
+        ? const Duration(seconds: 1)
+        : provided.scaleDownCooldown;
+    return WorkerAutoscaleConfig(
+      enabled: true,
+      minConcurrency: math.min(min, max),
+      maxConcurrency: max,
+      scaleUpStep: scaleUpStep,
+      scaleDownStep: scaleDownStep,
+      backlogPerIsolate: backlogPerIsolate,
+      idlePeriod: idle,
+      tick: tick,
+      scaleUpCooldown: upCooldown,
+      scaleDownCooldown: downCooldown,
+    );
+  }
 }
 
 /// An event emitted during worker operation.

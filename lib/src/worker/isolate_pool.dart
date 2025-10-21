@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import '../core/task_invocation.dart';
 import 'isolate_messages.dart';
@@ -9,32 +10,65 @@ import 'isolate_messages.dart';
 typedef TaskControlHandler = FutureOr<void> Function(
     TaskInvocationSignal signal);
 
+/// Reason an isolate was recycled or disposed.
+enum IsolateRecycleReason { scaleDown, maxTasks, memory, shutdown }
+
+/// Metadata describing an isolate recycle event.
+class IsolateRecycleEvent {
+  IsolateRecycleEvent({
+    required this.reason,
+    required this.tasksExecuted,
+    this.memoryBytes,
+  });
+
+  /// Why the isolate was recycled.
+  final IsolateRecycleReason reason;
+
+  /// Number of tasks the isolate executed before recycling.
+  final int tasksExecuted;
+
+  /// The most recent resident set size reading, if available.
+  final int? memoryBytes;
+}
+
 /// A pool of isolates for executing tasks concurrently.
 ///
-/// This class manages a fixed number of isolates to run tasks in parallel,
-/// queuing jobs when all isolates are busy.
+/// Manages a dynamic number of isolates, queuing jobs when all isolates are
+/// busy. The pool can scale up or down at runtime and enforces optional recycle
+/// policies such as max tasks or memory per isolate.
 class TaskIsolatePool {
-  /// Creates a pool with [size] isolates.
-  TaskIsolatePool({required this.size});
+  /// Creates a pool with the provided initial [size].
+  TaskIsolatePool({
+    required int size,
+    this.onRecycle,
+  }) : _targetSize = math.max(1, size);
 
-  /// The number of isolates in this pool.
-  final int size;
-  final List<_IsolateWorker> _idle = [];
+  final void Function(IsolateRecycleEvent event)? onRecycle;
+
+  int _targetSize;
+  final List<_PoolEntry> _idle = <_PoolEntry>[];
   final Queue<_TaskJob> _queue = Queue<_TaskJob>();
-  final Set<_IsolateWorker> _active = <_IsolateWorker>{};
+  final Set<_PoolEntry> _active = <_PoolEntry>{};
   bool _started = false;
   bool _disposed = false;
+  int _pendingDisposals = 0;
+  int? _maxTasksPerIsolate;
+  int? _maxMemoryBytes;
+
+  /// The desired number of isolates.
+  int get size => _targetSize;
 
   /// The number of currently active isolates.
   int get activeCount => _active.length;
 
-  /// Starts the pool by spawning [size] isolates.
+  /// Total isolates managed by the pool.
+  int get totalCount => _idle.length + _active.length;
+
+  /// Starts the pool by spawning [_targetSize] isolates.
   Future<void> start() async {
     if (_started) return;
     _started = true;
-    for (var i = 0; i < size; i++) {
-      _idle.add(await _IsolateWorker.spawn());
-    }
+    await _ensureCapacity();
   }
 
   /// Disposes the pool and all its isolates.
@@ -42,12 +76,65 @@ class TaskIsolatePool {
     if (_disposed) return;
     _disposed = true;
     _queue.clear();
-    final workers = {..._idle, ..._active};
+    final entries = {..._idle, ..._active};
     _idle.clear();
     _active.clear();
-    for (final worker in workers) {
-      await worker.dispose();
+    _pendingDisposals = 0;
+    for (final entry in entries) {
+      onRecycle?.call(
+        IsolateRecycleEvent(
+          reason: IsolateRecycleReason.shutdown,
+          tasksExecuted: entry.tasksExecuted,
+          memoryBytes: entry.lastRssBytes,
+        ),
+      );
+      await entry.worker.dispose();
     }
+  }
+
+  /// Resizes the pool to [newSize], spawning or draining isolates as needed.
+  Future<void> resize(int newSize) async {
+    if (_disposed) return;
+    final normalized = math.max(1, newSize);
+    if (normalized == _targetSize) return;
+    _targetSize = normalized;
+
+    if (totalCount < _targetSize) {
+      await _ensureCapacity();
+      _pump();
+      return;
+    }
+
+    var surplus = totalCount - _targetSize;
+    while (surplus > 0 && _idle.isNotEmpty) {
+      final entry = _idle.removeLast();
+      surplus -= 1;
+      onRecycle?.call(
+        IsolateRecycleEvent(
+          reason: IsolateRecycleReason.scaleDown,
+          tasksExecuted: entry.tasksExecuted,
+          memoryBytes: entry.lastRssBytes,
+        ),
+      );
+      await entry.worker.dispose();
+    }
+
+    if (surplus > 0) {
+      final draining = _active.where((entry) => !entry.draining).take(surplus);
+      for (final entry in draining) {
+        entry.draining = true;
+      }
+      _pendingDisposals += surplus;
+    }
+  }
+
+  /// Updates recycle thresholds for isolates.
+  void updateRecyclePolicy({
+    int? maxTasksPerIsolate,
+    int? maxMemoryBytes,
+  }) {
+    _maxTasksPerIsolate = maxTasksPerIsolate;
+    _maxMemoryBytes = maxMemoryBytes;
   }
 
   /// Executes a task in an available isolate.
@@ -57,7 +144,6 @@ class TaskIsolatePool {
   /// If [hardTimeout] is provided, the task will timeout after that duration.
   ///
   /// Returns a future that completes with a [TaskExecutionResult].
-  /// Throws a [StateError] if the pool is disposed.
   Future<TaskExecutionResult> execute(
     TaskEntrypoint entrypoint,
     Map<String, Object?> args,
@@ -88,24 +174,51 @@ class TaskIsolatePool {
 
   void _pump() {
     if (_disposed) return;
+    if (_idle.isEmpty && totalCount < _targetSize) {
+      // Spawn additional isolates lazily when needed.
+      unawaited(_ensureCapacity().then((_) => _pump()));
+      return;
+    }
     while (_queue.isNotEmpty && _idle.isNotEmpty) {
-      final worker = _idle.removeLast();
+      final entry = _idle.removeLast();
       final job = _queue.removeFirst();
-      _active.add(worker);
+      _active.add(entry);
       Timer? hardTimer;
 
-      worker.run(job).then((value) {
-        if (!job.completer.isCompleted) {
-          job.completer.complete(TaskExecutionSuccess(value));
+      entry.worker.run(job).then((response) {
+        if (job.completer.isCompleted) {
+          return;
+        }
+        if (response is TaskRunSuccess) {
+          entry.lastRssBytes = response.memoryBytes;
+          job.completer.complete(
+            TaskExecutionSuccess(
+              response.result,
+              memoryBytes: response.memoryBytes,
+            ),
+          );
+        } else if (response is TaskRunFailure) {
+          job.completer.complete(
+            TaskExecutionFailure(
+              _RemoteTaskError(
+                response.errorType,
+                response.message,
+                response.stackTrace,
+              ),
+              StackTrace.fromString(response.stackTrace),
+            ),
+          );
+        } else {
+          job.completer.complete(
+            TaskExecutionFailure(
+              StateError('Unexpected response: $response'),
+              StackTrace.current,
+            ),
+          );
         }
       }).catchError((error, StackTrace stack) {
         if (!job.completer.isCompleted) {
-          final resolvedStack = error is _RemoteTaskError
-              ? StackTrace.fromString(error.stackTrace)
-              : stack;
-          job.completer.complete(
-            TaskExecutionFailure(error, resolvedStack),
-          );
+          job.completer.complete(TaskExecutionFailure(error, stack));
         }
       });
 
@@ -120,34 +233,100 @@ class TaskIsolatePool {
               limit: job.hardTimeout,
             ),
           );
-          unawaited(worker.dispose());
+          entry.draining = true;
+          unawaited(entry.worker.dispose());
         });
       }
 
       job.completer.future.whenComplete(() async {
         hardTimer?.cancel();
-        _active.remove(worker);
+        _active.remove(entry);
+        entry.tasksExecuted += 1;
+        final shouldRecycle = _shouldRecycle(entry);
         if (_disposed) {
-          await worker.dispose();
+          await entry.worker.dispose();
           return;
         }
-        if (worker.isDisposed) {
-          if (!_disposed) {
-            final replacement = await _IsolateWorker.spawn();
-            _idle.add(replacement);
-          }
+        if (shouldRecycle) {
+          await _disposeEntry(
+            entry,
+            reason: _determineRecycleReason(entry),
+          );
+        } else if (_pendingDisposals > 0 && entry.draining) {
+          _pendingDisposals -= 1;
+          await _disposeEntry(
+            entry,
+            reason: IsolateRecycleReason.scaleDown,
+          );
         } else {
-          _idle.add(worker);
+          entry.draining = false;
+          _idle.add(entry);
         }
         _pump();
       });
+    }
+  }
+
+  bool _shouldRecycle(_PoolEntry entry) {
+    if (entry.draining) {
+      return true;
+    }
+    if (_maxTasksPerIsolate != null &&
+        entry.tasksExecuted >= _maxTasksPerIsolate!) {
+      return true;
+    }
+    if (_maxMemoryBytes != null &&
+        entry.lastRssBytes != null &&
+        entry.lastRssBytes! >= _maxMemoryBytes!) {
+      return true;
+    }
+    return false;
+  }
+
+  IsolateRecycleReason _determineRecycleReason(_PoolEntry entry) {
+    if (entry.draining) {
+      return IsolateRecycleReason.scaleDown;
+    }
+    if (_maxTasksPerIsolate != null &&
+        entry.tasksExecuted >= _maxTasksPerIsolate!) {
+      return IsolateRecycleReason.maxTasks;
+    }
+    if (_maxMemoryBytes != null &&
+        entry.lastRssBytes != null &&
+        entry.lastRssBytes! >= _maxMemoryBytes!) {
+      return IsolateRecycleReason.memory;
+    }
+    return IsolateRecycleReason.scaleDown;
+  }
+
+  Future<void> _disposeEntry(
+    _PoolEntry entry, {
+    required IsolateRecycleReason reason,
+  }) async {
+    onRecycle?.call(
+      IsolateRecycleEvent(
+        reason: reason,
+        tasksExecuted: entry.tasksExecuted,
+        memoryBytes: entry.lastRssBytes,
+      ),
+    );
+    await entry.worker.dispose();
+    if (!_disposed && totalCount < _targetSize) {
+      await _ensureCapacity();
+    }
+  }
+
+  Future<void> _ensureCapacity() async {
+    if (_disposed) return;
+    while (totalCount < _targetSize) {
+      final worker = await _IsolateWorker.spawn();
+      _idle.add(_PoolEntry(worker));
     }
   }
 }
 
 /// A job representing a task to be executed in an isolate.
 class _TaskJob {
-  /// Creates a task job with the given parameters.
   _TaskJob({
     required this.entrypoint,
     required this.args,
@@ -159,31 +338,15 @@ class _TaskJob {
     required this.taskName,
   });
 
-  /// The entrypoint function for the task.
   final TaskEntrypoint entrypoint;
-
-  /// The arguments passed to the task.
   final Map<String, Object?> args;
-
-  /// The headers for the task.
   final Map<String, String> headers;
-
-  /// The metadata for the task.
   final Map<String, Object?> meta;
-
-  /// The attempt number for the task.
   final int attempt;
-
-  /// The handler for task control signals.
   final TaskControlHandler onControl;
-
-  /// The hard timeout duration for the task.
   final Duration? hardTimeout;
-
-  /// The name of the task.
   final String taskName;
 
-  /// The completer for the task execution result.
   final Completer<TaskExecutionResult> completer =
       Completer<TaskExecutionResult>();
 }
@@ -195,10 +358,13 @@ sealed class TaskExecutionResult {
 
 /// A successful task execution with result [value].
 class TaskExecutionSuccess extends TaskExecutionResult {
-  const TaskExecutionSuccess(this.value);
+  const TaskExecutionSuccess(this.value, {this.memoryBytes});
 
   /// The result value of the task.
   final Object? value;
+
+  /// Last reported resident set size for the isolate, in bytes.
+  final int? memoryBytes;
 }
 
 /// A failed task execution with [error] and [stackTrace].
@@ -223,7 +389,15 @@ class TaskExecutionTimeout extends TaskExecutionResult {
   final Duration? limit;
 }
 
-/// A worker that manages a single isolate for executing tasks.
+class _PoolEntry {
+  _PoolEntry(this.worker);
+
+  final _IsolateWorker worker;
+  int tasksExecuted = 0;
+  int? lastRssBytes;
+  bool draining = false;
+}
+
 class _IsolateWorker {
   _IsolateWorker(this._isolate, this._sendPort);
 
@@ -231,7 +405,6 @@ class _IsolateWorker {
   final SendPort _sendPort;
   bool _disposed = false;
 
-  /// Spawns a new isolate and returns a worker to manage it.
   static Future<_IsolateWorker> spawn() async {
     final handshake = ReceivePort();
     final isolate = await Isolate.spawn(taskWorkerIsolate, handshake.sendPort);
@@ -240,13 +413,9 @@ class _IsolateWorker {
     return _IsolateWorker(isolate, sendPort);
   }
 
-  /// Whether this worker has been disposed.
   bool get isDisposed => _disposed;
 
-  /// Runs the given [job] in the isolate and returns the result.
-  ///
-  /// Throws a [_RemoteTaskError] if the task fails in the isolate.
-  Future<Object?> run(_TaskJob job) async {
+  Future<TaskRunResponse> run(_TaskJob job) async {
     final replyPort = ReceivePort();
     final controlPort = ReceivePort();
 
@@ -273,20 +442,13 @@ class _IsolateWorker {
     controlPort.close();
     replyPort.close();
 
-    if (response is TaskRunSuccess) {
-      return response.result;
-    } else if (response is TaskRunFailure) {
-      throw _RemoteTaskError(
-        response.errorType,
-        response.message,
-        response.stackTrace,
-      );
-    } else {
-      throw StateError('Unexpected response from worker isolate: $response');
+    if (response is TaskRunResponse) {
+      return response;
     }
+
+    throw StateError('Unexpected response from worker isolate: $response');
   }
 
-  /// Disposes this worker and terminates the isolate.
   Future<void> dispose() async {
     if (_disposed) {
       return;

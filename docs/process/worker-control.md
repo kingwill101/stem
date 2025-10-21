@@ -15,9 +15,41 @@ same connection configuration as the rest of the toolchain.
 | `stem worker inspect` | Shows in-flight tasks (optionally revoked cache) per worker. |
 | `stem worker stats` | Returns aggregate counters such as inflight count and queue depth. |
 | `stem worker revoke` | Persists a revoke record and publishes the control message. |
+| `stem worker shutdown` | Requests warm/soft/hard shutdown via the control plane. |
 
 Use `--namespace` to target non-default control namespaces; omit
 `--worker` to broadcast to every worker.
+
+## Autoscaling Concurrency
+
+Workers can now autoscale their isolate pools between configurable minimum and
+maximum bounds. Pass a `WorkerAutoscaleConfig` when constructing the worker to
+enable the evaluator:
+
+```dart
+final worker = Worker(
+  broker: broker,
+  registry: registry,
+  backend: backend,
+  queue: 'critical',
+  concurrency: 12, // maximum
+  autoscale: const WorkerAutoscaleConfig(
+    enabled: true,
+    minConcurrency: 2,
+    maxConcurrency: 12,
+    scaleUpStep: 2,
+    scaleDownStep: 1,
+    idlePeriod: Duration(seconds: 45),
+    tick: Duration(milliseconds: 250),
+  ),
+);
+```
+
+The autoscaler samples `broker.pendingCount(queue)` alongside the worker's
+inflight count to decide when to scale. Metrics expose the current setting via
+`stem.worker.concurrency`, and `stem worker stats --json` now includes
+`activeConcurrency` alongside the configured maximum. Broadcast control commands
+continue to operate while autoscaling; no restarts are required.
 
 ## Persistent Revokes
 
@@ -132,6 +164,35 @@ Operators should pair `--terminate` with observability: `stem worker inspect`
 shows inflight tasks that still need to quiesce. If a task does not emit
 heartbeats, consider adding them or implementing explicit cancellation logic in
 handlers.
+
+## Shutdown Modes and Lifecycle Guards
+
+`stem worker shutdown` lets operators request warm, soft, or hard shutdown over
+the control channel:
+
+- **Warm** stops new deliveries and waits for in-flight tasks to finish.
+- **Soft** issues `terminate=true` revocations and, after the configured grace
+  period, escalates to a hard stop if tasks are still running.
+- **Hard** immediately requeues active deliveries and tears down the isolate
+  pool.
+
+Workers install sensible signal defaults (`SIGTERM` → warm, `SIGINT` → soft,
+`SIGQUIT` → hard) which can be disabled via
+`WorkerLifecycleConfig(installSignalHandlers: false)`. Lifecycle guards also
+support recycling child isolates by count or memory usage:
+
+```dart
+final worker = Worker(
+  /* ... */,
+  lifecycle: const WorkerLifecycleConfig(
+    maxTasksPerIsolate: 500,
+    maxMemoryPerIsolateBytes: 512 * 1024 * 1024, // 512 MiB
+  ),
+);
+```
+
+When a threshold is exceeded the worker drains the task, logs the recycle, and
+starts a fresh isolate before accepting additional work.
 
 ### Cooperative checkpoints for isolate handlers
 

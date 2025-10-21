@@ -16,6 +16,7 @@ revocation durability, and termination semantics for inline vs isolate handlers.
 | `stem worker inspect` | List in-flight tasks (and optional revoke cache) per worker. |
 | `stem worker stats` | Summarize inflight counts, queue depth, and metadata. |
 | `stem worker revoke` | Persist revocations and broadcast terminate/best-effort revokes. |
+| `stem worker shutdown` | Request warm/soft/hard shutdown via the control channel. |
 | `stem worker status` | Stream heartbeats or snapshot the backend (existing command). |
 
 Use `--namespace` to target non-default control namespaces. Omitting `--worker`
@@ -34,6 +35,36 @@ stem worker inspect --json
 # Revoke a task and request termination
 stem worker revoke --task 1761057... --terminate
 ```
+
+## Autoscaling Concurrency
+
+Workers can autoscale their isolate pools between configured minimum and
+maximum bounds. Enable the evaluator by passing `WorkerAutoscaleConfig` to the
+worker constructor:
+
+```dart
+final worker = Worker(
+  broker: broker,
+  registry: registry,
+  backend: backend,
+  queue: 'critical',
+  concurrency: 12, // maximum upper bound
+  autoscale: const WorkerAutoscaleConfig(
+    enabled: true,
+    minConcurrency: 2,
+    maxConcurrency: 12,
+    scaleUpStep: 2,
+    scaleDownStep: 1,
+    idlePeriod: Duration(seconds: 45),
+    tick: Duration(milliseconds: 250),
+  ),
+);
+```
+
+The autoscaler samples broker queue depth alongside inflight counts to decide
+when to scale. Metrics expose the current setting via
+`stem.worker.concurrency`, and `stem worker stats --json` includes the live
+`activeConcurrency` value so dashboards can observe adjustments.
 
 ## Persistent Revokes
 
@@ -152,6 +183,35 @@ pre-empt the task until it returns on its own.
 Operators should pair `--terminate` with `stem worker inspect` to monitor
 inflight tasks that still need to quiesce. If a handler never emits heartbeats,
 add them or implement explicit cancellation logic.
+
+## Shutdown Modes and Lifecycle Guards
+
+Use `stem worker shutdown --mode warm|soft|hard` to trigger runtime shutdowns:
+
+- **Warm** stops fetching new deliveries and drains current work.
+- **Soft** issues terminate revocations, then escalates to hard after the
+  configured grace period if tasks continue running.
+- **Hard** immediately requeues active deliveries and terminates isolates.
+
+By default, workers install signal handlers that map `SIGTERM` to warm,
+`SIGINT` to soft, and `SIGQUIT` to hard. Disable them by constructing the worker
+with `WorkerLifecycleConfig(installSignalHandlers: false)` when embedding Stem
+inside a larger host that already owns signal routing.
+
+Lifecycle guards can also recycle isolates automatically:
+
+```dart
+final worker = Worker(
+  /* ... */
+  lifecycle: const WorkerLifecycleConfig(
+    maxTasksPerIsolate: 500,
+    maxMemoryPerIsolateBytes: 512 * 1024 * 1024,
+  ),
+);
+```
+
+Recycling occurs after the active task finishes; the worker logs the recycle
+reason and spawns a fresh isolate before accepting new work.
 
 ## Configuration Summary
 

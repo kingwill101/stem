@@ -13,15 +13,15 @@
 - [x] 2.4 Refactor CLI into structured command runners (e.g., `stem worker control ...`) with consistent usage/help output.
 
 ## 3. Autoscaling Engine
-- [ ] 3.1 Add autoscaler module to monitor queue depth/inflight metrics.
-- [ ] 3.2 Enable dynamic concurrency adjustments within configured min/max bounds for Redis and Postgres workers.
-- [ ] 3.3 Provide integration tests demonstrating scale-up/down behaviour.
+- [x] 3.1 Add autoscaler module to monitor queue depth/inflight metrics.
+- [x] 3.2 Enable dynamic concurrency adjustments within configured min/max bounds for Redis and Postgres workers.
+- [x] 3.3 Provide integration tests demonstrating scale-up/down behaviour.
 
 ## 4. Lifecycle Controls
-- [ ] 4.1 Implement warm/soft/hard shutdown semantics with signal handlers and CLI triggers.
-- [ ] 4.2 Add max tasks per isolate and memory-usage recycle thresholds, with tests ensuring exhausted workers restart cleanly.
+- [x] 4.1 Implement warm/soft/hard shutdown semantics with signal handlers and CLI triggers.
+- [x] 4.2 Add max tasks per isolate and memory-usage recycle thresholds, with tests ensuring exhausted workers restart cleanly.
 
 ## 5. Documentation & Validation
-- [ ] 5.1 Update user docs with new worker commands, autoscaling configuration, and shutdown guidance.
-- [ ] 5.2 `dart format`, `dart analyze`, `dart test`, and targeted integration suites (control channel, autoscaling, shutdown).
-- [ ] 5.3 `openspec validate add-worker-control --strict` before review.
+- [x] 5.1 Update user docs with new worker commands, autoscaling configuration, and shutdown guidance.
+- [x] 5.2 `dart format`, `dart analyze`, `dart test`, and targeted integration suites (control channel, autoscaling, shutdown).
+- [x] 5.3 `openspec validate add-worker-control --strict` before review.
