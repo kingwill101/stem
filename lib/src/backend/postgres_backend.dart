@@ -367,9 +367,8 @@ class PostgresResultBackend implements ResultBackend {
           'task_id': status.id,
           'state': status.state.name,
           'payload': status.payload != null ? jsonEncode(status.payload) : null,
-          'error': status.error != null
-              ? jsonEncode(status.error!.toJson())
-              : null,
+          'error':
+              status.error != null ? jsonEncode(status.error!.toJson()) : null,
           'attempt': status.attempt,
           'meta': jsonEncode(status.meta),
         },

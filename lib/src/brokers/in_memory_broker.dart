@@ -191,7 +191,8 @@ class InMemoryBroker implements Broker {
     final candidates = state.deadLetters.where((entry) {
       if (since == null) return true;
       return !entry.deadAt.isBefore(since);
-    }).toList()..sort((a, b) => a.deadAt.compareTo(b.deadAt));
+    }).toList()
+      ..sort((a, b) => a.deadAt.compareTo(b.deadAt));
     final selected = candidates.take(limit).toList();
     if (dryRun || selected.isEmpty) {
       return DeadLetterReplayResult(entries: selected, dryRun: true);
@@ -218,7 +219,8 @@ class InMemoryBroker implements Broker {
     final candidates = state.deadLetters.where((entry) {
       if (since == null) return true;
       return !entry.deadAt.isBefore(since);
-    }).toList()..sort((a, b) => b.deadAt.compareTo(a.deadAt));
+    }).toList()
+      ..sort((a, b) => b.deadAt.compareTo(a.deadAt));
     final toRemove = limit != null && limit >= 0
         ? candidates.take(limit).toList()
         : candidates;
@@ -317,9 +319,8 @@ class _QueueState {
         final receipt = _nextReceipt();
         final visibility =
             envelope.visibilityTimeout ?? defaultVisibilityTimeout;
-        final expiresAt = visibility == Duration.zero
-            ? null
-            : DateTime.now().add(visibility);
+        final expiresAt =
+            visibility == Duration.zero ? null : DateTime.now().add(visibility);
         final delivery = Delivery(
           envelope: envelope,
           receipt: receipt,

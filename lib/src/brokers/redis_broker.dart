@@ -324,9 +324,8 @@ class RedisStreamsBroker implements Broker {
           Delivery(
             envelope: envelope,
             receipt: receipt,
-            leaseExpiresAt: lease == Duration.zero
-                ? null
-                : DateTime.now().add(lease),
+            leaseExpiresAt:
+                lease == Duration.zero ? null : DateTime.now().add(lease),
           ),
         );
       }
@@ -339,8 +338,8 @@ class RedisStreamsBroker implements Broker {
       id: map['id'],
       name: map['name']!,
       args: jsonDecode(map['args'] ?? '{}') as Map<String, Object?>,
-      headers: (jsonDecode(map['headers'] ?? '{}') as Map)
-          .cast<String, String>(),
+      headers:
+          (jsonDecode(map['headers'] ?? '{}') as Map).cast<String, String>(),
       enqueuedAt: DateTime.parse(
         map['enqueuedAt'] ?? DateTime.now().toIso8601String(),
       ),
@@ -485,7 +484,8 @@ class RedisStreamsBroker implements Broker {
     final candidates = stored.where((entry) {
       if (since == null) return true;
       return !entry.entry.deadAt.isBefore(since);
-    }).toList()..sort((a, b) => a.entry.deadAt.compareTo(b.entry.deadAt));
+    }).toList()
+      ..sort((a, b) => a.entry.deadAt.compareTo(b.entry.deadAt));
     final selected = candidates.take(limit).toList();
     if (dryRun || selected.isEmpty) {
       return DeadLetterReplayResult(
@@ -524,7 +524,8 @@ class RedisStreamsBroker implements Broker {
     final candidates = stored.where((entry) {
       if (since == null) return true;
       return !entry.entry.deadAt.isBefore(since);
-    }).toList()..sort((a, b) => b.entry.deadAt.compareTo(a.entry.deadAt));
+    }).toList()
+      ..sort((a, b) => b.entry.deadAt.compareTo(a.entry.deadAt));
     final selected = limit != null && limit >= 0
         ? candidates.take(limit).toList()
         : candidates;

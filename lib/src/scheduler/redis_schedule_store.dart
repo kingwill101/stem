@@ -129,11 +129,10 @@ class RedisScheduleStore implements ScheduleStore {
           : null,
       lastJitter:
           data['lastJitterMs'] != null && data['lastJitterMs']!.isNotEmpty
-          ? Duration(milliseconds: int.parse(data['lastJitterMs']!))
-          : null,
-      lastError: data['lastError']?.isNotEmpty == true
-          ? data['lastError']
-          : null,
+              ? Duration(milliseconds: int.parse(data['lastJitterMs']!))
+              : null,
+      lastError:
+          data['lastError']?.isNotEmpty == true ? data['lastError'] : null,
       timezone: data['timezone']?.isNotEmpty == true ? data['timezone'] : null,
       meta: data['meta'] != null
           ? (jsonDecode(data['meta']!) as Map).cast<String, Object?>()
@@ -189,8 +188,7 @@ class RedisScheduleStore implements ScheduleStore {
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now();
-    final nextRun =
-        entry.nextRunAt ??
+    final nextRun = entry.nextRunAt ??
         _calculator.nextRun(
           entry,
           entry.lastRunAt ?? now,

@@ -15,10 +15,9 @@ class Stem {
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
     this.signer,
-  }) : retryStrategy =
-           retryStrategy ??
-           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
-       middleware = List.unmodifiable(middleware);
+  })  : retryStrategy = retryStrategy ??
+            ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+        middleware = List.unmodifiable(middleware);
 
   final Broker broker;
   final TaskRegistry registry;

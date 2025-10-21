@@ -603,19 +603,19 @@ Future<_HealthCheckResult> _checkBackendHealth(
 }
 
 Map<String, Object?> _tlsFailureContext(TlsConfig tls) => {
-  'tls': {
-    'caCertificate': tls.caCertificateFile ?? 'system',
-    'clientCertificate': tls.clientCertificateFile ?? 'not provided',
-    'allowInsecure': tls.allowInsecure,
-  },
-  'hints': tls.allowInsecure
-      ? const [
-          'TLS verification is disabled (STEM_TLS_ALLOW_INSECURE=true); ensure this is intentional.',
-        ]
-      : const [
-          'Verify certificate paths or temporarily set STEM_TLS_ALLOW_INSECURE=true to bypass validation while debugging.',
-        ],
-};
+      'tls': {
+        'caCertificate': tls.caCertificateFile ?? 'system',
+        'clientCertificate': tls.clientCertificateFile ?? 'not provided',
+        'allowInsecure': tls.allowInsecure,
+      },
+      'hints': tls.allowInsecure
+          ? const [
+              'TLS verification is disabled (STEM_TLS_ALLOW_INSECURE=true); ensure this is intentional.',
+            ]
+          : const [
+              'Verify certificate paths or temporarily set STEM_TLS_ALLOW_INSECURE=true to bypass validation while debugging.',
+            ],
+    };
 
 class _HealthCheckResult {
   _HealthCheckResult({
@@ -631,17 +631,16 @@ class _HealthCheckResult {
   final Map<String, Object?> context;
 
   Map<String, Object?> toJson() => {
-    'component': component,
-    'status': success ? 'ok' : 'error',
-    'message': message,
-    if (context.isNotEmpty) 'context': context,
-  };
+        'component': component,
+        'status': success ? 'ok' : 'error',
+        'message': message,
+        if (context.isNotEmpty) 'context': context,
+      };
 }
 
 Future<int> _scheduleList(ScheduleCliContext ctx, StringSink out) async {
-  final entries = ctx.store != null
-      ? await ctx.store!.list()
-      : await ctx.repo!.load();
+  final entries =
+      ctx.store != null ? await ctx.store!.list() : await ctx.repo!.load();
   if (entries.isEmpty) {
     out.writeln('No schedules found.');
     return 0;
@@ -656,8 +655,7 @@ Future<int> _scheduleList(ScheduleCliContext ctx, StringSink out) async {
   );
   for (final entry in entries) {
     final reference = entry.lastRunAt ?? now;
-    final next =
-        entry.nextRunAt ??
+    final next = entry.nextRunAt ??
         calculator.nextRun(
           entry.copyWith(lastRunAt: reference),
           reference,
@@ -1001,14 +999,14 @@ class ScheduleCliContext {
   ScheduleCliContext.store({
     required ScheduleStore storeInstance,
     Future<void> Function()? dispose,
-  }) : store = storeInstance,
-       repo = null,
-       _dispose = dispose ?? (() async {});
+  })  : store = storeInstance,
+        repo = null,
+        _dispose = dispose ?? (() async {});
 
   ScheduleCliContext.file({FileScheduleRepository? repo})
-    : store = null,
-      repo = repo ?? FileScheduleRepository(),
-      _dispose = (() async {});
+      : store = null,
+        repo = repo ?? FileScheduleRepository(),
+        _dispose = (() async {});
 
   final ScheduleStore? store;
   final FileScheduleRepository? repo;
@@ -1485,14 +1483,13 @@ Future<int> _workerStatus(
       .toSet();
   final follow = args['follow'] as bool? ?? false;
   final jsonOutput = args['json'] as bool? ?? false;
-  final heartbeatInterval =
-      ObservabilityConfig.parseDuration(
+  final heartbeatInterval = ObservabilityConfig.parseDuration(
         args['heartbeat-interval'] as String?,
       ) ??
       const Duration(seconds: 10);
   final timeout =
       ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-      const Duration(seconds: 30);
+          const Duration(seconds: 30);
   final exportersOverride = args['metrics-exporters'] as String?;
   if (exportersOverride != null && exportersOverride.trim().isNotEmpty) {
     final exporters = exportersOverride
@@ -1674,7 +1671,8 @@ Future<int> _printHeartbeatSnapshot(
         return false;
       }
       return true;
-    }).toList()..sort((a, b) => a.workerId.compareTo(b.workerId));
+    }).toList()
+      ..sort((a, b) => a.workerId.compareTo(b.workerId));
     if (filtered.isEmpty) {
       out.writeln('No worker heartbeats found for namespace "$namespace".');
       return 0;

@@ -107,8 +107,8 @@ class TaskStatus {
     Map<String, Object?>? meta,
     required this.attempt,
     DateTime? updatedAt,
-  }) : meta = Map.unmodifiable(meta ?? const {}),
-       updatedAt = updatedAt ?? DateTime.now();
+  })  : meta = Map.unmodifiable(meta ?? const {}),
+        updatedAt = updatedAt ?? DateTime.now();
 
   /// The unique identifier for this task status.
   final String id;
@@ -132,14 +132,14 @@ class TaskStatus {
   final DateTime updatedAt;
 
   Map<String, Object?> toJson() => {
-    'id': id,
-    'state': state.name,
-    'payload': payload,
-    'error': error?.toJson(),
-    'meta': meta,
-    'attempt': attempt,
-    'updatedAt': updatedAt.toIso8601String(),
-  };
+        'id': id,
+        'state': state.name,
+        'payload': payload,
+        'error': error?.toJson(),
+        'meta': meta,
+        'attempt': attempt,
+        'updatedAt': updatedAt.toIso8601String(),
+      };
 
   factory TaskStatus.fromJson(Map<String, Object?> json) {
     return TaskStatus(
@@ -187,12 +187,12 @@ class TaskError {
   final Map<String, Object?> meta;
 
   Map<String, Object?> toJson() => {
-    'type': type,
-    'message': message,
-    'stack': stack,
-    'retryable': retryable,
-    'meta': meta,
-  };
+        'type': type,
+        'message': message,
+        'stack': stack,
+        'retryable': retryable,
+        'meta': meta,
+      };
 
   factory TaskError.fromJson(Map<String, Object?> json) {
     return TaskError(
@@ -227,11 +227,11 @@ class DeadLetterEntry {
   final DateTime deadAt;
 
   Map<String, Object?> toJson() => {
-    'envelope': envelope.toJson(),
-    'reason': reason,
-    'meta': meta,
-    'deadAt': deadAt.toIso8601String(),
-  };
+        'envelope': envelope.toJson(),
+        'reason': reason,
+        'meta': meta,
+        'deadAt': deadAt.toIso8601String(),
+      };
 
   factory DeadLetterEntry.fromJson(Map<String, Object?> json) {
     return DeadLetterEntry(
@@ -401,29 +401,28 @@ class ScheduleEntry {
       lastRunAt: lastRunAt ?? this.lastRunAt,
       meta: meta ?? this.meta,
       nextRunAt: nextRunAt == _unset ? this.nextRunAt : nextRunAt as DateTime?,
-      lastJitter: lastJitter == _unset
-          ? this.lastJitter
-          : lastJitter as Duration?,
+      lastJitter:
+          lastJitter == _unset ? this.lastJitter : lastJitter as Duration?,
       lastError: lastError == _unset ? this.lastError : lastError as String?,
       timezone: timezone == _unset ? this.timezone : timezone as String?,
     );
   }
 
   Map<String, Object?> toJson() => {
-    'id': id,
-    'taskName': taskName,
-    'queue': queue,
-    'spec': spec,
-    'args': args,
-    'enabled': enabled,
-    'jitterMs': jitter?.inMilliseconds,
-    'lastRunAt': lastRunAt?.toIso8601String(),
-    'nextRunAt': nextRunAt?.toIso8601String(),
-    'lastJitterMs': lastJitter?.inMilliseconds,
-    'lastError': lastError,
-    'timezone': timezone,
-    'meta': meta,
-  };
+        'id': id,
+        'taskName': taskName,
+        'queue': queue,
+        'spec': spec,
+        'args': args,
+        'enabled': enabled,
+        'jitterMs': jitter?.inMilliseconds,
+        'lastRunAt': lastRunAt?.toIso8601String(),
+        'nextRunAt': nextRunAt?.toIso8601String(),
+        'lastJitterMs': lastJitter?.inMilliseconds,
+        'lastError': lastError,
+        'timezone': timezone,
+        'meta': meta,
+      };
 
   factory ScheduleEntry.fromJson(Map<String, Object?> json) {
     return ScheduleEntry(
@@ -559,8 +558,7 @@ class TaskContext {
   final Future<void> Function(
     double percentComplete, {
     Map<String, Object?>? data,
-  })
-  progress;
+  }) progress;
 }
 
 /// Runtime task handler.
@@ -594,12 +592,14 @@ class SimpleTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler> _handlers = {};
 
   @override
+
   /// Registers the [handler] in this registry.
   void register(TaskHandler handler) {
     _handlers[handler.name] = handler;
   }
 
   @override
+
   /// Resolves the handler for the given [name], or returns null if not found.
   TaskHandler? resolve(String name) => _handlers[name];
 }
@@ -712,8 +712,8 @@ class GroupStatus {
     required this.expected,
     Map<String, TaskStatus>? results,
     Map<String, Object?>? meta,
-  }) : results = Map.unmodifiable(results ?? const {}),
-       meta = Map.unmodifiable(meta ?? const {});
+  })  : results = Map.unmodifiable(results ?? const {}),
+        meta = Map.unmodifiable(meta ?? const {});
 
   /// The unique identifier of the group.
   final String id;

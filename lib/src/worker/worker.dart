@@ -68,21 +68,20 @@ class Worker {
     String heartbeatNamespace = 'stem',
     ObservabilityConfig? observability,
     this.signer,
-  }) : workerHeartbeatInterval =
-           observability?.heartbeatInterval ??
-           workerHeartbeatInterval ??
-           heartbeatInterval,
-       heartbeatTransport =
-           heartbeatTransport ?? const NoopHeartbeatTransport(),
-       namespace = observability?.namespace ?? heartbeatNamespace,
-       concurrency = _normalizeConcurrency(concurrency),
-       prefetchMultiplier = math.max(1, prefetchMultiplier),
-       prefetch = _calculatePrefetch(
-         prefetch,
-         _normalizeConcurrency(concurrency),
-         math.max(1, prefetchMultiplier),
-       ),
-       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
+  })  : workerHeartbeatInterval = observability?.heartbeatInterval ??
+            workerHeartbeatInterval ??
+            heartbeatInterval,
+        heartbeatTransport =
+            heartbeatTransport ?? const NoopHeartbeatTransport(),
+        namespace = observability?.namespace ?? heartbeatNamespace,
+        concurrency = _normalizeConcurrency(concurrency),
+        prefetchMultiplier = math.max(1, prefetchMultiplier),
+        prefetch = _calculatePrefetch(
+          prefetch,
+          _normalizeConcurrency(concurrency),
+          math.max(1, prefetchMultiplier),
+        ),
+        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
   }
 
@@ -136,32 +135,32 @@ class Worker {
     final subscription = broker
         .consume(queue, prefetch: prefetch, consumerName: consumerName)
         .listen(
-          (delivery) {
-            // Fire-and-forget; handler manages its own lifecycle.
-            final task = _handle(delivery);
-            unawaited(
-              task.catchError((Object error, StackTrace stack) {
-                _events.add(
-                  WorkerEvent(
-                    type: WorkerEventType.error,
-                    envelope: delivery.envelope,
-                    error: error,
-                    stackTrace: stack,
-                  ),
-                );
-              }),
-            );
-          },
-          onError: (Object error, StackTrace stack) {
+      (delivery) {
+        // Fire-and-forget; handler manages its own lifecycle.
+        final task = _handle(delivery);
+        unawaited(
+          task.catchError((Object error, StackTrace stack) {
             _events.add(
               WorkerEvent(
                 type: WorkerEventType.error,
+                envelope: delivery.envelope,
                 error: error,
                 stackTrace: stack,
               ),
             );
-          },
+          }),
         );
+      },
+      onError: (Object error, StackTrace stack) {
+        _events.add(
+          WorkerEvent(
+            type: WorkerEventType.error,
+            error: error,
+            stackTrace: stack,
+          ),
+        );
+      },
+    );
     _subscriptions[queue] = subscription;
   }
 
@@ -247,8 +246,7 @@ class Worker {
             meta: {'task': envelope.name},
           );
           if (!decision.allowed) {
-            final backoff =
-                decision.retryAfter ??
+            final backoff = decision.retryAfter ??
                 retryStrategy.nextDelay(
                   envelope.attempt,
                   StateError('rate-limit'),
@@ -412,8 +410,8 @@ class Worker {
           final completed = _releaseDelivery(envelope);
           if (completed != null) {
             final duration = DateTime.now().toUtc().difference(
-              completed.startedAt,
-            );
+                  completed.startedAt,
+                );
             StemMetrics.instance.recordDuration(
               'stem.task.duration',
               duration,
@@ -888,14 +886,13 @@ class Worker {
     final isolatePool = _isolatePool;
     final activeIsolates =
         isolatePool?.activeCount ?? math.min(_inflight, concurrency);
-    final queues =
-        _inflightPerQueue.entries
-            .where((entry) => entry.value > 0)
-            .map(
-              (entry) => QueueHeartbeat(name: entry.key, inflight: entry.value),
-            )
-            .toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
+    final queues = _inflightPerQueue.entries
+        .where((entry) => entry.value > 0)
+        .map(
+          (entry) => QueueHeartbeat(name: entry.key, inflight: entry.value),
+        )
+        .toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
     return WorkerHeartbeat(
       workerId: _workerIdentifier,
       namespace: namespace,
@@ -921,8 +918,8 @@ class Worker {
 
   String get _workerIdentifier =>
       consumerName != null && consumerName!.isNotEmpty
-      ? consumerName!
-      : 'stem-worker-$pid';
+          ? consumerName!
+          : 'stem-worker-$pid';
 
   void _reportProgress(
     Envelope envelope,
@@ -1016,7 +1013,8 @@ class Worker {
     int? provided,
     int concurrency,
     int multiplier,
-  ) => math.max(1, provided ?? concurrency * multiplier);
+  ) =>
+      math.max(1, provided ?? concurrency * multiplier);
 }
 
 /// An event emitted during worker operation.

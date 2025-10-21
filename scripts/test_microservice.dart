@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 Future<void> main() async {
-  await Process.run('docker', [
-    'compose',
-    'up',
-    '-d',
-    'redis',
-  ], workingDirectory: 'examples/microservice');
+  await Process.run(
+      'docker',
+      [
+        'compose',
+        'up',
+        '-d',
+        'redis',
+      ],
+      workingDirectory: 'examples/microservice');
 
   final env = {
     ...Platform.environment,
@@ -15,14 +18,20 @@ Future<void> main() async {
     'STEM_RESULT_BACKEND_URL': 'redis://localhost:6379/1',
   };
 
-  await Process.run('dart', [
-    'pub',
-    'get',
-  ], workingDirectory: 'examples/microservice/worker');
-  await Process.run('dart', [
-    'pub',
-    'get',
-  ], workingDirectory: 'examples/microservice/enqueuer');
+  await Process.run(
+      'dart',
+      [
+        'pub',
+        'get',
+      ],
+      workingDirectory: 'examples/microservice/worker');
+  await Process.run(
+      'dart',
+      [
+        'pub',
+        'get',
+      ],
+      workingDirectory: 'examples/microservice/enqueuer');
 
   final worker = await Process.start(
     'dart',
@@ -60,8 +69,11 @@ Future<void> main() async {
   await worker.exitCode;
   client.close();
 
-  await Process.run('docker', [
-    'compose',
-    'down',
-  ], workingDirectory: 'examples/microservice');
+  await Process.run(
+      'docker',
+      [
+        'compose',
+        'down',
+      ],
+      workingDirectory: 'examples/microservice');
 }

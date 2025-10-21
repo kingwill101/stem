@@ -123,9 +123,9 @@ class _SumTask implements TaskHandler<int> {
     final chordResults = context.meta['chordResults'];
     if (chordResults is List) {
       return chordResults.whereType<num>().fold<int>(
-        0,
-        (acc, value) => acc + value.toInt(),
-      );
+            0,
+            (acc, value) => acc + value.toInt(),
+          );
     }
     final previous = context.meta['chainPrevResult'];
     var total = 0;

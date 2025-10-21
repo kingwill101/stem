@@ -11,11 +11,10 @@ class ObservabilityConfig {
     String? namespace,
     List<String>? metricExporters,
     this.otlpEndpoint,
-  }) : heartbeatInterval = heartbeatInterval ?? const Duration(seconds: 10),
-       namespace = (namespace != null && namespace.isNotEmpty)
-           ? namespace
-           : 'stem',
-       metricExporters = List.unmodifiable(metricExporters ?? const []);
+  })  : heartbeatInterval = heartbeatInterval ?? const Duration(seconds: 10),
+        namespace =
+            (namespace != null && namespace.isNotEmpty) ? namespace : 'stem',
+        metricExporters = List.unmodifiable(metricExporters ?? const []);
 
   /// Interval between worker heartbeats emitted for monitoring.
   final Duration heartbeatInterval;
@@ -33,8 +32,7 @@ class ObservabilityConfig {
   /// [env] or the process environment.
   factory ObservabilityConfig.fromEnvironment([Map<String, String>? env]) {
     final environment = env ?? Platform.environment;
-    final interval =
-        parseDuration(environment[_EnvKeys.heartbeatInterval]) ??
+    final interval = parseDuration(environment[_EnvKeys.heartbeatInterval]) ??
         const Duration(seconds: 10);
     final namespace = environment[_EnvKeys.namespace]?.trim();
     final exportersRaw = environment[_EnvKeys.metricExporters] ?? '';
@@ -44,9 +42,8 @@ class ObservabilityConfig {
         .where((entry) => entry.isNotEmpty)
         .toList();
     final otlpRaw = environment[_EnvKeys.otlpEndpoint]?.trim();
-    final otlp = otlpRaw != null && otlpRaw.isNotEmpty
-        ? Uri.tryParse(otlpRaw)
-        : null;
+    final otlp =
+        otlpRaw != null && otlpRaw.isNotEmpty ? Uri.tryParse(otlpRaw) : null;
     return ObservabilityConfig(
       heartbeatInterval: interval,
       namespace: namespace,

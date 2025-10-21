@@ -4,23 +4,22 @@ import 'schedule_calculator.dart';
 /// Simple in-memory schedule store implementation used in tests.
 class InMemoryScheduleStore implements ScheduleStore {
   InMemoryScheduleStore({ScheduleCalculator? calculator})
-    : _calculator = calculator ?? ScheduleCalculator();
+      : _calculator = calculator ?? ScheduleCalculator();
 
   final ScheduleCalculator _calculator;
   final Map<String, _ScheduleState> _entries = {};
 
   @override
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async {
-    final due =
-        _entries.values
-            .where(
-              (state) =>
-                  !state.locked &&
-                  state.entry.enabled &&
-                  !(state.entry.nextRunAt ?? state.nextRun).isAfter(now),
-            )
-            .toList()
-          ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
+    final due = _entries.values
+        .where(
+          (state) =>
+              !state.locked &&
+              state.entry.enabled &&
+              !(state.entry.nextRunAt ?? state.nextRun).isAfter(now),
+        )
+        .toList()
+      ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
 
     final selected = <ScheduleEntry>[];
     for (final state in due.take(limit)) {

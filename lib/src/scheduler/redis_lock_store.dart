@@ -8,7 +8,7 @@ import '../security/tls.dart';
 
 class RedisLockStore implements LockStore {
   RedisLockStore._(this._connection, this._command, {this.namespace = 'stem'})
-    : _random = Random();
+      : _random = Random();
 
   final RedisConnection _connection;
   final Command _command;

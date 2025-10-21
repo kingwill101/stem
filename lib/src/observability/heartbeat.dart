@@ -48,16 +48,16 @@ class WorkerHeartbeat {
 
   /// Serializes this heartbeat into a JSON-ready map for transport or storage.
   Map<String, Object?> toJson() => {
-    'workerId': workerId,
-    'namespace': namespace,
-    'timestamp': timestamp.toIso8601String(),
-    'isolateCount': isolateCount,
-    'inflight': inflight,
-    'lastLeaseRenewal': lastLeaseRenewal?.toIso8601String(),
-    'version': version,
-    'queues': queues.map((queue) => queue.toJson()).toList(),
-    'extras': extras,
-  };
+        'workerId': workerId,
+        'namespace': namespace,
+        'timestamp': timestamp.toIso8601String(),
+        'isolateCount': isolateCount,
+        'inflight': inflight,
+        'lastLeaseRenewal': lastLeaseRenewal?.toIso8601String(),
+        'version': version,
+        'queues': queues.map((queue) => queue.toJson()).toList(),
+        'extras': extras,
+      };
 
   /// Rehydrates a [WorkerHeartbeat] from the JSON [json] map.
   factory WorkerHeartbeat.fromJson(Map<String, Object?> json) {

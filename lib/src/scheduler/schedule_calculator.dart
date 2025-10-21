@@ -26,9 +26,8 @@ class ScheduleCalculator {
   DateTime _calculateNextTimestamp(String spec, DateTime from) {
     if (spec.startsWith('every:')) {
       final duration = _parseEvery(spec.substring(6));
-      final base = from.isUtc
-          ? from
-          : from.toUtc(); // ensure consistent arithmetic
+      final base =
+          from.isUtc ? from : from.toUtc(); // ensure consistent arithmetic
       return base.add(duration).toLocal();
     }
     return _nextCron(spec, from);

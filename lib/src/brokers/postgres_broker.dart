@@ -121,8 +121,7 @@ ON CONFLICT (id) DO UPDATE SET
     String? consumerName,
   }) {
     final group = consumerGroup ?? 'default';
-    final consumer =
-        consumerName ??
+    final consumer = consumerName ??
         'consumer-${DateTime.now().microsecondsSinceEpoch}'
             '-${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
@@ -207,9 +206,8 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
     Map<String, Object?>? meta,
   }) async {
     final receipt = _Receipt.parse(delivery.receipt);
-    final entryReason = (reason == null || reason.trim().isEmpty)
-        ? 'unknown'
-        : reason.trim();
+    final entryReason =
+        (reason == null || reason.trim().isEmpty) ? 'unknown' : reason.trim();
     final deadAt = DateTime.now().toUtc();
     await _client.run((Connection conn) async {
       await conn.runTx((tx) async {
@@ -361,9 +359,8 @@ LIMIT @limit OFFSET @offset
         deadAt: deadAt,
       );
     }).toList();
-    final nextOffset = entries.length == limit
-        ? normalizedOffset + entries.length
-        : null;
+    final nextOffset =
+        entries.length == limit ? normalizedOffset + entries.length : null;
     return DeadLetterPage(entries: entries, nextOffset: nextOffset);
   }
 
@@ -506,8 +503,7 @@ WHERE id = @id AND queue = @queue
     final effectiveLimit = limit != null && limit >= 0 ? limit : null;
     final result = await _client.run((Connection conn) async {
       final dynamic deletedCount = await conn.runTx((tx) async {
-        final query = StringBuffer()
-          ..writeln('''
+        final query = StringBuffer()..writeln('''
 SELECT id
 FROM stem_jobs_dead
 WHERE queue = @queue
@@ -675,10 +671,10 @@ class _Receipt {
   String encode() => jsonEncode(toMap());
 
   Map<String, Object?> toMap() => {
-    'queue': queue,
-    'id': id,
-    'lockedBy': lockedBy,
-  };
+        'queue': queue,
+        'id': id,
+        'lockedBy': lockedBy,
+      };
 
   static _Receipt parse(String raw) {
     final decoded = jsonDecode(raw) as Map<String, dynamic>;

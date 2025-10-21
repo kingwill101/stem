@@ -187,8 +187,7 @@ class PostgresScheduleStore implements ScheduleStore {
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now();
-    final nextRun =
-        entry.nextRunAt ??
+    final nextRun = entry.nextRunAt ??
         _calculator.nextRun(
           entry,
           entry.lastRunAt ?? now,

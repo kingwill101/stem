@@ -2,16 +2,16 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
-typedef InlineTaskCallback<R> =
-    FutureOr<R> Function(TaskContext context, Map<String, Object?> args);
+typedef InlineTaskCallback<R> = FutureOr<R> Function(
+    TaskContext context, Map<String, Object?> args);
 
 class InlineTaskHandler<R> extends TaskHandler<R> {
   InlineTaskHandler({
     required this.name,
     required InlineTaskCallback<R> onCall,
     TaskOptions options = const TaskOptions(),
-  }) : _onCall = onCall,
-       _options = options;
+  })  : _onCall = onCall,
+        _options = options;
 
   @override
   final String name;

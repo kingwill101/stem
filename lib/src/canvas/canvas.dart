@@ -20,14 +20,14 @@ TaskSignature task(
   TaskOptions options = const TaskOptions(),
 }) {
   return () => Envelope(
-    name: name,
-    args: args,
-    headers: headers,
-    queue: options.queue,
-    priority: options.priority,
-    maxRetries: options.maxRetries,
-    visibilityTimeout: options.visibilityTimeout,
-  );
+        name: name,
+        args: args,
+        headers: headers,
+        queue: options.queue,
+        priority: options.priority,
+        maxRetries: options.maxRetries,
+        visibilityTimeout: options.visibilityTimeout,
+      );
 }
 
 /// A high-level API for composing and dispatching tasks.

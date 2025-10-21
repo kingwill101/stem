@@ -21,8 +21,8 @@ class StemConfig {
     this.defaultMaxRetries = 3,
     SigningConfig? signing,
     TlsConfig? tls,
-  }) : signing = signing ?? const SigningConfig.disabled(),
-       tls = tls ?? const TlsConfig.disabled();
+  })  : signing = signing ?? const SigningConfig.disabled(),
+        tls = tls ?? const TlsConfig.disabled();
 
   /// Broker connection string (e.g. redis://localhost:6379).
   final String brokerUrl;

@@ -24,10 +24,10 @@ class Envelope {
     this.visibilityTimeout,
     this.queue = 'default',
     Map<String, Object?>? meta,
-  }) : id = id ?? generateEnvelopeId(),
-       headers = Map.unmodifiable(headers ?? const {}),
-       enqueuedAt = enqueuedAt ?? DateTime.now(),
-       meta = Map.unmodifiable(meta ?? const {});
+  })  : id = id ?? generateEnvelopeId(),
+        headers = Map.unmodifiable(headers ?? const {}),
+        enqueuedAt = enqueuedAt ?? DateTime.now(),
+        meta = Map.unmodifiable(meta ?? const {});
 
   /// Unique identifier for the logical task.
   final String id;
@@ -95,19 +95,19 @@ class Envelope {
   }
 
   Map<String, Object?> toJson() => {
-    'id': id,
-    'name': name,
-    'args': args,
-    'headers': headers,
-    'enqueuedAt': enqueuedAt.toIso8601String(),
-    'notBefore': notBefore?.toIso8601String(),
-    'priority': priority,
-    'attempt': attempt,
-    'maxRetries': maxRetries,
-    'visibilityTimeout': visibilityTimeout?.inMilliseconds,
-    'queue': queue,
-    'meta': meta,
-  };
+        'id': id,
+        'name': name,
+        'args': args,
+        'headers': headers,
+        'enqueuedAt': enqueuedAt.toIso8601String(),
+        'notBefore': notBefore?.toIso8601String(),
+        'priority': priority,
+        'attempt': attempt,
+        'maxRetries': maxRetries,
+        'visibilityTimeout': visibilityTimeout?.inMilliseconds,
+        'queue': queue,
+        'meta': meta,
+      };
 
   static Envelope fromJson(Map<String, Object?> json) {
     return Envelope(

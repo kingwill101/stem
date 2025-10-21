@@ -59,9 +59,8 @@ void main() {
       );
       await broker.publish(envelope);
 
-      final first = await broker
-          .consume('default', consumerName: 'c-test')
-          .first;
+      final first =
+          await broker.consume('default', consumerName: 'c-test').first;
       expect(first.envelope.id, equals(envelope.id));
 
       // Do not ack; wait for reclaim.

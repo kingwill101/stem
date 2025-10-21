@@ -15,8 +15,7 @@ Future<bool> _canConnect(String uri) async {
 }
 
 void main() async {
-  final uri =
-      Platform.environment['STEM_TEST_REDIS_URL'] ??
+  final uri = Platform.environment['STEM_TEST_REDIS_URL'] ??
       Platform.environment['REDIS_URL'] ??
       'redis://localhost:6379';
   final available = await _canConnect(uri);

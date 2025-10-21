@@ -6,8 +6,8 @@ import '../core/task_invocation.dart';
 import 'isolate_messages.dart';
 
 /// A handler for task control signals.
-typedef TaskControlHandler =
-    FutureOr<void> Function(TaskInvocationSignal signal);
+typedef TaskControlHandler = FutureOr<void> Function(
+    TaskInvocationSignal signal);
 
 /// A pool of isolates for executing tasks concurrently.
 ///
@@ -94,23 +94,20 @@ class TaskIsolatePool {
       _active.add(worker);
       Timer? hardTimer;
 
-      worker
-          .run(job)
-          .then((value) {
-            if (!job.completer.isCompleted) {
-              job.completer.complete(TaskExecutionSuccess(value));
-            }
-          })
-          .catchError((error, StackTrace stack) {
-            if (!job.completer.isCompleted) {
-              final resolvedStack = error is _RemoteTaskError
-                  ? StackTrace.fromString(error.stackTrace)
-                  : stack;
-              job.completer.complete(
-                TaskExecutionFailure(error, resolvedStack),
-              );
-            }
-          });
+      worker.run(job).then((value) {
+        if (!job.completer.isCompleted) {
+          job.completer.complete(TaskExecutionSuccess(value));
+        }
+      }).catchError((error, StackTrace stack) {
+        if (!job.completer.isCompleted) {
+          final resolvedStack = error is _RemoteTaskError
+              ? StackTrace.fromString(error.stackTrace)
+              : stack;
+          job.completer.complete(
+            TaskExecutionFailure(error, resolvedStack),
+          );
+        }
+      });
 
       if (job.hardTimeout != null) {
         hardTimer = Timer(job.hardTimeout!, () {
