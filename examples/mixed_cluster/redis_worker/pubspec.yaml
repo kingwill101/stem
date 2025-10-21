@@ -1,0 +1,13 @@
+name: stem_mixed_redis_worker
+publish_to: 'none'
+description: Worker that consumes from Redis and stores results in Redis.
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../../..
+
+dev_dependencies:
+  lints: ^6.0.0

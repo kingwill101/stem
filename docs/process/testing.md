@@ -2,6 +2,8 @@
 title: Testing & Quality Gates
 ---
 
+> **Note:** Primary content is published via `.site/docs/testing-guide.md`.
+
 The project ships with a consolidated quality workflow that contributors and CI
 use to enforce formatting, static analysis, tests, coverage, and chaos
 resilience checks.

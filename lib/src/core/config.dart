@@ -16,6 +16,7 @@ class StemConfig {
     required this.brokerUrl,
     this.resultBackendUrl,
     this.scheduleStoreUrl,
+    this.revokeStoreUrl,
     this.defaultQueue = 'default',
     this.prefetchMultiplier = 2,
     this.defaultMaxRetries = 3,
@@ -32,6 +33,9 @@ class StemConfig {
 
   /// Optional schedule store connection string.
   final String? scheduleStoreUrl;
+
+  /// Optional revoke store connection string.
+  final String? revokeStoreUrl;
 
   /// Default queue for tasks without explicit routing.
   final String defaultQueue;
@@ -69,6 +73,7 @@ class StemConfig {
       brokerUrl: broker,
       resultBackendUrl: _optional(environment[_Keys.resultBackendUrl]),
       scheduleStoreUrl: _optional(environment[_Keys.scheduleStoreUrl]),
+      revokeStoreUrl: _optional(environment[_Keys.revokeStoreUrl]),
       defaultQueue: environment[_Keys.defaultQueue]?.trim().isNotEmpty == true
           ? environment[_Keys.defaultQueue]!.trim()
           : 'default',
@@ -108,6 +113,7 @@ class StemConfig {
     String? brokerUrl,
     String? resultBackendUrl,
     String? scheduleStoreUrl,
+    String? revokeStoreUrl,
     String? defaultQueue,
     int? prefetchMultiplier,
     int? defaultMaxRetries,
@@ -118,6 +124,7 @@ class StemConfig {
       brokerUrl: brokerUrl ?? this.brokerUrl,
       resultBackendUrl: resultBackendUrl ?? this.resultBackendUrl,
       scheduleStoreUrl: scheduleStoreUrl ?? this.scheduleStoreUrl,
+      revokeStoreUrl: revokeStoreUrl ?? this.revokeStoreUrl,
       defaultQueue: defaultQueue ?? this.defaultQueue,
       prefetchMultiplier: prefetchMultiplier ?? this.prefetchMultiplier,
       defaultMaxRetries: defaultMaxRetries ?? this.defaultMaxRetries,
@@ -132,6 +139,7 @@ abstract class _Keys {
   static const brokerUrl = 'STEM_BROKER_URL';
   static const resultBackendUrl = 'STEM_RESULT_BACKEND_URL';
   static const scheduleStoreUrl = 'STEM_SCHEDULE_STORE_URL';
+  static const revokeStoreUrl = 'STEM_REVOKE_STORE_URL';
   static const defaultQueue = 'STEM_DEFAULT_QUEUE';
   static const prefetchMultiplier = 'STEM_PREFETCH_MULTIPLIER';
   static const defaultMaxRetries = 'STEM_DEFAULT_MAX_RETRIES';

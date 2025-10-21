@@ -1,0 +1,74 @@
+services:
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+
+  postgres:
+    image: postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stem_demo
+      POSTGRES_USER: stem
+      POSTGRES_PASSWORD: stem
+    ports:
+      - "65434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stem -d stem_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis_worker:
+    build:
+      context: ../..
+      dockerfile: examples/mixed_cluster/redis_worker/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    environment:
+      STEM_BROKER_URL: ${REDIS_STEM_BROKER_URL:-redis://redis:6379/0}
+      STEM_RESULT_BACKEND_URL: ${REDIS_STEM_RESULT_BACKEND_URL:-redis://redis:6379/1}
+      STEM_DEFAULT_QUEUE: ${REDIS_STEM_DEFAULT_QUEUE:-redis-tasks}
+    depends_on:
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres_worker:
+    build:
+      context: ../..
+      dockerfile: examples/mixed_cluster/postgres_worker/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    environment:
+      STEM_BROKER_URL: ${POSTGRES_STEM_BROKER_URL:-postgres://stem:stem@postgres:5432/stem_demo}
+      STEM_RESULT_BACKEND_URL: ${POSTGRES_STEM_RESULT_BACKEND_URL:-postgres://stem:stem@postgres:5432/stem_demo}
+      STEM_DEFAULT_QUEUE: ${POSTGRES_STEM_DEFAULT_QUEUE:-postgres-tasks}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  enqueuer:
+    build:
+      context: ../..
+      dockerfile: examples/mixed_cluster/enqueuer/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    environment:
+      REDIS_STEM_BROKER_URL: ${REDIS_STEM_BROKER_URL:-redis://redis:6379/0}
+      REDIS_STEM_RESULT_BACKEND_URL: ${REDIS_STEM_RESULT_BACKEND_URL:-redis://redis:6379/1}
+      REDIS_STEM_DEFAULT_QUEUE: ${REDIS_STEM_DEFAULT_QUEUE:-redis-tasks}
+      POSTGRES_STEM_BROKER_URL: ${POSTGRES_STEM_BROKER_URL:-postgres://stem:stem@postgres:5432/stem_demo}
+      POSTGRES_STEM_RESULT_BACKEND_URL: ${POSTGRES_STEM_RESULT_BACKEND_URL:-postgres://stem:stem@postgres:5432/stem_demo}
+      POSTGRES_STEM_DEFAULT_QUEUE: ${POSTGRES_STEM_DEFAULT_QUEUE:-postgres-tasks}
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped

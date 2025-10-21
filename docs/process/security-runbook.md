@@ -1,5 +1,8 @@
 # Security Runbook
 
+> **Note:** The public docs version is `.site/docs/security-runbook.md`; keep
+> both files aligned.
+
 ## Payload Signing Key Rotation
 
 ### HMAC-SHA256 (default)

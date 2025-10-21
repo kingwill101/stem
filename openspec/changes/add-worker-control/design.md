@@ -6,11 +6,11 @@ Stem workers provide fixed concurrency, basic heartbeats, and no remote control 
 3. **Lifecycle Guards** — Warm/soft/hard shutdown semantics, `max_tasks_per_child`, `max_memory_per_child`, and persistent revokes to survive restarts.
 
 ## Control Plane
-- **Transport Abstraction**: Define a `ControlTransport` interface with `sendCommand`, `receiveCommands`, and `sendReply`. Implementations:
-  - `BroadcastControlTransport` (preferred): uses the broadcast routing channel from `add-routing-controls` (e.g., `broadcast://worker-control`) and per-namespace reply queues (`stem.control.reply.<namespace>`). Works with Redis Streams, Postgres notification queues, or any broker that supports fan-out.
-  - `HttpControlTransport`: exposes an internal HTTP endpoint (SSE/WebSocket) for workers to maintain a duplex connection. Suitable when brokers lack native broadcast support; workers connect to the coordinator’s control service.
-  - `PollingControlTransport`: workers poll a REST endpoint or shared store at an interval (`control.pollInterval`, default 5s) to fetch commands, ensuring compatibility with constrained environments. Throttles updates to avoid overload.
-  The worker chooses the first available transport based on configuration; transports can be chained (e.g., try broadcast, fallback to HTTP, then polling).
+- **Transport Abstraction**: Define a `ControlTransport` interface with `sendCommand`, `receiveCommands`, and `sendReply`. Current implementation ships with a broker-backed transport that publishes control envelopes to per-worker queues (`<namespace>.control.worker.<id>`) and replies via `<namespace>.control.reply.<requestId>`. This works across Redis Streams and Postgres without additional infrastructure. The interface leaves room for future transports:
+  - `BroadcastControlTransport`: reuse the broadcast routing channel from `add-routing-controls` once available, minimizing per-worker publications.
+  - `HttpControlTransport`: expose an internal HTTP endpoint (SSE/WebSocket) for environments where brokers cannot deliver near-real-time control messages.
+  - `PollingControlTransport`: allow workers to poll a REST endpoint or shared store (`control.pollInterval`, default 5s) when push transports are unavailable.
+  Transports can be chained (e.g., try broadcast, fallback to HTTP, then polling) to fit diverse deployments.
 - **Message Schema**:
   ```json
   {
@@ -28,7 +28,7 @@ Stem workers provide fixed concurrency, basic heartbeats, and no remote control 
   - `revoke`: `{ "taskIds": [...], "terminate": true, "signal": "SIGTERM" }`.
   - `shutdown`: `{ "mode": "warm|soft|hard" }`.
   - `autoscale-config`: update min/max at runtime.
-- **Replies**: Workers respond via the selected transport (reply queue for broadcast, HTTP POST for SSE/WebSocket, response payload for polling) with:
+- **Replies**: Workers respond via the active transport (broker reply queue by default) with:
   ```json
   {
     "requestId": "uuid",
@@ -40,7 +40,8 @@ Stem workers provide fixed concurrency, basic heartbeats, and no remote control 
   ```
   The coordinator aggregates replies and enforces client-side timeouts.
 - **Security**: Commands originate from trusted coordinator (Stem CLI or service). We will reuse the signing middleware (HMAC/Ed25519) to sign commands and verify on the worker. Commands lacking valid signatures are rejected and logged. Apply per-worker rate limiting (configurable, default 10 commands/sec) to avoid DoS. For HTTP transports, allow mTLS or token-based auth in addition to signatures.
-- **Persistent Revokes**: Introduce `revokes.stem` file (configurable) storing revoked ids. On startup worker reads file + syncs via control `sync-revokes` command. File format: newline-delimited task IDs with version header (`v1`). Periodically flush in-memory set to disk (every 30s or on change).
+- **Persistent Revokes**: Introduce a `RevokeStore` abstraction with Redis and Postgres adapters (defaulting to whichever backing service is configured) plus a file-based fallback (`revokes.stem`). On startup workers hydrate their in-memory cache from the store, prune expired records, and sync further updates through control messages. Store entries include monotonic versions so workers can ignore stale updates and revalidate after restarts. The CLI writes through the store before broadcasting control envelopes so durability always precedes visibility.
+- **Termination Semantics**: `stem worker revoke --terminate` requests best-effort cancellation. Inline handlers honour revokes the next time they call `heartbeat`, `extendLease`, or `progress` (throwing a `TaskRevokedException`). Isolate-backed tasks respond once they emit those signals; long-running tasks should publish heartbeats or cooperative checkpoints so termination can pre-empt work.
 
 ### Current Control/Telemetry Surface (Audit)
 - Worker heartbeats are published via `HeartbeatTransport` every `workerHeartbeatInterval` (default 10s) and persisted through the result backend (`setWorkerHeartbeat`). The payload already includes worker id, namespace, inflight counts, queues, and extras such as host/prefetch.

@@ -1,0 +1,40 @@
+services:
+  redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: examples/encrypted_payload/worker/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      STEM_BROKER_URL: ${STEM_BROKER_URL:-redis://redis:6379/0}
+      STEM_RESULT_BACKEND_URL: ${STEM_RESULT_BACKEND_URL:-redis://redis:6379/1}
+      STEM_DEFAULT_QUEUE: ${STEM_DEFAULT_QUEUE:-secure}
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}
+    restart: unless-stopped
+
+  enqueuer:
+    build:
+      context: ../..
+      dockerfile: examples/encrypted_payload/enqueuer/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      STEM_BROKER_URL: ${STEM_BROKER_URL:-redis://redis:6379/0}
+      STEM_RESULT_BACKEND_URL: ${STEM_RESULT_BACKEND_URL:-redis://redis:6379/1}
+      STEM_DEFAULT_QUEUE: ${STEM_DEFAULT_QUEUE:-secure}
+      PAYLOAD_SECRET: ${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}
+    restart: unless-stopped

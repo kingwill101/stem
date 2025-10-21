@@ -15,6 +15,7 @@ Environment variables used by the services:
 | --- | --- | --- |
 | `STEM_BROKER_URL` | `redis://redis:6379/0` | Redis Streams broker connection string. |
 | `STEM_RESULT_BACKEND_URL` | `redis://redis:6379/1` | Redis result backend connection string. |
+| `STEM_DEFAULT_QUEUE` | `emails` | Queue consumed by the email worker. |
 | `PORT` | `8082` | Port for the enqueue API. |
 | `SMTP_HOST` | `mailhog` | SMTP host address. |
 | `SMTP_PORT` | `1025` | SMTP port. |

@@ -3,10 +3,14 @@
 - [x] 1.2 Finalize control channel protocol (message schema, transport reuse vs new channel) and autoscaling heuristics.
 
 ## 2. Control Plane Foundation
-- [ ] 2.1 Implement control channel between coordinator and workers (publish/subscribe, authentication, observability).
-- [ ] 2.2 Expose CLI commands (`stem worker ping/inspect/revoke/stats`) and unit tests validating responses.
-- [ ] 2.3 Add persistent revoke store and ensure workers sync on startup.
-- [ ] 2.4 Refactor CLI into structured command runners (e.g., `stem worker control ...`) with consistent usage/help output.
+- [x] 2.1 Implement control channel between coordinator and workers (publish/subscribe, authentication, observability).
+- [x] 2.2 Expose CLI commands (`stem worker ping/inspect/revoke/stats`) and unit tests validating responses.
+  - [x] Ping command (`stem worker ping`)
+  - [x] Stats command (`stem worker stats`) with aggregation tests
+  - [x] Inspect command (`stem worker inspect`)
+  - [x] Revoke command (`stem worker revoke`)
+- [x] 2.3 Add persistent revoke store and ensure workers sync on startup.
+- [x] 2.4 Refactor CLI into structured command runners (e.g., `stem worker control ...`) with consistent usage/help output.
 
 ## 3. Autoscaling Engine
 - [ ] 3.1 Add autoscaler module to monitor queue depth/inflight metrics.

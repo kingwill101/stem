@@ -1,5 +1,8 @@
 # Security Configuration Examples
 
+> **Note:** The version served on the docs site lives at
+> `.site/docs/security-examples.md`.
+
 These scenarios illustrate how to wire signing and transport security for Stem
 services (producers, workers, beat, CLI) without referring to any pre-built
 project skeleton. Each section is self-contained: you can copy the environment

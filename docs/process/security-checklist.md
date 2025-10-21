@@ -1,5 +1,7 @@
 # Security Checklist
 
+> **Note:** Maintained version is published via `.site/docs/security-checklist.md`.
+
 ## Transport & Secrets
 - [ ] Enforce TLS for Redis connections (`rediss://`); document certificate management.
 - [ ] Store credentials in secret manager, inject via env vars (`STEM_REDIS_URL`, etc.).

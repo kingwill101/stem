@@ -1,5 +1,9 @@
 # Observability Runbook
 
+> **Note:** The canonical version of this document lives at
+> `.site/docs/observability-runbook.md` for publication on the docs site. Keep
+> the two files in sync when editing.
+
 ## SLOs
 | Service Aspect | Target | Measurement Window | Notes |
 | --- | --- | --- | --- |

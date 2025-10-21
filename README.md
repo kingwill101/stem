@@ -101,6 +101,10 @@ Three runnable example apps demonstrate common topologies:
 
 - `examples/monolith_service` – single process service using in-memory adapters.
 - `examples/microservice` – enqueue API and worker communicating through Redis.
+- `examples/postgres_worker` – broker and result backend backed by Postgres.
+- `examples/redis_postgres_worker` – Redis Streams broker with a Postgres result backend.
+- `examples/mixed_cluster` – runs Redis- and Postgres-backed workers side by side.
+- `examples/encrypted_payload` – encrypt task payloads end-to-end with AES-GCM (includes a containerized variant in `docker/`).
 - `examples/otel_metrics` – worker + OpenTelemetry collector + Jaeger via Docker Compose.
 
 Each example has a README with setup instructions and links back to the docs.
@@ -113,7 +117,14 @@ stem observe metrics
 stem dlq list --queue default --limit 20
 stem dlq replay --queue default --limit 10 --yes
 stem health
+stem worker ping --namespace stem
+stem worker inspect --worker worker-1
+stem worker stats --namespace stem
+stem worker revoke --task <task-id> [--terminate]
 ```
+
+See `docs/process/worker-control.md` for detailed control-plane usage,
+including revoke persistence and termination behavior.
 
 ### Security Utilities
 

@@ -20,6 +20,7 @@ Stem reads configuration from environment variables. The most common settings ar
 | `STEM_DEFAULT_MAX_RETRIES` | Global fallback retry limit |
 | `STEM_HEARTBEAT_INTERVAL` | Worker heartbeat cadence (e.g. `10s`) |
 | `STEM_WORKER_NAMESPACE` | Namespace prefix for Redis channels and worker IDs |
+| `STEM_REVOKE_STORE_URL` | Override the persistent revoke store (defaults to backend/broker) |
 | `STEM_METRIC_EXPORTERS` | Comma separated exporters (`console`, `otlp:http://host:4318/v1/metrics`, `prometheus`) |
 | `STEM_OTLP_ENDPOINT` | Default OTLP HTTP endpoint used when exporters omit a target |
 | `STEM_SIGNING_KEYS` / `STEM_SIGNING_ACTIVE_KEY` | HMAC signing secrets and active key identifier |
@@ -51,7 +52,7 @@ test/integration` to exercise adapters against those services.
 - One or more enqueue services publishing envelopes.
 - A fleet of worker processes (each with isolate pools).
 - One or more beat instances (recommended two for failover).
-- Optional Postgres for the result backend and/or schedule store (Postgres adapters auto-create tables).
+- Optional Postgres for the result backend and/or schedule store (Postgres adapters auto-create tables). See `examples/postgres_worker` for a Postgres-only setup, `examples/redis_postgres_worker` for a Redis broker + Postgres backend hybrid, or `examples/mixed_cluster` to run Redis- and Postgres-backed workers side by side.
 
 `examples/microservice` demonstrates an enqueue API and worker process running separately, sharing Redis.
 
@@ -60,6 +61,7 @@ test/integration` to exercise adapters against those services.
 - Package workers as container images with health endpoints (provided by Stem worker observability APIs).
 - Use systemd or container orchestrators (Kubernetes, Nomad) to ensure automatic restarts.
 - Configure graceful shutdown by catching termination signals and calling `worker.shutdown()`.
+- For remote control, revocations, and diagnostics, see the [Worker Control guide](./worker-control.md) covering `stem worker` commands and persistent revoke storage.
 
 ## Monitoring & Telemetry
 
@@ -127,6 +129,7 @@ This configuration batches metrics through the OTLP HTTP collector while heartbe
 ### Security
 
 - **Payload signing**: HMAC-SHA256 remains the default (`STEM_SIGNING_KEYS=primary:<base64 secret>` + `STEM_SIGNING_ACTIVE_KEY=primary`). For asymmetric signing, switch to Ed25519 by setting `STEM_SIGNING_ALGORITHM=ed25519` alongside `STEM_SIGNING_PUBLIC_KEYS` and (for producers) `STEM_SIGNING_PRIVATE_KEYS`. Run `dart run scripts/security/generate_ed25519_keys.dart` to produce ready-to-paste env values. Workers verify signatures automatically and dead-letter tampered payloads; see `docs/process/security-runbook.md` for rotation guidance. Concrete setups for each profile are documented in `docs/process/security-examples.md`.
+- **Payload confidentiality**: Encrypt payloads before calling `Stem.enqueue()` when tasks contain sensitive data. The `examples/encrypted_payload` sample demonstrates encrypting with AES-GCM and decrypting inside the worker while keeping payloads opaque in the broker/result backend.
 - Producers emit a warning and throw if the signing configuration is incomplete (for example, the active Ed25519 key lacks a private key). Address the log message before attempting to enqueue tasks.
 - **TLS bootstrap**: generate a CA plus server/client certificates with
   `scripts/security/generate_tls_assets.sh certs stem.local,redis,api.localhost`.

@@ -1,5 +1,8 @@
 # Stem Roadmap & Milestones
 
+> **Note:** The canonical version of this roadmap now lives at
+> `.site/docs/roadmap.md` for the public documentation site.
+
 ## Milestones
 
 ### M1 – Core Runtime

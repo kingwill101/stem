@@ -15,6 +15,13 @@ The script runs `dart format`, `dart analyze`, the default test suite
 (`--exclude-tags soak`), and coverage (threshold 60% unless overridden via
 `COVERAGE_THRESHOLD`).
 
+Expanded steps:
+
+1. `dart format --set-exit-if-changed .`
+2. `dart analyze`
+3. `dart test --exclude-tags soak`
+4. Coverage via `tool/quality/coverage.sh`
+
 ### Chaos suite against Redis
 
 Set `STEM_CHAOS_REDIS_URL` to execute chaos tests against a live Redis broker:

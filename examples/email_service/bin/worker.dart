@@ -30,7 +30,7 @@ Future<void> main(List<String> args) async {
       FunctionTaskHandler<String>(
         name: 'email.send',
         entrypoint: sendEmail,
-        options: const TaskOptions(queue: 'emails', maxRetries: 3),
+        options: TaskOptions(queue: config.defaultQueue, maxRetries: 3),
       ),
     );
 
@@ -38,6 +38,7 @@ Future<void> main(List<String> args) async {
     broker: broker,
     registry: registry,
     backend: backend,
+    queue: config.defaultQueue,
     concurrency: 2, // Allow parallel email sending
     signer: signer,
   );

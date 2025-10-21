@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:stem/src/control/in_memory_revoke_store.dart';
+import 'package:stem/src/control/revoke_store.dart';
 
 void main() {
   group('Worker', () {
@@ -389,6 +391,64 @@ void main() {
 
       final deadPage = await broker.listDeadLetters('default');
       expect(deadPage.entries, isEmpty);
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('skips revoked tasks from persistent store', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 10),
+        claimInterval: const Duration(milliseconds: 40),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final revokeStore = InMemoryRevokeStore();
+
+      final stem = Stem(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+      );
+
+      final taskId = await stem.enqueue('tasks.success');
+      await revokeStore.upsertAll([
+        RevokeEntry(
+          namespace: 'stem',
+          taskId: taskId,
+          version: generateRevokeVersion(),
+          issuedAt: DateTime.now().toUtc(),
+          terminate: true,
+        ),
+      ]);
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-revoked',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        revokeStore: revokeStore,
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.revoked &&
+              event.envelope?.id == taskId,
+        ),
+      );
+
+      final status = await backend.get(taskId);
+      expect(status?.state, TaskState.cancelled);
 
       await sub.cancel();
       await worker.shutdown();
