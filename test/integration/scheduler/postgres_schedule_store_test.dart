@@ -87,16 +87,14 @@ void main() {
 
     final manualDueWithJoin = await adminClient.run((conn) async {
       return conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT e.id
         FROM public.${namespace}_schedule_entries e
         LEFT JOIN public.${namespace}_schedule_locks l ON e.id = l.id
         WHERE e.enabled = true AND e.next_run_at <= @now AND l.id IS NULL
         ORDER BY e.next_run_at ASC
         LIMIT @limit
-        ''',
-        ),
+        '''),
         parameters: {'now': dueNow, 'limit': 5},
       );
     });

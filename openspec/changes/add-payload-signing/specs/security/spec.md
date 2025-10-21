@@ -16,6 +16,12 @@ Stem MUST offer automation and documentation to secure transport and detect know
 - **THEN** they MUST be able to provision certificates for Redis and HTTP endpoints using the provided scripts or Terraform snippets
 - **AND** the services MUST refuse plaintext connections when TLS is enabled
 
+#### Scenario: TLS diagnostics surface handshake failures
+- **GIVEN** an operator enables TLS for brokers or result backends
+- **WHEN** a connection attempt fails due to a handshake or certificate validation error
+- **THEN** Stem MUST emit a warning log that includes the targeted endpoint, the TLS options in use (excluding secrets), and guidance to enable insecure mode for troubleshooting
+- **AND** the CLI MUST provide a health check command that exercises the configured connections and reports TLS-specific failures
+
 #### Scenario: Recurring vulnerability scan documented
 - **GIVEN** a maintainer is responsible for security hygiene
 - **WHEN** they run the documented scanning workflow (CI job or scheduled script)

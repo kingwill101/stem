@@ -141,8 +141,7 @@ class PostgresScheduleStore implements ScheduleStore {
 
       // Find due entries and acquire locks
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT
           e.id, e.task_name, e.queue, e.spec, e.args, e.enabled,
           e.jitter_ms, e.last_run_at, e.next_run_at, e.last_jitter_ms,
@@ -154,8 +153,7 @@ class PostgresScheduleStore implements ScheduleStore {
           AND l.id IS NULL
         ORDER BY e.next_run_at ASC
         LIMIT @limit
-        ''',
-        ),
+        '''),
         parameters: {'now': now, 'limit': limit},
       );
 
@@ -168,12 +166,10 @@ class PostgresScheduleStore implements ScheduleStore {
         // Try to acquire lock
         try {
           await conn.execute(
-            Sql.named(
-              '''
+            Sql.named('''
             INSERT INTO ${_locksTable()} (id, expires_at)
             VALUES (@id, @expires_at)
-            ''',
-            ),
+            '''),
             parameters: {'id': id, 'expires_at': expiresAt},
           );
 
@@ -204,8 +200,7 @@ class PostgresScheduleStore implements ScheduleStore {
       final metaJson = jsonEncode(entry.meta);
 
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         INSERT INTO ${_entriesTable()}
           (id, task_name, queue, spec, args, enabled, jitter_ms,
            last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta, updated_at)
@@ -227,8 +222,7 @@ class PostgresScheduleStore implements ScheduleStore {
           timezone = EXCLUDED.timezone,
           meta = EXCLUDED.meta,
           updated_at = NOW()
-        ''',
-        ),
+        '''),
         parameters: {
           'id': entry.id,
           'task_name': entry.taskName,
@@ -248,12 +242,10 @@ class PostgresScheduleStore implements ScheduleStore {
 
       // Release lock if it exists
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_locksTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': entry.id},
       );
     });
@@ -263,22 +255,18 @@ class PostgresScheduleStore implements ScheduleStore {
   Future<void> remove(String id) async {
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_entriesTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': id},
       );
 
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_locksTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': id},
       );
     });
@@ -305,10 +293,7 @@ class PostgresScheduleStore implements ScheduleStore {
             ''';
 
       final result = limit != null
-          ? await conn.execute(
-              Sql.named(query),
-              parameters: {'limit': limit},
-            )
+          ? await conn.execute(Sql.named(query), parameters: {'limit': limit})
           : await conn.execute(query);
 
       return result.map((row) => _entryFromRow(row)).toList();
@@ -319,15 +304,13 @@ class PostgresScheduleStore implements ScheduleStore {
   Future<ScheduleEntry?> get(String id) async {
     return _client.run((Connection conn) async {
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT
           id, task_name, queue, spec, args, enabled, jitter_ms,
           last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
         FROM ${_entriesTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': id},
       );
 
@@ -347,27 +330,23 @@ class PostgresScheduleStore implements ScheduleStore {
     await _client.run((Connection conn) async {
       // Fetch current entry
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT
           id, task_name, queue, spec, args, enabled, jitter_ms,
           last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
         FROM ${_entriesTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': id},
       );
 
       if (result.isEmpty) {
         // Release lock if entry doesn't exist
         await conn.execute(
-          Sql.named(
-            '''
+          Sql.named('''
           DELETE FROM ${_locksTable()}
           WHERE id = @id
-          ''',
-          ),
+          '''),
           parameters: {'id': id},
         );
         return;
@@ -381,8 +360,7 @@ class PostgresScheduleStore implements ScheduleStore {
       );
 
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         UPDATE ${_entriesTable()}
         SET
           last_run_at = @last_run_at,
@@ -391,8 +369,7 @@ class PostgresScheduleStore implements ScheduleStore {
           last_error = @last_error,
           updated_at = NOW()
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {
           'id': id,
           'last_run_at': executedAt,
@@ -404,12 +381,10 @@ class PostgresScheduleStore implements ScheduleStore {
 
       // Release lock
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_locksTable()}
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': id},
       );
     });

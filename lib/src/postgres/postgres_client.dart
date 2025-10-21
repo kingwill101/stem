@@ -77,8 +77,6 @@ class PostgresClient {
     }
     final params = Map<String, String>.from(uri.queryParameters);
     params['application_name'] = appName;
-    return uri.replace(
-      queryParameters: params.isEmpty ? null : params,
-    );
+    return uri.replace(queryParameters: params.isEmpty ? null : params);
   }
 }

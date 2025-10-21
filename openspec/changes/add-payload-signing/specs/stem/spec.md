@@ -14,3 +14,9 @@ Stem MUST provide mechanisms to protect task payloads against tampering in trans
 - **WHEN** new tasks are enqueued using the new key while existing workers still accept the previous key
 - **THEN** the system MUST allow a configurable overlap period where multiple keys are accepted
 - **AND** documentation MUST describe the rotation process and blast radius
+
+#### Scenario: Misconfigured signing surfaces actionable warnings
+- **GIVEN** a producer process boots with signing enabled
+- **WHEN** the configured active key cannot be used to generate signatures (for example, an Ed25519 private key is missing)
+- **THEN** the process MUST emit a warning log describing the misconfiguration and required remediation
+- **AND** attempts to enqueue tasks MUST fail fast with a descriptive error so the issue is detected before messages are published

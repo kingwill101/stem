@@ -230,8 +230,7 @@ class PostgresResultBackend implements ResultBackend {
     final expiresAt = DateTime.now().add(ttl ?? defaultTtl);
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         INSERT INTO ${_tableName('task_results')}
           (id, state, payload, error, attempt, meta, expires_at, updated_at)
         VALUES
@@ -245,8 +244,7 @@ class PostgresResultBackend implements ResultBackend {
           meta = EXCLUDED.meta,
           expires_at = EXCLUDED.expires_at,
           updated_at = NOW()
-        ''',
-        ),
+        '''),
         parameters: {
           'id': taskId,
           'state': state.name,
@@ -266,13 +264,11 @@ class PostgresResultBackend implements ResultBackend {
   Future<TaskStatus?> get(String taskId) async {
     return _client.run((Connection conn) async {
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT id, state, payload, error, attempt, meta
         FROM ${_tableName('task_results')}
         WHERE id = @id AND expires_at > NOW()
-        ''',
-        ),
+        '''),
         parameters: {'id': taskId},
       );
 
@@ -316,8 +312,7 @@ class PostgresResultBackend implements ResultBackend {
     final expiresAt = DateTime.now().add(descriptor.ttl ?? groupDefaultTtl);
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         INSERT INTO ${_tableName('groups')}
           (id, expected, meta, expires_at)
         VALUES
@@ -327,8 +322,7 @@ class PostgresResultBackend implements ResultBackend {
           expected = EXCLUDED.expected,
           meta = EXCLUDED.meta,
           expires_at = EXCLUDED.expires_at
-        ''',
-        ),
+        '''),
         parameters: {
           'id': descriptor.id,
           'expected': descriptor.expected,
@@ -339,12 +333,10 @@ class PostgresResultBackend implements ResultBackend {
 
       // Clear existing group results
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_tableName('group_results')}
         WHERE group_id = @group_id
-        ''',
-        ),
+        '''),
         parameters: {'group_id': descriptor.id},
       );
     });
@@ -357,8 +349,7 @@ class PostgresResultBackend implements ResultBackend {
       if (!exists) return null;
 
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         INSERT INTO ${_tableName('group_results')}
           (group_id, task_id, state, payload, error, attempt, meta)
        VALUES
@@ -370,8 +361,7 @@ class PostgresResultBackend implements ResultBackend {
           error = EXCLUDED.error,
           attempt = EXCLUDED.attempt,
           meta = EXCLUDED.meta
-        ''',
-        ),
+        '''),
         parameters: {
           'group_id': groupId,
           'task_id': status.id,
@@ -402,13 +392,11 @@ class PostgresResultBackend implements ResultBackend {
 
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         UPDATE ${_tableName('task_results')}
         SET expires_at = @expires_at
         WHERE id = @id
-        ''',
-        ),
+        '''),
         parameters: {'id': taskId, 'expires_at': expiresAt},
       );
     });
@@ -419,8 +407,7 @@ class PostgresResultBackend implements ResultBackend {
     final expiresAt = DateTime.now().add(heartbeatTtl);
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         INSERT INTO ${_tableName('worker_heartbeats')}
           (worker_id, namespace, timestamp, isolate_count, inflight, queues, last_lease_renewal, version, extras, expires_at)
         VALUES
@@ -436,8 +423,7 @@ class PostgresResultBackend implements ResultBackend {
           version = EXCLUDED.version,
           extras = EXCLUDED.extras,
           expires_at = EXCLUDED.expires_at
-        ''',
-        ),
+        '''),
         parameters: {
           'worker_id': heartbeat.workerId,
           'namespace': heartbeat.namespace,
@@ -460,13 +446,11 @@ class PostgresResultBackend implements ResultBackend {
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
     return _client.run((Connection conn) async {
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         SELECT worker_id, namespace, timestamp, isolate_count, inflight, queues, last_lease_renewal, version, extras
         FROM ${_tableName('worker_heartbeats')}
         WHERE worker_id = @worker_id AND expires_at > NOW()
-        ''',
-        ),
+        '''),
         parameters: {'worker_id': workerId},
       );
 
@@ -537,13 +521,11 @@ class PostgresResultBackend implements ResultBackend {
 
   Future<bool> _groupExists(Connection conn, String groupId) async {
     final result = await conn.execute(
-      Sql.named(
-        '''
+      Sql.named('''
       SELECT 1
       FROM ${_tableName('groups')}
       WHERE id = @id AND expires_at > NOW()
-      ''',
-      ),
+      '''),
       parameters: {'id': groupId},
     );
     return result.isNotEmpty;
@@ -551,13 +533,11 @@ class PostgresResultBackend implements ResultBackend {
 
   Future<GroupStatus?> _readGroup(Connection conn, String groupId) async {
     final groupResult = await conn.execute(
-      Sql.named(
-        '''
+      Sql.named('''
       SELECT expected, meta
       FROM ${_tableName('groups')}
       WHERE id = @id AND expires_at > NOW()
-      ''',
-      ),
+      '''),
       parameters: {'id': groupId},
     );
 
@@ -570,13 +550,11 @@ class PostgresResultBackend implements ResultBackend {
         : const <String, Object?>{};
 
     final resultsQuery = await conn.execute(
-      Sql.named(
-        '''
+      Sql.named('''
       SELECT task_id, state, payload, error, attempt, meta
       FROM ${_tableName('group_results')}
       WHERE group_id = @group_id
-      ''',
-      ),
+      '''),
       parameters: {'group_id': groupId},
     );
 

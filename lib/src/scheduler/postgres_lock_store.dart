@@ -93,12 +93,10 @@ class PostgresLockStore implements LockStore {
       // Try to insert a new lock
       try {
         await conn.execute(
-          Sql.named(
-            '''
+          Sql.named('''
           INSERT INTO ${_tableName()} (key, owner, expires_at)
           VALUES (@key, @owner, @expires_at)
-          ''',
-          ),
+          '''),
           parameters: {
             'key': key,
             'owner': ownerValue,
@@ -109,12 +107,10 @@ class PostgresLockStore implements LockStore {
       } catch (_) {
         // Lock already exists or expired, try to clean up and acquire
         final deleted = await conn.execute(
-          Sql.named(
-            '''
+          Sql.named('''
           DELETE FROM ${_tableName()}
           WHERE key = @key AND expires_at < NOW()
-          ''',
-          ),
+          '''),
           parameters: {'key': key},
         );
 
@@ -122,12 +118,10 @@ class PostgresLockStore implements LockStore {
           // Try again after cleanup
           try {
             await conn.execute(
-              Sql.named(
-                '''
+              Sql.named('''
               INSERT INTO ${_tableName()} (key, owner, expires_at)
               VALUES (@key, @owner, @expires_at)
-              ''',
-              ),
+              '''),
               parameters: {
                 'key': key,
                 'owner': ownerValue,
@@ -149,13 +143,11 @@ class PostgresLockStore implements LockStore {
 
     return _client.run((conn) async {
       final result = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         UPDATE ${_tableName()}
         SET expires_at = @expires_at
         WHERE key = @key AND owner = @owner AND expires_at > NOW()
-        ''',
-        ),
+        '''),
         parameters: {'key': key, 'owner': owner, 'expires_at': expiresAt},
       );
       return result.affectedRows > 0;
@@ -165,12 +157,10 @@ class PostgresLockStore implements LockStore {
   Future<void> _release(String key, String owner) async {
     await _client.run((conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
         DELETE FROM ${_tableName()}
         WHERE key = @key AND owner = @owner
-        ''',
-        ),
+        '''),
         parameters: {'key': key, 'owner': owner},
       );
     });

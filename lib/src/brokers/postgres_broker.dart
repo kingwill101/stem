@@ -68,8 +68,7 @@ class PostgresBroker implements Broker {
     final stored = envelope.copyWith(queue: targetQueue);
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 INSERT INTO stem_jobs (
   id,
   queue,
@@ -100,8 +99,7 @@ ON CONFLICT (id) DO UPDATE SET
   locked_until = NULL,
   locked_by = NULL,
   created_at = EXCLUDED.created_at
-''',
-        ),
+'''),
         parameters: {
           'id': stored.id,
           'queue': targetQueue,
@@ -180,8 +178,7 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
     );
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 UPDATE stem_jobs
 SET
   envelope = @envelope::jsonb,
@@ -191,8 +188,7 @@ SET
   locked_until = NULL,
   locked_by = NULL
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-''',
-        ),
+'''),
         parameters: {
           ...receipt.toMap(),
           'envelope': jsonEncode(updatedEnvelope.toJson()),
@@ -225,8 +221,7 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
           parameters: receipt.toMap(),
         );
         await tx.execute(
-          Sql.named(
-            '''
+          Sql.named('''
 INSERT INTO stem_jobs_dead (
   id,
   queue,
@@ -248,8 +243,7 @@ ON CONFLICT (id) DO UPDATE SET
   reason = EXCLUDED.reason,
   meta = EXCLUDED.meta,
   dead_lettered_at = EXCLUDED.dead_lettered_at
-''',
-          ),
+'''),
           parameters: {
             'id': delivery.envelope.id,
             'queue': receipt.queue,
@@ -280,14 +274,12 @@ ON CONFLICT (id) DO UPDATE SET
     final milliseconds = by.inMilliseconds;
     await _client.run((Connection conn) async {
       await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 UPDATE stem_jobs
 SET locked_until = COALESCE(locked_until, NOW())
   + (@ms * INTERVAL '1 millisecond')
 WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-''',
-        ),
+'''),
         parameters: {...receipt.toMap(), 'ms': milliseconds},
       );
     });
@@ -297,15 +289,13 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
   Future<int?> pendingCount(String queue) async {
     final result = await _client.run((Connection conn) async {
       final rows = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 SELECT COUNT(1)
 FROM stem_jobs
 WHERE queue = @queue
   AND (not_before IS NULL OR not_before <= NOW())
   AND (locked_by IS NULL OR locked_until <= NOW())
-''',
-        ),
+'''),
         parameters: {'queue': queue},
       );
       if (rows.isEmpty) return 0;
@@ -318,15 +308,13 @@ WHERE queue = @queue
   Future<int?> inflightCount(String queue) async {
     final result = await _client.run((Connection conn) async {
       final rows = await conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 SELECT COUNT(1)
 FROM stem_jobs
 WHERE queue = @queue
   AND locked_by IS NOT NULL
   AND (locked_until IS NULL OR locked_until > NOW())
-''',
-        ),
+'''),
         parameters: {'queue': queue},
       );
       if (rows.isEmpty) return 0;
@@ -347,15 +335,13 @@ WHERE queue = @queue
     final normalizedOffset = offset < 0 ? 0 : offset;
     final rows = await _client.run((Connection conn) async {
       return conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 SELECT envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue
 ORDER BY dead_lettered_at DESC
 LIMIT @limit OFFSET @offset
-''',
-        ),
+'''),
         parameters: {
           'queue': queue,
           'limit': limit,
@@ -385,14 +371,12 @@ LIMIT @limit OFFSET @offset
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
     final rows = await _client.run((Connection conn) async {
       return conn.execute(
-        Sql.named(
-          '''
+        Sql.named('''
 SELECT envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue AND id = @id
 LIMIT 1
-''',
-        ),
+'''),
         parameters: {'queue': queue, 'id': id},
       );
     });
@@ -420,8 +404,7 @@ LIMIT 1
     final result = await _client.run((Connection conn) async {
       final dynamic replay = await conn.runTx((tx) async {
         final rows = await tx.execute(
-          Sql.named(
-            '''
+          Sql.named('''
 SELECT id, envelope, reason, meta, dead_lettered_at
 FROM stem_jobs_dead
 WHERE queue = @queue
@@ -429,8 +412,7 @@ WHERE queue = @queue
 ORDER BY dead_lettered_at ASC
 FOR UPDATE SKIP LOCKED
 LIMIT @limit
-''',
-          ),
+'''),
           parameters: {'queue': queue, 'limit': limit, 'since': since?.toUtc()},
         );
         if (rows.isEmpty) {
@@ -458,8 +440,7 @@ LIMIT @limit
             notBefore: delay == null ? null : now.add(delay),
           );
           await tx.execute(
-            Sql.named(
-              '''
+            Sql.named('''
 INSERT INTO stem_jobs (
   id,
   queue,
@@ -490,8 +471,7 @@ ON CONFLICT (id) DO UPDATE SET
   locked_until = NULL,
   locked_by = NULL,
   created_at = EXCLUDED.created_at
-''',
-            ),
+'''),
             parameters: {
               'id': id,
               'queue': queue,
@@ -503,12 +483,10 @@ ON CONFLICT (id) DO UPDATE SET
             },
           );
           await tx.execute(
-            Sql.named(
-              '''
+            Sql.named('''
 DELETE FROM stem_jobs_dead
 WHERE id = @id AND queue = @queue
-''',
-            ),
+'''),
             parameters: {'id': id, 'queue': queue},
           );
         }
@@ -553,12 +531,10 @@ ORDER BY dead_lettered_at DESC
         if (ids.isEmpty) return 0;
         final idList = ids.map((row) => row[0] as String).toList();
         final deleted = await tx.execute(
-          Sql.named(
-            '''
+          Sql.named('''
 DELETE FROM stem_jobs_dead
 WHERE queue = @queue AND id = ANY(@ids)
-''',
-          ),
+'''),
           parameters: {'queue': queue, 'ids': idList},
         );
         return deleted;
@@ -576,8 +552,7 @@ WHERE queue = @queue AND id = ANY(@ids)
     return _client.run((Connection conn) async {
       final dynamic list = await conn.runTx((tx) async {
         final rows = await tx.execute(
-          Sql.named(
-            '''
+          Sql.named('''
 SELECT id, envelope
 FROM stem_jobs
 WHERE queue = @queue
@@ -586,8 +561,7 @@ WHERE queue = @queue
 ORDER BY not_before NULLS FIRST, created_at
 FOR UPDATE SKIP LOCKED
 LIMIT @limit
-''',
-          ),
+'''),
           parameters: {'queue': queue, 'limit': limit},
         );
         if (rows.isEmpty) {
@@ -604,13 +578,11 @@ LIMIT @limit
           final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
           final leaseExpiresAt = lease == Duration.zero ? null : now.add(lease);
           await tx.execute(
-            Sql.named(
-              '''
+            Sql.named('''
 UPDATE stem_jobs
 SET locked_by = @lockedBy, locked_until = @lockedUntil
 WHERE id = @id
-''',
-            ),
+'''),
             parameters: {
               'lockedBy': locker,
               'lockedUntil': leaseExpiresAt,
