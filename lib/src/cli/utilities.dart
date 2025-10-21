@@ -28,6 +28,7 @@ Future<CliContext> createDefaultContext(
     {Map<String, String>? environment}) async {
   final env = environment ?? Platform.environment;
   final config = StemConfig.fromEnvironment(env);
+  final routingRegistry = _loadRoutingRegistry(config);
   final brokerUri = Uri.parse(config.brokerUrl);
   final disposables = <Future<void> Function()>[];
   late Broker broker;
@@ -91,12 +92,27 @@ Future<CliContext> createDefaultContext(
     broker: broker,
     backend: backend,
     revokeStore: revokeStore,
+    routing: routingRegistry,
     dispose: () async {
       for (final disposer in disposables.reversed) {
         await disposer();
       }
     },
   );
+}
+
+RoutingRegistry _loadRoutingRegistry(StemConfig config) {
+  final path = config.routingConfigPath?.trim();
+  if (path == null || path.isEmpty) {
+    return RoutingRegistry(RoutingConfig.legacy());
+  }
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw StateError('Routing config file "$path" not found.');
+  }
+  final contents = file.readAsStringSync();
+  final routingConfig = RoutingConfig.fromYaml(contents);
+  return RoutingRegistry(routingConfig);
 }
 
 String formatDateTime(DateTime? value) => value?.toIso8601String() ?? '-';

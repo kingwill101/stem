@@ -20,6 +20,7 @@ class StemConfig {
     this.defaultQueue = 'default',
     this.prefetchMultiplier = 2,
     this.defaultMaxRetries = 3,
+    this.routingConfigPath,
     SigningConfig? signing,
     TlsConfig? tls,
   })  : signing = signing ?? const SigningConfig.disabled(),
@@ -45,6 +46,9 @@ class StemConfig {
 
   /// Global fallback for tasks without explicit max retries.
   final int defaultMaxRetries;
+
+  /// Optional path to a routing configuration file (YAML/JSON).
+  final String? routingConfigPath;
 
   /// Payload signing configuration derived from `STEM_SIGNING_*` variables.
   ///
@@ -87,6 +91,7 @@ class StemConfig {
         fallback: 3,
         min: 0,
       ),
+      routingConfigPath: _optional(environment[_Keys.routingConfigPath]),
       signing: SigningConfig.fromEnvironment(environment),
       tls: TlsConfig.fromEnvironment(environment),
     );
@@ -117,6 +122,7 @@ class StemConfig {
     String? defaultQueue,
     int? prefetchMultiplier,
     int? defaultMaxRetries,
+    String? routingConfigPath,
     SigningConfig? signing,
     TlsConfig? tls,
   }) {
@@ -128,6 +134,7 @@ class StemConfig {
       defaultQueue: defaultQueue ?? this.defaultQueue,
       prefetchMultiplier: prefetchMultiplier ?? this.prefetchMultiplier,
       defaultMaxRetries: defaultMaxRetries ?? this.defaultMaxRetries,
+      routingConfigPath: routingConfigPath ?? this.routingConfigPath,
       signing: signing ?? this.signing,
       tls: tls ?? this.tls,
     );
@@ -143,4 +150,5 @@ abstract class _Keys {
   static const defaultQueue = 'STEM_DEFAULT_QUEUE';
   static const prefetchMultiplier = 'STEM_PREFETCH_MULTIPLIER';
   static const defaultMaxRetries = 'STEM_DEFAULT_MAX_RETRIES';
+  static const routingConfigPath = 'STEM_ROUTING_CONFIG';
 }

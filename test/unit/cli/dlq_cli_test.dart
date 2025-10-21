@@ -1,11 +1,8 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:stem/src/backend/in_memory_backend.dart';
-import 'package:stem/src/brokers/in_memory_broker.dart';
 import 'package:stem/src/cli/cli_runner.dart';
-import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/core/envelope.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('stem dlq cli', () {
@@ -30,8 +27,12 @@ void main() {
         ['dlq', 'list', '--queue', 'default'],
         out: stdoutBuffer,
         err: stderrBuffer,
-        contextBuilder: () async =>
-            CliContext(broker: broker, backend: backend, dispose: () async {}),
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+        ),
       );
 
       expect(exitCode, 0);
@@ -53,8 +54,12 @@ void main() {
         ['dlq', 'replay', '--queue', 'default', '--yes'],
         out: stdoutBuffer,
         err: stderrBuffer,
-        contextBuilder: () async =>
-            CliContext(broker: broker, backend: backend, dispose: () async {}),
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+        ),
       );
 
       expect(exitCode, 0, reason: stderrBuffer.toString());
@@ -79,8 +84,12 @@ void main() {
         ['dlq', 'replay', '--queue', 'default', '--dry-run'],
         out: stdoutBuffer,
         err: stderrBuffer,
-        contextBuilder: () async =>
-            CliContext(broker: broker, backend: backend, dispose: () async {}),
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+        ),
       );
 
       expect(exitCode, 0, reason: stderrBuffer.toString());
@@ -98,8 +107,12 @@ void main() {
         ['dlq', 'purge', '--queue', 'default', '--yes'],
         out: stdoutBuffer,
         err: stderrBuffer,
-        contextBuilder: () async =>
-            CliContext(broker: broker, backend: backend, dispose: () async {}),
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+        ),
       );
 
       expect(exitCode, 0, reason: stderrBuffer.toString());

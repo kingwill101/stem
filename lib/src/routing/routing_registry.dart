@@ -1,5 +1,3 @@
-import 'package:collection/collection.dart';
-
 import 'routing_config.dart';
 
 /// Describes the routing decision for an enqueue request.
@@ -112,6 +110,7 @@ class RoutingRegistry {
       Map.identity();
   final Map<RouteDefinition, BroadcastDefinition> _routeBroadcastTargets =
       Map.identity();
+  final Map<String, QueueDefinition> _dynamicQueues = {};
 
   /// Resolve a routing decision for the provided [request].
   RouteDecision resolve(RouteRequest request) {
@@ -253,11 +252,8 @@ class RoutingRegistry {
   }
 
   QueueDefinition _getQueue(String name) {
-    final queue = config.queues[name];
-    if (queue == null) {
-      throw StateError('Routing configuration missing queue "$name".');
-    }
-    return queue;
+    return config.queues[name] ??
+        _dynamicQueues.putIfAbsent(name, () => QueueDefinition(name: name));
   }
 
   List<QueueDefinition> _buildDefaultFallbacks(
@@ -318,14 +314,13 @@ class RoutingRegistry {
         'Queue name must not be empty${context != null ? ' ($context)' : ''}.',
       );
     }
-    final resolved = _queueAliases[trimmed] ??
-        config.queues.keys.firstWhereOrNull(
-          (queue) => queue == trimmed,
-        );
-    if (resolved == null) {
-      final suffix = context != null ? ' for $context' : '';
-      throw FormatException('Unknown queue "$trimmed"$suffix.');
+    final resolved = _queueAliases[trimmed];
+    if (resolved != null) {
+      return resolved;
     }
-    return resolved;
+    if (config.queues.containsKey(trimmed)) {
+      return trimmed;
+    }
+    return trimmed;
   }
 }

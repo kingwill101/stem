@@ -1,6 +1,8 @@
 import 'package:opentelemetry/api.dart' as otel;
 
 import '../observability/tracing.dart';
+import '../routing/routing_config.dart';
+import '../routing/routing_registry.dart';
 import '../security/signing.dart';
 import 'contracts.dart';
 import 'envelope.dart';
@@ -15,7 +17,9 @@ class Stem {
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
     this.signer,
-  })  : retryStrategy = retryStrategy ??
+    RoutingRegistry? routing,
+  })  : routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
+        retryStrategy = retryStrategy ??
             ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
         middleware = List.unmodifiable(middleware);
 
@@ -25,6 +29,7 @@ class Stem {
   final RetryStrategy retryStrategy;
   final List<Middleware> middleware;
   final PayloadSigner? signer;
+  final RoutingRegistry routing;
 
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -36,6 +41,16 @@ class Stem {
     Map<String, Object?> meta = const {},
   }) async {
     final tracer = StemTracer.instance;
+    final decision = routing.resolve(
+      RouteRequest(
+        task: name,
+        headers: headers,
+        queue: options.queue,
+      ),
+    );
+    final targetName = decision.targetName;
+    final resolvedPriority = decision.priorityOverride ?? options.priority;
+
     return tracer.trace(
       'stem.enqueue',
       () async {
@@ -51,9 +66,9 @@ class Stem {
           name: name,
           args: args,
           headers: traceHeaders,
-          queue: options.queue,
+          queue: targetName,
           notBefore: notBefore,
-          priority: options.priority,
+          priority: resolvedPriority,
           maxRetries: options.maxRetries,
           visibilityTimeout: options.visibilityTimeout,
           meta: meta,
@@ -62,8 +77,17 @@ class Stem {
           envelope = await signer!.sign(envelope);
         }
 
+        final routingInfo = decision.isBroadcast
+            ? RoutingInfo.broadcast(channel: decision.broadcastChannel!)
+            : RoutingInfo.queue(
+                queue: decision.queue!.name,
+                exchange: decision.queue!.exchange,
+                routingKey: decision.queue!.routingKey,
+                priority: resolvedPriority,
+              );
+
         await _runEnqueueMiddleware(envelope, () async {
-          await broker.publish(envelope);
+          await broker.publish(envelope, routing: routingInfo);
           if (backend != null) {
             await backend!.set(
               envelope.id,
@@ -71,7 +95,7 @@ class Stem {
               attempt: envelope.attempt,
               meta: {
                 ...meta,
-                'queue': envelope.queue,
+                'queue': targetName,
                 'maxRetries': envelope.maxRetries,
               },
             );
@@ -83,7 +107,11 @@ class Stem {
       spanKind: otel.SpanKind.producer,
       attributes: [
         otel.Attribute.fromString('stem.task', name),
-        otel.Attribute.fromString('stem.queue', options.queue),
+        otel.Attribute.fromString('stem.queue', targetName),
+        otel.Attribute.fromString(
+          'stem.routing.target_type',
+          decision.isBroadcast ? 'broadcast' : 'queue',
+        ),
       ],
     );
   }

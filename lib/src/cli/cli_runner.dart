@@ -17,6 +17,7 @@ import '../brokers/redis_broker.dart';
 import '../core/config.dart';
 import '../core/contracts.dart';
 import '../control/revoke_store.dart';
+import '../routing/routing_registry.dart';
 import '../security/tls.dart';
 
 const brokerEnvKey = 'STEM_BROKER_URL';
@@ -310,11 +311,13 @@ class CliContext {
     required this.broker,
     this.backend,
     this.revokeStore,
+    required this.routing,
     required this.dispose,
   });
 
   final Broker broker;
   final ResultBackend? backend;
   final RevokeStore? revokeStore;
+  final RoutingRegistry routing;
   final Future<void> Function() dispose;
 }

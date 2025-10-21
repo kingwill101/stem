@@ -27,6 +27,7 @@ void main() {
       contextBuilder: () async => CliContext(
         broker: broker,
         backend: backend,
+        routing: RoutingRegistry(RoutingConfig.legacy()),
         dispose: () async {
           broker.dispose();
         },
@@ -62,6 +63,7 @@ void main() {
       contextBuilder: () async => CliContext(
         broker: broker,
         backend: backend,
+        routing: RoutingRegistry(RoutingConfig.legacy()),
         dispose: () async {
           broker.dispose();
         },

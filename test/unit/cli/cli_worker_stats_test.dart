@@ -33,6 +33,7 @@ void main() {
         contextBuilder: () async => CliContext(
           broker: broker,
           backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
         ),
       );
@@ -95,6 +96,7 @@ void main() {
           broker: broker,
           backend: backend,
           revokeStore: InMemoryRevokeStore(),
+          routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
         ),
       );
@@ -148,6 +150,7 @@ void main() {
           contextBuilder: () async => CliContext(
             broker: broker,
             backend: backend,
+            routing: RoutingRegistry(RoutingConfig.legacy()),
             dispose: () async {},
           ),
         );
@@ -211,6 +214,7 @@ void main() {
           broker: broker,
           backend: backend,
           revokeStore: revokeStore,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
         ),
       );
@@ -255,6 +259,7 @@ void main() {
           broker: broker,
           backend: backend,
           revokeStore: revokeStore,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
         ),
       );
@@ -319,6 +324,7 @@ void main() {
           broker: broker,
           backend: backend,
           revokeStore: revokeStore,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
         ),
       );

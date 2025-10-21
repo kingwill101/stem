@@ -125,22 +125,21 @@ queues:
           equals(['secondary']));
     });
 
-    test('throws for unknown explicit queue', () {
+    test('allows unknown explicit queue fallback', () {
       const yaml = '''
 default_queue: primary
 queues:
   primary: {}
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
-      expect(
-        () => registry.resolve(
-          RouteRequest(task: 'tasks.process', queue: 'missing'),
-        ),
-        throwsA(isA<FormatException>()),
+      final decision = registry.resolve(
+        RouteRequest(task: 'tasks.process', queue: 'missing'),
       );
+      expect(decision.queue!.name, equals('missing'));
+      expect(decision.targetName, equals('missing'));
     });
 
-    test('validates unknown route targets at construction', () {
+    test('allows routes targeting undefined queues', () {
       const yaml = '''
 default_queue: primary
 queues:
@@ -152,10 +151,12 @@ routes:
       type: queue
       name: missing
 ''';
-      expect(
-        () => RoutingRegistry.fromYaml(yaml),
-        throwsA(isA<FormatException>()),
+      final registry = RoutingRegistry.fromYaml(yaml);
+      final decision = registry.resolve(
+        RouteRequest(task: 'reports.generate'),
       );
+      expect(decision.queue!.name, equals('missing'));
+      expect(decision.targetName, equals('missing'));
     });
   });
 }
