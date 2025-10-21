@@ -16,7 +16,11 @@ const sidebars: SidebarsConfig = {
   docs: [
     { type: "doc", id: "quick-start", label: "Quick Start" },
     { type: "doc", id: "developer-guide", label: "Developer Guide" },
+    { type: "doc", id: "recovery-guide", label: "Observability & Recovery" },
+    { type: "doc", id: "canvas-guide", label: "Canvas Patterns" },
     { type: "doc", id: "operations-guide", label: "Operations Guide" },
+    { type: "doc", id: "deployment-hardening", label: "Deployment Hardening" },
+    { type: "doc", id: "ci-cd", label: "CI/CD Integration" },
     { type: "doc", id: "scaling-playbook", label: "Scaling Playbook" },
     { type: "doc", id: "broker-comparison", label: "Broker Comparison" },
     { type: "doc", id: "release-process", label: "Release Process" },
