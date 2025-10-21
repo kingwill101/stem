@@ -61,7 +61,8 @@ void main() async {
     await broker.publish(envelope);
 
     final delivery = await broker
-        .consume('integration', consumerName: 'integration-tester')
+        .consume(RoutingSubscription.singleQueue('integration'),
+            consumerName: 'integration-tester')
         .first
         .timeout(const Duration(seconds: 5));
 

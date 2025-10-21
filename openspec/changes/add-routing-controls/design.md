@@ -6,6 +6,22 @@ Celery users rely on routing primitives (named queues, routing tables, prioritie
 3. Adds new broker capabilities: ordered delivery by priority, ability to bind multiple routes to a queue (for AMQP-like semantics), and broadcast fan-out delivery.
 4. Updates worker/runtime plumbing so a worker can subscribe to multiple queues/broadcast channels derived from config, while coordinators can inspect and log routing decisions.
 
+## Current Limitations
+### Redis Broker
+- `RedisStreamsBroker.publish` only ever receives a queue string (either the explicit `publish(..., queue: ...)` override or `Envelope.queue`) and writes directly to a single Redis stream (`stem:stream:<queue>`). There is no abstraction for exchanges, routing keys, or aliases.
+- Priority data is serialised on the envelope but ignored at delivery time. `supportsPriority` is `false` and the consume loop pops from the stream in FIFO order, so higher priority tasks cannot preempt lower priority ones.
+- Broadcast-style fan-out is absent; every consumer must explicitly read from one queue and will never see a message twice, making patterns like worker heartbeats or config pushes impossible.
+
+### Postgres Broker
+- The `stem_jobs` schema only contains `queue`, `envelope`, and bookkeeping columns. Publish and retry paths merely trim the queue name and persist the JSON payload; there is no space for exchanges, routing keys, or priority.
+- `consume` accepts a single queue string and locks rows solely by that column. Ordering is `ORDER BY created_at`, so priority scheduling cannot be emulated without schema changes.
+- Broadcast semantics are unsupported. There is no companion table or lease tracking that would allow duplicating deliveries across workers, and the broker hardcodes one queue per consumer group.
+
+### Worker Entrypoints
+- The `Worker` class is constructed with a single `queue` argument (defaulting to `default`) and calls `broker.consume(queue, ...)`, so a process cannot subscribe to multiple queues today.
+- CLI helpers rely on `readQueueArg`, which enforces a single required `--queue` option; there is no syntax for multiple queues or broadcast channels.
+- Enqueued tasks only capture the raw queue string from `TaskOptions`; alias resolution, route matching, or broadcast declarations must be embedded manually in producer code.
+
 ## Routing Data Model
 ```text
 RoutingRegistry
@@ -20,16 +36,43 @@ RoutingRegistry
 - **Routes** evaluate in order, matching on task name glob, optional headers, or explicit overrides from `Stem.enqueue`. When no route matches, we use the default queue alias.
 - **Broadcasts** represent fan-out destinations. Internally we’ll model them as ephemeral queues per-worker (Redis consumer groups; Postgres dedicated table marks) but logically present a `broadcast://channel` target.
 
-## Broker Contract Changes
-Add a `RoutingEnvelope` wrapper:
-```dart
-class RoutingEnvelope {
-  final Envelope envelope;
-  final QueueRoute route; // includes queue, exchange, routingKey, priority, broadcast flag
-}
+### Data Shapes
+- `DefaultQueue`: `{ alias: 'default', queue: 'default', fallbacks: ['priority'] }`
+- `QueueDefinition`: `{ name, exchange, routingKey, priorityRange: [min, max], bindings: [{ routingKey, headers?, weight? }] }`
+- `BroadcastDefinition`: `{ name, durability: 'transient'|'persistent', delivery: 'at-most-once'|'at-least-once' }`
+- `RouteRule`: `{ match: { task?: Glob, headers?: Map<String,String>, queueOverride?: String }, target: { type: 'queue'|'broadcast', name }, priorityOverride?, options? }`
+- Task patterns leverage the `glob` package so configs can supply either a single string or list (e.g. `'reports.*'` or `['reports.*', 'audit.*']`) without bespoke pattern parsing.
+
+The registry normalises these records so that every queue alias resolves to a concrete queue, and broadcasts reference the backing queue(s) per broker.
+
+```yaml
+default_queue: main
+queues:
+  main:
+    exchange: primary
+    routing_key: main
+    priority_range: [0, 9]
+  audit:
+    exchange: audit
+    routing_key: audit.events
+routes:
+  - match:
+      task: 'audit.*'
+    target:
+      type: queue
+      name: audit
+broadcasts:
+  alerts:
+    delivery: at-least-once
 ```
 
-Update `Broker.publish` signature to accept `RoutingEnvelope`. Provide a default implementation that unwraps to current behaviour (queue string) so existing brokers compile until updated. Similarly, extend `Broker.consume` with an optional list of queues and broadcast channels.
+## Broker Contract Changes
+Add a `RoutingInfo` wrapper around queue/exchange/priority/broadcast metadata. `Broker.publish` now takes an optional `RoutingInfo` argument so callers can pass resolved routing state while retaining the legacy fallback when omitted. Similarly, `Broker.consume` accepts a `RoutingSubscription` that can express multiple queues and broadcast channels instead of a single queue string.
+
+Implementations rely on two shared types:
+
+- `RoutingInfo` (publish/delivery metadata) captures queue/exchange/routing-key/priority/broadcast context.
+- `RoutingSubscription` (consume metadata) lists queues and broadcast channels a worker should listen on; single-queue helpers preserve existing ergonomics.
 
 ### Redis Broker
 - Represent each queue as a Redis Stream per existing behaviour. For priorities, maintain a sorted set per queue that points to message IDs. When publishing with priority > 0, insert into the ZSET and move highest priority to the stream, or use multiple priority streams (`queue:p0`, `queue:p1`, …). The simpler approach is to push into the stream with priority metadata and use a Lua script during consumption to pop highest priority message; prototype in design doc.

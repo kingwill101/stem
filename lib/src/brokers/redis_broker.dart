@@ -148,19 +148,33 @@ class RedisStreamsBroker implements Broker {
   }
 
   @override
-  Future<void> publish(Envelope envelope, {String? queue}) async {
-    final target = queue ?? envelope.queue;
-    if (envelope.notBefore != null &&
-        envelope.notBefore!.isAfter(DateTime.now())) {
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    final resolvedRoute = routing ??
+        RoutingInfo.queue(
+          queue: envelope.queue,
+          priority: envelope.priority,
+        );
+    if (resolvedRoute.isBroadcast) {
+      throw UnsupportedError(
+        'RedisStreamsBroker does not yet support broadcast routing.',
+      );
+    }
+    final target = resolvedRoute.queue ?? envelope.queue;
+    final message = envelope.copyWith(
+      queue: target,
+      priority: resolvedRoute.priority ?? envelope.priority,
+    );
+    if (message.notBefore != null &&
+        message.notBefore!.isAfter(DateTime.now())) {
       await _send([
         'ZADD',
         _delayedKey(target),
-        envelope.notBefore!.millisecondsSinceEpoch.toString(),
-        jsonEncode(envelope.toJson()),
+        message.notBefore!.millisecondsSinceEpoch.toString(),
+        jsonEncode(message.toJson()),
       ]);
       return;
     }
-    await _enqueue(target, envelope);
+    await _enqueue(target, message);
   }
 
   Future<void> _enqueue(String queue, Envelope envelope) async {
@@ -227,11 +241,27 @@ class RedisStreamsBroker implements Broker {
 
   @override
   Stream<Delivery> consume(
-    String queue, {
+    RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,
   }) {
+    if (subscription.broadcastChannels.isNotEmpty) {
+      throw UnsupportedError(
+        'RedisStreamsBroker does not yet support broadcast subscriptions.',
+      );
+    }
+    if (subscription.queues.isEmpty) {
+      throw ArgumentError(
+        'RoutingSubscription must specify at least one queue.',
+      );
+    }
+    if (subscription.queues.length > 1) {
+      throw UnsupportedError(
+        'RedisStreamsBroker currently supports consuming a single queue per subscription.',
+      );
+    }
+    final queue = subscription.queues.first;
     final consumer =
         consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
     final group = consumerGroup ?? _groupKey(queue);
@@ -326,6 +356,10 @@ class RedisStreamsBroker implements Broker {
             receipt: receipt,
             leaseExpiresAt:
                 lease == Duration.zero ? null : DateTime.now().add(lease),
+            route: RoutingInfo.queue(
+              queue: envelope.queue,
+              priority: envelope.priority,
+            ),
           ),
         );
       }

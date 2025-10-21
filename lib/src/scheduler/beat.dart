@@ -110,7 +110,7 @@ class Beat {
       if (signer != null) {
         envelope = await signer!.sign(envelope);
       }
-      await broker.publish(envelope, queue: entry.queue);
+      await broker.publish(envelope);
 
       final executedAt = DateTime.now();
       await store.markExecuted(

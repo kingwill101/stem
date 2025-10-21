@@ -18,6 +18,8 @@ export 'src/brokers/redis_broker.dart';
 export 'src/brokers/postgres_broker.dart';
 export 'src/brokers/in_memory_broker.dart';
 export 'src/canvas/canvas.dart';
+export 'src/routing/routing_config.dart';
+export 'src/routing/routing_registry.dart';
 export 'src/scheduler/beat.dart';
 export 'src/scheduler/in_memory_lock_store.dart';
 export 'src/scheduler/in_memory_schedule_store.dart';

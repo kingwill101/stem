@@ -4,20 +4,66 @@ import 'envelope.dart';
 import 'task_invocation.dart';
 import '../observability/heartbeat.dart';
 
+/// Subscription describing the queues and broadcast channels a worker should
+/// consume from.
+class RoutingSubscription {
+  RoutingSubscription({
+    required List<String> queues,
+    List<String>? broadcastChannels,
+  })  : queues = List.unmodifiable(
+          queues
+              .map((queue) => queue.trim())
+              .where((queue) => queue.isNotEmpty),
+        ),
+        broadcastChannels = List.unmodifiable(
+          (broadcastChannels ?? const <String>[])
+              .map((channel) => channel.trim())
+              .where((channel) => channel.isNotEmpty),
+        ) {
+    if (this.queues.isEmpty && this.broadcastChannels.isEmpty) {
+      throw ArgumentError(
+        'RoutingSubscription must include at least one queue or broadcast channel.',
+      );
+    }
+  }
+
+  factory RoutingSubscription.singleQueue(String queue) {
+    final trimmed = queue.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(queue, 'queue', 'Queue name must not be empty');
+    }
+    return RoutingSubscription(queues: [trimmed]);
+  }
+
+  /// Canonical queue names included in this subscription.
+  final List<String> queues;
+
+  /// Broadcast channels to join.
+  final List<String> broadcastChannels;
+
+  /// Helper that expands the subscription into queue names, falling back to
+  /// the provided [defaultQueue] when the subscription was created via
+  /// [RoutingSubscription.singleQueue].
+  List<String> resolveQueues(String defaultQueue) {
+    if (queues.isEmpty) return [defaultQueue];
+    return queues;
+  }
+}
+
 /// Abstract broker interface implemented by queue adapters (Redis, SQS, etc).
 /// Since: 0.1.0
 abstract class Broker {
-  /// Publishes the given [envelope] to the specified [queue].
+  /// Publishes the given [envelope] using [routing] metadata when provided.
   ///
-  /// If [queue] is omitted, publishes to the default queue.
-  Future<void> publish(Envelope envelope, {String? queue});
+  /// When [routing] is omitted, brokers MUST fall back to [Envelope.queue] and existing semantics.
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing});
 
-  /// Returns a stream of deliveries from the [queue].
+  /// Returns a stream of deliveries based on the supplied [subscription].
   ///
   /// The [prefetch] parameter specifies the number of messages to prefetch.
   /// [consumerGroup] and [consumerName] can be used for consumer identification.
   Stream<Delivery> consume(
-    String queue, {
+    RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,

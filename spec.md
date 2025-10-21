@@ -932,7 +932,7 @@ class Stem {
       priority: options.priority,
       queue: options.queue,
     );
-    await broker.publish(env, queue: options.queue);
+    await broker.publish(env);
     return id;
   }
 }
@@ -1269,7 +1269,7 @@ class Beat {
           notBefore: null,
           queue: entry.queue,
         );
-        await broker.publish(env, queue: entry.queue);
+        await broker.publish(env.copyWith(queue: entry.queue));
       }
 
       // Re-schedule

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/src/brokers/redis_broker.dart';
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:test/test.dart';
 
@@ -35,7 +36,8 @@ void main() {
     await broker.publish(first);
     await broker.publish(second);
 
-    final iterator = StreamIterator(broker.consume(queue, prefetch: 1));
+    final iterator = StreamIterator(
+        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 1));
     expect(await iterator.moveNext(), isTrue);
     final delivery = iterator.current;
     expect(delivery.envelope.id, first.id);

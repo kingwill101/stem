@@ -53,10 +53,23 @@ class InMemoryBroker implements Broker {
   }
 
   @override
-  Future<void> publish(Envelope envelope, {String? queue}) async {
-    final targetQueue = queue ?? envelope.queue;
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    final resolvedRoute = routing ??
+        RoutingInfo.queue(
+          queue: envelope.queue,
+          priority: envelope.priority,
+        );
+    if (resolvedRoute.isBroadcast) {
+      throw UnsupportedError(
+        'InMemoryBroker does not support broadcast routing.',
+      );
+    }
+    final targetQueue = resolvedRoute.queue ?? envelope.queue;
     final state = _state(targetQueue);
-    final msg = envelope.copyWith(queue: targetQueue);
+    final msg = envelope.copyWith(
+      queue: targetQueue,
+      priority: resolvedRoute.priority ?? envelope.priority,
+    );
 
     if (msg.notBefore != null && msg.notBefore!.isAfter(DateTime.now())) {
       state.addDelayed(msg);
@@ -81,11 +94,27 @@ class InMemoryBroker implements Broker {
 
   @override
   Stream<Delivery> consume(
-    String queue, {
+    RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,
   }) {
+    if (subscription.broadcastChannels.isNotEmpty) {
+      throw UnsupportedError(
+        'InMemoryBroker does not support broadcast subscriptions.',
+      );
+    }
+    if (subscription.queues.isEmpty) {
+      throw ArgumentError(
+        'RoutingSubscription must specify at least one queue.',
+      );
+    }
+    if (subscription.queues.length > 1) {
+      throw UnsupportedError(
+        'InMemoryBroker currently supports consuming a single queue at a time.',
+      );
+    }
+    final queue = subscription.queues.first;
     final state = _state(queue);
     final consumer =
         consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
@@ -204,7 +233,7 @@ class InMemoryBroker implements Broker {
         attempt: entry.envelope.attempt + 1,
         notBefore: delay != null ? now.add(delay) : null,
       );
-      await publish(replayEnvelope.copyWith(queue: queue), queue: queue);
+      await publish(replayEnvelope.copyWith(queue: queue));
     }
     return DeadLetterReplayResult(entries: selected, dryRun: false);
   }
@@ -325,6 +354,10 @@ class _QueueState {
           envelope: envelope,
           receipt: receipt,
           leaseExpiresAt: expiresAt,
+          route: RoutingInfo.queue(
+            queue: envelope.queue,
+            priority: envelope.priority,
+          ),
         );
         _pending[receipt] = _PendingEntry(
           delivery: delivery,

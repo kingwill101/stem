@@ -16,7 +16,7 @@ void main() {
       await broker.publish(envelope);
 
       final delivery = await broker
-          .consume('default', prefetch: 1)
+          .consume(RoutingSubscription.singleQueue('default'), prefetch: 1)
           .first
           .timeout(const Duration(seconds: 1));
 
@@ -38,7 +38,7 @@ void main() {
       );
       await broker.publish(envelope);
 
-      final stream = broker.consume('default');
+      final stream = broker.consume(RoutingSubscription.singleQueue('default'));
       final delivery = await stream.first.timeout(const Duration(seconds: 1));
       expect(delivery.envelope.name, equals('delayed'));
       await broker.ack(delivery);
@@ -59,15 +59,18 @@ void main() {
       );
       await broker.publish(envelope);
 
-      final first =
-          await broker.consume('default', consumerName: 'c-test').first;
+      final first = await broker
+          .consume(RoutingSubscription.singleQueue('default'),
+              consumerName: 'c-test')
+          .first;
       expect(first.envelope.id, equals(envelope.id));
 
       // Do not ack; wait for reclaim.
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
       final second = await broker
-          .consume('default', consumerName: 'c-test')
+          .consume(RoutingSubscription.singleQueue('default'),
+              consumerName: 'c-test')
           .first
           .timeout(const Duration(seconds: 1));
       expect(second.envelope.id, equals(envelope.id));
@@ -130,7 +133,9 @@ void main() {
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 
       final taskId = await stem.enqueue('noop');
-      final delivery = await broker.consume('default').first;
+      final delivery = await broker
+          .consume(RoutingSubscription.singleQueue('default'))
+          .first;
 
       await backend.set(taskId, TaskState.succeeded, attempt: 0);
       await broker.ack(delivery);
@@ -151,7 +156,9 @@ void main() {
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 
       final taskId = await stem.enqueue('noop');
-      final delivery = await broker.consume('default').first;
+      final delivery = await broker
+          .consume(RoutingSubscription.singleQueue('default'))
+          .first;
 
       await backend.set(
         taskId,

@@ -1,6 +1,76 @@
 import 'dart:convert';
 import 'dart:math';
 
+/// Target classification for routing operations.
+enum RoutingTargetType { queue, broadcast }
+
+/// Routing metadata that accompanies published envelopes.
+///
+/// Queue routes include optional exchange/routing-key context plus a priority
+/// override. Broadcast routes reference a logical channel; brokers may map
+/// that to underlying transport semantics.
+class RoutingInfo {
+  RoutingInfo._({
+    required this.type,
+    this.queue,
+    this.exchange,
+    this.routingKey,
+    this.priority,
+    this.broadcastChannel,
+    Map<String, Object?>? meta,
+  }) : meta = Map.unmodifiable(meta ?? const {});
+
+  factory RoutingInfo.queue({
+    required String queue,
+    String? exchange,
+    String? routingKey,
+    int? priority,
+    Map<String, Object?>? meta,
+  }) {
+    final trimmed = queue.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(queue, 'queue', 'Queue must not be empty');
+    }
+    return RoutingInfo._(
+      type: RoutingTargetType.queue,
+      queue: trimmed,
+      exchange: exchange,
+      routingKey: routingKey,
+      priority: priority,
+      meta: meta,
+    );
+  }
+
+  factory RoutingInfo.broadcast({
+    required String channel,
+    Map<String, Object?>? meta,
+  }) {
+    final trimmed = channel.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(
+        channel,
+        'channel',
+        'Broadcast channel must not be empty',
+      );
+    }
+    return RoutingInfo._(
+      type: RoutingTargetType.broadcast,
+      broadcastChannel: trimmed,
+      meta: meta,
+    );
+  }
+
+  final RoutingTargetType type;
+  final String? queue;
+  final String? exchange;
+  final String? routingKey;
+  final int? priority;
+  final String? broadcastChannel;
+  final Map<String, Object?> meta;
+
+  bool get isBroadcast => type == RoutingTargetType.broadcast;
+}
+
 /// Unique identifier generator used for task envelopes by default.
 String generateEnvelopeId() {
   final micros = DateTime.now().microsecondsSinceEpoch;
@@ -142,7 +212,12 @@ class Delivery {
     required this.envelope,
     required this.receipt,
     required this.leaseExpiresAt,
-  });
+    RoutingInfo? route,
+  }) : route = route ??
+            RoutingInfo.queue(
+              queue: envelope.queue,
+              priority: envelope.priority,
+            );
 
   final Envelope envelope;
 
@@ -151,4 +226,7 @@ class Delivery {
 
   /// When the current lease expires (if supported).
   final DateTime? leaseExpiresAt;
+
+  /// Routing metadata resolved for this delivery.
+  final RoutingInfo route;
 }

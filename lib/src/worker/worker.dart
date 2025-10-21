@@ -190,7 +190,11 @@ class Worker {
     _recordConcurrencyGauge();
     unawaited(_publishWorkerHeartbeat());
     final subscription = broker
-        .consume(queue, prefetch: prefetch, consumerName: consumerName)
+        .consume(
+      RoutingSubscription.singleQueue(queue),
+      prefetch: prefetch,
+      consumerName: consumerName,
+    )
         .listen(
       (delivery) {
         // Fire-and-forget; handler manages its own lifecycle.
@@ -1696,7 +1700,7 @@ class Worker {
         continue;
       }
       final stream = broker.consume(
-        queueName,
+        RoutingSubscription.singleQueue(queueName),
         prefetch: 1,
         consumerName: '$_workerIdentifier-control',
       );

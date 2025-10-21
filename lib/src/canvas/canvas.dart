@@ -67,7 +67,7 @@ class Canvas {
   /// [TaskState.queued] in [backend]. Returns the task id.
   Future<String> send(TaskSignature signature) async {
     final envelope = signature();
-    await broker.publish(envelope, queue: envelope.queue);
+    await broker.publish(envelope);
     await backend.set(
       envelope.id,
       TaskState.queued,
@@ -99,7 +99,7 @@ class Canvas {
         meta: {...raw.meta, 'groupId': id},
       );
       ids.add(envelope.id);
-      await broker.publish(envelope, queue: envelope.queue);
+      await broker.publish(envelope);
       await backend.set(
         envelope.id,
         TaskState.queued,
@@ -160,7 +160,7 @@ class Canvas {
         }
       });
 
-      await broker.publish(envelope, queue: envelope.queue);
+      await broker.publish(envelope);
       await backend.set(
         envelope.id,
         TaskState.queued,
@@ -244,7 +244,6 @@ class Canvas {
           headers: {...envelope.headers, 'stem-chord-id': chordId},
           meta: {...envelope.meta, 'chordResults': payload},
         ),
-        queue: envelope.queue,
       );
       await backend.set(
         envelope.id,

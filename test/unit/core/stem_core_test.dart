@@ -109,7 +109,7 @@ class _RecordingBroker implements Broker {
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {}
 
   @override
-  Future<void> publish(Envelope envelope, {String? queue}) async {
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     published.add(
       Delivery(envelope: envelope, receipt: 'receipt', leaseExpiresAt: null),
     );
@@ -120,7 +120,7 @@ class _RecordingBroker implements Broker {
 
   @override
   Stream<Delivery> consume(
-    String queue, {
+    RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,

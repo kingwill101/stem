@@ -63,9 +63,25 @@ class PostgresBroker implements Broker {
   bool get supportsPriority => false;
 
   @override
-  Future<void> publish(Envelope envelope, {String? queue}) async {
-    final targetQueue = (queue ?? envelope.queue).trim();
-    final stored = envelope.copyWith(queue: targetQueue);
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    final resolvedRoute = routing ??
+        RoutingInfo.queue(
+          queue: envelope.queue,
+          priority: envelope.priority,
+        );
+    if (resolvedRoute.isBroadcast) {
+      throw UnsupportedError(
+        'PostgresBroker does not yet support broadcast routing.',
+      );
+    }
+    final targetQueue = (resolvedRoute.queue ?? envelope.queue).trim();
+    if (targetQueue.isEmpty) {
+      throw StateError('Resolved queue must not be empty.');
+    }
+    final stored = envelope.copyWith(
+      queue: targetQueue,
+      priority: resolvedRoute.priority ?? envelope.priority,
+    );
     await _client.run((Connection conn) async {
       await conn.execute(
         Sql.named('''
@@ -115,11 +131,27 @@ ON CONFLICT (id) DO UPDATE SET
 
   @override
   Stream<Delivery> consume(
-    String queue, {
+    RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,
   }) {
+    if (subscription.broadcastChannels.isNotEmpty) {
+      throw UnsupportedError(
+        'PostgresBroker does not yet support broadcast subscriptions.',
+      );
+    }
+    if (subscription.queues.isEmpty) {
+      throw ArgumentError(
+        'RoutingSubscription must specify at least one queue.',
+      );
+    }
+    if (subscription.queues.length > 1) {
+      throw UnsupportedError(
+        'PostgresBroker currently supports consuming a single queue per subscription.',
+      );
+    }
+    final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
     final consumer = consumerName ??
         'consumer-${DateTime.now().microsecondsSinceEpoch}'
@@ -595,6 +627,10 @@ WHERE id = @id
               envelope: envelope,
               receipt: receipt,
               leaseExpiresAt: leaseExpiresAt,
+              route: RoutingInfo.queue(
+                queue: envelope.queue,
+                priority: envelope.priority,
+              ),
             ),
           );
         }

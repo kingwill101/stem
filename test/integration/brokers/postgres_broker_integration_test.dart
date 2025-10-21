@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:stem/src/brokers/postgres_broker.dart';
 import 'package:stem/src/cli/cli_runner.dart';
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:test/test.dart';
 
@@ -34,7 +35,8 @@ void main() {
     await broker.publish(envelope);
     expect(await broker.pendingCount(queue), 1);
 
-    final delivery = await broker.consume(queue).first;
+    final delivery =
+        await broker.consume(RoutingSubscription.singleQueue(queue)).first;
     expect(delivery.envelope.id, envelope.id);
     expect(delivery.envelope.queue, queue);
 
@@ -55,7 +57,8 @@ void main() {
     expect(replay.dryRun, isFalse);
     expect(replay.entries, hasLength(1));
 
-    final redelivery = await broker.consume(queue).first;
+    final redelivery =
+        await broker.consume(RoutingSubscription.singleQueue(queue)).first;
     expect(redelivery.envelope.id, envelope.id);
     expect(redelivery.envelope.attempt, envelope.attempt + 1);
 

@@ -1388,7 +1388,7 @@ Future<List<ControlReplyMessage>> _collectControlReplies(
   late final StreamSubscription<Delivery> subscription;
   subscription = ctx.broker
       .consume(
-    replyQueue,
+    RoutingSubscription.singleQueue(replyQueue),
     prefetch: 10,
     consumerName: 'stem-cli-control-$requestId',
   )
