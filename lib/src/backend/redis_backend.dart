@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:redis/redis.dart';
 
 import '../core/contracts.dart';
 import '../observability/heartbeat.dart';
+import '../security/tls.dart';
 
 /// Redis-backed implementation of [ResultBackend].
 class RedisResultBackend implements ResultBackend {
@@ -33,12 +35,39 @@ class RedisResultBackend implements ResultBackend {
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
+    TlsConfig? tls,
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
     final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
-    final command = await connection.connect(host, port);
+    final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
+    Command command;
+    if (scheme == 'rediss') {
+      final securityContext = tls?.toSecurityContext();
+      try {
+        final socket = await SecureSocket.connect(
+          host,
+          port,
+          context: securityContext,
+          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+        );
+        command = await connection.connectWithSocket(socket);
+      } on HandshakeException catch (error, stack) {
+        logTlsHandshakeFailure(
+          component: 'redis result backend',
+          host: host,
+          port: port,
+          config: tls,
+          error: error,
+          stack: stack,
+        );
+        await connection.close();
+        rethrow;
+      }
+    } else {
+      command = await connection.connect(host, port);
+    }
 
     if (parsed.userInfo.isNotEmpty) {
       final parts = parsed.userInfo.split(':');

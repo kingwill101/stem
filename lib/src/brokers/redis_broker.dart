@@ -51,13 +51,26 @@ class RedisStreamsBroker implements Broker {
     Command command;
     if (scheme == 'rediss') {
       final securityContext = tls?.toSecurityContext();
-      final socket = await SecureSocket.connect(
-        host,
-        port,
-        context: securityContext,
-        onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
-      );
-      command = await connection.connectWithSocket(socket);
+      try {
+        final socket = await SecureSocket.connect(
+          host,
+          port,
+          context: securityContext,
+          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+        );
+        command = await connection.connectWithSocket(socket);
+      } on HandshakeException catch (error, stack) {
+        logTlsHandshakeFailure(
+          component: 'redis broker',
+          host: host,
+          port: port,
+          config: tls,
+          error: error,
+          stack: stack,
+        );
+        await connection.close();
+        rethrow;
+      }
     } else {
       command = await connection.connect(host, port);
     }

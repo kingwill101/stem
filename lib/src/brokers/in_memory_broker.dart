@@ -5,8 +5,8 @@ import 'package:collection/collection.dart';
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 
-class InMemoryRedisBroker implements Broker {
-  InMemoryRedisBroker({
+class InMemoryBroker implements Broker {
+  InMemoryBroker({
     this.namespace = 'stem',
     this.delayedInterval = const Duration(milliseconds: 200),
     this.claimInterval = const Duration(seconds: 5),
