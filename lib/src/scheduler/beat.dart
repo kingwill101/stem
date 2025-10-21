@@ -7,6 +7,7 @@ import '../core/contracts.dart';
 import '../core/envelope.dart';
 import '../observability/logging.dart';
 import '../observability/metrics.dart';
+import '../security/signing.dart';
 
 class Beat {
   Beat({
@@ -15,6 +16,7 @@ class Beat {
     this.lockStore,
     this.tickInterval = const Duration(seconds: 1),
     this.lockTtl = const Duration(seconds: 5),
+    this.signer,
     Random? random,
   }) : _random = random ?? Random();
 
@@ -23,6 +25,7 @@ class Beat {
   final LockStore? lockStore;
   final Duration tickInterval;
   final Duration lockTtl;
+  final PayloadSigner? signer;
 
   final Random _random;
 
@@ -98,12 +101,15 @@ class Beat {
         await Future<void>.delayed(jitterDelay);
       }
 
-      final envelope = Envelope(
+      Envelope envelope = Envelope(
         name: entry.taskName,
         args: entry.args,
         queue: entry.queue,
         headers: {'scheduled-from': 'beat', 'schedule-id': entry.id},
       );
+      if (signer != null) {
+        envelope = await signer!.sign(envelope);
+      }
       await broker.publish(envelope, queue: entry.queue);
 
       final executedAt = DateTime.now();

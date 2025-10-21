@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:redis/redis.dart';
 
 import '../core/contracts.dart';
+import '../security/tls.dart';
 
 class RedisLockStore implements LockStore {
   RedisLockStore._(this._connection, this._command, {this.namespace = 'stem'})
@@ -17,12 +19,39 @@ class RedisLockStore implements LockStore {
   static Future<RedisLockStore> connect(
     String uri, {
     String namespace = 'stem',
+    TlsConfig? tls,
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
     final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
-    final command = await connection.connect(host, port);
+    final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
+    Command command;
+    if (scheme == 'rediss') {
+      final securityContext = tls?.toSecurityContext();
+      try {
+        final socket = await SecureSocket.connect(
+          host,
+          port,
+          context: securityContext,
+          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+        );
+        command = await connection.connectWithSocket(socket);
+      } on HandshakeException catch (error, stack) {
+        logTlsHandshakeFailure(
+          component: 'redis lock store',
+          host: host,
+          port: port,
+          config: tls,
+          error: error,
+          stack: stack,
+        );
+        await connection.close();
+        rethrow;
+      }
+    } else {
+      command = await connection.connect(host, port);
+    }
 
     if (parsed.userInfo.isNotEmpty) {
       final parts = parsed.userInfo.split(':');

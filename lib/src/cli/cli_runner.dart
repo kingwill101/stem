@@ -9,14 +9,16 @@ import 'package:redis/redis.dart';
 
 import '../backend/in_memory_backend.dart';
 import '../backend/redis_backend.dart';
-import '../broker_redis/in_memory_broker.dart';
-import '../broker_redis/redis_broker.dart';
+import '../brokers/in_memory_broker.dart';
+import '../brokers/redis_broker.dart';
+import '../brokers/postgres_broker.dart';
 import '../core/config.dart';
 import '../core/contracts.dart';
 import '../observability/metrics.dart';
 import '../observability/snapshots.dart';
 import '../observability/config.dart';
 import '../observability/heartbeat.dart';
+import '../security/tls.dart';
 import '../scheduler/schedule_calculator.dart';
 import '../scheduler/in_memory_schedule_store.dart';
 import '../scheduler/redis_schedule_store.dart';
@@ -31,14 +33,17 @@ Future<int> runStemCli(
   StringSink? err,
   String? scheduleFilePath,
   Future<CliContext> Function()? contextBuilder,
+  Map<String, String>? environment,
 }) async {
   final stdoutSink = out ?? stdout;
   final stderrSink = err ?? stderr;
+  final resolvedEnvironment = environment ?? Platform.environment;
 
   final parser = ArgParser();
   final scheduleParser = ArgParser();
   final observeParser = ArgParser();
   final dlqCommandParser = ArgParser();
+  final healthParser = ArgParser();
 
   scheduleParser.addCommand('list');
 
@@ -110,6 +115,37 @@ Future<int> runStemCli(
   schedulesParser.addOption('file', abbr: 'f', help: 'Path to schedules file');
 
   parser.addCommand('observe', observeParser);
+  healthParser
+    ..addOption(
+      'broker',
+      help: 'Override broker URL (defaults to STEM_BROKER_URL).',
+      valueHelp: 'redis://host:port',
+    )
+    ..addOption(
+      'backend',
+      help: 'Override result backend URL.',
+      valueHelp: 'redis://host:port',
+    )
+    ..addFlag(
+      'skip-backend',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Skip checking the result backend connection.',
+    )
+    ..addFlag(
+      'allow-insecure',
+      defaultsTo: false,
+      negatable: false,
+      help:
+          'Temporarily allow TLS handshakes without certificate validation for debugging.',
+    )
+    ..addFlag(
+      'json',
+      defaultsTo: false,
+      negatable: false,
+      help: 'Emit health results as JSON.',
+    );
+  parser.addCommand('health', healthParser);
 
   final workerParser = ArgParser();
   final workerStatusParser = workerParser.addCommand('status');
@@ -269,6 +305,10 @@ Future<int> runStemCli(
     return 64;
   }
 
+  if (command.name == 'health') {
+    return _healthCheck(command, stdoutSink, stderrSink, resolvedEnvironment);
+  }
+
   if (command.name == 'schedule') {
     final sub = command.command;
     if (sub == null) {
@@ -413,6 +453,190 @@ String _observeUsage(ArgParser parser) =>
     'Usage: stem observe <subcommand>\n${parser.usage}';
 String _dlqUsage(ArgParser parser) =>
     'Usage: stem dlq <subcommand>\n${parser.usage}';
+
+Future<int> _healthCheck(
+  ArgResults args,
+  StringSink out,
+  StringSink err,
+  Map<String, String> environment,
+) async {
+  final overrides = Map<String, String>.from(environment);
+  final brokerOverride = (args['broker'] as String?)?.trim();
+  if (brokerOverride != null && brokerOverride.isNotEmpty) {
+    overrides[_brokerEnvKey] = brokerOverride;
+  }
+  final backendOverride = (args['backend'] as String?)?.trim();
+  if (backendOverride != null && backendOverride.isNotEmpty) {
+    overrides[_backendEnvKey] = backendOverride;
+  }
+  if (args['allow-insecure'] == true) {
+    overrides[TlsEnvKeys.allowInsecure] = 'true';
+  }
+
+  StemConfig config;
+  try {
+    config = StemConfig.fromEnvironment(overrides);
+  } on Object catch (error) {
+    err.writeln('Failed to load StemConfig: $error');
+    return 64;
+  }
+
+  final results = <_HealthCheckResult>[];
+  final brokerUrl = overrides[_brokerEnvKey] ?? config.brokerUrl;
+  results.add(await _checkBrokerHealth(brokerUrl, config.tls));
+
+  final skipBackend = args['skip-backend'] as bool? ?? false;
+  final backendUrl = overrides[_backendEnvKey] ?? config.resultBackendUrl;
+  if (!skipBackend && backendUrl != null && backendUrl.isNotEmpty) {
+    results.add(await _checkBackendHealth(backendUrl, config.tls));
+  }
+
+  final jsonOutput = args['json'] as bool? ?? false;
+  if (jsonOutput) {
+    out.writeln(jsonEncode(results.map((r) => r.toJson()).toList()));
+  } else {
+    for (final result in results) {
+      final prefix = result.success ? '[ok]   ' : '[fail]';
+      out.writeln('$prefix ${result.component}: ${result.message}');
+      if (!result.success && result.context.isNotEmpty) {
+        final tls = result.context['tls'] as Map<String, Object?>?;
+        if (tls != null) {
+          out.writeln(
+            '       TLS -> ca=${tls['caCertificate']}, client=${tls['clientCertificate']}, allowInsecure=${tls['allowInsecure']}',
+          );
+        }
+        final hints = result.context['hints'] as List<String>? ?? const [];
+        for (final hint in hints) {
+          out.writeln('       hint: $hint');
+        }
+      }
+    }
+  }
+
+  final success = results.every((result) => result.success);
+  return success ? 0 : 70;
+}
+
+Future<_HealthCheckResult> _checkBrokerHealth(String url, TlsConfig tls) async {
+  final uri = Uri.parse(url);
+  if (_isPostgresScheme(uri.scheme)) {
+    try {
+      final broker = await PostgresBroker.connect(
+        url,
+        applicationName: 'stem-cli-health',
+      );
+      await broker.close();
+      return _HealthCheckResult(
+        component: 'broker',
+        success: true,
+        message: 'Connected to $url',
+      );
+    } on SocketException catch (error) {
+      return _HealthCheckResult(
+        component: 'broker',
+        success: false,
+        message: 'Connection failed for $url: $error',
+      );
+    } on Object catch (error) {
+      return _HealthCheckResult(
+        component: 'broker',
+        success: false,
+        message: 'Connection failed for $url: $error',
+      );
+    }
+  }
+
+  try {
+    final broker = await RedisStreamsBroker.connect(
+      url,
+      tls: tls,
+      blockTime: const Duration(seconds: 1),
+    );
+    await broker.close();
+    return _HealthCheckResult(
+      component: 'broker',
+      success: true,
+      message: 'Connected to $url',
+    );
+  } on HandshakeException catch (error) {
+    return _HealthCheckResult(
+      component: 'broker',
+      success: false,
+      message: 'TLS handshake failed for $url: $error',
+      context: _tlsFailureContext(tls),
+    );
+  } on Object catch (error) {
+    return _HealthCheckResult(
+      component: 'broker',
+      success: false,
+      message: 'Connection failed for $url: $error',
+    );
+  }
+}
+
+Future<_HealthCheckResult> _checkBackendHealth(
+  String url,
+  TlsConfig tls,
+) async {
+  try {
+    final backend = await RedisResultBackend.connect(url, tls: tls);
+    await backend.close();
+    return _HealthCheckResult(
+      component: 'backend',
+      success: true,
+      message: 'Connected to $url',
+    );
+  } on HandshakeException catch (error) {
+    return _HealthCheckResult(
+      component: 'backend',
+      success: false,
+      message: 'TLS handshake failed for $url: $error',
+      context: _tlsFailureContext(tls),
+    );
+  } on Object catch (error) {
+    return _HealthCheckResult(
+      component: 'backend',
+      success: false,
+      message: 'Connection failed for $url: $error',
+    );
+  }
+}
+
+Map<String, Object?> _tlsFailureContext(TlsConfig tls) => {
+  'tls': {
+    'caCertificate': tls.caCertificateFile ?? 'system',
+    'clientCertificate': tls.clientCertificateFile ?? 'not provided',
+    'allowInsecure': tls.allowInsecure,
+  },
+  'hints': tls.allowInsecure
+      ? const [
+          'TLS verification is disabled (STEM_TLS_ALLOW_INSECURE=true); ensure this is intentional.',
+        ]
+      : const [
+          'Verify certificate paths or temporarily set STEM_TLS_ALLOW_INSECURE=true to bypass validation while debugging.',
+        ],
+};
+
+class _HealthCheckResult {
+  _HealthCheckResult({
+    required this.component,
+    required this.success,
+    required this.message,
+    Map<String, Object?>? context,
+  }) : context = context ?? const {};
+
+  final String component;
+  final bool success;
+  final String message;
+  final Map<String, Object?> context;
+
+  Map<String, Object?> toJson() => {
+    'component': component,
+    'status': success ? 'ok' : 'error',
+    'message': message,
+    if (context.isNotEmpty) 'context': context,
+  };
+}
 
 Future<int> _scheduleList(ScheduleCliContext ctx, StringSink out) async {
   final entries = ctx.store != null
@@ -795,6 +1019,7 @@ class ScheduleCliContext {
 
 Future<ScheduleCliContext> _createScheduleCliContext({String? repoPath}) async {
   final url = Platform.environment['STEM_SCHEDULE_STORE_URL']?.trim();
+  final tls = TlsConfig.fromEnvironment(Platform.environment);
   if (url == null || url.isEmpty) {
     return ScheduleCliContext.file(
       repo: FileScheduleRepository(path: repoPath),
@@ -807,7 +1032,7 @@ Future<ScheduleCliContext> _createScheduleCliContext({String? repoPath}) async {
   switch (uri.scheme) {
     case 'redis':
     case 'rediss':
-      final redisStore = await RedisScheduleStore.connect(url);
+      final redisStore = await RedisScheduleStore.connect(url, tls: tls);
       store = redisStore;
       disposables.add(() => redisStore.close());
       break;
@@ -1114,8 +1339,15 @@ Future<CliContext> _createDefaultContext() async {
     );
     broker = redisBroker;
     disposables.add(() => redisBroker.close());
+  } else if (_isPostgresScheme(brokerUri.scheme)) {
+    final postgresBroker = await PostgresBroker.connect(
+      config.brokerUrl,
+      applicationName: 'stem-cli',
+    );
+    broker = postgresBroker;
+    disposables.add(() => postgresBroker.close());
   } else if (brokerUri.scheme == 'memory') {
-    final inMemory = InMemoryRedisBroker();
+    final inMemory = InMemoryBroker();
     broker = inMemory;
     disposables.add(() async => inMemory.dispose());
   } else {
@@ -1127,7 +1359,10 @@ Future<CliContext> _createDefaultContext() async {
   if (backendUrl != null) {
     final backendUri = Uri.parse(backendUrl);
     if (backendUri.scheme == 'redis' || backendUri.scheme == 'rediss') {
-      final redisBackend = await RedisResultBackend.connect(backendUrl);
+      final redisBackend = await RedisResultBackend.connect(
+        backendUrl,
+        tls: config.tls,
+      );
       backend = redisBackend;
       disposables.add(() => redisBackend.close());
     } else if (backendUri.scheme == 'memory') {
@@ -1157,6 +1392,18 @@ String? _readQueueArg(ArgResults args, StringSink err) {
     return null;
   }
   return queue;
+}
+
+bool _isPostgresScheme(String scheme) {
+  switch (scheme) {
+    case 'postgres':
+    case 'postgresql':
+    case 'postgresql+ssl':
+    case 'postgres+ssl':
+      return true;
+    default:
+      return false;
+  }
 }
 
 int? _parseIntWithDefault(

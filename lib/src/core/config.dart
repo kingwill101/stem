@@ -4,6 +4,13 @@ import '../security/signing.dart';
 import '../security/tls.dart';
 
 /// Configuration source for Stem clients and worker processes.
+///
+/// Instances are commonly created via [StemConfig.fromEnvironment], which
+/// reads the standard `STEM_*` environment variables used across the CLI,
+/// producers, and workers. Besides broker and backend connectivity it embeds
+/// security helpers such as [SigningConfig] and [TlsConfig], ensuring that
+/// producers log actionable warnings when signing misconfigurations are
+/// detected.
 class StemConfig {
   StemConfig({
     required this.brokerUrl,
@@ -35,10 +42,18 @@ class StemConfig {
   /// Global fallback for tasks without explicit max retries.
   final int defaultMaxRetries;
 
-  /// Payload signing configuration.
+  /// Payload signing configuration derived from `STEM_SIGNING_*` variables.
+  ///
+  /// When producers call [PayloadSigner.sign] with an incomplete configuration
+  /// (for example, missing the private key for the active Ed25519 key) Stem
+  /// logs a warning and fails enqueue attempts to surface the issue quickly.
   final SigningConfig signing;
 
-  /// TLS configuration for broker/backends.
+  /// TLS configuration for broker/backends populated from `STEM_TLS_*`.
+  ///
+  /// Handshake failures include host, certificate, and allow-insecure settings
+  /// to simplify troubleshooting; use `STEM_TLS_ALLOW_INSECURE=true` only for
+  /// short-lived debugging sessions.
   final TlsConfig tls;
 
   /// Construct configuration from environment variables.

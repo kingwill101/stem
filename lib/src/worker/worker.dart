@@ -47,7 +47,9 @@ class Worker {
   /// sets the interval for task heartbeats. [workerHeartbeatInterval] sets the
   /// interval for worker-level heartbeats. [heartbeatTransport] handles
   /// heartbeat publishing. [heartbeatNamespace] provides the namespace for
-  /// heartbeats. [observability] configures metrics and logging.
+  /// heartbeats. [observability] configures metrics and logging. The optional
+  /// [signer] verifies payload signatures (see [SigningConfig]); invalid
+  /// envelopes are dead-lettered with a `signature-invalid` reason.
   Worker({
     required this.broker,
     required this.registry,
