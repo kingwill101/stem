@@ -12,14 +12,11 @@ void main() {
         name: 'Build and Test',
         runsOn: RunnerSpec.single('ubuntu-latest'),
         services: const {
-          'redis': ServiceContainer(
-            image: 'redis:7',
-            ports: ['6379:6379'],
-          ),
+          'redis': ServiceContainer(image: 'redis:7', ports: ['6379:6379']),
         },
         steps: [
           checkout(),
-          setupDart(sdk: '3.5.0'),
+          setupDart(sdk: 'stable'),
           const Step(name: 'Fetch dependencies', run: 'dart pub get'),
           const Step(
             name: 'Run quality checks',
