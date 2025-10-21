@@ -158,5 +158,20 @@ routes:
       expect(decision.queue!.name, equals('missing'));
       expect(decision.targetName, equals('missing'));
     });
+
+    test('clamps priority to queue range', () {
+      const yaml = '''
+default_queue: primary
+queues:
+  primary:
+    priority_range: [2, 5]
+''';
+      final registry = RoutingRegistry.fromYaml(yaml);
+      final decision = registry.resolve(
+        RouteRequest(task: 'tasks.process'),
+      );
+      expect(decision.effectivePriority(0), equals(2));
+      expect(decision.effectivePriority(7), equals(5));
+    });
   });
 }

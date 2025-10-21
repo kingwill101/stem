@@ -189,14 +189,14 @@ class QueueDefinition {
     QueuePriorityRange? priorityRange,
     List<QueueBinding>? bindings,
     Map<String, Object?>? metadata,
-  })  : priorityRange = priorityRange,
+  })  : priorityRange = priorityRange ?? QueuePriorityRange.standard,
         bindings = List.unmodifiable(bindings ?? const []),
         metadata = Map.unmodifiable(metadata ?? const {});
 
   final String name;
   final String? exchange;
   final String? routingKey;
-  final QueuePriorityRange? priorityRange;
+  final QueuePriorityRange priorityRange;
   final List<QueueBinding> bindings;
   final Map<String, Object?> metadata;
 
@@ -211,10 +211,9 @@ class QueueDefinition {
         ),
     ];
     final priorityValue = json['priority_range'] ?? json['priorityRange'];
-    QueuePriorityRange? priorityRange;
-    if (priorityValue != null) {
-      priorityRange = QueuePriorityRange.fromJson(priorityValue);
-    }
+    final priorityRange = priorityValue != null
+        ? QueuePriorityRange.fromJson(priorityValue)
+        : QueuePriorityRange.standard;
     final metadata = _readMap(json, 'meta');
     return QueueDefinition(
       name: name,
@@ -230,7 +229,7 @@ class QueueDefinition {
   Map<String, Object?> toJson() => {
         if (exchange != null) 'exchange': exchange,
         if (routingKey != null) 'routingKey': routingKey,
-        if (priorityRange != null) 'priorityRange': priorityRange!.toJson(),
+        'priorityRange': priorityRange.toJson(),
         if (bindings.isNotEmpty)
           'bindings': bindings.map((binding) => binding.toJson()).toList(),
         if (metadata.isNotEmpty) 'meta': metadata,
@@ -239,8 +238,10 @@ class QueueDefinition {
 
 /// Priority range constraint applied to a queue definition.
 class QueuePriorityRange {
-  QueuePriorityRange({required this.min, required this.max})
+  const QueuePriorityRange({required this.min, required this.max})
       : assert(min <= max, 'min priority must be <= max priority');
+
+  static const QueuePriorityRange standard = QueuePriorityRange(min: 0, max: 9);
 
   final int min;
   final int max;
@@ -273,6 +274,12 @@ class QueuePriorityRange {
   }
 
   Map<String, int> toJson() => {'min': min, 'max': max};
+
+  int clamp(int value) {
+    if (value < min) return min;
+    if (value > max) return max;
+    return value;
+  }
 }
 
 /// Binding between a routing key (and optional headers) and a queue.

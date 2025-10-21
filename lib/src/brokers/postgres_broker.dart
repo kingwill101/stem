@@ -60,7 +60,7 @@ class PostgresBroker implements Broker {
   bool get supportsDelayed => true;
 
   @override
-  bool get supportsPriority => false;
+  bool get supportsPriority => true;
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
@@ -91,6 +91,7 @@ INSERT INTO stem_jobs (
   envelope,
   attempt,
   max_retries,
+  priority,
   not_before,
   locked_until,
   locked_by,
@@ -101,6 +102,7 @@ INSERT INTO stem_jobs (
   @envelope::jsonb,
   @attempt,
   @maxRetries,
+  @priority,
   @notBefore,
   NULL,
   NULL,
@@ -111,6 +113,7 @@ ON CONFLICT (id) DO UPDATE SET
   envelope = EXCLUDED.envelope,
   attempt = EXCLUDED.attempt,
   max_retries = EXCLUDED.max_retries,
+  priority = EXCLUDED.priority,
   not_before = EXCLUDED.not_before,
   locked_until = NULL,
   locked_by = NULL,
@@ -122,6 +125,7 @@ ON CONFLICT (id) DO UPDATE SET
           'envelope': jsonEncode(stored.toJson()),
           'attempt': stored.attempt,
           'maxRetries': stored.maxRetries,
+          'priority': stored.priority,
           'notBefore': stored.notBefore?.toUtc(),
           'createdAt': stored.enqueuedAt.toUtc(),
         },
@@ -586,7 +590,7 @@ FROM stem_jobs
 WHERE queue = @queue
   AND (not_before IS NULL OR not_before <= NOW())
   AND (locked_by IS NULL OR locked_until <= NOW())
-ORDER BY not_before NULLS FIRST, created_at
+ORDER BY priority DESC, created_at
 FOR UPDATE SKIP LOCKED
 LIMIT @limit
 '''),

@@ -49,7 +49,7 @@ class Stem {
       ),
     );
     final targetName = decision.targetName;
-    final resolvedPriority = decision.priorityOverride ?? options.priority;
+    final resolvedPriority = decision.effectivePriority(options.priority);
 
     return tracer.trace(
       'stem.enqueue',

@@ -37,8 +37,8 @@ queues:
       final primary = config.queues['primary']!;
       expect(primary.exchange, 'jobs');
       expect(primary.routingKey, 'jobs.default');
-      expect(primary.priorityRange!.min, 0);
-      expect(primary.priorityRange!.max, 9);
+      expect(primary.priorityRange.min, 0);
+      expect(primary.priorityRange.max, 9);
       expect(primary.bindings, hasLength(1));
       expect(primary.bindings.first.routingKey, 'jobs.default');
       expect(primary.bindings.first.headers, containsPair('region', 'eu'));

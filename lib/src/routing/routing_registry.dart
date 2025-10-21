@@ -59,6 +59,13 @@ class RouteDecision {
 
   /// Canonical target name (queue or broadcast channel).
   String get targetName => isBroadcast ? broadcast!.name : queue!.name;
+
+  /// Resolves the effective priority by applying overrides and queue ranges.
+  int effectivePriority(int original) {
+    final base = priorityOverride ?? original;
+    final range = queue?.priorityRange;
+    return range?.clamp(base) ?? base;
+  }
 }
 
 /// Distinguishes queue vs broadcast routing decisions.

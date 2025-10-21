@@ -112,10 +112,31 @@ class RedisStreamsBroker implements Broker {
     await _connection.close();
   }
 
+  static const int _maxPriority = 9;
+
   String _streamKey(String queue) => '$namespace:stream:$queue';
+  String _priorityStreamKey(String queue, int priority) {
+    final normalized = _normalizedPriority(priority);
+    if (normalized <= 0) return _streamKey(queue);
+    return '${_streamKey(queue)}:p$normalized';
+  }
+
   String _groupKey(String queue) => '$namespace:group:$queue';
   String _delayedKey(String queue) => '$namespace:delayed:$queue';
   String _deadKey(String queue) => '$namespace:dead:$queue';
+
+  List<String> _priorityStreamKeys(String queue) {
+    return [
+      for (var priority = _maxPriority; priority >= 0; priority--)
+        _priorityStreamKey(queue, priority)
+    ];
+  }
+
+  int _normalizedPriority(int value) {
+    if (value <= 0) return 0;
+    if (value >= _maxPriority) return _maxPriority;
+    return value;
+  }
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 
@@ -123,16 +144,16 @@ class RedisStreamsBroker implements Broker {
   bool get supportsDelayed => true;
 
   @override
-  bool get supportsPriority => false;
+  bool get supportsPriority => true;
 
-  Future<void> _ensureGroup(String queue) async {
-    final key = '${_streamKey(queue)}|${_groupKey(queue)}';
+  Future<void> _ensureGroupForStream(String queue, String streamKey) async {
+    final key = '$streamKey|${_groupKey(queue)}';
     if (_groupsCreated.contains(key)) return;
     try {
       await _send([
         'XGROUP',
         'CREATE',
-        _streamKey(queue),
+        streamKey,
         _groupKey(queue),
         '0', // use special ID to avoid delivering old entries
         'MKSTREAM',
@@ -178,10 +199,11 @@ class RedisStreamsBroker implements Broker {
   }
 
   Future<void> _enqueue(String queue, Envelope envelope) async {
-    await _ensureGroup(queue);
+    final stream = _priorityStreamKey(queue, envelope.priority);
+    await _ensureGroupForStream(queue, stream);
     await _send([
       'XADD',
-      _streamKey(queue),
+      stream,
       '*',
       ..._serializeEnvelope(envelope),
     ]);
@@ -265,6 +287,7 @@ class RedisStreamsBroker implements Broker {
     final consumer =
         consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
     final group = consumerGroup ?? _groupKey(queue);
+    final streamKeys = _priorityStreamKeys(queue);
 
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>.broadcast(
@@ -279,7 +302,9 @@ class RedisStreamsBroker implements Broker {
 
     Future<void> loop() async {
       while (!controller.isClosed && !_closed) {
-        await _ensureGroup(queue);
+        for (final stream in streamKeys) {
+          await _ensureGroupForStream(queue, stream);
+        }
         await _drainDelayed(queue);
         dynamic result;
         try {
@@ -293,15 +318,15 @@ class RedisStreamsBroker implements Broker {
             'COUNT',
             prefetch.toString(),
             'STREAMS',
-            _streamKey(queue),
-            '>',
+            ...streamKeys,
+            ...List.filled(streamKeys.length, '>'),
           ]);
         } catch (error) {
           if ('$error'.contains('NOGROUP')) {
-            final defaultKey = '${_streamKey(queue)}|${_groupKey(queue)}';
-            _groupsCreated.remove(defaultKey);
-            _groupsCreated.remove('${_streamKey(queue)}|$group');
-            await _ensureGroup(queue);
+            for (final stream in streamKeys) {
+              _groupsCreated.remove('$stream|${_groupKey(queue)}');
+              await _ensureGroupForStream(queue, stream);
+            }
             continue;
           }
           rethrow;
@@ -334,6 +359,8 @@ class RedisStreamsBroker implements Broker {
     if (raw is! List || raw.isEmpty) return deliveries;
     for (final streamEntry in raw) {
       if (streamEntry is! List || streamEntry.length != 2) continue;
+      final streamKey = streamEntry[0] as String?;
+      if (streamKey == null) continue;
       final entries = streamEntry[1];
       if (entries is! List) continue;
       for (final entry in entries) {
@@ -348,7 +375,7 @@ class RedisStreamsBroker implements Broker {
           map[field] = value;
         }
         final envelope = _envelopeFromMap(map);
-        final receipt = '${_streamKey(queue)}|$group|$consumer|$id';
+        final receipt = '$streamKey|$group|$consumer|$id';
         final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
         deliveries.add(
           Delivery(
@@ -394,32 +421,33 @@ class RedisStreamsBroker implements Broker {
   void _scheduleClaim(String queue, String group, String consumer) {
     _claimTimers['$queue|$consumer']?.cancel();
     _claimTimers['$queue|$consumer'] = Timer.periodic(claimInterval, (_) async {
-      await _ensureGroup(queue);
-      final result = await _send([
-        'XAUTOCLAIM',
-        _streamKey(queue),
-        group,
-        consumer,
-        claimInterval.inMilliseconds.toString(),
-        '0-0',
-        'COUNT',
-        delayedDrainBatch.toString(),
-        'JUSTID',
-      ]);
-      if (result is List && result.length >= 2) {
-        final ids = result[1];
-        if (ids is List && ids.isNotEmpty) {
-          // Requeue claimed ids with the same consumer for immediate delivery
-          for (final id in ids) {
-            await _send([
-              'XCLAIM',
-              _streamKey(queue),
-              group,
-              consumer,
-              '0',
-              id,
-              'JUSTID',
-            ]);
+      for (final stream in _priorityStreamKeys(queue)) {
+        await _ensureGroupForStream(queue, stream);
+        final result = await _send([
+          'XAUTOCLAIM',
+          stream,
+          group,
+          consumer,
+          claimInterval.inMilliseconds.toString(),
+          '0-0',
+          'COUNT',
+          delayedDrainBatch.toString(),
+          'JUSTID',
+        ]);
+        if (result is List && result.length >= 2) {
+          final ids = result[1];
+          if (ids is List && ids.isNotEmpty) {
+            for (final id in ids) {
+              await _send([
+                'XCLAIM',
+                stream,
+                group,
+                consumer,
+                '0',
+                id,
+                'JUSTID',
+              ]);
+            }
           }
         }
       }
@@ -598,22 +626,30 @@ class RedisStreamsBroker implements Broker {
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final length = await _send(['XLEN', _streamKey(queue)]);
+    var total = 0;
+    for (final stream in _priorityStreamKeys(queue)) {
+      final length = await _send(['XLEN', stream]);
+      total += _asInt(length);
+    }
     final delayed = await _send(['ZCARD', _delayedKey(queue)]);
-    return _asInt(length) + _asInt(delayed);
+    total += _asInt(delayed);
+    return total;
   }
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final result = await _send([
-      'XPENDING',
-      _streamKey(queue),
-      _groupKey(queue),
-    ]);
-    if (result is List && result.isNotEmpty) {
-      return _asInt(result.first);
+    var total = 0;
+    for (final stream in _priorityStreamKeys(queue)) {
+      final result = await _send([
+        'XPENDING',
+        stream,
+        _groupKey(queue),
+      ]);
+      if (result is List && result.isNotEmpty) {
+        total += _asInt(result.first);
+      }
     }
-    return 0;
+    return total;
   }
 
   DeadLetterEntry? _decodeDeadLetter(String raw) {

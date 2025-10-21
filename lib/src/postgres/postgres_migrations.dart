@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS stem_jobs (
   envelope JSONB NOT NULL,
   attempt INTEGER NOT NULL,
   max_retries INTEGER,
+  priority INTEGER NOT NULL DEFAULT 0,
   not_before TIMESTAMPTZ,
   locked_until TIMESTAMPTZ,
   locked_by TEXT,
@@ -21,7 +22,13 @@ CREATE TABLE IF NOT EXISTS stem_jobs (
 )
 ''');
       await conn.execute(
+        'ALTER TABLE stem_jobs ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0',
+      );
+      await conn.execute(
         'CREATE INDEX IF NOT EXISTS stem_jobs_queue_idx ON stem_jobs (queue, not_before)',
+      );
+      await conn.execute(
+        'CREATE INDEX IF NOT EXISTS stem_jobs_priority_idx ON stem_jobs (queue, priority DESC, created_at)',
       );
       await conn.execute('''
 CREATE TABLE IF NOT EXISTS stem_jobs_dead (
