@@ -4,7 +4,7 @@ void main() {
   final workflow = Workflow(
     name: 'CI',
     on: const WorkflowTriggers(
-      push: TriggerConfig(branches: ['main']),
+      push: TriggerConfig(branches: ['master']),
       pullRequest: TriggerConfig(),
     ),
     jobs: {
