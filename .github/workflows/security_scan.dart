@@ -13,11 +13,7 @@ void main() {
         runsOn: RunnerSpec.single('ubuntu-latest'),
         steps: [
           checkout(),
-          const Step(
-            name: 'Set up Dart',
-            uses: 'kingwill101/gha-dart@v2',
-            withArguments: {'sdk': 'stable'},
-          ),
+          setupDart(sdk: "stable"),
           const Step(
             name: 'Run vulnerability scan',
             run: './scripts/security/run_vulnerability_scan.sh',
