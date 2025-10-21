@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:args/command_runner.dart';
 import 'package:redis/redis.dart' as redis;
+import 'package:path/path.dart' as p;
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/cli/dependencies.dart';
 import 'package:stem/src/cli/utilities.dart';
@@ -19,6 +21,9 @@ class WorkerCommand extends Command<int> {
     addSubcommand(WorkerStatsCommand(dependencies));
     addSubcommand(WorkerStatusCommand(dependencies));
     addSubcommand(WorkerShutdownCommand(dependencies));
+    addSubcommand(WorkerHealthcheckCommand(dependencies));
+    addSubcommand(WorkerDiagnoseCommand(dependencies));
+    addSubcommand(WorkerMultiCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -1416,4 +1421,1009 @@ Future<List<ControlReplyMessage>> _collectControlReplies(
   ]);
   await subscription.cancel();
   return replies;
+}
+
+class WorkerMultiCommand extends Command<int> {
+  WorkerMultiCommand(this.dependencies) {
+    argParser
+      ..addMultiOption(
+        'command',
+        help:
+            'Executable and arguments for each worker node (repeat the option to provide multiple tokens).',
+        valueHelp: 'arg',
+      )
+      ..addOption(
+        'command-line',
+        help:
+            'Full command string (with optional quoting) executed per node when starting workers.',
+        valueHelp: 'cmd',
+      )
+      ..addOption(
+        'pidfile',
+        defaultsTo: '/var/run/stem/%n.pid',
+        valueHelp: 'path',
+        help:
+            'PID file template. Supports %n (node), %h (hostname), %I (index), %d (UTC timestamp).',
+      )
+      ..addOption(
+        'logfile',
+        defaultsTo: '/var/log/stem/%n.log',
+        valueHelp: 'path',
+        help: 'Log file template. Supports the same placeholders as --pidfile.',
+      )
+      ..addOption(
+        'workdir',
+        defaultsTo: '.',
+        valueHelp: 'path',
+        help: 'Working directory for launched processes (templated).',
+      )
+      ..addOption(
+        'env-file',
+        valueHelp: 'path',
+        help:
+            'Load KEY=VALUE pairs from file before launching worker processes.',
+      )
+      ..addFlag(
+        'detach',
+        defaultsTo: true,
+        help:
+            'Run processes in the background (use --no-detach or --foreground to stay attached).',
+      )
+      ..addFlag(
+        'foreground',
+        defaultsTo: false,
+        negatable: false,
+        help:
+            'Alias for --no-detach. Runs a single node in the foreground and inherits stdio.',
+      )
+      ..addOption(
+        'timeout',
+        defaultsTo: '30s',
+        valueHelp: 'duration',
+        help:
+            'Grace period before forcing termination when stopping or restarting nodes.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'multi';
+
+  @override
+  final String description =
+      'Manage multiple worker processes (start, stop, restart, status).';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final rest = List<String>.from(args.rest);
+    if (rest.isEmpty) {
+      dependencies.err.writeln(
+          'Usage: stem worker multi <start|stop|restart|status> <nodes...>');
+      return 64;
+    }
+
+    final action = rest.first;
+    final requestedNodes = rest.skip(1).toList();
+    final nodes = _multiResolveNodes(requestedNodes, dependencies.environment);
+
+    switch (action) {
+      case 'start':
+        if (nodes.isEmpty) {
+          dependencies.err.writeln('No worker nodes specified for start.');
+          return 64;
+        }
+        return _start(nodes, args);
+      case 'stop':
+        if (nodes.isEmpty) {
+          dependencies.err.writeln('No worker nodes specified for stop.');
+          return 64;
+        }
+        return _stop(nodes, args);
+      case 'restart':
+        if (nodes.isEmpty) {
+          dependencies.err.writeln('No worker nodes specified for restart.');
+          return 64;
+        }
+        return _restart(nodes, args);
+      case 'status':
+        if (nodes.isEmpty) {
+          dependencies.err.writeln('No worker nodes specified for status.');
+          return 64;
+        }
+        return _status(nodes, args);
+      default:
+        dependencies.err.writeln(
+            'Unknown action "$action". Use start, stop, restart, or status.');
+        return 64;
+    }
+  }
+
+  Future<int> _start(List<String> nodes, ArgResults args) async {
+    final envFilePath = args['env-file'] as String?;
+    final baseEnv =
+        _buildBaseEnvironment(dependencies.environment, envFilePath);
+    if (baseEnv == null) {
+      return 70;
+    }
+
+    final commandArgs = _resolveCommandArgs(args, baseEnv);
+    if (commandArgs == null || commandArgs.isEmpty) {
+      dependencies.err.writeln(
+        'No worker command configured. Provide --command / --command-line or set STEM_WORKER_COMMAND.',
+      );
+      return 64;
+    }
+
+    final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';
+    final logTemplate = args['logfile'] as String? ?? '/var/log/stem/%n.log';
+    final workdirTemplate = args['workdir'] as String? ?? '.';
+    final timeout = parseOptionalDuration(args['timeout'] as String?) ??
+        const Duration(seconds: 30);
+
+    final detachFlag = (args['detach'] as bool? ?? true) &&
+        !(args['foreground'] as bool? ?? false);
+    if (!detachFlag && nodes.length > 1) {
+      dependencies.err.writeln(
+          'Foreground mode supports only one node. Specify a single node.');
+      return 64;
+    }
+
+    final startOptions = _StartOptions(
+      pidTemplate: pidTemplate,
+      logTemplate: logTemplate,
+      workdirTemplate: workdirTemplate,
+      commandArgs: commandArgs,
+      detach: detachFlag,
+      timeout: timeout,
+      environment: baseEnv,
+    );
+
+    final timestamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+    final host = _hostname;
+
+    var exitCode = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      final context = _NodeContext(
+        name: nodes[i],
+        index: i + 1,
+        host: host,
+        timestamp: timestamp,
+      );
+      final code = await _startNode(
+          context, startOptions, dependencies.out, dependencies.err);
+      if (code != 0) {
+        exitCode = code;
+        if (!startOptions.detach) {
+          return code;
+        }
+      }
+    }
+    return exitCode;
+  }
+
+  Future<int> _stop(List<String> nodes, ArgResults args) async {
+    final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';
+    final timeout = parseOptionalDuration(args['timeout'] as String?) ??
+        const Duration(seconds: 30);
+    final stopOptions = _StopOptions(
+      pidTemplate: pidTemplate,
+      timeout: timeout,
+    );
+
+    final host = _hostname;
+    final timestamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+
+    var exitCode = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      final context = _NodeContext(
+        name: nodes[i],
+        index: i + 1,
+        host: host,
+        timestamp: timestamp,
+      );
+      final code = await _stopNode(
+          context, stopOptions, dependencies.out, dependencies.err);
+      if (code != 0) {
+        exitCode = code;
+      }
+    }
+    return exitCode;
+  }
+
+  Future<int> _restart(List<String> nodes, ArgResults args) async {
+    final stopCode = await _stop(nodes, args);
+    if (stopCode != 0) {
+      return stopCode;
+    }
+    return _start(nodes, args);
+  }
+
+  Future<int> _status(List<String> nodes, ArgResults args) async {
+    final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';
+    final statusOptions = _StopOptions(
+      pidTemplate: pidTemplate,
+      timeout: Duration.zero,
+    );
+
+    final host = _hostname;
+    final timestamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(':', '-')
+        .replaceAll('.', '-');
+
+    var exitCode = 0;
+    for (var i = 0; i < nodes.length; i++) {
+      final context = _NodeContext(
+        name: nodes[i],
+        index: i + 1,
+        host: host,
+        timestamp: timestamp,
+      );
+      final code = await _statusNode(context, statusOptions, dependencies.out);
+      if (code != 0) {
+        exitCode = code;
+      }
+    }
+    return exitCode;
+  }
+
+  Map<String, String>? _buildBaseEnvironment(
+    Map<String, String> base,
+    String? envFilePath,
+  ) {
+    final merged = <String, String>{...base};
+    if (envFilePath == null) {
+      return merged;
+    }
+    try {
+      final envFromFile = _loadEnvironmentFile(envFilePath);
+      merged.addAll(envFromFile);
+      return merged;
+    } on Object catch (error) {
+      dependencies.err
+          .writeln('Failed to load environment file "$envFilePath": $error');
+      return null;
+    }
+  }
+
+  List<String>? _resolveCommandArgs(ArgResults args, Map<String, String> env) {
+    final listArgs =
+        (args['command'] as List?)?.cast<String>() ?? const <String>[];
+    if (listArgs.isNotEmpty) {
+      return List<String>.from(listArgs);
+    }
+    final commandLine = (args['command-line'] as String?)?.trim();
+    if (commandLine != null && commandLine.isNotEmpty) {
+      return _multiSplitCommandLine(commandLine);
+    }
+    final envCommand = env['STEM_WORKER_COMMAND'] ?? env['STEMD_COMMAND'];
+    if (envCommand != null && envCommand.trim().isNotEmpty) {
+      return _multiSplitCommandLine(envCommand);
+    }
+    return null;
+  }
+}
+
+class WorkerHealthcheckCommand extends Command<int> {
+  WorkerHealthcheckCommand(this.dependencies) {
+    argParser
+      ..addOption(
+        'pidfile',
+        valueHelp: 'path',
+        help: 'PID file for the worker process.',
+      )
+      ..addOption(
+        'node',
+        help: 'Worker node name (defaults to pidfile basename).',
+      )
+      ..addOption(
+        'logfile',
+        valueHelp: 'path',
+        help: 'Optional log file for context.',
+      )
+      ..addFlag(
+        'json',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Emit health information as JSON.',
+      )
+      ..addFlag(
+        'quiet',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Suppress healthy output when not using --json.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'healthcheck';
+
+  @override
+  final String description =
+      'Probe worker process health for use in readiness/liveness checks.';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final pidfileArg = (args['pidfile'] as String?)?.trim();
+    if (pidfileArg == null || pidfileArg.isEmpty) {
+      dependencies.err.writeln('Missing required --pidfile <path>.');
+      return 64;
+    }
+    final pidfile = p.normalize(pidfileArg);
+    final node = _inferNodeName((args['node'] as String?)?.trim(), pidfile);
+    final logPath = (args['logfile'] as String?)?.trim();
+    final jsonOutput = args['json'] as bool? ?? false;
+    final quiet = args['quiet'] as bool? ?? false;
+
+    final pid = _readPidFile(pidfile);
+    bool running = false;
+    String? error;
+    if (pid == null) {
+      error = File(pidfile).existsSync() ? 'invalid-pid' : 'pidfile-missing';
+    } else {
+      running = await _isPidRunning(pid);
+      if (!running) {
+        error = 'process-not-running';
+      }
+    }
+
+    final since = _pidFileTimestamp(pidfile);
+    final uptime =
+        since != null ? DateTime.now().toUtc().difference(since) : null;
+
+    final payload = <String, Object?>{
+      'status': running ? 'ok' : 'error',
+      'node': node,
+      'pidfile': pidfile,
+      if (logPath != null && logPath.isNotEmpty) 'logfile': logPath,
+      if (pid != null) 'pid': pid,
+      if (since != null) 'since': since.toIso8601String(),
+      if (uptime != null) 'uptimeSeconds': uptime.inSeconds,
+      if (!running && error != null) 'error': error,
+    };
+
+    if (jsonOutput) {
+      dependencies.out.writeln(jsonEncode(payload));
+    } else if (!quiet || !running) {
+      if (running) {
+        final uptimeText =
+            uptime != null ? formatReadableDuration(uptime) : 'unknown';
+        dependencies.out.writeln(
+          'Worker ${node ?? '(unknown)'} healthy (pid ${pid ?? '-'}, uptime $uptimeText).',
+        );
+      } else {
+        final reason = error ?? 'unhealthy';
+        dependencies.out.writeln(
+          'Worker ${node ?? '(unknown)'} unhealthy: $reason (pidfile $pidfile).',
+        );
+      }
+    }
+
+    return running ? 0 : 70;
+  }
+}
+
+class WorkerDiagnoseCommand extends Command<int> {
+  WorkerDiagnoseCommand(this.dependencies) {
+    argParser
+      ..addOption(
+        'pidfile',
+        valueHelp: 'path',
+        help: 'PID file to validate.',
+      )
+      ..addOption(
+        'logfile',
+        valueHelp: 'path',
+        help: 'Log file expected for the worker.',
+      )
+      ..addOption(
+        'env-file',
+        valueHelp: 'path',
+        help: 'Environment file to validate (optional).',
+      )
+      ..addFlag(
+        'json',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Emit results as JSON.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'diagnose';
+
+  @override
+  final String description =
+      'Run common daemonization checks (directories, pidfiles, environment).';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final jsonOutput = args['json'] as bool? ?? false;
+    final entries = <_DiagnosticEntry>[];
+
+    void addEntry(String check, bool ok,
+        {String level = 'info', String? message}) {
+      entries.add(_DiagnosticEntry(
+        check: check,
+        ok: ok,
+        level: level,
+        message: message,
+      ));
+    }
+
+    final pidfileArg = (args['pidfile'] as String?)?.trim();
+    if (pidfileArg == null || pidfileArg.isEmpty) {
+      addEntry('pidfile option provided', false,
+          level: 'warning', message: 'No --pidfile supplied.');
+    } else {
+      final pidfile = p.normalize(pidfileArg);
+      final pidDir = Directory(p.dirname(pidfile));
+      if (pidDir.existsSync()) {
+        addEntry('PID directory exists', true, message: pidDir.path);
+      } else {
+        addEntry('PID directory exists', false,
+            level: 'error', message: '${pidDir.path} is missing');
+      }
+
+      final pidFile = File(pidfile);
+      if (pidFile.existsSync()) {
+        addEntry('PID file present', true, message: pidfile);
+        final pid = _readPidFile(pidfile);
+        if (pid == null) {
+          addEntry('PID file parses correctly', false,
+              level: 'error', message: 'Unable to parse integer PID.');
+        } else {
+          final running = await _isPidRunning(pid);
+          if (running) {
+            addEntry(
+              'Worker process running',
+              true,
+              message: 'pid $pid (${_describeUptime(pidfile)})',
+            );
+          } else {
+            addEntry(
+              'Worker process running',
+              false,
+              level: 'error',
+              message: 'Process $pid not running (stale pid file).',
+            );
+          }
+        }
+      } else {
+        addEntry('PID file present', false,
+            level: 'warning', message: '$pidfile missing');
+      }
+    }
+
+    final logfileArg = (args['logfile'] as String?)?.trim();
+    if (logfileArg != null && logfileArg.isNotEmpty) {
+      final logfile = p.normalize(logfileArg);
+      final logDir = Directory(p.dirname(logfile));
+      if (logDir.existsSync()) {
+        addEntry('Log directory exists', true, message: logDir.path);
+      } else {
+        addEntry('Log directory exists', false,
+            level: 'error', message: '${logDir.path} is missing');
+      }
+
+      final logFile = File(logfile);
+      if (logFile.existsSync()) {
+        addEntry('Log file present', true, message: logfile);
+      } else {
+        addEntry('Log file present', false,
+            level: 'warning',
+            message: '$logfile not found (will be created on first write).');
+      }
+    }
+
+    final envFileArg = (args['env-file'] as String?)?.trim();
+    if (envFileArg != null && envFileArg.isNotEmpty) {
+      final envPath = p.normalize(envFileArg);
+      try {
+        final env = _loadEnvironmentFile(envPath);
+        addEntry('Environment file parsed', true, message: envPath);
+        if (env['STEM_WORKER_COMMAND'] != null &&
+            (env['STEM_WORKER_COMMAND'] as String).trim().isNotEmpty) {
+          addEntry('STEM_WORKER_COMMAND defined', true,
+              message: env['STEM_WORKER_COMMAND'] as String);
+        } else {
+          addEntry('STEM_WORKER_COMMAND defined', false,
+              level: 'warning', message: 'Key not found in environment file.');
+        }
+      } catch (error) {
+        addEntry('Environment file parsed', false,
+            level: 'error', message: error.toString());
+      }
+    }
+
+    final hasError =
+        entries.any((entry) => !entry.ok && entry.level == 'error');
+
+    if (jsonOutput) {
+      final payload = {
+        'status': hasError ? 'error' : 'ok',
+        'checks': entries
+            .map(
+              (entry) => {
+                'check': entry.check,
+                'ok': entry.ok,
+                'level': entry.level,
+                if (entry.message != null) 'message': entry.message,
+              },
+            )
+            .toList(growable: false),
+      };
+      dependencies.out.writeln(jsonEncode(payload));
+    } else {
+      for (final entry in entries) {
+        final prefix = entry.ok
+            ? '[OK ]'
+            : entry.level == 'warning'
+                ? '[WARN]'
+                : '[ERR]';
+        final detail = entry.message != null ? ' - ${entry.message}' : '';
+        dependencies.out.writeln('$prefix ${entry.check}$detail');
+      }
+      dependencies.out.writeln(
+        hasError
+            ? 'Diagnostics detected errors. See guidance in the daemonization docs.'
+            : 'All diagnostics passed.',
+      );
+    }
+
+    return hasError ? 70 : 0;
+  }
+}
+
+class _NodeContext {
+  _NodeContext({
+    required this.name,
+    required this.index,
+    required this.host,
+    required this.timestamp,
+  });
+
+  final String name;
+  final int index;
+  final String host;
+  final String timestamp;
+}
+
+class _StartOptions {
+  const _StartOptions({
+    required this.pidTemplate,
+    required this.logTemplate,
+    required this.workdirTemplate,
+    required this.commandArgs,
+    required this.detach,
+    required this.timeout,
+    required this.environment,
+  });
+
+  final String pidTemplate;
+  final String logTemplate;
+  final String workdirTemplate;
+  final List<String> commandArgs;
+  final bool detach;
+  final Duration timeout;
+  final Map<String, String> environment;
+}
+
+class _StopOptions {
+  const _StopOptions({
+    required this.pidTemplate,
+    required this.timeout,
+  });
+
+  final String pidTemplate;
+  final Duration timeout;
+}
+
+final String _hostname = Platform.localHostname;
+
+class _DiagnosticEntry {
+  const _DiagnosticEntry({
+    required this.check,
+    required this.ok,
+    required this.level,
+    this.message,
+  });
+
+  final String check;
+  final bool ok;
+  final String level;
+  final String? message;
+}
+
+String? _inferNodeName(String? provided, String pidfile) {
+  if (provided != null && provided.isNotEmpty) {
+    return provided;
+  }
+  final base = p.basename(pidfile);
+  final dotIndex = base.indexOf('.');
+  return dotIndex > 0 ? base.substring(0, dotIndex) : base;
+}
+
+DateTime? _pidFileTimestamp(String pidfile) {
+  final file = File(pidfile);
+  if (!file.existsSync()) {
+    return null;
+  }
+  try {
+    final stat = file.statSync();
+    return stat.changed.toUtc();
+  } catch (_) {
+    return null;
+  }
+}
+
+String _describeUptime(String pidfile) {
+  final since = _pidFileTimestamp(pidfile);
+  if (since == null) {
+    return 'uptime unknown';
+  }
+  final duration = DateTime.now().toUtc().difference(since);
+  return 'uptime ${formatReadableDuration(duration)}';
+}
+
+Future<int> _startNode(
+  _NodeContext context,
+  _StartOptions options,
+  StringSink out,
+  StringSink err,
+) async {
+  final pidPath = _resolvePath(options.pidTemplate, context);
+  final logPath = _resolvePath(options.logTemplate, context);
+  final workDir = _resolvePath(options.workdirTemplate, context);
+
+  final existingPid = _readPidFile(pidPath);
+  if (existingPid != null) {
+    if (await _isPidRunning(existingPid)) {
+      err.writeln(
+        'Node ${context.name} appears to be running already (pid $existingPid).',
+      );
+      return 1;
+    }
+    _removePidFile(pidPath);
+  }
+
+  _ensureParentDirectory(pidPath);
+  _ensureParentDirectory(logPath);
+  File(logPath).createSync(recursive: true);
+  Directory(workDir).createSync(recursive: true);
+
+  final expandedCommand = _expandTemplates(options.commandArgs, context);
+  if (expandedCommand.isEmpty) {
+    err.writeln('Resolved command for ${context.name} is empty.');
+    return 64;
+  }
+
+  final executable = expandedCommand.first;
+  final executableArgs = expandedCommand.length > 1
+      ? expandedCommand.sublist(1)
+      : const <String>[];
+
+  final env = <String, String>{...options.environment};
+  env['STEM_WORKER_NODE'] = context.name;
+  env['STEM_WORKER_INDEX'] = context.index.toString();
+  env['STEM_WORKER_PIDFILE'] = pidPath;
+  env['STEM_WORKER_LOGFILE'] = logPath;
+  env['STEM_WORKER_HOST'] = context.host;
+
+  try {
+    final process = await Process.start(
+      executable,
+      executableArgs,
+      workingDirectory: workDir,
+      environment: env,
+      mode: options.detach
+          ? ProcessStartMode.detachedWithStdio
+          : ProcessStartMode.inheritStdio,
+    );
+
+    _writePidFile(pidPath, process.pid);
+
+    if (options.detach) {
+      out.writeln('Started ${context.name} (pid ${process.pid}).');
+      return 0;
+    }
+
+    out.writeln(
+        'Started ${context.name} (pid ${process.pid}); waiting for exit...');
+    final exitCode = await process.exitCode;
+    _removePidFile(pidPath);
+    if (exitCode != 0) {
+      err.writeln('Process ${context.name} exited with code $exitCode.');
+    }
+    return exitCode;
+  } on ProcessException catch (error) {
+    err.writeln('Failed to launch ${context.name}: $error');
+    return 70;
+  }
+}
+
+Future<int> _stopNode(
+  _NodeContext context,
+  _StopOptions options,
+  StringSink out,
+  StringSink err,
+) async {
+  final pidPath = _resolvePath(options.pidTemplate, context);
+  final pid = _readPidFile(pidPath);
+  if (pid == null) {
+    out.writeln('${context.name}: no PID file found at $pidPath.');
+    return 0;
+  }
+
+  out.writeln('Stopping ${context.name} (pid $pid)...');
+  final terminated = await _sendSigterm(pid);
+  if (!terminated) {
+    err.writeln('Failed to send termination signal to pid $pid.');
+  }
+
+  final exited = await _waitForExit(pid, options.timeout);
+  if (!exited) {
+    err.writeln(
+      'Process ${context.name} did not exit within ${options.timeout.inSeconds}s; sending SIGKILL.',
+    );
+    await _sendSigkill(pid);
+    final forcedExit = await _waitForExit(pid, const Duration(seconds: 5));
+    if (!forcedExit) {
+      err.writeln('Unable to terminate ${context.name} (pid $pid).');
+      return 70;
+    }
+  }
+
+  _removePidFile(pidPath);
+  out.writeln('Stopped ${context.name}.');
+  return 0;
+}
+
+Future<int> _statusNode(
+  _NodeContext context,
+  _StopOptions options,
+  StringSink out,
+) async {
+  final pidPath = _resolvePath(options.pidTemplate, context);
+  final pid = _readPidFile(pidPath);
+  if (pid == null) {
+    out.writeln('${context.name}: not running (no PID file).');
+    return 3;
+  }
+
+  final running = await _isPidRunning(pid);
+  if (running) {
+    out.writeln('${context.name}: running (pid $pid).');
+    return 0;
+  }
+
+  out.writeln('${context.name}: not running (stale pid $pid).');
+  _removePidFile(pidPath);
+  return 3;
+}
+
+List<String> _multiResolveNodes(
+  List<String> requested,
+  Map<String, String> environment,
+) {
+  if (requested.isNotEmpty) {
+    return requested;
+  }
+  final envNodes =
+      environment['STEMD_NODES'] ?? environment['STEM_WORKER_NODES'];
+  if (envNodes == null || envNodes.trim().isEmpty) {
+    return const [];
+  }
+  return envNodes
+      .split(RegExp(r'\s+'))
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList();
+}
+
+List<String> _expandTemplates(
+  List<String> templates,
+  _NodeContext context,
+) {
+  return templates
+      .map((template) => _expandTemplate(template, context))
+      .toList(growable: false);
+}
+
+String _expandTemplate(String template, _NodeContext context) {
+  return template.replaceAllMapped(RegExp(r'%[nNhIiDd]'), (match) {
+    switch (match.group(0)) {
+      case '%n':
+        return context.name;
+      case '%N':
+        return context.name.toUpperCase();
+      case '%h':
+        return context.host;
+      case '%I':
+      case '%i':
+        return context.index.toString();
+      case '%d':
+        return context.timestamp;
+      default:
+        return match.group(0)!;
+    }
+  });
+}
+
+String _resolvePath(String template, _NodeContext context) {
+  final expanded = _expandTemplate(template, context);
+  if (expanded.isEmpty) {
+    return expanded;
+  }
+  return p.isAbsolute(expanded)
+      ? p.normalize(expanded)
+      : p.normalize(p.join(Directory.current.path, expanded));
+}
+
+int? _readPidFile(String path) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    return null;
+  }
+  try {
+    final contents = file.readAsStringSync().trim();
+    if (contents.isEmpty) {
+      return null;
+    }
+    final pid = int.parse(contents, radix: 10);
+    return pid;
+  } catch (_) {
+    return null;
+  }
+}
+
+void _writePidFile(String path, int pid) {
+  File(path).writeAsStringSync('$pid\n', flush: true);
+}
+
+void _removePidFile(String path) {
+  final file = File(path);
+  if (file.existsSync()) {
+    try {
+      file.deleteSync();
+    } catch (_) {}
+  }
+}
+
+void _ensureParentDirectory(String path) {
+  final parent = Directory(p.dirname(path));
+  if (!parent.existsSync()) {
+    parent.createSync(recursive: true);
+  }
+}
+
+Future<bool> _isPidRunning(int pid) async {
+  if (Platform.isWindows) {
+    final result = await Process.run(
+      'tasklist',
+      ['/FI', 'PID eq $pid'],
+      runInShell: true,
+    );
+    if (result.exitCode != 0) {
+      return false;
+    }
+    final output = result.stdout.toString().toLowerCase();
+    return output.contains(' $pid ') ||
+        output.contains(' $pid\r') ||
+        output.contains(' pid eq $pid');
+  }
+  final result = await Process.run('kill', ['-0', '$pid']);
+  return result.exitCode == 0;
+}
+
+Future<bool> _waitForExit(int pid, Duration timeout) async {
+  if (timeout.isNegative) {
+    return false;
+  }
+  final deadline = DateTime.now().add(timeout);
+  while (await _isPidRunning(pid)) {
+    if (DateTime.now().isAfter(deadline)) {
+      return false;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  return true;
+}
+
+Future<bool> _sendSigterm(int pid) async {
+  if (Platform.isWindows) {
+    return Process.killPid(pid);
+  }
+  final result = await Process.run('kill', ['-TERM', '$pid']);
+  return result.exitCode == 0;
+}
+
+Future<bool> _sendSigkill(int pid) async {
+  if (Platform.isWindows) {
+    return Process.killPid(pid);
+  }
+  final result = await Process.run('kill', ['-KILL', '$pid']);
+  return result.exitCode == 0;
+}
+
+Map<String, String> _loadEnvironmentFile(String path) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw StateError('Environment file not found: $path');
+  }
+  final result = <String, String>{};
+  for (final rawLine in file.readAsLinesSync()) {
+    final line = rawLine.trim();
+    if (line.isEmpty || line.startsWith('#')) {
+      continue;
+    }
+    final sanitized =
+        line.startsWith('export ') ? line.substring(7).trim() : line;
+    final splitIndex = sanitized.indexOf('=');
+    if (splitIndex <= 0) {
+      continue;
+    }
+    final key = sanitized.substring(0, splitIndex).trim();
+    var value = sanitized.substring(splitIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith('\'') && value.endsWith('\''))) {
+      value = value.substring(1, value.length - 1);
+    }
+    value = value.replaceAll(r'\n', '\n');
+    result[key] = value;
+  }
+  return result;
+}
+
+List<String> _multiSplitCommandLine(String commandLine) {
+  final result = <String>[];
+  final buffer = StringBuffer();
+  var inSingle = false;
+  var inDouble = false;
+
+  for (var i = 0; i < commandLine.length; i++) {
+    final char = commandLine[i];
+    if (char == '\'' && !inDouble) {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (char == '"' && !inSingle) {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (char == '\\' && !inSingle && i + 1 < commandLine.length) {
+      buffer.write(commandLine[i + 1]);
+      i += 1;
+      continue;
+    }
+    if (char.trim().isEmpty && !inSingle && !inDouble) {
+      if (buffer.isNotEmpty) {
+        result.add(buffer.toString());
+        buffer.clear();
+      }
+      continue;
+    }
+    buffer.write(char);
+  }
+  if (buffer.isNotEmpty) {
+    result.add(buffer.toString());
+  }
+  return result;
 }

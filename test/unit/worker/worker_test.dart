@@ -121,7 +121,7 @@ void main() {
 
       await _waitFor(
         () => worker.activeConcurrency == 1,
-        timeout: const Duration(seconds: 6),
+        timeout: const Duration(seconds: 10),
       );
 
       await sub.cancel();

@@ -19,6 +19,7 @@ dependencies:
   crypto: ^3.0.3
   cryptography: ^2.6.0
   postgres: ^3.5.8
+  path: ^1.9.0
 
 dev_dependencies:
   lints: ^6.0.0

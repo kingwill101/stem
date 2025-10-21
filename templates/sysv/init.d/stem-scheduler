@@ -1,0 +1,88 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          stem-scheduler
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Stem scheduler daemon
+# Description:       Manage the Stem scheduler/beat process.
+### END INIT INFO
+
+DESC="Stem scheduler"
+NAME=stem-scheduler
+STEM_BIN=${STEM_BIN:-/usr/bin/stem}
+STEM_USER=${STEM_USER:-stem}
+STEM_GROUP=${STEM_GROUP:-stem}
+STEM_OPTS=${STEM_SCHEDULER_OPTS:-}
+STEM_ENV_FILE=${STEM_ENV_FILE:-/etc/stem/stem.env}
+STEM_PID_FILE=${STEM_SCHEDULER_PID_FILE:-/var/run/stem/scheduler.pid}
+STEM_LOG_FILE=${STEM_SCHEDULER_LOG_FILE:-/var/log/stem/scheduler.log}
+STEM_WORK_DIR=${STEM_WORK_DIR:-/var/lib/stem}
+
+[ -r /etc/default/stem ] && . /etc/default/stem
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+set -e
+
+STEM_SCHEDULER_COMMAND=${STEM_SCHEDULER_COMMAND:-/usr/bin/stem-scheduler}
+export STEM_WORKER_COMMAND="$STEM_SCHEDULER_COMMAND"
+
+mkdir -p "$(dirname "$STEM_PID_FILE")" "$(dirname "$STEM_LOG_FILE")"
+chown "$STEM_USER:$STEM_GROUP" "$(dirname "$STEM_PID_FILE")" "$(dirname "$STEM_LOG_FILE")"
+
+start_daemon() {
+  start-stop-daemon --start --background \
+    --chdir "$STEM_WORK_DIR" \
+    --chuid "$STEM_USER:$STEM_GROUP" \
+    --make-pidfile --pidfile "$STEM_PID_FILE" \
+    --exec "$STEM_BIN" -- worker multi start scheduler \
+      --pidfile="$STEM_PID_FILE" \
+      --logfile="$STEM_LOG_FILE" \
+      --workdir="$STEM_WORK_DIR" \
+      --detach \
+      --env-file="$STEM_ENV_FILE" \
+      $STEM_OPTS
+}
+
+stop_daemon() {
+  "$STEM_BIN" worker multi stop scheduler \
+    --pidfile="$STEM_PID_FILE" \
+    --env-file="$STEM_ENV_FILE" >/dev/null 2>&1 || true
+}
+
+status_daemon() {
+  if [ -f "$STEM_PID_FILE" ] && kill -0 "$(cat "$STEM_PID_FILE")" >/dev/null 2>&1; then
+    echo "$NAME is running (pid $(cat "$STEM_PID_FILE"))"
+    return 0
+  fi
+  echo "$NAME is not running"
+  return 3
+}
+
+case "$1" in
+  start)
+    echo "Starting $DESC..."
+    start_daemon
+    ;;
+  stop)
+    echo "Stopping $DESC..."
+    stop_daemon
+    ;;
+  restart|force-reload)
+    "$0" stop
+    sleep 2
+    "$0" start
+    ;;
+  status)
+    status_daemon
+    exit $?
+    ;;
+  *)
+    echo "Usage: /etc/init.d/$NAME {start|stop|restart|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

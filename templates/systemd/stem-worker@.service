@@ -1,0 +1,43 @@
+[Unit]
+Description=Stem Worker Instance (%i)
+After=network.target
+Wants=network-online.target
+Documentation=https://docs.stem.dev/worker-control
+
+[Service]
+Type=simple
+User=stem
+Group=stem
+EnvironmentFile=-/etc/stem/stem.env
+Environment=STEM_WORKER_COMMAND=/usr/bin/stem-worker
+WorkingDirectory=/var/lib/stem
+RuntimeDirectory=stem
+RuntimeDirectoryMode=0750
+PIDFile=/run/stem/%i.pid
+ExecStart=/usr/bin/stem worker multi start %i \
+    --pidfile=/run/stem/%i.pid \
+    --logfile=/var/log/stem/%i.log \
+    --workdir=/var/lib/stem \
+    --env-file=/etc/stem/stem.env \
+    --no-detach
+ExecStop=/usr/bin/stem worker multi stop %i \
+    --pidfile=/run/stem/%i.pid \
+    --env-file=/etc/stem/stem.env
+ExecReload=/usr/bin/stem worker multi restart %i \
+    --pidfile=/run/stem/%i.pid \
+    --logfile=/var/log/stem/%i.log \
+    --workdir=/var/lib/stem \
+    --env-file=/etc/stem/stem.env
+Restart=on-failure
+RestartSec=5
+KillMode=process
+TimeoutStopSec=30
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,44 @@
+[Unit]
+Description=Stem Scheduler Service
+After=network.target
+Wants=network-online.target
+Documentation=https://docs.stem.dev/worker-control
+
+[Service]
+Type=simple
+User=stem
+Group=stem
+EnvironmentFile=-/etc/stem/stem.env
+Environment=STEM_SCHEDULER_COMMAND=/usr/bin/stem-scheduler
+WorkingDirectory=/var/lib/stem
+PIDFile=/run/stem/scheduler.pid
+ExecStart=/bin/sh -c '/usr/bin/stem worker multi start scheduler \
+    --pidfile=/run/stem/scheduler.pid \
+    --logfile=/var/log/stem/scheduler.log \
+    --workdir=/var/lib/stem \
+    --env-file=/etc/stem/stem.env \
+    --no-detach \
+    --command-line=\"$STEM_SCHEDULER_COMMAND\"'
+ExecStop=/usr/bin/stem worker multi stop scheduler \
+    --pidfile=/run/stem/scheduler.pid \
+    --env-file=/etc/stem/stem.env
+ExecReload=/bin/sh -c '/usr/bin/stem worker multi restart scheduler \
+    --pidfile=/run/stem/scheduler.pid \
+    --logfile=/var/log/stem/scheduler.log \
+    --workdir=/var/lib/stem \
+    --env-file=/etc/stem/stem.env \
+    --no-detach \
+    --command-line="$STEM_SCHEDULER_COMMAND"'
+Restart=on-failure
+RestartSec=5
+KillMode=process
+TimeoutStopSec=30
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target

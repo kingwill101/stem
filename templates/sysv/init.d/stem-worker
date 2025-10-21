@@ -1,0 +1,103 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          stem-worker
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Stem worker daemon
+# Description:       Manage Stem worker instances with stem worker multi.
+### END INIT INFO
+
+DESC="Stem worker"
+NAME=stem-worker
+STEM_BIN=${STEM_BIN:-/usr/bin/stem}
+STEM_USER=${STEM_USER:-stem}
+STEM_GROUP=${STEM_GROUP:-stem}
+STEM_NODES=${STEM_NODES:-default}
+STEM_OPTS=${STEM_OPTS:-}
+STEM_ENV_FILE=${STEM_ENV_FILE:-/etc/stem/stem.env}
+STEM_PID_DIR=${STEM_PID_DIR:-/var/run/stem}
+STEM_LOG_DIR=${STEM_LOG_DIR:-/var/log/stem}
+STEM_WORK_DIR=${STEM_WORK_DIR:-/var/lib/stem}
+
+[ -r /etc/default/stem ] && . /etc/default/stem
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+
+set -e
+
+STEMD_COMMAND=${STEMD_COMMAND:-/usr/bin/stem-worker}
+export STEM_WORKER_COMMAND="$STEMD_COMMAND"
+
+mkdir -p "$STEM_PID_DIR" "$STEM_LOG_DIR"
+chown "$STEM_USER:$STEM_GROUP" "$STEM_PID_DIR" "$STEM_LOG_DIR"
+
+start_node() {
+  node="$1"
+  pidfile="$STEM_PID_DIR/$node.pid"
+  logfile="$STEM_LOG_DIR/$node.log"
+  start-stop-daemon --start --background \
+    --chdir "$STEM_WORK_DIR" \
+    --chuid "$STEM_USER:$STEM_GROUP" \
+    --make-pidfile --pidfile "$pidfile" \
+    --exec "$STEM_BIN" -- worker multi start "$node" \
+      --pidfile="$pidfile" \
+      --logfile="$logfile" \
+      --workdir="$STEM_WORK_DIR" \
+      --detach \
+      --env-file="$STEM_ENV_FILE" \
+      $STEM_OPTS
+}
+
+stop_node() {
+  node="$1"
+  pidfile="$STEM_PID_DIR/$node.pid"
+  "$STEM_BIN" worker multi stop "$node" \
+    --pidfile="$pidfile" \
+    --env-file="$STEM_ENV_FILE" >/dev/null 2>&1 || true
+}
+
+status_node() {
+  node="$1"
+  pidfile="$STEM_PID_DIR/$node.pid"
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" >/dev/null 2>&1; then
+    echo "$NAME [$node] is running (pid $(cat "$pidfile"))"
+    return 0
+  fi
+  echo "$NAME [$node] is not running"
+  return 3
+}
+
+case "$1" in
+  start)
+    echo "Starting $DESC..."
+    for node in $STEM_NODES; do
+      start_node "$node"
+    done
+    ;;
+  stop)
+    echo "Stopping $DESC..."
+    for node in $STEM_NODES; do
+      stop_node "$node"
+    done
+    ;;
+  restart|force-reload)
+    "$0" stop
+    sleep 2
+    "$0" start
+    ;;
+  status)
+    rc=0
+    for node in $STEM_NODES; do
+      status_node "$node" || rc=$?
+    done
+    exit $rc
+    ;;
+  *)
+    echo "Usage: /etc/init.d/$NAME {start|stop|restart|force-reload|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

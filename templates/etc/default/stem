@@ -1,0 +1,35 @@
+# Default settings for Stem worker and scheduler daemons.
+
+# List of worker node names to launch (space separated).
+# Example: STEMD_NODES="alpha beta gamma"
+STEMD_NODES="default"
+
+# Extra options passed to `stem worker multi start`.
+# Example: STEMD_OPTS="--concurrency=4 --queues=default,priority"
+STEMD_OPTS=""
+
+# Command executed for each worker node (may be overridden per host).
+STEMD_COMMAND="/usr/bin/stem-worker"
+
+# Path to the Stem CLI binary.
+STEM_BIN="/usr/bin/stem"
+
+# Unprivileged user and group owning the processes.
+STEM_USER="stem"
+STEM_GROUP="stem"
+
+# Environment file loaded by daemonized commands.
+STEM_ENV_FILE="/etc/stem/stem.env"
+
+# PID and log directories for worker nodes.
+STEM_PID_DIR="/var/run/stem"
+STEM_LOG_DIR="/var/log/stem"
+
+# Working directory used when launching worker processes.
+STEM_WORK_DIR="/var/lib/stem"
+
+# Scheduler (beat) specific settings.
+STEM_SCHEDULER_OPTS=""
+STEM_SCHEDULER_PID_FILE="/var/run/stem/scheduler.pid"
+STEM_SCHEDULER_LOG_FILE="/var/log/stem/scheduler.log"
+STEM_SCHEDULER_COMMAND="/usr/bin/stem-scheduler"

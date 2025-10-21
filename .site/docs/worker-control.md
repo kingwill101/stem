@@ -18,6 +18,9 @@ revocation durability, and termination semantics for inline vs isolate handlers.
 | `stem worker revoke` | Persist revocations and broadcast terminate/best-effort revokes. |
 | `stem worker shutdown` | Request warm/soft/hard shutdown via the control channel. |
 | `stem worker status` | Stream heartbeats or snapshot the backend (existing command). |
+| `stem worker healthcheck` | Probe worker processes for readiness/liveness. |
+| `stem worker diagnose` | Run local diagnostics for pid/log/env configuration issues. |
+| `stem worker multi` | Manage multiple worker processes (start/stop/restart/status). |
 
 Use `--namespace` to target non-default control namespaces. Omitting `--worker`
 broadcasts to every worker. All commands honour the same environment variables as
@@ -65,6 +68,60 @@ The autoscaler samples broker queue depth alongside inflight counts to decide
 when to scale. Metrics expose the current setting via
 `stem.worker.concurrency`, and `stem worker stats --json` includes the live
 `activeConcurrency` value so dashboards can observe adjustments.
+
+## CLI Multi-Instance Management
+
+`stem worker multi` orchestrates OS processes for worker nodes. It honours the
+same placeholders as the service templates (`%n`, `%h`, `%I`, `%d`) when
+expanding PID/log/workdir templates and uses `STEM_WORKER_COMMAND` (or
+`--command`/`--command-line`) for the executable.
+
+```bash
+export STEM_WORKER_COMMAND="/usr/bin/stem-worker"
+stem worker multi start alpha beta \
+  --pidfile=/var/run/stem/%n.pid \
+  --logfile=/var/log/stem/%n.log \
+  --env-file=/etc/stem/stem.env
+
+stem worker multi status alpha beta --pidfile=/var/run/stem/%n.pid
+stem worker multi stop alpha beta --pidfile=/var/run/stem/%n.pid
+```
+
+The CLI auto-creates directories and exposes `STEM_WORKER_NODE`,
+`STEM_WORKER_PIDFILE`, and `STEM_WORKER_LOGFILE` to the launched process so apps
+can discover their runtime context.
+
+## Worker Healthcheck
+
+Use `stem worker healthcheck` inside systemd `ExecStartPost=`, Kubernetes probes,
+or shell scripts to determine whether a worker process is running:
+
+```
+stem worker healthcheck \
+  --node alpha \
+  --pidfile=/var/run/stem/alpha.pid \
+  --logfile=/var/log/stem/alpha.log \
+  --json
+```
+
+Exit code `0` indicates the PID file exists and the process is alive. The JSON
+payload includes the pid, timestamp captured from the PID file, and the uptime
+in seconds.
+
+## Worker Diagnostics
+
+`stem worker diagnose` performs common checks (PID/log directories, stale PID
+files, environment file parsing) to help troubleshoot daemonization issues:
+
+```
+stem worker diagnose \
+  --pidfile=/var/run/stem/alpha.pid \
+  --logfile=/var/log/stem/alpha.log \
+  --env-file=/etc/stem/stem.env
+```
+
+Warnings and errors are printed for missing directories, unparseable PIDs, and
+other configuration gaps. Use `--json` when integrating with tooling.
 
 ## Persistent Revokes
 

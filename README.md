@@ -106,6 +106,7 @@ Three runnable example apps demonstrate common topologies:
 - `examples/mixed_cluster` – runs Redis- and Postgres-backed workers side by side.
 - `examples/encrypted_payload` – encrypt task payloads end-to-end with AES-GCM (includes a containerized variant in `docker/`).
 - `examples/otel_metrics` – worker + OpenTelemetry collector + Jaeger via Docker Compose.
+- `examples/daemonized_worker` – Dockerfile + entrypoint demonstrating `stem worker multi` in a container.
 
 Each example has a README with setup instructions and links back to the docs.
 
@@ -122,6 +123,7 @@ stem worker inspect --worker worker-1
 stem worker stats --namespace stem
 stem worker revoke --task <task-id> [--terminate]
 stem worker shutdown --mode soft
+stem worker multi start alpha --pidfile=/var/run/stem/%n.pid --logfile=/var/log/stem/%n.log
 ```
 
 See `docs/process/worker-control.md` for detailed control-plane usage,
@@ -157,3 +159,5 @@ including revoke persistence and termination behavior.
 See `openspec/changes/` for the spec deltas that drive the implementation. Pull
 requests should include updated specs and passing `openspec validate --strict`,
 `dart format`, and `dart test` runs.
+
+- [Daemonization Guide](docs/process/daemonization.md)
