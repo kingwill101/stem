@@ -9,7 +9,7 @@ import 'package:stem/stem.dart';
 
 Future<void> main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
-  final broker = InMemoryRedisBroker();
+  final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()
     ..register(
@@ -25,6 +25,11 @@ Future<void> main(List<String> args) async {
     );
 
   final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final canvas = Canvas(
+    broker: broker,
+    backend: backend,
+    registry: registry,
+  );
   final worker = Worker(
     broker: broker,
     registry: registry,
@@ -32,9 +37,28 @@ Future<void> main(List<String> args) async {
     consumerName: 'monolith-worker',
     concurrency: 2,
   );
+  final scheduleStore = InMemoryScheduleStore();
+  final beat = Beat(
+    store: scheduleStore,
+    broker: broker,
+    lockStore: InMemoryLockStore(),
+    tickInterval: const Duration(seconds: 1),
+  );
 
   await worker.start();
   stdout.writeln('Worker started (concurrency=2).');
+
+  await scheduleStore.upsert(
+    ScheduleEntry(
+      id: 'demo-greeting',
+      taskName: 'greeting.send',
+      queue: 'default',
+      spec: 'every:30s',
+      args: const {'name': 'scheduled friend'},
+    ),
+  );
+  await beat.start();
+  stdout.writeln('Beat started (schedule demo-greeting every 30s).');
 
   final router = Router()
     ..post('/enqueue', (Request request) async {
@@ -48,6 +72,50 @@ Future<void> main(List<String> args) async {
       final taskId = await stem.enqueue('greeting.send', args: {'name': name});
       return Response.ok(
         jsonEncode({'taskId': taskId}),
+        headers: {'content-type': 'application/json'},
+      );
+    })
+    ..post('/group', (Request request) async {
+      final payload = jsonDecode(await request.readAsString()) as Map;
+      final names = (payload['names'] as List?)?.cast<String>() ?? const [];
+      if (names.isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Provide a non-empty "names" array'}),
+        );
+      }
+      final groupId = await canvas.group([
+        for (final name in names)
+          task(
+            'greeting.send',
+            args: {'name': name},
+          )
+      ]);
+      return Response.ok(
+        jsonEncode({'groupId': groupId, 'count': names.length}),
+        headers: {'content-type': 'application/json'},
+      );
+    })
+    ..get('/group/<groupId>', (Request request, String groupId) async {
+      final status = await backend.getGroup(groupId);
+      if (status == null) {
+        return Response.notFound(
+          jsonEncode({'error': 'Unknown group or expired results'}),
+        );
+      }
+      return Response.ok(
+        jsonEncode({
+          'id': status.id,
+          'expected': status.expected,
+          'completed': status.results.length,
+          'results': status.results.map((key, value) => MapEntry(
+                key,
+                {
+                  'state': value.state.name,
+                  'attempt': value.attempt,
+                  'meta': value.meta,
+                },
+              )),
+        }),
         headers: {'content-type': 'application/json'},
       );
     })
@@ -71,6 +139,7 @@ Future<void> main(List<String> args) async {
 
   void handleShutdown(ProcessSignal signal) async {
     stdout.writeln('Received $signal, shutting down...');
+    await beat.stop();
     await worker.shutdown();
     await server.close(force: true);
     broker.dispose();

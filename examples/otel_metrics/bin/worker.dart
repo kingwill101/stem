@@ -17,7 +17,7 @@ Future<void> main() async {
       ),
     );
 
-  final broker = InMemoryRedisBroker();
+  final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
 
   final otlpEndpoint = Platform.environment['STEM_OTLP_ENDPOINT'] ??

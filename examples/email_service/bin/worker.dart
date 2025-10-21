@@ -11,7 +11,10 @@ Future<void> main(List<String> args) async {
     tls: config.tls,
   );
   final backend = config.resultBackendUrl != null
-      ? await RedisResultBackend.connect(config.resultBackendUrl!)
+      ? await RedisResultBackend.connect(
+          config.resultBackendUrl!,
+          tls: config.tls,
+        )
       : null;
   final signer = PayloadSigner.maybe(config.signing);
 

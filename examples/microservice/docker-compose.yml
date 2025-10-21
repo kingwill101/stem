@@ -1,24 +1,25 @@
 services:
   redis:
-    image: quay.io/opstree/redis:latest
+    image: redis:7.2-alpine
+    user: "0"
     ports:
       - "6379:6379"
     command:
-      [
-        "redis-server",
-        "--appendonly",
-        "yes",
-        "--tls-port",
-        "6379",
-        "--port",
-        "0",
-        "--tls-cert-file",
-        "/certs/server.crt",
-        "--tls-key-file",
-        "/certs/server.key",
-        "--tls-ca-cert-file",
-        "/certs/server.crt"
-      ]
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --port
+      - "0"
+      - --tls-port
+      - "6379"
+      - --tls-cert-file
+      - /certs/server.crt
+      - --tls-key-file
+      - /certs/server.key
+      - --tls-ca-cert-file
+      - /certs/ca.crt
+      - --tls-auth-clients
+      - "yes"
     volumes:
       - redis-data:/data
       - ./certs:/certs:ro
@@ -32,11 +33,14 @@ services:
     env_file:
       - .env.example
     environment:
-      PORT: ${PORT:-8081}
+      PORT: ${PORT:-8443}
+      ENQUEUER_TLS_CERT: "/certs/server.crt"
+      ENQUEUER_TLS_KEY: "/certs/server.key"
+      ENQUEUER_TLS_CLIENT_CA: "/certs/ca.crt"
     volumes:
       - ./certs:/certs:ro
     ports:
-      - "${PORT:-8081}:8081"
+      - "${PORT:-8443}:8443"
     depends_on:
       - redis
     restart: unless-stopped
@@ -78,6 +82,22 @@ services:
       - redis
     volumes:
       - ./certs:/certs:ro
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ../..
+      dockerfile: examples/microservice/beat/Dockerfile
+      target: dev
+    env_file:
+      - .env.example
+    environment:
+      STEM_SCHEDULE_FILE: "/config/schedules.yaml"
+    depends_on:
+      - redis
+    volumes:
+      - ./certs:/certs:ro
+      - ./schedules.example.yaml:/config/schedules.yaml:ro
     restart: unless-stopped
 
 volumes:

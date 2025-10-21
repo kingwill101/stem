@@ -1,6 +1,6 @@
 # Stem Monolith Example
 
-A minimal single-process deployment that exposes an HTTP API for enqueuing greeting tasks, executes them with an in-process worker, and stores task state in the in-memory backend.
+A minimal single-process deployment that exposes an HTTP API for enqueuing greeting tasks, executes them with an in-process worker, runs the Beat scheduler, and stores task state in the in-memory backend.
 
 ## Configuration
 
@@ -33,6 +33,23 @@ Fetch task status:
 ```bash
 curl http://localhost:8080/status/<taskId>
 ```
+
+Queue a fan-out job using the canvas helpers:
+
+```bash
+curl -X POST http://localhost:8080/group \
+  -H 'content-type: application/json' \
+  -d '{"names": ["Ada", "Perseverance", "Curiosity"]}'
+```
+
+Inspect the group results:
+
+```bash
+curl http://localhost:8080/group/<groupId>
+```
+
+The Beat scheduler also dispatches the `demo-greeting` schedule every 30 seconds,
+which you can observe in the worker logs.
 
 This example uses in-memory adapters, making it ideal for local experimentation or integration tests.
 

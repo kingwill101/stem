@@ -1,0 +1,10 @@
+entries:
+  - id: greetings-reminder
+    task: greeting.send
+    queue: greetings
+    spec: every:1m
+    jitter: 10s
+    args:
+      name: scheduled friend
+    meta:
+      seeded: true

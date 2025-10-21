@@ -1,6 +1,6 @@
 # Stem Microservice Example
 
-This example splits the enqueue API and worker into separate Dart packages communicating through Redis Streams.
+This example splits the enqueue API, worker fleet, and beat scheduler into separate Dart packages communicating through Redis Streams.
 
 ## Prerequisites
 
@@ -9,17 +9,20 @@ This example splits the enqueue API and worker into separate Dart packages commu
 
 ## Configuration
 
-All services expect the following environment variables:
+All services expect the following environment variables (see `.env.example` for defaults used by `docker compose`):
 
 | Variable | Default (Docker) | Description |
 | --- | --- | --- |
-| `STEM_BROKER_URL` | `redis://redis:6379/0` | Redis Streams broker connection string. |
-| `STEM_RESULT_BACKEND_URL` | `redis://redis:6379/1` | Redis result backend connection string. |
+| `STEM_BROKER_URL` | `rediss://redis:6379/0` | Redis Streams broker connection string. |
+| `STEM_RESULT_BACKEND_URL` | `rediss://redis:6379/1` | Redis result backend connection string. |
+| `STEM_SCHEDULE_STORE_URL` | `rediss://redis:6379/2` | Schedule/lock store consumed by the beat service. |
 | `STEM_SIGNING_KEYS` | `primary:<base64 secret>` | Comma-separated list of `keyId:base64Secret` pairs accepted by workers. |
 | `STEM_SIGNING_ACTIVE_KEY` | `primary` | Key id used by enqueuers to sign new envelopes. |
-| `STEM_TLS_CA_CERT` | `/certs/server.crt` | CA/leaf certificate trusted by clients (mounted via Docker). |
-| `STEM_TLS_ALLOW_INSECURE` | `true` | Accept self-signed certs (set to `false` in production). |
-| `PORT` | `8081` | HTTP port for the enqueue API. |
+| `STEM_TLS_CA_CERT` | `/certs/ca.crt` | CA bundle trusted by clients (mounted via Docker). |
+| `STEM_TLS_CLIENT_CERT` | `/certs/client.crt` | mTLS client certificate used by enqueuers/workers. |
+| `STEM_TLS_CLIENT_KEY` | `/certs/client.key` | Private key associated with the client certificate. |
+| `PORT` | `8443` | HTTPS port for the enqueue API. |
+| `STEM_SCHEDULE_FILE` | `/config/schedules.yaml` | Optional YAML file the beat service uses to seed schedules. |
 
 Several ready-made security profiles live alongside this README:
 
@@ -79,14 +82,36 @@ cp .env.hmac_tls .env   # or .env.hmac / .env.ed25519_tls
 docker compose up --build
 ```
 
-This launches Redis, the worker, and the enqueue API. The API is reachable at `http://localhost:8081`.
+This launches Redis, the worker pool, the beat scheduler, and the enqueue API. The API is reachable at `https://localhost:8443` when TLS is enabled (fall back to HTTP if you omit the HTTPS variables).
 
 Enqueue a task:
 
 ```bash
-curl -X POST http://localhost:8081/enqueue \
+curl -k -X POST https://localhost:8443/enqueue \
   -H 'content-type: application/json' \
   -d '{"name": "Ada"}'
+```
+
+Fan out work with the canvas helper:
+
+```bash
+curl -k -X POST https://localhost:8443/group \
+  -H 'content-type: application/json' \
+  -d '{"names": ["Ada", "Perseverance", "Curiosity"]}'
+```
+
+Fetch aggregated results:
+
+```bash
+curl -k https://localhost:8443/group/<groupId>
+```
+
+The beat service seeds the `greetings-reminder` schedule from
+`schedules.example.yaml`. Inspect its progress with:
+
+```bash
+stem schedule list
+stem schedule dry-run --id greetings-reminder --count 3
 ```
 
 Stop the stack with `docker compose down`.
@@ -128,4 +153,10 @@ Stop the stack with `docker compose down`.
    dart run bin/main.dart
    ```
 
-The worker logs progress for each greeting task, demonstrating isolate execution, heartbeats, and result backend updates.
+The worker logs progress for each greeting task, demonstrating isolate execution, heartbeats, and result backend updates. Start the beat service in a third terminal to dispatch scheduled jobs:
+
+```bash
+cd examples/microservice/beat
+dart pub get
+dart run bin/beat.dart
+```
