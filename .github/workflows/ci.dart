@@ -16,10 +16,10 @@ void main() {
             image: 'redis:7',
             ports: ['6379:6379'],
             options:
-                '--health-cmd "redis-cli ping" '
-                '--health-interval 5s '
-                '--health-timeout 5s '
-                '--health-retries 20',
+                '--health-cmd=redis-cli\\ ping '
+                '--health-interval=5s '
+                '--health-timeout=5s '
+                '--health-retries=20',
           ),
         },
         steps: [
