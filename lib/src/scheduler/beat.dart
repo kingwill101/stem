@@ -92,11 +92,15 @@ class Beat {
       });
     }
 
+    final baseScheduled = entry.nextRunAt ?? now;
+    final jitter = entry.jitter;
+    jitterDelay = (jitter != null && jitter > Duration.zero)
+        ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
+        : Duration.zero;
+    final scheduledFor = baseScheduled.add(jitterDelay);
+    final startedAt = DateTime.now();
+
     try {
-      final jitter = entry.jitter;
-      jitterDelay = (jitter != null && jitter > Duration.zero)
-          ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
-          : Duration.zero;
       if (jitterDelay > Duration.zero) {
         await Future<void>.delayed(jitterDelay);
       }
@@ -105,7 +109,16 @@ class Beat {
         name: entry.taskName,
         args: entry.args,
         queue: entry.queue,
-        headers: {'scheduled-from': 'beat', 'schedule-id': entry.id},
+        headers: {
+          'scheduled-from': 'beat',
+          'schedule-id': entry.id,
+        },
+        meta: entry.kwargs.isEmpty
+            ? entry.meta
+            : {
+                ...entry.meta,
+                'kwargs': entry.kwargs,
+              },
       );
       if (signer != null) {
         envelope = await signer!.sign(envelope);
@@ -113,11 +126,16 @@ class Beat {
       await broker.publish(envelope);
 
       final executedAt = DateTime.now();
+      final duration = executedAt.difference(startedAt);
       await store.markExecuted(
         entry.id,
+        scheduledFor: scheduledFor,
         executedAt: executedAt,
         jitter: jitterDelay == Duration.zero ? null : jitterDelay,
         lastError: null,
+        success: true,
+        runDuration: duration,
+        drift: executedAt.difference(scheduledFor),
       );
     } catch (error, stack) {
       stemLogger.warning(
@@ -129,11 +147,15 @@ class Beat {
         }),
       );
       try {
+        final executedAt = DateTime.now();
         await store.markExecuted(
           entry.id,
-          executedAt: DateTime.now(),
+          scheduledFor: scheduledFor,
+          executedAt: executedAt,
           jitter: jitterDelay == Duration.zero ? null : jitterDelay,
           lastError: error.toString(),
+          success: false,
+          drift: executedAt.difference(scheduledFor),
         );
       } catch (storeError, storeStack) {
         stemLogger.warning(

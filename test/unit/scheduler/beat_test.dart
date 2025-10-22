@@ -23,7 +23,7 @@ void main() {
           id: 'cleanup',
           taskName: 'noop',
           queue: 'default',
-          spec: 'every:100ms',
+          spec: IntervalScheduleSpec(every: const Duration(milliseconds: 100)),
         ),
       );
 
@@ -74,7 +74,7 @@ void main() {
           id: 'signed-cleanup',
           taskName: 'noop',
           queue: 'default',
-          spec: 'every:100ms',
+          spec: IntervalScheduleSpec(every: const Duration(milliseconds: 100)),
         ),
       );
 
@@ -131,7 +131,7 @@ void main() {
           id: 'unique',
           taskName: 'noop',
           queue: 'default',
-          spec: 'every:100ms',
+          spec: IntervalScheduleSpec(every: const Duration(milliseconds: 100)),
         ),
       );
 

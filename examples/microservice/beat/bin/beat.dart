@@ -82,7 +82,8 @@ Future<void> _seedSchedules(ScheduleStore store, String path) async {
       continue;
     }
     final queue = element['queue']?.toString() ?? 'default';
-    final spec = element['spec']?.toString() ?? 'every:60s';
+    final specRaw = element['spec'];
+    final spec = ScheduleSpec.fromPersisted(specRaw ?? 'every:60s');
     final jitterRaw = element['jitter'];
     final enabled = element['enabled'] != false;
     final timezone = element['timezone']?.toString();
@@ -115,8 +116,23 @@ Future<void> _seedSchedules(ScheduleStore store, String path) async {
 
     await store.upsert(entry);
     stdout.writeln(
-      'Seeded schedule ${entry.id} -> ${entry.taskName} (${entry.spec})',
+      'Seeded schedule ${entry.id} -> ${entry.taskName} (${_describeSpec(entry.spec)})',
     );
+  }
+}
+
+String _describeSpec(ScheduleSpec spec) {
+  switch (spec) {
+    case IntervalScheduleSpec interval:
+      return 'every ${interval.every.inSeconds}s';
+    case CronScheduleSpec cron:
+      return cron.expression;
+    case SolarScheduleSpec solar:
+      return '${solar.event} @${solar.latitude}/${solar.longitude}';
+    case ClockedScheduleSpec clocked:
+      return 'once ${clocked.runAt.toIso8601String()}';
+    case CalendarScheduleSpec calendar:
+      return 'calendar ${calendar.toJson()}';
   }
 }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'envelope.dart';
 import 'task_invocation.dart';
 import '../observability/heartbeat.dart';
+import '../scheduler/schedule_spec.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -368,8 +369,9 @@ class ScheduleEntry {
     required this.id,
     required this.taskName,
     required this.queue,
-    required this.spec,
-    this.args = const {},
+    required ScheduleSpec spec,
+    Map<String, Object?>? args,
+    Map<String, Object?>? kwargs,
     this.enabled = true,
     this.jitter,
     this.lastRunAt,
@@ -377,8 +379,18 @@ class ScheduleEntry {
     this.lastJitter,
     this.lastError,
     this.timezone,
+    this.totalRunCount = 0,
+    this.lastSuccessAt,
+    this.lastErrorAt,
+    this.drift,
+    this.expireAt,
+    this.createdAt,
+    this.updatedAt,
     Map<String, Object?>? meta,
-  }) : meta = Map.unmodifiable(meta ?? const {});
+  })  : spec = spec,
+        args = Map.unmodifiable(args ?? const {}),
+        kwargs = Map.unmodifiable(kwargs ?? const {}),
+        meta = Map.unmodifiable(meta ?? const {});
 
   /// The unique identifier for this schedule entry.
   final String id;
@@ -389,11 +401,14 @@ class ScheduleEntry {
   /// The queue to which the task should be sent.
   final String queue;
 
-  /// The schedule specification (e.g., cron expression).
-  final String spec;
+  /// The schedule specification.
+  final ScheduleSpec spec;
 
-  /// Arguments to pass to the task.
+  /// Positional arguments to pass to the task.
   final Map<String, Object?> args;
+
+  /// Keyword-style arguments passed to the task (parity with Celery).
+  final Map<String, Object?> kwargs;
 
   /// Whether this schedule entry is enabled.
   final bool enabled;
@@ -416,25 +431,54 @@ class ScheduleEntry {
   /// Optional timezone identifier (IANA) for cron evaluation.
   final String? timezone;
 
+  /// Total successful or attempted run count.
+  final int totalRunCount;
+
+  /// Timestamp of the most recent successful run.
+  final DateTime? lastSuccessAt;
+
+  /// Timestamp of the most recent errored run.
+  final DateTime? lastErrorAt;
+
+  /// Drift observed during the last execution (actual - scheduled).
+  final Duration? drift;
+
+  /// Optional expiry: disable the entry after this time.
+  final DateTime? expireAt;
+
+  /// Creation timestamp persisted by the store, if provided.
+  final DateTime? createdAt;
+
+  /// Last update timestamp persisted by the store, if provided.
+  final DateTime? updatedAt;
+
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
 
-  static const Object _unset = Object();
+  static const Object _sentinel = Object();
 
   ScheduleEntry copyWith({
     String? id,
     String? taskName,
     String? queue,
-    String? spec,
+    ScheduleSpec? spec,
     Map<String, Object?>? args,
+    Map<String, Object?>? kwargs,
     bool? enabled,
     Duration? jitter,
     DateTime? lastRunAt,
+    Object? nextRunAt = _sentinel,
+    Object? lastJitter = _sentinel,
+    Object? lastError = _sentinel,
+    Object? timezone = _sentinel,
+    int? totalRunCount,
+    Object? lastSuccessAt = _sentinel,
+    Object? lastErrorAt = _sentinel,
+    Object? drift = _sentinel,
+    Object? expireAt = _sentinel,
+    Object? createdAt = _sentinel,
+    Object? updatedAt = _sentinel,
     Map<String, Object?>? meta,
-    Object? nextRunAt = _unset,
-    Object? lastJitter = _unset,
-    Object? lastError = _unset,
-    Object? timezone = _unset,
   }) {
     return ScheduleEntry(
       id: id ?? this.id,
@@ -442,15 +486,30 @@ class ScheduleEntry {
       queue: queue ?? this.queue,
       spec: spec ?? this.spec,
       args: args ?? this.args,
+      kwargs: kwargs ?? this.kwargs,
       enabled: enabled ?? this.enabled,
       jitter: jitter ?? this.jitter,
       lastRunAt: lastRunAt ?? this.lastRunAt,
-      meta: meta ?? this.meta,
-      nextRunAt: nextRunAt == _unset ? this.nextRunAt : nextRunAt as DateTime?,
+      nextRunAt:
+          nextRunAt == _sentinel ? this.nextRunAt : nextRunAt as DateTime?,
       lastJitter:
-          lastJitter == _unset ? this.lastJitter : lastJitter as Duration?,
-      lastError: lastError == _unset ? this.lastError : lastError as String?,
-      timezone: timezone == _unset ? this.timezone : timezone as String?,
+          lastJitter == _sentinel ? this.lastJitter : lastJitter as Duration?,
+      lastError: lastError == _sentinel ? this.lastError : lastError as String?,
+      timezone: timezone == _sentinel ? this.timezone : timezone as String?,
+      totalRunCount: totalRunCount ?? this.totalRunCount,
+      lastSuccessAt: lastSuccessAt == _sentinel
+          ? this.lastSuccessAt
+          : lastSuccessAt as DateTime?,
+      lastErrorAt: lastErrorAt == _sentinel
+          ? this.lastErrorAt
+          : lastErrorAt as DateTime?,
+      drift: drift == _sentinel ? this.drift : drift as Duration?,
+      expireAt: expireAt == _sentinel ? this.expireAt : expireAt as DateTime?,
+      createdAt:
+          createdAt == _sentinel ? this.createdAt : createdAt as DateTime?,
+      updatedAt:
+          updatedAt == _sentinel ? this.updatedAt : updatedAt as DateTime?,
+      meta: meta ?? this.meta,
     );
   }
 
@@ -458,8 +517,9 @@ class ScheduleEntry {
         'id': id,
         'taskName': taskName,
         'queue': queue,
-        'spec': spec,
+        'spec': spec.toJson(),
         'args': args,
+        if (kwargs.isNotEmpty) 'kwargs': kwargs,
         'enabled': enabled,
         'jitterMs': jitter?.inMilliseconds,
         'lastRunAt': lastRunAt?.toIso8601String(),
@@ -467,34 +527,57 @@ class ScheduleEntry {
         'lastJitterMs': lastJitter?.inMilliseconds,
         'lastError': lastError,
         'timezone': timezone,
+        'totalRunCount': totalRunCount,
+        'lastSuccessAt': lastSuccessAt?.toIso8601String(),
+        'lastErrorAt': lastErrorAt?.toIso8601String(),
+        'driftMs': drift?.inMilliseconds,
+        'expireAt': expireAt?.toIso8601String(),
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
         'meta': meta,
       };
 
   factory ScheduleEntry.fromJson(Map<String, Object?> json) {
+    final spec = ScheduleSpec.fromPersisted(json['spec']);
     return ScheduleEntry(
       id: json['id'] as String,
       taskName: json['taskName'] as String,
       queue: json['queue'] as String,
-      spec: json['spec'] as String,
-      args: (json['args'] as Map?)?.cast<String, Object?>() ?? const {},
+      spec: spec,
+      args: (json['args'] as Map?)?.cast<String, Object?>(),
+      kwargs: (json['kwargs'] as Map?)?.cast<String, Object?>(),
       enabled: json['enabled'] as bool? ?? true,
       jitter: json['jitterMs'] != null
           ? Duration(milliseconds: (json['jitterMs'] as num).toInt())
           : null,
-      lastRunAt: json['lastRunAt'] != null
-          ? DateTime.parse(json['lastRunAt'] as String)
-          : null,
-      nextRunAt: json['nextRunAt'] != null
-          ? DateTime.parse(json['nextRunAt'] as String)
-          : null,
+      lastRunAt: _parseOptionalDate(json['lastRunAt']),
+      nextRunAt: _parseOptionalDate(json['nextRunAt']),
       lastJitter: json['lastJitterMs'] != null
           ? Duration(milliseconds: (json['lastJitterMs'] as num).toInt())
           : null,
       lastError: json['lastError'] as String?,
       timezone: json['timezone'] as String?,
+      totalRunCount: (json['totalRunCount'] as num?)?.toInt() ?? 0,
+      lastSuccessAt: _parseOptionalDate(json['lastSuccessAt']),
+      lastErrorAt: _parseOptionalDate(json['lastErrorAt']),
+      drift: json['driftMs'] != null
+          ? Duration(milliseconds: (json['driftMs'] as num).toInt())
+          : null,
+      expireAt: _parseOptionalDate(json['expireAt']),
+      createdAt: _parseOptionalDate(json['createdAt']),
+      updatedAt: _parseOptionalDate(json['updatedAt']),
       meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
     );
   }
+}
+
+DateTime? _parseOptionalDate(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  if (value is String && value.trim().isNotEmpty) {
+    return DateTime.parse(value);
+  }
+  return null;
 }
 
 /// Storage abstraction used by the scheduler to fetch due entries.
@@ -518,9 +601,14 @@ abstract class ScheduleStore {
   /// Updates execution metadata for the entry [id].
   Future<void> markExecuted(
     String id, {
+    required DateTime scheduledFor,
     required DateTime executedAt,
     Duration? jitter,
     String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
   });
 }
 

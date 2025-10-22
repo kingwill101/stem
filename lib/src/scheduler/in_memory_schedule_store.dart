@@ -1,5 +1,6 @@
 import '../core/contracts.dart';
 import 'schedule_calculator.dart';
+import 'schedule_spec.dart';
 
 /// Simple in-memory schedule store implementation used in tests.
 class InMemoryScheduleStore implements ScheduleStore {
@@ -16,6 +17,8 @@ class InMemoryScheduleStore implements ScheduleStore {
           (state) =>
               !state.locked &&
               state.entry.enabled &&
+              (state.entry.expireAt == null ||
+                  state.entry.expireAt!.isAfter(now)) &&
               !(state.entry.nextRunAt ?? state.nextRun).isAfter(now),
         )
         .toList()
@@ -32,12 +35,17 @@ class InMemoryScheduleStore implements ScheduleStore {
 
   @override
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now();
-    final next = _calculator.nextRun(
-      entry,
-      entry.lastRunAt ?? now,
-      includeJitter: false,
-    );
+    final now = DateTime.now().toUtc();
+    DateTime? next = entry.nextRunAt;
+    if (entry.enabled) {
+      next ??= _calculator.nextRun(
+        entry,
+        entry.lastRunAt ?? now,
+        includeJitter: false,
+      );
+    } else {
+      next ??= entry.lastRunAt ?? now;
+    }
     final updated = entry.copyWith(nextRunAt: next);
     _entries[entry.id] = _ScheduleState(updated, next, locked: false);
   }
@@ -61,22 +69,54 @@ class InMemoryScheduleStore implements ScheduleStore {
   @override
   Future<void> markExecuted(
     String id, {
+    required DateTime scheduledFor,
     required DateTime executedAt,
     Duration? jitter,
     String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
   }) async {
     final state = _entries[id];
     if (state == null) return;
-    final next = _calculator.nextRun(
-      state.entry.copyWith(lastRunAt: executedAt),
-      executedAt,
-      includeJitter: false,
-    );
-    state.entry = state.entry.copyWith(
+    final resolvedSuccess = success && lastError == null;
+    final updatedEntry = state.entry.copyWith(
       lastRunAt: executedAt,
       lastError: lastError,
       lastJitter: jitter,
+      lastSuccessAt: resolvedSuccess ? executedAt : state.entry.lastSuccessAt,
+      lastErrorAt: resolvedSuccess ? state.entry.lastErrorAt : executedAt,
+      totalRunCount: state.entry.totalRunCount + 1,
+      drift: drift ?? state.entry.drift,
+    );
+    DateTime? next = nextRunAt;
+    var enabled = updatedEntry.enabled;
+    if (next == null && enabled) {
+      try {
+        next = _calculator.nextRun(
+          updatedEntry,
+          executedAt,
+          includeJitter: false,
+        );
+      } catch (_) {
+        next = executedAt;
+      }
+    }
+    if (updatedEntry.expireAt != null &&
+        !executedAt.isBefore(updatedEntry.expireAt!)) {
+      enabled = false;
+    }
+    if (updatedEntry.spec is ClockedScheduleSpec) {
+      final spec = updatedEntry.spec as ClockedScheduleSpec;
+      if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+        enabled = false;
+      }
+    }
+    next ??= executedAt;
+    state.entry = updatedEntry.copyWith(
       nextRunAt: next,
+      enabled: enabled,
     );
     state.nextRun = next;
     state.locked = false;

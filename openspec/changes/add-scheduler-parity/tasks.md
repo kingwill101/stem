@@ -1,6 +1,6 @@
 ## 1. Discovery & Design
-- [ ] 1.1 Audit current scheduler capabilities (interval/cron, storage) and document gaps vs Celery Beat.
-- [ ] 1.2 Finalize data model changes for schedule store (solar, clocked, metadata) in design.md.
+- [x] 1.1 Audit current scheduler capabilities (interval/cron, storage) and document gaps vs Celery Beat.
+- [x] 1.2 Finalize data model changes for schedule store (solar, clocked, metadata) in design.md.
 
 ## 2. Schedule Store Enhancements
 - [ ] 2.1 Extend Postgres schedule tables with new fields (timezone, solar args, run_once, enabled, last_run_at history).

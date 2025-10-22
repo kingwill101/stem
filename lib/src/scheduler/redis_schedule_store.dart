@@ -6,6 +6,7 @@ import 'package:redis/redis.dart';
 import '../core/contracts.dart';
 import '../security/tls.dart';
 import 'schedule_calculator.dart';
+import 'schedule_spec.dart';
 
 /// Redis-backed implementation of [ScheduleStore].
 class RedisScheduleStore implements ScheduleStore {
@@ -109,34 +110,52 @@ class RedisScheduleStore implements ScheduleStore {
   }
 
   ScheduleEntry _entryFromMap(String id, Map<String, String> data) {
+    ScheduleSpec spec;
+    final specRaw = data['spec'];
+    if (specRaw != null) {
+      Object? decoded;
+      try {
+        decoded = jsonDecode(specRaw);
+      } catch (_) {
+        decoded = specRaw;
+      }
+      spec = ScheduleSpec.fromPersisted(decoded);
+    } else {
+      spec = ScheduleSpec.fromPersisted('every:60s');
+    }
+    Map<String, Object?> decodeJson(String? raw) {
+      if (raw == null || raw.isEmpty) return const {};
+      return (jsonDecode(raw) as Map).cast<String, Object?>();
+    }
+
+    Duration? parseDuration(String? raw) => raw != null && raw.isNotEmpty
+        ? Duration(milliseconds: int.parse(raw))
+        : null;
+    DateTime? parseDate(String? raw) =>
+        raw != null && raw.isNotEmpty ? DateTime.parse(raw) : null;
     return ScheduleEntry(
       id: id,
       taskName: data['taskName'] ?? '',
       queue: data['queue'] ?? 'default',
-      spec: data['spec'] ?? 'every:60s',
-      args: data['args'] != null
-          ? (jsonDecode(data['args']!) as Map).cast<String, Object?>()
-          : const {},
+      spec: spec,
+      args: decodeJson(data['args']),
+      kwargs: decodeJson(data['kwargs']),
       enabled: data['enabled'] != null ? data['enabled'] == 'true' : true,
-      jitter: data['jitterMs'] != null && data['jitterMs']!.isNotEmpty
-          ? Duration(milliseconds: int.parse(data['jitterMs']!))
-          : null,
-      lastRunAt: data['lastRunAt'] != null && data['lastRunAt']!.isNotEmpty
-          ? DateTime.parse(data['lastRunAt']!)
-          : null,
-      nextRunAt: data['nextRunAt'] != null && data['nextRunAt']!.isNotEmpty
-          ? DateTime.parse(data['nextRunAt']!)
-          : null,
-      lastJitter:
-          data['lastJitterMs'] != null && data['lastJitterMs']!.isNotEmpty
-              ? Duration(milliseconds: int.parse(data['lastJitterMs']!))
-              : null,
+      jitter: parseDuration(data['jitterMs']),
+      lastRunAt: parseDate(data['lastRunAt']),
+      nextRunAt: parseDate(data['nextRunAt']),
+      lastJitter: parseDuration(data['lastJitterMs']),
       lastError:
           data['lastError']?.isNotEmpty == true ? data['lastError'] : null,
       timezone: data['timezone']?.isNotEmpty == true ? data['timezone'] : null,
-      meta: data['meta'] != null
-          ? (jsonDecode(data['meta']!) as Map).cast<String, Object?>()
-          : const {},
+      totalRunCount: data['totalRunCount'] != null
+          ? int.tryParse(data['totalRunCount']!) ?? 0
+          : 0,
+      lastSuccessAt: parseDate(data['lastSuccessAt']),
+      lastErrorAt: parseDate(data['lastErrorAt']),
+      drift: parseDuration(data['driftMs']),
+      expireAt: parseDate(data['expireAt']),
+      meta: decodeJson(data['meta']),
     );
   }
 
@@ -180,6 +199,10 @@ class RedisScheduleStore implements ScheduleStore {
         await _send(['DEL', _lockKey(id)]);
         continue;
       }
+      if (entry.expireAt != null && !now.isBefore(entry.expireAt!)) {
+        await _send(['DEL', _lockKey(id)]);
+        continue;
+      }
       entries.add(entry);
     }
     return entries;
@@ -187,15 +210,21 @@ class RedisScheduleStore implements ScheduleStore {
 
   @override
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now();
-    final nextRun = entry.nextRunAt ??
-        _calculator.nextRun(
-          entry,
-          entry.lastRunAt ?? now,
-          includeJitter: false,
-        );
+    final now = DateTime.now().toUtc();
+    DateTime? nextRun = entry.nextRunAt;
+    if (entry.enabled) {
+      nextRun ??= _calculator.nextRun(
+        entry,
+        entry.lastRunAt ?? now,
+        includeJitter: false,
+      );
+    } else {
+      nextRun ??= entry.lastRunAt ?? now;
+    }
 
     final encodedArgs = jsonEncode(entry.args);
+    final encodedKwargs = jsonEncode(entry.kwargs);
+    final encodedSpec = jsonEncode(entry.spec.toJson());
     final encodedMeta = jsonEncode(entry.meta);
     await _send([
       'HSET',
@@ -205,11 +234,13 @@ class RedisScheduleStore implements ScheduleStore {
       'queue',
       entry.queue,
       'spec',
-      entry.spec,
+      encodedSpec,
       'args',
       encodedArgs,
+      'kwargs',
+      encodedKwargs,
       'enabled',
-      entry.enabled.toString(),
+      entry.enabled ? 'true' : 'false',
       'jitterMs',
       entry.jitter?.inMilliseconds.toString() ?? '',
       'lastRunAt',
@@ -222,6 +253,16 @@ class RedisScheduleStore implements ScheduleStore {
       entry.lastError ?? '',
       'timezone',
       entry.timezone ?? '',
+      'totalRunCount',
+      entry.totalRunCount.toString(),
+      'lastSuccessAt',
+      entry.lastSuccessAt?.toIso8601String() ?? '',
+      'lastErrorAt',
+      entry.lastErrorAt?.toIso8601String() ?? '',
+      'driftMs',
+      entry.drift?.inMilliseconds.toString() ?? '',
+      'expireAt',
+      entry.expireAt?.toIso8601String() ?? '',
       'meta',
       encodedMeta,
     ]);
@@ -266,9 +307,14 @@ class RedisScheduleStore implements ScheduleStore {
   @override
   Future<void> markExecuted(
     String id, {
+    required DateTime scheduledFor,
     required DateTime executedAt,
     Duration? jitter,
     String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
   }) async {
     final data = await _send(['HGETALL', _entryKey(id)]);
     if (data is! List || data.isEmpty) {
@@ -277,11 +323,39 @@ class RedisScheduleStore implements ScheduleStore {
     }
     final map = _listToMap(data);
     final entry = _entryFromMap(id, map);
-    final next = _calculator.nextRun(
-      entry.copyWith(lastRunAt: executedAt),
-      executedAt,
-      includeJitter: false,
+    final resolvedSuccess = success && lastError == null;
+    final updated = entry.copyWith(
+      lastRunAt: executedAt,
+      lastError: lastError,
+      lastJitter: jitter,
+      lastSuccessAt: resolvedSuccess ? executedAt : entry.lastSuccessAt,
+      lastErrorAt: resolvedSuccess ? entry.lastErrorAt : executedAt,
+      totalRunCount: entry.totalRunCount + 1,
+      drift: drift ?? entry.drift,
     );
+    DateTime? next = nextRunAt;
+    var enabled = updated.enabled;
+    if (next == null && enabled) {
+      try {
+        next = _calculator.nextRun(
+          updated,
+          executedAt,
+          includeJitter: false,
+        );
+      } catch (_) {
+        next = executedAt;
+      }
+    }
+    if (updated.expireAt != null && !executedAt.isBefore(updated.expireAt!)) {
+      enabled = false;
+    }
+    if (updated.spec is ClockedScheduleSpec) {
+      final spec = updated.spec as ClockedScheduleSpec;
+      if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+        enabled = false;
+      }
+    }
+    next ??= executedAt;
     await _send([
       'HSET',
       _entryKey(id),
@@ -293,6 +367,16 @@ class RedisScheduleStore implements ScheduleStore {
       jitter?.inMilliseconds.toString() ?? '',
       'lastError',
       lastError ?? '',
+      'enabled',
+      enabled ? 'true' : 'false',
+      'totalRunCount',
+      updated.totalRunCount.toString(),
+      'lastSuccessAt',
+      updated.lastSuccessAt?.toIso8601String() ?? '',
+      'lastErrorAt',
+      updated.lastErrorAt?.toIso8601String() ?? '',
+      'driftMs',
+      updated.drift?.inMilliseconds.toString() ?? '',
     ]);
     await _send([
       'ZADD',
@@ -301,5 +385,46 @@ class RedisScheduleStore implements ScheduleStore {
       id,
     ]);
     await _send(['DEL', _lockKey(id)]);
+    await _appendHistory(
+      id: id,
+      scheduledFor: scheduledFor,
+      executedAt: executedAt,
+      success: resolvedSuccess,
+      runDuration: runDuration,
+      error: lastError,
+    );
+  }
+
+  Future<void> _appendHistory({
+    required String id,
+    required DateTime scheduledFor,
+    required DateTime executedAt,
+    required bool success,
+    Duration? runDuration,
+    String? error,
+  }) async {
+    final key = '$namespace:schedule:$id:history';
+    await _send([
+      'XADD',
+      key,
+      '*',
+      'scheduledAt',
+      scheduledFor.toIso8601String(),
+      'executedAt',
+      executedAt.toIso8601String(),
+      'success',
+      success ? 'true' : 'false',
+      'durationMs',
+      runDuration?.inMilliseconds.toString() ?? '',
+      'error',
+      error ?? '',
+    ]);
+    await _send([
+      'XTRIM',
+      key,
+      'MAXLEN',
+      '~',
+      '1000',
+    ]);
   }
 }

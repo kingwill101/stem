@@ -5,6 +5,7 @@ import 'package:postgres/postgres.dart';
 import '../core/contracts.dart';
 import '../postgres/postgres_client.dart';
 import 'schedule_calculator.dart';
+import 'schedule_spec.dart';
 
 /// PostgreSQL-backed implementation of [ScheduleStore].
 class PostgresScheduleStore implements ScheduleStore {
@@ -21,6 +22,12 @@ class PostgresScheduleStore implements ScheduleStore {
   final String schema;
   final Duration lockTtl;
   final ScheduleCalculator _calculator;
+
+  static const String _selectColumns =
+      'e.id, e.task_name, e.queue, e.spec, e.args, e.kwargs, e.enabled, '
+      'e.jitter_ms, e.last_run_at, e.next_run_at, e.last_jitter_ms, '
+      'e.last_error, e.timezone, e.total_run_count, e.last_success_at, '
+      'e.last_error_at, e.drift_ms, e.expire_at, e.meta, e.created_at, e.updated_at';
 
   bool _closed = false;
 
@@ -59,8 +66,9 @@ class PostgresScheduleStore implements ScheduleStore {
           id TEXT PRIMARY KEY,
           task_name TEXT NOT NULL,
           queue TEXT NOT NULL,
-          spec TEXT NOT NULL,
+          spec JSONB NOT NULL,
           args JSONB NOT NULL DEFAULT '{}'::jsonb,
+          kwargs JSONB NOT NULL DEFAULT '{}'::jsonb,
           enabled BOOLEAN NOT NULL DEFAULT true,
           jitter_ms INTEGER,
           last_run_at TIMESTAMPTZ,
@@ -68,11 +76,57 @@ class PostgresScheduleStore implements ScheduleStore {
           last_jitter_ms INTEGER,
           last_error TEXT,
           timezone TEXT,
+          total_run_count BIGINT NOT NULL DEFAULT 0,
+          last_success_at TIMESTAMPTZ,
+          last_error_at TIMESTAMPTZ,
+          drift_ms INTEGER,
+          expire_at TIMESTAMPTZ,
           meta JSONB NOT NULL DEFAULT '{}'::jsonb,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
       ''');
+
+      try {
+        await conn.execute('''
+          ALTER TABLE $schema.${prefix}schedule_entries
+          ALTER COLUMN spec TYPE JSONB
+          USING CASE
+            WHEN jsonb_typeof(spec::jsonb) IS NULL THEN to_jsonb(spec::text)
+            ELSE spec::jsonb
+          END
+        ''');
+      } catch (_) {}
+
+      await _ensureColumn(
+        conn,
+        "ALTER TABLE $schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS kwargs JSONB NOT NULL DEFAULT '{}'::jsonb",
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS total_run_count BIGINT NOT NULL DEFAULT 0',
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS last_success_at TIMESTAMPTZ',
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ',
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS drift_ms INTEGER',
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS expire_at TIMESTAMPTZ',
+      );
 
       await conn.execute('''
         CREATE INDEX IF NOT EXISTS ${prefix}schedule_entries_next_run_at_idx
@@ -93,6 +147,23 @@ class PostgresScheduleStore implements ScheduleStore {
         CREATE INDEX IF NOT EXISTS ${prefix}schedule_locks_expires_at_idx
         ON $schema.${prefix}schedule_locks(expires_at)
       ''');
+
+      await conn.execute('''
+        CREATE TABLE IF NOT EXISTS $schema.${prefix}schedule_run_history (
+          schedule_id TEXT NOT NULL,
+          scheduled_at TIMESTAMPTZ NOT NULL,
+          executed_at TIMESTAMPTZ NOT NULL,
+          success BOOLEAN NOT NULL,
+          duration_ms INTEGER,
+          error TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      ''');
+
+      await conn.execute('''
+        CREATE INDEX IF NOT EXISTS ${prefix}schedule_run_history_idx
+        ON $schema.${prefix}schedule_run_history(schedule_id, executed_at DESC)
+      ''');
     });
   }
 
@@ -112,21 +183,50 @@ class PostgresScheduleStore implements ScheduleStore {
     return '$schema.${prefix}schedule_locks';
   }
 
+  String _historyTable() {
+    final prefix = namespace.isNotEmpty ? '${namespace}_' : '';
+    return '$schema.${prefix}schedule_run_history';
+  }
+
+  Future<void> _releaseLock(Connection conn, String id) async {
+    await conn.execute(
+      Sql.named('''
+        DELETE FROM ${_locksTable()}
+        WHERE id = @id
+      '''),
+      parameters: {'id': id},
+    );
+  }
+
   ScheduleEntry _entryFromRow(List<dynamic> row) {
     return ScheduleEntry(
       id: row[0] as String,
       taskName: row[1] as String,
       queue: row[2] as String,
-      spec: row[3] as String,
+      spec: ScheduleSpec.fromPersisted(row[3]),
       args: _decodeMap(row[4]),
-      enabled: row[5] as bool,
-      jitter: row[6] != null ? Duration(milliseconds: row[6] as int) : null,
-      lastRunAt: row[7] as DateTime?,
-      nextRunAt: row[8] as DateTime?,
-      lastJitter: row[9] != null ? Duration(milliseconds: row[9] as int) : null,
-      lastError: row[10] as String?,
-      timezone: row[11] as String?,
-      meta: _decodeMap(row[12]),
+      kwargs: _decodeMap(row[5]),
+      enabled: row[6] as bool,
+      jitter: row[7] != null
+          ? Duration(milliseconds: (row[7] as num).toInt())
+          : null,
+      lastRunAt: row[8] as DateTime?,
+      nextRunAt: row[9] as DateTime?,
+      lastJitter: row[10] != null
+          ? Duration(milliseconds: (row[10] as num).toInt())
+          : null,
+      lastError: row[11] as String?,
+      timezone: row[12] as String?,
+      totalRunCount: (row[13] as num?)?.toInt() ?? 0,
+      lastSuccessAt: row[14] as DateTime?,
+      lastErrorAt: row[15] as DateTime?,
+      drift: row[16] != null
+          ? Duration(milliseconds: (row[16] as num).toInt())
+          : null,
+      expireAt: row[17] as DateTime?,
+      meta: _decodeMap(row[18]),
+      createdAt: row.length > 19 ? row[19] as DateTime? : null,
+      updatedAt: row.length > 20 ? row[20] as DateTime? : null,
     );
   }
 
@@ -142,14 +242,12 @@ class PostgresScheduleStore implements ScheduleStore {
       // Find due entries and acquire locks
       final result = await conn.execute(
         Sql.named('''
-        SELECT
-          e.id, e.task_name, e.queue, e.spec, e.args, e.enabled,
-          e.jitter_ms, e.last_run_at, e.next_run_at, e.last_jitter_ms,
-          e.last_error, e.timezone, e.meta
+        SELECT $_selectColumns
         FROM ${_entriesTable()} e
         LEFT JOIN ${_locksTable()} l ON e.id = l.id
         WHERE e.enabled = true
           AND e.next_run_at <= @now
+          AND (e.expire_at IS NULL OR e.expire_at > @now)
           AND l.id IS NULL
         ORDER BY e.next_run_at ASC
         LIMIT @limit
@@ -186,32 +284,41 @@ class PostgresScheduleStore implements ScheduleStore {
 
   @override
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now();
-    final nextRun = entry.nextRunAt ??
-        _calculator.nextRun(
-          entry,
-          entry.lastRunAt ?? now,
-          includeJitter: false,
-        );
+    final now = DateTime.now().toUtc();
+    DateTime? nextRun = entry.nextRunAt;
+    if (entry.enabled) {
+      nextRun ??= _calculator.nextRun(
+        entry,
+        entry.lastRunAt ?? now,
+        includeJitter: false,
+      );
+    } else {
+      nextRun ??= entry.lastRunAt ?? now;
+    }
 
     await _client.run((Connection conn) async {
       final argsJson = jsonEncode(entry.args);
+      final kwargsJson = jsonEncode(entry.kwargs);
+      final specJson = jsonEncode(entry.spec.toJson());
       final metaJson = jsonEncode(entry.meta);
 
       await conn.execute(
         Sql.named('''
         INSERT INTO ${_entriesTable()}
-          (id, task_name, queue, spec, args, enabled, jitter_ms,
-           last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta, updated_at)
+          (id, task_name, queue, spec, args, kwargs, enabled, jitter_ms,
+           last_run_at, next_run_at, last_jitter_ms, last_error, timezone, total_run_count,
+           last_success_at, last_error_at, drift_ms, expire_at, meta, updated_at)
         VALUES
-          (@id, @task_name, @queue, @spec, @args::jsonb, @enabled, @jitter_ms,
-           @last_run_at, @next_run_at, @last_jitter_ms, @last_error, @timezone, @meta::jsonb, NOW())
+          (@id, @task_name, @queue, @spec::jsonb, @args::jsonb, @kwargs::jsonb, @enabled, @jitter_ms,
+           @last_run_at, @next_run_at, @last_jitter_ms, @last_error, @timezone, @total_run_count,
+           @last_success_at, @last_error_at, @drift_ms, @expire_at, @meta::jsonb, NOW())
         ON CONFLICT (id)
         DO UPDATE SET
           task_name = EXCLUDED.task_name,
           queue = EXCLUDED.queue,
           spec = EXCLUDED.spec,
           args = EXCLUDED.args,
+          kwargs = EXCLUDED.kwargs,
           enabled = EXCLUDED.enabled,
           jitter_ms = EXCLUDED.jitter_ms,
           last_run_at = EXCLUDED.last_run_at,
@@ -219,6 +326,11 @@ class PostgresScheduleStore implements ScheduleStore {
           last_jitter_ms = EXCLUDED.last_jitter_ms,
           last_error = EXCLUDED.last_error,
           timezone = EXCLUDED.timezone,
+          total_run_count = EXCLUDED.total_run_count,
+          last_success_at = EXCLUDED.last_success_at,
+          last_error_at = EXCLUDED.last_error_at,
+          drift_ms = EXCLUDED.drift_ms,
+          expire_at = EXCLUDED.expire_at,
           meta = EXCLUDED.meta,
           updated_at = NOW()
         '''),
@@ -226,8 +338,9 @@ class PostgresScheduleStore implements ScheduleStore {
           'id': entry.id,
           'task_name': entry.taskName,
           'queue': entry.queue,
-          'spec': entry.spec,
+          'spec': specJson,
           'args': argsJson,
+          'kwargs': kwargsJson,
           'enabled': entry.enabled,
           'jitter_ms': entry.jitter?.inMilliseconds,
           'last_run_at': entry.lastRunAt,
@@ -235,6 +348,11 @@ class PostgresScheduleStore implements ScheduleStore {
           'last_jitter_ms': entry.lastJitter?.inMilliseconds,
           'last_error': entry.lastError,
           'timezone': entry.timezone,
+          'total_run_count': entry.totalRunCount,
+          'last_success_at': entry.lastSuccessAt,
+          'last_error_at': entry.lastErrorAt,
+          'drift_ms': entry.drift?.inMilliseconds,
+          'expire_at': entry.expireAt,
           'meta': metaJson,
         },
       );
@@ -277,17 +395,15 @@ class PostgresScheduleStore implements ScheduleStore {
       final query = limit != null
           ? '''
             SELECT
-              id, task_name, queue, spec, args, enabled, jitter_ms,
-              last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
-            FROM ${_entriesTable()}
+              $_selectColumns
+            FROM ${_entriesTable()} e
             ORDER BY next_run_at ASC
             LIMIT @limit
             '''
           : '''
             SELECT
-              id, task_name, queue, spec, args, enabled, jitter_ms,
-              last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
-            FROM ${_entriesTable()}
+              $_selectColumns
+            FROM ${_entriesTable()} e
             ORDER BY next_run_at ASC
             ''';
 
@@ -305,9 +421,8 @@ class PostgresScheduleStore implements ScheduleStore {
       final result = await conn.execute(
         Sql.named('''
         SELECT
-          id, task_name, queue, spec, args, enabled, jitter_ms,
-          last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
-        FROM ${_entriesTable()}
+          $_selectColumns
+        FROM ${_entriesTable()} e
         WHERE id = @id
         '''),
         parameters: {'id': id},
@@ -322,70 +437,132 @@ class PostgresScheduleStore implements ScheduleStore {
   @override
   Future<void> markExecuted(
     String id, {
+    required DateTime scheduledFor,
     required DateTime executedAt,
     Duration? jitter,
     String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
   }) async {
     await _client.run((Connection conn) async {
-      // Fetch current entry
-      final result = await conn.execute(
-        Sql.named('''
-        SELECT
-          id, task_name, queue, spec, args, enabled, jitter_ms,
-          last_run_at, next_run_at, last_jitter_ms, last_error, timezone, meta
-        FROM ${_entriesTable()}
-        WHERE id = @id
-        '''),
-        parameters: {'id': id},
-      );
-
-      if (result.isEmpty) {
-        // Release lock if entry doesn't exist
-        await conn.execute(
+      try {
+        final result = await conn.execute(
           Sql.named('''
-          DELETE FROM ${_locksTable()}
-          WHERE id = @id
-          '''),
+        SELECT $_selectColumns
+        FROM ${_entriesTable()} e
+        WHERE id = @id
+        FOR UPDATE
+        '''),
           parameters: {'id': id},
         );
-        return;
-      }
 
-      final entry = _entryFromRow(result.first);
-      final next = _calculator.nextRun(
-        entry.copyWith(lastRunAt: executedAt),
-        executedAt,
-        includeJitter: false,
-      );
+        if (result.isEmpty) {
+          return;
+        }
 
-      await conn.execute(
-        Sql.named('''
+        final entry = _entryFromRow(result.first);
+        final bool resolvedSuccess = success && lastError == null;
+        final updated = entry.copyWith(
+          lastRunAt: executedAt,
+          lastJitter: jitter,
+          lastError: lastError,
+          lastSuccessAt: resolvedSuccess ? executedAt : entry.lastSuccessAt,
+          lastErrorAt: resolvedSuccess ? entry.lastErrorAt : executedAt,
+          totalRunCount: entry.totalRunCount + 1,
+          drift: drift ?? entry.drift,
+        );
+
+        DateTime? effectiveNextRun = nextRunAt;
+        var enabled = updated.enabled;
+        if (effectiveNextRun == null && enabled) {
+          try {
+            effectiveNextRun = _calculator.nextRun(
+              updated,
+              executedAt,
+              includeJitter: false,
+            );
+          } catch (_) {
+            effectiveNextRun = executedAt;
+          }
+        }
+
+        if (updated.expireAt != null &&
+            !executedAt.isBefore(updated.expireAt!)) {
+          enabled = false;
+        }
+        if (updated.spec is ClockedScheduleSpec) {
+          final spec = updated.spec as ClockedScheduleSpec;
+          if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+            enabled = false;
+          }
+        }
+
+        final nextValue = (effectiveNextRun ?? executedAt).toUtc();
+
+        await conn.execute(
+          Sql.named('''
         UPDATE ${_entriesTable()}
         SET
           last_run_at = @last_run_at,
           next_run_at = @next_run_at,
           last_jitter_ms = @last_jitter_ms,
           last_error = @last_error,
+          timezone = @timezone,
+          total_run_count = @total_run_count,
+          last_success_at = @last_success_at,
+          last_error_at = @last_error_at,
+          drift_ms = @drift_ms,
+          enabled = @enabled,
           updated_at = NOW()
         WHERE id = @id
         '''),
-        parameters: {
-          'id': id,
-          'last_run_at': executedAt,
-          'next_run_at': next,
-          'last_jitter_ms': jitter?.inMilliseconds,
-          'last_error': lastError,
-        },
-      );
+          parameters: {
+            'id': id,
+            'last_run_at': executedAt,
+            'next_run_at': nextValue,
+            'last_jitter_ms': jitter?.inMilliseconds,
+            'last_error': lastError,
+            'timezone': updated.timezone,
+            'total_run_count': updated.totalRunCount,
+            'last_success_at': updated.lastSuccessAt,
+            'last_error_at': updated.lastErrorAt,
+            'drift_ms': updated.drift?.inMilliseconds,
+            'enabled': enabled,
+          },
+        );
 
-      // Release lock
-      await conn.execute(
-        Sql.named('''
-        DELETE FROM ${_locksTable()}
-        WHERE id = @id
+        await conn.execute(
+          Sql.named('''
+        INSERT INTO ${_historyTable()} (
+          schedule_id,
+          scheduled_at,
+          executed_at,
+          success,
+          duration_ms,
+          error
+        ) VALUES (
+          @schedule_id,
+          @scheduled_at,
+          @executed_at,
+          @success,
+          @duration_ms,
+          @error
+        )
         '''),
-        parameters: {'id': id},
-      );
+          parameters: {
+            'schedule_id': id,
+            'scheduled_at': scheduledFor,
+            'executed_at': executedAt,
+            'success': resolvedSuccess,
+            'duration_ms': runDuration?.inMilliseconds,
+            'error': lastError,
+          },
+        );
+      } finally {
+        await _releaseLock(conn, id);
+      }
     });
   }
 }
@@ -399,4 +576,13 @@ Map<String, Object?> _decodeMap(Object? value) {
     return (jsonDecode(value) as Map).cast<String, Object?>();
   }
   return const {};
+}
+
+Future<void> _ensureColumn(
+  Connection conn,
+  String statement,
+) async {
+  try {
+    await conn.execute(statement);
+  } catch (_) {}
 }

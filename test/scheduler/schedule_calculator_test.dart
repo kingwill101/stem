@@ -3,13 +3,15 @@ import 'dart:math';
 import 'package:test/test.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
+import 'package:stem/src/scheduler/schedule_spec.dart';
 
 void main() {
   group('ScheduleCalculator', () {
     final now = DateTime.utc(2025, 1, 1, 12, 0);
 
     ScheduleEntry buildEntry({
-      String spec = 'every:5s',
+      ScheduleSpec? spec,
+      String? specExpression,
       DateTime? lastRun,
       Duration? jitter,
     }) {
@@ -17,7 +19,7 @@ void main() {
         id: 'sample',
         taskName: 'sample.task',
         queue: 'default',
-        spec: spec,
+        spec: spec ?? ScheduleSpec.fromPersisted(specExpression ?? 'every:5s'),
         lastRunAt: lastRun,
         jitter: jitter,
       );
@@ -25,7 +27,7 @@ void main() {
 
     test('computes next run for every: expressions without jitter', () {
       final calculator = ScheduleCalculator(random: Random(1));
-      final entry = buildEntry(spec: 'every:30s');
+      final entry = buildEntry(specExpression: 'every:30s');
 
       final result = calculator.nextRun(entry, now, includeJitter: false);
 
@@ -36,7 +38,7 @@ void main() {
       final referenceRandom = Random(42);
       final calculator = ScheduleCalculator(random: Random(42));
       final entry = buildEntry(
-        spec: 'every:1s',
+        specExpression: 'every:1s',
         jitter: const Duration(milliseconds: 500),
       );
 
@@ -53,7 +55,7 @@ void main() {
 
     test('supports millisecond every expressions', () {
       final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: 'every:250ms');
+      final entry = buildEntry(specExpression: 'every:250ms');
 
       final result = calculator.nextRun(entry, now, includeJitter: false);
 
@@ -61,28 +63,25 @@ void main() {
     });
 
     test('throws for invalid every expression', () {
-      final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: 'every:');
-
       expect(
-        () => calculator.nextRun(entry, now, includeJitter: false),
+        () => buildEntry(specExpression: 'every:'),
         throwsFormatException,
       );
     });
 
     test('throws for unsupported every unit', () {
-      final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: 'every:10q');
-
       expect(
-        () => calculator.nextRun(entry, now, includeJitter: false),
+        () => buildEntry(specExpression: 'every:10q'),
         throwsFormatException,
       );
     });
 
     test('computes cron expression for next minute when satisfied', () {
       final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: '*/15 9-17 * * 1-5', lastRun: now);
+      final entry = buildEntry(
+        specExpression: '*/15 9-17 * * 1-5',
+        lastRun: now,
+      );
 
       final result = calculator.nextRun(entry, now);
 
@@ -98,7 +97,10 @@ void main() {
     test('respects cron weekday aliases for Sunday', () {
       final calculator = ScheduleCalculator();
       final sunday = DateTime.utc(2025, 1, 5, 8, 45); // Sunday
-      final entry = buildEntry(spec: '0 9 * * 0', lastRun: sunday);
+      final entry = buildEntry(
+        specExpression: '0 9 * * 0',
+        lastRun: sunday,
+      );
 
       final nextRun = calculator.nextRun(entry, sunday);
 
@@ -109,21 +111,21 @@ void main() {
 
     test('throws when cron expression has invalid field count', () {
       final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: '*/5 0 * *');
+      final entry = buildEntry(specExpression: '*/5 0 * *');
 
       expect(() => calculator.nextRun(entry, now), throwsFormatException);
     });
 
     test('throws when cron range start exceeds end', () {
       final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: '0 0 10-5 * *');
+      final entry = buildEntry(specExpression: '0 0 10-5 * *');
 
       expect(() => calculator.nextRun(entry, now), throwsFormatException);
     });
 
     test('throws when cron value outside valid bounds', () {
       final calculator = ScheduleCalculator();
-      final entry = buildEntry(spec: '0 0 0 * *');
+      final entry = buildEntry(specExpression: '0 0 0 * *');
 
       expect(() => calculator.nextRun(entry, now), throwsA(isA<RangeError>()));
     });

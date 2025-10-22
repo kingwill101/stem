@@ -1,65 +1,113 @@
 import 'dart:math';
 
+import 'package:timezone/timezone.dart' as tz;
+
 import '../core/contracts.dart';
+import 'schedule_spec.dart';
+import 'solar_calculator.dart';
 
 class ScheduleCalculator {
-  ScheduleCalculator({Random? random}) : _random = random ?? Random();
+  ScheduleCalculator({
+    Random? random,
+    ScheduleTimezoneResolver? timezoneResolver,
+    SolarCalculator? solarCalculator,
+  })  : _random = random ?? Random(),
+        _timezoneResolver = timezoneResolver,
+        _solar = solarCalculator ?? const SolarCalculator();
 
   final Random _random;
+  final ScheduleTimezoneResolver? _timezoneResolver;
+  final SolarCalculator _solar;
 
   DateTime nextRun(
     ScheduleEntry entry,
     DateTime now, {
     bool includeJitter = true,
   }) {
-    final base = entry.lastRunAt ?? now;
-    final nextBase = _calculateNextTimestamp(entry.spec, base);
+    final spec = entry.spec;
+    final tz.Location? location =
+        _timezoneResolver?.resolve(entry.timezone);
+    final DateTime base = entry.lastRunAt ?? now;
+    DateTime next;
+
+    switch (spec) {
+      case IntervalScheduleSpec interval:
+        next = _nextInterval(interval, base, now);
+        break;
+      case CronScheduleSpec cron:
+        next = _nextCron(cron, base, location);
+        break;
+      case SolarScheduleSpec solar:
+        next = _nextSolar(solar, base, location);
+        break;
+      case ClockedScheduleSpec clocked:
+        next = _nextClocked(clocked, base, now);
+        break;
+      case CalendarScheduleSpec calendar:
+        next = _nextCalendar(calendar, base, location);
+        break;
+    }
+
+    final jitter = entry.jitter;
     if (includeJitter &&
-        entry.jitter != null &&
-        entry.jitter! > Duration.zero) {
-      final jitterMs = _random.nextInt(entry.jitter!.inMilliseconds + 1);
-      return nextBase.add(Duration(milliseconds: jitterMs));
+        jitter != null &&
+        jitter > Duration.zero) {
+      final jitterMs = _random.nextInt(jitter.inMilliseconds + 1);
+      next = next.add(Duration(milliseconds: jitterMs));
     }
-    return nextBase;
+    return next;
   }
 
-  DateTime _calculateNextTimestamp(String spec, DateTime from) {
-    if (spec.startsWith('every:')) {
-      final duration = _parseEvery(spec.substring(6));
-      final base =
-          from.isUtc ? from : from.toUtc(); // ensure consistent arithmetic
-      return base.add(duration).toLocal();
+  DateTime _nextInterval(
+    IntervalScheduleSpec spec,
+    DateTime reference,
+    DateTime now,
+  ) {
+    final start = spec.startAt ?? reference;
+    var candidate = reference.isBefore(start) ? start : reference;
+    if (candidate.isBefore(now)) {
+      final elapsed = now.difference(candidate);
+      final ticks = (elapsed.inMilliseconds / spec.every.inMilliseconds).ceil();
+      candidate = candidate.add(Duration(
+        milliseconds: (ticks * spec.every.inMilliseconds),
+      ));
+    } else if (candidate.isAtSameMomentAs(reference)) {
+      candidate = candidate.add(spec.every);
     }
-    return _nextCron(spec, from);
+
+    if (spec.endAt != null &&
+        (candidate.isAfter(spec.endAt!) ||
+            candidate.isAtSameMomentAs(spec.endAt!))) {
+      throw StateError('Interval schedule has reached end_at boundary.');
+    }
+    return candidate;
   }
 
-  Duration _parseEvery(String expression) {
-    final trimmed = expression.trim();
-    if (trimmed.isEmpty) {
-      throw FormatException('Invalid every: expression: "$expression"');
+  DateTime _nextClocked(
+    ClockedScheduleSpec spec,
+    DateTime reference,
+    DateTime now,
+  ) {
+    final runAt = spec.runAt.isUtc ? spec.runAt : spec.runAt.toUtc();
+    if (runAt.isBefore(now)) {
+      if (spec.runOnce) {
+        return runAt;
+      }
+      return runAt.add(Duration(
+        milliseconds: now.difference(runAt).inMilliseconds + 1,
+      ));
     }
-    final unitMatch = RegExp(r'^(\d+)(ms|s|m|h|d)?$').firstMatch(trimmed);
-    if (unitMatch == null) {
-      throw FormatException('Invalid every: expression: "$expression"');
-    }
-    final value = int.parse(unitMatch.group(1)!);
-    final unit = unitMatch.group(2) ?? 's';
-    switch (unit) {
-      case 'ms':
-        return Duration(milliseconds: value);
-      case 's':
-        return Duration(seconds: value);
-      case 'm':
-        return Duration(minutes: value);
-      case 'h':
-        return Duration(hours: value);
-      case 'd':
-        return Duration(days: value);
-    }
-    throw FormatException('Unknown duration unit: "$unit"');
+    return runAt;
   }
 
-  DateTime _nextCron(String expression, DateTime start) {
+  DateTime _nextCron(
+    CronScheduleSpec spec,
+    DateTime reference,
+    tz.Location? location,
+  ) {
+    final String expression = _cronExpression(spec);
+    final DateTime start =
+        location != null ? tz.TZDateTime.from(reference, location) : reference;
     final fields = expression.trim().split(RegExp(r'\s+'));
     if (fields.length != 5) {
       throw FormatException(
@@ -74,7 +122,7 @@ class ScheduleCalculator {
     final monthField = _CronField.parse(fields[3], 1, 12);
     final weekdayField = _CronField.parse(fields[4], 0, 6, sundayValue: {0, 7});
 
-    var candidate = DateTime(
+    DateTime candidate = DateTime.utc(
       start.year,
       start.month,
       start.day,
@@ -84,12 +132,13 @@ class ScheduleCalculator {
 
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
-        candidate = DateTime(candidate.year, candidate.month + 1, 1, 0, 0);
+        candidate =
+            DateTime.utc(candidate.year, candidate.month + 1, 1, 0, 0);
         continue;
       }
 
       if (!_matches(dayField, candidate.day)) {
-        candidate = DateTime(
+        candidate = DateTime.utc(
           candidate.year,
           candidate.month,
           candidate.day + 1,
@@ -99,9 +148,9 @@ class ScheduleCalculator {
         continue;
       }
 
-      final weekday = (candidate.weekday % 7);
+      final weekday = candidate.weekday % 7;
       if (!_matchesWeekday(weekdayField, weekday, dayField)) {
-        candidate = DateTime(
+        candidate = DateTime.utc(
           candidate.year,
           candidate.month,
           candidate.day + 1,
@@ -112,7 +161,7 @@ class ScheduleCalculator {
       }
 
       if (!_matches(hourField, candidate.hour)) {
-        candidate = DateTime(
+        candidate = DateTime.utc(
           candidate.year,
           candidate.month,
           candidate.day,
@@ -127,11 +176,40 @@ class ScheduleCalculator {
         continue;
       }
 
-      return candidate;
+      return location != null
+          ? tz.TZDateTime.from(candidate, location).toUtc()
+          : candidate;
     }
     throw StateError(
-      'Unable to compute next run for cron expression $expression',
+        'Unable to compute next run for cron expression $expression');
+  }
+
+  DateTime _nextCalendar(
+    CalendarScheduleSpec spec,
+    DateTime reference,
+    tz.Location? location,
+  ) {
+    final cron = CronScheduleSpec(
+      expression: _calendarToCron(spec),
     );
+    return _nextCron(cron, reference, location);
+  }
+
+  DateTime _nextSolar(
+    SolarScheduleSpec spec,
+    DateTime reference,
+    tz.Location? location,
+  ) {
+    final DateTime start = reference.toUtc();
+    final DateTime candidate = _solar.nextEvent(
+      spec,
+      start,
+      location,
+    );
+    if (spec.offset != null) {
+      return candidate.add(spec.offset!);
+    }
+    return candidate;
   }
 
   bool _matches(_CronField field, int value) {
@@ -145,6 +223,31 @@ class ScheduleCalculator {
     }
     return field.values!.contains(weekday) ||
         dayField.values!.contains(weekday);
+  }
+
+  String _cronExpression(CronScheduleSpec spec) {
+    if (spec.secondField != null && spec.secondField!.trim().isNotEmpty) {
+      final pieces = spec.expression.trim().split(RegExp(r'\s+'));
+      if (pieces.length >= 5) {
+        final trimmed = pieces.take(5).join(' ');
+        return trimmed;
+      }
+    }
+    return spec.expression;
+  }
+
+  String _calendarToCron(CalendarScheduleSpec spec) {
+    String serialize(List<int>? values) {
+      if (values == null || values.isEmpty) return '*';
+      return values.join(',');
+    }
+
+    final minute = serialize(spec.minutes);
+    final hour = serialize(spec.hours);
+    final day = serialize(spec.monthdays);
+    final month = serialize(spec.months);
+    final weekday = serialize(spec.weekdays);
+    return '$minute $hour $day $month $weekday';
   }
 }
 

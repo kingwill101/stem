@@ -53,7 +53,7 @@ Future<void> main(List<String> args) async {
       id: 'demo-greeting',
       taskName: 'greeting.send',
       queue: 'default',
-      spec: 'every:30s',
+      spec: IntervalScheduleSpec(every: const Duration(seconds: 30)),
       args: const {'name': 'scheduled friend'},
     ),
   );

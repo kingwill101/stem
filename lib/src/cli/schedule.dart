@@ -10,6 +10,7 @@ import 'package:yaml/yaml.dart';
 
 import '../core/contracts.dart';
 import '../scheduler/schedule_calculator.dart';
+import '../scheduler/schedule_spec.dart';
 import 'file_schedule_repository.dart';
 
 class ScheduleCommand extends Command<int> {
@@ -77,7 +78,7 @@ class ScheduleListCommand extends Command<int> {
           '${padCell(entry.id, 10)}| '
           '${padCell(entry.taskName, 16)}| '
           '${padCell(entry.queue, 10)}| '
-          '${padCell(entry.spec, 18)}| '
+          '${padCell(_describeSpec(entry.spec), 18)}| '
           '${padCell(formatDateTime(next), 24)}| '
           '${padCell(formatDateTime(entry.lastRunAt), 24)}| '
           '${padCell(formatDuration(entry.jitter), 7)} | '
@@ -278,17 +279,25 @@ class ScheduleApplyCommand extends Command<int> {
     if (task == null || task.isEmpty) {
       throw FormatException('Schedule "$id" missing "task" field.');
     }
-    final spec = (def['schedule'] ?? def['spec']) as String?;
-    if (spec == null || spec.isEmpty) {
+    final specRaw = def['schedule'] ?? def['spec'];
+    if (specRaw == null) {
       throw FormatException('Schedule "$id" missing "schedule" field.');
     }
+    final scheduleSpec = ScheduleSpec.fromPersisted(specRaw);
     final queue = (def['queue'] as String?) ?? 'default';
-    final enabled = def['enabled'] is bool ? def['enabled'] as bool : true;
-    final args = def['args'] is Map
-        ? _coerceMap(def['args'] as Map)
+    final enabledValue = def['enabled'];
+    final enabled = enabledValue is bool ? enabledValue : true;
+    final rawArgs = def['args'];
+    final args = rawArgs is Map
+        ? _coerceMap(rawArgs)
         : const <String, Object?>{};
-    final meta = def['meta'] is Map
-        ? _coerceMap(def['meta'] as Map)
+    final rawKwargs = def['kwargs'];
+    final kwargs = rawKwargs is Map
+        ? _coerceMap(rawKwargs)
+        : const <String, Object?>{};
+    final rawMeta = def['meta'];
+    final meta = rawMeta is Map
+        ? _coerceMap(rawMeta)
         : const <String, Object?>{};
 
     Duration? jitter;
@@ -321,8 +330,9 @@ class ScheduleApplyCommand extends Command<int> {
       id: id,
       taskName: task,
       queue: queue,
-      spec: spec,
+      spec: scheduleSpec,
       args: args,
+      kwargs: kwargs,
       enabled: enabled,
       jitter: jitter,
       lastRunAt: lastRunAt,
@@ -354,7 +364,7 @@ class ScheduleApplyCommand extends Command<int> {
     }
   }
 
-  Map<String, Object?> _coerceMap(Map<dynamic, dynamic> input) {
+  Map<String, Object?> _coerceMap(Map input) {
     final result = <String, Object?>{};
     input.forEach((key, value) {
       result[key.toString()] = _coerceValue(value);
@@ -370,6 +380,30 @@ class ScheduleApplyCommand extends Command<int> {
       return value.map(_coerceValue).toList();
     }
     return value;
+  }
+}
+
+String _describeSpec(ScheduleSpec spec) {
+  switch (spec) {
+    case IntervalScheduleSpec interval:
+      final base = 'every ${interval.every.inSeconds}s';
+      final start = interval.startAt != null
+          ? ' from ${interval.startAt!.toIso8601String()}'
+          : '';
+      final end = interval.endAt != null
+          ? ' until ${interval.endAt!.toIso8601String()}'
+          : '';
+      return '$base$start$end';
+    case CronScheduleSpec cron:
+      return cron.expression;
+    case SolarScheduleSpec solar:
+      final offset =
+          solar.offset != null ? ' (${solar.offset!.inMinutes}m offset)' : '';
+      return '${solar.event} @${solar.latitude.toStringAsFixed(2)},${solar.longitude.toStringAsFixed(2)}$offset';
+    case ClockedScheduleSpec clocked:
+      return 'once ${clocked.runAt.toIso8601String()}';
+    case CalendarScheduleSpec calendar:
+      return 'calendar ${calendar.toJson()}';
   }
 }
 
@@ -464,7 +498,9 @@ class ScheduleDryRunCommand extends Command<int> {
       final args = argResults!;
       final id = args['id'] as String? ??
           (args.rest.isNotEmpty ? args.rest.first : null);
-      final spec = args['spec'] as String?;
+      final specInput = args['spec'] as String?;
+      final overrideSpec =
+          specInput != null ? ScheduleSpec.fromPersisted(specInput) : null;
       final count = int.tryParse(args['count'] as String? ?? '5') ?? 5;
       DateTime start;
       if (args['from'] != null) {
@@ -492,7 +528,7 @@ class ScheduleDryRunCommand extends Command<int> {
         }
       }
 
-      if (entry == null && spec == null) {
+      if (entry == null && overrideSpec == null) {
         dependencies.err
             .writeln('Provide an existing schedule id or --spec to evaluate.');
         return 64;
@@ -502,7 +538,7 @@ class ScheduleDryRunCommand extends Command<int> {
         id: '_dry_',
         taskName: '_dry_',
         queue: 'default',
-        spec: spec!,
+        spec: overrideSpec!,
       );
 
       final calculator = ScheduleCalculator(random: Random(0));

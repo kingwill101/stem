@@ -25,6 +25,7 @@ export 'src/scheduler/in_memory_lock_store.dart';
 export 'src/scheduler/in_memory_schedule_store.dart';
 export 'src/scheduler/redis_lock_store.dart';
 export 'src/scheduler/redis_schedule_store.dart';
+export 'src/scheduler/schedule_spec.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';
 export 'src/observability/config.dart';

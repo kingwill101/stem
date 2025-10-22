@@ -107,7 +107,7 @@ void main() async {
       id: 'integration-schedule',
       taskName: 'integration.task',
       queue: 'integration',
-      spec: 'every:100ms',
+      spec: IntervalScheduleSpec(every: const Duration(milliseconds: 100)),
     );
 
     await scheduleStore.upsert(entry);
@@ -127,9 +127,11 @@ void main() async {
     );
     expect(again, isEmpty);
 
+    final executedAt = DateTime.now();
     await scheduleStore.markExecuted(
       'integration-schedule',
-      executedAt: DateTime.now(),
+      scheduledFor: executedAt,
+      executedAt: executedAt,
     );
     await scheduleStore.upsert(entry.copyWith(lastRunAt: DateTime.now()));
     await scheduleStore.remove(entry.id);

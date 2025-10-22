@@ -202,7 +202,7 @@ void main() {
           id: 'nightly',
           taskName: 'cleanup',
           queue: 'default',
-          spec: 'every:1m',
+          spec: IntervalScheduleSpec(every: const Duration(minutes: 1)),
         ),
       ]);
 

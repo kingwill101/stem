@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/postgres/postgres_client.dart';
 import 'package:stem/src/scheduler/postgres_schedule_store.dart';
+import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -51,7 +52,7 @@ void main() {
       id: 'sched-1',
       taskName: 'task.example',
       queue: 'default',
-      spec: '* * * * *',
+      spec: CronScheduleSpec(expression: '* * * * *'),
       nextRunAt: now.subtract(const Duration(seconds: 1)),
     );
 
@@ -134,7 +135,7 @@ void main() {
       id: 'sched-2',
       taskName: 'task.update',
       queue: 'default',
-      spec: '* * * * *',
+      spec: CronScheduleSpec(expression: '* * * * *'),
       nextRunAt: now.subtract(const Duration(seconds: 1)),
     );
 
@@ -164,7 +165,7 @@ void main() {
       id: 'sched-3',
       taskName: 'task.remove',
       queue: 'default',
-      spec: '* * * * *',
+      spec: CronScheduleSpec(expression: '* * * * *'),
       nextRunAt: now.subtract(const Duration(seconds: 1)),
     );
 
