@@ -40,6 +40,7 @@ const config: Config = {
       'classic',
       {
         docs: {
+          routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/stem/stem/tree/main/.site/docs/',
         },
@@ -96,15 +97,15 @@ const config: Config = {
           items: [
             {
               label: 'Quick Start',
-              to: '/docs/getting-started/quick-start',
+              to: '/getting-started/quick-start',
             },
             {
               label: 'Producer API',
-              to: '/docs/core-concepts/producer',
+              to: '/core-concepts/producer',
             },
             {
               label: 'Programmatic Workers',
-              to: '/docs/workers/programmatic',
+              to: '/workers/programmatic',
             },
           ],
         },

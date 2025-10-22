@@ -2,7 +2,9 @@
 title: Welcome to Stem
 sidebar_label: Introduction
 sidebar_position: 1
-slug: /getting-started/intro
+slug: /
+aliases:
+  - /getting-started/intro
 ---
 
 Stem is a Dart-native background work platform that gives you Celery‑level
