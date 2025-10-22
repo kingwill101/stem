@@ -1,6 +1,6 @@
 ## 1. Research & Design
-- [ ] 1.1 Inventory Celery signals and map them to Stem lifecycle events.
-- [ ] 1.2 Define signal API (registration, payload types, filtering) and capture decisions in design.md.
+- [x] 1.1 Inventory Celery signals and map them to Stem lifecycle events.
+- [x] 1.2 Define signal API (registration, payload types, filtering) and capture decisions in design.md.
 
 ## 2. Signal Infrastructure
 - [ ] 2.1 Implement lightweight signal dispatcher supporting sync/async handlers and filtering.

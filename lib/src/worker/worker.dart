@@ -227,6 +227,10 @@ class Worker {
     _lastScaleUp = null;
     _lastScaleDown = null;
     _drainCompleter = null;
+    await StemSignals.workerInit.emit(
+      WorkerLifecyclePayload(worker: _workerInfoSnapshot),
+      sender: _workerIdentifier,
+    );
     await _initializeRevocations();
     _startWorkerHeartbeatLoop();
     _recordInflightGauge();
@@ -279,6 +283,10 @@ class Worker {
     _startControlPlane();
     _startAutoscaler();
     _installSignalHandlers();
+    await StemSignals.workerReady.emit(
+      WorkerLifecyclePayload(worker: _workerInfoSnapshot),
+      sender: _workerIdentifier,
+    );
   }
 
   /// Stops the worker according to [mode], cancelling subscriptions and resources.
@@ -302,6 +310,14 @@ class Worker {
     final completer = Completer<void>();
     _shutdownCompleter = completer;
     _running = false;
+
+    await StemSignals.workerStopping.emit(
+      WorkerLifecyclePayload(
+        worker: _workerInfoSnapshot,
+        reason: mode.name,
+      ),
+      sender: _workerIdentifier,
+    );
 
     _autoscaleTimer?.cancel();
     _autoscaleTimer = null;
@@ -341,6 +357,14 @@ class Worker {
     if (!_events.isClosed) {
       await _events.close();
     }
+
+    await StemSignals.workerShutdown.emit(
+      WorkerLifecyclePayload(
+        worker: _workerInfoSnapshot,
+        reason: mode.name,
+      ),
+      sender: _workerIdentifier,
+    );
 
     completer.complete();
     return completer.future;
@@ -847,6 +871,15 @@ class Worker {
         stackTrace: stack,
         data: {'security': 'signature-invalid'},
       ),
+    );
+    await StemSignals.taskFailed.emit(
+      TaskFailurePayload(
+        envelope: envelope,
+        worker: _workerInfoSnapshot,
+        error: error,
+        stackTrace: stack,
+      ),
+      sender: _workerIdentifier,
     );
   }
 

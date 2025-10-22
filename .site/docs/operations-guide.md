@@ -183,10 +183,10 @@ If you rely on custom brokers, implement the new `replayDeadLetters`, `listDeadL
 - Manage schedules with `stem schedule` commands:
   - `stem schedule list` - tabular view of id, spec, next/last run, jitter, enabled flag.
   - `stem schedule show <id>` - detailed JSON snapshot for a specific entry.
-  - `stem schedule apply --file schedules.yaml --yes` - validate and upsert definitions from YAML/JSON (use `--dry-run` to preview).
+  - `stem schedule apply --file schedules.yaml --yes` - validate and upsert definitions from YAML/JSON (use `--dry-run` to preview). The command retries transient optimistic-lock conflicts (five attempts) and preserves last-run metadata when updating live stores.
   - `stem schedule delete <id> --yes` - remove an entry from the active store.
   - `stem schedule dry-run <id> --count 5` - preview upcoming fire times (with jitter) for an existing schedule, or provide `--spec` for ad-hoc evaluation.
-- Monitor schedule metadata (next run, last run, jitter) via the `stem observe schedules` report or direct Redis inspection.
+- Monitor schedule metadata (next run, last run, jitter) via the `stem observe schedules` summary (includes due/overdue counts, max drift, and per-entry totals) or direct Redis inspection.
 - Ensure beat instances share the same Redis namespace to coordinate locks.
 
 ## Disaster Recovery

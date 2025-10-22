@@ -53,9 +53,17 @@ metadata) so workers can interpret keyword arguments consistently.
   `sunrise @40.71/-74.01`, and `once 2025-01-01T09:00:00Z`.
 - `stem schedule enable|disable <id>` toggles entries without restarting Beat.
 - `stem schedule apply` persists the full JSON representation so kwargs and
-  metadata survive round-trips.
+  metadata survive round-trips. When pointed at a store it retries optimistic
+  lock conflicts (up to five attempts) and merges existing execution metadata so
+  operators keep last-run, drift, and counters intact.
+- `stem schedule enable|disable <id>` uses the same retry loop to make toggles
+  resilient while clustered beats race to update schedule versions.
 - `stem schedule dry-run --spec` accepts the same JSON blob (or legacy strings)
   and honours entry time zones when previewing upcoming runs.
+- `stem observe schedules` prints a summary of due/overdue counts (including
+  live gauge snapshots) plus a table with total runs, drift, next run, and last
+  error for each entry, regardless of whether the backend is a file repo or a
+  remote store.
 
 ## Observability
 

@@ -56,9 +56,18 @@ resolvers (`ScheduleTimezoneResolver`) and deterministic random implementations.
   `every 30s`, `sunrise @40.71/-74.01`, or `once 2025-01-01T09:00:00Z`.
 - `stem schedule enable|disable <id>` toggles entries without restarting Beat.
 - `stem schedule apply` and file repositories persist the full JSON form of the
-  schedule spec, preserving kwargs and metadata.
+  schedule spec, preserving kwargs and metadata. When targeting a live store the
+  command automatically retries optimistic-lock conflicts (up to five attempts)
+  and merges existing execution metadata (last run, drift, counters) so
+  operators do not lose observability context during updates.
+- `stem schedule enable|disable <id>` performs the same conflict-aware retry
+  loop, ensuring toggles stick even while clustered beats are updating entries.
 - `stem schedule dry-run --spec` accepts the same JSON structure (or legacy
   `every:` strings) and honours per-entry timezones when previewing occurrences.
+- `stem observe schedules` reports a summary line (due/overdue counts, live
+  gauge snapshots, max drift) followed by a table that includes total run count,
+  last error, and computed next run whether the backing store is file-based or
+  remote.
 
 ## Observability
 

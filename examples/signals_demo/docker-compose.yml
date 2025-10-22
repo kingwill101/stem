@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  worker:
+    build: .
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      WORKER_NAME: signals-demo-worker
+    depends_on:
+      - redis
+    command: ["dart", "bin/worker.dart"]
+
+  producer:
+    build: .
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    command: ["dart", "bin/producer.dart"]

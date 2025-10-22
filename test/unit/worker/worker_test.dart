@@ -58,6 +58,86 @@ void main() {
       broker.dispose();
     });
 
+    test('emits task lifecycle signals for successful execution', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'signal-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final calls = <String>[];
+      final received = Completer<void>();
+      final succeeded = Completer<void>();
+      final postrun = Completer<void>();
+
+      final subscriptions = <SignalSubscription>[
+        StemSignals.taskReceived.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.success') {
+            calls.add('received');
+            received.complete();
+          }
+        }),
+        StemSignals.taskPrerun.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.success') {
+            calls.add('prerun');
+          }
+        }),
+        StemSignals.taskPostrun.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.success') {
+            calls.add('postrun:${payload.state.name}');
+            if (!postrun.isCompleted) {
+              postrun.complete();
+            }
+          }
+        }),
+        StemSignals.taskSucceeded.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.success') {
+            calls.add('success');
+            if (!succeeded.isCompleted) {
+              succeeded.complete();
+            }
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      await stem.enqueue('tasks.success');
+
+      await received.future.timeout(const Duration(seconds: 2));
+      await succeeded.future.timeout(const Duration(seconds: 2));
+      await postrun.future.timeout(const Duration(seconds: 2));
+
+      expect(
+        calls,
+        equals([
+          'received',
+          'prerun',
+          'success',
+          'postrun:succeeded',
+        ]),
+      );
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('autoscaler scales concurrency up and down', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 5),
@@ -125,6 +205,149 @@ void main() {
       );
 
       await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('emits worker lifecycle signals on start and shutdown', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-life',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final phases = <String>[];
+      final init = Completer<void>();
+      final ready = Completer<void>();
+      final stopping = Completer<void>();
+      final shutdown = Completer<void>();
+
+      final subscriptions = <SignalSubscription>[
+        StemSignals.workerInit.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('init');
+            init.complete();
+          }
+        }),
+        StemSignals.workerReady.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('ready');
+            ready.complete();
+          }
+        }),
+        StemSignals.workerStopping.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('stopping:${payload.reason}');
+            stopping.complete();
+          }
+        }),
+        StemSignals.workerShutdown.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('shutdown:${payload.reason}');
+            shutdown.complete();
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      await init.future.timeout(const Duration(seconds: 2));
+      await ready.future.timeout(const Duration(seconds: 2));
+
+      await worker.shutdown(mode: WorkerShutdownMode.soft);
+
+      await stopping.future.timeout(const Duration(seconds: 2));
+      await shutdown.future.timeout(const Duration(seconds: 2));
+
+      expect(
+        phases,
+        equals([
+          'init',
+          'ready',
+          'stopping:soft',
+          'shutdown:soft',
+        ]),
+      );
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+
+      broker.dispose();
+    });
+
+    test('emits retry signal when task is retried', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-retry',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        retryStrategy: ExponentialJitterRetryStrategy(
+          base: const Duration(milliseconds: 10),
+        ),
+      );
+
+      final retrySeen = Completer<TaskRetryPayload>();
+      final postrunStates = <String>[];
+      final subscriptions = <SignalSubscription>[
+        StemSignals.taskRetry.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.flaky' &&
+              !retrySeen.isCompleted) {
+            retrySeen.complete(payload);
+          }
+        }),
+        StemSignals.taskPostrun.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.flaky') {
+            postrunStates.add(payload.state.name);
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      await stem.enqueue('tasks.flaky');
+
+      final payload = await retrySeen.future.timeout(
+        const Duration(seconds: 2),
+      );
+      expect(payload.reason, isA<StateError>());
+
+      await _waitFor(
+        () => postrunStates.contains('succeeded'),
+        timeout: const Duration(seconds: 4),
+      );
+
+      expect(postrunStates, contains('retried'));
+      expect(postrunStates, contains('succeeded'));
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+
       await worker.shutdown();
       broker.dispose();
     });
@@ -544,6 +767,8 @@ void main() {
     });
 
     test('moves task to dead letter after max retries', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 40),
@@ -566,6 +791,22 @@ void main() {
       final events = <WorkerEvent>[];
       final sub = worker.events.listen(events.add);
 
+      final failureSignal = Completer<TaskFailurePayload>();
+      final postrunStates = <String>[];
+      final subscriptions = <SignalSubscription>[
+        StemSignals.taskFailed.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.fail' &&
+              !failureSignal.isCompleted) {
+            failureSignal.complete(payload);
+          }
+        }),
+        StemSignals.taskPostrun.connect((payload, _) {
+          if (payload.envelope.name == 'tasks.fail') {
+            postrunStates.add(payload.state.name);
+          }
+        }),
+      ];
+
       await worker.start();
 
       final stem = Stem(broker: broker, registry: registry, backend: backend);
@@ -580,10 +821,16 @@ void main() {
       final status = await backend.get(taskId);
       expect(status?.state, TaskState.failed);
 
+      await failureSignal.future.timeout(const Duration(seconds: 2));
+      expect(postrunStates, contains('failed'));
+
       final deadPage = await broker.listDeadLetters('default');
       expect(deadPage.entries, hasLength(1));
       expect(deadPage.entries.single.envelope.id, equals(taskId));
 
+      for (final subscription in subscriptions) {
+        subscription.cancel();
+      }
       await sub.cancel();
       await worker.shutdown();
       broker.dispose();
@@ -710,6 +957,8 @@ void main() {
     });
 
     test('skips revoked tasks from persistent store', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
         claimInterval: const Duration(milliseconds: 40),
@@ -749,6 +998,21 @@ void main() {
       final events = <WorkerEvent>[];
       final sub = worker.events.listen(events.add);
 
+      final revokedSignal = Completer<TaskRevokedPayload>();
+      final postrunStates = <String>[];
+      final subscriptions = <SignalSubscription>[
+        StemSignals.taskRevoked.connect((payload, _) {
+          if (payload.envelope.id == taskId && !revokedSignal.isCompleted) {
+            revokedSignal.complete(payload);
+          }
+        }),
+        StemSignals.taskPostrun.connect((payload, _) {
+          if (payload.envelope.id == taskId) {
+            postrunStates.add(payload.state.name);
+          }
+        }),
+      ];
+
       await worker.start();
 
       await _waitFor(
@@ -762,6 +1026,10 @@ void main() {
       final status = await backend.get(taskId);
       expect(status?.state, TaskState.cancelled);
 
+      await revokedSignal.future.timeout(const Duration(seconds: 2));
+      for (final subscription in subscriptions) {
+        subscription.cancel();
+      }
       await sub.cancel();
       await worker.shutdown();
       broker.dispose();
