@@ -31,6 +31,23 @@ CREATE TABLE IF NOT EXISTS stem_jobs (
         'CREATE INDEX IF NOT EXISTS stem_jobs_priority_idx ON stem_jobs (queue, priority DESC, created_at)',
       );
       await conn.execute('''
+CREATE TABLE IF NOT EXISTS stem_broadcast_messages (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  envelope JSONB NOT NULL,
+  delivery TEXT NOT NULL DEFAULT 'at-least-once',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+''');
+      await conn.execute('''
+CREATE TABLE IF NOT EXISTS stem_broadcast_ack (
+  message_id TEXT NOT NULL REFERENCES stem_broadcast_messages(id) ON DELETE CASCADE,
+  worker_id TEXT NOT NULL,
+  acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (message_id, worker_id)
+)
+''');
+      await conn.execute('''
 CREATE TABLE IF NOT EXISTS stem_jobs_dead (
   id TEXT PRIMARY KEY,
   queue TEXT NOT NULL,

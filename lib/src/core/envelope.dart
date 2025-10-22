@@ -17,6 +17,7 @@ class RoutingInfo {
     this.routingKey,
     this.priority,
     this.broadcastChannel,
+    this.delivery,
     Map<String, Object?>? meta,
   }) : meta = Map.unmodifiable(meta ?? const {});
 
@@ -43,6 +44,7 @@ class RoutingInfo {
 
   factory RoutingInfo.broadcast({
     required String channel,
+    String delivery = 'at-least-once',
     Map<String, Object?>? meta,
   }) {
     final trimmed = channel.trim();
@@ -56,6 +58,7 @@ class RoutingInfo {
     return RoutingInfo._(
       type: RoutingTargetType.broadcast,
       broadcastChannel: trimmed,
+      delivery: delivery,
       meta: meta,
     );
   }
@@ -66,6 +69,7 @@ class RoutingInfo {
   final String? routingKey;
   final int? priority;
   final String? broadcastChannel;
+  final String? delivery;
   final Map<String, Object?> meta;
 
   bool get isBroadcast => type == RoutingTargetType.broadcast;

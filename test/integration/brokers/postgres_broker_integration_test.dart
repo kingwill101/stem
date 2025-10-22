@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/src/brokers/postgres_broker.dart';
@@ -23,49 +24,135 @@ void main() {
       connectionString,
       applicationName: 'stem-postgres-integration',
     );
-    addTearDown(() => broker.close());
+    try {
+      final queue = _uniqueQueue();
+      final envelope = Envelope(
+        name: 'integration.echo',
+        args: const <String, Object?>{'value': 'hello'},
+        queue: queue,
+      );
 
-    final queue = _uniqueQueue();
-    final envelope = Envelope(
-      name: 'integration.echo',
-      args: const <String, Object?>{'value': 'hello'},
-      queue: queue,
+      await broker.publish(envelope);
+      expect(await broker.pendingCount(queue), 1);
+
+      final delivery =
+          await broker.consume(RoutingSubscription.singleQueue(queue)).first;
+      expect(delivery.envelope.id, envelope.id);
+      expect(delivery.envelope.queue, queue);
+
+      await broker.deadLetter(delivery, reason: 'integration-test');
+
+      final page = await broker.listDeadLetters(queue);
+      expect(page.entries, hasLength(1));
+      expect(page.entries.first.reason, 'integration-test');
+
+      final dryRun = await broker.replayDeadLetters(
+        queue,
+        limit: 1,
+        dryRun: true,
+      );
+      expect(dryRun.dryRun, isTrue);
+
+      final replay = await broker.replayDeadLetters(queue, limit: 1);
+      expect(replay.dryRun, isFalse);
+      expect(replay.entries, hasLength(1));
+
+      final redelivery =
+          await broker.consume(RoutingSubscription.singleQueue(queue)).first;
+      expect(redelivery.envelope.id, envelope.id);
+      expect(redelivery.envelope.attempt, envelope.attempt + 1);
+
+      await broker.ack(redelivery);
+      expect(await broker.pendingCount(queue), 0);
+      expect(await broker.purgeDeadLetters(queue), 0);
+      await broker.purge(queue);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  test('Postgres broadcast fan-out delivers to all subscribers', () async {
+    final publisher = await PostgresBroker.connect(
+      connectionString,
+      applicationName: 'stem-postgres-broadcast-publisher',
     );
-
-    await broker.publish(envelope);
-    expect(await broker.pendingCount(queue), 1);
-
-    final delivery =
-        await broker.consume(RoutingSubscription.singleQueue(queue)).first;
-    expect(delivery.envelope.id, envelope.id);
-    expect(delivery.envelope.queue, queue);
-
-    await broker.deadLetter(delivery, reason: 'integration-test');
-
-    final page = await broker.listDeadLetters(queue);
-    expect(page.entries, hasLength(1));
-    expect(page.entries.first.reason, 'integration-test');
-
-    final dryRun = await broker.replayDeadLetters(
-      queue,
-      limit: 1,
-      dryRun: true,
+    final workerOneBroker = await PostgresBroker.connect(
+      connectionString,
+      applicationName: 'stem-postgres-broadcast-worker-1',
     );
-    expect(dryRun.dryRun, isTrue);
+    final workerTwoBroker = await PostgresBroker.connect(
+      connectionString,
+      applicationName: 'stem-postgres-broadcast-worker-2',
+    );
+    Future<void> safeClose(PostgresBroker broker) async {
+      try {
+        await broker.close();
+      } catch (_) {}
+    }
+    try {
+      final queue = _uniqueQueue();
+      final channel = '${queue}_broadcast';
+      final subscription = RoutingSubscription(
+        queues: [queue],
+        broadcastChannels: [channel],
+      );
 
-    final replay = await broker.replayDeadLetters(queue, limit: 1);
-    expect(replay.dryRun, isFalse);
-    expect(replay.entries, hasLength(1));
+      final futureOne = workerOneBroker
+          .consume(
+            subscription,
+            prefetch: 1,
+            consumerGroup: 'group-$queue',
+            consumerName: 'worker-one-$queue',
+          )
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        fail('worker-one timed out waiting for broadcast message');
+      });
+      final futureTwo = workerTwoBroker
+          .consume(
+            subscription,
+            prefetch: 1,
+            consumerGroup: 'group-$queue',
+            consumerName: 'worker-two-$queue',
+          )
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        fail('worker-two timed out waiting for broadcast message');
+      });
 
-    final redelivery =
-        await broker.consume(RoutingSubscription.singleQueue(queue)).first;
-    expect(redelivery.envelope.id, envelope.id);
-    expect(redelivery.envelope.attempt, envelope.attempt + 1);
+      final broadcast = Envelope(
+        name: 'integration.postgres.broadcast',
+        args: const {'value': 'fan-out'},
+        queue: queue,
+      );
 
-    await broker.ack(redelivery);
-    expect(await broker.pendingCount(queue), 0);
-    expect(await broker.purgeDeadLetters(queue), 0);
-    await broker.purge(queue);
+      await publisher.publish(
+        broadcast,
+        routing: RoutingInfo.broadcast(channel: channel),
+      );
+
+      final results = await Future.wait([futureOne, futureTwo]);
+      final firstDelivery = results[0];
+      final secondDelivery = results[1];
+
+      expect(firstDelivery.route.isBroadcast, isTrue);
+      expect(secondDelivery.route.isBroadcast, isTrue);
+      expect(firstDelivery.route.broadcastChannel, channel);
+      expect(secondDelivery.route.broadcastChannel, channel);
+      expect(firstDelivery.envelope.id, broadcast.id);
+      expect(secondDelivery.envelope.id, broadcast.id);
+      expect(firstDelivery.envelope.queue, channel);
+      expect(secondDelivery.envelope.queue, channel);
+
+      await workerOneBroker.ack(firstDelivery);
+      await workerTwoBroker.ack(secondDelivery);
+
+      await publisher.purge(queue);
+    } finally {
+      await safeClose(workerOneBroker);
+      await safeClose(workerTwoBroker);
+      await safeClose(publisher);
+    }
   });
 
   test('CLI health succeeds against Postgres broker', () async {

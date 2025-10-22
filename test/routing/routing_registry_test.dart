@@ -173,5 +173,30 @@ queues:
       expect(decision.effectivePriority(0), equals(2));
       expect(decision.effectivePriority(7), equals(5));
     });
+
+    test('broadcast decisions carry delivery metadata', () {
+      const yaml = '''
+default_queue: primary
+queues:
+  primary: {}
+broadcasts:
+  updates:
+    delivery: at-most-once
+routes:
+  - match:
+      task: updates.refresh
+    target:
+      type: broadcast
+      name: updates
+''';
+      final registry = RoutingRegistry.fromYaml(yaml);
+      final decision = registry.resolve(
+        RouteRequest(task: 'updates.refresh'),
+      );
+      expect(decision.isBroadcast, isTrue);
+      expect(decision.broadcast!.name, 'updates');
+      expect(decision.route, isNotNull);
+      expect(decision.priorityOverride, isNull);
+    });
   });
 }

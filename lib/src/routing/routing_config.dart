@@ -320,13 +320,14 @@ class BroadcastDefinition {
   BroadcastDefinition({
     required this.name,
     this.durability,
-    this.delivery,
+    String? delivery,
     Map<String, Object?>? metadata,
-  }) : metadata = Map.unmodifiable(metadata ?? const {});
+  })  : delivery = delivery ?? 'at-least-once',
+        metadata = Map.unmodifiable(metadata ?? const {});
 
   final String name;
   final String? durability;
-  final String? delivery;
+  final String delivery;
   final Map<String, Object?> metadata;
 
   factory BroadcastDefinition.fromJson(
@@ -346,7 +347,7 @@ class BroadcastDefinition {
 
   Map<String, Object?> toJson() => {
         if (durability != null) 'durability': durability,
-        if (delivery != null) 'delivery': delivery,
+        'delivery': delivery,
         if (metadata.isNotEmpty) 'meta': metadata,
       };
 }

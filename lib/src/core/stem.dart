@@ -78,7 +78,11 @@ class Stem {
         }
 
         final routingInfo = decision.isBroadcast
-            ? RoutingInfo.broadcast(channel: decision.broadcastChannel!)
+            ? RoutingInfo.broadcast(
+                channel: decision.broadcastChannel!,
+                delivery: decision.broadcast!.delivery,
+                meta: decision.broadcast!.metadata,
+              )
             : RoutingInfo.queue(
                 queue: decision.queue!.name,
                 exchange: decision.queue!.exchange,

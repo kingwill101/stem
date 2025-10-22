@@ -70,9 +70,40 @@ class PostgresBroker implements Broker {
           priority: envelope.priority,
         );
     if (resolvedRoute.isBroadcast) {
-      throw UnsupportedError(
-        'PostgresBroker does not yet support broadcast routing.',
-      );
+      final channel = resolvedRoute.broadcastChannel ?? envelope.queue;
+      final message = envelope.copyWith(queue: channel);
+      await _client.run((Connection conn) async {
+        await conn.execute(
+          Sql.named('''
+INSERT INTO stem_broadcast_messages (
+  id,
+  channel,
+  envelope,
+  delivery,
+  created_at
+) VALUES (
+  @id,
+  @channel,
+  @envelope::jsonb,
+  @delivery,
+  @createdAt
+)
+ON CONFLICT (id) DO UPDATE SET
+  channel = EXCLUDED.channel,
+  envelope = EXCLUDED.envelope,
+  delivery = EXCLUDED.delivery,
+  created_at = EXCLUDED.created_at
+'''),
+          parameters: {
+            'id': message.id,
+            'channel': channel,
+            'envelope': jsonEncode(message.toJson()),
+            'delivery': resolvedRoute.delivery ?? 'at-least-once',
+            'createdAt': message.enqueuedAt.toUtc(),
+          },
+        );
+      });
+      return;
     }
     final targetQueue = (resolvedRoute.queue ?? envelope.queue).trim();
     if (targetQueue.isEmpty) {
@@ -140,11 +171,6 @@ ON CONFLICT (id) DO UPDATE SET
     String? consumerGroup,
     String? consumerName,
   }) {
-    if (subscription.broadcastChannels.isNotEmpty) {
-      throw UnsupportedError(
-        'PostgresBroker does not yet support broadcast subscriptions.',
-      );
-    }
     if (subscription.queues.isEmpty) {
       throw ArgumentError(
         'RoutingSubscription must specify at least one queue.',
@@ -161,6 +187,7 @@ ON CONFLICT (id) DO UPDATE SET
         'consumer-${DateTime.now().microsecondsSinceEpoch}'
             '-${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
+    final broadcastChannels = subscription.broadcastChannels;
 
     late _ConsumerRunner runner;
     final controller = StreamController<Delivery>.broadcast(
@@ -176,6 +203,8 @@ ON CONFLICT (id) DO UPDATE SET
       queue: queue,
       locker: locker,
       prefetch: prefetch < 1 ? 1 : prefetch,
+      broadcastChannels: broadcastChannels,
+      workerId: consumer,
     );
     _consumers.add(runner);
     if (_closed) {
@@ -188,6 +217,10 @@ ON CONFLICT (id) DO UPDATE SET
 
   @override
   Future<void> ack(Delivery delivery) async {
+    if (delivery.route.isBroadcast) {
+      await _ackBroadcast(delivery);
+      return;
+    }
     final receipt = _Receipt.parse(delivery.receipt);
     await _client.run((Connection conn) async {
       await conn.execute(
@@ -202,6 +235,10 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
 
   @override
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
+    if (delivery.route.isBroadcast) {
+      await _ackBroadcast(delivery);
+      return;
+    }
     final receipt = _Receipt.parse(delivery.receipt);
     if (!requeue) {
       await ack(delivery);
@@ -241,6 +278,10 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
     String? reason,
     Map<String, Object?>? meta,
   }) async {
+    if (delivery.route.isBroadcast) {
+      await _ackBroadcast(delivery);
+      return;
+    }
     final receipt = _Receipt.parse(delivery.receipt);
     final entryReason =
         (reason == null || reason.trim().isEmpty) ? 'unknown' : reason.trim();
@@ -644,6 +685,76 @@ WHERE id = @id
     });
   }
 
+  Future<List<Delivery>> _reserveBroadcast(
+    List<String> channels,
+    String workerId,
+    int limit,
+  ) async {
+    if (channels.isEmpty) return const <Delivery>[];
+    return _client.run((Connection conn) async {
+      final rows = await conn.execute(
+        Sql.named('''
+SELECT id, channel, envelope, delivery
+FROM stem_broadcast_messages
+WHERE channel = ANY(@channels)
+  AND NOT EXISTS (
+    SELECT 1 FROM stem_broadcast_ack
+    WHERE message_id = stem_broadcast_messages.id
+      AND worker_id = @worker
+  )
+ORDER BY created_at
+LIMIT @limit
+'''),
+        parameters: {
+          'channels': channels,
+          'worker': workerId,
+          'limit': limit < 1 ? 1 : limit,
+        },
+      );
+      final deliveries = <Delivery>[];
+      for (final row in rows) {
+        final id = row[0] as String;
+        final channel = row[1] as String;
+        final envelope = _decodeEnvelope(row[2]);
+        final deliveryType = row[3] as String? ?? 'at-least-once';
+        deliveries.add(
+          Delivery(
+            envelope: envelope.copyWith(queue: channel),
+            receipt: jsonEncode({
+              'messageId': id,
+              'worker': workerId,
+            }),
+            leaseExpiresAt: null,
+            route: RoutingInfo.broadcast(
+              channel: channel,
+              delivery: deliveryType,
+            ),
+          ),
+        );
+      }
+      return deliveries;
+    });
+  }
+
+  Future<void> _ackBroadcast(Delivery delivery) async {
+    final data = jsonDecode(delivery.receipt) as Map<String, dynamic>;
+    final messageId = data['messageId'] as String;
+    final workerId = data['worker'] as String;
+    await _client.run((Connection conn) async {
+      await conn.execute(
+        Sql.named('''
+INSERT INTO stem_broadcast_ack (message_id, worker_id)
+VALUES (@messageId, @workerId)
+ON CONFLICT (message_id, worker_id) DO UPDATE SET acknowledged_at = NOW()
+'''),
+        parameters: {
+          'messageId': messageId,
+          'workerId': workerId,
+        },
+      );
+    });
+  }
+
   String _encodeLocker(String queue, String group, String consumer) {
     final salt = _random.nextInt(1 << 32);
     return '$queue::$group::$consumer::$salt::${DateTime.now().microsecondsSinceEpoch}';
@@ -657,6 +768,8 @@ class _ConsumerRunner {
     required this.queue,
     required this.locker,
     required this.prefetch,
+    required this.broadcastChannels,
+    required this.workerId,
   });
 
   final PostgresBroker broker;
@@ -664,6 +777,8 @@ class _ConsumerRunner {
   final String queue;
   final String locker;
   final int prefetch;
+  final List<String> broadcastChannels;
+  final String workerId;
 
   bool _started = false;
   bool _stopped = false;
@@ -682,11 +797,18 @@ class _ConsumerRunner {
     while (!_stopped && !controller.isClosed && !broker._closed) {
       try {
         final deliveries = await broker._reserve(queue, locker, prefetch);
-        if (deliveries.isEmpty) {
+        final broadcasts = broadcastChannels.isEmpty
+            ? const <Delivery>[]
+            : await broker._reserveBroadcast(
+                broadcastChannels,
+                workerId,
+                prefetch,
+              );
+        if (deliveries.isEmpty && broadcasts.isEmpty) {
           await Future.delayed(broker.pollInterval);
           continue;
         }
-        for (final delivery in deliveries) {
+        for (final delivery in [...deliveries, ...broadcasts]) {
           if (_stopped || controller.isClosed) {
             return;
           }

@@ -19,46 +19,143 @@ void main() {
 
   test('Redis broker end-to-end', () async {
     final broker = await RedisStreamsBroker.connect(redisUrl);
-    addTearDown(() => broker.close());
+    Future<void> safeClose(RedisStreamsBroker broker) async {
+      try {
+        await broker.close();
+      } catch (_) {}
+    }
 
-    final queue = _uniqueQueue();
-    final first = Envelope(
-      name: 'integration.redis.echo',
-      args: const {'value': 'hi'},
-      queue: queue,
+    try {
+      final queue = _uniqueQueue();
+      final first = Envelope(
+        name: 'integration.redis.echo',
+        args: const {'value': 'hi'},
+        queue: queue,
+      );
+      final second = Envelope(
+        name: 'integration.redis.echo',
+        args: const {'value': 'second'},
+        queue: queue,
+      );
+
+      await broker.publish(first);
+      await broker.publish(second);
+
+      final iterator = StreamIterator(
+        broker.consume(
+          RoutingSubscription.singleQueue(queue),
+          prefetch: 1,
+        ),
+      );
+      expect(await iterator.moveNext(), isTrue);
+      final delivery = iterator.current;
+      expect(delivery.envelope.id, first.id);
+
+      await broker.nack(delivery, requeue: true);
+
+      expect(await iterator.moveNext(), isTrue);
+      final secondDelivery = iterator.current;
+      expect(secondDelivery.envelope.name, second.name);
+      expect(secondDelivery.envelope.args, second.args);
+      await broker.ack(secondDelivery);
+
+      expect(await iterator.moveNext(), isTrue);
+      final redelivered = iterator.current;
+      expect(redelivered.envelope.id, first.id);
+      expect(redelivered.envelope.attempt, delivery.envelope.attempt + 1);
+      await broker.ack(redelivered);
+      await iterator.cancel();
+
+      expect(await broker.inflightCount(queue), 0);
+      await broker.purge(queue);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  test('Redis broadcast fan-out delivers to all subscribers', () async {
+    final namespace = 'stem-test-${DateTime.now().microsecondsSinceEpoch}';
+    final publisher = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
     );
-    final second = Envelope(
-      name: 'integration.redis.echo',
-      args: const {'value': 'second'},
-      queue: queue,
+    final workerOneBroker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
     );
+    final workerTwoBroker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+    );
+    Future<void> safeClose(RedisStreamsBroker broker) async {
+      try {
+        await broker.close();
+      } catch (_) {}
+    }
+    try {
+      final queue = _uniqueQueue();
+      final channel = '${queue}_broadcast';
+      final subscription = RoutingSubscription(
+        queues: [queue],
+        broadcastChannels: [channel],
+      );
 
-    await broker.publish(first);
-    await broker.publish(second);
+      final futureOne = workerOneBroker
+          .consume(
+            subscription,
+            prefetch: 1,
+            consumerGroup: 'group-$queue',
+            consumerName: 'worker-one-$queue',
+          )
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        fail('worker-one timed out waiting for broadcast message');
+      });
+      final futureTwo = workerTwoBroker
+          .consume(
+            subscription,
+            prefetch: 1,
+            consumerGroup: 'group-$queue',
+            consumerName: 'worker-two-$queue',
+          )
+          .first
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        fail('worker-two timed out waiting for broadcast message');
+      });
 
-    final iterator = StreamIterator(
-        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 1));
-    expect(await iterator.moveNext(), isTrue);
-    final delivery = iterator.current;
-    expect(delivery.envelope.id, first.id);
+      final broadcast = Envelope(
+        name: 'integration.redis.broadcast',
+        args: const {'value': 'fan-out'},
+        queue: queue,
+      );
 
-    await broker.nack(delivery, requeue: true);
+      await publisher.publish(
+        broadcast,
+        routing: RoutingInfo.broadcast(channel: channel),
+      );
 
-    expect(await iterator.moveNext(), isTrue);
-    final secondDelivery = iterator.current;
-    expect(secondDelivery.envelope.name, second.name);
-    expect(secondDelivery.envelope.args, second.args);
-    await broker.ack(secondDelivery);
+      final results = await Future.wait([futureOne, futureTwo]);
+      final firstDelivery = results[0];
+      final secondDelivery = results[1];
 
-    expect(await iterator.moveNext(), isTrue);
-    final redelivered = iterator.current;
-    expect(redelivered.envelope.id, first.id);
-    expect(redelivered.envelope.attempt, delivery.envelope.attempt + 1);
-    await broker.ack(redelivered);
-    await iterator.cancel();
+      expect(firstDelivery.route.isBroadcast, isTrue);
+      expect(secondDelivery.route.isBroadcast, isTrue);
+      expect(firstDelivery.route.broadcastChannel, channel);
+      expect(secondDelivery.route.broadcastChannel, channel);
+      expect(firstDelivery.envelope.id, broadcast.id);
+      expect(secondDelivery.envelope.id, broadcast.id);
+      expect(firstDelivery.envelope.queue, channel);
+      expect(secondDelivery.envelope.queue, channel);
 
-    expect(await broker.inflightCount(queue), 0);
-    await broker.purge(queue);
+      await workerOneBroker.ack(firstDelivery);
+      await workerTwoBroker.ack(secondDelivery);
+
+      await publisher.purge(queue);
+    } finally {
+      await safeClose(workerOneBroker);
+      await safeClose(workerTwoBroker);
+      await safeClose(publisher);
+    }
   });
 }
 
