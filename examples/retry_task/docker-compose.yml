@@ -2,15 +2,15 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "56380:6379"
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/signals_demo/Dockerfile
+      dockerfile: examples/retry_task/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
-      WORKER_NAME: signals-demo-worker
+      WORKER_NAME: retry-demo-worker
     depends_on:
       - redis
     command: ["dart", "bin/worker.dart"]
@@ -18,7 +18,7 @@ services:
   producer:
     build:
       context: ../..
-      dockerfile: examples/signals_demo/Dockerfile
+      dockerfile: examples/retry_task/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
     depends_on:

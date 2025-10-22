@@ -1,0 +1,54 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:stem/stem.dart';
+import 'package:stem_retry_task_demo/shared.dart';
+
+Future<void> main() async {
+  final brokerUrl =
+      Platform.environment['STEM_BROKER_URL'] ?? 'redis://redis:6379/0';
+  final workerName = Platform.environment['WORKER_NAME'] ?? 'retry-demo-worker';
+
+  final broker = await RedisStreamsBroker.connect(brokerUrl);
+  final registry = buildRegistry();
+  final backend = InMemoryResultBackend();
+
+  final worker = Worker(
+    broker: broker,
+    registry: registry,
+    backend: backend,
+    queue: 'retry-demo',
+    consumerName: workerName,
+    retryStrategy:
+        ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+  );
+
+  final subscriptions = attachLogging('worker');
+  final shutdownCompleted = Completer<void>();
+  var shuttingDown = false;
+
+  final shutdownSubscription = StemSignals.workerShutdown.connect((payload, _) {
+    if (!shutdownCompleted.isCompleted) {
+      shutdownCompleted.complete();
+    }
+  });
+  subscriptions.add(shutdownSubscription);
+
+  final failureSubscription = StemSignals.onTaskFailure((payload, _) async {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    // Give the logs a moment to flush before shutting down.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await worker.shutdown(mode: WorkerShutdownMode.hard);
+  });
+  subscriptions.add(failureSubscription);
+
+  await worker.start();
+  await shutdownCompleted.future;
+
+  for (final sub in subscriptions) {
+    sub.cancel();
+  }
+
+  await broker.close();
+}
