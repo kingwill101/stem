@@ -4,6 +4,8 @@ import '../observability/tracing.dart';
 import '../routing/routing_config.dart';
 import '../routing/routing_registry.dart';
 import '../security/signing.dart';
+import '../signals/payloads.dart';
+import '../signals/stem_signals.dart';
 import 'contracts.dart';
 import 'envelope.dart';
 import 'retry.dart';
@@ -90,6 +92,14 @@ class Stem {
                 priority: resolvedPriority,
               );
 
+        await StemSignals.beforeTaskPublish.emit(
+          BeforeTaskPublishPayload(
+            envelope: envelope,
+            attempt: envelope.attempt,
+          ),
+          sender: 'stem',
+        );
+
         await _runEnqueueMiddleware(envelope, () async {
           await broker.publish(envelope, routing: routingInfo);
           if (backend != null) {
@@ -105,6 +115,15 @@ class Stem {
             );
           }
         });
+
+        await StemSignals.afterTaskPublish.emit(
+          AfterTaskPublishPayload(
+            envelope: envelope,
+            attempt: envelope.attempt,
+            taskId: envelope.id,
+          ),
+          sender: 'stem',
+        );
 
         return envelope.id;
       },

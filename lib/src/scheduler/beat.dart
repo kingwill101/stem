@@ -80,7 +80,7 @@ class Beat {
         Context({
           'count': overdueCount.toString(),
           if (maxOverdue != null)
-            'maxOverdueMs': maxOverdue!.inMilliseconds.toString(),
+            'maxOverdueMs': maxOverdue.inMilliseconds.toString(),
         }),
       );
     }

@@ -20,6 +20,8 @@ import '../security/signing.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
 import 'worker_config.dart';
+import '../signals/payloads.dart';
+import '../signals/stem_signals.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
 ///
@@ -437,6 +439,14 @@ class Worker {
 
         _trackDelivery(delivery);
 
+        await StemSignals.taskReceived.emit(
+          TaskReceivedPayload(
+            envelope: envelope,
+            worker: _workerInfoSnapshot,
+          ),
+          sender: _workerIdentifier,
+        );
+
         stemLogger.debug(
           'Task {task} started',
           Context(
@@ -488,11 +498,21 @@ class Worker {
           },
         );
 
+        await StemSignals.taskPrerun.emit(
+          TaskPrerunPayload(
+            envelope: envelope,
+            worker: _workerInfoSnapshot,
+            context: context,
+          ),
+          sender: _workerIdentifier,
+        );
+
         Timer? heartbeatTimer;
         Timer? softTimer;
         _scheduleLeaseRenewal(delivery);
 
         dynamic result;
+        TaskState completionState = TaskState.running;
 
         try {
           checkTermination();
@@ -556,6 +576,15 @@ class Worker {
           _events.add(
             WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
           );
+          await StemSignals.taskSucceeded.emit(
+            TaskSuccessPayload(
+              envelope: envelope,
+              worker: _workerInfoSnapshot,
+              result: result,
+            ),
+            sender: _workerIdentifier,
+          );
+          completionState = TaskState.succeeded;
         } on TaskRevokedException catch (_) {
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
@@ -564,11 +593,12 @@ class Worker {
             envelope,
             groupId: groupId,
           );
+          completionState = TaskState.cancelled;
         } catch (error, stack) {
           await _notifyErrorMiddleware(context, error, stack);
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
-          await _handleFailure(
+          completionState = await _handleFailure(
             handler,
             delivery,
             envelope,
@@ -590,6 +620,16 @@ class Worker {
               tags: {'task': envelope.name, 'queue': envelope.queue},
             );
           }
+          await StemSignals.taskPostrun.emit(
+            TaskPostrunPayload(
+              envelope: envelope,
+              worker: _workerInfoSnapshot,
+              context: context,
+              result: result,
+              state: completionState,
+            ),
+            sender: _workerIdentifier,
+          );
         }
       },
       context: parentContext,
@@ -810,7 +850,7 @@ class Worker {
     );
   }
 
-  Future<void> _handleFailure(
+  Future<TaskState> _handleFailure(
     TaskHandler handler,
     Delivery delivery,
     Envelope envelope,
@@ -821,6 +861,7 @@ class Worker {
     final canRetry = envelope.attempt < handler.options.maxRetries;
     if (canRetry) {
       final delay = retryStrategy.nextDelay(envelope.attempt, error, stack);
+      final nextRunAt = DateTime.now().add(delay);
       await broker.nack(delivery, requeue: false);
       await broker.publish(
         envelope.copyWith(
@@ -853,6 +894,16 @@ class Worker {
           data: {'retryDelayMs': delay.inMilliseconds},
         ),
       );
+      await StemSignals.taskRetry.emit(
+        TaskRetryPayload(
+          envelope: envelope,
+          worker: _workerInfoSnapshot,
+          reason: error,
+          nextRetryAt: nextRunAt,
+        ),
+        sender: _workerIdentifier,
+      );
+      return TaskState.retried;
     } else {
       final failureMeta = {
         ...envelope.meta,
@@ -914,6 +965,16 @@ class Worker {
           stackTrace: stack,
         ),
       );
+      await StemSignals.taskFailed.emit(
+        TaskFailurePayload(
+          envelope: envelope,
+          worker: _workerInfoSnapshot,
+          error: error,
+          stackTrace: stack,
+        ),
+        sender: _workerIdentifier,
+      );
+      return TaskState.failed;
     }
   }
 
@@ -1467,6 +1528,12 @@ class Worker {
           ? consumerName!
           : 'stem-worker-$pid';
 
+  WorkerInfo get _workerInfoSnapshot => WorkerInfo(
+        id: _workerIdentifier,
+        queues: subscriptionQueues,
+        broadcasts: subscriptionBroadcasts,
+      );
+
   void _reportProgress(
     Envelope envelope,
     double progress, {
@@ -1631,6 +1698,14 @@ class Worker {
           'requestedBy': revokeEntry?.requestedBy,
         },
       ),
+    );
+    await StemSignals.taskRevoked.emit(
+      TaskRevokedPayload(
+        envelope: envelope,
+        worker: _workerInfoSnapshot,
+        reason: revokeEntry?.reason ?? 'revoked',
+      ),
+      sender: _workerIdentifier,
     );
     _revocations.remove(envelope.id);
   }

@@ -235,9 +235,11 @@ class ObserveSchedulesCommand extends Command<int> {
           dueCount += 1;
           overdueCount += 1;
         }
-        if (entry.drift != null) {
-          if (maxDrift == null || entry.drift!.abs() > maxDrift!) {
-            maxDrift = entry.drift!.abs();
+        final drift = entry.drift;
+        if (drift != null) {
+          final magnitude = drift.abs();
+          if (maxDrift == null || magnitude > maxDrift) {
+            maxDrift = magnitude;
           }
         }
       }

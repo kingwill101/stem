@@ -35,7 +35,7 @@ class StemCommandDependencies {
 
   Future<ScheduleCliContext> createScheduleContext() {
     if (_scheduleContextBuilder != null) {
-      return _scheduleContextBuilder!();
+      return _scheduleContextBuilder();
     }
     return _createScheduleCliContext(
       repoPath: scheduleFilePath,
