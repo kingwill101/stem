@@ -4,8 +4,7 @@ import '../observability/tracing.dart';
 import '../routing/routing_config.dart';
 import '../routing/routing_registry.dart';
 import '../security/signing.dart';
-import '../signals/payloads.dart';
-import '../signals/stem_signals.dart';
+import '../signals/emitter.dart';
 import 'contracts.dart';
 import 'envelope.dart';
 import 'retry.dart';
@@ -32,6 +31,8 @@ class Stem {
   final List<Middleware> middleware;
   final PayloadSigner? signer;
   final RoutingRegistry routing;
+  static const StemSignalEmitter _signals =
+      StemSignalEmitter(defaultSender: 'stem');
 
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -92,13 +93,7 @@ class Stem {
                 priority: resolvedPriority,
               );
 
-        await StemSignals.beforeTaskPublish.emit(
-          BeforeTaskPublishPayload(
-            envelope: envelope,
-            attempt: envelope.attempt,
-          ),
-          sender: 'stem',
-        );
+        await _signals.beforeTaskPublish(envelope);
 
         await _runEnqueueMiddleware(envelope, () async {
           await broker.publish(envelope, routing: routingInfo);
@@ -116,14 +111,7 @@ class Stem {
           }
         });
 
-        await StemSignals.afterTaskPublish.emit(
-          AfterTaskPublishPayload(
-            envelope: envelope,
-            attempt: envelope.attempt,
-            taskId: envelope.id,
-          ),
-          sender: 'stem',
-        );
+        await _signals.afterTaskPublish(envelope);
 
         return envelope.id;
       },

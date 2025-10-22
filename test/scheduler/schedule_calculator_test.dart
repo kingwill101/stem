@@ -150,10 +150,8 @@ void main() {
     });
 
     test('applies timezone offsets for cron schedules', () {
-      final resolver =
-          ScheduleTimezoneResolver((name) => tz.getLocation(name));
-      final calculator =
-          ScheduleCalculator(timezoneResolver: resolver);
+      final resolver = ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final calculator = ScheduleCalculator(timezoneResolver: resolver);
       final entry = buildEntry(
         spec: CronScheduleSpec(expression: '0 9 * * *'),
         lastRun: tz.TZDateTime.from(now, tz.getLocation('America/New_York')),
@@ -161,13 +159,13 @@ void main() {
 
       final next = calculator.nextRun(entry, now, includeJitter: false);
 
-      final local = tz.TZDateTime.from(next, tz.getLocation('America/New_York'));
+      final local =
+          tz.TZDateTime.from(next, tz.getLocation('America/New_York'));
       expect(local.hour, equals(9));
     });
 
     test('computes solar events after reference time', () {
-      final resolver =
-          ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final resolver = ScheduleTimezoneResolver((name) => tz.getLocation(name));
       final calculator = ScheduleCalculator(
         timezoneResolver: resolver,
       );

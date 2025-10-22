@@ -1,3 +1,4 @@
+import '../control/control_messages.dart';
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 
@@ -172,4 +173,78 @@ class WorkerHeartbeatPayload {
 
   final WorkerInfo worker;
   final DateTime timestamp;
+}
+
+class WorkerChildLifecyclePayload {
+  const WorkerChildLifecyclePayload({
+    required this.worker,
+    required this.isolateId,
+  });
+
+  final WorkerInfo worker;
+  final int isolateId;
+}
+
+class ScheduleEntryDuePayload {
+  const ScheduleEntryDuePayload({
+    required this.entry,
+    required this.tickAt,
+  });
+
+  final ScheduleEntry entry;
+  final DateTime tickAt;
+}
+
+class ScheduleEntryDispatchedPayload {
+  const ScheduleEntryDispatchedPayload({
+    required this.entry,
+    required this.scheduledFor,
+    required this.executedAt,
+    required this.drift,
+  });
+
+  final ScheduleEntry entry;
+  final DateTime scheduledFor;
+  final DateTime executedAt;
+  final Duration drift;
+}
+
+class ScheduleEntryFailedPayload {
+  const ScheduleEntryFailedPayload({
+    required this.entry,
+    required this.scheduledFor,
+    required this.error,
+    required this.stackTrace,
+  });
+
+  final ScheduleEntry entry;
+  final DateTime scheduledFor;
+  final Object error;
+  final StackTrace stackTrace;
+}
+
+class ControlCommandReceivedPayload {
+  const ControlCommandReceivedPayload({
+    required this.worker,
+    required this.command,
+  });
+
+  final WorkerInfo worker;
+  final ControlCommandMessage command;
+}
+
+class ControlCommandCompletedPayload {
+  const ControlCommandCompletedPayload({
+    required this.worker,
+    required this.command,
+    required this.status,
+    this.response,
+    this.error,
+  });
+
+  final WorkerInfo worker;
+  final ControlCommandMessage command;
+  final String status;
+  final Map<String, Object?>? response;
+  final Map<String, Object?>? error;
 }

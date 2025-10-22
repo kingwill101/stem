@@ -272,7 +272,7 @@ class ClockedScheduleSpec extends ScheduleSpec {
   Map<String, Object?> toJson() => {
         'kind': kind,
         'runAt': runAt.toIso8601String(),
-      'runOnce': runOnce,
+        'runOnce': runOnce,
       };
 }
 

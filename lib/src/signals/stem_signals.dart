@@ -46,6 +46,14 @@ class StemSignals {
   static const String workerReadyName = 'worker-ready';
   static const String workerStoppingName = 'worker-stopping';
   static const String workerShutdownName = 'worker-shutdown';
+  static const String workerHeartbeatName = 'worker-heartbeat';
+  static const String workerChildInitName = 'worker-child-init';
+  static const String workerChildShutdownName = 'worker-child-shutdown';
+  static const String scheduleEntryDueName = 'schedule-entry-due';
+  static const String scheduleEntryDispatchedName = 'schedule-entry-dispatched';
+  static const String scheduleEntryFailedName = 'schedule-entry-failed';
+  static const String controlCommandReceivedName = 'control-command-received';
+  static const String controlCommandCompletedName = 'control-command-completed';
 
   static StemSignalConfiguration _configuration =
       const StemSignalConfiguration();
@@ -127,6 +135,54 @@ class StemSignals {
     config: _dispatchConfigFor(workerShutdownName),
   );
 
+  static final Signal<WorkerHeartbeatPayload> workerHeartbeat =
+      Signal<WorkerHeartbeatPayload>(
+    name: workerHeartbeatName,
+    config: _dispatchConfigFor(workerHeartbeatName),
+  );
+
+  static final Signal<WorkerChildLifecyclePayload> workerChildInit =
+      Signal<WorkerChildLifecyclePayload>(
+    name: workerChildInitName,
+    config: _dispatchConfigFor(workerChildInitName),
+  );
+
+  static final Signal<WorkerChildLifecyclePayload> workerChildShutdown =
+      Signal<WorkerChildLifecyclePayload>(
+    name: workerChildShutdownName,
+    config: _dispatchConfigFor(workerChildShutdownName),
+  );
+
+  static final Signal<ScheduleEntryDuePayload> scheduleEntryDue =
+      Signal<ScheduleEntryDuePayload>(
+    name: scheduleEntryDueName,
+    config: _dispatchConfigFor(scheduleEntryDueName),
+  );
+
+  static final Signal<ScheduleEntryDispatchedPayload> scheduleEntryDispatched =
+      Signal<ScheduleEntryDispatchedPayload>(
+    name: scheduleEntryDispatchedName,
+    config: _dispatchConfigFor(scheduleEntryDispatchedName),
+  );
+
+  static final Signal<ScheduleEntryFailedPayload> scheduleEntryFailed =
+      Signal<ScheduleEntryFailedPayload>(
+    name: scheduleEntryFailedName,
+    config: _dispatchConfigFor(scheduleEntryFailedName),
+  );
+
+  static final Signal<ControlCommandReceivedPayload> controlCommandReceived =
+      Signal<ControlCommandReceivedPayload>(
+    name: controlCommandReceivedName,
+    config: _dispatchConfigFor(controlCommandReceivedName),
+  );
+
+  static final Signal<ControlCommandCompletedPayload> controlCommandCompleted =
+      Signal<ControlCommandCompletedPayload>(
+    name: controlCommandCompletedName,
+    config: _dispatchConfigFor(controlCommandCompletedName),
+  );
+
   static final List<Signal<dynamic>> _allSignals = <Signal<dynamic>>[
     beforeTaskPublish,
     afterTaskPublish,
@@ -141,6 +197,14 @@ class StemSignals {
     workerReady,
     workerStopping,
     workerShutdown,
+    workerHeartbeat,
+    workerChildInit,
+    workerChildShutdown,
+    scheduleEntryDue,
+    scheduleEntryDispatched,
+    scheduleEntryFailed,
+    controlCommandReceived,
+    controlCommandCompleted,
   ];
 
   static void configure({
@@ -250,6 +314,86 @@ class StemSignals {
     );
   }
 
+  static SignalSubscription onWorkerHeartbeat(
+    SignalHandler<WorkerHeartbeatPayload> handler, {
+    String? workerId,
+  }) {
+    return workerHeartbeat.connect(
+      handler,
+      filter: _workerIdFilter(workerId),
+    );
+  }
+
+  static SignalSubscription onWorkerChildInit(
+    SignalHandler<WorkerChildLifecyclePayload> handler, {
+    String? workerId,
+  }) {
+    return workerChildInit.connect(
+      handler,
+      filter: _workerIdFilter(workerId),
+    );
+  }
+
+  static SignalSubscription onWorkerChildShutdown(
+    SignalHandler<WorkerChildLifecyclePayload> handler, {
+    String? workerId,
+  }) {
+    return workerChildShutdown.connect(
+      handler,
+      filter: _workerIdFilter(workerId),
+    );
+  }
+
+  static SignalSubscription onScheduleEntryDue(
+    SignalHandler<ScheduleEntryDuePayload> handler, {
+    String? entryId,
+  }) {
+    return scheduleEntryDue.connect(
+      handler,
+      filter: _scheduleIdFilter(entryId),
+    );
+  }
+
+  static SignalSubscription onScheduleEntryDispatched(
+    SignalHandler<ScheduleEntryDispatchedPayload> handler, {
+    String? entryId,
+  }) {
+    return scheduleEntryDispatched.connect(
+      handler,
+      filter: _scheduleIdFilter(entryId),
+    );
+  }
+
+  static SignalSubscription onScheduleEntryFailed(
+    SignalHandler<ScheduleEntryFailedPayload> handler, {
+    String? entryId,
+  }) {
+    return scheduleEntryFailed.connect(
+      handler,
+      filter: _scheduleIdFilter(entryId),
+    );
+  }
+
+  static SignalSubscription onControlCommandReceived(
+    SignalHandler<ControlCommandReceivedPayload> handler, {
+    String? commandType,
+  }) {
+    return controlCommandReceived.connect(
+      handler,
+      filter: _commandTypeFilter(commandType),
+    );
+  }
+
+  static SignalSubscription onControlCommandCompleted(
+    SignalHandler<ControlCommandCompletedPayload> handler, {
+    String? commandType,
+  }) {
+    return controlCommandCompleted.connect(
+      handler,
+      filter: _commandTypeFilter(commandType),
+    );
+  }
+
   static SignalSubscription onWorkerReady(
     SignalHandler<WorkerLifecyclePayload> handler, {
     String? workerId,
@@ -296,6 +440,41 @@ class StemSignals {
     if (payload is TaskFailurePayload) return payload.worker.id;
     if (payload is TaskRevokedPayload) return payload.worker.id;
     if (payload is WorkerLifecyclePayload) return payload.worker.id;
+    if (payload is WorkerHeartbeatPayload) return payload.worker.id;
+    if (payload is WorkerChildLifecyclePayload) return payload.worker.id;
+    if (payload is ControlCommandReceivedPayload) return payload.worker.id;
+    if (payload is ControlCommandCompletedPayload) return payload.worker.id;
+    return null;
+  }
+
+  static SignalFilter<T>? _scheduleIdFilter<T>(String? entryId) {
+    if (entryId == null) return null;
+    return SignalFilter<T>.where(
+      (payload, _) => _payloadScheduleId(payload as Object) == entryId,
+    );
+  }
+
+  static String? _payloadScheduleId(Object payload) {
+    if (payload is ScheduleEntryDuePayload) return payload.entry.id;
+    if (payload is ScheduleEntryDispatchedPayload) return payload.entry.id;
+    if (payload is ScheduleEntryFailedPayload) return payload.entry.id;
+    return null;
+  }
+
+  static SignalFilter<T>? _commandTypeFilter<T>(String? commandType) {
+    if (commandType == null) return null;
+    return SignalFilter<T>.where(
+      (payload, _) => _payloadCommandType(payload as Object) == commandType,
+    );
+  }
+
+  static String? _payloadCommandType(Object payload) {
+    if (payload is ControlCommandReceivedPayload) {
+      return payload.command.type;
+    }
+    if (payload is ControlCommandCompletedPayload) {
+      return payload.command.type;
+    }
     return null;
   }
 

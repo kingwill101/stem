@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import '../signals/stem_signals.dart';
 import 'metrics.dart';
 
 /// Aggregates configuration controlling observability integrations.
@@ -11,10 +12,13 @@ class ObservabilityConfig {
     String? namespace,
     List<String>? metricExporters,
     this.otlpEndpoint,
+    StemSignalConfiguration? signalConfiguration,
   })  : heartbeatInterval = heartbeatInterval ?? const Duration(seconds: 10),
         namespace =
             (namespace != null && namespace.isNotEmpty) ? namespace : 'stem',
-        metricExporters = List.unmodifiable(metricExporters ?? const []);
+        metricExporters = List.unmodifiable(metricExporters ?? const []),
+        signalConfiguration =
+            signalConfiguration ?? const StemSignalConfiguration();
 
   /// Interval between worker heartbeats emitted for monitoring.
   final Duration heartbeatInterval;
@@ -27,6 +31,9 @@ class ObservabilityConfig {
 
   /// Explicit endpoint override for OTLP-compatible exporters.
   final Uri? otlpEndpoint;
+
+  /// Signal dispatch configuration describing enablement flags.
+  final StemSignalConfiguration signalConfiguration;
 
   /// Builds a configuration by reading relevant environment variables from
   /// [env] or the process environment.
@@ -44,11 +51,20 @@ class ObservabilityConfig {
     final otlpRaw = environment[_EnvKeys.otlpEndpoint]?.trim();
     final otlp =
         otlpRaw != null && otlpRaw.isNotEmpty ? Uri.tryParse(otlpRaw) : null;
+    final signalsEnabled = _parseBool(environment[_EnvKeys.signalsEnabled]);
+    final disabledSignals = _parseList(environment[_EnvKeys.signalsDisabled]);
+    final signalConfig = StemSignalConfiguration(
+      enabled: signalsEnabled ?? true,
+      enabledSignals: {
+        for (final name in disabledSignals) name: false,
+      },
+    );
     return ObservabilityConfig(
       heartbeatInterval: interval,
       namespace: namespace,
       metricExporters: exporters,
       otlpEndpoint: otlp,
+      signalConfiguration: signalConfig,
     );
   }
 
@@ -61,6 +77,7 @@ class ObservabilityConfig {
           ? metricExporters
           : other.metricExporters,
       otlpEndpoint: other.otlpEndpoint ?? otlpEndpoint,
+      signalConfiguration: other.signalConfiguration,
     );
   }
 
@@ -94,6 +111,11 @@ class ObservabilityConfig {
     if (exporters.isNotEmpty) {
       StemMetrics.instance.configure(exporters: exporters);
     }
+  }
+
+  /// Applies signal configuration globally.
+  void applySignalConfiguration() {
+    StemSignals.configure(configuration: signalConfiguration);
   }
 
   /// Parses an OTLP endpoint out of a single exporter [spec] string.
@@ -134,4 +156,33 @@ abstract class _EnvKeys {
   static const namespace = 'STEM_WORKER_NAMESPACE';
   static const metricExporters = 'STEM_METRIC_EXPORTERS';
   static const otlpEndpoint = 'STEM_OTLP_ENDPOINT';
+  static const signalsEnabled = 'STEM_SIGNALS_ENABLED';
+  static const signalsDisabled = 'STEM_SIGNALS_DISABLED';
+}
+
+bool? _parseBool(String? raw) {
+  if (raw == null) return null;
+  final normalized = raw.trim().toLowerCase();
+  if (normalized.isEmpty) return null;
+  if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+    return true;
+  }
+  if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+    return false;
+  }
+  return null;
+}
+
+List<String> _parseList(String? input) {
+  if (input == null || input.trim().isEmpty) return const [];
+  final seen = <String>{};
+  final values = <String>[];
+  for (final part in input.split(',')) {
+    final trimmed = part.trim();
+    if (trimmed.isEmpty) continue;
+    if (seen.add(trimmed)) {
+      values.add(trimmed);
+    }
+  }
+  return values;
 }

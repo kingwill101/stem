@@ -107,6 +107,144 @@ void main() {
       }
       broker.dispose();
     });
+
+    test('per-signal configuration disables selected handlers', () async {
+      StemSignals.configure(
+        configuration: const StemSignalConfiguration(
+          enabledSignals: {StemSignals.taskPrerunName: false},
+        ),
+      );
+      addTearDown(() {
+        StemSignals.configure(configuration: const StemSignalConfiguration());
+      });
+
+      var invoked = false;
+      StemSignals.taskPrerun.connect((payload, _) {
+        invoked = true;
+      });
+
+      final envelope = Envelope(name: 'tasks.disabled', args: const {});
+      final worker = const WorkerInfo(
+        id: 'worker',
+        queues: ['default'],
+        broadcasts: [],
+      );
+      final context = TaskContext(
+        id: envelope.id,
+        attempt: envelope.attempt,
+        headers: envelope.headers,
+        meta: envelope.meta,
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+
+      await StemSignals.taskPrerun.emit(
+        TaskPrerunPayload(
+          envelope: envelope,
+          worker: worker,
+          context: context,
+        ),
+      );
+
+      expect(invoked, isFalse);
+    });
+  });
+
+  group('SignalMiddleware', () {
+    test('coordinator forwards publish lifecycle', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+      addTearDown(() {
+        StemSignals.configure(configuration: const StemSignalConfiguration());
+      });
+
+      final middleware = SignalMiddleware.coordinator();
+      final envelope = Envelope(name: 'tasks.demo', args: const {});
+      final calls = <String>[];
+      final subscriptions = <SignalSubscription>[
+        StemSignals.beforeTaskPublish.connect((payload, _) {
+          calls.add('before');
+        }),
+        StemSignals.afterTaskPublish.connect((payload, _) {
+          calls.add('after');
+        }),
+      ];
+
+      await middleware.onEnqueue(envelope, () async {});
+
+      expect(calls, equals(['before', 'after']));
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+    });
+
+    test('worker forwards consume, prerun, and failure signals', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+      addTearDown(() {
+        StemSignals.configure(configuration: const StemSignalConfiguration());
+      });
+
+      const workerInfo = WorkerInfo(
+        id: 'worker-1',
+        queues: ['default'],
+        broadcasts: [],
+      );
+      final middleware = SignalMiddleware.worker(workerInfo: () => workerInfo);
+      final envelope = Envelope(name: 'tasks.test', args: const {});
+      final delivery = Delivery(
+        envelope: envelope,
+        receipt: 'receipt-1',
+        leaseExpiresAt: DateTime.now().add(const Duration(minutes: 1)),
+      );
+
+      final received = Completer<void>();
+      final prerun = Completer<void>();
+      final failed = Completer<void>();
+
+      final subscriptions = <SignalSubscription>[
+        StemSignals.taskReceived.connect((payload, _) {
+          if (!received.isCompleted) {
+            received.complete();
+          }
+        }),
+        StemSignals.taskPrerun.connect((payload, _) {
+          if (!prerun.isCompleted) {
+            prerun.complete();
+          }
+        }),
+        StemSignals.taskFailed.connect((payload, _) {
+          if (!failed.isCompleted) {
+            failed.complete();
+          }
+        }),
+      ];
+
+      await middleware.onConsume(delivery, () async {});
+      final context = TaskContext(
+        id: envelope.id,
+        attempt: envelope.attempt,
+        headers: envelope.headers,
+        meta: envelope.meta,
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+
+      try {
+        await middleware.onExecute(context, () async {
+          throw StateError('boom');
+        });
+      } catch (_) {}
+      await middleware.onError(context, StateError('boom'), StackTrace.current);
+
+      expect(received.isCompleted, isTrue);
+      expect(prerun.isCompleted, isTrue);
+      expect(failed.isCompleted, isTrue);
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+    });
   });
 }
 

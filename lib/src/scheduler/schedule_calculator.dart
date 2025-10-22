@@ -25,8 +25,7 @@ class ScheduleCalculator {
     bool includeJitter = true,
   }) {
     final spec = entry.spec;
-    final tz.Location? location =
-        _timezoneResolver?.resolve(entry.timezone);
+    final tz.Location? location = _timezoneResolver?.resolve(entry.timezone);
     final DateTime base = entry.lastRunAt ?? now;
     DateTime next;
 
@@ -49,9 +48,7 @@ class ScheduleCalculator {
     }
 
     final jitter = entry.jitter;
-    if (includeJitter &&
-        jitter != null &&
-        jitter > Duration.zero) {
+    if (includeJitter && jitter != null && jitter > Duration.zero) {
       final jitterMs = _random.nextInt(jitter.inMilliseconds + 1);
       next = next.add(Duration(milliseconds: jitterMs));
     }
@@ -209,20 +206,21 @@ class ScheduleCalculator {
 
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
-        candidate = tz.TZDateTime(location, candidate.year, candidate.month + 1);
+        candidate =
+            tz.TZDateTime(location, candidate.year, candidate.month + 1);
         continue;
       }
 
       if (!_matches(dayField, candidate.day)) {
-        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
-            candidate.day + 1);
+        candidate = tz.TZDateTime(
+            location, candidate.year, candidate.month, candidate.day + 1);
         continue;
       }
 
       final weekday = candidate.weekday % 7;
       if (!_matchesWeekday(weekdayField, weekday, dayField)) {
-        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
-            candidate.day + 1);
+        candidate = tz.TZDateTime(
+            location, candidate.year, candidate.month, candidate.day + 1);
         continue;
       }
 

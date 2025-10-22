@@ -41,9 +41,13 @@ class TaskIsolatePool {
   TaskIsolatePool({
     required int size,
     this.onRecycle,
+    this.onSpawned,
+    this.onDisposed,
   }) : _targetSize = math.max(1, size);
 
   final void Function(IsolateRecycleEvent event)? onRecycle;
+  final FutureOr<void> Function(int isolateId)? onSpawned;
+  final FutureOr<void> Function(int isolateId)? onDisposed;
 
   int _targetSize;
   final List<_PoolEntry> _idle = <_PoolEntry>[];
@@ -88,7 +92,7 @@ class TaskIsolatePool {
           memoryBytes: entry.lastRssBytes,
         ),
       );
-      await entry.worker.dispose();
+      await _disposeWorker(entry);
     }
   }
 
@@ -116,7 +120,7 @@ class TaskIsolatePool {
           memoryBytes: entry.lastRssBytes,
         ),
       );
-      await entry.worker.dispose();
+      await _disposeWorker(entry);
     }
 
     if (surplus > 0) {
@@ -234,7 +238,7 @@ class TaskIsolatePool {
             ),
           );
           entry.draining = true;
-          unawaited(entry.worker.dispose());
+          unawaited(_disposeWorker(entry));
         });
       }
 
@@ -310,7 +314,7 @@ class TaskIsolatePool {
         memoryBytes: entry.lastRssBytes,
       ),
     );
-    await entry.worker.dispose();
+    await _disposeWorker(entry);
     if (!_disposed && totalCount < _targetSize) {
       await _ensureCapacity();
     }
@@ -320,8 +324,33 @@ class TaskIsolatePool {
     if (_disposed) return;
     while (totalCount < _targetSize) {
       final worker = await _IsolateWorker.spawn();
-      _idle.add(_PoolEntry(worker));
+      final entry = _PoolEntry(worker);
+      _idle.add(entry);
+      _notifySpawned(worker);
     }
+  }
+
+  void _notifySpawned(_IsolateWorker worker) {
+    final callback = onSpawned;
+    if (callback == null) return;
+    final result = callback(worker.isolateId);
+    if (result is Future) {
+      unawaited(result);
+    }
+  }
+
+  void _notifyDisposed(_IsolateWorker worker) {
+    final callback = onDisposed;
+    if (callback == null) return;
+    final result = callback(worker.isolateId);
+    if (result is Future) {
+      unawaited(result);
+    }
+  }
+
+  Future<void> _disposeWorker(_PoolEntry entry) async {
+    _notifyDisposed(entry.worker);
+    await entry.worker.dispose();
   }
 }
 
@@ -414,6 +443,7 @@ class _IsolateWorker {
   }
 
   bool get isDisposed => _disposed;
+  int get isolateId => _isolate.hashCode;
 
   Future<TaskRunResponse> run(_TaskJob job) async {
     final replyPort = ReceivePort();

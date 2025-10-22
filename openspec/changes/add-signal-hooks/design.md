@@ -20,6 +20,7 @@ Celery exposes more than 30 lifecycle signals. We only need a curated subset tha
 | `heartbeat_sent` | Heartbeat | Worker heartbeat flush | `StemSignals.workerHeartbeat` (emitted via heartbeat transport) |
 | `beat_init`, `beat_embedded_init` | Scheduler | Scheduler startup | `StemSignals.schedulerInit` |
 | (Celery has `beat_scheduler_ready`, `beat_schedule` via docs) | Scheduler | Entry due/sent | `StemSignals.scheduleEntryDue`, `StemSignals.scheduleEntryDispatched`, `StemSignals.scheduleEntryFailed` |
+| `worker_before_create_process`, `worker_process_init`, `worker_process_shutdown` | Pool processes | Child spawn/teardown notifications | `StemSignals.workerChildInit`, `StemSignals.workerChildShutdown` |
 | `import_modules`, `celeryd_after_setup`, `celeryd_init` | Worker bootstrap | Module import + config | folded into `workerInit` (no dedicated Stem signal required) |
 | Logging/user preload signals | CLI | logger setup / CLI preload options | not planned for initial parity; out-of-scope for MVP |
 
@@ -78,7 +79,7 @@ Ensure serialization not required but provide `toMap()` for logging.
 
 ## Integration Points
 - **Coordinator**: Emit `beforeTaskPublish` and `afterTaskPublish` around `Broker.publish`; `task_enqueued` when entering retry pipeline; `app_ready` when Stem instance initialized.
-- **Worker**: Emit `workerStarting`, `workerReady`, `workerShutdown`, `taskReceived`, `taskPrerun`, `taskPostrun`, `taskSuccess`, `taskFailure`, `taskRetry`, `taskRevoked`, `taskUnknown`.
+- **Worker**: Emit `workerStarting`, `workerReady`, `workerShutdown`, `workerHeartbeat`, `workerChildInit`, `workerChildShutdown`, `taskReceived`, `taskPrerun`, `taskPostrun`, `taskSuccess`, `taskFailure`, `taskRetry`, `taskRevoked`, `taskUnknown`.
 - **Scheduler**: Emit `scheduleEntryDue`, `scheduleEntryExecuted`, `scheduleEntryFailed`, `scheduleSync`.
 - **Control Plane**: Emit `controlCommandReceived`, `controlCommandCompleted` for remote control interactions.
 

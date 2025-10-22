@@ -4,6 +4,7 @@ import 'dart:isolate';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
 
@@ -138,6 +139,46 @@ void main() {
       broker.dispose();
     });
 
+    test('emits worker heartbeat signals', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'heartbeat-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        workerHeartbeatInterval: const Duration(milliseconds: 100),
+        heartbeatTransport: const NoopHeartbeatTransport(),
+      );
+
+      final heartbeat = Completer<WorkerHeartbeatPayload>();
+      final subs = <SignalSubscription>[
+        StemSignals.workerHeartbeat.connect((payload, _) {
+          if (payload.worker.id == 'heartbeat-worker' &&
+              !heartbeat.isCompleted) {
+            heartbeat.complete(payload);
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      await heartbeat.future.timeout(const Duration(seconds: 2));
+
+      for (final sub in subs) {
+        sub.cancel();
+      }
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('autoscaler scales concurrency up and down', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 5),
@@ -209,6 +250,155 @@ void main() {
       broker.dispose();
     });
 
+    test('emits worker lifecycle signals on start and shutdown', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-life',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final phases = <String>[];
+      final init = Completer<void>();
+      final ready = Completer<void>();
+      final stopping = Completer<void>();
+      final shutdown = Completer<void>();
+
+      final subscriptions = <SignalSubscription>[
+        StemSignals.workerInit.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('init');
+            init.complete();
+          }
+        }),
+        StemSignals.workerReady.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('ready');
+            ready.complete();
+          }
+        }),
+        StemSignals.workerStopping.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('stopping:${payload.reason}');
+            stopping.complete();
+          }
+        }),
+        StemSignals.workerShutdown.connect((payload, _) {
+          if (payload.worker.id == 'worker-life') {
+            phases.add('shutdown:${payload.reason}');
+            shutdown.complete();
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      await init.future.timeout(const Duration(seconds: 2));
+      await ready.future.timeout(const Duration(seconds: 2));
+
+      await worker.shutdown(mode: WorkerShutdownMode.soft);
+
+      await stopping.future.timeout(const Duration(seconds: 2));
+      await shutdown.future.timeout(const Duration(seconds: 2));
+
+      expect(
+        phases,
+        equals([
+          'init',
+          'ready',
+          'stopping:soft',
+          'shutdown:soft',
+        ]),
+      );
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+
+      broker.dispose();
+    });
+
+    test('emits worker child lifecycle signals', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<int>(
+            name: 'tasks.isolate',
+            entrypoint: _isolateEntrypoint,
+            options: const TaskOptions(maxRetries: 0),
+          ),
+        );
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'isolate-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final init = Completer<int>();
+      final shutdown = Completer<int>();
+      final events = <WorkerEvent>[];
+      final eventSub = worker.events.listen(events.add);
+      final subscriptions = <SignalSubscription>[
+        StemSignals.workerChildInit.connect((payload, _) {
+          if (payload.worker.id == 'isolate-worker' && !init.isCompleted) {
+            init.complete(payload.isolateId);
+          }
+        }),
+        StemSignals.workerChildShutdown.connect((payload, _) {
+          if (payload.worker.id == 'isolate-worker' && !shutdown.isCompleted) {
+            shutdown.complete(payload.isolateId);
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      await stem.enqueue('tasks.isolate', args: {'value': 2});
+
+      final spawnedId = await init.future.timeout(const Duration(seconds: 2));
+
+      await _waitFor(
+        () => events.any((event) => event.type == WorkerEventType.completed),
+        timeout: const Duration(seconds: 4),
+      );
+
+      await worker.shutdown();
+      final shutdownId =
+          await shutdown.future.timeout(const Duration(seconds: 2));
+
+      expect(shutdownId, equals(spawnedId));
+
+      for (final sub in subscriptions) {
+        sub.cancel();
+      }
+
+      await eventSub.cancel();
+
+      broker.dispose();
+    });
     test('emits worker lifecycle signals on start and shutdown', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 
@@ -1031,6 +1221,70 @@ void main() {
         subscription.cancel();
       }
       await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('emits control command signals', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'control-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final received = Completer<ControlCommandReceivedPayload>();
+      final completed = Completer<ControlCommandCompletedPayload>();
+      final subs = <SignalSubscription>[
+        StemSignals.onControlCommandReceived((payload, _) {
+          if (payload.command.requestId == 'req-ctrl' &&
+              !received.isCompleted) {
+            received.complete(payload);
+          }
+        }),
+        StemSignals.onControlCommandCompleted((payload, _) {
+          if (payload.command.requestId == 'req-ctrl' &&
+              !completed.isCompleted) {
+            completed.complete(payload);
+          }
+        }),
+      ];
+
+      await worker.start();
+
+      final command = ControlCommandMessage(
+        requestId: 'req-ctrl',
+        type: 'ping',
+        targets: const ['*'],
+      );
+      final queue =
+          ControlQueueNames.worker(worker.namespace, worker.consumerName!);
+      await broker.publish(command.toEnvelope(queue: queue));
+
+      final receivedPayload =
+          await received.future.timeout(const Duration(seconds: 2));
+      expect(receivedPayload.command.type, 'ping');
+
+      final completedPayload =
+          await completed.future.timeout(const Duration(seconds: 2));
+      expect(completedPayload.status, 'ok');
+      expect(completedPayload.response?['queue'], worker.primaryQueue);
+
+      for (final sub in subs) {
+        sub.cancel();
+      }
       await worker.shutdown();
       broker.dispose();
     });

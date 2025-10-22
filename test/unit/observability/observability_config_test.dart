@@ -1,6 +1,9 @@
 import 'package:test/test.dart';
+import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/observability/config.dart';
 import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/signals/payloads.dart';
+import 'package:stem/src/signals/stem_signals.dart';
 
 void main() {
   group('ObservabilityConfig', () {
@@ -34,6 +37,8 @@ void main() {
         'STEM_METRIC_EXPORTERS':
             'console, otlp:http://collector:4318/v1/metrics ,prometheus',
         'STEM_OTLP_ENDPOINT': 'http://collector:4318/v1/metrics',
+        'STEM_SIGNALS_ENABLED': 'false',
+        'STEM_SIGNALS_DISABLED': 'task-prerun, worker-heartbeat',
       });
 
       expect(config.heartbeatInterval, equals(const Duration(seconds: 15)));
@@ -49,6 +54,12 @@ void main() {
       expect(
         config.otlpEndpoint,
         equals(Uri.parse('http://collector:4318/v1/metrics')),
+      );
+      expect(config.signalConfiguration.enabled, isFalse);
+      expect(config.signalConfiguration.enabledSignals['task-prerun'], isFalse);
+      expect(
+        config.signalConfiguration.enabledSignals['worker-heartbeat'],
+        isFalse,
       );
     });
 
@@ -110,5 +121,31 @@ void main() {
         expect(() => config.applyMetricExporters(), returnsNormally);
       },
     );
+
+    test('applySignalConfiguration honors enablement flags', () async {
+      addTearDown(() {
+        StemSignals.configure(configuration: const StemSignalConfiguration());
+      });
+
+      final config = ObservabilityConfig(
+        signalConfiguration: const StemSignalConfiguration(
+          enabled: false,
+        ),
+      );
+
+      config.applySignalConfiguration();
+
+      var invoked = false;
+      StemSignals.beforeTaskPublish.connect((payload, _) {
+        invoked = true;
+      });
+
+      final envelope = Envelope(name: 'task', args: const {});
+      await StemSignals.beforeTaskPublish.emit(
+        BeforeTaskPublishPayload(envelope: envelope, attempt: envelope.attempt),
+      );
+
+      expect(invoked, isFalse);
+    });
   });
 }

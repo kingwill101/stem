@@ -20,8 +20,8 @@ import '../security/signing.dart';
 import '../core/task_invocation.dart';
 import 'isolate_pool.dart';
 import 'worker_config.dart';
+import '../signals/emitter.dart';
 import '../signals/payloads.dart';
-import '../signals/stem_signals.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
 ///
@@ -99,6 +99,7 @@ class Worker {
         ),
         retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
+    observability?.applySignalConfiguration();
     _maxConcurrency = this.concurrency;
     final autoscaleMax = autoscaleConfig.maxConcurrency != null &&
             autoscaleConfig.maxConcurrency! > 0
@@ -142,6 +143,7 @@ class Worker {
     this.subscription = resolvedSubscription;
     subscriptionQueues = List.unmodifiable(normalizedQueues);
     subscriptionBroadcasts = List.unmodifiable(normalizedBroadcasts);
+    _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
   }
 
   final Broker broker;
@@ -167,6 +169,7 @@ class Worker {
   late final RoutingSubscription subscription;
   late final List<String> subscriptionQueues;
   late final List<String> subscriptionBroadcasts;
+  late final StemSignalEmitter _signals;
 
   List<String> get _effectiveQueues =>
       subscriptionQueues.isNotEmpty ? subscriptionQueues : [queue];
@@ -227,10 +230,7 @@ class Worker {
     _lastScaleUp = null;
     _lastScaleDown = null;
     _drainCompleter = null;
-    await StemSignals.workerInit.emit(
-      WorkerLifecyclePayload(worker: _workerInfoSnapshot),
-      sender: _workerIdentifier,
-    );
+    await _signals.workerInit(_workerInfoSnapshot);
     await _initializeRevocations();
     _startWorkerHeartbeatLoop();
     _recordInflightGauge();
@@ -283,10 +283,7 @@ class Worker {
     _startControlPlane();
     _startAutoscaler();
     _installSignalHandlers();
-    await StemSignals.workerReady.emit(
-      WorkerLifecyclePayload(worker: _workerInfoSnapshot),
-      sender: _workerIdentifier,
-    );
+    await _signals.workerReady(_workerInfoSnapshot);
   }
 
   /// Stops the worker according to [mode], cancelling subscriptions and resources.
@@ -311,12 +308,9 @@ class Worker {
     _shutdownCompleter = completer;
     _running = false;
 
-    await StemSignals.workerStopping.emit(
-      WorkerLifecyclePayload(
-        worker: _workerInfoSnapshot,
-        reason: mode.name,
-      ),
-      sender: _workerIdentifier,
+    await _signals.workerStopping(
+      _workerInfoSnapshot,
+      reason: mode.name,
     );
 
     _autoscaleTimer?.cancel();
@@ -358,12 +352,9 @@ class Worker {
       await _events.close();
     }
 
-    await StemSignals.workerShutdown.emit(
-      WorkerLifecyclePayload(
-        worker: _workerInfoSnapshot,
-        reason: mode.name,
-      ),
-      sender: _workerIdentifier,
+    await _signals.workerShutdown(
+      _workerInfoSnapshot,
+      reason: mode.name,
     );
 
     completer.complete();
@@ -463,12 +454,9 @@ class Worker {
 
         _trackDelivery(delivery);
 
-        await StemSignals.taskReceived.emit(
-          TaskReceivedPayload(
-            envelope: envelope,
-            worker: _workerInfoSnapshot,
-          ),
-          sender: _workerIdentifier,
+        await _signals.taskReceived(
+          envelope,
+          _workerInfoSnapshot,
         );
 
         stemLogger.debug(
@@ -522,13 +510,10 @@ class Worker {
           },
         );
 
-        await StemSignals.taskPrerun.emit(
-          TaskPrerunPayload(
-            envelope: envelope,
-            worker: _workerInfoSnapshot,
-            context: context,
-          ),
-          sender: _workerIdentifier,
+        await _signals.taskPrerun(
+          envelope,
+          _workerInfoSnapshot,
+          context,
         );
 
         Timer? heartbeatTimer;
@@ -600,13 +585,10 @@ class Worker {
           _events.add(
             WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
           );
-          await StemSignals.taskSucceeded.emit(
-            TaskSuccessPayload(
-              envelope: envelope,
-              worker: _workerInfoSnapshot,
-              result: result,
-            ),
-            sender: _workerIdentifier,
+          await _signals.taskSucceeded(
+            envelope,
+            _workerInfoSnapshot,
+            result: result,
           );
           completionState = TaskState.succeeded;
         } on TaskRevokedException catch (_) {
@@ -644,15 +626,12 @@ class Worker {
               tags: {'task': envelope.name, 'queue': envelope.queue},
             );
           }
-          await StemSignals.taskPostrun.emit(
-            TaskPostrunPayload(
-              envelope: envelope,
-              worker: _workerInfoSnapshot,
-              context: context,
-              result: result,
-              state: completionState,
-            ),
-            sender: _workerIdentifier,
+          await _signals.taskPostrun(
+            envelope,
+            _workerInfoSnapshot,
+            context,
+            result: result,
+            state: completionState,
           );
         }
       },
@@ -872,14 +851,11 @@ class Worker {
         data: {'security': 'signature-invalid'},
       ),
     );
-    await StemSignals.taskFailed.emit(
-      TaskFailurePayload(
-        envelope: envelope,
-        worker: _workerInfoSnapshot,
-        error: error,
-        stackTrace: stack,
-      ),
-      sender: _workerIdentifier,
+    await _signals.taskFailed(
+      envelope,
+      _workerInfoSnapshot,
+      error: error,
+      stackTrace: stack,
     );
   }
 
@@ -927,14 +903,11 @@ class Worker {
           data: {'retryDelayMs': delay.inMilliseconds},
         ),
       );
-      await StemSignals.taskRetry.emit(
-        TaskRetryPayload(
-          envelope: envelope,
-          worker: _workerInfoSnapshot,
-          reason: error,
-          nextRetryAt: nextRunAt,
-        ),
-        sender: _workerIdentifier,
+      await _signals.taskRetry(
+        envelope,
+        _workerInfoSnapshot,
+        reason: error,
+        nextRetryAt: nextRunAt,
       );
       return TaskState.retried;
     } else {
@@ -998,14 +971,11 @@ class Worker {
           stackTrace: stack,
         ),
       );
-      await StemSignals.taskFailed.emit(
-        TaskFailurePayload(
-          envelope: envelope,
-          worker: _workerInfoSnapshot,
-          error: error,
-          stackTrace: stack,
-        ),
-        sender: _workerIdentifier,
+      await _signals.taskFailed(
+        envelope,
+        _workerInfoSnapshot,
+        error: error,
+        stackTrace: stack,
       );
       return TaskState.failed;
     }
@@ -1492,6 +1462,10 @@ class Worker {
     if (!_running) return;
     await _recordQueueDepth();
     final heartbeat = _buildHeartbeat();
+    await _signals.workerHeartbeat(
+      _workerInfoSnapshot,
+      heartbeat.timestamp,
+    );
     try {
       await heartbeatTransport.publish(heartbeat);
     } catch (error, stack) {
@@ -1732,13 +1706,10 @@ class Worker {
         },
       ),
     );
-    await StemSignals.taskRevoked.emit(
-      TaskRevokedPayload(
-        envelope: envelope,
-        worker: _workerInfoSnapshot,
-        reason: revokeEntry?.reason ?? 'revoked',
-      ),
-      sender: _workerIdentifier,
+    await _signals.taskRevoked(
+      envelope,
+      _workerInfoSnapshot,
+      reason: revokeEntry?.reason ?? 'revoked',
     );
     _revocations.remove(envelope.id);
   }
@@ -1924,10 +1895,16 @@ class Worker {
   }
 
   Future<void> _handleControlCommand(ControlCommandMessage command) async {
-    switch (command.type) {
-      case 'ping':
-        await _sendControlReply(
-          ControlReplyMessage(
+    await _signals.controlCommandReceived(
+      _workerInfoSnapshot,
+      command,
+    );
+
+    ControlReplyMessage reply;
+    try {
+      switch (command.type) {
+        case 'ping':
+          reply = ControlReplyMessage(
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'ok',
@@ -1937,84 +1914,96 @@ class Worker {
               'inflight': _inflight,
               'subscriptions': _subscriptionMetadata(),
             },
-          ),
-        );
-        break;
-      case 'stats':
-        await _sendControlReply(
-          ControlReplyMessage(
+          );
+          break;
+        case 'stats':
+          reply = ControlReplyMessage(
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'ok',
             payload: _buildStatsSnapshot(),
-          ),
-        );
-        break;
-      case 'inspect':
-        final includeRevoked = command.payload['includeRevoked'] != false;
-        await _sendControlReply(
-          ControlReplyMessage(
+          );
+          break;
+        case 'inspect':
+          final includeRevoked = command.payload['includeRevoked'] != false;
+          reply = ControlReplyMessage(
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'ok',
             payload: _buildInspectSnapshot(
               includeRevoked: includeRevoked,
             ),
-          ),
-        );
-        break;
-      case 'revoke':
-        try {
-          final result = await _processRevokeCommand(command);
-          await _sendControlReply(
-            ControlReplyMessage(
+          );
+          break;
+        case 'revoke':
+          try {
+            final result = await _processRevokeCommand(command);
+            reply = ControlReplyMessage(
               requestId: command.requestId,
               workerId: _workerIdentifier,
               status: 'ok',
               payload: result,
-            ),
-          );
-        } catch (error, stack) {
-          stemLogger.warning(
-            'Failed to apply revocations: $error',
-            Context(_logContext({'stack': stack.toString()})),
-          );
-          await _sendControlReply(
-            ControlReplyMessage(
+            );
+          } catch (error, stack) {
+            stemLogger.warning(
+              'Failed to apply revocations: $error',
+              Context(_logContext({'stack': stack.toString()})),
+            );
+            reply = ControlReplyMessage(
               requestId: command.requestId,
               workerId: _workerIdentifier,
               status: 'error',
               error: {
-                'message': 'Failed to apply revocations: $error',
+                'message': 'Failed to apply revocations',
+                'detail': error.toString(),
               },
-            ),
-          );
-        }
-        break;
-      case 'shutdown':
-        final mode = _parseShutdownMode(command.payload['mode'] as String?);
-        final summary = await _handleShutdownRequest(mode);
-        await _sendControlReply(
-          ControlReplyMessage(
+            );
+          }
+          break;
+        case 'shutdown':
+          final mode = _parseShutdownMode(command.payload['mode'] as String?);
+          final summary = await _handleShutdownRequest(mode);
+          reply = ControlReplyMessage(
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'ok',
             payload: summary,
-          ),
-        );
-        break;
-      default:
-        await _sendControlReply(
-          ControlReplyMessage(
+          );
+          break;
+        default:
+          reply = ControlReplyMessage(
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'error',
             error: {
               'message': 'Unknown control command ${command.type}',
             },
-          ),
-        );
+          );
+      }
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Control command handler failed: $error',
+        Context(_logContext({'stack': stack.toString()})),
+      );
+      reply = ControlReplyMessage(
+        requestId: command.requestId,
+        workerId: _workerIdentifier,
+        status: 'error',
+        error: {
+          'message': error.toString(),
+          'stack': stack.toString(),
+        },
+      );
     }
+
+    await _sendControlReply(reply);
+    await _signals.controlCommandCompleted(
+      _workerInfoSnapshot,
+      command,
+      status: reply.status,
+      response: reply.payload.isNotEmpty ? reply.payload : null,
+      error: reply.error,
+    );
   }
 
   Future<void> _sendControlReply(ControlReplyMessage reply) async {
@@ -2176,6 +2165,24 @@ class Worker {
     final pool = TaskIsolatePool(
       size: _currentConcurrency,
       onRecycle: _handleIsolateRecycle,
+      onSpawned: (isolateId) {
+        unawaited(
+          _signals.workerChildLifecycle(
+            _workerInfoSnapshot,
+            isolateId,
+            initializing: true,
+          ),
+        );
+      },
+      onDisposed: (isolateId) {
+        unawaited(
+          _signals.workerChildLifecycle(
+            _workerInfoSnapshot,
+            isolateId,
+            initializing: false,
+          ),
+        );
+      },
     );
     pool.updateRecyclePolicy(
       maxTasksPerIsolate: lifecycleConfig.maxTasksPerIsolate,

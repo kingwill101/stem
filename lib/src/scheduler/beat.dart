@@ -8,6 +8,7 @@ import '../core/envelope.dart';
 import '../observability/logging.dart';
 import '../observability/metrics.dart';
 import '../security/signing.dart';
+import '../signals/emitter.dart';
 
 class Beat {
   Beat({
@@ -28,6 +29,8 @@ class Beat {
   final PayloadSigner? signer;
 
   final Random _random;
+  static const StemSignalEmitter _signals =
+      StemSignalEmitter(defaultSender: 'beat');
 
   Timer? _timer;
   bool _running = false;
@@ -85,6 +88,7 @@ class Beat {
       );
     }
     for (final entry in dueEntries) {
+      await _signals.scheduleEntryDue(entry, now);
       await _dispatch(entry, now);
     }
   }
@@ -199,6 +203,12 @@ class Beat {
           }),
         );
       }
+      await _signals.scheduleEntryDispatched(
+        entry,
+        scheduledFor: scheduledFor,
+        executedAt: executedAt,
+        drift: drift,
+      );
     } catch (error, stack) {
       stemLogger.warning(
         'Beat dispatch failed for {schedule}: {error}',
@@ -233,6 +243,12 @@ class Beat {
           }),
         );
       }
+      await _signals.scheduleEntryFailed(
+        entry,
+        scheduledFor: scheduledFor,
+        error: error,
+        stackTrace: stack,
+      );
     } finally {
       renewalTimer?.cancel();
       await lock?.release();

@@ -206,6 +206,98 @@ void main() {
       await beatB.stop();
       broker.dispose();
     });
+
+    test('emits scheduler signals on successful dispatch', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+      final broker = InMemoryBroker();
+      final store = InMemoryScheduleStore();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        lockStore: InMemoryLockStore(),
+      );
+
+      await store.upsert(
+        ScheduleEntry(
+          id: 'demo',
+          taskName: 'noop',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(milliseconds: 10)),
+        ),
+      );
+
+      final due = Completer<void>();
+      final dispatched = Completer<ScheduleEntryDispatchedPayload>();
+      final subs = <SignalSubscription>[
+        StemSignals.onScheduleEntryDue((payload, _) {
+          if (payload.entry.id == 'demo' && !due.isCompleted) {
+            due.complete();
+          }
+        }),
+        StemSignals.onScheduleEntryDispatched((payload, _) {
+          if (payload.entry.id == 'demo' && !dispatched.isCompleted) {
+            dispatched.complete(payload);
+          }
+        }),
+      ];
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await beat.runOnce();
+
+      await due.future.timeout(const Duration(seconds: 1));
+      final dispatchedPayload =
+          await dispatched.future.timeout(const Duration(seconds: 1));
+      expect(dispatchedPayload.entry.id, 'demo');
+
+      for (final sub in subs) {
+        sub.cancel();
+      }
+      await beat.stop();
+      broker.dispose();
+    });
+
+    test('emits scheduler failure signal when publish fails', () async {
+      StemSignals.configure(configuration: const StemSignalConfiguration());
+      final broker = _ThrowingBroker();
+      final store = InMemoryScheduleStore();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        lockStore: InMemoryLockStore(),
+      );
+
+      await store.upsert(
+        ScheduleEntry(
+          id: 'failing',
+          taskName: 'noop',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(milliseconds: 10)),
+        ),
+      );
+
+      final failure = Completer<ScheduleEntryFailedPayload>();
+      final subs = <SignalSubscription>[
+        StemSignals.onScheduleEntryFailed((payload, _) {
+          if (payload.entry.id == 'failing' && !failure.isCompleted) {
+            failure.complete(payload);
+          }
+        }),
+      ];
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      await beat.runOnce();
+
+      final failedPayload =
+          await failure.future.timeout(const Duration(seconds: 1));
+      expect(failedPayload.entry.id, 'failing');
+      expect(failedPayload.error, isA<StateError>());
+
+      for (final sub in subs) {
+        sub.cancel();
+      }
+      await beat.stop();
+      broker.dispose();
+    });
   });
 }
 
@@ -221,4 +313,20 @@ class _NoopTask implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {}
+}
+
+class _ThrowingBroker extends InMemoryBroker {
+  bool _throwOnce = true;
+
+  @override
+  Future<void> publish(
+    Envelope envelope, {
+    RoutingInfo? routing,
+  }) {
+    if (_throwOnce) {
+      _throwOnce = false;
+      return Future.error(StateError('publish failed'));
+    }
+    return super.publish(envelope, routing: routing);
+  }
 }

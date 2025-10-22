@@ -28,6 +28,8 @@ export 'src/scheduler/redis_schedule_store.dart';
 export 'src/scheduler/schedule_spec.dart';
 export 'src/signals/payloads.dart';
 export 'src/signals/signal.dart';
+export 'src/signals/emitter.dart';
+export 'src/signals/middleware.dart';
 export 'src/signals/stem_signals.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';

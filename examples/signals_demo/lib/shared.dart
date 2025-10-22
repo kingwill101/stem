@@ -145,6 +145,59 @@ List<SignalSubscription> registerSignalLogging(String label) {
         'reason': payload.reason,
       });
     }),
+    StemSignals.workerHeartbeat.connect((payload, _) {
+      log('worker_heartbeat', {
+        'worker': payload.worker.id,
+        'timestamp': payload.timestamp.toIso8601String(),
+      });
+    }),
+    StemSignals.workerChildInit.connect((payload, _) {
+      log('worker_child_init', {
+        'worker': payload.worker.id,
+        'isolateId': payload.isolateId,
+      });
+    }),
+    StemSignals.workerChildShutdown.connect((payload, _) {
+      log('worker_child_shutdown', {
+        'worker': payload.worker.id,
+        'isolateId': payload.isolateId,
+      });
+    }),
+    StemSignals.scheduleEntryDue.connect((payload, _) {
+      log('schedule_entry_due', {
+        'id': payload.entry.id,
+        'task': payload.entry.taskName,
+      });
+    }),
+    StemSignals.scheduleEntryDispatched.connect((payload, _) {
+      log('schedule_entry_dispatched', {
+        'id': payload.entry.id,
+        'task': payload.entry.taskName,
+        'driftMs': payload.drift.inMilliseconds,
+      });
+    }),
+    StemSignals.scheduleEntryFailed.connect((payload, _) {
+      log('schedule_entry_failed', {
+        'id': payload.entry.id,
+        'task': payload.entry.taskName,
+        'error': payload.error.toString(),
+      });
+    }),
+    StemSignals.controlCommandReceived.connect((payload, _) {
+      log('control_command_received', {
+        'worker': payload.worker.id,
+        'type': payload.command.type,
+        'requestId': payload.command.requestId,
+      });
+    }),
+    StemSignals.controlCommandCompleted.connect((payload, _) {
+      log('control_command_completed', {
+        'worker': payload.worker.id,
+        'type': payload.command.type,
+        'requestId': payload.command.requestId,
+        'status': payload.status,
+      });
+    }),
   ];
 
   return subscriptions;

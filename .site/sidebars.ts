@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
     { type: "doc", id: "roadmap", label: "Roadmap" },
     { type: "doc", id: "recovery-guide", label: "Observability & Recovery" },
     { type: "doc", id: "observability-runbook", label: "Observability Runbook" },
+    { type: "doc", id: "signals", label: "Stem Signals" },
     { type: "doc", id: "canvas-guide", label: "Canvas Patterns" },
     { type: "doc", id: "worker-control", label: "Worker Control" },
     { type: "doc", id: "scheduler-parity", label: "Scheduler Parity" },
