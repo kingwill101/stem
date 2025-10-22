@@ -1,7 +1,8 @@
 ---
-id: signals
 title: Stem Signals
-sidebar_label: Stem Signals
+sidebar_label: Signals
+sidebar_position: 4
+slug: /core-concepts/signals
 ---
 
 Stem now exposes Celery-style lifecycle signals so instrumentation can react to
@@ -81,6 +82,17 @@ docker compose up --build
 
 streams every signal as structured JSON, showcasing retries, failures, worker
 heartbeats, scheduler drift, and control commands.
+
+### Retry-Focused Walkthrough
+
+For a minimal reproduction of retry cadence, try `examples/retry_task`. The
+worker connects to Redis with `blockTime=100ms`, `claimInterval=200ms`, and
+`defaultVisibilityTimeout=2s`, and uses
+`ExponentialJitterRetryStrategy(base: 200ms, max: 1s)` so each retry happens in
+under a second. The producer enqueues a single task with `maxRetries=2`, and the
+console prints every `task_retry`, `task_failed`, and `task_postrun` signal.
+Experiment with the strategy or Redis timings to see how they shape retry
+frequency.
 
 ## Celery Comparison
 

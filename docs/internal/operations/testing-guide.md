@@ -1,6 +1,8 @@
 ---
-id: testing-guide
 title: Testing & Quality Gates
+sidebar_label: Testing
+sidebar_position: 5
+slug: /operations/testing
 ---
 
 Stem uses a consolidated quality script to keep local workflows aligned with CI.

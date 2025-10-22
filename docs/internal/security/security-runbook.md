@@ -1,7 +1,8 @@
 ---
-id: security-runbook
 title: Security Runbook
-sidebar_label: Security Runbook
+sidebar_label: Runbook
+sidebar_position: 3
+slug: /security/runbook
 ---
 
 ## Payload Signing Key Rotation

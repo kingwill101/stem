@@ -1,7 +1,8 @@
 ---
-id: daemonization
 title: Daemonization Guide
 sidebar_label: Daemonization
+sidebar_position: 2
+slug: /workers/daemonization
 ---
 
 Stem now ships opinionated service templates and CLI helpers so you can manage

@@ -95,16 +95,16 @@ const config: Config = {
           title: 'Docs',
           items: [
             {
-              label: 'Developer Guide',
-              to: '/docs/developer-guide',
+              label: 'Quick Start',
+              to: '/docs/getting-started/quick-start',
             },
             {
-              label: 'Operations Guide',
-              to: '/docs/operations-guide',
+              label: 'Producer API',
+              to: '/docs/core-concepts/producer',
             },
             {
-              label: 'Scaling Playbook',
-              to: '/docs/scaling-playbook',
+              label: 'Programmatic Workers',
+              to: '/docs/workers/programmatic',
             },
           ],
         },

@@ -1,7 +1,8 @@
 ---
-id: release-process
 title: Release Process
-sidebar_label: Release Process
+sidebar_label: Releases
+sidebar_position: 3
+slug: /deployment/releases
 ---
 
 This guide covers preparation, versioning, and post-release steps for Stem.
@@ -36,7 +37,7 @@ This guide covers preparation, versioning, and post-release steps for Stem.
 
 ## Migration Notes
 
-- Document breaking changes in the release notes and the [Developer Guide](developer-guide.md).
+- Document breaking changes in the release notes and the [Developer Environment](../getting-started/developer-environment.md) guide.
 - Provide upgrade snippets (`before`/`after`) for significant API shifts.
 - Schedule a docs update walkthrough with maintainers for major releases.
 

@@ -1,7 +1,8 @@
 ---
-id: recovery-guide
 title: Observability & Recovery
-sidebar_label: Observability & Recovery
+sidebar_label: Recovery
+sidebar_position: 4
+slug: /operations/recovery
 ---
 
 This guide covers day-to-day diagnostics for Stem deployments: how to inspect

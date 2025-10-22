@@ -1,7 +1,8 @@
 ---
-id: worker-control
 title: Worker Control
-sidebar_label: Worker Control
+sidebar_label: Worker Control CLI
+sidebar_position: 1
+slug: /workers/control
 ---
 
 Stem exposes a broker-backed control plane so operators can inspect, revoke, and
@@ -288,7 +289,6 @@ export STEM_REVOKE_STORE_URL=postgres://stem:secret@db:5432/stem
 
 ## Additional Resources
 
-- [Operations Guide](./operations-guide.md) – configuration, monitoring, and
-  day-to-day runbooks (includes a Worker Control section).
-- [Scaling Playbook](./scaling-playbook.md) – autoscaling and capacity planning.
 - `stem worker --help` – built-in CLI usage for each subcommand.
+- The `examples/` directory in the Stem repository demonstrates control
+  commands alongside worker lifecycle signals.

@@ -1,7 +1,8 @@
 ---
-id: security-checklist
 title: Security Checklist
-sidebar_label: Security Checklist
+sidebar_label: Checklist
+sidebar_position: 1
+slug: /security/checklist
 ---
 
 ## Transport & Secrets

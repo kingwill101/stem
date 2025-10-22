@@ -1,7 +1,8 @@
 ---
-id: scaling-playbook
 title: Scaling Playbook
-sidebar_label: Scaling Playbook
+sidebar_label: Scaling
+sidebar_position: 3
+slug: /operations/scaling
 ---
 
 This playbook describes how to size workers, plan horizontal scaling, and tune shared infrastructure as Stem adoption grows.

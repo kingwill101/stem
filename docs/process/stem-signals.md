@@ -87,6 +87,23 @@ docker compose up --build
 prints each signal as structured JSON, illustrating retries, failures, worker
 heartbeats, control commands, and scheduler events with no additional setup.
 
+### Focused Retry Demo
+
+Need to watch a failing task exhaust its retries quickly? `examples/retry_task`
+launches a single worker plus producer that enqueues one task configured with
+`maxRetries = 2`. The worker:
+
+- sets `ExponentialJitterRetryStrategy(base: 200ms, max: 1s)` so retry delays
+  stay sub-second, and
+- connects to Redis with `blockTime=100ms`, `claimInterval=200ms`, and
+  `defaultVisibilityTimeout=2s` so delayed entries are drained almost
+  immediately.
+
+The console output shows every `task_retry`, `task_failed`, and `task_postrun`
+signal, along with the calculated `nextRunAt` timestamp. Tweak those values to
+see how backoff and broker polling affect retry cadence (e.g., raise `base` to
+slow down, or increase `maxRetries` in `TaskOptions` to observe more attempts).
+
 ## Celery Parity Snapshot
 
 | Celery | Stem | Notes |

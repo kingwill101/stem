@@ -1,7 +1,8 @@
 ---
-id: observability-runbook
 title: Observability Runbook
-sidebar_label: Observability Runbook
+sidebar_label: Observability
+sidebar_position: 2
+slug: /operations/observability
 ---
 
 ## SLOs

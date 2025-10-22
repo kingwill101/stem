@@ -1,7 +1,8 @@
 ---
-id: operations-guide
 title: Operations Guide
-sidebar_label: Operations Guide
+sidebar_label: Operations
+sidebar_position: 1
+slug: /operations/guide
 ---
 
 This guide covers environment configuration, deployment patterns, monitoring, and day-to-day operations for Stem clusters.

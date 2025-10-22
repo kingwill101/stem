@@ -1,7 +1,8 @@
 ---
-id: scheduler-parity
 title: Scheduler Parity
-sidebar_label: Scheduler Parity
+sidebar_label: Parity & Features
+sidebar_position: 1
+slug: /scheduler/parity
 ---
 
 Stem's scheduler now matches Celery Beat's core capabilities while preserving

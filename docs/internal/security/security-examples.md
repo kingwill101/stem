@@ -1,7 +1,8 @@
 ---
-id: security-examples
 title: Security Configuration Examples
-sidebar_label: Security Examples
+sidebar_label: Examples
+sidebar_position: 2
+slug: /security/examples
 ---
 
 These scenarios illustrate how to wire signing and transport security for Stem

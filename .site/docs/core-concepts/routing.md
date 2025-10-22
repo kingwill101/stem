@@ -1,7 +1,8 @@
 ---
-id: routing-config
 title: Routing Configuration
-sidebar_label: Routing Configuration
+sidebar_label: Routing
+sidebar_position: 3
+slug: /core-concepts/routing
 ---
 
 Stem workers and publishers resolve queue and broadcast targets from the routing
@@ -9,6 +10,12 @@ file referenced by `STEM_ROUTING_CONFIG`. The file is parsed into a typed
 `RoutingConfig`, validated by the `RoutingRegistry`, and used by helpers such as
 `buildWorkerSubscription`. When no file is supplied Stem falls back to a legacy
 single-queue configuration.
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs>
+<TabItem value="yaml" label="config/routing.yaml">
 
 ```yaml
 default_queue:
@@ -39,6 +46,33 @@ routes:
       type: broadcast
       name: control
 ```
+
+</TabItem>
+<TabItem value="dart" label="lib/routing.dart">
+
+```dart
+import 'package:stem/stem.dart';
+
+Future<RoutingRegistry> loadRouting() async {
+  final config = await RoutingConfigLoader().loadFromYamlFile(
+    'config/routing.yaml',
+  );
+  return RoutingRegistry(config);
+}
+
+final registry = RoutingRegistry(
+  RoutingConfig(
+    defaultQueue: DefaultQueue(alias: 'default', queue: 'primary'),
+    queues: {'primary': QueueSpec()},
+    routes: [
+      RouteSpec(match: RouteMatch(task: 'reports.*'), target: QueueTarget('primary')),
+    ],
+  ),
+);
+```
+
+</TabItem>
+</Tabs>
 
 ## Queue priority ranges
 
@@ -79,3 +113,56 @@ routes:
 - The helper `buildWorkerSubscription` combines `StemConfig` defaults with
   optional overrides and is used by `stem worker multi` to honour `--queue`
   and `--broadcast`.
+
+## Using the config in Dart
+
+Load the routing file once during service start-up and reuse the registry across
+producers and workers:
+
+```dart title="lib/routing.dart"
+import 'package:stem/stem.dart';
+
+Future<(Stem, Worker)> bootstrapStem() async {
+  final routing = await RoutingConfigLoader().loadFromYamlFile(
+    'config/routing.yaml',
+  );
+  final registry = SimpleTaskRegistry()..register(EmailTask());
+
+  final stem = Stem(
+    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
+    registry: registry,
+    backend: InMemoryResultBackend(),
+    routing: RoutingRegistry(routing),
+  );
+
+  final worker = Worker(
+    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
+    registry: registry,
+    backend: InMemoryResultBackend(),
+    routing: RoutingRegistry(routing),
+    subscription: buildWorkerSubscription(
+      config: StemConfig.fromEnvironment(),
+      registry: RoutingRegistry(routing),
+    ),
+  );
+
+  return (stem, worker);
+}
+```
+
+For lightweight services or tests, you can construct the registry inline:
+
+```dart
+final registry = RoutingRegistry(
+  RoutingConfig(
+    defaultQueue: DefaultQueue(alias: 'default', queue: 'primary'),
+    queues: {'primary': QueueSpec()},
+    routes: [
+      RouteSpec(match: RouteMatch(task: 'reports.*'), target: QueueTarget('primary')),
+    ],
+  ),
+);
+```
+
+Both approaches keep routing logic declarative while letting you evolve queue
+topology without editing code.

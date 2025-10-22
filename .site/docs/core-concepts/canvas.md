@@ -1,7 +1,8 @@
 ---
-id: canvas-guide
 title: Canvas Patterns
-sidebar_label: Canvas Patterns
+sidebar_label: Canvas
+sidebar_position: 5
+slug: /core-concepts/canvas
 ---
 
 This guide walks through Stem's task composition primitives—chains, groups, and

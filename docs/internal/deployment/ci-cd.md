@@ -1,7 +1,8 @@
 ---
-id: ci-cd
 title: CI/CD Integration
-sidebar_label: CI/CD Integration
+sidebar_label: CI/CD
+sidebar_position: 1
+slug: /deployment/ci-cd
 ---
 
 Follow these practices to keep Stem projects healthy in automation.

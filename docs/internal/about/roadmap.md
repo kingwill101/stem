@@ -1,7 +1,8 @@
 ---
-id: roadmap
 title: Stem Roadmap & Milestones
 sidebar_label: Roadmap
+slug: /about/roadmap
+sidebar_position: 1
 ---
 
 ## Milestones

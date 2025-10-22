@@ -1,7 +1,8 @@
 ---
-id: deployment-hardening
 title: Deployment Hardening
-sidebar_label: Deployment Hardening
+sidebar_label: Hardening
+sidebar_position: 2
+slug: /deployment/hardening
 ---
 
 This checklist captures production-ready defaults for Stem services—producers,

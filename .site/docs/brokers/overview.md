@@ -1,7 +1,8 @@
 ---
-id: broker-comparison
 title: Broker Comparison
-sidebar_label: Broker Comparison
+sidebar_label: Broker Overview
+sidebar_position: 0
+slug: /brokers
 ---
 
 Stem ships with multiple broker adapters and planned integrations. Use this
