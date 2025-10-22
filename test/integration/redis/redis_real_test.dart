@@ -133,7 +133,12 @@ void main() async {
       scheduledFor: executedAt,
       executedAt: executedAt,
     );
-    await scheduleStore.upsert(entry.copyWith(lastRunAt: DateTime.now()));
+    final latest = await scheduleStore.get(entry.id);
+    expect(latest, isNotNull);
+    expect(latest!.version, greaterThan(0));
+    await scheduleStore.upsert(
+      latest.copyWith(lastRunAt: DateTime.now()),
+    );
     await scheduleStore.remove(entry.id);
   });
 

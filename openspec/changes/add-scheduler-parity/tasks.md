@@ -21,4 +21,4 @@
 
 ## 6. Validation
 - [x] 6.1 `dart format`, `dart analyze`, `dart test`, plus integration tests covering new schedule types and CRUD operations.
-- [ ] 6.2 `openspec validate add-scheduler-parity --strict` before review.
+- [x] 6.2 `openspec validate add-scheduler-parity --strict` before review.

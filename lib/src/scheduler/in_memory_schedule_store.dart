@@ -46,7 +46,17 @@ class InMemoryScheduleStore implements ScheduleStore {
     } else {
       next ??= entry.lastRunAt ?? now;
     }
-    final updated = entry.copyWith(nextRunAt: next);
+    final existing = _entries[entry.id];
+    final currentVersion = existing?.entry.version ?? 0;
+    if (existing != null && entry.version != currentVersion) {
+      throw ScheduleConflictException(
+        entry.id,
+        expectedVersion: entry.version,
+        actualVersion: currentVersion,
+      );
+    }
+    final nextVersion = existing == null ? 1 : currentVersion + 1;
+    final updated = entry.copyWith(nextRunAt: next, version: nextVersion);
     _entries[entry.id] = _ScheduleState(updated, next, locked: false);
   }
 
@@ -114,9 +124,11 @@ class InMemoryScheduleStore implements ScheduleStore {
       }
     }
     next ??= executedAt;
+    final nextVersion = state.entry.version + 1;
     state.entry = updatedEntry.copyWith(
       nextRunAt: next,
       enabled: enabled,
+      version: nextVersion,
     );
     state.nextRun = next;
     state.locked = false;

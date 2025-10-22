@@ -133,6 +133,8 @@ class RedisScheduleStore implements ScheduleStore {
         : null;
     DateTime? parseDate(String? raw) =>
         raw != null && raw.isNotEmpty ? DateTime.parse(raw) : null;
+    final version = data['version'];
+    final parsedVersion = version != null ? int.tryParse(version) ?? 0 : 0;
     return ScheduleEntry(
       id: id,
       taskName: data['taskName'] ?? '',
@@ -156,6 +158,7 @@ class RedisScheduleStore implements ScheduleStore {
       drift: parseDuration(data['driftMs']),
       expireAt: parseDate(data['expireAt']),
       meta: decodeJson(data['meta']),
+      version: parsedVersion,
     );
   }
 
@@ -226,54 +229,90 @@ class RedisScheduleStore implements ScheduleStore {
     final encodedKwargs = jsonEncode(entry.kwargs);
     final encodedSpec = jsonEncode(entry.spec.toJson());
     final encodedMeta = jsonEncode(entry.meta);
-    await _send([
-      'HSET',
-      _entryKey(entry.id),
-      'taskName',
-      entry.taskName,
-      'queue',
-      entry.queue,
-      'spec',
-      encodedSpec,
-      'args',
-      encodedArgs,
-      'kwargs',
-      encodedKwargs,
-      'enabled',
-      entry.enabled ? 'true' : 'false',
-      'jitterMs',
-      entry.jitter?.inMilliseconds.toString() ?? '',
-      'lastRunAt',
-      entry.lastRunAt?.toIso8601String() ?? '',
-      'nextRunAt',
-      nextRun.toIso8601String(),
-      'lastJitterMs',
-      entry.lastJitter?.inMilliseconds.toString() ?? '',
-      'lastError',
-      entry.lastError ?? '',
-      'timezone',
-      entry.timezone ?? '',
-      'totalRunCount',
-      entry.totalRunCount.toString(),
-      'lastSuccessAt',
-      entry.lastSuccessAt?.toIso8601String() ?? '',
-      'lastErrorAt',
-      entry.lastErrorAt?.toIso8601String() ?? '',
-      'driftMs',
-      entry.drift?.inMilliseconds.toString() ?? '',
-      'expireAt',
-      entry.expireAt?.toIso8601String() ?? '',
-      'meta',
-      encodedMeta,
-    ]);
+    final key = _entryKey(entry.id);
+    final lockKey = _lockKey(entry.id);
+    await _send(['WATCH', key]);
+    var watchActive = true;
+    try {
+      final versionRaw = await _send(['HGET', key, 'version']);
+      final currentVersion = versionRaw == null
+          ? 0
+          : versionRaw is int
+              ? versionRaw
+              : int.tryParse(versionRaw.toString()) ?? 0;
+      if (versionRaw != null && entry.version != currentVersion) {
+        throw ScheduleConflictException(
+          entry.id,
+          expectedVersion: entry.version,
+          actualVersion: currentVersion,
+        );
+      }
+      final nextVersion = currentVersion + 1;
 
-    await _send([
-      'ZADD',
-      _indexKey,
-      nextRun.millisecondsSinceEpoch.toString(),
-      entry.id,
-    ]);
-    await _send(['DEL', _lockKey(entry.id)]);
+      await _send(['MULTI']);
+      await _send([
+        'HSET',
+        key,
+        'taskName',
+        entry.taskName,
+        'queue',
+        entry.queue,
+        'spec',
+        encodedSpec,
+        'args',
+        encodedArgs,
+        'kwargs',
+        encodedKwargs,
+        'enabled',
+        entry.enabled ? 'true' : 'false',
+        'jitterMs',
+        entry.jitter?.inMilliseconds.toString() ?? '',
+        'lastRunAt',
+        entry.lastRunAt?.toIso8601String() ?? '',
+        'nextRunAt',
+        nextRun.toIso8601String(),
+        'lastJitterMs',
+        entry.lastJitter?.inMilliseconds.toString() ?? '',
+        'lastError',
+        entry.lastError ?? '',
+        'timezone',
+        entry.timezone ?? '',
+        'totalRunCount',
+        entry.totalRunCount.toString(),
+        'lastSuccessAt',
+        entry.lastSuccessAt?.toIso8601String() ?? '',
+        'lastErrorAt',
+        entry.lastErrorAt?.toIso8601String() ?? '',
+        'driftMs',
+        entry.drift?.inMilliseconds.toString() ?? '',
+        'expireAt',
+        entry.expireAt?.toIso8601String() ?? '',
+        'meta',
+        encodedMeta,
+        'version',
+        nextVersion.toString(),
+      ]);
+      await _send([
+        'ZADD',
+        _indexKey,
+        nextRun.millisecondsSinceEpoch.toString(),
+        entry.id,
+      ]);
+      await _send(['DEL', lockKey]);
+      final execResult = await _send(['EXEC']);
+      watchActive = false;
+      if (execResult == null) {
+        throw ScheduleConflictException(
+          entry.id,
+          expectedVersion: entry.version,
+          actualVersion: currentVersion,
+        );
+      }
+    } finally {
+      if (watchActive) {
+        await _send(['UNWATCH']);
+      }
+    }
   }
 
   @override
@@ -316,83 +355,110 @@ class RedisScheduleStore implements ScheduleStore {
     DateTime? nextRunAt,
     Duration? drift,
   }) async {
-    final data = await _send(['HGETALL', _entryKey(id)]);
-    if (data is! List || data.isEmpty) {
-      await _send(['DEL', _lockKey(id)]);
-      return;
-    }
-    final map = _listToMap(data);
-    final entry = _entryFromMap(id, map);
-    final resolvedSuccess = success && lastError == null;
-    final updated = entry.copyWith(
-      lastRunAt: executedAt,
-      lastError: lastError,
-      lastJitter: jitter,
-      lastSuccessAt: resolvedSuccess ? executedAt : entry.lastSuccessAt,
-      lastErrorAt: resolvedSuccess ? entry.lastErrorAt : executedAt,
-      totalRunCount: entry.totalRunCount + 1,
-      drift: drift ?? entry.drift,
-    );
-    DateTime? next = nextRunAt;
-    var enabled = updated.enabled;
-    if (next == null && enabled) {
-      try {
-        next = _calculator.nextRun(
-          updated,
-          executedAt,
-          includeJitter: false,
-        );
-      } catch (_) {
-        next = executedAt;
+    final key = _entryKey(id);
+    final lockKey = _lockKey(id);
+    await _send(['WATCH', key]);
+    var watchActive = true;
+    var committed = false;
+    try {
+      final data = await _send(['HGETALL', key]);
+      if (data is! List || data.isEmpty) {
+        await _send(['UNWATCH']);
+        watchActive = false;
+        await _send(['DEL', lockKey]);
+        return;
       }
-    }
-    if (updated.expireAt != null && !executedAt.isBefore(updated.expireAt!)) {
-      enabled = false;
-    }
-    if (updated.spec is ClockedScheduleSpec) {
-      final spec = updated.spec as ClockedScheduleSpec;
-      if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+      final map = _listToMap(data);
+      final entry = _entryFromMap(id, map);
+      final resolvedSuccess = success && lastError == null;
+      final updated = entry.copyWith(
+        lastRunAt: executedAt,
+        lastError: lastError,
+        lastJitter: jitter,
+        lastSuccessAt: resolvedSuccess ? executedAt : entry.lastSuccessAt,
+        lastErrorAt: resolvedSuccess ? entry.lastErrorAt : executedAt,
+        totalRunCount: entry.totalRunCount + 1,
+        drift: drift ?? entry.drift,
+      );
+      DateTime? next = nextRunAt;
+      var enabled = updated.enabled;
+      if (next == null && enabled) {
+        try {
+          next = _calculator.nextRun(
+            updated,
+            executedAt,
+            includeJitter: false,
+          );
+        } catch (_) {
+          next = executedAt;
+        }
+      }
+      if (updated.expireAt != null && !executedAt.isBefore(updated.expireAt!)) {
         enabled = false;
       }
+      if (updated.spec is ClockedScheduleSpec) {
+        final spec = updated.spec as ClockedScheduleSpec;
+        if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+          enabled = false;
+        }
+      }
+      next ??= executedAt;
+      final nextVersion = entry.version + 1;
+
+      await _send(['MULTI']);
+      await _send([
+        'HSET',
+        key,
+        'lastRunAt',
+        executedAt.toIso8601String(),
+        'nextRunAt',
+        next.toIso8601String(),
+        'lastJitterMs',
+        jitter?.inMilliseconds.toString() ?? '',
+        'lastError',
+        lastError ?? '',
+        'enabled',
+        enabled ? 'true' : 'false',
+        'totalRunCount',
+        updated.totalRunCount.toString(),
+        'lastSuccessAt',
+        updated.lastSuccessAt?.toIso8601String() ?? '',
+        'lastErrorAt',
+        updated.lastErrorAt?.toIso8601String() ?? '',
+        'driftMs',
+        updated.drift?.inMilliseconds.toString() ?? '',
+        'version',
+        nextVersion.toString(),
+      ]);
+      await _send([
+        'ZADD',
+        _indexKey,
+        next.millisecondsSinceEpoch.toString(),
+        id,
+      ]);
+      await _send(['DEL', lockKey]);
+      final execResult = await _send(['EXEC']);
+      watchActive = false;
+      if (execResult == null) {
+        await _send(['DEL', lockKey]);
+        return;
+      }
+      committed = true;
+    } finally {
+      if (watchActive) {
+        await _send(['UNWATCH']);
+      }
+      if (committed) {
+        await _appendHistory(
+          id: id,
+          scheduledFor: scheduledFor,
+          executedAt: executedAt,
+          success: success && lastError == null,
+          runDuration: runDuration,
+          error: lastError,
+        );
+      }
     }
-    next ??= executedAt;
-    await _send([
-      'HSET',
-      _entryKey(id),
-      'lastRunAt',
-      executedAt.toIso8601String(),
-      'nextRunAt',
-      next.toIso8601String(),
-      'lastJitterMs',
-      jitter?.inMilliseconds.toString() ?? '',
-      'lastError',
-      lastError ?? '',
-      'enabled',
-      enabled ? 'true' : 'false',
-      'totalRunCount',
-      updated.totalRunCount.toString(),
-      'lastSuccessAt',
-      updated.lastSuccessAt?.toIso8601String() ?? '',
-      'lastErrorAt',
-      updated.lastErrorAt?.toIso8601String() ?? '',
-      'driftMs',
-      updated.drift?.inMilliseconds.toString() ?? '',
-    ]);
-    await _send([
-      'ZADD',
-      _indexKey,
-      next.millisecondsSinceEpoch.toString(),
-      id,
-    ]);
-    await _send(['DEL', _lockKey(id)]);
-    await _appendHistory(
-      id: id,
-      scheduledFor: scheduledFor,
-      executedAt: executedAt,
-      success: resolvedSuccess,
-      runDuration: runDuration,
-      error: lastError,
-    );
   }
 
   Future<void> _appendHistory({

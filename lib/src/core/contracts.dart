@@ -386,6 +386,7 @@ class ScheduleEntry {
     this.expireAt,
     this.createdAt,
     this.updatedAt,
+    this.version = 0,
     Map<String, Object?>? meta,
   })  : spec = spec,
         args = Map.unmodifiable(args ?? const {}),
@@ -455,6 +456,9 @@ class ScheduleEntry {
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
 
+  /// Optimistic locking version assigned by the underlying store.
+  final int version;
+
   static const Object _sentinel = Object();
 
   ScheduleEntry copyWith({
@@ -478,6 +482,7 @@ class ScheduleEntry {
     Object? expireAt = _sentinel,
     Object? createdAt = _sentinel,
     Object? updatedAt = _sentinel,
+    int? version,
     Map<String, Object?>? meta,
   }) {
     return ScheduleEntry(
@@ -509,6 +514,7 @@ class ScheduleEntry {
           createdAt == _sentinel ? this.createdAt : createdAt as DateTime?,
       updatedAt:
           updatedAt == _sentinel ? this.updatedAt : updatedAt as DateTime?,
+      version: version ?? this.version,
       meta: meta ?? this.meta,
     );
   }
@@ -534,6 +540,7 @@ class ScheduleEntry {
         'expireAt': expireAt?.toIso8601String(),
         if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
         if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+        'version': version,
         'meta': meta,
       };
 
@@ -566,6 +573,7 @@ class ScheduleEntry {
       expireAt: _parseOptionalDate(json['expireAt']),
       createdAt: _parseOptionalDate(json['createdAt']),
       updatedAt: _parseOptionalDate(json['updatedAt']),
+      version: (json['version'] as num?)?.toInt() ?? 0,
       meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
     );
   }
@@ -610,6 +618,28 @@ abstract class ScheduleStore {
     DateTime? nextRunAt,
     Duration? drift,
   });
+}
+
+/// Thrown when a schedule mutation conflicts with a newer store version.
+class ScheduleConflictException implements Exception {
+  ScheduleConflictException(
+    this.id, {
+    required this.expectedVersion,
+    required this.actualVersion,
+  });
+
+  /// Identifier of the conflicted schedule entry.
+  final String id;
+
+  /// Version the caller attempted to update.
+  final int expectedVersion;
+
+  /// Version currently persisted in the store.
+  final int actualVersion;
+
+  @override
+  String toString() =>
+      'ScheduleConflictException(id: $id, expected: $expectedVersion, actual: $actualVersion)';
 }
 
 /// Configuration options attached to task handlers.

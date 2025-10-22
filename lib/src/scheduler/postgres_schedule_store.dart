@@ -27,7 +27,8 @@ class PostgresScheduleStore implements ScheduleStore {
       'e.id, e.task_name, e.queue, e.spec, e.args, e.kwargs, e.enabled, '
       'e.jitter_ms, e.last_run_at, e.next_run_at, e.last_jitter_ms, '
       'e.last_error, e.timezone, e.total_run_count, e.last_success_at, '
-      'e.last_error_at, e.drift_ms, e.expire_at, e.meta, e.created_at, e.updated_at';
+      'e.last_error_at, e.drift_ms, e.expire_at, e.meta, e.created_at, '
+      'e.updated_at, e.version';
 
   bool _closed = false;
 
@@ -126,6 +127,11 @@ class PostgresScheduleStore implements ScheduleStore {
         conn,
         'ALTER TABLE '
         '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS expire_at TIMESTAMPTZ',
+      );
+      await _ensureColumn(
+        conn,
+        'ALTER TABLE '
+        '$schema.${prefix}schedule_entries ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0',
       );
 
       await conn.execute('''
@@ -227,6 +233,9 @@ class PostgresScheduleStore implements ScheduleStore {
       meta: _decodeMap(row[18]),
       createdAt: row.length > 19 ? row[19] as DateTime? : null,
       updatedAt: row.length > 20 ? row[20] as DateTime? : null,
+      version: row.length > 21
+          ? (row[21] as int?) ?? (row[21] is num ? (row[21] as num).toInt() : 0)
+          : 0,
     );
   }
 
@@ -297,74 +306,134 @@ class PostgresScheduleStore implements ScheduleStore {
     }
 
     await _client.run((Connection conn) async {
-      final argsJson = jsonEncode(entry.args);
-      final kwargsJson = jsonEncode(entry.kwargs);
-      final specJson = jsonEncode(entry.spec.toJson());
-      final metaJson = jsonEncode(entry.meta);
+      await conn.runTx((tx) async {
+        final argsJson = jsonEncode(entry.args);
+        final kwargsJson = jsonEncode(entry.kwargs);
+        final specJson = jsonEncode(entry.spec.toJson());
+        final metaJson = jsonEncode(entry.meta);
 
-      await conn.execute(
-        Sql.named('''
-        INSERT INTO ${_entriesTable()}
-          (id, task_name, queue, spec, args, kwargs, enabled, jitter_ms,
-           last_run_at, next_run_at, last_jitter_ms, last_error, timezone, total_run_count,
-           last_success_at, last_error_at, drift_ms, expire_at, meta, updated_at)
-        VALUES
-          (@id, @task_name, @queue, @spec::jsonb, @args::jsonb, @kwargs::jsonb, @enabled, @jitter_ms,
-           @last_run_at, @next_run_at, @last_jitter_ms, @last_error, @timezone, @total_run_count,
-           @last_success_at, @last_error_at, @drift_ms, @expire_at, @meta::jsonb, NOW())
-        ON CONFLICT (id)
-        DO UPDATE SET
-          task_name = EXCLUDED.task_name,
-          queue = EXCLUDED.queue,
-          spec = EXCLUDED.spec,
-          args = EXCLUDED.args,
-          kwargs = EXCLUDED.kwargs,
-          enabled = EXCLUDED.enabled,
-          jitter_ms = EXCLUDED.jitter_ms,
-          last_run_at = EXCLUDED.last_run_at,
-          next_run_at = EXCLUDED.next_run_at,
-          last_jitter_ms = EXCLUDED.last_jitter_ms,
-          last_error = EXCLUDED.last_error,
-          timezone = EXCLUDED.timezone,
-          total_run_count = EXCLUDED.total_run_count,
-          last_success_at = EXCLUDED.last_success_at,
-          last_error_at = EXCLUDED.last_error_at,
-          drift_ms = EXCLUDED.drift_ms,
-          expire_at = EXCLUDED.expire_at,
-          meta = EXCLUDED.meta,
-          updated_at = NOW()
-        '''),
-        parameters: {
-          'id': entry.id,
-          'task_name': entry.taskName,
-          'queue': entry.queue,
-          'spec': specJson,
-          'args': argsJson,
-          'kwargs': kwargsJson,
-          'enabled': entry.enabled,
-          'jitter_ms': entry.jitter?.inMilliseconds,
-          'last_run_at': entry.lastRunAt,
-          'next_run_at': nextRun,
-          'last_jitter_ms': entry.lastJitter?.inMilliseconds,
-          'last_error': entry.lastError,
-          'timezone': entry.timezone,
-          'total_run_count': entry.totalRunCount,
-          'last_success_at': entry.lastSuccessAt,
-          'last_error_at': entry.lastErrorAt,
-          'drift_ms': entry.drift?.inMilliseconds,
-          'expire_at': entry.expireAt,
-          'meta': metaJson,
-        },
-      );
+        final existing = await tx.execute(
+          Sql.named('''
+            SELECT version
+            FROM ${_entriesTable()}
+            WHERE id = @id
+            FOR UPDATE
+          '''),
+          parameters: {'id': entry.id},
+        );
 
-      // Release lock if it exists
-      await conn.execute(
-        Sql.named('''
-        DELETE FROM ${_locksTable()}
-        WHERE id = @id
-        '''),
-        parameters: {'id': entry.id},
-      );
+        late final int nextVersion;
+        if (existing.isEmpty) {
+          nextVersion = 1;
+          await tx.execute(
+            Sql.named('''
+              INSERT INTO ${_entriesTable()}
+                (id, task_name, queue, spec, args, kwargs, enabled, jitter_ms,
+                 last_run_at, next_run_at, last_jitter_ms, last_error, timezone,
+                 total_run_count, last_success_at, last_error_at, drift_ms,
+                 expire_at, meta, created_at, updated_at, version)
+              VALUES
+                (@id, @task_name, @queue, @spec::jsonb, @args::jsonb, @kwargs::jsonb,
+                 @enabled, @jitter_ms, @last_run_at, @next_run_at, @last_jitter_ms,
+                 @last_error, @timezone, @total_run_count, @last_success_at,
+                 @last_error_at, @drift_ms, @expire_at, @meta::jsonb, NOW(), NOW(),
+                 @version)
+            '''),
+            parameters: {
+              'id': entry.id,
+              'task_name': entry.taskName,
+              'queue': entry.queue,
+              'spec': specJson,
+              'args': argsJson,
+              'kwargs': kwargsJson,
+              'enabled': entry.enabled,
+              'jitter_ms': entry.jitter?.inMilliseconds,
+              'last_run_at': entry.lastRunAt,
+              'next_run_at': nextRun,
+              'last_jitter_ms': entry.lastJitter?.inMilliseconds,
+              'last_error': entry.lastError,
+              'timezone': entry.timezone,
+              'total_run_count': entry.totalRunCount,
+              'last_success_at': entry.lastSuccessAt,
+              'last_error_at': entry.lastErrorAt,
+              'drift_ms': entry.drift?.inMilliseconds,
+              'expire_at': entry.expireAt,
+              'meta': metaJson,
+              'version': nextVersion,
+            },
+          );
+        } else {
+          final currentVersionRaw = existing.first[0];
+          final currentVersion = currentVersionRaw is int
+              ? currentVersionRaw
+              : (currentVersionRaw as num?)?.toInt() ?? 0;
+          if (entry.version != currentVersion) {
+            throw ScheduleConflictException(
+              entry.id,
+              expectedVersion: entry.version,
+              actualVersion: currentVersion,
+            );
+          }
+          nextVersion = currentVersion + 1;
+          await tx.execute(
+            Sql.named('''
+              UPDATE ${_entriesTable()}
+              SET
+                task_name = @task_name,
+                queue = @queue,
+                spec = @spec::jsonb,
+                args = @args::jsonb,
+                kwargs = @kwargs::jsonb,
+                enabled = @enabled,
+                jitter_ms = @jitter_ms,
+                last_run_at = @last_run_at,
+                next_run_at = @next_run_at,
+                last_jitter_ms = @last_jitter_ms,
+                last_error = @last_error,
+                timezone = @timezone,
+                total_run_count = @total_run_count,
+                last_success_at = @last_success_at,
+                last_error_at = @last_error_at,
+                drift_ms = @drift_ms,
+                expire_at = @expire_at,
+                meta = @meta::jsonb,
+                updated_at = NOW(),
+                version = @version
+              WHERE id = @id
+            '''),
+            parameters: {
+              'id': entry.id,
+              'task_name': entry.taskName,
+              'queue': entry.queue,
+              'spec': specJson,
+              'args': argsJson,
+              'kwargs': kwargsJson,
+              'enabled': entry.enabled,
+              'jitter_ms': entry.jitter?.inMilliseconds,
+              'last_run_at': entry.lastRunAt,
+              'next_run_at': nextRun,
+              'last_jitter_ms': entry.lastJitter?.inMilliseconds,
+              'last_error': entry.lastError,
+              'timezone': entry.timezone,
+              'total_run_count': entry.totalRunCount,
+              'last_success_at': entry.lastSuccessAt,
+              'last_error_at': entry.lastErrorAt,
+              'drift_ms': entry.drift?.inMilliseconds,
+              'expire_at': entry.expireAt,
+              'meta': metaJson,
+              'version': nextVersion,
+            },
+          );
+        }
+
+        await tx.execute(
+          Sql.named('''
+            DELETE FROM ${_locksTable()}
+            WHERE id = @id
+          '''),
+          parameters: {'id': entry.id},
+        );
+      });
     });
   }
 
@@ -464,6 +533,8 @@ class PostgresScheduleStore implements ScheduleStore {
 
         final entry = _entryFromRow(result.first);
         final bool resolvedSuccess = success && lastError == null;
+        final currentVersion = entry.version;
+        final nextVersion = currentVersion + 1;
         final updated = entry.copyWith(
           lastRunAt: executedAt,
           lastJitter: jitter,
@@ -515,7 +586,8 @@ class PostgresScheduleStore implements ScheduleStore {
           last_error_at = @last_error_at,
           drift_ms = @drift_ms,
           enabled = @enabled,
-          updated_at = NOW()
+          updated_at = NOW(),
+          version = @version
         WHERE id = @id
         '''),
           parameters: {
@@ -530,6 +602,7 @@ class PostgresScheduleStore implements ScheduleStore {
             'last_error_at': updated.lastErrorAt,
             'drift_ms': updated.drift?.inMilliseconds,
             'enabled': enabled,
+            'version': nextVersion,
           },
         );
 

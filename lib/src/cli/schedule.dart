@@ -228,7 +228,19 @@ class ScheduleApplyCommand extends Command<int> {
 
       if (scheduleCtx.store != null) {
         for (final entry in entries) {
-          await scheduleCtx.store!.upsert(entry);
+          try {
+            final existing = await scheduleCtx.store!.get(entry.id);
+            final payload = existing != null
+                ? entry.copyWith(version: existing.version)
+                : entry;
+            await scheduleCtx.store!.upsert(payload);
+          } on ScheduleConflictException catch (error) {
+            dependencies.err.writeln(
+              'Schedule "${error.id}" was modified concurrently '
+              '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
+            );
+            return 70;
+          }
         }
       } else {
         final repo = scheduleCtx.repo!;
@@ -498,7 +510,15 @@ class ScheduleEnableCommand extends Command<int> {
         }
         final updated =
             existing.copyWith(enabled: true, nextRunAt: null, lastError: null);
-        await scheduleCtx.store!.upsert(updated);
+        try {
+          await scheduleCtx.store!.upsert(updated);
+        } on ScheduleConflictException catch (error) {
+          dependencies.err.writeln(
+            'Schedule "${error.id}" was modified concurrently '
+            '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
+          );
+          return 70;
+        }
         dependencies.out.writeln('Enabled schedule "$id".');
         return 0;
       }
@@ -557,7 +577,15 @@ class ScheduleDisableCommand extends Command<int> {
           return 64;
         }
         final updated = existing.copyWith(enabled: false);
-        await scheduleCtx.store!.upsert(updated);
+        try {
+          await scheduleCtx.store!.upsert(updated);
+        } on ScheduleConflictException catch (error) {
+          dependencies.err.writeln(
+            'Schedule "${error.id}" was modified concurrently '
+            '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
+          );
+          return 70;
+        }
         dependencies.out.writeln('Disabled schedule "$id".');
         return 0;
       }

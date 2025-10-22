@@ -143,7 +143,7 @@ void main() {
     final first = await store.due(DateTime.now().toUtc());
     expect(first, hasLength(1));
 
-    final updated = entry.copyWith(
+    final updated = first.single.copyWith(
       nextRunAt: now.add(const Duration(minutes: 5)),
       meta: const {'updated': true},
     );
