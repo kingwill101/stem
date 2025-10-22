@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:async/async.dart';
 import 'package:stem/src/brokers/redis_broker.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
@@ -94,7 +95,7 @@ void main() {
         broadcastChannels: [channel],
       );
 
-      final workerOne = StreamIterator(
+      final workerOne = StreamQueue(
         workerOneBroker.consume(
           subscription,
           prefetch: 1,
@@ -102,7 +103,7 @@ void main() {
           consumerName: 'worker-one-$queue',
         ),
       );
-      final workerTwo = StreamIterator(
+      final workerTwo = StreamQueue(
         workerTwoBroker.consume(
           subscription,
           prefetch: 1,
@@ -124,24 +125,16 @@ void main() {
           routing: RoutingInfo.broadcast(channel: channel),
         );
 
-        final results = await Future.wait<bool>([
-          workerOne.moveNext().timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              fail('worker-one timed out waiting for broadcast message');
-            },
-          ),
-          workerTwo.moveNext().timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              fail('worker-two timed out waiting for broadcast message');
-            },
-          ),
-        ]);
-        expect(results.every((value) => value), isTrue);
-
-        final firstDelivery = workerOne.current;
-        final secondDelivery = workerTwo.current;
+        final firstDelivery = await workerOne.next.timeout(
+          const Duration(seconds: 10),
+          onTimeout: () =>
+              fail('worker-one timed out waiting for broadcast message'),
+        );
+        final secondDelivery = await workerTwo.next.timeout(
+          const Duration(seconds: 10),
+          onTimeout: () =>
+              fail('worker-two timed out waiting for broadcast message'),
+        );
 
         expect(firstDelivery.route.isBroadcast, isTrue);
         expect(secondDelivery.route.isBroadcast, isTrue);
@@ -157,8 +150,8 @@ void main() {
 
         await publisher.purge(queue);
       } finally {
-        await workerOne.cancel();
-        await workerTwo.cancel();
+        await workerOne.cancel(immediate: true);
+        await workerTwo.cancel(immediate: true);
       }
     } finally {
       await _safeCloseRedisBroker(publisher);
