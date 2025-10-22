@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:stem/src/brokers/redis_broker.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -18,13 +19,11 @@ void main() {
   }
 
   test('Redis broker end-to-end', () async {
-    final broker = await RedisStreamsBroker.connect(redisUrl);
-    Future<void> safeClose(RedisStreamsBroker broker) async {
-      try {
-        await broker.close();
-      } catch (_) {}
-    }
-
+    final namespace = _uniqueNamespace();
+    final broker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+    );
     try {
       final queue = _uniqueQueue();
       final first = Envelope(
@@ -69,12 +68,12 @@ void main() {
       expect(await broker.inflightCount(queue), 0);
       await broker.purge(queue);
     } finally {
-      await broker.close();
+      await _safeCloseRedisBroker(broker);
     }
   });
 
   test('Redis broadcast fan-out delivers to all subscribers', () async {
-    final namespace = 'stem-test-${DateTime.now().microsecondsSinceEpoch}';
+    final namespace = _uniqueNamespace();
     final publisher = await RedisStreamsBroker.connect(
       redisUrl,
       namespace: namespace,
@@ -87,11 +86,6 @@ void main() {
       redisUrl,
       namespace: namespace,
     );
-    Future<void> safeClose(RedisStreamsBroker broker) async {
-      try {
-        await broker.close();
-      } catch (_) {}
-    }
     try {
       final queue = _uniqueQueue();
       final channel = '${queue}_broadcast';
@@ -100,61 +94,71 @@ void main() {
         broadcastChannels: [channel],
       );
 
-      final futureOne = workerOneBroker
-          .consume(
-            subscription,
-            prefetch: 1,
-            consumerGroup: 'group-$queue',
-            consumerName: 'worker-one-$queue',
-          )
-          .first
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        fail('worker-one timed out waiting for broadcast message');
-      });
-      final futureTwo = workerTwoBroker
-          .consume(
-            subscription,
-            prefetch: 1,
-            consumerGroup: 'group-$queue',
-            consumerName: 'worker-two-$queue',
-          )
-          .first
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        fail('worker-two timed out waiting for broadcast message');
-      });
-
-      final broadcast = Envelope(
-        name: 'integration.redis.broadcast',
-        args: const {'value': 'fan-out'},
-        queue: queue,
+      final workerOne = StreamIterator(
+        workerOneBroker.consume(
+          subscription,
+          prefetch: 1,
+          consumerGroup: 'group-$queue',
+          consumerName: 'worker-one-$queue',
+        ),
       );
-
-      await publisher.publish(
-        broadcast,
-        routing: RoutingInfo.broadcast(channel: channel),
+      final workerTwo = StreamIterator(
+        workerTwoBroker.consume(
+          subscription,
+          prefetch: 1,
+          consumerGroup: 'group-$queue',
+          consumerName: 'worker-two-$queue',
+        ),
       );
+      try {
+        final broadcast = Envelope(
+          name: 'integration.redis.broadcast',
+          args: const {'value': 'fan-out'},
+          queue: queue,
+        );
 
-      final results = await Future.wait([futureOne, futureTwo]);
-      final firstDelivery = results[0];
-      final secondDelivery = results[1];
+        await publisher.publish(
+          broadcast,
+          routing: RoutingInfo.broadcast(channel: channel),
+        );
 
-      expect(firstDelivery.route.isBroadcast, isTrue);
-      expect(secondDelivery.route.isBroadcast, isTrue);
-      expect(firstDelivery.route.broadcastChannel, channel);
-      expect(secondDelivery.route.broadcastChannel, channel);
-      expect(firstDelivery.envelope.id, broadcast.id);
-      expect(secondDelivery.envelope.id, broadcast.id);
-      expect(firstDelivery.envelope.queue, channel);
-      expect(secondDelivery.envelope.queue, channel);
+        final gotOne = await workerOne.moveNext().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            fail('worker-one timed out waiting for broadcast message');
+          },
+        );
+        final gotTwo = await workerTwo.moveNext().timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            fail('worker-two timed out waiting for broadcast message');
+          },
+        );
+        expect(gotOne, isTrue);
+        expect(gotTwo, isTrue);
 
-      await workerOneBroker.ack(firstDelivery);
-      await workerTwoBroker.ack(secondDelivery);
+        final firstDelivery = workerOne.current;
+        final secondDelivery = workerTwo.current;
 
-      await publisher.purge(queue);
+        expect(firstDelivery.route.isBroadcast, isTrue);
+        expect(secondDelivery.route.isBroadcast, isTrue);
+        expect(firstDelivery.route.broadcastChannel, channel);
+        expect(secondDelivery.route.broadcastChannel, channel);
+        expect(firstDelivery.envelope.id, broadcast.id);
+        expect(secondDelivery.envelope.id, broadcast.id);
+        expect(firstDelivery.envelope.queue, channel);
+        expect(secondDelivery.envelope.queue, channel);
+
+        await workerOneBroker.ack(firstDelivery);
+        await workerTwoBroker.ack(secondDelivery);
+
+        await publisher.purge(queue);
+      } finally {
+        await workerOne.cancel();
+        await workerTwo.cancel();
+      }
     } finally {
-      await safeClose(workerOneBroker);
-      await safeClose(workerTwoBroker);
-      await safeClose(publisher);
+      await _safeCloseRedisBroker(publisher);
     }
   });
 }
@@ -163,3 +167,20 @@ String _uniqueQueue() =>
     'redis-${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
 
 var _counter = 0;
+
+final _namespaceRandom = Random();
+
+String _uniqueNamespace() {
+  final micros = DateTime.now().microsecondsSinceEpoch;
+  final suffix = _namespaceRandom.nextInt(1 << 32);
+  return 'stem-test-$micros-$suffix';
+}
+
+Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
+  try {
+    await runZonedGuarded(
+      () => broker.close(),
+      (Object _, StackTrace __) {},
+    );
+  } catch (_) {}
+}

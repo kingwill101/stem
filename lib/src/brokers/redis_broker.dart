@@ -109,12 +109,20 @@ class RedisStreamsBroker implements Broker {
     for (final timer in _claimTimers.values) {
       timer.cancel();
     }
-    try {
-      await _connection.close();
-    } catch (error) {
-      if (!_shouldSuppressClosedError(error)) {
-        rethrow;
-      }
+    Object? failure;
+    StackTrace? failureStack;
+    await runZonedGuarded(
+      () => _connection.close(),
+      (Object error, StackTrace stack) {
+        if (_shouldSuppressClosedError(error)) {
+          return;
+        }
+        failure = error;
+        failureStack = stack;
+      },
+    );
+    if (failure != null) {
+      Error.throwWithStackTrace(failure!, failureStack!);
     }
   }
 
