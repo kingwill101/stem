@@ -107,6 +107,49 @@ void main() {
       broker.dispose();
     });
 
+    test('disables one-shot schedules after execution', () async {
+      final broker = InMemoryBroker();
+      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final backend = InMemoryResultBackend();
+      final store = InMemoryScheduleStore();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        lockStore: InMemoryLockStore(),
+        tickInterval: const Duration(milliseconds: 10),
+      );
+
+      final runAt = DateTime.now().add(const Duration(milliseconds: 100));
+      await store.upsert(
+        ScheduleEntry(
+          id: 'once',
+          taskName: 'noop',
+          queue: 'default',
+          spec: ClockedScheduleSpec(runAt: runAt, runOnce: true),
+        ),
+      );
+
+      await beat.start();
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'worker-once',
+        concurrency: 1,
+      );
+      await worker.start();
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+
+      final entry = await store.get('once');
+      expect(entry, isNotNull);
+      expect(entry!.enabled, isFalse);
+
+      await worker.shutdown();
+      await beat.stop();
+      broker.dispose();
+    });
+
     test('only one beat instance dispatches when locks used', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();

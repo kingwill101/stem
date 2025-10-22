@@ -22,6 +22,7 @@ const sidebars: SidebarsConfig = {
     { type: "doc", id: "observability-runbook", label: "Observability Runbook" },
     { type: "doc", id: "canvas-guide", label: "Canvas Patterns" },
     { type: "doc", id: "worker-control", label: "Worker Control" },
+    { type: "doc", id: "scheduler-parity", label: "Scheduler Parity" },
     { type: "doc", id: "routing-config", label: "Routing Configuration" },
     { type: "doc", id: "operations-guide", label: "Operations Guide" },
     { type: "doc", id: "deployment-hardening", label: "Deployment Hardening" },

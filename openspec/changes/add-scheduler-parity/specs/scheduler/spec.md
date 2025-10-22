@@ -18,11 +18,11 @@ Operators MUST be able to list, add, update, enable/disable, and delete periodic
 #### Scenario: CLI disable entry
 - **GIVEN** an enabled schedule entry
 - **WHEN** `stem schedule disable <id>` is executed
-- **THEN** the entry MUST stop firing immediately and remain disabled across restarts until re-enabled.
+- **THEN** the entry MUST stop firing immediately and remain disabled across restarts until re-enabled via `stem schedule enable <id>`.
 
 #### Scenario: Update schedule interval
 - **GIVEN** a schedule entry running every hour
-- **WHEN** the operator updates it to every 10 minutes via CLI/API
+- **WHEN** the operator updates it to every 10 minutes via `stem schedule apply`
 - **THEN** the next run MUST honor the new cadence without restarting the scheduler.
 
 ### Requirement: Drift & History Tracking
@@ -36,5 +36,5 @@ Scheduler MUST record last run, next run, total runs, and log drift corrections 
 
 #### Scenario: History inspection
 - **GIVEN** completed runs
-- **WHEN** `stem observe schedules` is executed
+- **WHEN** `stem schedule list` is executed with a connected store
 - **THEN** the CLI MUST display last run time, next run time, total runs, and last error (if any) for each schedule.

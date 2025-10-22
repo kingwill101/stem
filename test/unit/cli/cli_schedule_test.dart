@@ -216,5 +216,67 @@ void main() {
       expect(code, equals(0));
       expect(out.toString(), contains('nightly'));
     });
+
+    test('schedule enable toggles entry on file repo', () async {
+      final filePath = '${tempDir.path}/enable.json';
+      final repo = FileScheduleRepository(path: filePath);
+      await repo.save([
+        ScheduleEntry(
+          id: 'nightly',
+          taskName: 'cleanup',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
+          enabled: false,
+        ),
+      ]);
+
+      final out = StringBuffer();
+      final code = await runStemCli(
+        [
+          'schedule',
+          'enable',
+          'nightly',
+        ],
+        out: out,
+        scheduleFilePath: filePath,
+      );
+
+      expect(code, equals(0));
+      expect(out.toString(), contains('Enabled schedule'));
+
+      final reloaded = await repo.load();
+      expect(reloaded.single.enabled, isTrue);
+    });
+
+    test('schedule disable toggles entry on file repo', () async {
+      final filePath = '${tempDir.path}/disable.json';
+      final repo = FileScheduleRepository(path: filePath);
+      await repo.save([
+        ScheduleEntry(
+          id: 'nightly',
+          taskName: 'cleanup',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
+          enabled: true,
+        ),
+      ]);
+
+      final out = StringBuffer();
+      final code = await runStemCli(
+        [
+          'schedule',
+          'disable',
+          'nightly',
+        ],
+        out: out,
+        scheduleFilePath: filePath,
+      );
+
+      expect(code, equals(0));
+      expect(out.toString(), contains('Disabled schedule'));
+
+      final reloaded = await repo.load();
+      expect(reloaded.single.enabled, isFalse);
+    });
   });
 }

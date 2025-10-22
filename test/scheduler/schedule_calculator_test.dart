@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:test/test.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
@@ -8,6 +10,10 @@ import 'package:stem/src/scheduler/schedule_spec.dart';
 void main() {
   group('ScheduleCalculator', () {
     final now = DateTime.utc(2025, 1, 1, 12, 0);
+
+    setUpAll(() {
+      tzdata.initializeTimeZones();
+    });
 
     ScheduleEntry buildEntry({
       ScheduleSpec? spec,
@@ -128,6 +134,55 @@ void main() {
       final entry = buildEntry(specExpression: '0 0 0 * *');
 
       expect(() => calculator.nextRun(entry, now), throwsA(isA<RangeError>()));
+    });
+
+    test('computes clocked schedule and disables after run', () {
+      final calculator = ScheduleCalculator();
+      final runAt = now.add(const Duration(hours: 2));
+      final entry = buildEntry(
+        spec: ClockedScheduleSpec(runAt: runAt, runOnce: true),
+        lastRun: now,
+      );
+
+      final next = calculator.nextRun(entry, now, includeJitter: false);
+
+      expect(next, equals(runAt.toUtc()));
+    });
+
+    test('applies timezone offsets for cron schedules', () {
+      final resolver =
+          ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final calculator =
+          ScheduleCalculator(timezoneResolver: resolver);
+      final entry = buildEntry(
+        spec: CronScheduleSpec(expression: '0 9 * * *'),
+        lastRun: tz.TZDateTime.from(now, tz.getLocation('America/New_York')),
+      ).copyWith(timezone: 'America/New_York');
+
+      final next = calculator.nextRun(entry, now, includeJitter: false);
+
+      final local = tz.TZDateTime.from(next, tz.getLocation('America/New_York'));
+      expect(local.hour, equals(9));
+    });
+
+    test('computes solar events after reference time', () {
+      final resolver =
+          ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final calculator = ScheduleCalculator(
+        timezoneResolver: resolver,
+      );
+      final entry = buildEntry(
+        spec: SolarScheduleSpec(
+          event: 'sunrise',
+          latitude: 40.7128,
+          longitude: -74.0060,
+        ),
+        lastRun: now,
+      );
+
+      final next = calculator.nextRun(entry, now, includeJitter: false);
+
+      expect(next.isAfter(now), isTrue);
     });
   });
 }

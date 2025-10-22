@@ -105,9 +105,11 @@ class ScheduleCalculator {
     DateTime reference,
     tz.Location? location,
   ) {
-    final String expression = _cronExpression(spec);
-    final DateTime start =
-        location != null ? tz.TZDateTime.from(reference, location) : reference;
+    if (location != null) {
+      final tz.TZDateTime localRef = tz.TZDateTime.from(reference, location);
+      return _nextCronTz(spec, localRef, location).toUtc();
+    }
+    final expression = _cronExpression(spec);
     final fields = expression.trim().split(RegExp(r'\s+'));
     if (fields.length != 5) {
       throw FormatException(
@@ -123,17 +125,16 @@ class ScheduleCalculator {
     final weekdayField = _CronField.parse(fields[4], 0, 6, sundayValue: {0, 7});
 
     DateTime candidate = DateTime.utc(
-      start.year,
-      start.month,
-      start.day,
-      start.hour,
-      start.minute,
+      reference.year,
+      reference.month,
+      reference.day,
+      reference.hour,
+      reference.minute,
     ).add(const Duration(minutes: 1));
 
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
-        candidate =
-            DateTime.utc(candidate.year, candidate.month + 1, 1, 0, 0);
+        candidate = DateTime.utc(candidate.year, candidate.month + 1, 1);
         continue;
       }
 
@@ -142,8 +143,6 @@ class ScheduleCalculator {
           candidate.year,
           candidate.month,
           candidate.day + 1,
-          0,
-          0,
         );
         continue;
       }
@@ -154,8 +153,6 @@ class ScheduleCalculator {
           candidate.year,
           candidate.month,
           candidate.day + 1,
-          0,
-          0,
         );
         continue;
       }
@@ -166,7 +163,6 @@ class ScheduleCalculator {
           candidate.month,
           candidate.day,
           candidate.hour + 1,
-          0,
         );
         continue;
       }
@@ -176,9 +172,72 @@ class ScheduleCalculator {
         continue;
       }
 
-      return location != null
-          ? tz.TZDateTime.from(candidate, location).toUtc()
-          : candidate;
+      return candidate;
+    }
+    throw StateError(
+        'Unable to compute next run for cron expression $expression');
+  }
+
+  tz.TZDateTime _nextCronTz(
+    CronScheduleSpec spec,
+    tz.TZDateTime reference,
+    tz.Location location,
+  ) {
+    final expression = _cronExpression(spec);
+    final fields = expression.trim().split(RegExp(r'\s+'));
+    if (fields.length != 5) {
+      throw FormatException(
+        'Cron expression must have 5 fields (minute hour day month weekday). '
+        'Got: "$expression"',
+      );
+    }
+
+    final minuteField = _CronField.parse(fields[0], 0, 59);
+    final hourField = _CronField.parse(fields[1], 0, 23);
+    final dayField = _CronField.parse(fields[2], 1, 31);
+    final monthField = _CronField.parse(fields[3], 1, 12);
+    final weekdayField = _CronField.parse(fields[4], 0, 6, sundayValue: {0, 7});
+
+    tz.TZDateTime candidate = tz.TZDateTime(
+      location,
+      reference.year,
+      reference.month,
+      reference.day,
+      reference.hour,
+      reference.minute,
+    ).add(const Duration(minutes: 1));
+
+    for (var i = 0; i < 525600; i++) {
+      if (!_matches(monthField, candidate.month)) {
+        candidate = tz.TZDateTime(location, candidate.year, candidate.month + 1);
+        continue;
+      }
+
+      if (!_matches(dayField, candidate.day)) {
+        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
+            candidate.day + 1);
+        continue;
+      }
+
+      final weekday = candidate.weekday % 7;
+      if (!_matchesWeekday(weekdayField, weekday, dayField)) {
+        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
+            candidate.day + 1);
+        continue;
+      }
+
+      if (!_matches(hourField, candidate.hour)) {
+        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
+            candidate.day, candidate.hour + 1);
+        continue;
+      }
+
+      if (!_matches(minuteField, candidate.minute)) {
+        candidate = candidate.add(const Duration(minutes: 1));
+        continue;
+      }
+
+      return candidate;
     }
     throw StateError(
         'Unable to compute next run for cron expression $expression');

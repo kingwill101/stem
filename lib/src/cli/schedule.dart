@@ -19,6 +19,8 @@ class ScheduleCommand extends Command<int> {
     addSubcommand(ScheduleShowCommand(dependencies));
     addSubcommand(ScheduleApplyCommand(dependencies));
     addSubcommand(ScheduleDeleteCommand(dependencies));
+    addSubcommand(ScheduleEnableCommand(dependencies));
+    addSubcommand(ScheduleDisableCommand(dependencies));
     addSubcommand(ScheduleDryRunCommand(dependencies));
   }
 
@@ -288,17 +290,14 @@ class ScheduleApplyCommand extends Command<int> {
     final enabledValue = def['enabled'];
     final enabled = enabledValue is bool ? enabledValue : true;
     final rawArgs = def['args'];
-    final args = rawArgs is Map
-        ? _coerceMap(rawArgs)
-        : const <String, Object?>{};
+    final args =
+        rawArgs is Map ? _coerceMap(rawArgs) : const <String, Object?>{};
     final rawKwargs = def['kwargs'];
-    final kwargs = rawKwargs is Map
-        ? _coerceMap(rawKwargs)
-        : const <String, Object?>{};
+    final kwargs =
+        rawKwargs is Map ? _coerceMap(rawKwargs) : const <String, Object?>{};
     final rawMeta = def['meta'];
-    final meta = rawMeta is Map
-        ? _coerceMap(rawMeta)
-        : const <String, Object?>{};
+    final meta =
+        rawMeta is Map ? _coerceMap(rawMeta) : const <String, Object?>{};
 
     Duration? jitter;
     if (def['jitterMs'] != null) {
@@ -460,6 +459,123 @@ class ScheduleDeleteCommand extends Command<int> {
       }
       dependencies.out.writeln('Deleted schedule "$id".');
       return 0;
+    } finally {
+      await scheduleCtx.dispose();
+    }
+  }
+}
+
+class ScheduleEnableCommand extends Command<int> {
+  ScheduleEnableCommand(this.dependencies) {
+    argParser.addOption('id', abbr: 'i', help: 'Schedule identifier');
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'enable';
+
+  @override
+  final String description = 'Enable a schedule entry.';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final id = args['id'] as String? ??
+        (args.rest.isNotEmpty ? args.rest.first : null);
+    if (id == null || id.isEmpty) {
+      dependencies.err
+          .writeln('Provide a schedule id via --id or positional argument.');
+      return 64;
+    }
+    final scheduleCtx = await dependencies.createScheduleContext();
+    try {
+      if (scheduleCtx.store != null) {
+        final existing = await scheduleCtx.store!.get(id);
+        if (existing == null) {
+          dependencies.err.writeln('Schedule "$id" not found.');
+          return 64;
+        }
+        final updated =
+            existing.copyWith(enabled: true, nextRunAt: null, lastError: null);
+        await scheduleCtx.store!.upsert(updated);
+        dependencies.out.writeln('Enabled schedule "$id".');
+        return 0;
+      }
+      final repo = scheduleCtx.repo;
+      if (repo != null) {
+        final entries = await repo.load();
+        final index = entries.indexWhere((entry) => entry.id == id);
+        if (index == -1) {
+          dependencies.err.writeln('Schedule "$id" not found.');
+          return 64;
+        }
+        final updated = entries[index]
+            .copyWith(enabled: true, nextRunAt: null, lastError: null);
+        entries[index] = updated;
+        await repo.save(entries);
+        dependencies.out.writeln('Enabled schedule "$id".');
+        return 0;
+      }
+      dependencies.err.writeln('No schedule store configured.');
+      return 64;
+    } finally {
+      await scheduleCtx.dispose();
+    }
+  }
+}
+
+class ScheduleDisableCommand extends Command<int> {
+  ScheduleDisableCommand(this.dependencies) {
+    argParser.addOption('id', abbr: 'i', help: 'Schedule identifier');
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'disable';
+
+  @override
+  final String description = 'Disable a schedule entry.';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final id = args['id'] as String? ??
+        (args.rest.isNotEmpty ? args.rest.first : null);
+    if (id == null || id.isEmpty) {
+      dependencies.err
+          .writeln('Provide a schedule id via --id or positional argument.');
+      return 64;
+    }
+    final scheduleCtx = await dependencies.createScheduleContext();
+    try {
+      if (scheduleCtx.store != null) {
+        final existing = await scheduleCtx.store!.get(id);
+        if (existing == null) {
+          dependencies.err.writeln('Schedule "$id" not found.');
+          return 64;
+        }
+        final updated = existing.copyWith(enabled: false);
+        await scheduleCtx.store!.upsert(updated);
+        dependencies.out.writeln('Disabled schedule "$id".');
+        return 0;
+      }
+      final repo = scheduleCtx.repo;
+      if (repo != null) {
+        final entries = await repo.load();
+        final index = entries.indexWhere((entry) => entry.id == id);
+        if (index == -1) {
+          dependencies.err.writeln('Schedule "$id" not found.');
+          return 64;
+        }
+        entries[index] = entries[index].copyWith(enabled: false);
+        await repo.save(entries);
+        dependencies.out.writeln('Disabled schedule "$id".');
+        return 0;
+      }
+      dependencies.err.writeln('No schedule store configured.');
+      return 64;
     } finally {
       await scheduleCtx.dispose();
     }
