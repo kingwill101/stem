@@ -71,6 +71,61 @@ void main() {
     }
   });
 
+  test('Postgres broker honours priority ordering', () async {
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      applicationName: 'stem-postgres-priority-ordering',
+    );
+    try {
+      final queue = _uniqueQueue();
+      final lowPriority = Envelope(
+        name: 'integration.postgres.low',
+        args: const {'value': 'low'},
+        queue: queue,
+        priority: 1,
+      );
+      final highPriority = Envelope(
+        name: 'integration.postgres.high',
+        args: const {'value': 'high'},
+        queue: queue,
+        priority: 9,
+      );
+
+      await broker.publish(
+        lowPriority,
+        routing:
+            RoutingInfo.queue(queue: queue, priority: lowPriority.priority),
+      );
+      await broker.publish(
+        highPriority,
+        routing:
+            RoutingInfo.queue(queue: queue, priority: highPriority.priority),
+      );
+
+      final iterator = StreamIterator(
+        broker.consume(
+          RoutingSubscription.singleQueue(queue),
+          prefetch: 2,
+        ),
+      );
+
+      expect(await iterator.moveNext(), isTrue);
+      final first = iterator.current;
+      expect(first.envelope.id, highPriority.id);
+      await broker.ack(first);
+
+      expect(await iterator.moveNext(), isTrue);
+      final second = iterator.current;
+      expect(second.envelope.id, lowPriority.id);
+      await broker.ack(second);
+      await iterator.cancel();
+
+      await broker.purge(queue);
+    } finally {
+      await broker.close();
+    }
+  });
+
   test('Postgres broadcast fan-out delivers to all subscribers', () async {
     final publisher = await PostgresBroker.connect(
       connectionString,
@@ -89,6 +144,7 @@ void main() {
         await broker.close();
       } catch (_) {}
     }
+
     try {
       final queue = _uniqueQueue();
       final channel = '${queue}_broadcast';

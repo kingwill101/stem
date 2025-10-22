@@ -183,7 +183,8 @@ void main() {
 
       await _waitFor(
         () =>
-            events.where((event) => event.type == WorkerEventType.completed)
+            events
+                .where((event) => event.type == WorkerEventType.completed)
                 .length >=
             2,
         timeout: const Duration(seconds: 5),
