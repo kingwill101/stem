@@ -10,6 +10,8 @@ import '../scheduler/in_memory_schedule_store.dart';
 import '../scheduler/redis_schedule_store.dart';
 import 'file_schedule_repository.dart';
 
+typedef ScheduleContextBuilder = Future<ScheduleCliContext> Function();
+
 class StemCommandDependencies {
   StemCommandDependencies({
     required this.out,
@@ -17,7 +19,9 @@ class StemCommandDependencies {
     required this.environment,
     required this.scheduleFilePath,
     required CliContextBuilder cliContextBuilder,
-  }) : _cliContextBuilder = cliContextBuilder;
+    ScheduleContextBuilder? scheduleContextBuilder,
+  })  : _cliContextBuilder = cliContextBuilder,
+        _scheduleContextBuilder = scheduleContextBuilder;
 
   final StringSink out;
   final StringSink err;
@@ -25,14 +29,19 @@ class StemCommandDependencies {
   final String? scheduleFilePath;
 
   final CliContextBuilder _cliContextBuilder;
+  final ScheduleContextBuilder? _scheduleContextBuilder;
 
   Future<CliContext> createCliContext() => _cliContextBuilder();
 
-  Future<ScheduleCliContext> createScheduleContext() =>
-      _createScheduleCliContext(
-        repoPath: scheduleFilePath,
-        environment: environment,
-      );
+  Future<ScheduleCliContext> createScheduleContext() {
+    if (_scheduleContextBuilder != null) {
+      return _scheduleContextBuilder!();
+    }
+    return _createScheduleCliContext(
+      repoPath: scheduleFilePath,
+      environment: environment,
+    );
+  }
 }
 
 Future<ScheduleCliContext> _createScheduleCliContext({

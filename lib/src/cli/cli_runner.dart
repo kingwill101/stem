@@ -58,6 +58,7 @@ Future<int> runStemCli(
   String? scheduleFilePath,
   Future<CliContext> Function()? contextBuilder,
   Map<String, String>? environment,
+  ScheduleContextBuilder? scheduleContextBuilder,
 }) async {
   final stdoutSink = out ?? stdout;
   final stderrSink = err ?? stderr;
@@ -72,6 +73,7 @@ Future<int> runStemCli(
     environment: resolvedEnvironment,
     scheduleFilePath: scheduleFilePath,
     cliContextBuilder: cliContextBuilder,
+    scheduleContextBuilder: scheduleContextBuilder,
   );
 
   final runner = StemCommandRunner(dependencies: dependencies);

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:args/command_runner.dart';
 import 'package:stem/src/cli/dependencies.dart';
 import 'package:stem/src/cli/file_schedule_repository.dart';
+import 'package:stem/src/cli/utilities.dart';
 import 'package:stem/src/observability/snapshots.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
 import 'package:stem/stem.dart';
@@ -201,27 +202,105 @@ class ObserveSchedulesCommand extends Command<int> {
   @override
   Future<int> run() async {
     final out = dependencies.out;
-    final repoPath =
-        argResults!['file'] as String? ?? dependencies.scheduleFilePath;
-    final repo = FileScheduleRepository(path: repoPath);
-    final entries = await repo.load();
-    if (entries.isEmpty) {
-      out.writeln('No schedules found.');
-      return 0;
-    }
-    final calculator = ScheduleCalculator();
-    out.writeln('ID        | Task           | Next Run           | Queue');
-    out.writeln('----------+----------------+--------------------+----------');
-    final now = DateTime.now();
-    for (final entry in entries) {
-      final next = calculator.nextRun(entry, entry.lastRunAt ?? now);
-      out.writeln(
-        '${entry.id.padRight(10)}| '
-        '${entry.taskName.padRight(16)}| '
-        '${next.toIso8601String()} | '
-        '${entry.queue}',
+    final scheduleCtx = await dependencies.createScheduleContext();
+    try {
+      final repoPath =
+          argResults!['file'] as String? ?? dependencies.scheduleFilePath;
+      FileScheduleRepository? fileRepo;
+      if (repoPath != null) {
+        fileRepo = FileScheduleRepository(path: repoPath);
+      } else {
+        fileRepo = scheduleCtx.repo;
+      }
+      final entries = scheduleCtx.store != null
+          ? await scheduleCtx.store!.list()
+          : await (fileRepo ?? FileScheduleRepository()).load();
+      if (entries.isEmpty) {
+        out.writeln('No schedules found.');
+        return 0;
+      }
+      final calculator = ScheduleCalculator();
+      final now = DateTime.now();
+      var dueCount = 0;
+      var overdueCount = 0;
+      Duration? maxDrift;
+      for (final entry in entries) {
+        final next = entry.nextRunAt ??
+            calculator.nextRun(
+              entry.copyWith(lastRunAt: entry.lastRunAt ?? now),
+              entry.lastRunAt ?? now,
+              includeJitter: false,
+            );
+        if (!next.isAfter(now)) {
+          dueCount += 1;
+          overdueCount += 1;
+        }
+        if (entry.drift != null) {
+          if (maxDrift == null || entry.drift!.abs() > maxDrift!) {
+            maxDrift = entry.drift!.abs();
+          }
+        }
+      }
+
+      final metricsSnapshot = StemMetrics.instance.snapshot();
+      double? dueGauge = _gaugeValue(
+        metricsSnapshot,
+        'stem.scheduler.due.entries',
       );
+      double? overdueGauge = _gaugeValue(
+        metricsSnapshot,
+        'stem.scheduler.overdue.entries',
+      );
+      out.writeln(
+        'Summary: due=$dueCount overdue=$overdueCount'
+        '${dueGauge != null ? ' (gauge=${dueGauge.toStringAsFixed(0)})' : ''}'
+        '${overdueGauge != null ? ', gaugeOverdue=${overdueGauge.toStringAsFixed(0)}' : ''}'
+        '${maxDrift != null ? ', maxDrift=${formatDuration(maxDrift)}' : ''}',
+      );
+
+      out.writeln(
+        'ID        | Task           | Queue     | Next Run                | Last Run                | Total | Drift   | Last Error',
+      );
+      out.writeln(
+        '----------+----------------+-----------+------------------------+------------------------+-------+---------+-----------',
+      );
+      for (final entry in entries) {
+        final reference = entry.lastRunAt ?? now;
+        final next = entry.nextRunAt ??
+            calculator.nextRun(
+              entry.copyWith(lastRunAt: reference),
+              reference,
+              includeJitter: false,
+            );
+        final drift = entry.drift != null ? formatDuration(entry.drift) : '-';
+        final lastError =
+            (entry.lastError?.isEmpty ?? true) ? '-' : entry.lastError!;
+        out.writeln(
+          '${entry.id.padRight(10)}| '
+          '${entry.taskName.padRight(16)}| '
+          '${entry.queue.padRight(10)}| '
+          '${next.toIso8601String().padRight(24)}| '
+          '${formatDateTime(entry.lastRunAt).padRight(24)}| '
+          '${entry.totalRunCount.toString().padLeft(5)} | '
+          '${drift.toString().padRight(7)} | '
+          '$lastError',
+        );
+      }
+      return 0;
+    } finally {
+      await scheduleCtx.dispose();
     }
-    return 0;
   }
+}
+
+double? _gaugeValue(Map<String, Object> snapshot, String name) {
+  final gauges = snapshot['gauges'];
+  if (gauges is! List) return null;
+  for (final entry in gauges) {
+    if (entry is Map && entry['name'] == name) {
+      final value = entry['value'];
+      if (value is num) return value.toDouble();
+    }
+  }
+  return null;
 }

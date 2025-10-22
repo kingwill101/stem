@@ -13,10 +13,10 @@
 
 ## 4. Runtime CRUD & Reload
 - [x] 4.1 Build CLI/API commands to list, add, update, enable/disable, and delete schedules at runtime.
-- [ ] 4.2 Ensure scheduler reloads updates without restart and handles conflict resolution in clustered mode.
+- [x] 4.2 Ensure scheduler reloads updates without restart and handles conflict resolution in clustered mode.
 
 ## 5. Observability & Docs
-- [ ] 5.1 Expose schedule metrics/logging (due counts, missed runs) and surface via CLI.
+- [x] 5.1 Expose schedule metrics/logging (due counts, missed runs) and surface via CLI.
 - [x] 5.2 Document new schedule types, CLI usage, and migration guide.
 
 ## 6. Validation

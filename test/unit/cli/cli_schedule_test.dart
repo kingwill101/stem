@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:test/test.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/cli/file_schedule_repository.dart';
+import 'package:stem/src/cli/schedule.dart' show ScheduleCliContext;
 import 'package:stem/src/observability/snapshots.dart';
 import 'package:stem/stem.dart';
 
@@ -101,6 +102,89 @@ void main() {
       final repo = FileScheduleRepository(path: scheduleFile);
       final entries = await repo.load();
       expect(entries, isEmpty);
+    });
+
+    test('apply retries on conflict when schedule store updates concurrently',
+        () async {
+      final baseStore = InMemoryScheduleStore();
+      final flakyStore =
+          FlakyScheduleStore(baseStore, failuresBeforeSuccess: 1);
+
+      final now = DateTime.now().toUtc();
+      await baseStore.upsert(
+        ScheduleEntry(
+          id: 'nightly',
+          taskName: 'noop',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
+        ),
+      );
+      await baseStore.markExecuted(
+        'nightly',
+        scheduledFor: now.subtract(const Duration(minutes: 5)),
+        executedAt: now.subtract(const Duration(minutes: 4, seconds: 30)),
+      );
+
+      final defs = File('${tempDir.path}/conflict_defs.json')
+        ..writeAsStringSync(
+          jsonEncode([
+            {
+              'id': 'nightly',
+              'task': 'noop',
+              'queue': 'priority',
+              'schedule': 'every:30s',
+            },
+          ]),
+        );
+
+      final code = await runStemCli(
+        ['schedule', 'apply', '--file', defs.path, '--yes'],
+        scheduleContextBuilder: () async => ScheduleCliContext.store(
+          storeInstance: flakyStore,
+        ),
+      );
+      expect(code, equals(0));
+
+      final updated = await baseStore.get('nightly');
+      expect(updated, isNotNull);
+      expect(updated!.queue, equals('priority'));
+      expect(
+        updated.spec,
+        isA<IntervalScheduleSpec>().having(
+            (spec) => spec.every, 'every', equals(const Duration(seconds: 30))),
+      );
+      expect(updated.lastRunAt, isNotNull);
+      expect(updated.totalRunCount, greaterThan(0));
+      expect(flakyStore.conflictAttempts, equals(1));
+    });
+
+    test('enable retries on conflict when toggling schedule state', () async {
+      final baseStore = InMemoryScheduleStore();
+      final flakyStore =
+          FlakyScheduleStore(baseStore, failuresBeforeSuccess: 1);
+
+      await baseStore.upsert(
+        ScheduleEntry(
+          id: 'nightly',
+          taskName: 'noop',
+          queue: 'default',
+          enabled: false,
+          spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
+        ),
+      );
+
+      final code = await runStemCli(
+        ['schedule', 'enable', 'nightly'],
+        scheduleContextBuilder: () async => ScheduleCliContext.store(
+          storeInstance: flakyStore,
+        ),
+      );
+      expect(code, equals(0));
+
+      final updated = await baseStore.get('nightly');
+      expect(updated, isNotNull);
+      expect(updated!.enabled, isTrue);
+      expect(flakyStore.conflictAttempts, equals(1));
     });
   });
 
@@ -279,4 +363,76 @@ void main() {
       expect(reloaded.single.enabled, isFalse);
     });
   });
+}
+
+class FlakyScheduleStore implements ScheduleStore {
+  FlakyScheduleStore(
+    this.delegate, {
+    this.failuresBeforeSuccess = 1,
+  });
+
+  final ScheduleStore delegate;
+  int failuresBeforeSuccess;
+  int conflictAttempts = 0;
+
+  @override
+  Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) =>
+      delegate.due(now, limit: limit);
+
+  @override
+  Future<void> upsert(ScheduleEntry entry) async {
+    if (failuresBeforeSuccess > 0) {
+      failuresBeforeSuccess -= 1;
+      conflictAttempts += 1;
+      final current = await delegate.get(entry.id);
+      if (current != null) {
+        await delegate.upsert(current);
+        final latest = await delegate.get(entry.id);
+        throw ScheduleConflictException(
+          entry.id,
+          expectedVersion: entry.version,
+          actualVersion: latest?.version ?? entry.version,
+        );
+      }
+      throw ScheduleConflictException(
+        entry.id,
+        expectedVersion: entry.version,
+        actualVersion: entry.version + 1,
+      );
+    }
+    await delegate.upsert(entry);
+  }
+
+  @override
+  Future<void> remove(String id) => delegate.remove(id);
+
+  @override
+  Future<List<ScheduleEntry>> list({int? limit}) => delegate.list(limit: limit);
+
+  @override
+  Future<ScheduleEntry?> get(String id) => delegate.get(id);
+
+  @override
+  Future<void> markExecuted(
+    String id, {
+    required DateTime scheduledFor,
+    required DateTime executedAt,
+    Duration? jitter,
+    String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
+  }) =>
+      delegate.markExecuted(
+        id,
+        scheduledFor: scheduledFor,
+        executedAt: executedAt,
+        jitter: jitter,
+        lastError: lastError,
+        success: success,
+        runDuration: runDuration,
+        nextRunAt: nextRunAt,
+        drift: drift,
+      );
 }

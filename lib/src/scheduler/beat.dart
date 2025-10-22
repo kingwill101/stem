@@ -50,6 +50,40 @@ class Beat {
     if (!_running && _timer != null) return;
     final now = DateTime.now();
     final dueEntries = await store.due(now);
+    StemMetrics.instance.setGauge(
+      'stem.scheduler.due.entries',
+      dueEntries.length.toDouble(),
+    );
+    var overdueCount = 0;
+    Duration? maxOverdue;
+    for (final entry in dueEntries) {
+      final scheduled = entry.nextRunAt;
+      if (scheduled != null && now.isAfter(scheduled)) {
+        final overdue = now.difference(scheduled);
+        overdueCount += 1;
+        maxOverdue = maxOverdue == null
+            ? overdue
+            : (overdue > maxOverdue ? overdue : maxOverdue);
+        StemMetrics.instance.recordDuration(
+          'stem.scheduler.overdue.lag',
+          overdue,
+        );
+      }
+    }
+    StemMetrics.instance.setGauge(
+      'stem.scheduler.overdue.entries',
+      overdueCount.toDouble(),
+    );
+    if (overdueCount > 0) {
+      stemLogger.warning(
+        'Scheduler lag detected for {count} schedule(s)',
+        Context({
+          'count': overdueCount.toString(),
+          if (maxOverdue != null)
+            'maxOverdueMs': maxOverdue!.inMilliseconds.toString(),
+        }),
+      );
+    }
     for (final entry in dueEntries) {
       await _dispatch(entry, now);
     }
@@ -100,6 +134,10 @@ class Beat {
     final scheduledFor = baseScheduled.add(jitterDelay);
     final startedAt = DateTime.now();
 
+    StemMetrics.instance.increment(
+      'stem.scheduler.dispatch.attempts',
+      tags: {'schedule': entry.id},
+    );
     try {
       if (jitterDelay > Duration.zero) {
         await Future<void>.delayed(jitterDelay);
@@ -127,6 +165,11 @@ class Beat {
 
       final executedAt = DateTime.now();
       final duration = executedAt.difference(startedAt);
+      StemMetrics.instance.recordDuration(
+        'stem.scheduler.dispatch.duration',
+        duration,
+        tags: {'schedule': entry.id},
+      );
       await store.markExecuted(
         entry.id,
         scheduledFor: scheduledFor,
@@ -137,6 +180,25 @@ class Beat {
         runDuration: duration,
         drift: executedAt.difference(scheduledFor),
       );
+      final drift = executedAt.difference(scheduledFor);
+      StemMetrics.instance.increment(
+        'stem.scheduler.dispatch.success',
+        tags: {'schedule': entry.id},
+      );
+      StemMetrics.instance.recordDuration(
+        'stem.scheduler.drift',
+        Duration(milliseconds: drift.inMilliseconds.abs()),
+        tags: {'schedule': entry.id},
+      );
+      if (drift.inMilliseconds.abs() > 0) {
+        stemLogger.info(
+          'Schedule {schedule} drift recorded',
+          Context({
+            'schedule': entry.id,
+            'driftMs': drift.inMilliseconds.toString(),
+          }),
+        );
+      }
     } catch (error, stack) {
       stemLogger.warning(
         'Beat dispatch failed for {schedule}: {error}',
@@ -156,6 +218,10 @@ class Beat {
           lastError: error.toString(),
           success: false,
           drift: executedAt.difference(scheduledFor),
+        );
+        StemMetrics.instance.increment(
+          'stem.scheduler.dispatch.failed',
+          tags: {'schedule': entry.id},
         );
       } catch (storeError, storeStack) {
         stemLogger.warning(

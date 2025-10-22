@@ -227,19 +227,27 @@ class ScheduleApplyCommand extends Command<int> {
       }
 
       if (scheduleCtx.store != null) {
+        final store = scheduleCtx.store!;
         for (final entry in entries) {
-          try {
-            final existing = await scheduleCtx.store!.get(entry.id);
-            final payload = existing != null
-                ? entry.copyWith(version: existing.version)
-                : entry;
-            await scheduleCtx.store!.upsert(payload);
-          } on ScheduleConflictException catch (error) {
-            dependencies.err.writeln(
-              'Schedule "${error.id}" was modified concurrently '
-              '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
-            );
-            return 70;
+          var attempts = 0;
+          while (true) {
+            attempts += 1;
+            final existing = await store.get(entry.id);
+            final payload = _mergeScheduleDefinition(entry, existing);
+            try {
+              await store.upsert(payload);
+              break;
+            } on ScheduleConflictException catch (error) {
+              if (attempts >= 5) {
+                dependencies.err.writeln(
+                  'Schedule "${error.id}" was modified concurrently '
+                  '(expected v${error.expectedVersion}, found v${error.actualVersion}). '
+                  'Retry the command after the scheduler settles.',
+                );
+                return 70;
+              }
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+            }
           }
         }
       } else {
@@ -503,21 +511,34 @@ class ScheduleEnableCommand extends Command<int> {
     final scheduleCtx = await dependencies.createScheduleContext();
     try {
       if (scheduleCtx.store != null) {
-        final existing = await scheduleCtx.store!.get(id);
-        if (existing == null) {
-          dependencies.err.writeln('Schedule "$id" not found.');
-          return 64;
-        }
-        final updated =
-            existing.copyWith(enabled: true, nextRunAt: null, lastError: null);
-        try {
-          await scheduleCtx.store!.upsert(updated);
-        } on ScheduleConflictException catch (error) {
-          dependencies.err.writeln(
-            'Schedule "${error.id}" was modified concurrently '
-            '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
+        final store = scheduleCtx.store!;
+        var attempts = 0;
+        while (true) {
+          final existing = await store.get(id);
+          if (existing == null) {
+            dependencies.err.writeln('Schedule "$id" not found.');
+            return 64;
+          }
+          final updated = existing.copyWith(
+            enabled: true,
+            nextRunAt: null,
+            lastError: null,
           );
-          return 70;
+          try {
+            await store.upsert(updated);
+            break;
+          } on ScheduleConflictException catch (error) {
+            attempts += 1;
+            if (attempts >= 5) {
+              dependencies.err.writeln(
+                'Schedule "${error.id}" was modified concurrently '
+                '(expected v${error.expectedVersion}, found v${error.actualVersion}). '
+                'Retry the command after the scheduler settles.',
+              );
+              return 70;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+          }
         }
         dependencies.out.writeln('Enabled schedule "$id".');
         return 0;
@@ -571,20 +592,30 @@ class ScheduleDisableCommand extends Command<int> {
     final scheduleCtx = await dependencies.createScheduleContext();
     try {
       if (scheduleCtx.store != null) {
-        final existing = await scheduleCtx.store!.get(id);
-        if (existing == null) {
-          dependencies.err.writeln('Schedule "$id" not found.');
-          return 64;
-        }
-        final updated = existing.copyWith(enabled: false);
-        try {
-          await scheduleCtx.store!.upsert(updated);
-        } on ScheduleConflictException catch (error) {
-          dependencies.err.writeln(
-            'Schedule "${error.id}" was modified concurrently '
-            '(expected v${error.expectedVersion}, found v${error.actualVersion}).',
-          );
-          return 70;
+        final store = scheduleCtx.store!;
+        var attempts = 0;
+        while (true) {
+          final existing = await store.get(id);
+          if (existing == null) {
+            dependencies.err.writeln('Schedule "$id" not found.');
+            return 64;
+          }
+          final updated = existing.copyWith(enabled: false);
+          try {
+            await store.upsert(updated);
+            break;
+          } on ScheduleConflictException catch (error) {
+            attempts += 1;
+            if (attempts >= 5) {
+              dependencies.err.writeln(
+                'Schedule "${error.id}" was modified concurrently '
+                '(expected v${error.expectedVersion}, found v${error.actualVersion}). '
+                'Retry the command after the scheduler settles.',
+              );
+              return 70;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+          }
         }
         dependencies.out.writeln('Disabled schedule "$id".');
         return 0;
@@ -698,6 +729,28 @@ class ScheduleDryRunCommand extends Command<int> {
       await scheduleCtx.dispose();
     }
   }
+}
+
+ScheduleEntry _mergeScheduleDefinition(
+  ScheduleEntry desired,
+  ScheduleEntry? existing,
+) {
+  if (existing == null) {
+    return desired;
+  }
+  return desired.copyWith(
+    version: existing.version,
+    lastRunAt: existing.lastRunAt,
+    lastJitter: existing.lastJitter,
+    lastError: existing.lastError,
+    totalRunCount: existing.totalRunCount,
+    lastSuccessAt: existing.lastSuccessAt,
+    lastErrorAt: existing.lastErrorAt,
+    drift: existing.drift,
+    createdAt: existing.createdAt,
+    updatedAt: existing.updatedAt,
+    meta: desired.meta.isEmpty ? existing.meta : desired.meta,
+  );
 }
 
 class ScheduleCliContext {
