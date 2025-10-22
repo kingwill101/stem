@@ -2,10 +2,25 @@ import 'dart:async';
 import 'dart:io';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
+import 'package:stem/src/routing/subscription_loader.dart';
 import 'package:stem/stem.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
+  final routingRegistry = () {
+    try {
+      return RoutingConfigLoader(
+        StemRoutingContext.fromConfig(config),
+      ).load();
+    } on StateError catch (error) {
+      stderr.writeln('Failed to load routing config: ${error.message}');
+      exit(64);
+    }
+  }();
+  final subscription = buildWorkerSubscription(
+    config: config,
+    registry: routingRegistry,
+  );
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
@@ -39,6 +54,7 @@ Future<void> main(List<String> args) async {
     registry: registry,
     backend: backend,
     queue: config.defaultQueue,
+    subscription: subscription,
     concurrency: 2, // Allow parallel email sending
     signer: signer,
   );

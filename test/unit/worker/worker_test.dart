@@ -129,6 +129,80 @@ void main() {
       broker.dispose();
     });
 
+    test('consumes tasks across multiple subscribed queues', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.default',
+            entrypoint: (context, args) async {
+              return;
+            },
+            options: const TaskOptions(maxRetries: 1),
+          ),
+        )
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.priority',
+            entrypoint: (context, args) async {
+              return;
+            },
+            options: const TaskOptions(queue: 'priority', maxRetries: 1),
+          ),
+        );
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        subscription: RoutingSubscription(
+          queues: const ['default', 'priority'],
+        ),
+        consumerName: 'worker-multi',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      expect(worker.subscriptionQueues, containsAll(['default', 'priority']));
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      await stem.enqueue('tasks.default');
+      await stem.enqueue(
+        'tasks.priority',
+        options: const TaskOptions(queue: 'priority'),
+      );
+
+      await _waitFor(
+        () =>
+            events.where((event) => event.type == WorkerEventType.completed)
+                .length >=
+            2,
+        timeout: const Duration(seconds: 5),
+      );
+
+      final completedQueues = events
+          .where((event) => event.type == WorkerEventType.completed)
+          .map((event) => event.envelope?.queue)
+          .whereType<String>()
+          .toSet();
+
+      expect(completedQueues, contains('default'));
+      expect(completedQueues, contains('priority'));
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('warm shutdown drains tasks', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 5),

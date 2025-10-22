@@ -9,10 +9,10 @@
 - [ ] 2.3 Implement broadcast delivery in Postgres (new table/storage) and add conformance tests.
 
 ## 3. Worker & CLI Subscription Updates
-- [ ] 3.1 Update worker runtime to consume `RoutingSubscription` (multi-queue + broadcast) and emit richer heartbeats/metrics.
-- [ ] 3.2 Extend CLI commands/flags to configure multiple queues/broadcast channels and surface routing state.
-- [ ] 3.3 Update docs/examples/tests to reflect the new worker/CLI experience.
+- [x] 3.1 Update worker runtime to consume `RoutingSubscription` (multi-queue + broadcast) and emit richer heartbeats/metrics.
+- [x] 3.2 Extend CLI commands/flags to configure multiple queues/broadcast channels and surface routing state.
+- [x] 3.3 Update docs/examples/tests to reflect the new worker/CLI experience.
 
 ## 4. Tooling & Rollout Support
-- [ ] 4.1 Provide routing config loaders/generators (incl. CLI) and error messaging for missing files.
-- [ ] 4.2 Document rollout plan (feature flags, Postgres migration steps, Redis notes) and validate with end-to-end tests.
+- [x] 4.1 Provide routing config loaders/generators (incl. CLI) and error messaging for missing files.
+- [x] 4.2 Document rollout plan (feature flags, Postgres migration steps, Redis notes) and validate with end-to-end tests.

@@ -64,6 +64,7 @@ class Worker {
     this.revokeStore,
     RetryStrategy? retryStrategy,
     this.queue = 'default',
+    RoutingSubscription? subscription,
     this.consumerName,
     int? concurrency,
     int prefetchMultiplier = 2,
@@ -111,6 +112,34 @@ class Worker {
     }
     _currentConcurrency = math.max(1, _currentConcurrency);
     _recordConcurrencyGauge();
+
+    final resolvedSubscription =
+        subscription ?? RoutingSubscription.singleQueue(queue);
+
+    List<String> normalize(List<String> values) {
+      final seen = <String>{};
+      final result = <String>[];
+      for (final value in values) {
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) continue;
+        if (seen.add(trimmed)) {
+          result.add(trimmed);
+        }
+      }
+      return result;
+    }
+
+    final normalizedQueues =
+        normalize(resolvedSubscription.resolveQueues(queue));
+    if (normalizedQueues.isEmpty) {
+      normalizedQueues.add(queue);
+    }
+    final normalizedBroadcasts =
+        normalize(resolvedSubscription.broadcastChannels);
+
+    this.subscription = resolvedSubscription;
+    subscriptionQueues = List.unmodifiable(normalizedQueues);
+    subscriptionBroadcasts = List.unmodifiable(normalizedBroadcasts);
   }
 
   final Broker broker;
@@ -132,6 +161,18 @@ class Worker {
   final String namespace;
   final PayloadSigner? signer;
   final RevokeStore? revokeStore;
+
+  late final RoutingSubscription subscription;
+  late final List<String> subscriptionQueues;
+  late final List<String> subscriptionBroadcasts;
+
+  List<String> get _effectiveQueues =>
+      subscriptionQueues.isNotEmpty ? subscriptionQueues : [queue];
+
+  List<String> get _broadcastSubscriptions => subscriptionBroadcasts;
+
+  String get primaryQueue =>
+      _effectiveQueues.isNotEmpty ? _effectiveQueues.first : queue;
 
   final Map<String, Timer> _leaseTimers = {};
   final Map<String, Timer> _heartbeatTimers = {};
@@ -189,40 +230,50 @@ class Worker {
     _recordInflightGauge();
     _recordConcurrencyGauge();
     unawaited(_publishWorkerHeartbeat());
-    final subscription = broker
-        .consume(
-      RoutingSubscription.singleQueue(queue),
-      prefetch: prefetch,
-      consumerName: consumerName,
-    )
-        .listen(
-      (delivery) {
-        // Fire-and-forget; handler manages its own lifecycle.
-        final task = _handle(delivery);
-        unawaited(
-          task.catchError((Object error, StackTrace stack) {
-            _events.add(
-              WorkerEvent(
-                type: WorkerEventType.error,
-                envelope: delivery.envelope,
-                error: error,
-                stackTrace: stack,
-              ),
-            );
-          }),
-        );
-      },
-      onError: (Object error, StackTrace stack) {
-        _events.add(
-          WorkerEvent(
-            type: WorkerEventType.error,
-            error: error,
-            stackTrace: stack,
-          ),
-        );
-      },
-    );
-    _subscriptions[queue] = subscription;
+    final queueNames = _effectiveQueues;
+    if (queueNames.isEmpty) {
+      throw StateError('Worker subscription resolved no queues.');
+    }
+    for (var index = 0; index < queueNames.length; index += 1) {
+      final queueName = queueNames[index];
+      final stream = broker.consume(
+        RoutingSubscription(
+          queues: [queueName],
+          broadcastChannels:
+              index == 0 ? _broadcastSubscriptions : const <String>[],
+        ),
+        prefetch: prefetch,
+        consumerName: consumerName,
+      );
+      final subscription = stream.listen(
+        (delivery) {
+          // Fire-and-forget; handler manages its own lifecycle.
+          final task = _handle(delivery);
+          unawaited(
+            task.catchError((Object error, StackTrace stack) {
+              _events.add(
+                WorkerEvent(
+                  type: WorkerEventType.error,
+                  envelope: delivery.envelope,
+                  error: error,
+                  stackTrace: stack,
+                ),
+              );
+            }),
+          );
+        },
+        onError: (Object error, StackTrace stack) {
+          _events.add(
+            WorkerEvent(
+              type: WorkerEventType.error,
+              error: error,
+              stackTrace: stack,
+            ),
+          );
+        },
+      );
+      _subscriptions[queueName] = subscription;
+    }
     _startControlPlane();
     _startAutoscaler();
     _installSignalHandlers();
@@ -947,21 +998,35 @@ class Worker {
 
   Future<void> _recordQueueDepth() async {
     try {
-      final depth = await broker.pendingCount(queue);
-      if (depth == null) return;
-      _lastQueueDepth = depth;
-      StemMetrics.instance.setGauge(
-        'stem.queue.depth',
-        depth.toDouble(),
-        tags: {
-          'queue': queue,
-          'worker': _workerIdentifier,
-          'namespace': namespace,
-        },
-      );
+      final depths = await _collectQueueDepths();
+      if (depths.isEmpty) return;
+      _lastQueueDepth =
+          depths.values.fold<int>(0, (previous, value) => previous + value);
+      for (final entry in depths.entries) {
+        StemMetrics.instance.setGauge(
+          'stem.queue.depth',
+          entry.value.toDouble(),
+          tags: {
+            'queue': entry.key,
+            'worker': _workerIdentifier,
+            'namespace': namespace,
+          },
+        );
+      }
     } catch (_) {
       // Swallow errors to avoid impacting worker loops; rely on logging elsewhere.
     }
+  }
+
+  Future<Map<String, int>> _collectQueueDepths() async {
+    final result = <String, int>{};
+    for (final queueName in _effectiveQueues) {
+      final depth = await broker.pendingCount(queueName);
+      if (depth != null) {
+        result[queueName] = depth;
+      }
+    }
+    return result;
   }
 
   Future<void> _cancelAllSubscriptions() async {
@@ -1128,7 +1193,13 @@ class Worker {
     if (_autoscaleEvaluating) return;
     _autoscaleEvaluating = true;
     try {
-      final depth = await broker.pendingCount(queue) ?? _lastQueueDepth ?? 0;
+      final depthMap = await _collectQueueDepths();
+      final depth = depthMap.isEmpty
+          ? _lastQueueDepth ?? 0
+          : depthMap.values.fold<int>(0, (value, element) => value + element);
+      if (depthMap.isNotEmpty) {
+        _lastQueueDepth = depth;
+      }
       final inflight = _inflight;
       final now = DateTime.now();
       final configuredMax = autoscaleConfig.maxConcurrency ?? _maxConcurrency;
@@ -1381,6 +1452,11 @@ class Worker {
         if (_lastQueueDepth != null) {
           extras['queueDepth'] = _lastQueueDepth!;
         }
+        extras['subscriptions'] = {
+          'queues': subscriptionQueues,
+          if (subscriptionBroadcasts.isNotEmpty)
+            'broadcasts': subscriptionBroadcasts,
+        };
         return extras;
       }(),
     );
@@ -1749,8 +1825,9 @@ class Worker {
             status: 'ok',
             payload: {
               'timestamp': DateTime.now().toUtc().toIso8601String(),
-              'queue': queue,
+              'queue': primaryQueue,
               'inflight': _inflight,
+              'subscriptions': _subscriptionMetadata(),
             },
           ),
         );
@@ -1844,6 +1921,12 @@ class Worker {
     }
   }
 
+  Map<String, Object?> _subscriptionMetadata() => {
+        'queues': subscriptionQueues,
+        if (subscriptionBroadcasts.isNotEmpty)
+          'broadcasts': subscriptionBroadcasts,
+      };
+
   Map<String, Object?> _buildStatsSnapshot() {
     final now = DateTime.now().toUtc();
     final activeTasks = _activeDeliveries.entries.map((entry) {
@@ -1865,7 +1948,7 @@ class Worker {
     return {
       'timestamp': now.toIso8601String(),
       'namespace': namespace,
-      'queue': queue,
+      'queue': primaryQueue,
       'host': Platform.localHostname,
       'pid': pid,
       'concurrency': _currentConcurrency,
@@ -1875,6 +1958,7 @@ class Worker {
       'inflight': _inflight,
       'queues': queues,
       'active': activeTasks,
+      'subscriptions': _subscriptionMetadata(),
       'lastLeaseRenewalMsAgo': _lastLeaseRenewal == null
           ? null
           : now.difference(_lastLeaseRenewal!).inMilliseconds,

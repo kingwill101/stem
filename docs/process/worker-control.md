@@ -79,6 +79,13 @@ Additional arguments can be provided with `--command` (repeatable) or
 and exports helpful metadata (`STEM_WORKER_NODE`, `STEM_WORKER_PIDFILE`,
 `STEM_WORKER_LOGFILE`) to the launched process.
 
+Use `--queue` (repeatable) to subscribe nodes to specific queues and
+`--broadcast` to join broadcast channels. The CLI resolves aliases using the
+routing configuration referenced by `STEM_ROUTING_CONFIG` and exports
+`STEM_WORKER_QUEUES` / `STEM_WORKER_BROADCASTS` for the child process. When
+these options are omitted the worker falls back to the default queue defined in
+`StemConfig`.
+
 ## Worker Healthcheck
 
 Use `stem worker healthcheck` inside systemd `ExecStartPost=`, Kubernetes probes,
@@ -110,6 +117,12 @@ stem worker diagnose \
 
 Warnings and errors are printed for missing directories, unparseable PIDs, and
 other configuration gaps. Use `--json` when integrating with tooling.
+
+## Routing Configuration Helpers
+
+Inspect the active routing file with `stem routing dump`. Pass `--json` to
+emit the raw map or `--sample` to print a starter skeleton suitable for new
+deployments.
 
 ## Persistent Revokes
 

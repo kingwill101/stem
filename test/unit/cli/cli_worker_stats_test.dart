@@ -43,6 +43,7 @@ void main() {
       expect(output, contains('worker-test (ok)'));
       expect(output, contains('inflight: 0'));
       expect(output, contains('active: none'));
+      expect(output, contains('subscribed queues: default'));
       expect(err.toString().trim(), isEmpty);
 
       await worker.shutdown();
@@ -161,6 +162,7 @@ void main() {
         expect(output, contains('active (1):'));
         expect(output, contains('tasks.blocking'));
         expect(output, contains('queue=default'));
+        expect(output, contains('subscribed queues: default'));
       } finally {
         if (!release.isCompleted) {
           release.complete();

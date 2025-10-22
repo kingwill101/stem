@@ -117,25 +117,28 @@ void main() {
           queue: queue,
         );
 
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
         await publisher.publish(
           broadcast,
           routing: RoutingInfo.broadcast(channel: channel),
         );
 
-        final gotOne = await workerOne.moveNext().timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            fail('worker-one timed out waiting for broadcast message');
-          },
-        );
-        final gotTwo = await workerTwo.moveNext().timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            fail('worker-two timed out waiting for broadcast message');
-          },
-        );
-        expect(gotOne, isTrue);
-        expect(gotTwo, isTrue);
+        final results = await Future.wait<bool>([
+          workerOne.moveNext().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              fail('worker-one timed out waiting for broadcast message');
+            },
+          ),
+          workerTwo.moveNext().timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              fail('worker-two timed out waiting for broadcast message');
+            },
+          ),
+        ]);
+        expect(results.every((value) => value), isTrue);
 
         final firstDelivery = workerOne.current;
         final secondDelivery = workerTwo.current;

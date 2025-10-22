@@ -7,6 +7,7 @@ import 'package:args/command_runner.dart';
 import 'package:stem/src/cli/dependencies.dart';
 import 'package:stem/src/cli/dlq.dart';
 import 'package:stem/src/cli/observer.dart';
+import 'package:stem/src/cli/routing.dart';
 import 'package:stem/src/cli/schedule.dart';
 import 'package:stem/src/cli/utilities.dart';
 import 'package:stem/src/cli/worker.dart';
@@ -34,6 +35,7 @@ class StemCommandRunner extends CommandRunner<int> {
     addCommand(WorkerCommand(dependencies));
     addCommand(DlqCommand(dependencies));
     addCommand(HealthCommand(dependencies));
+    addCommand(RoutingCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;

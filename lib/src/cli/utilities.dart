@@ -4,6 +4,7 @@ import 'package:args/args.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/control/revoke_store_factory.dart';
+import 'package:stem/src/routing/subscription_loader.dart';
 import 'package:stem/stem.dart';
 
 Duration? parseOptionalDuration(String? value) {
@@ -102,17 +103,13 @@ Future<CliContext> createDefaultContext(
 }
 
 RoutingRegistry _loadRoutingRegistry(StemConfig config) {
-  final path = config.routingConfigPath?.trim();
-  if (path == null || path.isEmpty) {
-    return RoutingRegistry(RoutingConfig.legacy());
-  }
-  final file = File(path);
-  if (!file.existsSync()) {
-    throw StateError('Routing config file "$path" not found.');
-  }
-  final contents = file.readAsStringSync();
-  final routingConfig = RoutingConfig.fromYaml(contents);
-  return RoutingRegistry(routingConfig);
+  final loader = RoutingConfigLoader(
+    StemRoutingContext(
+      defaultQueue: config.defaultQueue,
+      configPath: config.routingConfigPath,
+    ),
+  );
+  return loader.load();
 }
 
 String formatDateTime(DateTime? value) => value?.toIso8601String() ?? '-';

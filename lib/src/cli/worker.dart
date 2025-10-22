@@ -11,6 +11,7 @@ import 'package:stem/src/cli/dependencies.dart';
 import 'package:stem/src/cli/utilities.dart';
 import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/control/revoke_store.dart';
+import 'package:stem/src/routing/subscription_loader.dart';
 import 'package:stem/stem.dart';
 
 class WorkerCommand extends Command<int> {
@@ -492,7 +493,18 @@ class WorkerStatsCommand extends Command<int> {
     final prefetch = payload['prefetch'];
     final timestamp = payload['timestamp'];
     final namespace = payload['namespace'];
-    final queueName = payload['queue'];
+    final subscriptionsMeta =
+        (payload['subscriptions'] as Map?)?.cast<String, Object?>();
+    final subscriptionQueues = subscriptionsMeta == null
+        ? const <String>[]
+        : (subscriptionsMeta['queues'] as List?)?.cast<String>() ??
+            const <String>[];
+    final subscriptionBroadcasts = subscriptionsMeta == null
+        ? const <String>[]
+        : (subscriptionsMeta['broadcasts'] as List?)?.cast<String>() ??
+            const <String>[];
+    final queueName = payload['queue'] ??
+        (subscriptionQueues.isNotEmpty ? subscriptionQueues.first : null);
     final host = payload['host'];
     final pid = payload['pid'];
     final lastQueueDepth = payload['lastQueueDepth'];
@@ -527,6 +539,17 @@ class WorkerStatsCommand extends Command<int> {
           .map((entry) => '${entry.key}=${entry.value}')
           .join(', ');
       dependencies.out.writeln('  queues: $parts');
+    }
+
+    if (subscriptionQueues.isNotEmpty) {
+      dependencies.out.writeln(
+        '  subscribed queues: ${subscriptionQueues.join(', ')}',
+      );
+    }
+    if (subscriptionBroadcasts.isNotEmpty) {
+      dependencies.out.writeln(
+        '  broadcasts: ${subscriptionBroadcasts.join(', ')}',
+      );
     }
 
     final active = payload['active'];
@@ -1269,6 +1292,21 @@ class WorkerStatusCommand extends Command<int> {
       'isolate=${heartbeat.isolateCount} inflight=${heartbeat.inflight}'
       '${isStale ? ' [stale ${formatReadableDuration(age)}]' : ''}',
     );
+    final subscriptions =
+        (heartbeat.extras['subscriptions'] as Map?)?.cast<String, Object?>();
+    if (subscriptions != null) {
+      final queues = (subscriptions['queues'] as List?)?.cast<String>() ??
+          const <String>[];
+      final broadcasts =
+          (subscriptions['broadcasts'] as List?)?.cast<String>() ??
+              const <String>[];
+      if (queues.isNotEmpty) {
+        out.writeln('  subscribed queues: ${queues.join(', ')}');
+      }
+      if (broadcasts.isNotEmpty) {
+        out.writeln('  broadcasts: ${broadcasts.join(', ')}');
+      }
+    }
     if (heartbeat.lastLeaseRenewal != null) {
       out.writeln(
         '  lastLeaseRenewal: '
@@ -1438,6 +1476,18 @@ class WorkerMultiCommand extends Command<int> {
             'Full command string (with optional quoting) executed per node when starting workers.',
         valueHelp: 'cmd',
       )
+      ..addMultiOption(
+        'queue',
+        abbr: 'q',
+        help: 'Queue to subscribe to (repeatable).',
+        valueHelp: 'queue',
+      )
+      ..addMultiOption(
+        'broadcast',
+        abbr: 'b',
+        help: 'Broadcast channel to subscribe to (repeatable).',
+        valueHelp: 'channel',
+      )
       ..addOption(
         'pidfile',
         defaultsTo: '/var/run/stem/%n.pid',
@@ -1554,6 +1604,64 @@ class WorkerMultiCommand extends Command<int> {
         'No worker command configured. Provide --command / --command-line or set STEM_WORKER_COMMAND.',
       );
       return 64;
+    }
+
+    final queueFlags =
+        ((args['queue'] as List?) ?? const <String>[]).cast<String>();
+    final broadcastFlags =
+        ((args['broadcast'] as List?) ?? const <String>[]).cast<String>();
+
+    StemConfig config;
+    try {
+      config = StemConfig.fromEnvironment(baseEnv);
+    } on Object catch (error) {
+      dependencies.err.writeln('Failed to load Stem configuration: $error');
+      return 64;
+    }
+
+    RoutingRegistry registry;
+    try {
+      registry = RoutingConfigLoader(
+        StemRoutingContext.fromConfig(config),
+      ).load();
+    } on StateError catch (error) {
+      dependencies.err.writeln(error.message);
+      return 64;
+    } on Object catch (error) {
+      dependencies.err.writeln('Failed to load routing configuration: $error');
+      return 70;
+    }
+
+    final builder = WorkerSubscriptionBuilder(
+      registry: registry,
+      defaultQueue: config.defaultQueue,
+    );
+
+    final overrideQueues = queueFlags.isNotEmpty
+        ? queueFlags
+        : (config.workerQueues.isNotEmpty ? config.workerQueues : null);
+    final overrideBroadcasts = broadcastFlags.isNotEmpty
+        ? broadcastFlags
+        : (config.workerBroadcasts.isNotEmpty ? config.workerBroadcasts : null);
+
+    RoutingSubscription subscription;
+    try {
+      subscription = builder.build(
+        queues: overrideQueues,
+        broadcasts: overrideBroadcasts,
+      );
+    } on StateError catch (error) {
+      dependencies.err.writeln(error.message);
+      return 64;
+    }
+
+    baseEnv['STEM_DEFAULT_QUEUE'] = subscription.queues.first;
+    baseEnv['STEM_WORKER_QUEUES'] = subscription.queues.join(',');
+    if (subscription.broadcastChannels.isEmpty) {
+      baseEnv.remove('STEM_WORKER_BROADCASTS');
+    } else {
+      baseEnv['STEM_WORKER_BROADCASTS'] =
+          subscription.broadcastChannels.join(',');
     }
 
     final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';

@@ -410,7 +410,7 @@ class RedisStreamsBroker implements Broker {
           }
           if ('$error'.contains('NOGROUP')) {
             for (final stream in streamKeys) {
-              _groupsCreated.remove('${stream}|${_groupKey(queue)}');
+              _groupsCreated.remove('$stream|${_groupKey(queue)}');
               await _ensureGroupForStream(queue, stream);
             }
             continue;
