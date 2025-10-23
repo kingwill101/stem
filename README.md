@@ -6,7 +6,7 @@
 
 # Stem
 
-Stem is a spec-driven background job platform for Dart. It gives you Celery-style
+ Stem is a Dart-native background job platform. It gives you Celery-style
 task execution with a Dart-first API, Redis Streams integration, retries,
 scheduling, observability, and security tooling—all without leaving the Dart
 ecosystem.
