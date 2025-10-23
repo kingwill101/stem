@@ -33,3 +33,17 @@ stack exits. To run again, clear the previous containers with:
 ```bash
 docker compose down
 ```
+
+### Tuning retry cadence
+
+Stem calculates retry delays with the worker's `retryStrategy`. This demo sets
+`ExponentialJitterRetryStrategy(base: Duration(milliseconds: 200), max: Duration(seconds: 1))`
+and connects to Redis with `blockTime=100ms` and `claimInterval=200ms`, so each
+retry fires within roughly a second. Increase or decrease the `base` duration or
+redis timing parameters in `bin/worker.dart` to change cadence (each retry
+doubles the wait up to `max`).
+
+You can also override retries per task via `TaskOptions(maxRetries: N)` in
+`bin/producer.dart`. Lower values result in fewer attempts. When you need a
+fixed delay instead of exponential backoff, implement a custom
+`RetryStrategy` or set `TaskOptions.notBefore` inside your own retry logic.

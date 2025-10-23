@@ -9,7 +9,12 @@ Future<void> main() async {
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://redis:6379/0';
   final workerName = Platform.environment['WORKER_NAME'] ?? 'retry-demo-worker';
 
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
+  final broker = await RedisStreamsBroker.connect(
+    brokerUrl,
+    blockTime: const Duration(milliseconds: 100),
+    claimInterval: const Duration(milliseconds: 200),
+    defaultVisibilityTimeout: const Duration(seconds: 2),
+  );
   final registry = buildRegistry();
   final backend = InMemoryResultBackend();
 
@@ -19,8 +24,10 @@ Future<void> main() async {
     backend: backend,
     queue: 'retry-demo',
     consumerName: workerName,
-    retryStrategy:
-        ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+    retryStrategy: ExponentialJitterRetryStrategy(
+      base: const Duration(milliseconds: 200),
+      max: const Duration(seconds: 1),
+    ),
   );
 
   final subscriptions = attachLogging('worker');

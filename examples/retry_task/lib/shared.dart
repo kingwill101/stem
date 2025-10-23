@@ -10,7 +10,7 @@ SimpleTaskRegistry buildRegistry() {
         name: 'tasks.always_fail',
         entrypoint: _alwaysFailEntrypoint,
         options: const TaskOptions(
-          maxRetries: 3,
+          maxRetries: 2,
           queue: 'retry-demo',
         ),
       ),
