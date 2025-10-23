@@ -1,7 +1,7 @@
 ## Implementation
 - [ ] Audit existing examples to confirm reuse opportunities and avoid duplication (document gaps captured in proposal).
 - [x] Scaffold rate-limit + delayed delivery demo (producer, worker, README, optional compose).
-- [ ] Scaffold DLQ operations sandbox demonstrating failures, CLI inspection, and replay.
+- [x] Scaffold DLQ operations sandbox demonstrating failures, CLI inspection, and replay.
 - [ ] Scaffold worker control lab showing ping/stats/revoke/shutdown workflows (support multiple workers).
 - [ ] Scaffold autoscaling demo illustrating dynamic concurrency adjustments with metrics verification.
 - [ ] Scaffold scheduler observability demo covering drift metrics, schedule-entry signals, and CLI checks.

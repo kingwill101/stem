@@ -1,0 +1,39 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "56382:6379"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: examples/dlq_sandbox/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+      WORKER_NAME: dlq-sandbox-worker
+    depends_on:
+      - redis
+    command: ["dart", "bin/worker.dart"]
+
+  producer:
+    build:
+      context: ../..
+      dockerfile: examples/dlq_sandbox/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+    depends_on:
+      - redis
+    command: ["dart", "bin/producer.dart"]
+
+  cli:
+    build:
+      context: ../..
+      dockerfile: examples/dlq_sandbox/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+    depends_on:
+      - redis
+    entrypoint: ["sleep", "infinity"]
