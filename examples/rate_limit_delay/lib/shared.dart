@@ -62,16 +62,20 @@ Future<RedisFixedWindowRateLimiter> connectRateLimiter(String uri) =>
 
 List<SignalSubscription> attachSignalLogging() {
   final subscriptions = <SignalSubscription>[];
-  subscriptions.add(StemSignals.taskReceived.connect((payload) {
-    stdout.writeln(
-      '[signal][received] task=${payload.envelope.name} id=${payload.envelope.id}',
-    );
-  }));
-  subscriptions.add(StemSignals.taskRetry.connect((payload) {
-    stdout.writeln(
-      '[signal][retry] task=${payload.envelope.name} retry=${payload.attempt} next=${payload.nextRetryAt.toIso8601String()}',
-    );
-  }));
+  subscriptions.add(
+    StemSignals.taskReceived.connect((payload, _) {
+      stdout.writeln(
+        '[signal][received] task=${payload.envelope.name} id=${payload.envelope.id}',
+      );
+    }),
+  );
+  subscriptions.add(
+    StemSignals.taskRetry.connect((payload, _) {
+      stdout.writeln(
+        '[signal][retry] task=${payload.envelope.name} retry=${payload.attempt} next=${payload.nextRetryAt.toIso8601String()}',
+      );
+    }),
+  );
   return subscriptions;
 }
 
