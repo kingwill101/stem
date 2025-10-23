@@ -9,10 +9,7 @@ void main() {
       final signal = Signal<String>(name: 'test');
       final calls = <String>[];
       signal.connect((payload, _) => calls.add('low:$payload'));
-      signal.connect(
-        (payload, _) => calls.add('high:$payload'),
-        priority: 10,
-      );
+      signal.connect((payload, _) => calls.add('high:$payload'), priority: 10);
 
       await signal.emit('payload');
 
@@ -140,11 +137,7 @@ void main() {
       );
 
       await StemSignals.taskPrerun.emit(
-        TaskPrerunPayload(
-          envelope: envelope,
-          worker: worker,
-          context: context,
-        ),
+        TaskPrerunPayload(envelope: envelope, worker: worker, context: context),
       );
 
       expect(invoked, isFalse);

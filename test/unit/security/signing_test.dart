@@ -176,9 +176,7 @@ void main() {
 }
 
 class _RecordingLogDriver extends LogDriver {
-  _RecordingLogDriver()
-      : entries = <LogEntry>[],
-        super('recording');
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
 
   final List<LogEntry> entries;
 

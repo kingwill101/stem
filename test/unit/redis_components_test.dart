@@ -60,8 +60,10 @@ void main() {
       await broker.publish(envelope);
 
       final first = await broker
-          .consume(RoutingSubscription.singleQueue('default'),
-              consumerName: 'c-test')
+          .consume(
+            RoutingSubscription.singleQueue('default'),
+            consumerName: 'c-test',
+          )
           .first;
       expect(first.envelope.id, equals(envelope.id));
 
@@ -69,8 +71,10 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
       final second = await broker
-          .consume(RoutingSubscription.singleQueue('default'),
-              consumerName: 'c-test')
+          .consume(
+            RoutingSubscription.singleQueue('default'),
+            consumerName: 'c-test',
+          )
           .first
           .timeout(const Duration(seconds: 1));
       expect(second.envelope.id, equals(envelope.id));

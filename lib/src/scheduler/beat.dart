@@ -29,8 +29,9 @@ class Beat {
   final PayloadSigner? signer;
 
   final Random _random;
-  static const StemSignalEmitter _signals =
-      StemSignalEmitter(defaultSender: 'beat');
+  static const StemSignalEmitter _signals = StemSignalEmitter(
+    defaultSender: 'beat',
+  );
 
   Timer? _timer;
   bool _running = false;
@@ -151,16 +152,10 @@ class Beat {
         name: entry.taskName,
         args: entry.args,
         queue: entry.queue,
-        headers: {
-          'scheduled-from': 'beat',
-          'schedule-id': entry.id,
-        },
+        headers: {'scheduled-from': 'beat', 'schedule-id': entry.id},
         meta: entry.kwargs.isEmpty
             ? entry.meta
-            : {
-                ...entry.meta,
-                'kwargs': entry.kwargs,
-              },
+            : {...entry.meta, 'kwargs': entry.kwargs},
       );
       if (signer != null) {
         envelope = await signer!.sign(envelope);

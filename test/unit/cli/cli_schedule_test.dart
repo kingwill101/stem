@@ -104,64 +104,72 @@ void main() {
       expect(entries, isEmpty);
     });
 
-    test('apply retries on conflict when schedule store updates concurrently',
-        () async {
-      final baseStore = InMemoryScheduleStore();
-      final flakyStore =
-          FlakyScheduleStore(baseStore, failuresBeforeSuccess: 1);
-
-      final now = DateTime.now().toUtc();
-      await baseStore.upsert(
-        ScheduleEntry(
-          id: 'nightly',
-          taskName: 'noop',
-          queue: 'default',
-          spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
-        ),
-      );
-      await baseStore.markExecuted(
-        'nightly',
-        scheduledFor: now.subtract(const Duration(minutes: 5)),
-        executedAt: now.subtract(const Duration(minutes: 4, seconds: 30)),
-      );
-
-      final defs = File('${tempDir.path}/conflict_defs.json')
-        ..writeAsStringSync(
-          jsonEncode([
-            {
-              'id': 'nightly',
-              'task': 'noop',
-              'queue': 'priority',
-              'schedule': 'every:30s',
-            },
-          ]),
+    test(
+      'apply retries on conflict when schedule store updates concurrently',
+      () async {
+        final baseStore = InMemoryScheduleStore();
+        final flakyStore = FlakyScheduleStore(
+          baseStore,
+          failuresBeforeSuccess: 1,
         );
 
-      final code = await runStemCli(
-        ['schedule', 'apply', '--file', defs.path, '--yes'],
-        scheduleContextBuilder: () async => ScheduleCliContext.store(
-          storeInstance: flakyStore,
-        ),
-      );
-      expect(code, equals(0));
+        final now = DateTime.now().toUtc();
+        await baseStore.upsert(
+          ScheduleEntry(
+            id: 'nightly',
+            taskName: 'noop',
+            queue: 'default',
+            spec: IntervalScheduleSpec(every: const Duration(minutes: 5)),
+          ),
+        );
+        await baseStore.markExecuted(
+          'nightly',
+          scheduledFor: now.subtract(const Duration(minutes: 5)),
+          executedAt: now.subtract(const Duration(minutes: 4, seconds: 30)),
+        );
 
-      final updated = await baseStore.get('nightly');
-      expect(updated, isNotNull);
-      expect(updated!.queue, equals('priority'));
-      expect(
-        updated.spec,
-        isA<IntervalScheduleSpec>().having(
-            (spec) => spec.every, 'every', equals(const Duration(seconds: 30))),
-      );
-      expect(updated.lastRunAt, isNotNull);
-      expect(updated.totalRunCount, greaterThan(0));
-      expect(flakyStore.conflictAttempts, equals(1));
-    });
+        final defs = File('${tempDir.path}/conflict_defs.json')
+          ..writeAsStringSync(
+            jsonEncode([
+              {
+                'id': 'nightly',
+                'task': 'noop',
+                'queue': 'priority',
+                'schedule': 'every:30s',
+              },
+            ]),
+          );
+
+        final code = await runStemCli(
+          ['schedule', 'apply', '--file', defs.path, '--yes'],
+          scheduleContextBuilder: () async =>
+              ScheduleCliContext.store(storeInstance: flakyStore),
+        );
+        expect(code, equals(0));
+
+        final updated = await baseStore.get('nightly');
+        expect(updated, isNotNull);
+        expect(updated!.queue, equals('priority'));
+        expect(
+          updated.spec,
+          isA<IntervalScheduleSpec>().having(
+            (spec) => spec.every,
+            'every',
+            equals(const Duration(seconds: 30)),
+          ),
+        );
+        expect(updated.lastRunAt, isNotNull);
+        expect(updated.totalRunCount, greaterThan(0));
+        expect(flakyStore.conflictAttempts, equals(1));
+      },
+    );
 
     test('enable retries on conflict when toggling schedule state', () async {
       final baseStore = InMemoryScheduleStore();
-      final flakyStore =
-          FlakyScheduleStore(baseStore, failuresBeforeSuccess: 1);
+      final flakyStore = FlakyScheduleStore(
+        baseStore,
+        failuresBeforeSuccess: 1,
+      );
 
       await baseStore.upsert(
         ScheduleEntry(
@@ -175,9 +183,8 @@ void main() {
 
       final code = await runStemCli(
         ['schedule', 'enable', 'nightly'],
-        scheduleContextBuilder: () async => ScheduleCliContext.store(
-          storeInstance: flakyStore,
-        ),
+        scheduleContextBuilder: () async =>
+            ScheduleCliContext.store(storeInstance: flakyStore),
       );
       expect(code, equals(0));
 
@@ -316,11 +323,7 @@ void main() {
 
       final out = StringBuffer();
       final code = await runStemCli(
-        [
-          'schedule',
-          'enable',
-          'nightly',
-        ],
+        ['schedule', 'enable', 'nightly'],
         out: out,
         scheduleFilePath: filePath,
       );
@@ -347,11 +350,7 @@ void main() {
 
       final out = StringBuffer();
       final code = await runStemCli(
-        [
-          'schedule',
-          'disable',
-          'nightly',
-        ],
+        ['schedule', 'disable', 'nightly'],
         out: out,
         scheduleFilePath: filePath,
       );
@@ -366,10 +365,7 @@ void main() {
 }
 
 class FlakyScheduleStore implements ScheduleStore {
-  FlakyScheduleStore(
-    this.delegate, {
-    this.failuresBeforeSuccess = 1,
-  });
+  FlakyScheduleStore(this.delegate, {this.failuresBeforeSuccess = 1});
 
   final ScheduleStore delegate;
   int failuresBeforeSuccess;
@@ -423,16 +419,15 @@ class FlakyScheduleStore implements ScheduleStore {
     Duration? runDuration,
     DateTime? nextRunAt,
     Duration? drift,
-  }) =>
-      delegate.markExecuted(
-        id,
-        scheduledFor: scheduledFor,
-        executedAt: executedAt,
-        jitter: jitter,
-        lastError: lastError,
-        success: success,
-        runDuration: runDuration,
-        nextRunAt: nextRunAt,
-        drift: drift,
-      );
+  }) => delegate.markExecuted(
+    id,
+    scheduledFor: scheduledFor,
+    executedAt: executedAt,
+    jitter: jitter,
+    lastError: lastError,
+    success: success,
+    runDuration: runDuration,
+    nextRunAt: nextRunAt,
+    drift: drift,
+  );
 }

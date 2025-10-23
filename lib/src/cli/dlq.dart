@@ -118,7 +118,8 @@ class DlqListCommand extends Command<int> {
         out.writeln('No dead letter entries found.');
         if (page.hasMore) {
           out.writeln(
-              'More entries available. Try --offset ${page.nextOffset}.');
+            'More entries available. Try --offset ${page.nextOffset}.',
+          );
         }
         return 0;
       }

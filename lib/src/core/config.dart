@@ -25,10 +25,10 @@ class StemConfig {
     List<String>? workerBroadcasts,
     SigningConfig? signing,
     TlsConfig? tls,
-  })  : workerQueues = List.unmodifiable(workerQueues ?? const []),
-        workerBroadcasts = List.unmodifiable(workerBroadcasts ?? const []),
-        signing = signing ?? const SigningConfig.disabled(),
-        tls = tls ?? const TlsConfig.disabled();
+  }) : workerQueues = List.unmodifiable(workerQueues ?? const []),
+       workerBroadcasts = List.unmodifiable(workerBroadcasts ?? const []),
+       signing = signing ?? const SigningConfig.disabled(),
+       tls = tls ?? const TlsConfig.disabled();
 
   /// Broker connection string (e.g. redis://localhost:6379).
   final String brokerUrl;

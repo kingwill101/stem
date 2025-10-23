@@ -42,10 +42,7 @@ void main() {
       await broker.publish(second);
 
       final iterator = StreamIterator(
-        broker.consume(
-          RoutingSubscription.singleQueue(queue),
-          prefetch: 1,
-        ),
+        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 1),
       );
       expect(await iterator.moveNext(), isTrue);
       final delivery = iterator.current;
@@ -96,20 +93,21 @@ void main() {
 
       await broker.publish(
         lowPriority,
-        routing:
-            RoutingInfo.queue(queue: queue, priority: lowPriority.priority),
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: lowPriority.priority,
+        ),
       );
       await broker.publish(
         highPriority,
-        routing:
-            RoutingInfo.queue(queue: queue, priority: highPriority.priority),
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: highPriority.priority,
+        ),
       );
 
       final iterator = StreamIterator(
-        broker.consume(
-          RoutingSubscription.singleQueue(queue),
-          prefetch: 2,
-        ),
+        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 2),
       );
       expect(await iterator.moveNext(), isTrue);
       final first = iterator.current;
@@ -229,9 +227,6 @@ String _uniqueNamespace() {
 
 Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
   try {
-    await runZonedGuarded(
-      () => broker.close(),
-      (Object _, StackTrace __) {},
-    );
+    await runZonedGuarded(() => broker.close(), (Object _, StackTrace __) {});
   } catch (_) {}
 }

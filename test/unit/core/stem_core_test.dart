@@ -124,8 +124,7 @@ class _RecordingBroker implements Broker {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,
-  }) =>
-      const Stream.empty();
+  }) => const Stream.empty();
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {}
@@ -147,8 +146,7 @@ class _RecordingBroker implements Broker {
     String queue, {
     int limit = 50,
     int offset = 0,
-  }) async =>
-      const DeadLetterPage(entries: []);
+  }) async => const DeadLetterPage(entries: []);
 
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async => null;
@@ -160,16 +158,14 @@ class _RecordingBroker implements Broker {
     DateTime? since,
     Duration? delay,
     bool dryRun = false,
-  }) async =>
-      DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+  }) async => DeadLetterReplayResult(entries: const [], dryRun: dryRun);
 
   @override
   Future<int> purgeDeadLetters(
     String queue, {
     DateTime? since,
     int? limit,
-  }) async =>
-      0;
+  }) async => 0;
 }
 
 class _RecordingBackend implements ResultBackend {

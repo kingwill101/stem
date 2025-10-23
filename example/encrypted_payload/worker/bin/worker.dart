@@ -13,28 +13,22 @@ Future<void> main(List<String> args) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-        'STEM_RESULT_BACKEND_URL must be set for the encrypted example.');
+      'STEM_RESULT_BACKEND_URL must be set for the encrypted example.',
+    );
   }
 
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
   );
-  final backend = await RedisResultBackend.connect(
-    backendUrl,
-    tls: config.tls,
-  );
+  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<String>(
         name: 'secure.report',
-        entrypoint: (context, args) => _encryptedEntrypoint(
-          context,
-          args,
-          cipher,
-          secretKey,
-        ),
+        entrypoint: (context, args) =>
+            _encryptedEntrypoint(context, args, cipher, secretKey),
         options: TaskOptions(
           queue: config.defaultQueue,
           maxRetries: 5,
@@ -80,18 +74,16 @@ Future<String> _encryptedEntrypoint(
   final mac = Mac(base64Decode(args['mac'] as String));
 
   final secretBox = SecretBox(cipherText, nonce: nonce, mac: mac);
-  final plainBytes = await cipher.decrypt(
-    secretBox,
-    secretKey: secretKey,
-  );
+  final plainBytes = await cipher.decrypt(secretBox, secretKey: secretKey);
 
   final payload = jsonDecode(utf8.decode(plainBytes)) as Map<String, Object?>;
   final customerId = payload['customerId'];
   final amount = payload['amount'];
 
   context.heartbeat();
-  stdout
-      .writeln('🔐 Generated secure report for $customerId (amount: $amount)');
+  stdout.writeln(
+    '🔐 Generated secure report for $customerId (amount: $amount)',
+  );
   context.progress(1.0, data: payload);
   return 'Report complete for $customerId';
 }

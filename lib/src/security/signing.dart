@@ -63,11 +63,11 @@ class SigningConfig {
 
   /// Disabled configuration (no signing).
   const SigningConfig.disabled()
-      : activeKeyId = null,
-        algorithm = SigningAlgorithm.hmacSha256,
-        hmacSecrets = const {},
-        ed25519PublicKeys = const {},
-        ed25519PrivateKeys = const {};
+    : activeKeyId = null,
+      algorithm = SigningAlgorithm.hmacSha256,
+      hmacSecrets = const {},
+      ed25519PublicKeys = const {},
+      ed25519PrivateKeys = const {};
 
   /// The active signing key used for new envelopes.
   final String? activeKeyId;
@@ -120,8 +120,9 @@ class SigningConfig {
       env[_SigningEnv.algorithm]?.trim(),
     );
     final activeValue = env[_SigningEnv.activeKey]?.trim();
-    final activeKeyId =
-        (activeValue == null || activeValue.isEmpty) ? null : activeValue;
+    final activeKeyId = (activeValue == null || activeValue.isEmpty)
+        ? null
+        : activeValue;
 
     if (algorithm == SigningAlgorithm.hmacSha256) {
       final rawKeys = env[_SigningEnv.keys]?.trim();

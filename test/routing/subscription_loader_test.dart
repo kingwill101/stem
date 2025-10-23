@@ -15,9 +15,7 @@ void main() {
         'default': QueueDefinition(name: 'default'),
         'critical': QueueDefinition(name: 'critical'),
       },
-      broadcasts: {
-        'announcements': BroadcastDefinition(name: 'announcements'),
-      },
+      broadcasts: {'announcements': BroadcastDefinition(name: 'announcements')},
     );
     final registry = RoutingRegistry(routingConfig);
 

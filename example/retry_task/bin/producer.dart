@@ -15,10 +15,7 @@ Future<void> main() async {
 
   final taskId = await stem.enqueue(
     'tasks.always_fail',
-    options: const TaskOptions(
-      maxRetries: 3,
-      queue: 'retry-demo',
-    ),
+    options: const TaskOptions(maxRetries: 3, queue: 'retry-demo'),
     meta: const {'maxRetries': 3},
   );
 

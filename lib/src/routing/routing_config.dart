@@ -14,10 +14,10 @@ class RoutingConfig {
     required Map<String, QueueDefinition> queues,
     List<RouteDefinition>? routes,
     Map<String, BroadcastDefinition>? broadcasts,
-  })  : defaultQueue = defaultQueue,
-        queues = Map.unmodifiable(queues),
-        routes = List.unmodifiable(routes ?? const []),
-        broadcasts = Map.unmodifiable(broadcasts ?? const {});
+  }) : defaultQueue = defaultQueue,
+       queues = Map.unmodifiable(queues),
+       routes = List.unmodifiable(routes ?? const []),
+       broadcasts = Map.unmodifiable(broadcasts ?? const {});
 
   /// Default queue alias configuration.
   final DefaultQueueConfig defaultQueue;
@@ -103,14 +103,15 @@ class RoutingConfig {
   }
 
   Map<String, Object?> toJson() => {
-        'defaultQueue': defaultQueue.toJson(),
-        'queues': queues.map((key, value) => MapEntry(key, value.toJson())),
-        if (routes.isNotEmpty)
-          'routes': routes.map((route) => route.toJson()).toList(),
-        if (broadcasts.isNotEmpty)
-          'broadcasts':
-              broadcasts.map((key, value) => MapEntry(key, value.toJson())),
-      };
+    'defaultQueue': defaultQueue.toJson(),
+    'queues': queues.map((key, value) => MapEntry(key, value.toJson())),
+    if (routes.isNotEmpty)
+      'routes': routes.map((route) => route.toJson()).toList(),
+    if (broadcasts.isNotEmpty)
+      'broadcasts': broadcasts.map(
+        (key, value) => MapEntry(key, value.toJson()),
+      ),
+  };
 }
 
 /// Default queue alias configuration tying `alias` to a canonical queue name.
@@ -143,16 +144,12 @@ class DefaultQueueConfig {
     if (value is String && value.trim().isNotEmpty) {
       final queue = value.trim();
       final canonical = _resolveQueueOrFallback(queue, queueLookup);
-      return DefaultQueueConfig(
-        alias: 'default',
-        queue: canonical,
-      );
+      return DefaultQueueConfig(alias: 'default', queue: canonical);
     }
-    final map =
-        _requireMap(value, context: 'default_queue').map((key, val) => MapEntry(
-              key.toString(),
-              val,
-            ));
+    final map = _requireMap(
+      value,
+      context: 'default_queue',
+    ).map((key, val) => MapEntry(key.toString(), val));
     final alias = (map['alias'] as String?)?.trim().isNotEmpty == true
         ? (map['alias'] as String).trim()
         : 'default';
@@ -166,18 +163,14 @@ class DefaultQueueConfig {
       for (final fallback in fallbackValues)
         _resolveQueueOrFallback(fallback, queueLookup),
     ];
-    return DefaultQueueConfig(
-      alias: alias,
-      queue: queue,
-      fallbacks: fallbacks,
-    );
+    return DefaultQueueConfig(alias: alias, queue: queue, fallbacks: fallbacks);
   }
 
   Map<String, Object?> toJson() => {
-        'alias': alias,
-        'queue': queue,
-        if (fallbacks.isNotEmpty) 'fallbacks': fallbacks,
-      };
+    'alias': alias,
+    'queue': queue,
+    if (fallbacks.isNotEmpty) 'fallbacks': fallbacks,
+  };
 }
 
 /// Detailed queue definition with optional routing metadata.
@@ -189,9 +182,9 @@ class QueueDefinition {
     QueuePriorityRange? priorityRange,
     List<QueueBinding>? bindings,
     Map<String, Object?>? metadata,
-  })  : priorityRange = priorityRange ?? QueuePriorityRange.standard,
-        bindings = List.unmodifiable(bindings ?? const []),
-        metadata = Map.unmodifiable(metadata ?? const {});
+  }) : priorityRange = priorityRange ?? QueuePriorityRange.standard,
+       bindings = List.unmodifiable(bindings ?? const []),
+       metadata = Map.unmodifiable(metadata ?? const {});
 
   final String name;
   final String? exchange;
@@ -218,8 +211,9 @@ class QueueDefinition {
     return QueueDefinition(
       name: name,
       exchange: exchange?.isEmpty == true ? null : exchange,
-      routingKey:
-          routingKey?.toString().trim().isEmpty == true ? null : routingKey,
+      routingKey: routingKey?.toString().trim().isEmpty == true
+          ? null
+          : routingKey,
       priorityRange: priorityRange,
       bindings: bindings,
       metadata: metadata,
@@ -227,19 +221,19 @@ class QueueDefinition {
   }
 
   Map<String, Object?> toJson() => {
-        if (exchange != null) 'exchange': exchange,
-        if (routingKey != null) 'routingKey': routingKey,
-        'priorityRange': priorityRange.toJson(),
-        if (bindings.isNotEmpty)
-          'bindings': bindings.map((binding) => binding.toJson()).toList(),
-        if (metadata.isNotEmpty) 'meta': metadata,
-      };
+    if (exchange != null) 'exchange': exchange,
+    if (routingKey != null) 'routingKey': routingKey,
+    'priorityRange': priorityRange.toJson(),
+    if (bindings.isNotEmpty)
+      'bindings': bindings.map((binding) => binding.toJson()).toList(),
+    if (metadata.isNotEmpty) 'meta': metadata,
+  };
 }
 
 /// Priority range constraint applied to a queue definition.
 class QueuePriorityRange {
   const QueuePriorityRange({required this.min, required this.max})
-      : assert(min <= max, 'min priority must be <= max priority');
+    : assert(min <= max, 'min priority must be <= max priority');
 
   static const QueuePriorityRange standard = QueuePriorityRange(min: 0, max: 9);
 
@@ -309,10 +303,10 @@ class QueueBinding {
   }
 
   Map<String, Object?> toJson() => {
-        'routingKey': routingKey,
-        if (headers.isNotEmpty) 'headers': headers,
-        if (weight != null) 'weight': weight,
-      };
+    'routingKey': routingKey,
+    if (headers.isNotEmpty) 'headers': headers,
+    if (weight != null) 'weight': weight,
+  };
 }
 
 /// Broadcast channel declaration.
@@ -322,18 +316,15 @@ class BroadcastDefinition {
     this.durability,
     String? delivery,
     Map<String, Object?>? metadata,
-  })  : delivery = delivery ?? 'at-least-once',
-        metadata = Map.unmodifiable(metadata ?? const {});
+  }) : delivery = delivery ?? 'at-least-once',
+       metadata = Map.unmodifiable(metadata ?? const {});
 
   final String name;
   final String? durability;
   final String delivery;
   final Map<String, Object?> metadata;
 
-  factory BroadcastDefinition.fromJson(
-    String name,
-    Map<String, Object?> json,
-  ) {
+  factory BroadcastDefinition.fromJson(String name, Map<String, Object?> json) {
     final durability = (json['durability'] as String?)?.trim();
     final delivery = (json['delivery'] as String?)?.trim();
     final metadata = _readMap(json, 'meta');
@@ -346,10 +337,10 @@ class BroadcastDefinition {
   }
 
   Map<String, Object?> toJson() => {
-        if (durability != null) 'durability': durability,
-        'delivery': delivery,
-        if (metadata.isNotEmpty) 'meta': metadata,
-      };
+    if (durability != null) 'durability': durability,
+    'delivery': delivery,
+    if (metadata.isNotEmpty) 'meta': metadata,
+  };
 }
 
 /// Declarative routing rule mapping match criteria to targets.
@@ -384,11 +375,11 @@ class RouteDefinition {
   }
 
   Map<String, Object?> toJson() => {
-        'match': match.toJson(),
-        'target': target.toJson(),
-        if (priorityOverride != null) 'priorityOverride': priorityOverride,
-        if (options.isNotEmpty) 'options': options,
-      };
+    'match': match.toJson(),
+    'target': target.toJson(),
+    if (priorityOverride != null) 'priorityOverride': priorityOverride,
+    if (options.isNotEmpty) 'options': options,
+  };
 }
 
 /// Routing match criteria with optional task glob, headers, or queue override.
@@ -397,8 +388,8 @@ class RouteMatch {
     List<Glob>? taskGlobs,
     Map<String, String>? headers,
     this.queueOverride,
-  })  : taskGlobs = taskGlobs == null ? null : List.unmodifiable(taskGlobs),
-        headers = Map.unmodifiable(headers ?? const {});
+  }) : taskGlobs = taskGlobs == null ? null : List.unmodifiable(taskGlobs),
+       headers = Map.unmodifiable(headers ?? const {});
 
   final List<Glob>? taskGlobs;
   final Map<String, String> headers;
@@ -412,8 +403,9 @@ class RouteMatch {
     return RouteMatch(
       taskGlobs: tasks,
       headers: headers ?? const {},
-      queueOverride:
-          queueOverride?.trim().isEmpty == true ? null : queueOverride?.trim(),
+      queueOverride: queueOverride?.trim().isEmpty == true
+          ? null
+          : queueOverride?.trim(),
     );
   }
 
@@ -436,10 +428,7 @@ class RouteMatch {
 
 /// Route target describing queue or broadcast destination.
 class RouteTarget {
-  RouteTarget({
-    required this.type,
-    required this.name,
-  });
+  RouteTarget({required this.type, required this.name});
 
   final String type;
   final String name;
@@ -450,16 +439,10 @@ class RouteTarget {
     if (name == null || name.isEmpty) {
       throw const FormatException('route target requires name.');
     }
-    return RouteTarget(
-      type: type.isEmpty ? 'queue' : type,
-      name: name,
-    );
+    return RouteTarget(type: type.isEmpty ? 'queue' : type, name: name);
   }
 
-  Map<String, Object?> toJson() => {
-        'type': type,
-        'name': name,
-      };
+  Map<String, Object?> toJson() => {'type': type, 'name': name};
 }
 
 List<Glob>? _normalizeTaskPatterns(Object? value) {
@@ -493,10 +476,7 @@ List<Glob>? _normalizeTaskPatterns(Object? value) {
   return patterns.map((pattern) => Glob(pattern)).toList();
 }
 
-String _resolveQueueOrFallback(
-  String candidate,
-  Iterable<String> knownQueues,
-) {
+String _resolveQueueOrFallback(String candidate, Iterable<String> knownQueues) {
   final lookup = knownQueues.firstWhereOrNull((queue) => queue == candidate);
   if (lookup == null) {
     throw FormatException(
@@ -512,10 +492,7 @@ Map<String, Object?> _readMap(Map<String, Object?> source, String key) {
   return _requireMap(value, context: key);
 }
 
-Map<String, Object?> _requireMap(
-  Object? value, {
-  required String context,
-}) {
+Map<String, Object?> _requireMap(Object? value, {required String context}) {
   if (value == null) {
     throw FormatException('$context must be a map.');
   }

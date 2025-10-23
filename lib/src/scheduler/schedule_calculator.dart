@@ -11,9 +11,9 @@ class ScheduleCalculator {
     Random? random,
     ScheduleTimezoneResolver? timezoneResolver,
     SolarCalculator? solarCalculator,
-  })  : _random = random ?? Random(),
-        _timezoneResolver = timezoneResolver,
-        _solar = solarCalculator ?? const SolarCalculator();
+  }) : _random = random ?? Random(),
+       _timezoneResolver = timezoneResolver,
+       _solar = solarCalculator ?? const SolarCalculator();
 
   final Random _random;
   final ScheduleTimezoneResolver? _timezoneResolver;
@@ -65,9 +65,9 @@ class ScheduleCalculator {
     if (candidate.isBefore(now)) {
       final elapsed = now.difference(candidate);
       final ticks = (elapsed.inMilliseconds / spec.every.inMilliseconds).ceil();
-      candidate = candidate.add(Duration(
-        milliseconds: (ticks * spec.every.inMilliseconds),
-      ));
+      candidate = candidate.add(
+        Duration(milliseconds: (ticks * spec.every.inMilliseconds)),
+      );
     } else if (candidate.isAtSameMomentAs(reference)) {
       candidate = candidate.add(spec.every);
     }
@@ -90,9 +90,9 @@ class ScheduleCalculator {
       if (spec.runOnce) {
         return runAt;
       }
-      return runAt.add(Duration(
-        milliseconds: now.difference(runAt).inMilliseconds + 1,
-      ));
+      return runAt.add(
+        Duration(milliseconds: now.difference(runAt).inMilliseconds + 1),
+      );
     }
     return runAt;
   }
@@ -172,7 +172,8 @@ class ScheduleCalculator {
       return candidate;
     }
     throw StateError(
-        'Unable to compute next run for cron expression $expression');
+      'Unable to compute next run for cron expression $expression',
+    );
   }
 
   tz.TZDateTime _nextCronTz(
@@ -206,27 +207,43 @@ class ScheduleCalculator {
 
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
-        candidate =
-            tz.TZDateTime(location, candidate.year, candidate.month + 1);
+        candidate = tz.TZDateTime(
+          location,
+          candidate.year,
+          candidate.month + 1,
+        );
         continue;
       }
 
       if (!_matches(dayField, candidate.day)) {
         candidate = tz.TZDateTime(
-            location, candidate.year, candidate.month, candidate.day + 1);
+          location,
+          candidate.year,
+          candidate.month,
+          candidate.day + 1,
+        );
         continue;
       }
 
       final weekday = candidate.weekday % 7;
       if (!_matchesWeekday(weekdayField, weekday, dayField)) {
         candidate = tz.TZDateTime(
-            location, candidate.year, candidate.month, candidate.day + 1);
+          location,
+          candidate.year,
+          candidate.month,
+          candidate.day + 1,
+        );
         continue;
       }
 
       if (!_matches(hourField, candidate.hour)) {
-        candidate = tz.TZDateTime(location, candidate.year, candidate.month,
-            candidate.day, candidate.hour + 1);
+        candidate = tz.TZDateTime(
+          location,
+          candidate.year,
+          candidate.month,
+          candidate.day,
+          candidate.hour + 1,
+        );
         continue;
       }
 
@@ -238,7 +255,8 @@ class ScheduleCalculator {
       return candidate;
     }
     throw StateError(
-        'Unable to compute next run for cron expression $expression');
+      'Unable to compute next run for cron expression $expression',
+    );
   }
 
   DateTime _nextCalendar(
@@ -246,9 +264,7 @@ class ScheduleCalculator {
     DateTime reference,
     tz.Location? location,
   ) {
-    final cron = CronScheduleSpec(
-      expression: _calendarToCron(spec),
-    );
+    final cron = CronScheduleSpec(expression: _calendarToCron(spec));
     return _nextCron(cron, reference, location);
   }
 
@@ -258,11 +274,7 @@ class ScheduleCalculator {
     tz.Location? location,
   ) {
     final DateTime start = reference.toUtc();
-    final DateTime candidate = _solar.nextEvent(
-      spec,
-      start,
-      location,
-    );
+    final DateTime candidate = _solar.nextEvent(spec, start, location);
     if (spec.offset != null) {
       return candidate.add(spec.offset!);
     }

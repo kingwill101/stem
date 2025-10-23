@@ -7,11 +7,11 @@ class HelloTask implements TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: 'default',
-        maxRetries: 3,
-        rateLimit: '10/s',
-        visibilityTimeout: Duration(seconds: 60),
-      );
+    queue: 'default',
+    maxRetries: 3,
+    rateLimit: '10/s',
+    visibilityTimeout: Duration(seconds: 60),
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {

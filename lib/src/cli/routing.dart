@@ -76,8 +76,9 @@ class RoutingDumpCommand extends Command<int> {
         dependencies.err.writeln(error.message);
         return 64;
       } on Object catch (error) {
-        dependencies.err
-            .writeln('Failed to load routing configuration: $error');
+        dependencies.err.writeln(
+          'Failed to load routing configuration: $error',
+        );
         return 70;
       }
     }
@@ -103,7 +104,8 @@ class RoutingDumpCommand extends Command<int> {
     config.queues.forEach((name, definition) {
       buffer.writeln('  $name:');
       buffer.writeln(
-          '    priorityRange: ${definition.priorityRange.min}-${definition.priorityRange.max}');
+        '    priorityRange: ${definition.priorityRange.min}-${definition.priorityRange.max}',
+      );
       if (definition.exchange != null) {
         buffer.writeln('    exchange: ${definition.exchange}');
       }
@@ -129,8 +131,9 @@ class RoutingDumpCommand extends Command<int> {
         buffer.writeln('  - match:');
         if (route.match.taskGlobs != null &&
             route.match.taskGlobs!.isNotEmpty) {
-          final tasks =
-              route.match.taskGlobs!.map((glob) => glob.pattern).join(', ');
+          final tasks = route.match.taskGlobs!
+              .map((glob) => glob.pattern)
+              .join(', ');
           buffer.writeln('      task: $tasks');
         }
         if (route.match.queueOverride != null) {

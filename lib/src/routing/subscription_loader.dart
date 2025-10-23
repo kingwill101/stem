@@ -41,10 +41,7 @@ class RoutingConfigLoader {
 
 /// Context required to resolve routing subscriptions.
 class StemRoutingContext {
-  const StemRoutingContext({
-    required this.defaultQueue,
-    this.configPath,
-  });
+  const StemRoutingContext({required this.defaultQueue, this.configPath});
 
   factory StemRoutingContext.fromConfig(StemConfig config) =>
       StemRoutingContext(
@@ -67,10 +64,7 @@ class WorkerSubscriptionBuilder {
   final RoutingRegistry registry;
   final String defaultQueue;
 
-  RoutingSubscription build({
-    List<String>? queues,
-    List<String>? broadcasts,
-  }) {
+  RoutingSubscription build({List<String>? queues, List<String>? broadcasts}) {
     final resolvedQueues = _resolveQueues(queues);
     final resolvedBroadcasts = _resolveBroadcasts(broadcasts);
     return RoutingSubscription(

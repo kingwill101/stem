@@ -16,12 +16,12 @@ class ControlCommandMessage {
   final int? timeoutMs;
 
   Map<String, Object?> toMap() => {
-        'requestId': requestId,
-        'type': type,
-        'targets': targets,
-        'payload': payload,
-        if (timeoutMs != null) 'timeoutMs': timeoutMs,
-      };
+    'requestId': requestId,
+    'type': type,
+    'targets': targets,
+    'payload': payload,
+    if (timeoutMs != null) 'timeoutMs': timeoutMs,
+  };
 
   factory ControlCommandMessage.fromMap(Map<String, Object?> map) {
     return ControlCommandMessage(
@@ -50,12 +50,12 @@ class ControlReplyMessage {
   final Map<String, Object?>? error;
 
   Map<String, Object?> toMap() => {
-        'requestId': requestId,
-        'workerId': workerId,
-        'status': status,
-        'payload': payload,
-        if (error != null) 'error': error,
-      };
+    'requestId': requestId,
+    'workerId': workerId,
+    'status': status,
+    'payload': payload,
+    if (error != null) 'error': error,
+  };
 
   factory ControlReplyMessage.fromMap(Map<String, Object?> map) {
     return ControlReplyMessage(
@@ -84,35 +84,23 @@ class ControlEnvelopeTypes {
 }
 
 extension ControlCommandEnvelope on ControlCommandMessage {
-  Envelope toEnvelope({
-    required String queue,
-    Map<String, String>? headers,
-  }) {
+  Envelope toEnvelope({required String queue, Map<String, String>? headers}) {
     return Envelope(
       name: ControlEnvelopeTypes.command,
       queue: queue,
       args: toMap(),
-      headers: {
-        'stem-control': '1',
-        if (headers != null) ...headers,
-      },
+      headers: {'stem-control': '1', if (headers != null) ...headers},
     );
   }
 }
 
 extension ControlReplyEnvelope on ControlReplyMessage {
-  Envelope toEnvelope({
-    required String queue,
-    Map<String, String>? headers,
-  }) {
+  Envelope toEnvelope({required String queue, Map<String, String>? headers}) {
     return Envelope(
       name: ControlEnvelopeTypes.reply,
       queue: queue,
       args: toMap(),
-      headers: {
-        'stem-control-reply': '1',
-        if (headers != null) ...headers,
-      },
+      headers: {'stem-control-reply': '1', if (headers != null) ...headers},
     );
   }
 }

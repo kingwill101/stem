@@ -15,7 +15,8 @@ Future<bool> _canConnect(String uri) async {
 }
 
 void main() async {
-  final uri = Platform.environment['STEM_TEST_REDIS_URL'] ??
+  final uri =
+      Platform.environment['STEM_TEST_REDIS_URL'] ??
       Platform.environment['REDIS_URL'] ??
       'redis://localhost:6379';
   final available = await _canConnect(uri);
@@ -61,8 +62,10 @@ void main() async {
     await broker.publish(envelope);
 
     final delivery = await broker
-        .consume(RoutingSubscription.singleQueue('integration'),
-            consumerName: 'integration-tester')
+        .consume(
+          RoutingSubscription.singleQueue('integration'),
+          consumerName: 'integration-tester',
+        )
         .first
         .timeout(const Duration(seconds: 5));
 
@@ -136,9 +139,7 @@ void main() async {
     final latest = await scheduleStore.get(entry.id);
     expect(latest, isNotNull);
     expect(latest!.version, greaterThan(0));
-    await scheduleStore.upsert(
-      latest.copyWith(lastRunAt: DateTime.now()),
-    );
+    await scheduleStore.upsert(latest.copyWith(lastRunAt: DateTime.now()));
     await scheduleStore.remove(entry.id);
   });
 

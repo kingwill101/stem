@@ -51,9 +51,7 @@ routes:
       name: special
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
-      final decision = registry.resolve(
-        RouteRequest(task: 'reports.generate'),
-      );
+      final decision = registry.resolve(RouteRequest(task: 'reports.generate'));
       expect(decision.queue!.name, 'reports');
       expect(decision.route, isNotNull);
       expect(decision.selectedQueueAlias, 'reports');
@@ -121,8 +119,10 @@ queues:
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
       final decision = registry.resolve(RouteRequest(task: 'tasks.process'));
-      expect(decision.fallbackQueues.map((queue) => queue.name).toList(),
-          equals(['secondary']));
+      expect(
+        decision.fallbackQueues.map((queue) => queue.name).toList(),
+        equals(['secondary']),
+      );
     });
 
     test('allows unknown explicit queue fallback', () {
@@ -152,9 +152,7 @@ routes:
       name: missing
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
-      final decision = registry.resolve(
-        RouteRequest(task: 'reports.generate'),
-      );
+      final decision = registry.resolve(RouteRequest(task: 'reports.generate'));
       expect(decision.queue!.name, equals('missing'));
       expect(decision.targetName, equals('missing'));
     });
@@ -167,9 +165,7 @@ queues:
     priority_range: [2, 5]
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
-      final decision = registry.resolve(
-        RouteRequest(task: 'tasks.process'),
-      );
+      final decision = registry.resolve(RouteRequest(task: 'tasks.process'));
       expect(decision.effectivePriority(0), equals(2));
       expect(decision.effectivePriority(7), equals(5));
     });
@@ -190,9 +186,7 @@ routes:
       name: updates
 ''';
       final registry = RoutingRegistry.fromYaml(yaml);
-      final decision = registry.resolve(
-        RouteRequest(task: 'updates.refresh'),
-      );
+      final decision = registry.resolve(RouteRequest(task: 'updates.refresh'));
       expect(decision.isBroadcast, isTrue);
       expect(decision.broadcast!.name, 'updates');
       expect(decision.route, isNotNull);

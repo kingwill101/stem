@@ -85,7 +85,7 @@ class WorkerPingCommand extends Command<int> {
         : namespaceInput;
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 5);
+        const Duration(seconds: 5);
     final jsonOutput = args['json'] as bool? ?? false;
     final targets = ((args['worker'] as List?) ?? const [])
         .cast<String>()
@@ -135,9 +135,7 @@ class WorkerPingCommand extends Command<int> {
             replies.map((reply) => reply.workerId).toSet(),
           );
           if (missing.isNotEmpty) {
-            dependencies.err.writeln(
-              'No reply from: ${missing.join(', ')}',
-            );
+            dependencies.err.writeln('No reply from: ${missing.join(', ')}');
           }
         }
 
@@ -218,7 +216,7 @@ class WorkerInspectCommand extends Command<int> {
         : namespaceInput;
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 5);
+        const Duration(seconds: 5);
     final jsonOutput = args['json'] as bool? ?? false;
     final includeRevoked = args['include-revoked'] as bool? ?? true;
     final targets = ((args['worker'] as List?) ?? const [])
@@ -243,10 +241,7 @@ class WorkerInspectCommand extends Command<int> {
         type: 'inspect',
         targets: targets.isEmpty ? const ['*'] : targets.toList(),
         timeoutMs: timeout.inMilliseconds,
-        payload: {
-          'namespace': namespace,
-          'includeRevoked': includeRevoked,
-        },
+        payload: {'namespace': namespace, 'includeRevoked': includeRevoked},
       );
 
       await _publishControlCommand(
@@ -269,10 +264,7 @@ class WorkerInspectCommand extends Command<int> {
           jsonEncode(replies.map((reply) => reply.toMap()).toList()),
         );
       } else {
-        _emitMissingWarnings(
-          targets,
-          replies.map((r) => r.workerId).toSet(),
-        );
+        _emitMissingWarnings(targets, replies.map((r) => r.workerId).toSet());
         if (replies.isEmpty) {
           dependencies.out.writeln(
             'No replies received within ${timeout.inMilliseconds}ms.',
@@ -301,18 +293,14 @@ class WorkerInspectCommand extends Command<int> {
       ..sort((a, b) => a.workerId.compareTo(b.workerId));
     for (var index = 0; index < ordered.length; index += 1) {
       final reply = ordered[index];
-      dependencies.out.writeln(
-        '${reply.workerId} (${reply.status})',
-      );
+      dependencies.out.writeln('${reply.workerId} (${reply.status})');
       if (reply.status != 'ok') {
         final message = reply.error?['message'] ?? '-';
         dependencies.out.writeln('  error: $message');
       } else {
         final payload = reply.payload;
         final inflight = payload['inflight'];
-        dependencies.out.writeln(
-          '  inflight: ${inflight ?? 0}',
-        );
+        dependencies.out.writeln('  inflight: ${inflight ?? 0}');
 
         final active = payload['active'];
         if (active is List && active.isNotEmpty) {
@@ -400,7 +388,7 @@ class WorkerStatsCommand extends Command<int> {
         : namespaceInput;
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 5);
+        const Duration(seconds: 5);
     final jsonOutput = args['json'] as bool? ?? false;
     final targets = ((args['worker'] as List?) ?? const [])
         .cast<String>()
@@ -459,9 +447,7 @@ class WorkerStatsCommand extends Command<int> {
           ..sort((a, b) => a.workerId.compareTo(b.workerId));
         for (var index = 0; index < ordered.length; index += 1) {
           final reply = ordered[index];
-          dependencies.out.writeln(
-            '${reply.workerId} (${reply.status})',
-          );
+          dependencies.out.writeln('${reply.workerId} (${reply.status})');
           if (reply.status == 'ok') {
             _renderStatsPayload(reply.payload);
           } else {
@@ -493,17 +479,18 @@ class WorkerStatsCommand extends Command<int> {
     final prefetch = payload['prefetch'];
     final timestamp = payload['timestamp'];
     final namespace = payload['namespace'];
-    final subscriptionsMeta =
-        (payload['subscriptions'] as Map?)?.cast<String, Object?>();
+    final subscriptionsMeta = (payload['subscriptions'] as Map?)
+        ?.cast<String, Object?>();
     final subscriptionQueues = subscriptionsMeta == null
         ? const <String>[]
         : (subscriptionsMeta['queues'] as List?)?.cast<String>() ??
-            const <String>[];
+              const <String>[];
     final subscriptionBroadcasts = subscriptionsMeta == null
         ? const <String>[]
         : (subscriptionsMeta['broadcasts'] as List?)?.cast<String>() ??
-            const <String>[];
-    final queueName = payload['queue'] ??
+              const <String>[];
+    final queueName =
+        payload['queue'] ??
         (subscriptionQueues.isNotEmpty ? subscriptionQueues.first : null);
     final host = payload['host'];
     final pid = payload['pid'];
@@ -513,9 +500,7 @@ class WorkerStatsCommand extends Command<int> {
     dependencies.out.writeln(
       '  namespace: ${namespace ?? '-'} queue: ${queueName ?? '-'}',
     );
-    dependencies.out.writeln(
-      '  host: ${host ?? '-'} pid: ${pid ?? '-'}',
-    );
+    dependencies.out.writeln('  host: ${host ?? '-'} pid: ${pid ?? '-'}');
     dependencies.out.writeln(
       '  inflight: ${inflight ?? '-'} / concurrency: ${concurrency ?? '-'} (prefetch: ${prefetch ?? '-'})',
     );
@@ -563,9 +548,7 @@ class WorkerStatsCommand extends Command<int> {
         final runtimeMs = task['runtimeMs'];
         final startedAt = task['startedAt'];
         final runtime = runtimeMs is num
-            ? formatReadableDuration(
-                Duration(milliseconds: runtimeMs.toInt()),
-              )
+            ? formatReadableDuration(Duration(milliseconds: runtimeMs.toInt()))
             : '-';
         dependencies.out.writeln(
           '    - $taskName [queue=$queue, attempt=${attempt ?? '-'}, runtime=$runtime, started=$startedAt]',
@@ -659,7 +642,7 @@ class WorkerRevokeCommand extends Command<int> {
         : namespaceInput;
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 5);
+        const Duration(seconds: 5);
     final reason = (args['reason'] as String?)?.trim();
     final requester = (args['requester'] as String?)?.trim().isNotEmpty == true
         ? (args['requester'] as String).trim()
@@ -746,10 +729,7 @@ class WorkerRevokeCommand extends Command<int> {
           jsonEncode(replies.map((reply) => reply.toMap()).toList()),
         );
       } else {
-        _emitMissingWarnings(
-          targets,
-          replies.map((r) => r.workerId).toSet(),
-        );
+        _emitMissingWarnings(targets, replies.map((r) => r.workerId).toSet());
         if (replies.isEmpty) {
           dependencies.out.writeln(
             'No replies received within ${timeout.inMilliseconds}ms.',
@@ -778,9 +758,7 @@ class WorkerRevokeCommand extends Command<int> {
       ..sort((a, b) => a.workerId.compareTo(b.workerId));
     for (var index = 0; index < ordered.length; index += 1) {
       final reply = ordered[index];
-      dependencies.out.writeln(
-        '${reply.workerId} (${reply.status})',
-      );
+      dependencies.out.writeln('${reply.workerId} (${reply.status})');
       if (reply.status != 'ok') {
         final message = reply.error?['message'] ?? '-';
         dependencies.out.writeln('  error: $message');
@@ -797,19 +775,13 @@ class WorkerRevokeCommand extends Command<int> {
           '  revoked: ${tasks.length} -> ${tasks.isEmpty ? '-' : tasks.join(', ')}',
         );
         if (inflight.isNotEmpty) {
-          dependencies.out.writeln(
-            '  inflight: ${inflight.join(', ')}',
-          );
+          dependencies.out.writeln('  inflight: ${inflight.join(', ')}');
         }
         if (ignored.isNotEmpty) {
-          dependencies.out.writeln(
-            '  ignored: ${ignored.join(', ')}',
-          );
+          dependencies.out.writeln('  ignored: ${ignored.join(', ')}');
         }
         if (expired.isNotEmpty) {
-          dependencies.out.writeln(
-            '  expired: ${expired.join(', ')}',
-          );
+          dependencies.out.writeln('  expired: ${expired.join(', ')}');
         }
       }
       if (index < ordered.length - 1) {
@@ -871,7 +843,7 @@ class WorkerShutdownCommand extends Command<int> {
     final mode = ((args['mode'] as String?) ?? 'warm').trim().toLowerCase();
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 5);
+        const Duration(seconds: 5);
     final jsonOutput = args['json'] as bool? ?? false;
     final targets = ((args['worker'] as List?) ?? const [])
         .cast<String>()
@@ -923,9 +895,7 @@ class WorkerShutdownCommand extends Command<int> {
             replies.map((reply) => reply.workerId).toSet(),
           );
           if (missing.isNotEmpty) {
-            dependencies.err.writeln(
-              'No reply from: ${missing.join(', ')}',
-            );
+            dependencies.err.writeln('No reply from: ${missing.join(', ')}');
           }
         }
         if (replies.isEmpty) {
@@ -1060,13 +1030,14 @@ class WorkerStatusCommand extends Command<int> {
         .toSet();
     final follow = args['follow'] as bool? ?? false;
     final jsonOutput = args['json'] as bool? ?? false;
-    final heartbeatInterval = ObservabilityConfig.parseDuration(
+    final heartbeatInterval =
+        ObservabilityConfig.parseDuration(
           args['heartbeat-interval'] as String?,
         ) ??
         const Duration(seconds: 10);
     final timeout =
         ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
-            const Duration(seconds: 30);
+        const Duration(seconds: 30);
     final exportersOverride = args['metrics-exporters'] as String?;
     if (exportersOverride != null && exportersOverride.trim().isNotEmpty) {
       final exporters = exportersOverride
@@ -1250,8 +1221,7 @@ class WorkerStatusCommand extends Command<int> {
           return false;
         }
         return true;
-      }).toList()
-        ..sort((a, b) => a.workerId.compareTo(b.workerId));
+      }).toList()..sort((a, b) => a.workerId.compareTo(b.workerId));
       if (filtered.isEmpty) {
         out.writeln('No worker heartbeats found for namespace "$namespace".');
         return 0;
@@ -1292,14 +1262,15 @@ class WorkerStatusCommand extends Command<int> {
       'isolate=${heartbeat.isolateCount} inflight=${heartbeat.inflight}'
       '${isStale ? ' [stale ${formatReadableDuration(age)}]' : ''}',
     );
-    final subscriptions =
-        (heartbeat.extras['subscriptions'] as Map?)?.cast<String, Object?>();
+    final subscriptions = (heartbeat.extras['subscriptions'] as Map?)
+        ?.cast<String, Object?>();
     if (subscriptions != null) {
-      final queues = (subscriptions['queues'] as List?)?.cast<String>() ??
+      final queues =
+          (subscriptions['queues'] as List?)?.cast<String>() ??
           const <String>[];
       final broadcasts =
           (subscriptions['broadcasts'] as List?)?.cast<String>() ??
-              const <String>[];
+          const <String>[];
       if (queues.isNotEmpty) {
         out.writeln('  subscribed queues: ${queues.join(', ')}');
       }
@@ -1400,10 +1371,11 @@ Future<void> _publishControlCommand(
   if (targets.isEmpty) {
     queueNames = [ControlQueueNames.broadcast(namespace)];
   } else {
-    queueNames = targets
-        .map((target) => ControlQueueNames.worker(namespace, target))
-        .toList()
-      ..sort();
+    queueNames =
+        targets
+            .map((target) => ControlQueueNames.worker(namespace, target))
+            .toList()
+          ..sort();
   }
 
   for (final queue in queueNames) {
@@ -1426,37 +1398,34 @@ Future<List<ControlReplyMessage>> _collectControlReplies(
   late final StreamSubscription<Delivery> subscription;
   subscription = ctx.broker
       .consume(
-    RoutingSubscription.singleQueue(replyQueue),
-    prefetch: 10,
-    consumerName: 'stem-cli-control-$requestId',
-  )
+        RoutingSubscription.singleQueue(replyQueue),
+        prefetch: 10,
+        consumerName: 'stem-cli-control-$requestId',
+      )
       .listen(
-    (delivery) async {
-      try {
-        final reply = controlReplyFromEnvelope(delivery.envelope);
-        replies.add(reply);
-        seenWorkers.add(reply.workerId);
-        await ctx.broker.ack(delivery);
-        if (!completer.isCompleted &&
-            expectedWorkers != null &&
-            seenWorkers.length >= expectedWorkers) {
-          completer.complete();
-        }
-      } catch (_) {
-        await ctx.broker.ack(delivery);
-      }
-    },
-    onError: (_, __) {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    },
-  );
+        (delivery) async {
+          try {
+            final reply = controlReplyFromEnvelope(delivery.envelope);
+            replies.add(reply);
+            seenWorkers.add(reply.workerId);
+            await ctx.broker.ack(delivery);
+            if (!completer.isCompleted &&
+                expectedWorkers != null &&
+                seenWorkers.length >= expectedWorkers) {
+              completer.complete();
+            }
+          } catch (_) {
+            await ctx.broker.ack(delivery);
+          }
+        },
+        onError: (_, __) {
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        },
+      );
 
-  await Future.any([
-    completer.future,
-    Future.delayed(timeout),
-  ]);
+  await Future.any([completer.future, Future.delayed(timeout)]);
   await subscription.cancel();
   return replies;
 }
@@ -1550,7 +1519,8 @@ class WorkerMultiCommand extends Command<int> {
     final rest = List<String>.from(args.rest);
     if (rest.isEmpty) {
       dependencies.err.writeln(
-          'Usage: stem worker multi <start|stop|restart|status> <nodes...>');
+        'Usage: stem worker multi <start|stop|restart|status> <nodes...>',
+      );
       return 64;
     }
 
@@ -1585,15 +1555,18 @@ class WorkerMultiCommand extends Command<int> {
         return _status(nodes, args);
       default:
         dependencies.err.writeln(
-            'Unknown action "$action". Use start, stop, restart, or status.');
+          'Unknown action "$action". Use start, stop, restart, or status.',
+        );
         return 64;
     }
   }
 
   Future<int> _start(List<String> nodes, ArgResults args) async {
     final envFilePath = args['env-file'] as String?;
-    final baseEnv =
-        _buildBaseEnvironment(dependencies.environment, envFilePath);
+    final baseEnv = _buildBaseEnvironment(
+      dependencies.environment,
+      envFilePath,
+    );
     if (baseEnv == null) {
       return 70;
     }
@@ -1606,10 +1579,10 @@ class WorkerMultiCommand extends Command<int> {
       return 64;
     }
 
-    final queueFlags =
-        ((args['queue'] as List?) ?? const <String>[]).cast<String>();
-    final broadcastFlags =
-        ((args['broadcast'] as List?) ?? const <String>[]).cast<String>();
+    final queueFlags = ((args['queue'] as List?) ?? const <String>[])
+        .cast<String>();
+    final broadcastFlags = ((args['broadcast'] as List?) ?? const <String>[])
+        .cast<String>();
 
     StemConfig config;
     try {
@@ -1660,21 +1633,25 @@ class WorkerMultiCommand extends Command<int> {
     if (subscription.broadcastChannels.isEmpty) {
       baseEnv.remove('STEM_WORKER_BROADCASTS');
     } else {
-      baseEnv['STEM_WORKER_BROADCASTS'] =
-          subscription.broadcastChannels.join(',');
+      baseEnv['STEM_WORKER_BROADCASTS'] = subscription.broadcastChannels.join(
+        ',',
+      );
     }
 
     final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';
     final logTemplate = args['logfile'] as String? ?? '/var/log/stem/%n.log';
     final workdirTemplate = args['workdir'] as String? ?? '.';
-    final timeout = parseOptionalDuration(args['timeout'] as String?) ??
+    final timeout =
+        parseOptionalDuration(args['timeout'] as String?) ??
         const Duration(seconds: 30);
 
-    final detachFlag = (args['detach'] as bool? ?? true) &&
+    final detachFlag =
+        (args['detach'] as bool? ?? true) &&
         !(args['foreground'] as bool? ?? false);
     if (!detachFlag && nodes.length > 1) {
       dependencies.err.writeln(
-          'Foreground mode supports only one node. Specify a single node.');
+        'Foreground mode supports only one node. Specify a single node.',
+      );
       return 64;
     }
 
@@ -1704,7 +1681,11 @@ class WorkerMultiCommand extends Command<int> {
         timestamp: timestamp,
       );
       final code = await _startNode(
-          context, startOptions, dependencies.out, dependencies.err);
+        context,
+        startOptions,
+        dependencies.out,
+        dependencies.err,
+      );
       if (code != 0) {
         exitCode = code;
         if (!startOptions.detach) {
@@ -1717,7 +1698,8 @@ class WorkerMultiCommand extends Command<int> {
 
   Future<int> _stop(List<String> nodes, ArgResults args) async {
     final pidTemplate = args['pidfile'] as String? ?? '/var/run/stem/%n.pid';
-    final timeout = parseOptionalDuration(args['timeout'] as String?) ??
+    final timeout =
+        parseOptionalDuration(args['timeout'] as String?) ??
         const Duration(seconds: 30);
     final stopOptions = _StopOptions(
       pidTemplate: pidTemplate,
@@ -1740,7 +1722,11 @@ class WorkerMultiCommand extends Command<int> {
         timestamp: timestamp,
       );
       final code = await _stopNode(
-          context, stopOptions, dependencies.out, dependencies.err);
+        context,
+        stopOptions,
+        dependencies.out,
+        dependencies.err,
+      );
       if (code != 0) {
         exitCode = code;
       }
@@ -1799,8 +1785,9 @@ class WorkerMultiCommand extends Command<int> {
       merged.addAll(envFromFile);
       return merged;
     } on Object catch (error) {
-      dependencies.err
-          .writeln('Failed to load environment file "$envFilePath": $error');
+      dependencies.err.writeln(
+        'Failed to load environment file "$envFilePath": $error',
+      );
       return null;
     }
   }
@@ -1890,8 +1877,9 @@ class WorkerHealthcheckCommand extends Command<int> {
     }
 
     final since = _pidFileTimestamp(pidfile);
-    final uptime =
-        since != null ? DateTime.now().toUtc().difference(since) : null;
+    final uptime = since != null
+        ? DateTime.now().toUtc().difference(since)
+        : null;
 
     final payload = <String, Object?>{
       'status': running ? 'ok' : 'error',
@@ -1908,8 +1896,9 @@ class WorkerHealthcheckCommand extends Command<int> {
       dependencies.out.writeln(jsonEncode(payload));
     } else if (!quiet || !running) {
       if (running) {
-        final uptimeText =
-            uptime != null ? formatReadableDuration(uptime) : 'unknown';
+        final uptimeText = uptime != null
+            ? formatReadableDuration(uptime)
+            : 'unknown';
         dependencies.out.writeln(
           'Worker ${node ?? '(unknown)'} healthy (pid ${pid ?? '-'}, uptime $uptimeText).',
         );
@@ -1928,11 +1917,7 @@ class WorkerHealthcheckCommand extends Command<int> {
 class WorkerDiagnoseCommand extends Command<int> {
   WorkerDiagnoseCommand(this.dependencies) {
     argParser
-      ..addOption(
-        'pidfile',
-        valueHelp: 'path',
-        help: 'PID file to validate.',
-      )
+      ..addOption('pidfile', valueHelp: 'path', help: 'PID file to validate.')
       ..addOption(
         'logfile',
         valueHelp: 'path',
@@ -1966,28 +1951,37 @@ class WorkerDiagnoseCommand extends Command<int> {
     final jsonOutput = args['json'] as bool? ?? false;
     final entries = <_DiagnosticEntry>[];
 
-    void addEntry(String check, bool ok,
-        {String level = 'info', String? message}) {
-      entries.add(_DiagnosticEntry(
-        check: check,
-        ok: ok,
-        level: level,
-        message: message,
-      ));
+    void addEntry(
+      String check,
+      bool ok, {
+      String level = 'info',
+      String? message,
+    }) {
+      entries.add(
+        _DiagnosticEntry(check: check, ok: ok, level: level, message: message),
+      );
     }
 
     final pidfileArg = (args['pidfile'] as String?)?.trim();
     if (pidfileArg == null || pidfileArg.isEmpty) {
-      addEntry('pidfile option provided', false,
-          level: 'warning', message: 'No --pidfile supplied.');
+      addEntry(
+        'pidfile option provided',
+        false,
+        level: 'warning',
+        message: 'No --pidfile supplied.',
+      );
     } else {
       final pidfile = p.normalize(pidfileArg);
       final pidDir = Directory(p.dirname(pidfile));
       if (pidDir.existsSync()) {
         addEntry('PID directory exists', true, message: pidDir.path);
       } else {
-        addEntry('PID directory exists', false,
-            level: 'error', message: '${pidDir.path} is missing');
+        addEntry(
+          'PID directory exists',
+          false,
+          level: 'error',
+          message: '${pidDir.path} is missing',
+        );
       }
 
       final pidFile = File(pidfile);
@@ -1995,8 +1989,12 @@ class WorkerDiagnoseCommand extends Command<int> {
         addEntry('PID file present', true, message: pidfile);
         final pid = _readPidFile(pidfile);
         if (pid == null) {
-          addEntry('PID file parses correctly', false,
-              level: 'error', message: 'Unable to parse integer PID.');
+          addEntry(
+            'PID file parses correctly',
+            false,
+            level: 'error',
+            message: 'Unable to parse integer PID.',
+          );
         } else {
           final running = await _isPidRunning(pid);
           if (running) {
@@ -2015,8 +2013,12 @@ class WorkerDiagnoseCommand extends Command<int> {
           }
         }
       } else {
-        addEntry('PID file present', false,
-            level: 'warning', message: '$pidfile missing');
+        addEntry(
+          'PID file present',
+          false,
+          level: 'warning',
+          message: '$pidfile missing',
+        );
       }
     }
 
@@ -2027,17 +2029,24 @@ class WorkerDiagnoseCommand extends Command<int> {
       if (logDir.existsSync()) {
         addEntry('Log directory exists', true, message: logDir.path);
       } else {
-        addEntry('Log directory exists', false,
-            level: 'error', message: '${logDir.path} is missing');
+        addEntry(
+          'Log directory exists',
+          false,
+          level: 'error',
+          message: '${logDir.path} is missing',
+        );
       }
 
       final logFile = File(logfile);
       if (logFile.existsSync()) {
         addEntry('Log file present', true, message: logfile);
       } else {
-        addEntry('Log file present', false,
-            level: 'warning',
-            message: '$logfile not found (will be created on first write).');
+        addEntry(
+          'Log file present',
+          false,
+          level: 'warning',
+          message: '$logfile not found (will be created on first write).',
+        );
       }
     }
 
@@ -2049,20 +2058,32 @@ class WorkerDiagnoseCommand extends Command<int> {
         addEntry('Environment file parsed', true, message: envPath);
         if (env['STEM_WORKER_COMMAND'] != null &&
             (env['STEM_WORKER_COMMAND'] as String).trim().isNotEmpty) {
-          addEntry('STEM_WORKER_COMMAND defined', true,
-              message: env['STEM_WORKER_COMMAND'] as String);
+          addEntry(
+            'STEM_WORKER_COMMAND defined',
+            true,
+            message: env['STEM_WORKER_COMMAND'] as String,
+          );
         } else {
-          addEntry('STEM_WORKER_COMMAND defined', false,
-              level: 'warning', message: 'Key not found in environment file.');
+          addEntry(
+            'STEM_WORKER_COMMAND defined',
+            false,
+            level: 'warning',
+            message: 'Key not found in environment file.',
+          );
         }
       } catch (error) {
-        addEntry('Environment file parsed', false,
-            level: 'error', message: error.toString());
+        addEntry(
+          'Environment file parsed',
+          false,
+          level: 'error',
+          message: error.toString(),
+        );
       }
     }
 
-    final hasError =
-        entries.any((entry) => !entry.ok && entry.level == 'error');
+    final hasError = entries.any(
+      (entry) => !entry.ok && entry.level == 'error',
+    );
 
     if (jsonOutput) {
       final payload = {
@@ -2084,8 +2105,8 @@ class WorkerDiagnoseCommand extends Command<int> {
         final prefix = entry.ok
             ? '[OK ]'
             : entry.level == 'warning'
-                ? '[WARN]'
-                : '[ERR]';
+            ? '[WARN]'
+            : '[ERR]';
         final detail = entry.message != null ? ' - ${entry.message}' : '';
         dependencies.out.writeln('$prefix ${entry.check}$detail');
       }
@@ -2135,10 +2156,7 @@ class _StartOptions {
 }
 
 class _StopOptions {
-  const _StopOptions({
-    required this.pidTemplate,
-    required this.timeout,
-  });
+  const _StopOptions({required this.pidTemplate, required this.timeout});
 
   final String pidTemplate;
   final Duration timeout;
@@ -2254,7 +2272,8 @@ Future<int> _startNode(
     }
 
     out.writeln(
-        'Started ${context.name} (pid ${process.pid}); waiting for exit...');
+      'Started ${context.name} (pid ${process.pid}); waiting for exit...',
+    );
     final exitCode = await process.exitCode;
     _removePidFile(pidPath);
     if (exitCode != 0) {
@@ -2346,10 +2365,7 @@ List<String> _multiResolveNodes(
       .toList();
 }
 
-List<String> _expandTemplates(
-  List<String> templates,
-  _NodeContext context,
-) {
+List<String> _expandTemplates(List<String> templates, _NodeContext context) {
   return templates
       .map((template) => _expandTemplate(template, context))
       .toList(growable: false);
@@ -2424,11 +2440,10 @@ void _ensureParentDirectory(String path) {
 
 Future<bool> _isPidRunning(int pid) async {
   if (Platform.isWindows) {
-    final result = await Process.run(
-      'tasklist',
-      ['/FI', 'PID eq $pid'],
-      runInShell: true,
-    );
+    final result = await Process.run('tasklist', [
+      '/FI',
+      'PID eq $pid',
+    ], runInShell: true);
     if (result.exitCode != 0) {
       return false;
     }
@@ -2482,8 +2497,9 @@ Map<String, String> _loadEnvironmentFile(String path) {
     if (line.isEmpty || line.startsWith('#')) {
       continue;
     }
-    final sanitized =
-        line.startsWith('export ') ? line.substring(7).trim() : line;
+    final sanitized = line.startsWith('export ')
+        ? line.substring(7).trim()
+        : line;
     final splitIndex = sanitized.indexOf('=');
     if (splitIndex <= 0) {
       continue;

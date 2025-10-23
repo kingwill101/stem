@@ -128,9 +128,7 @@ void main() {
       });
 
       final config = ObservabilityConfig(
-        signalConfiguration: const StemSignalConfiguration(
-          enabled: false,
-        ),
+        signalConfiguration: const StemSignalConfiguration(enabled: false),
       );
 
       config.applySignalConfiguration();

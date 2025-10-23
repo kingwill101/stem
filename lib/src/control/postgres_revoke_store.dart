@@ -100,10 +100,7 @@ class PostgresRevokeStore implements RevokeStore {
         'DELETE FROM $schema.${this.namespace}_revokes '
         'WHERE namespace = @namespace AND expires_at IS NOT NULL '
         'AND expires_at <= @expires RETURNING task_id',
-        parameters: {
-          'namespace': namespace,
-          'expires': clock,
-        },
+        parameters: {'namespace': namespace, 'expires': clock},
       );
       return result.length;
     });

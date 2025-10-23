@@ -11,21 +11,22 @@ class WorkerAutoscaleConfig {
     this.tick = const Duration(seconds: 2),
     this.scaleUpCooldown = const Duration(seconds: 5),
     this.scaleDownCooldown = const Duration(seconds: 10),
-  }) : minConcurrency =
-            minConcurrency != null && minConcurrency > 0 ? minConcurrency : 1;
+  }) : minConcurrency = minConcurrency != null && minConcurrency > 0
+           ? minConcurrency
+           : 1;
 
   /// Disabled autoscaling profile.
   const WorkerAutoscaleConfig.disabled()
-      : enabled = false,
-        minConcurrency = 1,
-        maxConcurrency = null,
-        scaleUpStep = 1,
-        scaleDownStep = 1,
-        backlogPerIsolate = 1.0,
-        idlePeriod = const Duration(seconds: 30),
-        tick = const Duration(seconds: 2),
-        scaleUpCooldown = const Duration(seconds: 5),
-        scaleDownCooldown = const Duration(seconds: 10);
+    : enabled = false,
+      minConcurrency = 1,
+      maxConcurrency = null,
+      scaleUpStep = 1,
+      scaleDownStep = 1,
+      backlogPerIsolate = 1.0,
+      idlePeriod = const Duration(seconds: 30),
+      tick = const Duration(seconds: 2),
+      scaleUpCooldown = const Duration(seconds: 5),
+      scaleDownCooldown = const Duration(seconds: 10);
 
   /// Whether autoscaling is active.
   final bool enabled;

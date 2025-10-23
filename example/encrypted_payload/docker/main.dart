@@ -23,11 +23,7 @@ Future<void> main(List<String> args) async {
       ),
     );
 
-  final stem = Stem(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-  );
+  final stem = Stem(broker: broker, registry: registry, backend: backend);
 
   final jobs = [
     {'customerId': 'cust-1001', 'amount': 1250.75},
@@ -62,8 +58,7 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';
 
 String _requireEnv(String name) {
   final value = Platform.environment[name];

@@ -4,11 +4,8 @@ import '../observability/logging.dart';
 import 'payloads.dart';
 import 'signal.dart';
 
-typedef SignalErrorReporter = void Function(
-  String signalName,
-  Object error,
-  StackTrace stackTrace,
-);
+typedef SignalErrorReporter =
+    void Function(String signalName, Object error, StackTrace stackTrace);
 
 class StemSignalConfiguration {
   const StemSignalConfiguration({
@@ -61,21 +58,21 @@ class StemSignals {
 
   static final Signal<BeforeTaskPublishPayload> beforeTaskPublish =
       Signal<BeforeTaskPublishPayload>(
-    name: beforeTaskPublishName,
-    config: _dispatchConfigFor(beforeTaskPublishName),
-  );
+        name: beforeTaskPublishName,
+        config: _dispatchConfigFor(beforeTaskPublishName),
+      );
 
   static final Signal<AfterTaskPublishPayload> afterTaskPublish =
       Signal<AfterTaskPublishPayload>(
-    name: afterTaskPublishName,
-    config: _dispatchConfigFor(afterTaskPublishName),
-  );
+        name: afterTaskPublishName,
+        config: _dispatchConfigFor(afterTaskPublishName),
+      );
 
   static final Signal<TaskReceivedPayload> taskReceived =
       Signal<TaskReceivedPayload>(
-    name: taskReceivedName,
-    config: _dispatchConfigFor(taskReceivedName),
-  );
+        name: taskReceivedName,
+        config: _dispatchConfigFor(taskReceivedName),
+      );
 
   static final Signal<TaskPrerunPayload> taskPrerun = Signal<TaskPrerunPayload>(
     name: taskPrerunName,
@@ -84,9 +81,9 @@ class StemSignals {
 
   static final Signal<TaskPostrunPayload> taskPostrun =
       Signal<TaskPostrunPayload>(
-    name: taskPostrunName,
-    config: _dispatchConfigFor(taskPostrunName),
-  );
+        name: taskPostrunName,
+        config: _dispatchConfigFor(taskPostrunName),
+      );
 
   static final Signal<TaskRetryPayload> taskRetry = Signal<TaskRetryPayload>(
     name: taskRetryName,
@@ -95,93 +92,93 @@ class StemSignals {
 
   static final Signal<TaskSuccessPayload> taskSucceeded =
       Signal<TaskSuccessPayload>(
-    name: taskSucceededName,
-    config: _dispatchConfigFor(taskSucceededName),
-  );
+        name: taskSucceededName,
+        config: _dispatchConfigFor(taskSucceededName),
+      );
 
   static final Signal<TaskFailurePayload> taskFailed =
       Signal<TaskFailurePayload>(
-    name: taskFailedName,
-    config: _dispatchConfigFor(taskFailedName),
-  );
+        name: taskFailedName,
+        config: _dispatchConfigFor(taskFailedName),
+      );
 
   static final Signal<TaskRevokedPayload> taskRevoked =
       Signal<TaskRevokedPayload>(
-    name: taskRevokedName,
-    config: _dispatchConfigFor(taskRevokedName),
-  );
+        name: taskRevokedName,
+        config: _dispatchConfigFor(taskRevokedName),
+      );
 
   static final Signal<WorkerLifecyclePayload> workerInit =
       Signal<WorkerLifecyclePayload>(
-    name: workerInitName,
-    config: _dispatchConfigFor(workerInitName),
-  );
+        name: workerInitName,
+        config: _dispatchConfigFor(workerInitName),
+      );
 
   static final Signal<WorkerLifecyclePayload> workerReady =
       Signal<WorkerLifecyclePayload>(
-    name: workerReadyName,
-    config: _dispatchConfigFor(workerReadyName),
-  );
+        name: workerReadyName,
+        config: _dispatchConfigFor(workerReadyName),
+      );
 
   static final Signal<WorkerLifecyclePayload> workerStopping =
       Signal<WorkerLifecyclePayload>(
-    name: workerStoppingName,
-    config: _dispatchConfigFor(workerStoppingName),
-  );
+        name: workerStoppingName,
+        config: _dispatchConfigFor(workerStoppingName),
+      );
 
   static final Signal<WorkerLifecyclePayload> workerShutdown =
       Signal<WorkerLifecyclePayload>(
-    name: workerShutdownName,
-    config: _dispatchConfigFor(workerShutdownName),
-  );
+        name: workerShutdownName,
+        config: _dispatchConfigFor(workerShutdownName),
+      );
 
   static final Signal<WorkerHeartbeatPayload> workerHeartbeat =
       Signal<WorkerHeartbeatPayload>(
-    name: workerHeartbeatName,
-    config: _dispatchConfigFor(workerHeartbeatName),
-  );
+        name: workerHeartbeatName,
+        config: _dispatchConfigFor(workerHeartbeatName),
+      );
 
   static final Signal<WorkerChildLifecyclePayload> workerChildInit =
       Signal<WorkerChildLifecyclePayload>(
-    name: workerChildInitName,
-    config: _dispatchConfigFor(workerChildInitName),
-  );
+        name: workerChildInitName,
+        config: _dispatchConfigFor(workerChildInitName),
+      );
 
   static final Signal<WorkerChildLifecyclePayload> workerChildShutdown =
       Signal<WorkerChildLifecyclePayload>(
-    name: workerChildShutdownName,
-    config: _dispatchConfigFor(workerChildShutdownName),
-  );
+        name: workerChildShutdownName,
+        config: _dispatchConfigFor(workerChildShutdownName),
+      );
 
   static final Signal<ScheduleEntryDuePayload> scheduleEntryDue =
       Signal<ScheduleEntryDuePayload>(
-    name: scheduleEntryDueName,
-    config: _dispatchConfigFor(scheduleEntryDueName),
-  );
+        name: scheduleEntryDueName,
+        config: _dispatchConfigFor(scheduleEntryDueName),
+      );
 
   static final Signal<ScheduleEntryDispatchedPayload> scheduleEntryDispatched =
       Signal<ScheduleEntryDispatchedPayload>(
-    name: scheduleEntryDispatchedName,
-    config: _dispatchConfigFor(scheduleEntryDispatchedName),
-  );
+        name: scheduleEntryDispatchedName,
+        config: _dispatchConfigFor(scheduleEntryDispatchedName),
+      );
 
   static final Signal<ScheduleEntryFailedPayload> scheduleEntryFailed =
       Signal<ScheduleEntryFailedPayload>(
-    name: scheduleEntryFailedName,
-    config: _dispatchConfigFor(scheduleEntryFailedName),
-  );
+        name: scheduleEntryFailedName,
+        config: _dispatchConfigFor(scheduleEntryFailedName),
+      );
 
   static final Signal<ControlCommandReceivedPayload> controlCommandReceived =
       Signal<ControlCommandReceivedPayload>(
-    name: controlCommandReceivedName,
-    config: _dispatchConfigFor(controlCommandReceivedName),
-  );
+        name: controlCommandReceivedName,
+        config: _dispatchConfigFor(controlCommandReceivedName),
+      );
 
   static final Signal<ControlCommandCompletedPayload> controlCommandCompleted =
       Signal<ControlCommandCompletedPayload>(
-    name: controlCommandCompletedName,
-    config: _dispatchConfigFor(controlCommandCompletedName),
-  );
+        name: controlCommandCompletedName,
+        config: _dispatchConfigFor(controlCommandCompletedName),
+      );
 
   static final List<Signal<dynamic>> _allSignals = <Signal<dynamic>>[
     beforeTaskPublish,
@@ -238,100 +235,70 @@ class StemSignals {
     SignalHandler<AfterTaskPublishPayload> handler, {
     String? taskName,
   }) {
-    return afterTaskPublish.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return afterTaskPublish.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskPrerun(
     SignalHandler<TaskPrerunPayload> handler, {
     String? taskName,
   }) {
-    return taskPrerun.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskPrerun.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskPostrun(
     SignalHandler<TaskPostrunPayload> handler, {
     String? taskName,
   }) {
-    return taskPostrun.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskPostrun.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskSuccess(
     SignalHandler<TaskSuccessPayload> handler, {
     String? taskName,
   }) {
-    return taskSucceeded.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskSucceeded.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskFailure(
     SignalHandler<TaskFailurePayload> handler, {
     String? taskName,
   }) {
-    return taskFailed.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskFailed.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskRetry(
     SignalHandler<TaskRetryPayload> handler, {
     String? taskName,
   }) {
-    return taskRetry.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskRetry.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskReceived(
     SignalHandler<TaskReceivedPayload> handler, {
     String? taskName,
   }) {
-    return taskReceived.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskReceived.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onTaskRevoked(
     SignalHandler<TaskRevokedPayload> handler, {
     String? taskName,
   }) {
-    return taskRevoked.connect(
-      handler,
-      filter: _taskNameFilter(taskName),
-    );
+    return taskRevoked.connect(handler, filter: _taskNameFilter(taskName));
   }
 
   static SignalSubscription onWorkerHeartbeat(
     SignalHandler<WorkerHeartbeatPayload> handler, {
     String? workerId,
   }) {
-    return workerHeartbeat.connect(
-      handler,
-      filter: _workerIdFilter(workerId),
-    );
+    return workerHeartbeat.connect(handler, filter: _workerIdFilter(workerId));
   }
 
   static SignalSubscription onWorkerChildInit(
     SignalHandler<WorkerChildLifecyclePayload> handler, {
     String? workerId,
   }) {
-    return workerChildInit.connect(
-      handler,
-      filter: _workerIdFilter(workerId),
-    );
+    return workerChildInit.connect(handler, filter: _workerIdFilter(workerId));
   }
 
   static SignalSubscription onWorkerChildShutdown(

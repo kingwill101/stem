@@ -7,8 +7,8 @@ import '../core/task_invocation.dart';
 import 'isolate_messages.dart';
 
 /// A handler for task control signals.
-typedef TaskControlHandler = FutureOr<void> Function(
-    TaskInvocationSignal signal);
+typedef TaskControlHandler =
+    FutureOr<void> Function(TaskInvocationSignal signal);
 
 /// Reason an isolate was recycled or disposed.
 enum IsolateRecycleReason { scaleDown, maxTasks, memory, shutdown }
@@ -133,10 +133,7 @@ class TaskIsolatePool {
   }
 
   /// Updates recycle thresholds for isolates.
-  void updateRecyclePolicy({
-    int? maxTasksPerIsolate,
-    int? maxMemoryBytes,
-  }) {
+  void updateRecyclePolicy({int? maxTasksPerIsolate, int? maxMemoryBytes}) {
     _maxTasksPerIsolate = maxTasksPerIsolate;
     _maxMemoryBytes = maxMemoryBytes;
   }
@@ -189,42 +186,45 @@ class TaskIsolatePool {
       _active.add(entry);
       Timer? hardTimer;
 
-      entry.worker.run(job).then((response) {
-        if (job.completer.isCompleted) {
-          return;
-        }
-        if (response is TaskRunSuccess) {
-          entry.lastRssBytes = response.memoryBytes;
-          job.completer.complete(
-            TaskExecutionSuccess(
-              response.result,
-              memoryBytes: response.memoryBytes,
-            ),
-          );
-        } else if (response is TaskRunFailure) {
-          job.completer.complete(
-            TaskExecutionFailure(
-              _RemoteTaskError(
-                response.errorType,
-                response.message,
-                response.stackTrace,
-              ),
-              StackTrace.fromString(response.stackTrace),
-            ),
-          );
-        } else {
-          job.completer.complete(
-            TaskExecutionFailure(
-              StateError('Unexpected response: $response'),
-              StackTrace.current,
-            ),
-          );
-        }
-      }).catchError((error, StackTrace stack) {
-        if (!job.completer.isCompleted) {
-          job.completer.complete(TaskExecutionFailure(error, stack));
-        }
-      });
+      entry.worker
+          .run(job)
+          .then((response) {
+            if (job.completer.isCompleted) {
+              return;
+            }
+            if (response is TaskRunSuccess) {
+              entry.lastRssBytes = response.memoryBytes;
+              job.completer.complete(
+                TaskExecutionSuccess(
+                  response.result,
+                  memoryBytes: response.memoryBytes,
+                ),
+              );
+            } else if (response is TaskRunFailure) {
+              job.completer.complete(
+                TaskExecutionFailure(
+                  _RemoteTaskError(
+                    response.errorType,
+                    response.message,
+                    response.stackTrace,
+                  ),
+                  StackTrace.fromString(response.stackTrace),
+                ),
+              );
+            } else {
+              job.completer.complete(
+                TaskExecutionFailure(
+                  StateError('Unexpected response: $response'),
+                  StackTrace.current,
+                ),
+              );
+            }
+          })
+          .catchError((error, StackTrace stack) {
+            if (!job.completer.isCompleted) {
+              job.completer.complete(TaskExecutionFailure(error, stack));
+            }
+          });
 
       if (job.hardTimeout != null) {
         hardTimer = Timer(job.hardTimeout!, () {
@@ -252,16 +252,10 @@ class TaskIsolatePool {
           return;
         }
         if (shouldRecycle) {
-          await _disposeEntry(
-            entry,
-            reason: _determineRecycleReason(entry),
-          );
+          await _disposeEntry(entry, reason: _determineRecycleReason(entry));
         } else if (_pendingDisposals > 0 && entry.draining) {
           _pendingDisposals -= 1;
-          await _disposeEntry(
-            entry,
-            reason: IsolateRecycleReason.scaleDown,
-          );
+          await _disposeEntry(entry, reason: IsolateRecycleReason.scaleDown);
         } else {
           entry.draining = false;
           _idle.add(entry);

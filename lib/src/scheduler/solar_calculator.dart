@@ -17,12 +17,24 @@ class SolarCalculator {
   ) {
     var date = DateTime.utc(fromUtc.year, fromUtc.month, fromUtc.day);
     for (var i = 0; i < 400; i++) {
-      final sunrise =
-          _calculate(date, spec.latitude, spec.longitude, SolarEvent.sunrise);
-      final sunset =
-          _calculate(date, spec.latitude, spec.longitude, SolarEvent.sunset);
-      final solarNoon =
-          _calculate(date, spec.latitude, spec.longitude, SolarEvent.noon);
+      final sunrise = _calculate(
+        date,
+        spec.latitude,
+        spec.longitude,
+        SolarEvent.sunrise,
+      );
+      final sunset = _calculate(
+        date,
+        spec.latitude,
+        spec.longitude,
+        SolarEvent.sunset,
+      );
+      final solarNoon = _calculate(
+        date,
+        spec.latitude,
+        spec.longitude,
+        SolarEvent.noon,
+      );
       DateTime? candidate;
       switch (spec.event) {
         case 'sunrise':
@@ -58,14 +70,16 @@ class SolarCalculator {
         : dayOfYear + ((18 - lngHour) / 24);
 
     final meanAnomaly = (0.9856 * approx) - 3.289;
-    var trueLongitude = meanAnomaly +
+    var trueLongitude =
+        meanAnomaly +
         (1.916 * sin(_degToRad(meanAnomaly))) +
         (0.020 * sin(_degToRad(2 * meanAnomaly))) +
         282.634;
     trueLongitude = _normalizeAngle(trueLongitude);
 
-    var rightAscension =
-        _radToDeg(atan(0.91764 * tan(_degToRad(trueLongitude))));
+    var rightAscension = _radToDeg(
+      atan(0.91764 * tan(_degToRad(trueLongitude))),
+    );
     rightAscension = _normalizeAngle(rightAscension);
     final quadrant = (trueLongitude / 90).floor() * 90;
     final raQuadrant = (rightAscension / 90).floor() * 90;
@@ -77,7 +91,7 @@ class SolarCalculator {
 
     final cosH =
         (cos(_degToRad(_zenith)) - (sinDec * sin(_degToRad(latitude)))) /
-            (cosDec * cos(_degToRad(latitude)));
+        (cosDec * cos(_degToRad(latitude)));
 
     if (cosH.abs() > 1) {
       return null;

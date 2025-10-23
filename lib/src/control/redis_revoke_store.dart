@@ -72,11 +72,7 @@ class RedisRevokeStore implements RevokeStore {
       }
     }
 
-    return RedisRevokeStore._(
-      connection,
-      command,
-      defaultNamespace: namespace,
-    );
+    return RedisRevokeStore._(connection, command, defaultNamespace: namespace);
   }
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
@@ -98,7 +94,8 @@ class RedisRevokeStore implements RevokeStore {
     for (var i = 0; i < raw.length; i += 2) {
       final value = raw[i + 1] as String;
       final decoded = RevokeEntry.fromJson(
-          (jsonDecode(value) as Map).cast<String, Object?>());
+        (jsonDecode(value) as Map).cast<String, Object?>(),
+      );
       if (decoded.namespace == namespace) {
         entries.add(decoded);
       }
@@ -144,7 +141,8 @@ return payload
         script,
         '1',
         _recordsKey(
-            entry.namespace.isNotEmpty ? entry.namespace : defaultNamespace),
+          entry.namespace.isNotEmpty ? entry.namespace : defaultNamespace,
+        ),
         entry.taskId,
         jsonEncode(entry.toJson()),
         entry.version.toString(),

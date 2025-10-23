@@ -2,21 +2,15 @@ import 'dart:convert';
 import 'dart:io';
 
 Future<void> main() async {
-  await Process.run(
-      'dart',
-      [
-        'pub',
-        'get',
-      ],
-      workingDirectory: 'examples/monolith_service');
+  await Process.run('dart', [
+    'pub',
+    'get',
+  ], workingDirectory: 'examples/monolith_service');
 
-  final process = await Process.start(
-      'dart',
-      [
-        'run',
-        'bin/service.dart',
-      ],
-      workingDirectory: 'examples/monolith_service');
+  final process = await Process.start('dart', [
+    'run',
+    'bin/service.dart',
+  ], workingDirectory: 'examples/monolith_service');
 
   process.stdout.transform(utf8.decoder).listen(stdout.write);
   process.stderr.transform(utf8.decoder).listen(stderr.write);

@@ -50,10 +50,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.taskReceived.emit(
-      TaskReceivedPayload(
-        envelope: envelope,
-        worker: worker,
-      ),
+      TaskReceivedPayload(envelope: envelope, worker: worker),
       sender: _senderOverride(sender),
     );
   }
@@ -65,11 +62,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.taskPrerun.emit(
-      TaskPrerunPayload(
-        envelope: envelope,
-        worker: worker,
-        context: context,
-      ),
+      TaskPrerunPayload(envelope: envelope, worker: worker, context: context),
       sender: _senderOverride(sender),
     );
   }
@@ -119,11 +112,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.taskSucceeded.emit(
-      TaskSuccessPayload(
-        envelope: envelope,
-        worker: worker,
-        result: result,
-      ),
+      TaskSuccessPayload(envelope: envelope, worker: worker, result: result),
       sender: _senderOverride(sender),
     );
   }
@@ -153,20 +142,12 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.taskRevoked.emit(
-      TaskRevokedPayload(
-        envelope: envelope,
-        worker: worker,
-        reason: reason,
-      ),
+      TaskRevokedPayload(envelope: envelope, worker: worker, reason: reason),
       sender: _senderOverride(sender),
     );
   }
 
-  Future<void> workerInit(
-    WorkerInfo worker, {
-    String? reason,
-    String? sender,
-  }) {
+  Future<void> workerInit(WorkerInfo worker, {String? reason, String? sender}) {
     return StemSignals.workerInit.emit(
       WorkerLifecyclePayload(worker: worker, reason: reason),
       sender: _senderOverride(sender),
@@ -231,8 +212,10 @@ class StemSignalEmitter {
     if (initializing) {
       return StemSignals.workerChildInit.emit(payload, sender: effectiveSender);
     }
-    return StemSignals.workerChildShutdown
-        .emit(payload, sender: effectiveSender);
+    return StemSignals.workerChildShutdown.emit(
+      payload,
+      sender: effectiveSender,
+    );
   }
 
   Future<void> scheduleEntryDue(

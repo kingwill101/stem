@@ -43,8 +43,10 @@ class InMemoryRevokeStore implements RevokeStore {
   Future<List<RevokeEntry>> upsertAll(List<RevokeEntry> entries) async {
     final applied = <RevokeEntry>[];
     for (final entry in entries) {
-      final namespaceRecords =
-          _entries.putIfAbsent(entry.namespace, () => <String, RevokeEntry>{});
+      final namespaceRecords = _entries.putIfAbsent(
+        entry.namespace,
+        () => <String, RevokeEntry>{},
+      );
       final current = namespaceRecords[entry.taskId];
       if (current == null || entry.version > current.version) {
         namespaceRecords[entry.taskId] = entry;

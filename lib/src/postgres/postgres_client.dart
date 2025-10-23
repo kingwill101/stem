@@ -3,8 +3,8 @@ import 'package:postgres/postgres.dart';
 
 class PostgresClient {
   PostgresClient(String connectionString, {String? applicationName})
-      : _connectionString = connectionString,
-        _applicationName = applicationName;
+    : _connectionString = connectionString,
+      _applicationName = applicationName;
 
   final String _connectionString;
   final String? _applicationName;

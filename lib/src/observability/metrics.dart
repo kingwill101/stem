@@ -21,11 +21,11 @@ class MetricEvent {
     Map<String, String> tags = const {},
     DateTime? timestamp,
     this.unit,
-  })  : tags = Map.unmodifiable(tags),
-        timestamp = (timestamp ?? DateTime.now()).toUtc(),
-        attributes = tags.entries
-            .map((entry) => otel.Attribute.fromString(entry.key, entry.value))
-            .toList();
+  }) : tags = Map.unmodifiable(tags),
+       timestamp = (timestamp ?? DateTime.now()).toUtc(),
+       attributes = tags.entries
+           .map((entry) => otel.Attribute.fromString(entry.key, entry.value))
+           .toList();
 
   /// Type of aggregation represented by this event.
   final MetricType type;
@@ -50,13 +50,13 @@ class MetricEvent {
 
   /// Encodes this metric event into a JSON map for transport.
   Map<String, Object> toJson() => {
-        'type': type.name,
-        'name': name,
-        'value': value,
-        'tags': tags,
-        'timestamp': timestamp.toIso8601String(),
-        if (unit != null) 'unit': unit!,
-      };
+    'type': type.name,
+    'name': name,
+    'value': value,
+    'tags': tags,
+    'timestamp': timestamp.toIso8601String(),
+    if (unit != null) 'unit': unit!,
+  };
 }
 
 /// Consumers implement exporters to relay metric events to specific sinks.
@@ -162,12 +162,12 @@ class StemMetrics {
 
   /// Returns a serializable representation of the aggregate state.
   Map<String, Object> snapshot() => {
-        'counters':
-            _counters.values.map((counter) => counter.toJson()).toList(),
-        'histograms':
-            _histograms.values.map((histogram) => histogram.toJson()).toList(),
-        'gauges': _gauges.values.map((gauge) => gauge.toJson()).toList(),
-      };
+    'counters': _counters.values.map((counter) => counter.toJson()).toList(),
+    'histograms': _histograms.values
+        .map((histogram) => histogram.toJson())
+        .toList(),
+    'gauges': _gauges.values.map((gauge) => gauge.toJson()).toList(),
+  };
 
   /// Resets all internal aggregates.
   void reset() {
@@ -201,7 +201,7 @@ class StemMetrics {
 /// Mutable aggregate backing a counter metric.
 class _CounterState {
   _CounterState(this.name, Map<String, String> tags)
-      : tags = Map.unmodifiable(tags);
+    : tags = Map.unmodifiable(tags);
 
   /// Counter name.
   final String name;
@@ -222,7 +222,7 @@ class _CounterState {
 /// Mutable aggregate backing a histogram metric.
 class _HistogramState {
   _HistogramState(this.name, Map<String, String> tags)
-      : tags = Map.unmodifiable(tags);
+    : tags = Map.unmodifiable(tags);
 
   /// Histogram name.
   final String name;
@@ -252,20 +252,20 @@ class _HistogramState {
 
   /// Serializes the histogram aggregate.
   Map<String, Object> toJson() => {
-        'name': name,
-        'tags': tags,
-        'count': count,
-        'sum': sum,
-        'min': count == 0 ? 0 : min,
-        'max': count == 0 ? 0 : max,
-        'avg': count == 0 ? 0 : sum / count,
-      };
+    'name': name,
+    'tags': tags,
+    'count': count,
+    'sum': sum,
+    'min': count == 0 ? 0 : min,
+    'max': count == 0 ? 0 : max,
+    'avg': count == 0 ? 0 : sum / count,
+  };
 }
 
 /// Mutable aggregate backing a gauge metric.
 class _GaugeState {
   _GaugeState(this.name, Map<String, String> tags)
-      : tags = Map.unmodifiable(tags);
+    : tags = Map.unmodifiable(tags);
 
   /// Gauge name.
   final String name;
@@ -287,17 +287,17 @@ class _GaugeState {
 
   /// Serializes the gauge aggregate.
   Map<String, Object> toJson() => {
-        'name': name,
-        'tags': tags,
-        'value': value,
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'name': name,
+    'tags': tags,
+    'value': value,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 }
 
 /// Lookup key combining metric name and tags.
 class _MetricKey {
   _MetricKey(this.name, Map<String, String> tags)
-      : tags = Map.unmodifiable(tags);
+    : tags = Map.unmodifiable(tags);
 
   /// Metric name.
   final String name;
@@ -326,7 +326,6 @@ class ConsoleMetricsExporter extends MetricsExporter {
   final StringSink? sink;
 
   @override
-
   /// Writes the encoded [event] as a single JSON line.
   void record(MetricEvent event) {
     final line = jsonEncode(event.toJson());
@@ -346,10 +345,10 @@ class DartasticMetricsExporter extends MetricsExporter {
     required String serviceName,
     Duration exportInterval = const Duration(seconds: 15),
   }) : _runtime = _DartasticMetricsRuntimeRegistry.instance.obtain(
-          endpoint: endpoint,
-          serviceName: serviceName,
-          exportInterval: exportInterval,
-        );
+         endpoint: endpoint,
+         serviceName: serviceName,
+         exportInterval: exportInterval,
+       );
 
   final _DartasticMetricsRuntime _runtime;
 
@@ -371,7 +370,6 @@ class PrometheusMetricsExporter extends MetricsExporter {
   final Map<String, _PrometheusSample> _samples = {};
 
   @override
-
   /// Updates Prometheus-style aggregates for [event].
   void record(MetricEvent event) {
     final key = _PrometheusSample.keyFor(event);
@@ -395,7 +393,7 @@ class PrometheusMetricsExporter extends MetricsExporter {
 /// Holds intermediate aggregation state for a Prometheus sample.
 class _PrometheusSample {
   _PrometheusSample(this.name, Map<String, String> tags, this.type)
-      : tags = Map.unmodifiable(tags);
+    : tags = Map.unmodifiable(tags);
 
   /// Metric name written to the exposition output.
   final String name;
@@ -446,8 +444,9 @@ class _PrometheusSample {
 
   /// Renders the aggregate into the Prometheus exposition format.
   String render() {
-    final tagString =
-        tags.entries.map((entry) => '${entry.key}="${entry.value}"').join(',');
+    final tagString = tags.entries
+        .map((entry) => '${entry.key}="${entry.value}"')
+        .join(',');
     switch (type) {
       case MetricType.counter:
         return '$name{$tagString} $value';

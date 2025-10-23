@@ -70,7 +70,8 @@ class ScheduleListCommand extends Command<int> {
       );
       for (final entry in entries) {
         final reference = entry.lastRunAt ?? now;
-        final next = entry.nextRunAt ??
+        final next =
+            entry.nextRunAt ??
             calculator.nextRun(
               entry.copyWith(lastRunAt: reference),
               reference,
@@ -112,7 +113,8 @@ class ScheduleShowCommand extends Command<int> {
     final scheduleCtx = await dependencies.createScheduleContext();
     try {
       final args = argResults!;
-      final id = args['id'] as String? ??
+      final id =
+          args['id'] as String? ??
           (args.rest.isNotEmpty ? args.rest.first : null);
       if (id == null || id.isEmpty) {
         dependencies.err.writeln(
@@ -185,20 +187,23 @@ class ScheduleApplyCommand extends Command<int> {
       final definitionsPath =
           args['file'] as String? ?? dependencies.scheduleFilePath;
       if (definitionsPath == null) {
-        dependencies.err
-            .writeln('Missing --file pointing to schedule definitions.');
+        dependencies.err.writeln(
+          'Missing --file pointing to schedule definitions.',
+        );
         return 64;
       }
       final dryRun = args['dry-run'] as bool? ?? false;
       final confirmed = args['yes'] as bool? ?? false;
       if (!dryRun && !confirmed) {
-        dependencies.err
-            .writeln('Apply requires --yes confirmation (or use --dry-run).');
+        dependencies.err.writeln(
+          'Apply requires --yes confirmation (or use --dry-run).',
+        );
         return 64;
       }
       if (!File(definitionsPath).existsSync()) {
-        dependencies.err
-            .writeln('Definitions file not found: $definitionsPath');
+        dependencies.err.writeln(
+          'Definitions file not found: $definitionsPath',
+        );
         return 64;
       }
 
@@ -281,14 +286,16 @@ class ScheduleApplyCommand extends Command<int> {
     }
     if (decoded is! List) {
       throw const FormatException(
-          'Schedule definitions must be provided as a list.');
+        'Schedule definitions must be provided as a list.',
+      );
     }
     return decoded.map<Map<String, Object?>>((item) {
       if (item is Map) {
         return _coerceMap(item);
       }
       throw const FormatException(
-          'Schedule definition entries must be objects.');
+        'Schedule definition entries must be objects.',
+      );
     }).toList();
   }
 
@@ -310,14 +317,17 @@ class ScheduleApplyCommand extends Command<int> {
     final enabledValue = def['enabled'];
     final enabled = enabledValue is bool ? enabledValue : true;
     final rawArgs = def['args'];
-    final args =
-        rawArgs is Map ? _coerceMap(rawArgs) : const <String, Object?>{};
+    final args = rawArgs is Map
+        ? _coerceMap(rawArgs)
+        : const <String, Object?>{};
     final rawKwargs = def['kwargs'];
-    final kwargs =
-        rawKwargs is Map ? _coerceMap(rawKwargs) : const <String, Object?>{};
+    final kwargs = rawKwargs is Map
+        ? _coerceMap(rawKwargs)
+        : const <String, Object?>{};
     final rawMeta = def['meta'];
-    final meta =
-        rawMeta is Map ? _coerceMap(rawMeta) : const <String, Object?>{};
+    final meta = rawMeta is Map
+        ? _coerceMap(rawMeta)
+        : const <String, Object?>{};
 
     Duration? jitter;
     if (def['jitterMs'] != null) {
@@ -416,8 +426,9 @@ String _describeSpec(ScheduleSpec spec) {
     case CronScheduleSpec cron:
       return cron.expression;
     case SolarScheduleSpec solar:
-      final offset =
-          solar.offset != null ? ' (${solar.offset!.inMinutes}m offset)' : '';
+      final offset = solar.offset != null
+          ? ' (${solar.offset!.inMinutes}m offset)'
+          : '';
       return '${solar.event} @${solar.latitude.toStringAsFixed(2)},${solar.longitude.toStringAsFixed(2)}$offset';
     case ClockedScheduleSpec clocked:
       return 'once ${clocked.runAt.toIso8601String()}';
@@ -452,7 +463,8 @@ class ScheduleDeleteCommand extends Command<int> {
     final scheduleCtx = await dependencies.createScheduleContext();
     try {
       final args = argResults!;
-      final id = args['id'] as String? ??
+      final id =
+          args['id'] as String? ??
           (args.rest.isNotEmpty ? args.rest.first : null);
       if (id == null || id.isEmpty) {
         dependencies.err.writeln(
@@ -501,11 +513,13 @@ class ScheduleEnableCommand extends Command<int> {
   @override
   Future<int> run() async {
     final args = argResults!;
-    final id = args['id'] as String? ??
+    final id =
+        args['id'] as String? ??
         (args.rest.isNotEmpty ? args.rest.first : null);
     if (id == null || id.isEmpty) {
-      dependencies.err
-          .writeln('Provide a schedule id via --id or positional argument.');
+      dependencies.err.writeln(
+        'Provide a schedule id via --id or positional argument.',
+      );
       return 64;
     }
     final scheduleCtx = await dependencies.createScheduleContext();
@@ -551,8 +565,11 @@ class ScheduleEnableCommand extends Command<int> {
           dependencies.err.writeln('Schedule "$id" not found.');
           return 64;
         }
-        final updated = entries[index]
-            .copyWith(enabled: true, nextRunAt: null, lastError: null);
+        final updated = entries[index].copyWith(
+          enabled: true,
+          nextRunAt: null,
+          lastError: null,
+        );
         entries[index] = updated;
         await repo.save(entries);
         dependencies.out.writeln('Enabled schedule "$id".');
@@ -582,11 +599,13 @@ class ScheduleDisableCommand extends Command<int> {
   @override
   Future<int> run() async {
     final args = argResults!;
-    final id = args['id'] as String? ??
+    final id =
+        args['id'] as String? ??
         (args.rest.isNotEmpty ? args.rest.first : null);
     if (id == null || id.isEmpty) {
-      dependencies.err
-          .writeln('Provide a schedule id via --id or positional argument.');
+      dependencies.err.writeln(
+        'Provide a schedule id via --id or positional argument.',
+      );
       return 64;
     }
     final scheduleCtx = await dependencies.createScheduleContext();
@@ -651,11 +670,7 @@ class ScheduleDryRunCommand extends Command<int> {
         help: 'Number of occurrences to preview',
         defaultsTo: '5',
       )
-      ..addOption(
-        'from',
-        help: 'Start timestamp ISO8601',
-        valueHelp: 'time',
-      );
+      ..addOption('from', help: 'Start timestamp ISO8601', valueHelp: 'time');
   }
 
   final StemCommandDependencies dependencies;
@@ -671,19 +686,22 @@ class ScheduleDryRunCommand extends Command<int> {
     final scheduleCtx = await dependencies.createScheduleContext();
     try {
       final args = argResults!;
-      final id = args['id'] as String? ??
+      final id =
+          args['id'] as String? ??
           (args.rest.isNotEmpty ? args.rest.first : null);
       final specInput = args['spec'] as String?;
-      final overrideSpec =
-          specInput != null ? ScheduleSpec.fromPersisted(specInput) : null;
+      final overrideSpec = specInput != null
+          ? ScheduleSpec.fromPersisted(specInput)
+          : null;
       final count = int.tryParse(args['count'] as String? ?? '5') ?? 5;
       DateTime start;
       if (args['from'] != null) {
         try {
           start = DateTime.parse(args['from'] as String);
         } catch (_) {
-          dependencies.err
-              .writeln('Invalid --from timestamp. Use ISO-8601 format.');
+          dependencies.err.writeln(
+            'Invalid --from timestamp. Use ISO-8601 format.',
+          );
           return 64;
         }
       } else {
@@ -704,8 +722,9 @@ class ScheduleDryRunCommand extends Command<int> {
       }
 
       if (entry == null && overrideSpec == null) {
-        dependencies.err
-            .writeln('Provide an existing schedule id or --spec to evaluate.');
+        dependencies.err.writeln(
+          'Provide an existing schedule id or --spec to evaluate.',
+        );
         return 64;
       }
 
@@ -757,14 +776,14 @@ class ScheduleCliContext {
   ScheduleCliContext.store({
     required ScheduleStore storeInstance,
     Future<void> Function()? dispose,
-  })  : store = storeInstance,
-        repo = null,
-        _dispose = dispose ?? (() async {});
+  }) : store = storeInstance,
+       repo = null,
+       _dispose = dispose ?? (() async {});
 
   ScheduleCliContext.file({FileScheduleRepository? repo})
-      : store = null,
-        repo = repo ?? FileScheduleRepository(),
-        _dispose = (() async {});
+    : store = null,
+      repo = repo ?? FileScheduleRepository(),
+      _dispose = (() async {});
 
   final ScheduleStore? store;
   final FileScheduleRepository? repo;

@@ -124,12 +124,7 @@ void main() {
 
       expect(
         calls,
-        equals([
-          'received',
-          'prerun',
-          'success',
-          'postrun:succeeded',
-        ]),
+        equals(['received', 'prerun', 'success', 'postrun:succeeded']),
       );
 
       for (final sub in subscriptions) {
@@ -314,12 +309,7 @@ void main() {
 
       expect(
         phases,
-        equals([
-          'init',
-          'ready',
-          'stopping:soft',
-          'shutdown:soft',
-        ]),
+        equals(['init', 'ready', 'stopping:soft', 'shutdown:soft']),
       );
 
       for (final sub in subscriptions) {
@@ -386,8 +376,9 @@ void main() {
       );
 
       await worker.shutdown();
-      final shutdownId =
-          await shutdown.future.timeout(const Duration(seconds: 2));
+      final shutdownId = await shutdown.future.timeout(
+        const Duration(seconds: 2),
+      );
 
       expect(shutdownId, equals(spawnedId));
 
@@ -463,12 +454,7 @@ void main() {
 
       expect(
         phases,
-        equals([
-          'init',
-          'ready',
-          'stopping:soft',
-          'shutdown:soft',
-        ]),
+        equals(['init', 'ready', 'stopping:soft', 'shutdown:soft']),
       );
 
       for (final sub in subscriptions) {
@@ -1157,11 +1143,7 @@ void main() {
       final registry = SimpleTaskRegistry()..register(_SuccessTask());
       final revokeStore = InMemoryRevokeStore();
 
-      final stem = Stem(
-        broker: broker,
-        registry: registry,
-        backend: backend,
-      );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
 
       final taskId = await stem.enqueue('tasks.success');
       await revokeStore.upsertAll([
@@ -1269,16 +1251,20 @@ void main() {
         type: 'ping',
         targets: const ['*'],
       );
-      final queue =
-          ControlQueueNames.worker(worker.namespace, worker.consumerName!);
+      final queue = ControlQueueNames.worker(
+        worker.namespace,
+        worker.consumerName!,
+      );
       await broker.publish(command.toEnvelope(queue: queue));
 
-      final receivedPayload =
-          await received.future.timeout(const Duration(seconds: 2));
+      final receivedPayload = await received.future.timeout(
+        const Duration(seconds: 2),
+      );
       expect(receivedPayload.command.type, 'ping');
 
-      final completedPayload =
-          await completed.future.timeout(const Duration(seconds: 2));
+      final completedPayload = await completed.future.timeout(
+        const Duration(seconds: 2),
+      );
       expect(completedPayload.status, 'ok');
       expect(completedPayload.response?['queue'], worker.primaryQueue);
 

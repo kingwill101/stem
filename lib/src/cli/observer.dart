@@ -52,11 +52,7 @@ class ObserveMetricsCommand extends Command<int> {
 
 class ObserveQueuesCommand extends Command<int> {
   ObserveQueuesCommand(this.dependencies) {
-    argParser.addOption(
-      'file',
-      abbr: 'f',
-      help: 'Path to queue snapshot JSON',
-    );
+    argParser.addOption('file', abbr: 'f', help: 'Path to queue snapshot JSON');
   }
 
   final StemCommandDependencies dependencies;
@@ -140,11 +136,7 @@ class ObserveWorkersCommand extends Command<int> {
 
 class ObserveDlqCommand extends Command<int> {
   ObserveDlqCommand(this.dependencies) {
-    argParser.addOption(
-      'file',
-      abbr: 'f',
-      help: 'Path to DLQ snapshot JSON',
-    );
+    argParser.addOption('file', abbr: 'f', help: 'Path to DLQ snapshot JSON');
   }
 
   final StemCommandDependencies dependencies;
@@ -225,7 +217,8 @@ class ObserveSchedulesCommand extends Command<int> {
       var overdueCount = 0;
       Duration? maxDrift;
       for (final entry in entries) {
-        final next = entry.nextRunAt ??
+        final next =
+            entry.nextRunAt ??
             calculator.nextRun(
               entry.copyWith(lastRunAt: entry.lastRunAt ?? now),
               entry.lastRunAt ?? now,
@@ -268,15 +261,17 @@ class ObserveSchedulesCommand extends Command<int> {
       );
       for (final entry in entries) {
         final reference = entry.lastRunAt ?? now;
-        final next = entry.nextRunAt ??
+        final next =
+            entry.nextRunAt ??
             calculator.nextRun(
               entry.copyWith(lastRunAt: reference),
               reference,
               includeJitter: false,
             );
         final drift = entry.drift != null ? formatDuration(entry.drift) : '-';
-        final lastError =
-            (entry.lastError?.isEmpty ?? true) ? '-' : entry.lastError!;
+        final lastError = (entry.lastError?.isEmpty ?? true)
+            ? '-'
+            : entry.lastError!;
         out.writeln(
           '${entry.id.padRight(10)}| '
           '${entry.taskName.padRight(16)}| '

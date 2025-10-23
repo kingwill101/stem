@@ -9,14 +9,14 @@ import 'payloads.dart';
 /// coordinator or worker logic.
 class SignalMiddleware extends Middleware {
   SignalMiddleware.coordinator({StemSignalEmitter? emitter})
-      : _emitter = emitter ?? const StemSignalEmitter(defaultSender: 'stem'),
-        _workerInfoProvider = null;
+    : _emitter = emitter ?? const StemSignalEmitter(defaultSender: 'stem'),
+      _workerInfoProvider = null;
 
   SignalMiddleware.worker({
     StemSignalEmitter? emitter,
     required WorkerInfo Function() workerInfo,
-  })  : _emitter = emitter ?? const StemSignalEmitter(),
-        _workerInfoProvider = workerInfo;
+  }) : _emitter = emitter ?? const StemSignalEmitter(),
+       _workerInfoProvider = workerInfo;
 
   final StemSignalEmitter _emitter;
   final WorkerInfo Function()? _workerInfoProvider;
@@ -57,11 +57,7 @@ class SignalMiddleware extends Middleware {
     }
     final envelope = _envelopes[context.id];
     if (envelope != null) {
-      await _emitter.taskPrerun(
-        envelope,
-        workerInfoProvider(),
-        context,
-      );
+      await _emitter.taskPrerun(envelope, workerInfoProvider(), context);
     }
     Object? error;
     try {

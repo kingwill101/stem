@@ -58,10 +58,7 @@ Future<Stem> _buildRedisStem(StemConfig config) async {
   if (backendUrl == null) {
     throw StateError('STEM_RESULT_BACKEND_URL must be set for Redis Stem');
   }
-  final backend = await RedisResultBackend.connect(
-    backendUrl,
-    tls: config.tls,
-  );
+  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
   final registry = SimpleTaskRegistry()
     ..register(
@@ -115,5 +112,4 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';

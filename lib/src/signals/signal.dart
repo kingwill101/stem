@@ -1,22 +1,14 @@
 import 'dart:async';
 
-typedef SignalHandler<T> = FutureOr<void> Function(
-  T payload,
-  SignalContext context,
-);
+typedef SignalHandler<T> =
+    FutureOr<void> Function(T payload, SignalContext context);
 
-typedef SignalPredicate<T> = bool Function(
-  T payload,
-  SignalContext context,
-);
+typedef SignalPredicate<T> = bool Function(T payload, SignalContext context);
 
 /// Context passed to every signal dispatch.
 class SignalContext {
-  SignalContext({
-    required this.name,
-    this.sender,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+  SignalContext({required this.name, this.sender, DateTime? timestamp})
+    : timestamp = timestamp ?? DateTime.now();
 
   /// Signal identifier.
   final String name;
@@ -41,20 +33,14 @@ class SignalContext {
 
 /// Configuration applied to all signals dispatched through [SignalHub].
 class SignalDispatchConfig {
-  const SignalDispatchConfig({
-    this.enabled = true,
-    this.onError,
-  });
+  const SignalDispatchConfig({this.enabled = true, this.onError});
 
   /// Whether dispatch is enabled.
   final bool enabled;
 
   /// Error reporting callback.
-  final void Function(
-    String signalName,
-    Object error,
-    StackTrace stackTrace,
-  )? onError;
+  final void Function(String signalName, Object error, StackTrace stackTrace)?
+  onError;
 
   SignalDispatchConfig copyWith({
     bool? enabled,
@@ -93,13 +79,12 @@ class SignalFilter<T> {
       _predicate(payload, context);
 
   SignalFilter<T> and(SignalFilter<T> other) => SignalFilter<T>._(
-        (payload, context) =>
-            matches(payload, context) && other.matches(payload, context),
-      );
+    (payload, context) =>
+        matches(payload, context) && other.matches(payload, context),
+  );
 
-  SignalFilter<T> negate() => SignalFilter<T>._(
-        (payload, context) => !matches(payload, context),
-      );
+  SignalFilter<T> negate() =>
+      SignalFilter<T>._((payload, context) => !matches(payload, context));
 }
 
 class Signal<T> {
@@ -107,8 +92,8 @@ class Signal<T> {
     required this.name,
     SignalFilter<T>? defaultFilter,
     SignalDispatchConfig? config,
-  })  : _defaultFilter = defaultFilter ?? SignalFilter.allowAll<T>(),
-        _config = config ?? const SignalDispatchConfig();
+  }) : _defaultFilter = defaultFilter ?? SignalFilter.allowAll<T>(),
+       _config = config ?? const SignalDispatchConfig();
 
   final String name;
 
@@ -145,10 +130,7 @@ class Signal<T> {
     });
   }
 
-  Future<void> emit(
-    T payload, {
-    String? sender,
-  }) async {
+  Future<void> emit(T payload, {String? sender}) async {
     if (!_config.enabled || _listeners.isEmpty) {
       return;
     }

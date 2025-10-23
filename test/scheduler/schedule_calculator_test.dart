@@ -69,10 +69,7 @@ void main() {
     });
 
     test('throws for invalid every expression', () {
-      expect(
-        () => buildEntry(specExpression: 'every:'),
-        throwsFormatException,
-      );
+      expect(() => buildEntry(specExpression: 'every:'), throwsFormatException);
     });
 
     test('throws for unsupported every unit', () {
@@ -103,10 +100,7 @@ void main() {
     test('respects cron weekday aliases for Sunday', () {
       final calculator = ScheduleCalculator();
       final sunday = DateTime.utc(2025, 1, 5, 8, 45); // Sunday
-      final entry = buildEntry(
-        specExpression: '0 9 * * 0',
-        lastRun: sunday,
-      );
+      final entry = buildEntry(specExpression: '0 9 * * 0', lastRun: sunday);
 
       final nextRun = calculator.nextRun(entry, sunday);
 
@@ -159,16 +153,16 @@ void main() {
 
       final next = calculator.nextRun(entry, now, includeJitter: false);
 
-      final local =
-          tz.TZDateTime.from(next, tz.getLocation('America/New_York'));
+      final local = tz.TZDateTime.from(
+        next,
+        tz.getLocation('America/New_York'),
+      );
       expect(local.hour, equals(9));
     });
 
     test('computes solar events after reference time', () {
       final resolver = ScheduleTimezoneResolver((name) => tz.getLocation(name));
-      final calculator = ScheduleCalculator(
-        timezoneResolver: resolver,
-      );
+      final calculator = ScheduleCalculator(timezoneResolver: resolver);
       final entry = buildEntry(
         spec: SolarScheduleSpec(
           event: 'sunrise',

@@ -129,8 +129,9 @@ Future<String> _seedDeadLetter(
 }) async {
   final envelope = Envelope(name: 'tasks.sample', args: const {});
   await broker.publish(envelope);
-  final delivery =
-      await broker.consume(RoutingSubscription.singleQueue('default')).first;
+  final delivery = await broker
+      .consume(RoutingSubscription.singleQueue('default'))
+      .first;
   await backend?.set(
     envelope.id,
     TaskState.failed,

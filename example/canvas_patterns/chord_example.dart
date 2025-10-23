@@ -19,7 +19,8 @@ Future<void> main() async {
       FunctionTaskHandler<Object?>(
         name: 'aggregate.metric',
         entrypoint: (context, args) async {
-          final values = (context.meta['chordResults'] as List?)
+          final values =
+              (context.meta['chordResults'] as List?)
                   ?.whereType<int>()
                   .toList() ??
               const [];

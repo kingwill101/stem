@@ -147,8 +147,9 @@ class RedisScheduleStore implements ScheduleStore {
       lastRunAt: parseDate(data['lastRunAt']),
       nextRunAt: parseDate(data['nextRunAt']),
       lastJitter: parseDuration(data['lastJitterMs']),
-      lastError:
-          data['lastError']?.isNotEmpty == true ? data['lastError'] : null,
+      lastError: data['lastError']?.isNotEmpty == true
+          ? data['lastError']
+          : null,
       timezone: data['timezone']?.isNotEmpty == true ? data['timezone'] : null,
       totalRunCount: data['totalRunCount'] != null
           ? int.tryParse(data['totalRunCount']!) ?? 0
@@ -238,8 +239,8 @@ class RedisScheduleStore implements ScheduleStore {
       final currentVersion = versionRaw == null
           ? 0
           : versionRaw is int
-              ? versionRaw
-              : int.tryParse(versionRaw.toString()) ?? 0;
+          ? versionRaw
+          : int.tryParse(versionRaw.toString()) ?? 0;
       if (versionRaw != null && entry.version != currentVersion) {
         throw ScheduleConflictException(
           entry.id,
@@ -384,11 +385,7 @@ class RedisScheduleStore implements ScheduleStore {
       var enabled = updated.enabled;
       if (next == null && enabled) {
         try {
-          next = _calculator.nextRun(
-            updated,
-            executedAt,
-            includeJitter: false,
-          );
+          next = _calculator.nextRun(updated, executedAt, includeJitter: false);
         } catch (_) {
           next = executedAt;
         }
@@ -485,12 +482,6 @@ class RedisScheduleStore implements ScheduleStore {
       'error',
       error ?? '',
     ]);
-    await _send([
-      'XTRIM',
-      key,
-      'MAXLEN',
-      '~',
-      '1000',
-    ]);
+    await _send(['XTRIM', key, 'MAXLEN', '~', '1000']);
   }
 }

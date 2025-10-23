@@ -25,8 +25,9 @@ Duration? parseOptionalDuration(String? value) {
   return null;
 }
 
-Future<CliContext> createDefaultContext(
-    {Map<String, String>? environment}) async {
+Future<CliContext> createDefaultContext({
+  Map<String, String>? environment,
+}) async {
   final env = environment ?? Platform.environment;
   final config = StemConfig.fromEnvironment(env);
   final routingRegistry = _loadRoutingRegistry(config);

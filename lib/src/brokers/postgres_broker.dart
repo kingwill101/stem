@@ -64,11 +64,9 @@ class PostgresBroker implements Broker {
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
-    final resolvedRoute = routing ??
-        RoutingInfo.queue(
-          queue: envelope.queue,
-          priority: envelope.priority,
-        );
+    final resolvedRoute =
+        routing ??
+        RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
     if (resolvedRoute.isBroadcast) {
       final channel = resolvedRoute.broadcastChannel ?? envelope.queue;
       final message = envelope.copyWith(queue: channel);
@@ -183,7 +181,8 @@ ON CONFLICT (id) DO UPDATE SET
     }
     final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
-    final consumer = consumerName ??
+    final consumer =
+        consumerName ??
         'consumer-${DateTime.now().microsecondsSinceEpoch}'
             '-${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
@@ -283,8 +282,9 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
       return;
     }
     final receipt = _Receipt.parse(delivery.receipt);
-    final entryReason =
-        (reason == null || reason.trim().isEmpty) ? 'unknown' : reason.trim();
+    final entryReason = (reason == null || reason.trim().isEmpty)
+        ? 'unknown'
+        : reason.trim();
     final deadAt = DateTime.now().toUtc();
     await _client.run((Connection conn) async {
       await conn.runTx((tx) async {
@@ -436,8 +436,9 @@ LIMIT @limit OFFSET @offset
         deadAt: deadAt,
       );
     }).toList();
-    final nextOffset =
-        entries.length == limit ? normalizedOffset + entries.length : null;
+    final nextOffset = entries.length == limit
+        ? normalizedOffset + entries.length
+        : null;
     return DeadLetterPage(entries: entries, nextOffset: nextOffset);
   }
 
@@ -580,7 +581,8 @@ WHERE id = @id AND queue = @queue
     final effectiveLimit = limit != null && limit >= 0 ? limit : null;
     final result = await _client.run((Connection conn) async {
       final dynamic deletedCount = await conn.runTx((tx) async {
-        final query = StringBuffer()..writeln('''
+        final query = StringBuffer()
+          ..writeln('''
 SELECT id
 FROM stem_jobs_dead
 WHERE queue = @queue
@@ -720,10 +722,7 @@ LIMIT @limit
         deliveries.add(
           Delivery(
             envelope: envelope.copyWith(queue: channel),
-            receipt: jsonEncode({
-              'messageId': id,
-              'worker': workerId,
-            }),
+            receipt: jsonEncode({'messageId': id, 'worker': workerId}),
             leaseExpiresAt: null,
             route: RoutingInfo.broadcast(
               channel: channel,
@@ -747,10 +746,7 @@ INSERT INTO stem_broadcast_ack (message_id, worker_id)
 VALUES (@messageId, @workerId)
 ON CONFLICT (message_id, worker_id) DO UPDATE SET acknowledged_at = NOW()
 '''),
-        parameters: {
-          'messageId': messageId,
-          'workerId': workerId,
-        },
+        parameters: {'messageId': messageId, 'workerId': workerId},
       );
     });
   }
@@ -833,10 +829,10 @@ class _Receipt {
   String encode() => jsonEncode(toMap());
 
   Map<String, Object?> toMap() => {
-        'queue': queue,
-        'id': id,
-        'lockedBy': lockedBy,
-      };
+    'queue': queue,
+    'id': id,
+    'lockedBy': lockedBy,
+  };
 
   static _Receipt parse(String raw) {
     final decoded = jsonDecode(raw) as Map<String, dynamic>;

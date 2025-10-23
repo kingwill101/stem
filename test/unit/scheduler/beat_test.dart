@@ -245,8 +245,9 @@ void main() {
       await beat.runOnce();
 
       await due.future.timeout(const Duration(seconds: 1));
-      final dispatchedPayload =
-          await dispatched.future.timeout(const Duration(seconds: 1));
+      final dispatchedPayload = await dispatched.future.timeout(
+        const Duration(seconds: 1),
+      );
       expect(dispatchedPayload.entry.id, 'demo');
 
       for (final sub in subs) {
@@ -287,8 +288,9 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       await beat.runOnce();
 
-      final failedPayload =
-          await failure.future.timeout(const Duration(seconds: 1));
+      final failedPayload = await failure.future.timeout(
+        const Duration(seconds: 1),
+      );
       expect(failedPayload.entry.id, 'failing');
       expect(failedPayload.error, isA<StateError>());
 
@@ -319,10 +321,7 @@ class _ThrowingBroker extends InMemoryBroker {
   bool _throwOnce = true;
 
   @override
-  Future<void> publish(
-    Envelope envelope, {
-    RoutingInfo? routing,
-  }) {
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) {
     if (_throwOnce) {
       _throwOnce = false;
       return Future.error(StateError('publish failed'));

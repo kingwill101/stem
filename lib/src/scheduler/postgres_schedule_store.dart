@@ -651,10 +651,7 @@ Map<String, Object?> _decodeMap(Object? value) {
   return const {};
 }
 
-Future<void> _ensureColumn(
-  Connection conn,
-  String statement,
-) async {
+Future<void> _ensureColumn(Connection conn, String statement) async {
   try {
     await conn.execute(statement);
   } catch (_) {}

@@ -58,11 +58,8 @@ sealed class ScheduleSpec {
 }
 
 class IntervalScheduleSpec extends ScheduleSpec {
-  IntervalScheduleSpec({
-    required this.every,
-    this.startAt,
-    this.endAt,
-  }) : super(ScheduleSpecKind.interval) {
+  IntervalScheduleSpec({required this.every, this.startAt, this.endAt})
+    : super(ScheduleSpecKind.interval) {
     if (every <= Duration.zero) {
       throw ArgumentError.value(
         every,
@@ -129,8 +126,8 @@ class CronScheduleSpec extends ScheduleSpec {
     required this.expression,
     this.description,
     this.secondField,
-  })  : assert(expression.trim().isNotEmpty, 'Cron expression must be set.'),
-        super(ScheduleSpecKind.cron);
+  }) : assert(expression.trim().isNotEmpty, 'Cron expression must be set.'),
+       super(ScheduleSpecKind.cron);
 
   factory CronScheduleSpec.fromJson(Map<String, Object?> json) {
     final expression = json['expression'] as String?;
@@ -157,20 +154,22 @@ class CronScheduleSpec extends ScheduleSpec {
   }) {
     return CronScheduleSpec(
       expression: expression ?? this.expression,
-      description:
-          description == _sentinel ? this.description : description as String?,
-      secondField:
-          secondField == _sentinel ? this.secondField : secondField as String?,
+      description: description == _sentinel
+          ? this.description
+          : description as String?,
+      secondField: secondField == _sentinel
+          ? this.secondField
+          : secondField as String?,
     );
   }
 
   @override
   Map<String, Object?> toJson() => {
-        'kind': kind,
-        'expression': expression,
-        if (description != null) 'description': description,
-        if (secondField != null) 'secondField': secondField,
-      };
+    'kind': kind,
+    'expression': expression,
+    if (description != null) 'description': description,
+    if (secondField != null) 'secondField': secondField,
+  };
 }
 
 class SolarScheduleSpec extends ScheduleSpec {
@@ -179,9 +178,11 @@ class SolarScheduleSpec extends ScheduleSpec {
     required this.latitude,
     required this.longitude,
     this.offset,
-  })  : assert(_validEvents.contains(event),
-            'Solar event must be one of $_validEvents'),
-        super(ScheduleSpecKind.solar);
+  }) : assert(
+         _validEvents.contains(event),
+         'Solar event must be one of $_validEvents',
+       ),
+       super(ScheduleSpecKind.solar);
 
   factory SolarScheduleSpec.fromJson(Map<String, Object?> json) {
     final event = json['event'] as String?;
@@ -237,10 +238,8 @@ class SolarScheduleSpec extends ScheduleSpec {
 }
 
 class ClockedScheduleSpec extends ScheduleSpec {
-  ClockedScheduleSpec({
-    required this.runAt,
-    this.runOnce = true,
-  }) : super(ScheduleSpecKind.clocked);
+  ClockedScheduleSpec({required this.runAt, this.runOnce = true})
+    : super(ScheduleSpecKind.clocked);
 
   factory ClockedScheduleSpec.fromJson(Map<String, Object?> json) {
     final runAtRaw = json['runAt'] ?? json['run_at'];
@@ -258,10 +257,7 @@ class ClockedScheduleSpec extends ScheduleSpec {
   final bool runOnce;
 
   @override
-  ClockedScheduleSpec copyWith({
-    DateTime? runAt,
-    bool? runOnce,
-  }) {
+  ClockedScheduleSpec copyWith({DateTime? runAt, bool? runOnce}) {
     return ClockedScheduleSpec(
       runAt: runAt ?? this.runAt,
       runOnce: runOnce ?? this.runOnce,
@@ -270,10 +266,10 @@ class ClockedScheduleSpec extends ScheduleSpec {
 
   @override
   Map<String, Object?> toJson() => {
-        'kind': kind,
-        'runAt': runAt.toIso8601String(),
-        'runOnce': runOnce,
-      };
+    'kind': kind,
+    'runAt': runAt.toIso8601String(),
+    'runOnce': runOnce,
+  };
 }
 
 class CalendarScheduleSpec extends ScheduleSpec {
@@ -331,19 +327,19 @@ class CalendarScheduleSpec extends ScheduleSpec {
 
   @override
   Map<String, Object?> toJson() => {
-        'kind': kind,
-        if (months != null) 'months': months,
-        if (weekdays != null) 'weekdays': weekdays,
-        if (monthdays != null) 'monthdays': monthdays,
-        if (hours != null) 'hours': hours,
-        if (minutes != null) 'minutes': minutes,
-      };
+    'kind': kind,
+    if (months != null) 'months': months,
+    if (weekdays != null) 'weekdays': weekdays,
+    if (monthdays != null) 'monthdays': monthdays,
+    if (hours != null) 'hours': hours,
+    if (minutes != null) 'minutes': minutes,
+  };
 }
 
 /// Lazily resolves timezone identifiers. Exposed for calculators.
 class ScheduleTimezoneResolver {
   ScheduleTimezoneResolver(this._provider, {String defaultTimezone = 'UTC'})
-      : _defaultTimezone = defaultTimezone;
+    : _defaultTimezone = defaultTimezone;
 
   final tz.Location Function(String name)? _provider;
   final String _defaultTimezone;

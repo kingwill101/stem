@@ -8,27 +8,27 @@ class RouteDecision {
     RouteDefinition? route,
     int? priorityOverride,
     Iterable<QueueDefinition> fallbackQueues = const [],
-  })  : type = RouteDecisionType.queue,
-        queue = queue,
-        broadcast = null,
-        route = route,
-        priorityOverride = priorityOverride,
-        selectedQueueAlias = selectedAlias ?? queue.name,
-        fallbackQueues = List.unmodifiable(fallbackQueues),
-        broadcastChannel = null;
+  }) : type = RouteDecisionType.queue,
+       queue = queue,
+       broadcast = null,
+       route = route,
+       priorityOverride = priorityOverride,
+       selectedQueueAlias = selectedAlias ?? queue.name,
+       fallbackQueues = List.unmodifiable(fallbackQueues),
+       broadcastChannel = null;
 
   RouteDecision.broadcast({
     required BroadcastDefinition broadcast,
     RouteDefinition? route,
     int? priorityOverride,
-  })  : type = RouteDecisionType.broadcast,
-        queue = null,
-        broadcast = broadcast,
-        route = route,
-        priorityOverride = priorityOverride,
-        selectedQueueAlias = null,
-        fallbackQueues = const [],
-        broadcastChannel = broadcast.name;
+  }) : type = RouteDecisionType.broadcast,
+       queue = null,
+       broadcast = broadcast,
+       route = route,
+       priorityOverride = priorityOverride,
+       selectedQueueAlias = null,
+       fallbackQueues = const [],
+       broadcastChannel = broadcast.name;
 
   /// The type of target selected for the route.
   final RouteDecisionType type;
@@ -77,10 +77,10 @@ class RouteRequest {
     required this.task,
     Map<String, String>? headers,
     String? queue,
-  })  : headers = Map.unmodifiable(
-          headers == null ? const {} : Map<String, String>.from(headers),
-        ),
-        queue = queue?.trim().isNotEmpty == true ? queue!.trim() : null;
+  }) : headers = Map.unmodifiable(
+         headers == null ? const {} : Map<String, String>.from(headers),
+       ),
+       queue = queue?.trim().isNotEmpty == true ? queue!.trim() : null;
 
   /// Task name being enqueued.
   final String task;
@@ -263,9 +263,7 @@ class RoutingRegistry {
         _dynamicQueues.putIfAbsent(name, () => QueueDefinition(name: name));
   }
 
-  List<QueueDefinition> _buildDefaultFallbacks(
-    List<String> fallbackNames,
-  ) {
+  List<QueueDefinition> _buildDefaultFallbacks(List<String> fallbackNames) {
     final seen = <String>{};
     final fallbacks = <QueueDefinition>[];
     for (final entry in fallbackNames) {
@@ -311,10 +309,7 @@ class RoutingRegistry {
     return aliases;
   }
 
-  String _resolveQueueName(
-    String value, {
-    String? context,
-  }) {
+  String _resolveQueueName(String value, {String? context}) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) {
       throw FormatException(

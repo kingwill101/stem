@@ -31,8 +31,8 @@ class RevokeStoreFactory {
         final path = uri.scheme == 'file'
             ? uri.toFilePath()
             : uri.path.isEmpty
-                ? candidate
-                : uri.path;
+            ? candidate
+            : uri.path;
         return FileRevokeStore.open(path);
       case 'redis':
       case 'rediss':
@@ -51,9 +51,7 @@ class RevokeStoreFactory {
           applicationName: 'stem-revoke-store',
         );
       default:
-        throw StateError(
-          'Unsupported revoke store scheme: ${uri.scheme}',
-        );
+        throw StateError('Unsupported revoke store scheme: ${uri.scheme}');
     }
   }
 

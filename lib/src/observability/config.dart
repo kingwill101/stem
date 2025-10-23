@@ -13,12 +13,13 @@ class ObservabilityConfig {
     List<String>? metricExporters,
     this.otlpEndpoint,
     StemSignalConfiguration? signalConfiguration,
-  })  : heartbeatInterval = heartbeatInterval ?? const Duration(seconds: 10),
-        namespace =
-            (namespace != null && namespace.isNotEmpty) ? namespace : 'stem',
-        metricExporters = List.unmodifiable(metricExporters ?? const []),
-        signalConfiguration =
-            signalConfiguration ?? const StemSignalConfiguration();
+  }) : heartbeatInterval = heartbeatInterval ?? const Duration(seconds: 10),
+       namespace = (namespace != null && namespace.isNotEmpty)
+           ? namespace
+           : 'stem',
+       metricExporters = List.unmodifiable(metricExporters ?? const []),
+       signalConfiguration =
+           signalConfiguration ?? const StemSignalConfiguration();
 
   /// Interval between worker heartbeats emitted for monitoring.
   final Duration heartbeatInterval;
@@ -39,7 +40,8 @@ class ObservabilityConfig {
   /// [env] or the process environment.
   factory ObservabilityConfig.fromEnvironment([Map<String, String>? env]) {
     final environment = env ?? Platform.environment;
-    final interval = parseDuration(environment[_EnvKeys.heartbeatInterval]) ??
+    final interval =
+        parseDuration(environment[_EnvKeys.heartbeatInterval]) ??
         const Duration(seconds: 10);
     final namespace = environment[_EnvKeys.namespace]?.trim();
     final exportersRaw = environment[_EnvKeys.metricExporters] ?? '';
@@ -49,15 +51,14 @@ class ObservabilityConfig {
         .where((entry) => entry.isNotEmpty)
         .toList();
     final otlpRaw = environment[_EnvKeys.otlpEndpoint]?.trim();
-    final otlp =
-        otlpRaw != null && otlpRaw.isNotEmpty ? Uri.tryParse(otlpRaw) : null;
+    final otlp = otlpRaw != null && otlpRaw.isNotEmpty
+        ? Uri.tryParse(otlpRaw)
+        : null;
     final signalsEnabled = _parseBool(environment[_EnvKeys.signalsEnabled]);
     final disabledSignals = _parseList(environment[_EnvKeys.signalsDisabled]);
     final signalConfig = StemSignalConfiguration(
       enabled: signalsEnabled ?? true,
-      enabledSignals: {
-        for (final name in disabledSignals) name: false,
-      },
+      enabledSignals: {for (final name in disabledSignals) name: false},
     );
     return ObservabilityConfig(
       heartbeatInterval: interval,

@@ -9,7 +9,8 @@ Future<void> main(List<String> args) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-        'STEM_RESULT_BACKEND_URL must be set for the Postgres worker.');
+      'STEM_RESULT_BACKEND_URL must be set for the Postgres worker.',
+    );
   }
 
   final broker = await PostgresBroker.connect(

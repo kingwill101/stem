@@ -44,15 +44,15 @@ class RevokeEntry {
 
   /// Serialises this entry to a JSON-compatible map.
   Map<String, Object?> toJson() => {
-        'namespace': namespace,
-        'taskId': taskId,
-        'version': version,
-        'issuedAt': issuedAt.toIso8601String(),
-        'terminate': terminate,
-        if (reason != null) 'reason': reason,
-        if (requestedBy != null) 'requestedBy': requestedBy,
-        if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
-      };
+    'namespace': namespace,
+    'taskId': taskId,
+    'version': version,
+    'issuedAt': issuedAt.toIso8601String(),
+    'terminate': terminate,
+    if (reason != null) 'reason': reason,
+    if (requestedBy != null) 'requestedBy': requestedBy,
+    if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
+  };
 
   /// Creates a [RevokeEntry] from a JSON map.
   factory RevokeEntry.fromJson(Map<String, Object?> json) {

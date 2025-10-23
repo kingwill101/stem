@@ -19,10 +19,11 @@ class Stem {
     List<Middleware> middleware = const [],
     this.signer,
     RoutingRegistry? routing,
-  })  : routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
-        retryStrategy = retryStrategy ??
-            ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
-        middleware = List.unmodifiable(middleware);
+  }) : routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
+       retryStrategy =
+           retryStrategy ??
+           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+       middleware = List.unmodifiable(middleware);
 
   final Broker broker;
   final TaskRegistry registry;
@@ -31,8 +32,9 @@ class Stem {
   final List<Middleware> middleware;
   final PayloadSigner? signer;
   final RoutingRegistry routing;
-  static const StemSignalEmitter _signals =
-      StemSignalEmitter(defaultSender: 'stem');
+  static const StemSignalEmitter _signals = StemSignalEmitter(
+    defaultSender: 'stem',
+  );
 
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -45,11 +47,7 @@ class Stem {
   }) async {
     final tracer = StemTracer.instance;
     final decision = routing.resolve(
-      RouteRequest(
-        task: name,
-        headers: headers,
-        queue: options.queue,
-      ),
+      RouteRequest(task: name, headers: headers, queue: options.queue),
     );
     final targetName = decision.targetName;
     final resolvedPriority = decision.effectivePriority(options.priority);

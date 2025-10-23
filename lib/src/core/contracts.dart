@@ -11,16 +11,14 @@ class RoutingSubscription {
   RoutingSubscription({
     required List<String> queues,
     List<String>? broadcastChannels,
-  })  : queues = List.unmodifiable(
-          queues
-              .map((queue) => queue.trim())
-              .where((queue) => queue.isNotEmpty),
-        ),
-        broadcastChannels = List.unmodifiable(
-          (broadcastChannels ?? const <String>[])
-              .map((channel) => channel.trim())
-              .where((channel) => channel.isNotEmpty),
-        ) {
+  }) : queues = List.unmodifiable(
+         queues.map((queue) => queue.trim()).where((queue) => queue.isNotEmpty),
+       ),
+       broadcastChannels = List.unmodifiable(
+         (broadcastChannels ?? const <String>[])
+             .map((channel) => channel.trim())
+             .where((channel) => channel.isNotEmpty),
+       ) {
     if (this.queues.isEmpty && this.broadcastChannels.isEmpty) {
       throw ArgumentError(
         'RoutingSubscription must include at least one queue or broadcast channel.',
@@ -154,8 +152,8 @@ class TaskStatus {
     Map<String, Object?>? meta,
     required this.attempt,
     DateTime? updatedAt,
-  })  : meta = Map.unmodifiable(meta ?? const {}),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : meta = Map.unmodifiable(meta ?? const {}),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// The unique identifier for this task status.
   final String id;
@@ -179,14 +177,14 @@ class TaskStatus {
   final DateTime updatedAt;
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'state': state.name,
-        'payload': payload,
-        'error': error?.toJson(),
-        'meta': meta,
-        'attempt': attempt,
-        'updatedAt': updatedAt.toIso8601String(),
-      };
+    'id': id,
+    'state': state.name,
+    'payload': payload,
+    'error': error?.toJson(),
+    'meta': meta,
+    'attempt': attempt,
+    'updatedAt': updatedAt.toIso8601String(),
+  };
 
   factory TaskStatus.fromJson(Map<String, Object?> json) {
     return TaskStatus(
@@ -234,12 +232,12 @@ class TaskError {
   final Map<String, Object?> meta;
 
   Map<String, Object?> toJson() => {
-        'type': type,
-        'message': message,
-        'stack': stack,
-        'retryable': retryable,
-        'meta': meta,
-      };
+    'type': type,
+    'message': message,
+    'stack': stack,
+    'retryable': retryable,
+    'meta': meta,
+  };
 
   factory TaskError.fromJson(Map<String, Object?> json) {
     return TaskError(
@@ -274,11 +272,11 @@ class DeadLetterEntry {
   final DateTime deadAt;
 
   Map<String, Object?> toJson() => {
-        'envelope': envelope.toJson(),
-        'reason': reason,
-        'meta': meta,
-        'deadAt': deadAt.toIso8601String(),
-      };
+    'envelope': envelope.toJson(),
+    'reason': reason,
+    'meta': meta,
+    'deadAt': deadAt.toIso8601String(),
+  };
 
   factory DeadLetterEntry.fromJson(Map<String, Object?> json) {
     return DeadLetterEntry(
@@ -388,10 +386,10 @@ class ScheduleEntry {
     this.updatedAt,
     this.version = 0,
     Map<String, Object?>? meta,
-  })  : spec = spec,
-        args = Map.unmodifiable(args ?? const {}),
-        kwargs = Map.unmodifiable(kwargs ?? const {}),
-        meta = Map.unmodifiable(meta ?? const {});
+  }) : spec = spec,
+       args = Map.unmodifiable(args ?? const {}),
+       kwargs = Map.unmodifiable(kwargs ?? const {}),
+       meta = Map.unmodifiable(meta ?? const {});
 
   /// The unique identifier for this schedule entry.
   final String id;
@@ -495,10 +493,12 @@ class ScheduleEntry {
       enabled: enabled ?? this.enabled,
       jitter: jitter ?? this.jitter,
       lastRunAt: lastRunAt ?? this.lastRunAt,
-      nextRunAt:
-          nextRunAt == _sentinel ? this.nextRunAt : nextRunAt as DateTime?,
-      lastJitter:
-          lastJitter == _sentinel ? this.lastJitter : lastJitter as Duration?,
+      nextRunAt: nextRunAt == _sentinel
+          ? this.nextRunAt
+          : nextRunAt as DateTime?,
+      lastJitter: lastJitter == _sentinel
+          ? this.lastJitter
+          : lastJitter as Duration?,
       lastError: lastError == _sentinel ? this.lastError : lastError as String?,
       timezone: timezone == _sentinel ? this.timezone : timezone as String?,
       totalRunCount: totalRunCount ?? this.totalRunCount,
@@ -510,39 +510,41 @@ class ScheduleEntry {
           : lastErrorAt as DateTime?,
       drift: drift == _sentinel ? this.drift : drift as Duration?,
       expireAt: expireAt == _sentinel ? this.expireAt : expireAt as DateTime?,
-      createdAt:
-          createdAt == _sentinel ? this.createdAt : createdAt as DateTime?,
-      updatedAt:
-          updatedAt == _sentinel ? this.updatedAt : updatedAt as DateTime?,
+      createdAt: createdAt == _sentinel
+          ? this.createdAt
+          : createdAt as DateTime?,
+      updatedAt: updatedAt == _sentinel
+          ? this.updatedAt
+          : updatedAt as DateTime?,
       version: version ?? this.version,
       meta: meta ?? this.meta,
     );
   }
 
   Map<String, Object?> toJson() => {
-        'id': id,
-        'taskName': taskName,
-        'queue': queue,
-        'spec': spec.toJson(),
-        'args': args,
-        if (kwargs.isNotEmpty) 'kwargs': kwargs,
-        'enabled': enabled,
-        'jitterMs': jitter?.inMilliseconds,
-        'lastRunAt': lastRunAt?.toIso8601String(),
-        'nextRunAt': nextRunAt?.toIso8601String(),
-        'lastJitterMs': lastJitter?.inMilliseconds,
-        'lastError': lastError,
-        'timezone': timezone,
-        'totalRunCount': totalRunCount,
-        'lastSuccessAt': lastSuccessAt?.toIso8601String(),
-        'lastErrorAt': lastErrorAt?.toIso8601String(),
-        'driftMs': drift?.inMilliseconds,
-        'expireAt': expireAt?.toIso8601String(),
-        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
-        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
-        'version': version,
-        'meta': meta,
-      };
+    'id': id,
+    'taskName': taskName,
+    'queue': queue,
+    'spec': spec.toJson(),
+    'args': args,
+    if (kwargs.isNotEmpty) 'kwargs': kwargs,
+    'enabled': enabled,
+    'jitterMs': jitter?.inMilliseconds,
+    'lastRunAt': lastRunAt?.toIso8601String(),
+    'nextRunAt': nextRunAt?.toIso8601String(),
+    'lastJitterMs': lastJitter?.inMilliseconds,
+    'lastError': lastError,
+    'timezone': timezone,
+    'totalRunCount': totalRunCount,
+    'lastSuccessAt': lastSuccessAt?.toIso8601String(),
+    'lastErrorAt': lastErrorAt?.toIso8601String(),
+    'driftMs': drift?.inMilliseconds,
+    'expireAt': expireAt?.toIso8601String(),
+    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+    if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+    'version': version,
+    'meta': meta,
+  };
 
   factory ScheduleEntry.fromJson(Map<String, Object?> json) {
     final spec = ScheduleSpec.fromPersisted(json['spec']);
@@ -722,7 +724,8 @@ class TaskContext {
   final Future<void> Function(
     double percentComplete, {
     Map<String, Object?>? data,
-  }) progress;
+  })
+  progress;
 }
 
 /// Runtime task handler.
@@ -756,14 +759,12 @@ class SimpleTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler> _handlers = {};
 
   @override
-
   /// Registers the [handler] in this registry.
   void register(TaskHandler handler) {
     _handlers[handler.name] = handler;
   }
 
   @override
-
   /// Resolves the handler for the given [name], or returns null if not found.
   TaskHandler? resolve(String name) => _handlers[name];
 }
@@ -876,8 +877,8 @@ class GroupStatus {
     required this.expected,
     Map<String, TaskStatus>? results,
     Map<String, Object?>? meta,
-  })  : results = Map.unmodifiable(results ?? const {}),
-        meta = Map.unmodifiable(meta ?? const {});
+  }) : results = Map.unmodifiable(results ?? const {}),
+       meta = Map.unmodifiable(meta ?? const {});
 
   /// The unique identifier of the group.
   final String id;

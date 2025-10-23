@@ -17,8 +17,10 @@ void main() {
     tearDown(() async {
       if (stubProcess != null) {
         stubProcess!.kill(ProcessSignal.sigterm);
-        await stubProcess!.exitCode
-            .timeout(const Duration(seconds: 5), onTimeout: () => 0);
+        await stubProcess!.exitCode.timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => 0,
+        );
         stubProcess = null;
       }
       if (tempDir.existsSync()) {
@@ -29,10 +31,10 @@ void main() {
     test('reports ok when pid is alive', () async {
       final pidFile = p.join(tempDir.path, 'alpha.pid');
       final script = p.absolute('test/support/fixtures/daemon_stub.dart');
-      stubProcess = await Process.start(
-        Platform.resolvedExecutable,
-        ['--disable-dart-dev', script],
-      );
+      stubProcess = await Process.start(Platform.resolvedExecutable, [
+        '--disable-dart-dev',
+        script,
+      ]);
       File(pidFile).writeAsStringSync('${stubProcess!.pid}\n');
 
       final out = StringBuffer();
@@ -62,12 +64,7 @@ void main() {
       final pidFile = p.join(tempDir.path, 'missing.pid');
       final out = StringBuffer();
       final code = await runStemCli(
-        [
-          'worker',
-          'healthcheck',
-          '--pidfile',
-          pidFile,
-        ],
+        ['worker', 'healthcheck', '--pidfile', pidFile],
         out: out,
         err: StringBuffer(),
         environment: Platform.environment,
@@ -97,19 +94,17 @@ void main() {
       final pidFile = p.join(pidDir.path, 'alpha.pid');
       File(pidFile).writeAsStringSync('99999\n');
 
-      final missingLog =
-          p.join(tempDir.path, 'var', 'log', 'stem', 'alpha.log');
+      final missingLog = p.join(
+        tempDir.path,
+        'var',
+        'log',
+        'stem',
+        'alpha.log',
+      );
 
       final out = StringBuffer();
       final code = await runStemCli(
-        [
-          'worker',
-          'diagnose',
-          '--pidfile',
-          pidFile,
-          '--logfile',
-          missingLog,
-        ],
+        ['worker', 'diagnose', '--pidfile', pidFile, '--logfile', missingLog],
         out: out,
         err: StringBuffer(),
         environment: Platform.environment,

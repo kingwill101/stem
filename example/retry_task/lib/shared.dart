@@ -9,10 +9,7 @@ SimpleTaskRegistry buildRegistry() {
       FunctionTaskHandler<void>(
         name: 'tasks.always_fail',
         entrypoint: _alwaysFailEntrypoint,
-        options: const TaskOptions(
-          maxRetries: 2,
-          queue: 'retry-demo',
-        ),
+        options: const TaskOptions(maxRetries: 2, queue: 'retry-demo'),
       ),
     );
   return registry;

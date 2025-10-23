@@ -25,10 +25,10 @@ class TlsConfig {
   });
 
   const TlsConfig.disabled()
-      : caCertificateFile = null,
-        clientCertificateFile = null,
-        clientKeyFile = null,
-        allowInsecure = false;
+    : caCertificateFile = null,
+      clientCertificateFile = null,
+      clientKeyFile = null,
+      allowInsecure = false;
 
   final String? caCertificateFile;
   final String? clientCertificateFile;
@@ -70,9 +70,9 @@ class TlsConfig {
     final key = optional(env[TlsEnvKeys.clientKey]);
     final allowInsecure =
         (env[TlsEnvKeys.allowInsecure] ?? 'false').toLowerCase().contains(
-                  'true',
-                ) ||
-            (env[TlsEnvKeys.allowInsecure] ?? '').toLowerCase() == '1';
+          'true',
+        ) ||
+        (env[TlsEnvKeys.allowInsecure] ?? '').toLowerCase() == '1';
 
     if (ca == null && cert == null && key == null && !allowInsecure) {
       return const TlsConfig.disabled();

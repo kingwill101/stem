@@ -111,16 +111,16 @@ class RedisStreamsBroker implements Broker {
     }
     Object? failure;
     StackTrace? failureStack;
-    await runZonedGuarded(
-      () => _connection.close(),
-      (Object error, StackTrace stack) {
-        if (_shouldSuppressClosedError(error)) {
-          return;
-        }
-        failure = error;
-        failureStack = stack;
-      },
-    );
+    await runZonedGuarded(() => _connection.close(), (
+      Object error,
+      StackTrace stack,
+    ) {
+      if (_shouldSuppressClosedError(error)) {
+        return;
+      }
+      failure = error;
+      failureStack = stack;
+    });
     if (failure != null) {
       Error.throwWithStackTrace(failure!, failureStack!);
     }
@@ -146,7 +146,7 @@ class RedisStreamsBroker implements Broker {
   List<String> _priorityStreamKeys(String queue) {
     return [
       for (var priority = _maxPriority; priority >= 0; priority--)
-        _priorityStreamKey(queue, priority)
+        _priorityStreamKey(queue, priority),
     ];
   }
 
@@ -201,14 +201,7 @@ class RedisStreamsBroker implements Broker {
     final key = '$stream|$group';
     if (_groupsCreated.contains(key)) return;
     try {
-      await _send([
-        'XGROUP',
-        'CREATE',
-        stream,
-        group,
-        '0',
-        'MKSTREAM',
-      ]);
+      await _send(['XGROUP', 'CREATE', stream, group, '0', 'MKSTREAM']);
     } catch (e) {
       if ('$e'.contains('BUSYGROUP')) {
         // already created
@@ -221,11 +214,9 @@ class RedisStreamsBroker implements Broker {
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
-    final resolvedRoute = routing ??
-        RoutingInfo.queue(
-          queue: envelope.queue,
-          priority: envelope.priority,
-        );
+    final resolvedRoute =
+        routing ??
+        RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
     if (resolvedRoute.isBroadcast) {
       final channel = resolvedRoute.broadcastChannel ?? envelope.queue;
       final message = envelope.copyWith(queue: channel);
@@ -272,12 +263,7 @@ class RedisStreamsBroker implements Broker {
   Future<void> _enqueue(String queue, Envelope envelope) async {
     final stream = _priorityStreamKey(queue, envelope.priority);
     await _ensureGroupForStream(queue, stream);
-    await _send([
-      'XADD',
-      stream,
-      '*',
-      ..._serializeEnvelope(envelope),
-    ]);
+    await _send(['XADD', stream, '*', ..._serializeEnvelope(envelope)]);
   }
 
   List<String> _serializeEnvelope(Envelope envelope) {
@@ -539,8 +525,9 @@ class RedisStreamsBroker implements Broker {
           Delivery(
             envelope: envelope,
             receipt: receipt,
-            leaseExpiresAt:
-                lease == Duration.zero ? null : DateTime.now().add(lease),
+            leaseExpiresAt: lease == Duration.zero
+                ? null
+                : DateTime.now().add(lease),
             route: route,
           ),
         );
@@ -554,8 +541,8 @@ class RedisStreamsBroker implements Broker {
       id: map['id'],
       name: map['name']!,
       args: jsonDecode(map['args'] ?? '{}') as Map<String, Object?>,
-      headers:
-          (jsonDecode(map['headers'] ?? '{}') as Map).cast<String, String>(),
+      headers: (jsonDecode(map['headers'] ?? '{}') as Map)
+          .cast<String, String>(),
       enqueuedAt: DateTime.parse(
         map['enqueuedAt'] ?? DateTime.now().toIso8601String(),
       ),
@@ -718,8 +705,7 @@ class RedisStreamsBroker implements Broker {
     final candidates = stored.where((entry) {
       if (since == null) return true;
       return !entry.entry.deadAt.isBefore(since);
-    }).toList()
-      ..sort((a, b) => a.entry.deadAt.compareTo(b.entry.deadAt));
+    }).toList()..sort((a, b) => a.entry.deadAt.compareTo(b.entry.deadAt));
     final selected = candidates.take(limit).toList();
     if (dryRun || selected.isEmpty) {
       return DeadLetterReplayResult(
@@ -758,8 +744,7 @@ class RedisStreamsBroker implements Broker {
     final candidates = stored.where((entry) {
       if (since == null) return true;
       return !entry.entry.deadAt.isBefore(since);
-    }).toList()
-      ..sort((a, b) => b.entry.deadAt.compareTo(a.entry.deadAt));
+    }).toList()..sort((a, b) => b.entry.deadAt.compareTo(a.entry.deadAt));
     final selected = limit != null && limit >= 0
         ? candidates.take(limit).toList()
         : candidates;
@@ -812,11 +797,7 @@ class RedisStreamsBroker implements Broker {
   Future<int?> inflightCount(String queue) async {
     var total = 0;
     for (final stream in _priorityStreamKeys(queue)) {
-      final result = await _send([
-        'XPENDING',
-        stream,
-        _groupKey(queue),
-      ]);
+      final result = await _send(['XPENDING', stream, _groupKey(queue)]);
       if (result is List && result.isNotEmpty) {
         total += _asInt(result.first);
       }

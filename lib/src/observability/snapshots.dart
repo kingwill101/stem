@@ -21,17 +21,17 @@ class QueueSnapshot {
 
   /// Serializes this snapshot into a JSON-compatible map.
   Map<String, Object> toJson() => {
-        'queue': queue,
-        'pending': pending,
-        'inflight': inflight,
-      };
+    'queue': queue,
+    'pending': pending,
+    'inflight': inflight,
+  };
 
   /// Reconstructs a snapshot from JSON [json].
   factory QueueSnapshot.fromJson(Map<String, Object?> json) => QueueSnapshot(
-        queue: json['queue'] as String,
-        pending: (json['pending'] as num).toInt(),
-        inflight: (json['inflight'] as num).toInt(),
-      );
+    queue: json['queue'] as String,
+    pending: (json['pending'] as num).toInt(),
+    inflight: (json['inflight'] as num).toInt(),
+  );
 }
 
 /// Captures details about a worker instance at the sample instant.
@@ -54,17 +54,17 @@ class WorkerSnapshot {
 
   /// Serializes this snapshot into a JSON-compatible map.
   Map<String, Object> toJson() => {
-        'id': id,
-        'active': active,
-        'lastHeartbeat': lastHeartbeat.toIso8601String(),
-      };
+    'id': id,
+    'active': active,
+    'lastHeartbeat': lastHeartbeat.toIso8601String(),
+  };
 
   /// Reconstructs a snapshot from JSON [json].
   factory WorkerSnapshot.fromJson(Map<String, Object?> json) => WorkerSnapshot(
-        id: json['id'] as String,
-        active: (json['active'] as num).toInt(),
-        lastHeartbeat: DateTime.parse(json['lastHeartbeat'] as String),
-      );
+    id: json['id'] as String,
+    active: (json['active'] as num).toInt(),
+    lastHeartbeat: DateTime.parse(json['lastHeartbeat'] as String),
+  );
 }
 
 /// Represents a single entry captured in the dead-letter queue.
@@ -91,11 +91,11 @@ class DlqEntrySnapshot {
 
   /// Serializes this snapshot into a JSON-compatible map.
   Map<String, Object> toJson() => {
-        'queue': queue,
-        'taskId': taskId,
-        'reason': reason,
-        'deadAt': deadAt.toIso8601String(),
-      };
+    'queue': queue,
+    'taskId': taskId,
+    'reason': reason,
+    'deadAt': deadAt.toIso8601String(),
+  };
 
   /// Reconstructs a snapshot from JSON [json].
   factory DlqEntrySnapshot.fromJson(Map<String, Object?> json) =>
@@ -127,31 +127,27 @@ class ObservabilityReport {
 
   /// Serializes this report into a JSON-compatible map.
   Map<String, Object> toJson() => {
-        'queues': queues.map((q) => q.toJson()).toList(),
-        'workers': workers.map((w) => w.toJson()).toList(),
-        'dlq': dlq.map((d) => d.toJson()).toList(),
-      };
+    'queues': queues.map((q) => q.toJson()).toList(),
+    'workers': workers.map((w) => w.toJson()).toList(),
+    'dlq': dlq.map((d) => d.toJson()).toList(),
+  };
 
   /// Reconstructs a report from raw JSON [json].
   factory ObservabilityReport.fromJson(
     Map<String, Object?> json,
-  ) =>
-      ObservabilityReport(
-        queues: (json['queues'] as List<dynamic>? ?? const [])
-            .map((e) =>
-                QueueSnapshot.fromJson((e as Map).cast<String, Object?>()))
-            .toList(),
-        workers: (json['workers'] as List<dynamic>? ?? const [])
-            .map((e) =>
-                WorkerSnapshot.fromJson((e as Map).cast<String, Object?>()))
-            .toList(),
-        dlq: (json['dlq'] as List<dynamic>? ?? const [])
-            .map(
-              (e) =>
-                  DlqEntrySnapshot.fromJson((e as Map).cast<String, Object?>()),
-            )
-            .toList(),
-      );
+  ) => ObservabilityReport(
+    queues: (json['queues'] as List<dynamic>? ?? const [])
+        .map((e) => QueueSnapshot.fromJson((e as Map).cast<String, Object?>()))
+        .toList(),
+    workers: (json['workers'] as List<dynamic>? ?? const [])
+        .map((e) => WorkerSnapshot.fromJson((e as Map).cast<String, Object?>()))
+        .toList(),
+    dlq: (json['dlq'] as List<dynamic>? ?? const [])
+        .map(
+          (e) => DlqEntrySnapshot.fromJson((e as Map).cast<String, Object?>()),
+        )
+        .toList(),
+  );
 
   /// Loads a report from [path], returning an empty report if the file
   /// is missing or empty.

@@ -35,8 +35,9 @@ void main() {
       await broker.publish(envelope);
       expect(await broker.pendingCount(queue), 1);
 
-      final delivery =
-          await broker.consume(RoutingSubscription.singleQueue(queue)).first;
+      final delivery = await broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first;
       expect(delivery.envelope.id, envelope.id);
       expect(delivery.envelope.queue, queue);
 
@@ -57,8 +58,9 @@ void main() {
       expect(replay.dryRun, isFalse);
       expect(replay.entries, hasLength(1));
 
-      final redelivery =
-          await broker.consume(RoutingSubscription.singleQueue(queue)).first;
+      final redelivery = await broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first;
       expect(redelivery.envelope.id, envelope.id);
       expect(redelivery.envelope.attempt, envelope.attempt + 1);
 
@@ -93,20 +95,21 @@ void main() {
 
       await broker.publish(
         lowPriority,
-        routing:
-            RoutingInfo.queue(queue: queue, priority: lowPriority.priority),
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: lowPriority.priority,
+        ),
       );
       await broker.publish(
         highPriority,
-        routing:
-            RoutingInfo.queue(queue: queue, priority: highPriority.priority),
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: highPriority.priority,
+        ),
       );
 
       final iterator = StreamIterator(
-        broker.consume(
-          RoutingSubscription.singleQueue(queue),
-          prefetch: 2,
-        ),
+        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 2),
       );
 
       expect(await iterator.moveNext(), isTrue);
@@ -161,9 +164,12 @@ void main() {
             consumerName: 'worker-one-$queue',
           )
           .first
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        fail('worker-one timed out waiting for broadcast message');
-      });
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              fail('worker-one timed out waiting for broadcast message');
+            },
+          );
       final futureTwo = workerTwoBroker
           .consume(
             subscription,
@@ -172,9 +178,12 @@ void main() {
             consumerName: 'worker-two-$queue',
           )
           .first
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        fail('worker-two timed out waiting for broadcast message');
-      });
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              fail('worker-two timed out waiting for broadcast message');
+            },
+          );
 
       final broadcast = Envelope(
         name: 'integration.postgres.broadcast',

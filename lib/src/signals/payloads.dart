@@ -43,10 +43,7 @@ class AfterTaskPublishPayload {
 }
 
 class TaskReceivedPayload {
-  const TaskReceivedPayload({
-    required this.envelope,
-    required this.worker,
-  });
+  const TaskReceivedPayload({required this.envelope, required this.worker});
 
   final Envelope envelope;
   final WorkerInfo worker;
@@ -156,20 +153,14 @@ class TaskRevokedPayload {
 }
 
 class WorkerLifecyclePayload {
-  const WorkerLifecyclePayload({
-    required this.worker,
-    this.reason,
-  });
+  const WorkerLifecyclePayload({required this.worker, this.reason});
 
   final WorkerInfo worker;
   final String? reason;
 }
 
 class WorkerHeartbeatPayload {
-  const WorkerHeartbeatPayload({
-    required this.worker,
-    required this.timestamp,
-  });
+  const WorkerHeartbeatPayload({required this.worker, required this.timestamp});
 
   final WorkerInfo worker;
   final DateTime timestamp;
@@ -186,10 +177,7 @@ class WorkerChildLifecyclePayload {
 }
 
 class ScheduleEntryDuePayload {
-  const ScheduleEntryDuePayload({
-    required this.entry,
-    required this.tickAt,
-  });
+  const ScheduleEntryDuePayload({required this.entry, required this.tickAt});
 
   final ScheduleEntry entry;
   final DateTime tickAt;

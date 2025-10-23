@@ -27,9 +27,8 @@ const backendEnvKey = 'STEM_RESULT_BACKEND_URL';
 typedef CliContextBuilder = Future<CliContext> Function();
 
 class StemCommandRunner extends CommandRunner<int> {
-  StemCommandRunner({
-    required this.dependencies,
-  }) : super('stem', 'Stem command-line interface') {
+  StemCommandRunner({required this.dependencies})
+    : super('stem', 'Stem command-line interface') {
     addCommand(ScheduleCommand(dependencies));
     addCommand(ObserveCommand(dependencies));
     addCommand(WorkerCommand(dependencies));
@@ -62,9 +61,11 @@ Future<int> runStemCli(
 }) async {
   final stdoutSink = out ?? stdout;
   final stderrSink = err ?? stderr;
-  final resolvedEnvironment =
-      Map<String, String>.from(environment ?? Platform.environment);
-  final CliContextBuilder cliContextBuilder = contextBuilder ??
+  final resolvedEnvironment = Map<String, String>.from(
+    environment ?? Platform.environment,
+  );
+  final CliContextBuilder cliContextBuilder =
+      contextBuilder ??
       (() => createDefaultContext(environment: resolvedEnvironment));
 
   final dependencies = StemCommandDependencies(
@@ -188,7 +189,9 @@ class HealthCommand extends Command<int> {
   }
 
   Future<_HealthCheckResult> _checkBrokerHealth(
-      String url, TlsConfig tls) async {
+    String url,
+    TlsConfig tls,
+  ) async {
     final uri = Uri.parse(url);
     if (isPostgresScheme(uri.scheme)) {
       try {
@@ -274,19 +277,19 @@ class HealthCommand extends Command<int> {
   }
 
   Map<String, Object?> _tlsFailureContext(TlsConfig tls) => {
-        'tls': {
-          'caCertificate': tls.caCertificateFile ?? 'system',
-          'clientCertificate': tls.clientCertificateFile ?? 'not provided',
-          'allowInsecure': tls.allowInsecure,
-        },
-        'hints': tls.allowInsecure
-            ? const [
-                'TLS verification is disabled (STEM_TLS_ALLOW_INSECURE=true); ensure this is intentional.',
-              ]
-            : const [
-                'Verify certificate paths or temporarily set STEM_TLS_ALLOW_INSECURE=true to bypass validation while debugging.',
-              ],
-      };
+    'tls': {
+      'caCertificate': tls.caCertificateFile ?? 'system',
+      'clientCertificate': tls.clientCertificateFile ?? 'not provided',
+      'allowInsecure': tls.allowInsecure,
+    },
+    'hints': tls.allowInsecure
+        ? const [
+            'TLS verification is disabled (STEM_TLS_ALLOW_INSECURE=true); ensure this is intentional.',
+          ]
+        : const [
+            'Verify certificate paths or temporarily set STEM_TLS_ALLOW_INSECURE=true to bypass validation while debugging.',
+          ],
+  };
 }
 
 class _HealthCheckResult {
@@ -303,11 +306,11 @@ class _HealthCheckResult {
   final Map<String, Object?> context;
 
   Map<String, Object?> toJson() => {
-        'component': component,
-        'status': success ? 'ok' : 'error',
-        'message': message,
-        if (context.isNotEmpty) 'context': context,
-      };
+    'component': component,
+    'status': success ? 'ok' : 'error',
+    'message': message,
+    if (context.isNotEmpty) 'context': context,
+  };
 }
 
 class CliContext {

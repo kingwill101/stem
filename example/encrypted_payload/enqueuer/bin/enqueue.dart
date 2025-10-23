@@ -17,12 +17,10 @@ Future<void> main(List<String> args) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-        'STEM_RESULT_BACKEND_URL must be set for the encrypted example.');
+      'STEM_RESULT_BACKEND_URL must be set for the encrypted example.',
+    );
   }
-  final backend = await RedisResultBackend.connect(
-    backendUrl,
-    tls: config.tls,
-  );
+  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
   final registry = SimpleTaskRegistry()
     ..register(
@@ -74,8 +72,7 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) =>
-    'noop';
+) => 'noop';
 
 String _requireEnv(String name) {
   final value = Platform.environment[name];

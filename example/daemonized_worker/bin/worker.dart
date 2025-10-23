@@ -22,7 +22,8 @@ Future<void> main(List<String> args) async {
     await Future<void>.delayed(const Duration(seconds: 10));
     if (!completer.isCompleted) {
       stdout.writeln(
-          'Stub worker "$node" heartbeat at ${DateTime.now().toIso8601String()}.');
+        'Stub worker "$node" heartbeat at ${DateTime.now().toIso8601String()}.',
+      );
     }
   }
 }

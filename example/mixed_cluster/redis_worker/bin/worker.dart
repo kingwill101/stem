@@ -9,17 +9,15 @@ Future<void> main(List<String> args) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-        'STEM_RESULT_BACKEND_URL must be set for the Redis worker.');
+      'STEM_RESULT_BACKEND_URL must be set for the Redis worker.',
+    );
   }
 
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
   );
-  final backend = await RedisResultBackend.connect(
-    backendUrl,
-    tls: config.tls,
-  );
+  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
   final registry = SimpleTaskRegistry()
     ..register(

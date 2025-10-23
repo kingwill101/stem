@@ -24,9 +24,12 @@ class FileRevokeStore implements RevokeStore {
       for (final line in lines) {
         if (line.trim().isEmpty) continue;
         final decoded = RevokeEntry.fromJson(
-            (jsonDecode(line) as Map).cast<String, Object?>());
-        entries.putIfAbsent(decoded.namespace,
-            () => <String, RevokeEntry>{})[decoded.taskId] = decoded;
+          (jsonDecode(line) as Map).cast<String, Object?>(),
+        );
+        entries.putIfAbsent(
+          decoded.namespace,
+          () => <String, RevokeEntry>{},
+        )[decoded.taskId] = decoded;
       }
     } else {
       final parent = file.parent;
@@ -44,8 +47,7 @@ class FileRevokeStore implements RevokeStore {
 
   @override
   Future<List<RevokeEntry>> list(String namespace) async {
-    return _entries[namespace]
-            ?.values
+    return _entries[namespace]?.values
             .sortedBy<num>((entry) => entry.version)
             .toList() ??
         const [];
@@ -79,7 +81,9 @@ class FileRevokeStore implements RevokeStore {
       final applied = <RevokeEntry>[];
       for (final entry in entries) {
         final map = _entries.putIfAbsent(
-            entry.namespace, () => <String, RevokeEntry>{});
+          entry.namespace,
+          () => <String, RevokeEntry>{},
+        );
         final current = map[entry.taskId];
         if (current == null || entry.version > current.version) {
           map[entry.taskId] = entry;

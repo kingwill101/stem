@@ -79,29 +79,31 @@ class Worker {
     WorkerLifecycleConfig? lifecycle,
     ObservabilityConfig? observability,
     this.signer,
-  })  : workerHeartbeatInterval = observability?.heartbeatInterval ??
-            workerHeartbeatInterval ??
-            heartbeatInterval,
-        heartbeatTransport =
-            heartbeatTransport ?? const NoopHeartbeatTransport(),
-        namespace = observability?.namespace ?? heartbeatNamespace,
-        concurrency = _normalizeConcurrency(concurrency),
-        autoscaleConfig = _resolveAutoscaleConfig(
-          autoscale,
-          _normalizeConcurrency(concurrency),
-        ),
-        lifecycleConfig = lifecycle ?? const WorkerLifecycleConfig(),
-        prefetchMultiplier = math.max(1, prefetchMultiplier),
-        prefetch = _calculatePrefetch(
-          prefetch,
-          _normalizeConcurrency(concurrency),
-          math.max(1, prefetchMultiplier),
-        ),
-        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
+  }) : workerHeartbeatInterval =
+           observability?.heartbeatInterval ??
+           workerHeartbeatInterval ??
+           heartbeatInterval,
+       heartbeatTransport =
+           heartbeatTransport ?? const NoopHeartbeatTransport(),
+       namespace = observability?.namespace ?? heartbeatNamespace,
+       concurrency = _normalizeConcurrency(concurrency),
+       autoscaleConfig = _resolveAutoscaleConfig(
+         autoscale,
+         _normalizeConcurrency(concurrency),
+       ),
+       lifecycleConfig = lifecycle ?? const WorkerLifecycleConfig(),
+       prefetchMultiplier = math.max(1, prefetchMultiplier),
+       prefetch = _calculatePrefetch(
+         prefetch,
+         _normalizeConcurrency(concurrency),
+         math.max(1, prefetchMultiplier),
+       ),
+       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
     observability?.applySignalConfiguration();
     _maxConcurrency = this.concurrency;
-    final autoscaleMax = autoscaleConfig.maxConcurrency != null &&
+    final autoscaleMax =
+        autoscaleConfig.maxConcurrency != null &&
             autoscaleConfig.maxConcurrency! > 0
         ? math.min(autoscaleConfig.maxConcurrency!, _maxConcurrency)
         : _maxConcurrency;
@@ -132,13 +134,15 @@ class Worker {
       return result;
     }
 
-    final normalizedQueues =
-        normalize(resolvedSubscription.resolveQueues(queue));
+    final normalizedQueues = normalize(
+      resolvedSubscription.resolveQueues(queue),
+    );
     if (normalizedQueues.isEmpty) {
       normalizedQueues.add(queue);
     }
-    final normalizedBroadcasts =
-        normalize(resolvedSubscription.broadcastChannels);
+    final normalizedBroadcasts = normalize(
+      resolvedSubscription.broadcastChannels,
+    );
 
     this.subscription = resolvedSubscription;
     subscriptionQueues = List.unmodifiable(normalizedQueues);
@@ -245,8 +249,9 @@ class Worker {
       final stream = broker.consume(
         RoutingSubscription(
           queues: [queueName],
-          broadcastChannels:
-              index == 0 ? _broadcastSubscriptions : const <String>[],
+          broadcastChannels: index == 0
+              ? _broadcastSubscriptions
+              : const <String>[],
         ),
         prefetch: prefetch,
         consumerName: consumerName,
@@ -291,8 +296,9 @@ class Worker {
   /// Warm shutdown drains in-flight tasks before exiting. Soft shutdown requests
   /// cooperative termination and escalates to hard shutdown if tasks ignore the
   /// grace period. Hard shutdown immediately requeues in-flight deliveries.
-  Future<void> shutdown(
-      {WorkerShutdownMode mode = WorkerShutdownMode.hard}) async {
+  Future<void> shutdown({
+    WorkerShutdownMode mode = WorkerShutdownMode.hard,
+  }) async {
     if (_shutdownCompleter != null) {
       if (mode == WorkerShutdownMode.hard &&
           (_shutdownMode ?? WorkerShutdownMode.warm) !=
@@ -308,10 +314,7 @@ class Worker {
     _shutdownCompleter = completer;
     _running = false;
 
-    await _signals.workerStopping(
-      _workerInfoSnapshot,
-      reason: mode.name,
-    );
+    await _signals.workerStopping(_workerInfoSnapshot, reason: mode.name);
 
     _autoscaleTimer?.cancel();
     _autoscaleTimer = null;
@@ -352,10 +355,7 @@ class Worker {
       await _events.close();
     }
 
-    await _signals.workerShutdown(
-      _workerInfoSnapshot,
-      reason: mode.name,
-    );
+    await _signals.workerShutdown(_workerInfoSnapshot, reason: mode.name);
 
     completer.complete();
     return completer.future;
@@ -384,11 +384,7 @@ class Worker {
         final groupId = envelope.headers['stem-group-id'];
 
         if (_isTaskRevoked(envelope.id)) {
-          await _handleRevokedDelivery(
-            delivery,
-            envelope,
-            groupId: groupId,
-          );
+          await _handleRevokedDelivery(delivery, envelope, groupId: groupId);
           return;
         }
 
@@ -418,7 +414,8 @@ class Worker {
             meta: {'task': envelope.name},
           );
           if (!decision.allowed) {
-            final backoff = decision.retryAfter ??
+            final backoff =
+                decision.retryAfter ??
                 retryStrategy.nextDelay(
                   envelope.attempt,
                   StateError('rate-limit'),
@@ -454,10 +451,7 @@ class Worker {
 
         _trackDelivery(delivery);
 
-        await _signals.taskReceived(
-          envelope,
-          _workerInfoSnapshot,
-        );
+        await _signals.taskReceived(envelope, _workerInfoSnapshot);
 
         stemLogger.debug(
           'Task {task} started',
@@ -510,11 +504,7 @@ class Worker {
           },
         );
 
-        await _signals.taskPrerun(
-          envelope,
-          _workerInfoSnapshot,
-          context,
-        );
+        await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
 
         Timer? heartbeatTimer;
         Timer? softTimer;
@@ -594,11 +584,7 @@ class Worker {
         } on TaskRevokedException catch (_) {
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
-          await _handleRevokedDelivery(
-            delivery,
-            envelope,
-            groupId: groupId,
-          );
+          await _handleRevokedDelivery(delivery, envelope, groupId: groupId);
           completionState = TaskState.cancelled;
         } catch (error, stack) {
           await _notifyErrorMiddleware(context, error, stack);
@@ -618,8 +604,8 @@ class Worker {
           final completed = _releaseDelivery(envelope);
           if (completed != null) {
             final duration = DateTime.now().toUtc().difference(
-                  completed.startedAt,
-                );
+              completed.startedAt,
+            );
             StemMetrics.instance.recordDuration(
               'stem.task.duration',
               duration,
@@ -1064,8 +1050,10 @@ class Worker {
     try {
       final depths = await _collectQueueDepths();
       if (depths.isEmpty) return;
-      _lastQueueDepth =
-          depths.values.fold<int>(0, (previous, value) => previous + value);
+      _lastQueueDepth = depths.values.fold<int>(
+        0,
+        (previous, value) => previous + value,
+      );
       for (final entry in depths.entries) {
         StemMetrics.instance.setGauge(
           'stem.queue.depth',
@@ -1143,11 +1131,13 @@ class Worker {
       } catch (error, stack) {
         stemLogger.warning(
           'Failed to requeue delivery during shutdown: $error',
-          Context(_logContext({
-            'queue': active.queue,
-            'task': active.envelope.name,
-            'stack': stack.toString(),
-          })),
+          Context(
+            _logContext({
+              'queue': active.queue,
+              'task': active.envelope.name,
+              'stack': stack.toString(),
+            }),
+          ),
         );
       }
       _revocations.remove(active.envelope.id);
@@ -1267,8 +1257,9 @@ class Worker {
       final inflight = _inflight;
       final now = DateTime.now();
       final configuredMax = autoscaleConfig.maxConcurrency ?? _maxConcurrency;
-      final maxAllowed =
-          configuredMax < _maxConcurrency ? configuredMax : _maxConcurrency;
+      final maxAllowed = configuredMax < _maxConcurrency
+          ? configuredMax
+          : _maxConcurrency;
       final minAllowed = autoscaleConfig.minConcurrency <= maxAllowed
           ? autoscaleConfig.minConcurrency
           : maxAllowed;
@@ -1283,7 +1274,10 @@ class Worker {
       if (depth > 0 &&
           current < maxAllowed &&
           _cooldownElapsed(
-              _lastScaleUp, autoscaleConfig.scaleUpCooldown, now)) {
+            _lastScaleUp,
+            autoscaleConfig.scaleUpCooldown,
+            now,
+          )) {
         final backlogPerIsolate = depth / math.max(1, current);
         if (backlogPerIsolate >= autoscaleConfig.backlogPerIsolate) {
           final step = math.max(1, autoscaleConfig.scaleUpStep);
@@ -1307,7 +1301,10 @@ class Worker {
           current > minAllowed &&
           now.difference(idleSince) >= autoscaleConfig.idlePeriod &&
           _cooldownElapsed(
-              _lastScaleDown, autoscaleConfig.scaleDownCooldown, now)) {
+            _lastScaleDown,
+            autoscaleConfig.scaleDownCooldown,
+            now,
+          )) {
         final step = math.max(1, autoscaleConfig.scaleDownStep);
         final candidate = current - step;
         final desired = candidate < minAllowed ? minAllowed : candidate;
@@ -1462,10 +1459,7 @@ class Worker {
     if (!_running) return;
     await _recordQueueDepth();
     final heartbeat = _buildHeartbeat();
-    await _signals.workerHeartbeat(
-      _workerInfoSnapshot,
-      heartbeat.timestamp,
-    );
+    await _signals.workerHeartbeat(_workerInfoSnapshot, heartbeat.timestamp);
     try {
       await heartbeatTransport.publish(heartbeat);
     } catch (error, stack) {
@@ -1493,13 +1487,14 @@ class Worker {
     final isolatePool = _isolatePool;
     final activeIsolates =
         isolatePool?.activeCount ?? math.min(_inflight, _currentConcurrency);
-    final queues = _inflightPerQueue.entries
-        .where((entry) => entry.value > 0)
-        .map(
-          (entry) => QueueHeartbeat(name: entry.key, inflight: entry.value),
-        )
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final queues =
+        _inflightPerQueue.entries
+            .where((entry) => entry.value > 0)
+            .map(
+              (entry) => QueueHeartbeat(name: entry.key, inflight: entry.value),
+            )
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
     return WorkerHeartbeat(
       workerId: _workerIdentifier,
       namespace: namespace,
@@ -1532,14 +1527,14 @@ class Worker {
 
   String get _workerIdentifier =>
       consumerName != null && consumerName!.isNotEmpty
-          ? consumerName!
-          : 'stem-worker-$pid';
+      ? consumerName!
+      : 'stem-worker-$pid';
 
   WorkerInfo get _workerInfoSnapshot => WorkerInfo(
-        id: _workerIdentifier,
-        queues: subscriptionQueues,
-        broadcasts: subscriptionBroadcasts,
-      );
+    id: _workerIdentifier,
+    queues: subscriptionQueues,
+    broadcasts: subscriptionBroadcasts,
+  );
 
   void _reportProgress(
     Envelope envelope,
@@ -1620,10 +1615,7 @@ class Worker {
     }
   }
 
-  void _applyRevocationEntry(
-    RevokeEntry entry, {
-    DateTime? clock,
-  }) {
+  void _applyRevocationEntry(RevokeEntry entry, {DateTime? clock}) {
     final now = clock ?? DateTime.now().toUtc();
     if (entry.isExpired(now)) {
       _revocations.remove(entry.taskId);
@@ -1721,8 +1713,8 @@ class Worker {
     final namespaceOverride = (payload['namespace'] as String?)?.trim();
     final defaultNamespace =
         namespaceOverride != null && namespaceOverride.isNotEmpty
-            ? namespaceOverride
-            : namespace;
+        ? namespaceOverride
+        : namespace;
     final rawRevocations = (payload['revocations'] as List?) ?? const [];
     final requester = (payload['requester'] as String?)?.trim();
     final now = DateTime.now().toUtc();
@@ -1736,8 +1728,8 @@ class Worker {
       final targetNamespace = (map['namespace'] as String?)?.trim();
       final entryNamespace =
           targetNamespace != null && targetNamespace.isNotEmpty
-              ? targetNamespace
-              : defaultNamespace;
+          ? targetNamespace
+          : defaultNamespace;
       if (entryNamespace != namespace) {
         continue;
       }
@@ -1753,8 +1745,9 @@ class Worker {
           ? DateTime.parse(expiresAtStr).toUtc()
           : null;
       final versionValue = map['version'];
-      final version =
-          versionValue is num ? versionValue.toInt() : generateRevokeVersion();
+      final version = versionValue is num
+          ? versionValue.toInt()
+          : generateRevokeVersion();
       final terminate = map['terminate'] == true;
       final reason = (map['reason'] as String?)?.trim();
       final requestedBy = (map['requestedBy'] as String?)?.trim() ?? requester;
@@ -1865,7 +1858,8 @@ class Worker {
           stemLogger.warning(
             'Control channel error: $error',
             Context(
-                _logContext({'queue': queueName, 'stack': stack.toString()})),
+              _logContext({'queue': queueName, 'stack': stack.toString()}),
+            ),
           );
         },
       );
@@ -1895,10 +1889,7 @@ class Worker {
   }
 
   Future<void> _handleControlCommand(ControlCommandMessage command) async {
-    await _signals.controlCommandReceived(
-      _workerInfoSnapshot,
-      command,
-    );
+    await _signals.controlCommandReceived(_workerInfoSnapshot, command);
 
     ControlReplyMessage reply;
     try {
@@ -1930,9 +1921,7 @@ class Worker {
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'ok',
-            payload: _buildInspectSnapshot(
-              includeRevoked: includeRevoked,
-            ),
+            payload: _buildInspectSnapshot(includeRevoked: includeRevoked),
           );
           break;
         case 'revoke':
@@ -1975,9 +1964,7 @@ class Worker {
             requestId: command.requestId,
             workerId: _workerIdentifier,
             status: 'error',
-            error: {
-              'message': 'Unknown control command ${command.type}',
-            },
+            error: {'message': 'Unknown control command ${command.type}'},
           );
       }
     } catch (error, stack) {
@@ -1989,10 +1976,7 @@ class Worker {
         requestId: command.requestId,
         workerId: _workerIdentifier,
         status: 'error',
-        error: {
-          'message': error.toString(),
-          'stack': stack.toString(),
-        },
+        error: {'message': error.toString(), 'stack': stack.toString()},
       );
     }
 
@@ -2019,10 +2003,9 @@ class Worker {
   }
 
   Map<String, Object?> _subscriptionMetadata() => {
-        'queues': subscriptionQueues,
-        if (subscriptionBroadcasts.isNotEmpty)
-          'broadcasts': subscriptionBroadcasts,
-      };
+    'queues': subscriptionQueues,
+    if (subscriptionBroadcasts.isNotEmpty) 'broadcasts': subscriptionBroadcasts,
+  };
 
   Map<String, Object?> _buildStatsSnapshot() {
     final now = DateTime.now().toUtc();
@@ -2085,9 +2068,9 @@ class Worker {
 
     final revoked = includeRevoked
         ? _revocations.values
-            .where((entry) => !entry.isExpired(now))
-            .map((entry) => entry.toJson())
-            .toList()
+              .where((entry) => !entry.isExpired(now))
+              .map((entry) => entry.toJson())
+              .toList()
         : const [];
 
     return {
@@ -2200,8 +2183,7 @@ class Worker {
     int? provided,
     int concurrency,
     int multiplier,
-  ) =>
-      math.max(1, provided ?? concurrency * multiplier);
+  ) => math.max(1, provided ?? concurrency * multiplier);
 
   static WorkerAutoscaleConfig _resolveAutoscaleConfig(
     WorkerAutoscaleConfig? provided,
@@ -2215,8 +2197,9 @@ class Worker {
     final max = math.max(min, math.min(rawMax, normalizedConcurrency));
     final scaleUpStep = math.max(1, provided.scaleUpStep);
     final scaleDownStep = math.max(1, provided.scaleDownStep);
-    final backlogPerIsolate =
-        provided.backlogPerIsolate <= 0 ? 1.0 : provided.backlogPerIsolate;
+    final backlogPerIsolate = provided.backlogPerIsolate <= 0
+        ? 1.0
+        : provided.backlogPerIsolate;
     final tick = provided.tick <= const Duration(milliseconds: 100)
         ? const Duration(seconds: 1)
         : provided.tick;

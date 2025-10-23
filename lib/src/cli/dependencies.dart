@@ -20,8 +20,8 @@ class StemCommandDependencies {
     required this.scheduleFilePath,
     required CliContextBuilder cliContextBuilder,
     ScheduleContextBuilder? scheduleContextBuilder,
-  })  : _cliContextBuilder = cliContextBuilder,
-        _scheduleContextBuilder = scheduleContextBuilder;
+  }) : _cliContextBuilder = cliContextBuilder,
+       _scheduleContextBuilder = scheduleContextBuilder;
 
   final StringSink out;
   final StringSink err;

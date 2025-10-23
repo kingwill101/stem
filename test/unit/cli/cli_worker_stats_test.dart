@@ -71,11 +71,7 @@ void main() {
 
       await worker.start();
 
-      final stem = Stem(
-        broker: broker,
-        registry: registry,
-        backend: backend,
-      );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
       await stem.enqueue('tasks.blocking');
       await started.future;
 
@@ -131,11 +127,7 @@ void main() {
 
       await worker.start();
 
-      final stem = Stem(
-        broker: broker,
-        registry: registry,
-        backend: backend,
-      );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
       await stem.enqueue('tasks.blocking');
 
       await started.future;
@@ -196,11 +188,7 @@ void main() {
 
       await worker.start();
 
-      final stem = Stem(
-        broker: broker,
-        registry: registry,
-        backend: backend,
-      );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
       await stem.enqueue('tasks.blocking');
 
       await started.future;
@@ -298,11 +286,7 @@ void main() {
 
       await worker.start();
 
-      final stem = Stem(
-        broker: broker,
-        registry: registry,
-        backend: backend,
-      );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
       final taskId = await stem.enqueue('tasks.looping');
 
       await started.future;
