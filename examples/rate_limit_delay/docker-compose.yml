@@ -1,0 +1,30 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "56381:6379"
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: examples/rate_limit_delay/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+      STEM_RATE_LIMIT_URL: redis://redis:6379/2
+      WORKER_NAME: rate-limit-demo-worker
+    depends_on:
+      - redis
+    command: ["dart", "bin/worker.dart"]
+
+  producer:
+    build:
+      context: ../..
+      dockerfile: examples/rate_limit_delay/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+    depends_on:
+      - redis
+      - worker
+    command: ["dart", "bin/producer.dart"]
