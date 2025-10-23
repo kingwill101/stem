@@ -1,3 +1,9 @@
+[![pub package](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem)
+[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.0-blue.svg)](https://dart.dev/)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![Build Status](https://github.com/kingwill101/stem/workflows/ci/badge.svg)](https://github.com/kingwill101/stem/actions)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
+
 # Stem
 
 Stem is a spec-driven background job platform for Dart. It gives you Celery-style
@@ -73,11 +79,11 @@ Future<void> main() async {
 
 ## Documentation & Examples
 
-- Full docs: `.site/docs` (run `npm install && npm start` inside `.site/`).
-- Guided onboarding: `.site/docs/getting-started/` (install → infra → ops → production).
+- Full docs: [Full docs](.site/docs) (run `npm install && npm start` inside `.site/`).
+- Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
-  - `examples/rate_limit_delay` – delayed enqueue, priority clamping, Redis rate limiter.
-  - `examples/dlq_sandbox` – dead-letter inspection and replay via CLI.
-  - `examples/microservice`, `examples/monolith_service`, `examples/mixed_cluster` – production-style topologies.
-  - `examples/security/*` – payload signing + TLS profiles.
-  - `examples/otel_metrics` – OTLP collectors + Grafana dashboards.
+  - [rate_limit_delay](example/rate_limit_delay) – delayed enqueue, priority clamping, Redis rate limiter.
+  - [dlq_sandbox](example/dlq_sandbox) – dead-letter inspection and replay via CLI.
+  - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](examples/mixed_cluster) – production-style topologies.
+  - [security examples](example/security/*) – payload signing + TLS profiles.
+  - [otel_metrics](example/otel_metrics) – OTLP collectors + Grafana dashboards.

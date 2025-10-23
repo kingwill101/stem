@@ -35,7 +35,7 @@ service.
    `/var/lib/stem` owned by the unprivileged `stem` user inside your package
    scripts to satisfy the templates’ expectations.
 6. Document the installation steps in release notes and reference
-   `docs/process/daemonization.md` (added in this change) so operators know how
+   `doc/process/daemonization.md` (added in this change) so operators know how
    to enable the services.
 
 These templates are intentionally conservative—encourage operators to use

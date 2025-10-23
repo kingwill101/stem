@@ -1,7 +1,7 @@
 name: stem
 description: A starting point for Dart libraries or applications.
 version: 0.1.0-alpha
-# repository: https://github.com/my_org/my_repo
+repository: https://github.com/kingwill101/stem
 
 environment:
   sdk: ">=3.9.0 <4.0.0"
