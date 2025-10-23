@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
-import 'package:stem_retry_task_demo/shared.dart';
+import '../lib/shared.dart';
 
 Future<void> main() async {
   final brokerUrl =

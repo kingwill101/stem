@@ -18,6 +18,9 @@ class HelloTask implements TaskHandler<void> {
     final who = args['name'] as String? ?? 'world';
     print('Hello $who (attempt ${context.attempt})');
   }
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
 }
 
 Future<void> main() async {
