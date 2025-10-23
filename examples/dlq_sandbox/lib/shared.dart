@@ -87,7 +87,8 @@ FutureOr<void> _invoiceEntrypoint(
 
   context.heartbeat();
   await Future<void>.delayed(const Duration(milliseconds: 200));
-  await context.progress(0.5, data: {'invoiceId': invoiceId, 'stage': 'replay'});
+  await context
+      .progress(0.5, data: {'invoiceId': invoiceId, 'stage': 'replay'});
   await Future<void>.delayed(const Duration(milliseconds: 200));
   stdout.writeln('[worker][success] invoice=$invoiceId replayed successfully');
 }

@@ -77,8 +77,7 @@ return {0, ttl}
       }
     }
 
-    final resolvedNamespace =
-        parsed.queryParameters['ns'] ?? namespace.trim();
+    final resolvedNamespace = parsed.queryParameters['ns'] ?? namespace.trim();
 
     return RedisFixedWindowRateLimiter._(
       connection,
@@ -115,8 +114,7 @@ return {0, ttl}
     final allowed = (response[0] as num).toInt() == 1;
     final ttlMs = (response[1] as num).toInt();
     final remainingMs = ttlMs < 0 ? window.inMilliseconds : ttlMs;
-    final retryAfter =
-        allowed ? null : Duration(milliseconds: remainingMs);
+    final retryAfter = allowed ? null : Duration(milliseconds: remainingMs);
 
     final decision = RateLimitDecision(
       allowed: allowed,
@@ -129,8 +127,9 @@ return {0, ttl}
     );
 
     final status = allowed ? 'granted' : 'denied';
-    final retryText =
-        retryAfter == null ? 'available immediately' : 'retry in ${retryAfter.inMilliseconds}ms';
+    final retryText = retryAfter == null
+        ? 'available immediately'
+        : 'retry in ${retryAfter.inMilliseconds}ms';
     stdout.writeln(
       '[rate-limiter][$status] key=$key tokens=$tokens window=${window.inMilliseconds}ms -> $retryText',
     );

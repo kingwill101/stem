@@ -6,8 +6,8 @@ import 'package:stem_dlq_sandbox/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6382/0';
-  final backendUrl =
-      Platform.environment['STEM_RESULT_BACKEND_URL'] ?? 'redis://localhost:6382/1';
+  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+      'redis://localhost:6382/1';
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
@@ -25,7 +25,8 @@ Future<void> main() async {
     (index) => 1000 + index,
   );
 
-  stdout.writeln('[producer] enqueueing invoices $invoices (all expected to fail first)');
+  stdout.writeln(
+      '[producer] enqueueing invoices $invoices (all expected to fail first)');
   for (final invoice in invoices) {
     final id = await stem.enqueue(
       taskName(),

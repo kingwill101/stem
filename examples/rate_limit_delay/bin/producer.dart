@@ -6,8 +6,8 @@ import 'package:stem_rate_limit_delay_demo/shared.dart';
 Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6381/0';
-  final backendUrl =
-      Platform.environment['STEM_RESULT_BACKEND_URL'] ?? 'redis://localhost:6381/1';
+  final backendUrl = Platform.environment['STEM_RESULT_BACKEND_URL'] ??
+      'redis://localhost:6381/1';
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
@@ -31,8 +31,9 @@ Future<void> main() async {
 
   for (var i = 0; i < totalJobs; i++) {
     final delaySeconds = i >= totalJobs / 2 ? 4 : 0;
-    final notBefore =
-        delaySeconds > 0 ? DateTime.now().add(Duration(seconds: delaySeconds)) : null;
+    final notBefore = delaySeconds > 0
+        ? DateTime.now().add(Duration(seconds: delaySeconds))
+        : null;
     final priority = i.isEven ? 9 : 2;
     final route = routing.resolve(
       RouteRequest(
