@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_FILE="$SCRIPT_DIR/docker/testing/docker-compose.yml"
+
+if ! command -v docker >/dev/null 2>&1; then
+  >&2 echo "Docker is required to run integration dependencies. Install Docker and retry."
+  return 1 2>/dev/null || exit 1
+fi
+
+echo "Starting Redis/Postgres test services (docker compose)..."
+docker compose -f "$COMPOSE_FILE" up -d postgres redis
+
+REDIS_URL="redis://127.0.0.1:56379"
+POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
+CA_CERT_PATH="$SCRIPT_DIR/docker/testing/certs/postgres-root.crt"
+
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  export STEM_TEST_REDIS_URL="$REDIS_URL"
+  export STEM_TEST_POSTGRES_URL="$POSTGRES_URL"
+  export STEM_TEST_POSTGRES_TLS_URL="$POSTGRES_URL"
+  export STEM_TEST_POSTGRES_TLS_CA_CERT="$CA_CERT_PATH"
+  echo "Exported STEM_TEST_* variables into current shell."
+else
+  cat <<EOF
+Docker services are running.
+
+To export the test environment variables into your shell, run:
+  source ./_init_test_env
+
+Variables:
+  STEM_TEST_REDIS_URL=$REDIS_URL
+  STEM_TEST_POSTGRES_URL=$POSTGRES_URL
+  STEM_TEST_POSTGRES_TLS_URL=$POSTGRES_URL
+  STEM_TEST_POSTGRES_TLS_CA_CERT=$CA_CERT_PATH
+EOF
+fi

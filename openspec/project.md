@@ -8,7 +8,7 @@ Build **Stem**, a Dart-native background job processing platform that mirrors th
 - Redis Streams (primary broker + delay store), Redis key-value (locks, rate limiting, metrics)
 - Postgres (planned result backend & schedule store)
 - RabbitMQ and Amazon SQS adapters (phase-two targets)
-- OpenTelemetry for metrics/tracing, JSON/HTTP for control-plane APIs
+- Dartastic OpenTelemetry (metrics/tracing), JSON/HTTP for control-plane APIs
 
 ## Project Conventions
 
@@ -31,9 +31,23 @@ Build **Stem**, a Dart-native background job processing platform that mirrors th
 
 ### Testing Strategy
 - Unit tests for contracts, retry strategies, middleware pipelines, and cron/interval parsing.
-- Integration suites using docker-compose to validate broker/backend behavior (Redis Streams, Postgres) covering enqueue → execute → retry/DLQ.
+- Integration suites using the docker stack to validate broker/backend behavior (Redis Streams, Postgres) covering enqueue → execute → retry/DLQ.
 - Chaos-style tests that kill worker processes mid-task to ensure at-least-once semantics hold.
 - Snapshot/load testing for scheduler ticking and canvas aggregation logic.
+
+Before running integration tests locally, start the Docker services and export the expected environment variables:
+
+```
+docker compose -f docker/testing/docker-compose.yml up -d postgres redis
+
+export STEM_TEST_REDIS_URL=redis://127.0.0.1:56379
+export STEM_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test
+export STEM_TEST_POSTGRES_TLS_URL=$STEM_TEST_POSTGRES_URL
+export STEM_TEST_POSTGRES_TLS_CA_CERT=docker/testing/certs/postgres-root.crt
+```
+
+Leaving services running keeps integration tests stable and mirrors CI expectations.
+For convenience, `source ./_init_test_env` performs the same setup in one step.
 
 ### Git Workflow
 - Branch names: `change/<change-id>/<short-description>` (e.g., `change/add-stem-background-jobs/worker-mvp`).
@@ -59,5 +73,5 @@ Build **Stem**, a Dart-native background job processing platform that mirrors th
 - Redis 7+ (Streams, ZSET, key-value commands like XADD/XACK/XAUTOCLAIM, SET NX PX)
 - Postgres 14+ (result backend tables, schedule storage)
 - RabbitMQ 3.12+ (AMQP 0-9-1) and Amazon SQS (optional adapters)
-- OpenTelemetry Collector / compatible exporters (metrics, traces)
-- Docker or container runtime for local development environments and integration testing
+- Dartastic OpenTelemetry Collector / compatible exporters (metrics, traces)
+- Docker or container runtime for local development environments and integration testing (keep `docker/testing/docker-compose.yml` running while exercising integration suites)

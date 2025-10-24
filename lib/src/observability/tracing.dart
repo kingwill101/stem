@@ -1,99 +1,197 @@
-import 'package:opentelemetry/api.dart' as otel;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
+import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
+    as dotel_api;
 
-/// Utilities for Stem's tracing integration (OpenTelemetry).
+/// Utilities for Stem's tracing integration (Dartastic OpenTelemetry).
 class StemTracer {
-  StemTracer._() : tracer = otel.globalTracerProvider.getTracer('stem');
+  StemTracer._();
 
   /// Singleton instance used across the runtime.
   static final StemTracer instance = StemTracer._();
 
-  /// Underlying tracer emitting spans.
-  final otel.Tracer tracer;
+  dotel_api.APITracer get _tracer => _obtainTracer();
 
-  final otel.TextMapPropagator _propagator = otel.W3CTraceContextPropagator();
-  final _HeaderSetter _setter = _HeaderSetter();
-  final _HeaderGetter _getter = _HeaderGetter();
+  bool get _isTelemetryReady => dotel_api.OTelFactory.otelFactory != null;
+
+  dotel_api.Context _fallbackContext() => dotel_api.ContextCreate.create();
+
+  static dotel_api.APITracer _obtainTracer() {
+    try {
+      return dotel.OTel.tracerProvider().getTracer('stem');
+    } catch (error) {
+      if (error is TypeError || error is StateError) {
+        try {
+          dotel_api.OTelAPI.initialize();
+        } on StateError {
+          // Already initialised elsewhere; ignore.
+        }
+        return dotel_api.OTelAPI.tracerProvider().getTracer('stem');
+      }
+      rethrow;
+    }
+  }
 
   /// Runs [fn] within an async span named [name].
   Future<T> trace<T>(
     String name,
     Future<T> Function() fn, {
-    otel.Context? context,
-    List<otel.Attribute> attributes = const [],
-    otel.SpanKind spanKind = otel.SpanKind.internal,
-  }) {
-    return otel.trace(
+    dotel.Context? context,
+    Map<String, Object> attributes = const {},
+    dotel.SpanKind spanKind = dotel.SpanKind.internal,
+  }) async {
+    if (!_isTelemetryReady) {
+      return await fn();
+    }
+    final attributeSet = attributes.isEmpty
+        ? null
+        : dotel.Attributes.of(Map<String, Object>.from(attributes));
+    final baseContext = context ?? dotel.Context.current;
+    final tracer = _tracer;
+    final span = tracer.startSpan(
       name,
-      fn,
-      tracer: tracer,
-      context: context,
-      spanAttributes: attributes,
-      spanKind: spanKind,
+      context: baseContext,
+      kind: spanKind,
+      attributes: attributeSet,
     );
+    try {
+      return await tracer.withSpanAsync(span, fn);
+    } finally {
+      span.end();
+    }
   }
 
   /// Runs [fn] within a synchronous span named [name].
   T traceSync<T>(
     String name,
     T Function() fn, {
-    otel.Context? context,
-    List<otel.Attribute> attributes = const [],
-    otel.SpanKind spanKind = otel.SpanKind.internal,
+    dotel.Context? context,
+    Map<String, Object> attributes = const {},
+    dotel.SpanKind spanKind = dotel.SpanKind.internal,
   }) {
-    return otel.traceSync(
+    if (!_isTelemetryReady) {
+      return fn();
+    }
+    final attributeSet = attributes.isEmpty
+        ? null
+        : dotel.Attributes.of(Map<String, Object>.from(attributes));
+    final baseContext = context ?? dotel.Context.current;
+    final tracer = _tracer;
+    final span = tracer.startSpan(
       name,
-      fn,
-      tracer: tracer,
-      context: context,
-      spanAttributes: attributes,
-      spanKind: spanKind,
+      context: baseContext,
+      kind: spanKind,
+      attributes: attributeSet,
     );
+    try {
+      return tracer.withSpan(span, fn);
+    } finally {
+      span.end();
+    }
   }
 
   /// Injects the active trace context into [headers].
   void injectTraceContext(
     Map<String, String> headers, {
-    otel.Context? context,
+    dotel.Context? context,
   }) {
-    _propagator.inject(context ?? otel.Context.current, headers, _setter);
+    if (!_isTelemetryReady) return;
+    final spanContext = _spanContextFrom(context ?? dotel.Context.current);
+    if (spanContext == null) return;
+
+    final traceParent = _formatTraceparent(spanContext);
+    if (traceParent == null) return;
+
+    headers['traceparent'] = traceParent;
+
+    final traceState = spanContext.traceState;
+    if (traceState != null && traceState.entries.isNotEmpty) {
+      headers['tracestate'] = traceState.toString();
+    } else {
+      headers.remove('tracestate');
+    }
   }
 
   /// Extracts a trace context from [headers].
-  otel.Context extractTraceContext(
+  dotel.Context extractTraceContext(
     Map<String, String> headers, {
-    otel.Context? context,
+    dotel.Context? context,
   }) {
-    return _propagator.extract(
-      context ?? otel.Context.current,
-      headers,
-      _getter,
-    );
+    if (!_isTelemetryReady) {
+      return context ?? _fallbackContext();
+    }
+    final baseContext = context ?? dotel.Context.current;
+    final spanContext = _parseTraceContext(headers);
+    if (spanContext == null) return baseContext;
+    return baseContext.withSpanContext(spanContext);
   }
 
   /// Returns trace identifiers for inclusion in structured logs.
-  Map<String, String> traceFields({otel.Context? context}) {
-    final span = otel.spanFromContext(context ?? otel.Context.current);
-    final spanContext = span.spanContext;
-    if (!spanContext.isValid) return const {};
+  Map<String, String> traceFields({dotel.Context? context}) {
+    if (!_isTelemetryReady) return const {};
+    final spanContext = _spanContextFrom(context ?? dotel.Context.current);
+    if (spanContext == null || !spanContext.isValid) return const {};
     return {
-      'traceId': spanContext.traceId.toString(),
-      'spanId': spanContext.spanId.toString(),
+      'traceId': spanContext.traceId.hexString,
+      'spanId': spanContext.spanId.hexString,
     };
   }
-}
 
-class _HeaderSetter implements otel.TextMapSetter<Map<String, String>> {
-  @override
-  void set(Map<String, String> carrier, String key, String value) {
-    carrier[key] = value;
+  dotel.SpanContext? _spanContextFrom(dotel.Context context) {
+    final span = context.span;
+    if (span != null && span.spanContext.isValid) {
+      return span.spanContext;
+    }
+    final spanContext = context.spanContext;
+    if (spanContext != null && spanContext.isValid) {
+      return spanContext;
+    }
+    return null;
   }
-}
 
-class _HeaderGetter implements otel.TextMapGetter<Map<String, String>> {
-  @override
-  String? get(Map<String, String>? carrier, String key) =>
-      carrier == null ? null : carrier[key];
+  String? _formatTraceparent(dotel.SpanContext spanContext) {
+    if (!spanContext.isValid) return null;
+    final traceId = spanContext.traceId.hexString;
+    final spanId = spanContext.spanId.hexString;
+    final flagsHex = spanContext.traceFlags.asByte
+        .toRadixString(16)
+        .padLeft(2, '0');
+    return '00-$traceId-$spanId-$flagsHex';
+  }
 
-  @override
-  Iterable<String> keys(Map<String, String> carrier) => carrier.keys;
+  dotel.SpanContext? _parseTraceContext(Map<String, String> headers) {
+    final traceParent = headers['traceparent'];
+    if (traceParent == null) return null;
+    final parts = traceParent.trim().split('-');
+    if (parts.length != 4) return null;
+
+    final traceIdHex = parts[1];
+    final spanIdHex = parts[2];
+    final flagsHex = parts[3];
+
+    if (traceIdHex.length != 32 ||
+        spanIdHex.length != 16 ||
+        flagsHex.length != 2) {
+      return null;
+    }
+
+    try {
+      final traceId = dotel.OTel.traceIdFrom(traceIdHex);
+      final spanId = dotel.OTel.spanIdFrom(spanIdHex);
+      final traceFlags = dotel.OTel.traceFlags(int.parse(flagsHex, radix: 16));
+      final traceStateHeader = headers['tracestate'];
+      final traceState = traceStateHeader == null || traceStateHeader.isEmpty
+          ? null
+          : dotel.TraceState.fromString(traceStateHeader);
+
+      return dotel.OTel.spanContext(
+        traceId: traceId,
+        spanId: spanId,
+        traceFlags: traceFlags,
+        traceState: traceState,
+        isRemote: true,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 }

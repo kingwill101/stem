@@ -72,7 +72,7 @@ Future<void> main() async {
 - **Task pipeline** – enqueue with delays, priorities, idempotency helpers, and retries.
 - **Workers** – isolate pools with soft/hard time limits, autoscaling, and remote control (`stem worker ping|revoke|shutdown`).
 - **Scheduling** – Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
-- **Observability** – OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
+- **Observability** – Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
 - **Security** – Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
 - **Adapters** – Redis Streams broker + Redis/Postgres result backends and schedule stores; in-memory drivers for tests.
 - **Specs & tooling** – OpenSpec change workflow, quality gates (`tool/quality/run_quality_checks.sh`), chaos/regression suites.
@@ -85,6 +85,20 @@ Future<void> main() async {
   - [rate_limit_delay](example/rate_limit_delay) – delayed enqueue, priority clamping, Redis rate limiter.
   - [dlq_sandbox](example/dlq_sandbox) – dead-letter inspection and replay via CLI.
   - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) – production-style topologies.
-  - [security examples](example/security/*) – payload signing + TLS profiles.
-  - [postgres_tls](example/postgres_tls) – Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
-  - [otel_metrics](example/otel_metrics) – OTLP collectors + Grafana dashboards.
+- [security examples](example/security/*) – payload signing + TLS profiles.
+- [postgres_tls](example/postgres_tls) – Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
+- [otel_metrics](example/otel_metrics) – OTLP collectors + Grafana dashboards.
+
+## Running Tests Locally
+
+Start the dockerised dependencies and export the integration variables before
+invoking the test suite:
+
+```bash
+source ./_init_test_env
+dart test
+```
+
+The helper script launches `docker/testing/docker-compose.yml` (Redis +
+Postgres) and populates `STEM_TEST_*` environment variables needed by the
+integration suites.
