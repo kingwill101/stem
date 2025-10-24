@@ -1,4 +1,4 @@
-import 'package:opentelemetry/api.dart' as otel;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
 import '../observability/tracing.dart';
 import '../routing/routing_config.dart';
@@ -113,15 +113,14 @@ class Stem {
 
         return envelope.id;
       },
-      spanKind: otel.SpanKind.producer,
-      attributes: [
-        otel.Attribute.fromString('stem.task', name),
-        otel.Attribute.fromString('stem.queue', targetName),
-        otel.Attribute.fromString(
-          'stem.routing.target_type',
-          decision.isBroadcast ? 'broadcast' : 'queue',
-        ),
-      ],
+      spanKind: dotel.SpanKind.producer,
+      attributes: {
+        'stem.task': name,
+        'stem.queue': targetName,
+        'stem.routing.target_type': decision.isBroadcast
+            ? 'broadcast'
+            : 'queue',
+      },
     );
   }
 

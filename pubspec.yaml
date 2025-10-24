@@ -1,6 +1,6 @@
 name: stem
 description: "Stem is a Dart-native background job platform with Redis Streams, retries, scheduling, observability, and security tooling."
-version: 0.1.0-alpha
+version: 0.1.0-alpha.2
 repository: https://github.com/kingwill101/stem
 
 environment:
@@ -10,7 +10,6 @@ environment:
 dependencies:
   collection: ^1.18.0
   args: ^2.5.0
-  opentelemetry: ^0.18.10
   dartastic_opentelemetry: ^0.8.6
   dartastic_opentelemetry_api: ^0.8.8
   redis: ^4.0.0
@@ -28,7 +27,7 @@ keywords:
   - task-queue
   - redis
   - scheduler
-  - opentelemetry
+  - dartastic-opentelemetry
   - dart
 
 topics:
@@ -47,3 +46,4 @@ dev_dependencies:
 
 false_secrets:
   - /example/microservice/certs/*
+  - /example/postgres_tls/certs/*

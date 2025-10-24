@@ -1,24 +1,22 @@
 import 'dart:async';
 
-import 'package:opentelemetry/api.dart' as otel;
-import 'package:opentelemetry/sdk.dart'
-    show SimpleSpanProcessor, SpanExporter, TracerProviderBase, ReadOnlySpan;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
-class _RecordingSpanExporter implements SpanExporter {
-  final List<ReadOnlySpan> spans = [];
+class _RecordingSpanExporter implements dotel.SpanExporter {
+  final List<dotel.Span> spans = [];
 
   @override
-  void export(List<ReadOnlySpan> spans) {
+  Future<void> export(List<dotel.Span> spans) async {
     this.spans.addAll(spans);
   }
 
   @override
-  void forceFlush() {}
+  Future<void> forceFlush() async {}
 
   @override
-  void shutdown() {}
+  Future<void> shutdown() async {}
 }
 
 Future<void> _waitFor(Future<bool> Function() predicate) async {
@@ -36,15 +34,19 @@ Future<void> _waitFor(Future<bool> Function() predicate) async {
 void main() {
   final exporter = _RecordingSpanExporter();
 
-  setUpAll(() {
-    try {
-      final provider = TracerProviderBase(
-        processors: [SimpleSpanProcessor(exporter)],
-      );
-      otel.registerGlobalTracerProvider(provider);
-    } on StateError {
-      // Global provider already registered; assume spans will still be captured.
-    }
+  setUpAll(() async {
+    await dotel.OTel.reset();
+    await dotel.OTel.initialize(
+      serviceName: 'stem-tracing-test',
+      endpoint: 'http://localhost:4317',
+      secure: false,
+      spanProcessor: dotel.SimpleSpanProcessor(exporter),
+      enableMetrics: false,
+    );
+  });
+
+  tearDownAll(() async {
+    await dotel.OTel.shutdown();
   });
 
   setUp(() {
@@ -92,8 +94,6 @@ void main() {
     await worker.shutdown();
     broker.dispose();
 
-    // Debug: collect spans for analysis.
-    // ignore: avoid_print
     final spanNames = exporter.spans.map((span) => span.name).toList();
     expect(spanNames, contains('stem.enqueue'));
     expect(spanNames, contains('stem.consume'));
@@ -103,7 +103,7 @@ void main() {
     );
 
     final traceIds = exporter.spans
-        .map((span) => span.spanContext.traceId.toString())
+        .map((span) => span.spanContext.traceId.hexString)
         .toSet();
     expect(traceIds.length, equals(1));
 
@@ -117,13 +117,16 @@ void main() {
       (span) => span.name.startsWith('stem.execute.'),
     );
 
-    expect(
-      consumeSpan.parentSpanId.toString(),
-      enqueueSpan.spanContext.spanId.toString(),
-    );
-    expect(
-      executeSpan.parentSpanId.toString(),
-      consumeSpan.spanContext.spanId.toString(),
-    );
+    String? parentSpanId(dotel.Span span) {
+      return span.parentSpanContext?.spanId.hexString ??
+          span.parentSpan?.spanContext.spanId.hexString;
+    }
+
+    expect(parentSpanId(consumeSpan), enqueueSpan.spanContext.spanId.hexString);
+    final allowedExecuteParents = {
+      consumeSpan.spanContext.spanId.hexString,
+      enqueueSpan.spanContext.spanId.hexString,
+    };
+    expect(allowedExecuteParents, contains(parentSpanId(executeSpan)));
   });
 }

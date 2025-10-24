@@ -6,14 +6,13 @@ import 'package:collection/collection.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as dotel_api;
-import 'package:opentelemetry/api.dart' as otel;
 
 /// Known metric aggregation types supported by the exporters.
 enum MetricType { counter, histogram, gauge }
 
 /// Immutable metric event emitted to exporters.
 class MetricEvent {
-  /// Creates a metric event and derives OpenTelemetry attributes from [tags].
+  /// Creates a metric event and derives attribute metadata from [tags].
   MetricEvent({
     required this.type,
     required this.name,
@@ -23,9 +22,9 @@ class MetricEvent {
     this.unit,
   }) : tags = Map.unmodifiable(tags),
        timestamp = (timestamp ?? DateTime.now()).toUtc(),
-       attributes = tags.entries
-           .map((entry) => otel.Attribute.fromString(entry.key, entry.value))
-           .toList();
+       attributes = tags.isEmpty
+           ? dotel.Attributes.of(const {})
+           : dotel.Attributes.of(Map<String, Object>.from(tags));
 
   /// Type of aggregation represented by this event.
   final MetricType type;
@@ -45,8 +44,8 @@ class MetricEvent {
   /// Optional display unit for the recorded [value].
   final String? unit;
 
-  /// Derived OpenTelemetry attributes used by OTLP exporters.
-  final List<otel.Attribute> attributes;
+  /// Derived attribute set used by OTLP exporters.
+  final dotel.Attributes attributes;
 
   /// Encodes this metric event into a JSON map for transport.
   Map<String, Object> toJson() => {

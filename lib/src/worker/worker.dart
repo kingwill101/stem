@@ -3,7 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
-import 'package:opentelemetry/api.dart' as otel;
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
@@ -365,10 +365,10 @@ class Worker {
     final envelope = delivery.envelope;
     final tracer = StemTracer.instance;
     final parentContext = tracer.extractTraceContext(envelope.headers);
-    final spanAttributes = [
-      otel.Attribute.fromString('stem.task', envelope.name),
-      otel.Attribute.fromString('stem.queue', envelope.queue),
-    ];
+    final spanAttributes = <String, Object>{
+      'stem.task': envelope.name,
+      'stem.queue': envelope.queue,
+    };
 
     await tracer.trace(
       'stem.consume',
@@ -524,7 +524,7 @@ class Worker {
               context,
               () => _executeWithHardLimit(handler, context, envelope),
             ),
-            spanKind: otel.SpanKind.internal,
+            spanKind: dotel.SpanKind.internal,
             attributes: spanAttributes,
           );
 
@@ -622,7 +622,7 @@ class Worker {
         }
       },
       context: parentContext,
-      spanKind: otel.SpanKind.consumer,
+      spanKind: dotel.SpanKind.consumer,
       attributes: spanAttributes,
     );
   }
