@@ -53,7 +53,11 @@ void main() {
       payload: const {'value': 'done'},
       error: error,
       attempt: 3,
-      meta: const {'origin': 'test'},
+      meta: const {
+        'origin': 'test',
+        'stem-signature': 'pg-sig',
+        'stem-signature-key': 'pg-key',
+      },
     );
 
     final status = await backend.get(taskId);
@@ -63,6 +67,8 @@ void main() {
     expect(status.error?.type, 'TestError');
     expect(status.attempt, 3);
     expect(status.meta['origin'], 'test');
+    expect(status.meta['stem-signature'], 'pg-sig');
+    expect(status.meta['stem-signature-key'], 'pg-key');
 
     final streamed = await updateFuture;
     expect(streamed.id, taskId);

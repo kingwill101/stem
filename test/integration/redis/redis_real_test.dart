@@ -80,13 +80,19 @@ void main() async {
       taskId,
       TaskState.running,
       attempt: 0,
-      meta: const {'integration': true},
+      meta: const {
+        'integration': true,
+        'stem-signature': 'redis-sig',
+        'stem-signature-key': 'redis-key',
+      },
     );
 
     final status = await backend.get(taskId);
     expect(status, isNotNull);
     expect(status!.state, TaskState.running);
     expect(status.meta['integration'], isTrue);
+    expect(status.meta['stem-signature'], 'redis-sig');
+    expect(status.meta['stem-signature-key'], 'redis-key');
 
     await backend.set(
       taskId,

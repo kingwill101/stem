@@ -32,6 +32,8 @@ class RedisStreamsBroker implements Broker {
   final Set<StreamController<Delivery>> _controllers = {};
   final Set<String> _groupsCreated = {};
 
+  int get activeClaimTimerCount => _claimTimers.length;
+
   bool _closed = false;
 
   static Future<RedisStreamsBroker> connect(
@@ -357,11 +359,15 @@ class RedisStreamsBroker implements Broker {
     final group = consumerGroup ?? _groupKey(queue);
     final streamKeys = _priorityStreamKeys(queue);
     final broadcastChannels = subscription.broadcastChannels;
+    final claimTimerKeys = <String>{};
 
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>.broadcast(
       onCancel: () {
         _controllers.remove(controller);
+        for (final key in claimTimerKeys) {
+          _claimTimers.remove(key)?.cancel();
+        }
         if (!controller.isClosed) {
           unawaited(controller.close());
         }
@@ -418,16 +424,18 @@ class RedisStreamsBroker implements Broker {
 
     loop();
     for (final stream in streamKeys) {
-      _scheduleClaim(stream, group, consumer);
+      final key = _scheduleClaim(stream, group, consumer);
+      claimTimerKeys.add(key);
     }
 
     for (final channel in broadcastChannels) {
       _listenBroadcast(channel, consumer, prefetch, controller);
-      _scheduleClaim(
+      final key = _scheduleClaim(
         _broadcastStreamKey(channel),
         _broadcastGroupKey(channel, consumer),
         consumer,
       );
+      claimTimerKeys.add(key);
     }
     return controller.stream;
   }
@@ -560,8 +568,11 @@ class RedisStreamsBroker implements Broker {
     );
   }
 
-  void _scheduleClaim(String stream, String group, String consumer) {
-    final key = '$stream|$group|$consumer';
+  String _claimTimerKey(String stream, String group, String consumer) =>
+      '$stream|$group|$consumer';
+
+  String _scheduleClaim(String stream, String group, String consumer) {
+    final key = _claimTimerKey(stream, group, consumer);
     _claimTimers[key]?.cancel();
     _claimTimers[key] = Timer.periodic(claimInterval, (_) async {
       dynamic result;
@@ -607,6 +618,7 @@ class RedisStreamsBroker implements Broker {
         }
       }
     });
+    return key;
   }
 
   @override
@@ -770,15 +782,18 @@ class RedisStreamsBroker implements Broker {
 
   @override
   Future<void> purge(String queue) async {
-    await _send(['DEL', _streamKey(queue)]);
+    final streams = _priorityStreamKeys(queue).toSet();
+    for (final stream in streams) {
+      await _send(['DEL', stream]);
+      try {
+        await _send(['XGROUP', 'DESTROY', stream, _groupKey(queue)]);
+      } catch (_) {
+        // Group may not exist; ignore.
+      }
+      _groupsCreated.remove('$stream|${_groupKey(queue)}');
+    }
     await _send(['DEL', _delayedKey(queue)]);
     await _send(['DEL', _deadKey(queue)]);
-    try {
-      await _send(['XGROUP', 'DESTROY', _streamKey(queue), _groupKey(queue)]);
-    } catch (_) {
-      // Group may not exist; ignore.
-    }
-    _groupsCreated.remove('${_streamKey(queue)}|${_groupKey(queue)}');
   }
 
   @override

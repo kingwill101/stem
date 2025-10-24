@@ -126,6 +126,94 @@ void main() {
     }
   });
 
+  test('purge clears priority stream data', () async {
+    final namespace = _uniqueNamespace();
+    final broker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+    );
+    try {
+      final queue = _uniqueQueue();
+      final highPriority = Envelope(
+        name: 'integration.redis.high',
+        args: const {'value': 'high'},
+        queue: queue,
+        priority: 7,
+      );
+      final lowPriority = Envelope(
+        name: 'integration.redis.low',
+        args: const {'value': 'low'},
+        queue: queue,
+        priority: 1,
+      );
+
+      await broker.publish(
+        highPriority,
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: highPriority.priority,
+        ),
+      );
+      await broker.publish(
+        lowPriority,
+        routing: RoutingInfo.queue(
+          queue: queue,
+          priority: lowPriority.priority,
+        ),
+      );
+
+      expect(await broker.pendingCount(queue), 2);
+
+      await broker.purge(queue);
+
+      expect(await broker.pendingCount(queue), 0);
+
+      final postPurge = Envelope(
+        name: 'integration.redis.post_purge',
+        args: const {'value': 'fresh'},
+        queue: queue,
+      );
+      await broker.publish(postPurge);
+      final iterator = StreamIterator(
+        broker.consume(
+          RoutingSubscription.singleQueue(queue),
+          prefetch: 1,
+          consumerName: 'purge-check-$queue',
+        ),
+      );
+      expect(await iterator.moveNext(), isTrue);
+      expect(iterator.current.envelope.id, postPurge.id);
+      await broker.ack(iterator.current);
+      await iterator.cancel();
+    } finally {
+      await _safeCloseRedisBroker(broker);
+    }
+  });
+
+  test('subscription cancellation stops claim timers', () async {
+    final namespace = _uniqueNamespace();
+    final broker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+      claimInterval: const Duration(milliseconds: 50),
+    );
+    try {
+      final queue = _uniqueQueue();
+      final subscription = broker
+          .consume(RoutingSubscription.singleQueue(queue), prefetch: 1)
+          .listen((_) {});
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(broker.activeClaimTimerCount, greaterThan(0));
+
+      await subscription.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(broker.activeClaimTimerCount, 0);
+    } finally {
+      await _safeCloseRedisBroker(broker);
+    }
+  });
+
   test('Redis broadcast fan-out delivers to all subscribers', () async {
     final namespace = _uniqueNamespace();
     final publisher = await RedisStreamsBroker.connect(

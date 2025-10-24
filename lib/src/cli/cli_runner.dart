@@ -12,6 +12,7 @@ import 'package:stem/src/cli/schedule.dart';
 import 'package:stem/src/cli/utilities.dart';
 import 'package:stem/src/cli/worker.dart';
 
+import '../backend/postgres_backend.dart';
 import '../backend/redis_backend.dart';
 import '../brokers/postgres_broker.dart';
 import '../brokers/redis_broker.dart';
@@ -252,6 +253,28 @@ class HealthCommand extends Command<int> {
     String url,
     TlsConfig tls,
   ) async {
+    final uri = Uri.parse(url);
+    if (isPostgresScheme(uri.scheme)) {
+      try {
+        final backend = await PostgresResultBackend.connect(
+          url,
+          applicationName: 'stem-cli-health',
+        );
+        await backend.close();
+        return _HealthCheckResult(
+          component: 'backend',
+          success: true,
+          message: 'Connected to $url',
+        );
+      } on Object catch (error) {
+        return _HealthCheckResult(
+          component: 'backend',
+          success: false,
+          message: 'Connection failed for $url: $error',
+        );
+      }
+    }
+
     try {
       final backend = await RedisResultBackend.connect(url, tls: tls);
       await backend.close();

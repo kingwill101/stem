@@ -105,6 +105,27 @@ void main() {
       expect(expired, isNull);
     });
 
+    test('preserves signature metadata', () async {
+      final backend = InMemoryResultBackend();
+
+      const signatureMeta = {
+        'stem-signature': 'sig-value',
+        'stem-signature-key': 'key-1',
+      };
+
+      await backend.set(
+        'signed-task',
+        TaskState.succeeded,
+        attempt: 0,
+        meta: signatureMeta,
+      );
+
+      final status = await backend.get('signed-task');
+      expect(status, isNotNull);
+      expect(status!.meta['stem-signature'], equals('sig-value'));
+      expect(status.meta['stem-signature-key'], equals('key-1'));
+    });
+
     test('aggregates group results', () async {
       final backend = InMemoryResultBackend();
 
