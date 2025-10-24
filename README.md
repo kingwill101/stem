@@ -84,6 +84,7 @@ Future<void> main() async {
 - Examples (each has its own README):
   - [rate_limit_delay](example/rate_limit_delay) – delayed enqueue, priority clamping, Redis rate limiter.
   - [dlq_sandbox](example/dlq_sandbox) – dead-letter inspection and replay via CLI.
-  - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](examples/mixed_cluster) – production-style topologies.
+  - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) – production-style topologies.
   - [security examples](example/security/*) – payload signing + TLS profiles.
+  - [postgres_tls](example/postgres_tls) – Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
   - [otel_metrics](example/otel_metrics) – OTLP collectors + Grafana dashboards.

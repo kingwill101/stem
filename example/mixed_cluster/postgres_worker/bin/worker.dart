@@ -16,11 +16,13 @@ Future<void> main(List<String> args) async {
   final broker = await PostgresBroker.connect(
     config.brokerUrl,
     applicationName: 'stem-mixed-postgres-worker',
+    tls: config.tls,
   );
   final backend = await PostgresResultBackend.connect(
     backendUrl,
     namespace: 'stem_demo',
     applicationName: 'stem-mixed-postgres-worker',
+    tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()

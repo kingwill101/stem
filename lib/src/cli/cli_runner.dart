@@ -199,6 +199,7 @@ class HealthCommand extends Command<int> {
         final broker = await PostgresBroker.connect(
           url,
           applicationName: 'stem-cli-health',
+          tls: tls,
         );
         await broker.close();
         return _HealthCheckResult(
@@ -259,6 +260,7 @@ class HealthCommand extends Command<int> {
         final backend = await PostgresResultBackend.connect(
           url,
           applicationName: 'stem-cli-health',
+          tls: tls,
         );
         await backend.close();
         return _HealthCheckResult(

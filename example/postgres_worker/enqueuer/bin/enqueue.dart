@@ -9,6 +9,7 @@ Future<void> main(List<String> args) async {
   final broker = await PostgresBroker.connect(
     config.brokerUrl,
     applicationName: 'stem-postgres-enqueuer',
+    tls: config.tls,
   );
 
   final backendUrl = config.resultBackendUrl;
@@ -22,6 +23,7 @@ Future<void> main(List<String> args) async {
     backendUrl,
     namespace: 'stem_demo',
     applicationName: 'stem-postgres-enqueuer',
+    tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()

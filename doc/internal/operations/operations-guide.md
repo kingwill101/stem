@@ -27,8 +27,8 @@ Stem reads configuration from environment variables. The most common settings ar
 | `STEM_SIGNING_KEYS` / `STEM_SIGNING_ACTIVE_KEY` | HMAC signing secrets and active key identifier |
 | `STEM_SIGNING_PUBLIC_KEYS` / `STEM_SIGNING_PRIVATE_KEYS` | Ed25519 verification & signing material |
 | `STEM_SIGNING_ALGORITHM` | `hmac-sha256` (default) or `ed25519` |
-| `STEM_TLS_CA_CERT` | Path to trusted CA bundle for Redis/HTTP connections |
-| `STEM_TLS_CLIENT_CERT` / `STEM_TLS_CLIENT_KEY` | Mutual TLS credentials for Redis/HTTP |
+| `STEM_TLS_CA_CERT` | Path to trusted CA bundle for Redis/Postgres/HTTP connections |
+| `STEM_TLS_CLIENT_CERT` / `STEM_TLS_CLIENT_KEY` | Mutual TLS credentials for Redis/Postgres/HTTP clients |
 | `STEM_TLS_ALLOW_INSECURE` | Set to `true` to bypass TLS verification during debugging |
 
 Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Manager) and inject them as environment variables.
@@ -37,6 +37,8 @@ For local smoke tests the repository includes `docker/testing/docker-compose.yml
 which launches Postgres and Redis with ports exposed at `65432`/`56379`. Export
 `STEM_TEST_POSTGRES_URL` / `STEM_TEST_REDIS_URL` and run `dart test
 test/integration` to exercise adapters against those services.
+Set `STEM_TLS_CA_CERT=docker/testing/certs/postgres-root.crt` to enable
+certificate validation when pointing Stem at the bundled Postgres instance.
 
 ## Deployment Topologies
 
@@ -53,7 +55,7 @@ test/integration` to exercise adapters against those services.
 - One or more enqueue services publishing envelopes.
 - A fleet of worker processes (each with isolate pools).
 - One or more beat instances (recommended two for failover).
-- Optional Postgres for the result backend and/or schedule store (Postgres adapters auto-create tables). See `examples/postgres_worker` for a Postgres-only setup, `examples/redis_postgres_worker` for a Redis broker + Postgres backend hybrid, or `examples/mixed_cluster` to run Redis- and Postgres-backed workers side by side.
+- Optional Postgres for the result backend and/or schedule store (Postgres adapters auto-create tables). See `example/postgres_worker` for a Postgres-only setup, `example/redis_postgres_worker` for a Redis broker + Postgres backend hybrid, `example/mixed_cluster` to run Redis- and Postgres-backed workers side by side, or `example/postgres_tls` for a secure Postgres backend using the shared `STEM_TLS_*` configuration.
 
 `examples/microservice` demonstrates an enqueue API and worker process running separately, sharing Redis.
 

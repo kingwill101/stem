@@ -45,6 +45,7 @@ Future<CliContext> createDefaultContext({
     final postgresBroker = await PostgresBroker.connect(
       config.brokerUrl,
       applicationName: 'stem-cli',
+      tls: config.tls,
     );
     broker = postgresBroker;
     disposables.add(() => postgresBroker.close());
@@ -67,6 +68,15 @@ Future<CliContext> createDefaultContext({
       );
       backend = redisBackend;
       disposables.add(() => redisBackend.close());
+    } else if (isPostgresScheme(backendUri.scheme)) {
+      final postgresBackend = await PostgresResultBackend.connect(
+        backendUrl,
+        namespace: 'stem',
+        applicationName: 'stem-cli',
+        tls: config.tls,
+      );
+      backend = postgresBackend;
+      disposables.add(() => postgresBackend.close());
     } else if (backendUri.scheme == 'memory') {
       backend = InMemoryResultBackend();
     } else {

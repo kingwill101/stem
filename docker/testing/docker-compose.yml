@@ -1,10 +1,13 @@
 services:
   postgres:
-    image: postgres:14
+    build:
+      context: ../..
+      dockerfile: docker/testing/postgres/Dockerfile
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stem_test
+    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/etc/postgres/certs/server.crt", "-c", "ssl_key_file=/etc/postgres/certs/server.key", "-c", "ssl_ca_file=/etc/postgres/certs/root.crt"]
     ports:
       - "65432:5432"
     healthcheck:

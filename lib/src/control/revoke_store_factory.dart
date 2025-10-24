@@ -49,6 +49,7 @@ class RevokeStoreFactory {
           candidate,
           namespace: namespace,
           applicationName: 'stem-revoke-store',
+          tls: config.tls,
         );
       default:
         throw StateError('Unsupported revoke store scheme: ${uri.scheme}');

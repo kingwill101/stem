@@ -6,36 +6,34 @@ import 'package:stem/stem.dart';
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
 
-  final broker = await PostgresBroker.connect(
+  final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
-    applicationName: 'stem-postgres-worker',
     tls: config.tls,
   );
 
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-      'STEM_RESULT_BACKEND_URL must be configured for the Postgres worker.',
+      'STEM_RESULT_BACKEND_URL must be set for the Postgres TLS example.',
     );
   }
 
   final backend = await PostgresResultBackend.connect(
     backendUrl,
-    namespace: 'stem_demo',
-    applicationName: 'stem-postgres-worker',
+    namespace: 'stem_tls_demo',
+    applicationName: 'stem-postgres-tls-worker',
     tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<String>(
-        name: 'report.generate',
+        name: 'reports.generate',
         entrypoint: _reportEntrypoint,
         options: TaskOptions(
           queue: config.defaultQueue,
           maxRetries: 3,
-          softTimeLimit: const Duration(seconds: 5),
-          hardTimeLimit: const Duration(seconds: 10),
+          visibilityTimeout: const Duration(seconds: 30),
         ),
       ),
     );
@@ -45,20 +43,20 @@ Future<void> main(List<String> args) async {
     registry: registry,
     backend: backend,
     queue: config.defaultQueue,
-    consumerName: 'postgres-worker-1',
-    concurrency: 3,
-    prefetchMultiplier: 2,
+    consumerName: 'postgres-tls-worker',
+    concurrency: 2,
     observability: ObservabilityConfig(
-      namespace: 'postgres-demo',
       heartbeatInterval: const Duration(seconds: 5),
+      namespace: 'tls-demo',
     ),
+    signer: PayloadSigner.maybe(config.signing),
   );
 
   await worker.start();
-  stdout.writeln('Postgres worker listening on queue "${config.defaultQueue}"');
+  stdout.writeln('Postgres TLS worker consuming "${config.defaultQueue}"');
 
   Future<void> shutdown(ProcessSignal signal) async {
-    stdout.writeln('Stopping worker ($signal)...');
+    stdout.writeln('Stopping Postgres TLS worker ($signal)...');
     await worker.shutdown();
     await broker.close();
     await backend.close();
@@ -77,10 +75,10 @@ FutureOr<Object?> _reportEntrypoint(
 ) async {
   final region = (args['region'] as String?) ?? 'unknown';
   context.heartbeat();
-  await Future<void>.delayed(const Duration(milliseconds: 750));
+  await Future<void>.delayed(const Duration(milliseconds: 500));
   final message =
-      'Generated analytics report for $region (attempt ${context.attempt})';
-  stdout.writeln('📊 $message');
+      'Generated TLS report for $region (attempt ${context.attempt})';
+  stdout.writeln('[tls] $message');
   context.progress(1.0, data: {'region': region});
   return message;
 }

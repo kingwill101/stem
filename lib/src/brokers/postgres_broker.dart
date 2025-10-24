@@ -8,6 +8,7 @@ import '../core/contracts.dart';
 import '../core/envelope.dart';
 import '../postgres/postgres_client.dart';
 import '../postgres/postgres_migrations.dart';
+import '../security/tls.dart';
 
 class PostgresBroker implements Broker {
   PostgresBroker._(
@@ -21,10 +22,12 @@ class PostgresBroker implements Broker {
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration pollInterval = const Duration(milliseconds: 500),
     String? applicationName,
+    TlsConfig? tls,
   }) async {
     final client = PostgresClient(
       connectionString,
       applicationName: applicationName,
+      tls: tls,
     );
     final broker = PostgresBroker._(
       client,

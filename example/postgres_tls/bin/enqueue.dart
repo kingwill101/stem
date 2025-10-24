@@ -14,21 +14,21 @@ Future<void> main(List<String> args) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
-      'STEM_RESULT_BACKEND_URL must be set when using the Redis/Postgres example.',
+      'STEM_RESULT_BACKEND_URL must be set for the Postgres TLS example.',
     );
   }
 
   final backend = await PostgresResultBackend.connect(
     backendUrl,
-    namespace: 'stem_demo',
-    applicationName: 'stem-redis-postgres-enqueuer',
+    namespace: 'stem_tls_demo',
+    applicationName: 'stem-postgres-tls-enqueuer',
     tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<String>(
-        name: 'hybrid.process',
+        name: 'reports.generate',
         entrypoint: _noop,
         options: TaskOptions(queue: config.defaultQueue),
       ),
@@ -41,14 +41,14 @@ Future<void> main(List<String> args) async {
     signer: PayloadSigner.maybe(config.signing),
   );
 
-  final items = ['alpha', 'beta', 'gamma'];
-  for (final item in items) {
-    final taskId = await stem.enqueue(
-      'hybrid.process',
-      args: {'item': item},
+  final regions = ['emea', 'amer', 'apac'];
+  for (final region in regions) {
+    final id = await stem.enqueue(
+      'reports.generate',
+      args: {'region': region},
       options: TaskOptions(queue: config.defaultQueue),
     );
-    stdout.writeln('Enqueued hybrid job $taskId for $item');
+    stdout.writeln('Enqueued TLS demo task $id for $region');
   }
 
   await broker.close();

@@ -6,6 +6,7 @@ import 'package:postgres/postgres.dart';
 import '../core/contracts.dart';
 import '../observability/heartbeat.dart';
 import '../postgres/postgres_client.dart';
+import '../security/tls.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
 class PostgresResultBackend implements ResultBackend {
@@ -48,8 +49,13 @@ class PostgresResultBackend implements ResultBackend {
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
     String? applicationName,
+    TlsConfig? tls,
   }) async {
-    final client = PostgresClient(uri, applicationName: applicationName);
+    final client = PostgresClient(
+      uri,
+      applicationName: applicationName,
+      tls: tls,
+    );
 
     final backend = PostgresResultBackend._(
       client,

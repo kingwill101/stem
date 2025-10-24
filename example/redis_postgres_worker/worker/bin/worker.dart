@@ -22,6 +22,7 @@ Future<void> main(List<String> args) async {
     backendUrl,
     namespace: 'stem_demo',
     applicationName: 'stem-redis-postgres-worker',
+    tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()

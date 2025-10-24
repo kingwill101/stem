@@ -81,6 +81,7 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
   final broker = await PostgresBroker.connect(
     config.brokerUrl,
     applicationName: 'stem-mixed-enqueuer',
+    tls: config.tls,
   );
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
@@ -90,6 +91,7 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
     backendUrl,
     namespace: 'stem_demo',
     applicationName: 'stem-mixed-enqueuer',
+    tls: config.tls,
   );
 
   final registry = SimpleTaskRegistry()

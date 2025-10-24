@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:postgres/postgres.dart';
 
 import '../postgres/postgres_client.dart';
+import '../security/tls.dart';
 import 'revoke_store.dart';
 
 /// PostgreSQL-backed implementation of [RevokeStore].
@@ -22,10 +23,12 @@ class PostgresRevokeStore implements RevokeStore {
     String schema = 'public',
     String namespace = 'stem',
     String? applicationName,
+    TlsConfig? tls,
   }) async {
     final client = PostgresClient(
       uri,
       applicationName: applicationName ?? 'stem-revoke-store',
+      tls: tls,
     );
     final store = PostgresRevokeStore._(
       client,

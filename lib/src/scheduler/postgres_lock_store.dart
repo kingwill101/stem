@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 
 import '../core/contracts.dart';
 import '../postgres/postgres_client.dart';
+import '../security/tls.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
@@ -28,8 +29,13 @@ class PostgresLockStore implements LockStore {
     String namespace = 'stem',
     String schema = 'public',
     String? applicationName,
+    TlsConfig? tls,
   }) async {
-    final client = PostgresClient(uri, applicationName: applicationName);
+    final client = PostgresClient(
+      uri,
+      applicationName: applicationName,
+      tls: tls,
+    );
     final store = PostgresLockStore._(
       client,
       namespace: namespace,

@@ -4,6 +4,7 @@ import 'package:postgres/postgres.dart';
 
 import '../core/contracts.dart';
 import '../postgres/postgres_client.dart';
+import '../security/tls.dart';
 import 'schedule_calculator.dart';
 import 'schedule_spec.dart';
 
@@ -43,8 +44,13 @@ class PostgresScheduleStore implements ScheduleStore {
     Duration lockTtl = const Duration(seconds: 5),
     ScheduleCalculator? calculator,
     String? applicationName,
+    TlsConfig? tls,
   }) async {
-    final client = PostgresClient(uri, applicationName: applicationName);
+    final client = PostgresClient(
+      uri,
+      applicationName: applicationName,
+      tls: tls,
+    );
     final store = PostgresScheduleStore._(
       client,
       namespace: namespace,
