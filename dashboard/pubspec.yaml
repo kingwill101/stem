@@ -1,0 +1,36 @@
+name: stem_dashboard
+description: Hotwire + Routed dashboard for the Stem runtime.
+version: 0.1.0
+publish_to: "none"
+
+environment:
+  sdk: ">=3.9.0 <4.0.0"
+
+dependencies:
+  intl: ^0.20.2
+  meta: ^1.17.0
+  routed: ^0.1.0
+  routed_hotwire: ^0.1.0
+  redis: ^4.0.0
+  uuid: ^4.5.1
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3
+  property_testing: ^0.1.0
+  routed_testing: ^0.1.0
+  server_testing: ^0.1.0
+
+dependency_overrides:
+  routed:
+    path: /home/kingwill101/code/dart_packages/routed_ecosystem/packages/routed
+  routed_hotwire:
+    path: /home/kingwill101/code/dart_packages/routed_ecosystem/packages/routed_hotwire
+  server_testing:
+    path: /home/kingwill101/code/dart_packages/routed_ecosystem/packages/server_testing/server_testing
+  routed_testing:
+    path: /home/kingwill101/code/dart_packages/routed_ecosystem/packages/server_testing/routed_testing
+  property_testing:
+    path: /home/kingwill101/code/dart_packages/routed_ecosystem/packages/property_testing
+  redis: ^4.0.0
+  contextual: ^2.0.0

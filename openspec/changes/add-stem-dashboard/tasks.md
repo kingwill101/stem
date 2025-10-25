@@ -1,11 +1,11 @@
 ## Implementation
-- [ ] Confirm available control-plane APIs (or Redis fallbacks) that expose queue stats, worker states, task events, and triggers; document any gaps.
-- [ ] Add dependency overrides in the dashboard package to point to `~/code/dart_packages/routed_ecosystem/packages/routed_hotwire` and related Routed packages.
-- [ ] Scaffold a Hotwire + Routed Flutter web project under `dashboard/` with shared layout, sidebar navigation, and base styling.
-- [ ] Implement the Overview page (metrics cards + recent activity table) backed by live/polled data.
-- [ ] Implement the Tasks page with sortable tables, row expansion, filtering, and enqueue controls for demo jobs.
-- [ ] Implement the Events page showing a live stream/log of task lifecycle events with expandable rows.
+- [x] Confirm available control-plane APIs (or Redis fallbacks) that expose queue stats, worker states, task events, and triggers; document any gaps.
+- [x] Add dependency overrides in the dashboard package to point to `~/code/dart_packages/routed_ecosystem/packages/routed_hotwire` and related Routed packages.
+- [x] Scaffold a Hotwire + Routed Flutter web project under `dashboard/` with shared layout, sidebar navigation, and base styling.
+- [x] Implement the Overview page (metrics cards + recent activity table) backed by live/polled data.
+- [x] Implement the Tasks page with sortable tables, row expansion, filtering, and enqueue controls for demo jobs.
+- [x] Implement the Events page showing a live stream/log of task lifecycle events with expandable rows.
 - [ ] Implement the Workers page with status tables and actions (ping, pause, shutdown, replay DLQ) wired to backend methods.
-- [ ] Add service layer(s) that mediate between the dashboard and Stem core (or Redis scripts) for fetching/updating state; include tests or contract expectations.
+- [x] Add service layer(s) that mediate between the dashboard and Stem core (or Redis scripts) for fetching/updating state; include tests or contract expectations.
 - [ ] Provide documentation (README + docs site entry) explaining how to run the dashboard, configure the local routed packages, and expose Stem endpoints.
-- [ ] Validate with `dart format`, `dart analyze`, `dart test`, and `openspec validate add-stem-dashboard --strict`.
+- [x] Validate with `dart format`, `dart analyze`, `dart test`, and `openspec validate add-stem-dashboard --strict`.

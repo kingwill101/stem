@@ -1,0 +1,273 @@
+[2025-10-25T02:35:11.224553] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.344501] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.454123] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.564490] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.674108] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.783055] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:11.893070] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.003568] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.112288] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.223560] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.333814] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.442551] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.552109] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.662631] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.771481] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.880363] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:12.990249] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.099960] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.209108] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.319773] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.428607] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.537933] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.646473] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.757630] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.866308] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:13.976399] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.086076] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.197029] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.306602] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.419076] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.529263] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.639281] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.773881] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:14.904694] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.015081] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.125678] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.234133] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.344423] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.454295] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.563816] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.672790] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.783411] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:15.894052] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.003917] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.113044] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.222755] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.332512] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.442657] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.552341] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.663016] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.772531] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.882409] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:16.992030] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.100617] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.210769] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.320481] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.430947] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.540200] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.653831] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.785782] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:17.895534] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.006] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.114501] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.224246] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.333530] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.443238] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.554876] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.664559] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.775799] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.884664] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:18.994139] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.104494] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.215012] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.324066] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.433641] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.543946] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.654187] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.762931] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.871374] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:19.986545] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.095537] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.205357] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.314538] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.425415] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.535496] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.645825] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.755110] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.864634] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:20.973532] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:21.083778] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)
+[2025-10-25T02:35:21.193278] ERROR: Element not found (action: findElement) (selector: .flash.success)
+  Underlying error: NoSuchElementException (404): no such element: Unable to locate element: {"method":"css selector","selector":".flash.success"}
+  (Session info: chrome=141.0.7390.37)

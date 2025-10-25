@@ -1,0 +1,16 @@
+[2025-10-25T02:41:07.213408] [579681] INFO: Starting test: global_setup
+[2025-10-25T02:41:07.215798] [579681] INFO: Test Environment:
+[2025-10-25T02:41:07.216114] [579681] INFO:   Platform: linux Linux 6.16.8-1-MANJARO #1 SMP PREEMPT_DYNAMIC Fri, 19 Sep 2025 16:09:36 +0000
+[2025-10-25T02:41:07.216208] [579681] INFO:   Dart: 3.9.2 (stable) (Wed Aug 27 03:49:40 2025 -0700) on "linux_x64"
+[2025-10-25T02:41:07.216298] [579681] INFO:   Directory: /run/media/kingwill101/disk2/code/code/dart_packages/stem/dashboard
+[2025-10-25T02:41:07.216358] [579681] INFO:   PID: 579681
+[2025-10-25T02:41:07.216420] [579681] INFO: ---
+[2025-10-25T02:41:07.216471] [579681] INFO: Setting up global browser test environment...
+[2025-10-25T02:41:07.216553] [579681] INFO: Initial default browser from config: chromium
+[2025-10-25T02:41:07.216635] [579681] INFO: Auto-install is enabled, checking browser availability...
+[2025-10-25T02:41:07.217608] [579681] INFO: Attempting to auto-install browsers in order: [chromium, firefox, webkit]
+[2025-10-25T02:41:07.217694] [579681] INFO: Trying to install: chromium
+[2025-10-25T02:41:07.220319] [579681] INFO: Successfully installed/verified browser: chromium
+[2025-10-25T02:41:07.220382] [579681] INFO: Ensuring default browser binary (chromium) is installed...
+[2025-10-25T02:41:07.221007] [579681] INFO: Default browser binary check complete.
+[2025-10-25T02:41:07.221076] [579681] INFO: Ensuring WebDriver server for default browser (chromium) is running...
