@@ -15,11 +15,24 @@ You can start local instances with the provided Docker compose file:
 docker compose -f docker/testing/docker-compose.yml up -d
 ```
 
+The repository also provides `source ./_init_test_env`, which starts the same
+stack and exports the `STEM_TEST_*` environment variables required by the
+integration suites.
+
 Run all integration tests:
 
 ```bash
 dart test test/integration
 ```
+
+## Runtime Hardening Suites
+
+- `test/integration/brokers/redis_broker_integration_test.dart` exercises Redis
+  queue purging across priority streams and validates claim timer shutdown using
+  the dockerised Redis instance.
+- `test/integration/cli/cli_health_integration_test.dart` verifies that
+  `stem health` reports Postgres/Redis backend connectivity against the docker
+  stack.
 
 Each suite will `skip` automatically if the required environment variables are
 missing. Use these tests for manual verification; they are not intended for the

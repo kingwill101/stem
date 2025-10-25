@@ -6,6 +6,12 @@ import 'package:redis/redis.dart';
 import '../security/tls.dart';
 import 'heartbeat.dart';
 
+typedef RedisHeartbeatCommandFactory =
+    Future<({RedisConnection connection, Command command})> Function(
+      Uri uri,
+      TlsConfig? tls,
+    );
+
 /// Transport abstraction for distributing worker heartbeat payloads.
 abstract class HeartbeatTransport {
   const HeartbeatTransport();
@@ -50,12 +56,28 @@ class RedisHeartbeatTransport extends HeartbeatTransport {
   /// If a password or database index is embedded in [uri], the connection is
   /// authenticated and selected automatically. Heartbeats are published to the
   /// namespace-specific channel.
+  ///
+  /// Tests may override [commandFactory] to inject mocked Redis command
+  /// implementations without establishing a real network connection.
   static Future<RedisHeartbeatTransport> connect(
     String uri, {
     String namespace = 'stem',
     TlsConfig? tls,
+    RedisHeartbeatCommandFactory? commandFactory,
   }) async {
     final parsed = Uri.parse(uri);
+    final factory = commandFactory ?? _defaultCommandFactory;
+    final handle = await factory(parsed, tls);
+
+    return RedisHeartbeatTransport._(
+      handle.connection,
+      handle.command,
+      WorkerHeartbeat.topic(namespace),
+    );
+  }
+
+  static Future<({RedisConnection connection, Command command})>
+  _defaultCommandFactory(Uri parsed, TlsConfig? tls) async {
     final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
     final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
@@ -101,11 +123,7 @@ class RedisHeartbeatTransport extends HeartbeatTransport {
       }
     }
 
-    return RedisHeartbeatTransport._(
-      connection,
-      command,
-      WorkerHeartbeat.topic(namespace),
-    );
+    return (connection: connection, command: command);
   }
 
   /// Publishes the encoded [heartbeat] to the configured Redis channel.

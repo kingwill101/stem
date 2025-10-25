@@ -36,6 +36,26 @@ void main() {
     expect(stdoutBuffer.toString(), contains('Connection failed'));
   });
 
+  test('health command surfaces backend connection failures', () async {
+    final stdoutBuffer = StringBuffer();
+    final stderrBuffer = StringBuffer();
+
+    final exitCode = await runStemCli(
+      ['health'],
+      out: stdoutBuffer,
+      err: stderrBuffer,
+      environment: const {
+        'STEM_BROKER_URL': 'redis://127.0.0.1:64000',
+        'STEM_RESULT_BACKEND_URL': 'postgres://127.0.0.1:65432/stem',
+      },
+    );
+
+    expect(exitCode, 70);
+    final output = stdoutBuffer.toString();
+    expect(output, contains('backend'));
+    expect(output, contains('Connection failed'));
+  });
+
   test('health command supports postgres brokers', () async {
     final stdoutBuffer = StringBuffer();
     final stderrBuffer = StringBuffer();

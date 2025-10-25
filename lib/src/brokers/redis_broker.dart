@@ -101,6 +101,30 @@ class RedisStreamsBroker implements Broker {
     );
   }
 
+  /// Creates a broker instance using injected [connection] and [command].
+  ///
+  /// This is intended for unit tests that need to stub Redis behaviour without
+  /// establishing a real network connection.
+  static RedisStreamsBroker test({
+    required RedisConnection connection,
+    required Command command,
+    String namespace = 'stem',
+    Duration blockTime = const Duration(seconds: 5),
+    int delayedDrainBatch = 128,
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration claimInterval = const Duration(seconds: 30),
+  }) {
+    return RedisStreamsBroker._(
+      connection,
+      command,
+      namespace: namespace,
+      blockTime: blockTime,
+      delayedDrainBatch: delayedDrainBatch,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      claimInterval: claimInterval,
+    );
+  }
+
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
