@@ -1,34 +1,22 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
-import 'package:redis/redis.dart';
-import 'package:uuid/uuid.dart';
+import 'package:stem/stem.dart';
+import 'package:stem/src/cli/cli_runner.dart';
+import 'package:stem/src/cli/utilities.dart';
 
 import '../config/config.dart';
-import '../config/tls.dart';
 import '../stem/control_messages.dart';
 import 'models.dart';
-import 'redis_handle.dart';
 
 abstract class DashboardDataSource {
   Future<List<QueueSummary>> fetchQueueSummaries();
   Future<List<WorkerStatus>> fetchWorkerStatuses();
   Future<void> enqueueTask(EnqueueRequest request);
-  Future<List<ControlReplyMessage>> sendControlCommand(
-    ControlCommandMessage command, {
-    Duration timeout,
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    bool dryRun = false,
   });
-  Future<void> close();
-}
-
-abstract class _DashboardBackplane {
-  Future<Set<String>> discoverQueues();
-  Future<int> pendingCount(String queue);
-  Future<int> inflightCount(String queue);
-  Future<int> deadLetterCount(String queue);
-  Future<List<WorkerStatus>> workerStatuses();
-  Future<void> enqueue(EnqueueRequest request);
   Future<List<ControlReplyMessage>> sendControlCommand(
     ControlCommandMessage command, {
     Duration timeout,
@@ -37,46 +25,27 @@ abstract class _DashboardBackplane {
 }
 
 class StemDashboardService implements DashboardDataSource {
-  StemDashboardService._(this._backplane);
+  StemDashboardService._({required DashboardConfig config})
+    : _config = config,
+      _namespace = config.namespace,
+      _environment = Map<String, String>.from(config.environment);
 
-  final _DashboardBackplane _backplane;
+  final DashboardConfig _config;
+  final String _namespace;
+  final Map<String, String> _environment;
 
-  static Future<StemDashboardService> connect(DashboardConfig config) async {
-    final uri = Uri.parse(config.brokerUrl);
-    switch (uri.scheme) {
-      case 'redis':
-      case 'rediss':
-        final broker = await _connectRedis(config.brokerUrl, config.tls);
-        final backend = config.resultBackendUrl == config.brokerUrl
-            ? broker
-            : await _connectRedis(config.resultBackendUrl, config.tls);
-        final backplane = _RedisDashboardBackplane(
-          config,
-          brokerHandle: broker,
-          backendHandle: backend,
-        );
-        return StemDashboardService._(backplane);
-      case 'memory':
-        final backplane = _MemoryDashboardBackplane(
-          namespace: config.namespace,
-        );
-        return StemDashboardService._(backplane);
-      default:
-        throw UnsupportedError(
-          'Unsupported broker scheme "${uri.scheme}". '
-          'Only redis, rediss, and memory are currently supported.',
-        );
-    }
-  }
+  static Future<StemDashboardService> connect(DashboardConfig config) async =>
+      StemDashboardService._(config: config);
 
   @override
-  Future<List<QueueSummary>> fetchQueueSummaries() async {
-    final queues = await _backplane.discoverQueues();
+  Future<List<QueueSummary>> fetchQueueSummaries() => _withContext((ctx) async {
+    final broker = ctx.broker;
+    final queues = await _discoverQueues(ctx);
     final summaries = <QueueSummary>[];
     for (final queue in queues) {
-      final pending = await _backplane.pendingCount(queue);
-      final inflight = await _backplane.inflightCount(queue);
-      final dead = await _backplane.deadLetterCount(queue);
+      final pending = await broker.pendingCount(queue) ?? 0;
+      final inflight = await broker.inflightCount(queue) ?? 0;
+      final dead = await _deadLetterCount(broker, queue);
       summaries.add(
         QueueSummary(
           queue: queue,
@@ -88,480 +57,205 @@ class StemDashboardService implements DashboardDataSource {
     }
     summaries.sort((a, b) => a.queue.compareTo(b.queue));
     return summaries;
-  }
+  });
 
   @override
-  Future<List<WorkerStatus>> fetchWorkerStatuses() {
-    return _backplane.workerStatuses();
-  }
+  Future<List<WorkerStatus>> fetchWorkerStatuses() => _withContext((ctx) async {
+    final backend = ctx.backend;
+    if (backend == null) return const [];
+    try {
+      final heartbeats = await backend.listWorkerHeartbeats();
+      final statuses =
+          heartbeats.map(WorkerStatus.fromHeartbeat).toList(growable: false)
+            ..sort((a, b) => a.workerId.compareTo(b.workerId));
+      return statuses;
+    } catch (_) {
+      return const [];
+    }
+  });
 
   @override
-  Future<void> enqueueTask(EnqueueRequest request) {
-    return _backplane.enqueue(request);
-  }
+  Future<void> enqueueTask(EnqueueRequest request) => _withContext((ctx) async {
+    final envelope = Envelope(
+      id: generateEnvelopeId(),
+      name: request.task,
+      args: request.args,
+      queue: request.queue,
+      priority: request.priority,
+      maxRetries: request.maxRetries,
+      meta: const {'source': 'dashboard'},
+    );
+    await ctx.broker.publish(envelope);
+  });
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    bool dryRun = false,
+  }) => _withContext((ctx) async {
+    final bounded = limit.clamp(1, 500).toInt();
+    return ctx.broker.replayDeadLetters(queue, limit: bounded, dryRun: dryRun);
+  });
 
   @override
   Future<List<ControlReplyMessage>> sendControlCommand(
     ControlCommandMessage command, {
     Duration timeout = const Duration(seconds: 5),
-  }) {
-    return _backplane.sendControlCommand(command, timeout: timeout);
-  }
+  }) => _withContext((ctx) async {
+    final broker = ctx.broker;
+    final replyQueue = ControlQueueNames.reply(_namespace, command.requestId);
+    await _purgeQueue(broker, replyQueue);
 
-  @override
-  Future<void> close() => _backplane.close();
-}
-
-class _MemoryDashboardBackplane implements _DashboardBackplane {
-  _MemoryDashboardBackplane({required this.namespace});
-
-  final String namespace;
-  final Map<String, List<EnqueueRequest>> _queues = {};
-  final Map<String, WorkerStatus> _workers = {};
-
-  @override
-  Future<Set<String>> discoverQueues() async =>
-      _queues.keys.toSet()..add('default');
-
-  @override
-  Future<int> pendingCount(String queue) async => _queues[queue]?.length ?? 0;
-
-  @override
-  Future<int> inflightCount(String queue) async => 0;
-
-  @override
-  Future<int> deadLetterCount(String queue) async => 0;
-
-  @override
-  Future<List<WorkerStatus>> workerStatuses() async =>
-      _workers.values.toList(growable: false);
-
-  @override
-  Future<void> enqueue(EnqueueRequest request) async {
-    final list = _queues.putIfAbsent(request.queue, () => <EnqueueRequest>[]);
-    list.add(request);
-  }
-
-  @override
-  Future<List<ControlReplyMessage>> sendControlCommand(
-    ControlCommandMessage command, {
-    Duration timeout = const Duration(seconds: 5),
-  }) async {
-    // Memory backplane has no workers to command yet.
-    return const [];
-  }
-
-  @override
-  Future<void> close() async {}
-}
-
-class _RedisDashboardBackplane implements _DashboardBackplane {
-  _RedisDashboardBackplane(
-    this._config, {
-    required RedisHandle brokerHandle,
-    required RedisHandle backendHandle,
-  }) : _broker = brokerHandle,
-       _backend = backendHandle;
-
-  final DashboardConfig _config;
-  final RedisHandle _broker;
-  final RedisHandle _backend;
-  static final Uuid _uuid = Uuid();
-
-  @override
-  Future<Set<String>> discoverQueues() async {
-    final namespace = _config.namespace;
-    final streamPrefix = '$namespace:stream:';
-    final keys = await _scanKeys(_broker, '$streamPrefix*');
-    final queues = <String>{};
-    for (final key in keys) {
-      final queue = _queueNameFromStreamKey(streamPrefix, key);
-      if (queue != null) queues.add(queue);
-    }
-    if (queues.isEmpty) {
-      queues.add('default');
-    }
-    return queues;
-  }
-
-  @override
-  Future<int> pendingCount(String queue) async {
-    final namespace = _config.namespace;
-    final streamKeys = _streamVariants(namespace, queue);
-    var pending = 0;
-    for (final streamKey in streamKeys) {
-      final length = await _safeSend(_broker, ['XLEN', streamKey]);
-      pending += length;
-    }
-    final delayedKey = '$namespace:delayed:$queue';
-    pending += await _safeSend(_broker, ['ZCARD', delayedKey]);
-    return pending;
-  }
-
-  @override
-  Future<int> inflightCount(String queue) async {
-    final namespace = _config.namespace;
-    final streamKeys = _streamVariants(namespace, queue);
-    var inflight = 0;
-    for (final streamKey in streamKeys) {
-      final result = await _broker.send([
-        'XPENDING',
-        streamKey,
-        _groupKey(namespace, queue),
-      ]);
-      inflight += _pendingCountFromXp(result);
-    }
-    return inflight;
-  }
-
-  @override
-  Future<int> deadLetterCount(String queue) async {
-    final key = '${_config.namespace}:dead:$queue';
-    return _safeSend(_broker, ['LLEN', key]);
-  }
-
-  @override
-  Future<List<WorkerStatus>> workerStatuses() async {
-    final namespace = _config.namespace;
-    final indexKey = '$namespace:worker:heartbeats';
-    final raw = await _backend.send(['SMEMBERS', indexKey]);
-    if (raw is! List) return const [];
-
-    final statuses = <WorkerStatus>[];
-    for (final id in raw.cast<String>()) {
-      final key = '$namespace:worker:heartbeat:$id';
-      final heartbeatRaw = await _backend.send(['GET', key]);
-      if (heartbeatRaw is String) {
-        try {
-          final map = jsonDecode(heartbeatRaw) as Map<String, Object?>;
-          statuses.add(WorkerStatus.fromJson(map));
-        } catch (_) {
-          // ignore malformed heartbeats
-        }
-      } else {
-        await _backend.send(['SREM', indexKey, id]);
-      }
-    }
-
-    statuses.sort((a, b) => a.workerId.compareTo(b.workerId));
-    return statuses;
-  }
-
-  @override
-  Future<void> enqueue(EnqueueRequest request) async {
-    final streamKey = '${_config.namespace}:stream:${request.queue}';
-    await _ensureGroup(streamKey, request.queue);
-    final envelopeId = _uuid.v4();
-    final now = DateTime.now().toUtc();
-    await _broker.send([
-      'XADD',
-      streamKey,
-      '*',
-      ..._serializeEnvelope(envelopeId, request, now),
-    ]);
-  }
-
-  @override
-  Future<List<ControlReplyMessage>> sendControlCommand(
-    ControlCommandMessage command, {
-    Duration timeout = const Duration(seconds: 5),
-  }) async {
-    final namespace = _config.namespace;
-    final replyKey = ControlQueueNames.reply(namespace, command.requestId);
-    await _broker.send(['DEL', replyKey]);
-
-    final targetQueues = command.targets.isEmpty
-        ? <String>[ControlQueueNames.broadcast(namespace)]
+    final targets = command.targets.isEmpty
+        ? <String>[ControlQueueNames.broadcast(_namespace)]
         : command.targets
-              .map((target) => ControlQueueNames.worker(namespace, target))
+              .map((target) => ControlQueueNames.worker(_namespace, target))
               .toList();
 
     final now = DateTime.now().toUtc();
-    for (final queue in targetQueues) {
-      final fields = _serializeControlEnvelope(queue, command, now);
-      await _broker.send(['XADD', queue, '*', ...fields]);
+    for (final queue in targets) {
+      final envelope = Envelope(
+        id: generateEnvelopeId(),
+        name: ControlEnvelopeTypes.command,
+        queue: queue,
+        args: command.toMap(),
+        headers: {
+          'stem-control': '1',
+          'stem-reply-to': replyQueue,
+          'stem-command-source': 'dashboard',
+        },
+        meta: const {'source': 'dashboard'},
+        enqueuedAt: now,
+      );
+      await broker.publish(envelope);
     }
 
     final expectedReplies = command.targets.isEmpty
         ? null
         : command.targets.length;
+    final prefetch = expectedReplies == null ? 8 : expectedReplies.clamp(1, 32);
 
-    final deadline = DateTime.now().add(timeout);
+    final subscription = broker.consume(
+      RoutingSubscription.singleQueue(replyQueue),
+      consumerGroup: _controlConsumerGroup,
+      consumerName: 'dashboard-${command.requestId}',
+      prefetch: prefetch,
+    );
+
+    final iterator = StreamIterator(subscription);
     final replies = <ControlReplyMessage>[];
-    var lastId = '0-0';
+    final deadline = DateTime.now().add(timeout);
 
-    while (DateTime.now().isBefore(deadline)) {
-      final remaining = deadline.difference(DateTime.now());
-      final blockMs = remaining.inMilliseconds;
-      if (blockMs <= 0) break;
+    try {
+      while (DateTime.now().isBefore(deadline)) {
+        final remaining = deadline.difference(DateTime.now());
+        bool hasNext;
+        try {
+          hasNext = await iterator.moveNext().timeout(remaining);
+        } on TimeoutException {
+          break;
+        }
+        if (!hasNext) break;
 
-      final response = await _broker.send([
-        'XREAD',
-        'BLOCK',
-        blockMs.toString(),
-        'STREAMS',
-        replyKey,
-        lastId,
-      ]);
+        final delivery = iterator.current;
+        try {
+          final reply = controlReplyFromEnvelope(delivery.envelope);
+          replies.add(reply);
+          await broker.ack(delivery);
+        } catch (_) {
+          await broker.nack(delivery, requeue: false);
+        }
 
-      final lastSeenId = _appendControlReplies(response, replies);
-      if (lastSeenId != null) {
-        lastId = lastSeenId;
+        if (expectedReplies != null && replies.length >= expectedReplies) {
+          break;
+        }
       }
-
-      if (expectedReplies != null && replies.length >= expectedReplies) {
-        break;
-      }
+    } finally {
+      await iterator.cancel();
+      await _purgeQueue(broker, replyQueue);
     }
 
-    await _broker.send(['DEL', replyKey]);
     return replies;
-  }
+  });
 
   @override
   Future<void> close() async {
-    await Future.wait([
-      _broker.close(),
-      if (!identical(_broker, _backend)) _backend.close(),
-    ]);
+    // No persistent connections to close; contexts are per-call.
   }
 
-  Future<List<String>> _scanKeys(RedisHandle handle, String pattern) async {
-    var cursor = '0';
-    final results = <String>[];
-    do {
-      final reply = await handle.send([
-        'SCAN',
-        cursor,
-        'MATCH',
-        pattern,
-        'COUNT',
-        '200',
-      ]);
-      if (reply is! List || reply.length != 2) {
-        break;
-      }
-      cursor = reply[0] as String? ?? '0';
-      final keys = reply[1];
-      if (keys is List) {
-        results.addAll(keys.cast<String>());
-      }
-    } while (cursor != '0');
-    return results;
-  }
-
-  static List<String> _streamVariants(String namespace, String queue) {
-    final base = '$namespace:stream:$queue';
-    return [
-      base,
-      for (var priority = 1; priority <= 9; priority++) '$base:p$priority',
-    ];
-  }
-
-  static String _groupKey(String namespace, String queue) =>
-      '$namespace:group:$queue';
-
-  String? _queueNameFromStreamKey(String prefix, String key) {
-    if (!key.startsWith(prefix)) return null;
-    var remainder = key.substring(prefix.length);
-    final priorityMatch = RegExp(r':p\d+$');
-    remainder = remainder.replaceAll(priorityMatch, '');
-    if (remainder.isEmpty) return null;
-    return remainder;
-  }
-
-  Future<void> _ensureGroup(String streamKey, String queue) async {
-    final group = _groupKey(_config.namespace, queue);
+  Future<T> _withContext<T>(Future<T> Function(CliContext ctx) action) async {
+    final ctx = await createDefaultContext(environment: _environment);
     try {
-      await _broker.send([
-        'XGROUP',
-        'CREATE',
-        streamKey,
-        group,
-        '0',
-        'MKSTREAM',
-      ]);
-    } catch (error) {
-      final message = '$error'.toLowerCase();
-      if (!message.contains('busygroup')) {
-        rethrow;
-      }
+      // Ensure primary queue has a consumer group before we read metrics.
+      await _ensureGroupExists(ctx);
+      return await action(ctx);
+    } finally {
+      await ctx.dispose();
     }
   }
 
-  List<Object> _serializeEnvelope(
-    String id,
-    EnqueueRequest request,
-    DateTime now,
-  ) {
-    return [
-      'id',
-      id,
-      'name',
-      request.task,
-      'args',
-      jsonEncode(request.args),
-      'headers',
-      jsonEncode(const <String, String>{}),
-      'enqueuedAt',
-      now.toIso8601String(),
-      'notBefore',
-      '',
-      'priority',
-      request.priority.toString(),
-      'attempt',
-      '0',
-      'maxRetries',
-      request.maxRetries.toString(),
-      'visibilityTimeout',
-      '',
-      'queue',
-      request.queue,
-      'meta',
-      jsonEncode({'source': 'dashboard'}),
-    ];
-  }
+  Future<Set<String>> _discoverQueues(CliContext ctx) async {
+    final names = <String>{_config.stem.defaultQueue};
+    names.addAll(_config.stem.workerQueues);
+    names.addAll(_config.routing.config.queues.keys);
 
-  List<Object> _serializeControlEnvelope(
-    String queue,
-    ControlCommandMessage command,
-    DateTime now,
-  ) {
-    return [
-      'id',
-      _uuid.v4(),
-      'name',
-      ControlEnvelopeTypes.command,
-      'args',
-      jsonEncode(command.toMap()),
-      'headers',
-      jsonEncode({'stem-control': '1'}),
-      'enqueuedAt',
-      now.toIso8601String(),
-      'notBefore',
-      '',
-      'priority',
-      '0',
-      'attempt',
-      '0',
-      'maxRetries',
-      '0',
-      'visibilityTimeout',
-      '',
-      'queue',
-      queue,
-      'meta',
-      jsonEncode({'source': 'dashboard'}),
-    ];
-  }
-
-  String? _appendControlReplies(
-    dynamic response,
-    List<ControlReplyMessage> replies,
-  ) {
-    if (response is! List || response.isEmpty) {
-      return null;
-    }
-    String? lastId;
-    for (final streamEntry in response) {
-      if (streamEntry is! List || streamEntry.length != 2) {
-        continue;
-      }
-      final entries = streamEntry[1];
-      if (entries is! List) continue;
-      for (final entry in entries) {
-        if (entry is! List || entry.length != 2) continue;
-        final id = entry[0] as String;
-        final fields = entry[1];
-        if (fields is! List) continue;
-        final map = <String, String>{};
-        for (var i = 0; i < fields.length; i += 2) {
-          map[fields[i] as String] = fields[i + 1] as String;
+    final backend = ctx.backend;
+    if (backend != null) {
+      try {
+        final heartbeats = await backend.listWorkerHeartbeats();
+        for (final heartbeat in heartbeats) {
+          for (final queue in heartbeat.queues) {
+            names.add(queue.name);
+          }
         }
-        final argsJson = map['args'];
-        if (argsJson == null) continue;
-        try {
-          final decoded = jsonDecode(argsJson) as Map<String, Object?>;
-          replies.add(ControlReplyMessage.fromMap(decoded));
-          lastId = id;
-        } catch (_) {
-          // ignore malformed replies
-        }
+      } catch (_) {
+        // Ignore discovery errors from backend.
       }
     }
-    return lastId;
-  }
 
-  static Future<int> _safeSend(RedisHandle handle, List<Object> command) async {
-    try {
-      final result = await handle.send(command);
-      return _asInt(result);
-    } catch (_) {
-      return 0;
+    names.removeWhere((value) => value.trim().isEmpty);
+    if (names.isEmpty) {
+      names.add(_config.stem.defaultQueue);
     }
+    return names;
   }
 
-  static int _pendingCountFromXp(dynamic value) {
-    if (value is List && value.isNotEmpty) {
-      return _asInt(value.first);
-    }
-    return 0;
-  }
+  Future<int> _deadLetterCount(Broker broker, String queue) async {
+    var total = 0;
+    var offset = 0;
+    const pageSize = 200;
+    const maxIterations = 50;
 
-  static int _asInt(dynamic value) {
-    if (value == null) return 0;
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value) ?? 0;
-    if (value is List && value.isNotEmpty) {
-      return _asInt(value.first);
-    }
-    return 0;
-  }
-}
-
-Future<RedisHandle> _connectRedis(String uri, TlsConfig tls) async {
-  final parsed = Uri.parse(uri);
-  final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
-  final port = parsed.hasPort ? parsed.port : 6379;
-  final connection = RedisConnection();
-  final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
-  Command command;
-  if (scheme == 'rediss') {
-    final context = tls.toSecurityContext();
-    try {
-      final socket = await SecureSocket.connect(
-        host,
-        port,
-        context: context,
-        onBadCertificate: tls.allowInsecure ? (_) => true : null,
+    for (var iteration = 0; iteration < maxIterations; iteration++) {
+      final page = await broker.listDeadLetters(
+        queue,
+        limit: pageSize,
+        offset: offset,
       );
-      command = await connection.connectWithSocket(socket);
-    } on HandshakeException catch (_) {
-      stderr.writeln('[stem-dashboard] TLS handshake failed for $uri');
-      rethrow;
+      total += page.entries.length;
+      final next = page.nextOffset;
+      if (next == null) break;
+      offset = next;
     }
-  } else {
-    command = await connection.connect(host, port);
+    return total;
   }
 
-  if (parsed.userInfo.isNotEmpty) {
-    final parts = parsed.userInfo.split(':');
-    final password = parts.length == 2 ? parts[1] : parts[0];
-    if (password.isNotEmpty) {
-      await command.send_object(['AUTH', password]);
-    }
-  }
-
-  if (parsed.pathSegments.isNotEmpty) {
-    final segment = parsed.pathSegments.firstWhere(
-      (value) => value.isNotEmpty,
-      orElse: () => '',
-    );
-    final db = int.tryParse(segment);
-    if (db != null) {
-      await command.send_object(['SELECT', db]);
+  Future<void> _ensureGroupExists(CliContext ctx) async {
+    final broker = ctx.broker;
+    if (broker is RedisStreamsBroker) {
+      // Touch the default queue to force group creation if it doesn't exist.
+      await broker.pendingCount(_config.stem.defaultQueue);
     }
   }
 
-  return RedisHandle(connection, command);
+  Future<void> _purgeQueue(Broker broker, String queue) async {
+    try {
+      await broker.purge(queue);
+    } catch (_) {
+      // Some brokers may not support purge; ignore failures.
+    }
+  }
+
+  static const _controlConsumerGroup = 'stem-dashboard-control';
 }

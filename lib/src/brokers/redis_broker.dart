@@ -10,6 +10,8 @@ import '../security/tls.dart';
 
 class RedisStreamsBroker implements Broker {
   RedisStreamsBroker._(
+    this._uri,
+    this._tls,
     this._connection,
     this._command, {
     this.namespace = 'stem',
@@ -25,12 +27,16 @@ class RedisStreamsBroker implements Broker {
   final Duration defaultVisibilityTimeout;
   final Duration claimInterval;
 
-  final RedisConnection _connection;
-  final Command _command;
+  final Uri _uri;
+  final TlsConfig? _tls;
+  RedisConnection _connection;
+  Command _command;
 
   final Map<String, Timer> _claimTimers = {};
   final Set<StreamController<Delivery>> _controllers = {};
   final Set<String> _groupsCreated = {};
+  Future<void>? _reconnectFuture;
+  Future<void> _commandQueue = Future.value();
 
   int get activeClaimTimerCount => _claimTimers.length;
 
@@ -46,10 +52,29 @@ class RedisStreamsBroker implements Broker {
     TlsConfig? tls,
   }) async {
     final parsed = Uri.parse(uri);
-    final host = parsed.host.isNotEmpty ? parsed.host : 'localhost';
-    final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
-    final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
+    final command = await _openCommand(parsed, tls, connection);
+    return RedisStreamsBroker._(
+      parsed,
+      tls,
+      connection,
+      command,
+      namespace: namespace,
+      blockTime: blockTime,
+      delayedDrainBatch: delayedDrainBatch,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      claimInterval: claimInterval,
+    );
+  }
+
+  static Future<Command> _openCommand(
+    Uri uri,
+    TlsConfig? tls,
+    RedisConnection connection,
+  ) async {
+    final host = uri.host.isNotEmpty ? uri.host : 'localhost';
+    final port = uri.hasPort ? uri.port : 6379;
+    final scheme = uri.scheme.isEmpty ? 'redis' : uri.scheme;
     Command command;
     if (scheme == 'rediss') {
       final securityContext = tls?.toSecurityContext();
@@ -77,28 +102,19 @@ class RedisStreamsBroker implements Broker {
       command = await connection.connect(host, port);
     }
 
-    if (parsed.userInfo.isNotEmpty) {
-      final parts = parsed.userInfo.split(':');
+    if (uri.userInfo.isNotEmpty) {
+      final parts = uri.userInfo.split(':');
       final password = parts.length == 2 ? parts[1] : parts[0];
       await command.send_object(['AUTH', password]);
     }
 
-    if (parsed.pathSegments.isNotEmpty) {
-      final db = int.tryParse(parsed.pathSegments.first);
+    if (uri.pathSegments.isNotEmpty) {
+      final db = int.tryParse(uri.pathSegments.first);
       if (db != null) {
         await command.send_object(['SELECT', db]);
       }
     }
-
-    return RedisStreamsBroker._(
-      connection,
-      command,
-      namespace: namespace,
-      blockTime: blockTime,
-      delayedDrainBatch: delayedDrainBatch,
-      defaultVisibilityTimeout: defaultVisibilityTimeout,
-      claimInterval: claimInterval,
-    );
+    return command;
   }
 
   /// Creates a broker instance using injected [connection] and [command].
@@ -108,6 +124,8 @@ class RedisStreamsBroker implements Broker {
   static RedisStreamsBroker test({
     required RedisConnection connection,
     required Command command,
+    Uri? uri,
+    TlsConfig? tls,
     String namespace = 'stem',
     Duration blockTime = const Duration(seconds: 5),
     int delayedDrainBatch = 128,
@@ -115,6 +133,8 @@ class RedisStreamsBroker implements Broker {
     Duration claimInterval = const Duration(seconds: 30),
   }) {
     return RedisStreamsBroker._(
+      uri ?? Uri.parse('redis://localhost:6379/0'),
+      tls,
       connection,
       command,
       namespace: namespace,
@@ -182,7 +202,36 @@ class RedisStreamsBroker implements Broker {
     return value;
   }
 
-  Future<dynamic> _send(List<Object> command) => _command.send_object(command);
+  Future<dynamic> _send(List<Object> command, {int attempt = 0}) {
+    final completer = Completer<dynamic>();
+    _commandQueue = _commandQueue.catchError((_) {}).then((_) async {
+      try {
+        final result = await _sendWithRetry(command, attempt: attempt);
+        if (!completer.isCompleted) {
+          completer.complete(result);
+        }
+      } catch (error, stack) {
+        if (!completer.isCompleted) {
+          completer.completeError(error, stack);
+        }
+      }
+    });
+    return completer.future;
+  }
+
+  Future<dynamic> _sendWithRetry(
+    List<Object> command, {
+    int attempt = 0,
+  }) async {
+    try {
+      return await _command.send_object(command);
+    } catch (error) {
+      if (await _recoverFromConnectionError(error) && attempt < 3) {
+        return _sendWithRetry(command, attempt: attempt + 1);
+      }
+      rethrow;
+    }
+  }
 
   bool _shouldSuppressClosedError(Object error) {
     if (!_closed) return false;
@@ -191,6 +240,48 @@ class RedisStreamsBroker implements Broker {
         message.contains('stream is closed') ||
         message.contains('connection closed') ||
         message.contains('socket is closed');
+  }
+
+  bool _isConnectionError(Object error) {
+    final message = '$error'.toLowerCase();
+    return message.contains('streamsink is closed') ||
+        message.contains('stream is closed') ||
+        message.contains('connection closed') ||
+        message.contains('socket is closed');
+  }
+
+  Future<bool> _recoverFromConnectionError(Object error) async {
+    if (_closed || !_isConnectionError(error)) {
+      return false;
+    }
+    await _reconnect();
+    return true;
+  }
+
+  Future<void> _reconnect() async {
+    if (_closed) return;
+    if (_reconnectFuture != null) {
+      return _reconnectFuture!;
+    }
+    final completer = Completer<void>();
+    _reconnectFuture = completer.future;
+    try {
+      try {
+        await _connection.close();
+      } catch (_) {
+        // ignore close errors during reconnect
+      }
+      final newConnection = RedisConnection();
+      final newCommand = await _openCommand(_uri, _tls, newConnection);
+      _connection = newConnection;
+      _command = newCommand;
+      completer.complete();
+    } catch (error, stack) {
+      completer.completeError(error, stack);
+      rethrow;
+    } finally {
+      _reconnectFuture = null;
+    }
   }
 
   @override
@@ -338,6 +429,9 @@ class RedisStreamsBroker implements Broker {
       if (_shouldSuppressClosedError(error)) {
         return;
       }
+      if (await _recoverFromConnectionError(error)) {
+        return;
+      }
       rethrow;
     }
     if (result is List && result.isNotEmpty) {
@@ -347,6 +441,9 @@ class RedisStreamsBroker implements Broker {
           removed = await _send(['ZREM', _delayedKey(queue), entry]);
         } catch (error) {
           if (_shouldSuppressClosedError(error)) {
+            return;
+          }
+          if (await _recoverFromConnectionError(error)) {
             return;
           }
           rethrow;
@@ -424,6 +521,9 @@ class RedisStreamsBroker implements Broker {
           if (_shouldSuppressClosedError(error)) {
             return;
           }
+          if (await _recoverFromConnectionError(error)) {
+            continue;
+          }
           if ('$error'.contains('NOGROUP')) {
             for (final stream in streamKeys) {
               _groupsCreated.remove('$stream|${_groupKey(queue)}');
@@ -493,6 +593,9 @@ class RedisStreamsBroker implements Broker {
         } catch (error) {
           if (_shouldSuppressClosedError(error)) {
             return;
+          }
+          if (await _recoverFromConnectionError(error)) {
+            continue;
           }
           if ('$error'.contains('NOGROUP')) {
             _groupsCreated.remove('$streamKey|$group');
@@ -616,6 +719,9 @@ class RedisStreamsBroker implements Broker {
         if (_shouldSuppressClosedError(error)) {
           return;
         }
+        if (await _recoverFromConnectionError(error)) {
+          return;
+        }
         rethrow;
       }
       if (result is List && result.length >= 2) {
@@ -634,6 +740,9 @@ class RedisStreamsBroker implements Broker {
               ]);
             } catch (error) {
               if (_shouldSuppressClosedError(error)) {
+                return;
+              }
+              if (await _recoverFromConnectionError(error)) {
                 return;
               }
               rethrow;
@@ -824,8 +933,18 @@ class RedisStreamsBroker implements Broker {
   Future<int?> pendingCount(String queue) async {
     var total = 0;
     for (final stream in _priorityStreamKeys(queue)) {
-      final length = await _send(['XLEN', stream]);
-      total += _asInt(length);
+      await _ensureGroupForStream(queue, stream);
+      try {
+        final length = await _send(['XLEN', stream]);
+        total += _asInt(length);
+      } catch (error) {
+        if ('$error'.contains('NOGROUP')) {
+          _groupsCreated.remove('$stream|${_groupKey(queue)}');
+          await _ensureGroupForStream(queue, stream);
+          continue;
+        }
+        rethrow;
+      }
     }
     final delayed = await _send(['ZCARD', _delayedKey(queue)]);
     total += _asInt(delayed);
@@ -836,9 +955,19 @@ class RedisStreamsBroker implements Broker {
   Future<int?> inflightCount(String queue) async {
     var total = 0;
     for (final stream in _priorityStreamKeys(queue)) {
-      final result = await _send(['XPENDING', stream, _groupKey(queue)]);
-      if (result is List && result.isNotEmpty) {
-        total += _asInt(result.first);
+      await _ensureGroupForStream(queue, stream);
+      try {
+        final result = await _send(['XPENDING', stream, _groupKey(queue)]);
+        if (result is List && result.isNotEmpty) {
+          total += _asInt(result.first);
+        }
+      } catch (error) {
+        if ('$error'.contains('NOGROUP')) {
+          _groupsCreated.remove('$stream|${_groupKey(queue)}');
+          await _ensureGroupForStream(queue, stream);
+          continue;
+        }
+        rethrow;
       }
     }
     return total;

@@ -1,42 +1,47 @@
 import 'dart:io';
 
-import 'tls.dart';
+import 'package:stem/stem.dart';
+// ignore: implementation_imports
+import 'package:stem/src/routing/subscription_loader.dart';
 
 class DashboardConfig {
-  DashboardConfig({
-    required this.brokerUrl,
-    required this.resultBackendUrl,
+  DashboardConfig._({
+    required this.environment,
+    required this.stem,
     required this.namespace,
-    required this.tls,
+    required this.routing,
   });
 
   factory DashboardConfig.fromEnvironment(Map<String, String> environment) {
-    final broker = environment['STEM_BROKER_URL']?.trim().isNotEmpty == true
-        ? environment['STEM_BROKER_URL']!.trim()
-        : 'redis://127.0.0.1:6379/0';
-    final backend =
-        environment['STEM_RESULT_BACKEND_URL']?.trim().isNotEmpty == true
-        ? environment['STEM_RESULT_BACKEND_URL']!.trim()
-        : broker;
-    final namespace =
-        environment['STEM_DASHBOARD_NAMESPACE']?.trim().isNotEmpty == true
-        ? environment['STEM_DASHBOARD_NAMESPACE']!.trim()
-        : environment['STEM_NAMESPACE']?.trim().isNotEmpty == true
-        ? environment['STEM_NAMESPACE']!.trim()
+    final stemConfig = StemConfig.fromEnvironment(environment);
+    final env = Map<String, String>.from(environment);
+    final namespace = env['STEM_DASHBOARD_NAMESPACE']?.trim().isNotEmpty == true
+        ? env['STEM_DASHBOARD_NAMESPACE']!.trim()
+        : env['STEM_NAMESPACE']?.trim().isNotEmpty == true
+        ? env['STEM_NAMESPACE']!.trim()
         : 'stem';
-    return DashboardConfig(
-      brokerUrl: broker,
-      resultBackendUrl: backend,
+    env['STEM_NAMESPACE'] ??= namespace;
+    final routing = RoutingConfigLoader(
+      StemRoutingContext.fromConfig(stemConfig),
+    ).load();
+
+    return DashboardConfig._(
+      environment: Map.unmodifiable(env),
+      stem: stemConfig,
       namespace: namespace,
-      tls: TlsConfig.fromEnvironment(environment),
+      routing: routing,
     );
   }
 
   factory DashboardConfig.load() =>
       DashboardConfig.fromEnvironment(Platform.environment);
 
-  final String brokerUrl;
-  final String resultBackendUrl;
+  final Map<String, String> environment;
+  final StemConfig stem;
   final String namespace;
-  final TlsConfig tls;
+  final RoutingRegistry routing;
+
+  String get brokerUrl => stem.brokerUrl;
+  String? get resultBackendUrl => stem.resultBackendUrl;
+  TlsConfig get tls => stem.tls;
 }
