@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_routing_parity_example/routing_demo.dart';
 
 Future<void> main() async {

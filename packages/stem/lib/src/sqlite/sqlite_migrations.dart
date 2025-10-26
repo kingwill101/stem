@@ -12,10 +12,7 @@ class SqliteMigrations {
   const SqliteMigrations._();
 
   /// Ensures that queue storage tables exist for the SQLite broker.
-  static void ensureBrokerTables(
-    Database db, {
-    String namespace = 'stem',
-  }) {
+  static void ensureBrokerTables(Database db, {String namespace = 'stem'}) {
     final jobs = _tableName(namespace, 'queue_jobs');
     final deadLetters = _tableName(namespace, 'dead_letters');
 
@@ -64,10 +61,7 @@ CREATE INDEX IF NOT EXISTS ${deadLetters}_queue_dead_at_idx
   }
 
   /// Ensures that result backend tables exist for the SQLite backend.
-  static void ensureResultTables(
-    Database db, {
-    String namespace = 'stem',
-  }) {
+  static void ensureResultTables(Database db, {String namespace = 'stem'}) {
     final taskResults = _tableName(namespace, 'task_results');
     final groups = _tableName(namespace, 'groups');
     final groupResults = _tableName(namespace, 'group_results');

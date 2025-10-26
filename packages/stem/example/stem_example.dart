@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+import 'package:stem_redis/stem_redis.dart';
 
 class HelloTask implements TaskHandler<void> {
   @override

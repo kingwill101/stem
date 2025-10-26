@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as path;
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();

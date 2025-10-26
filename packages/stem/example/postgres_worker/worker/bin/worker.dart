@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/stem_postgres.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();

@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'package:mailer/mailer.dart';
 import 'package:mailer/smtp_server.dart';
-import 'package:stem/src/routing/subscription_loader.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_cli/stem_cli.dart';
+import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();

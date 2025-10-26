@@ -1,6 +1,5 @@
 import 'package:test/test.dart';
-import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/core/function_task_handler.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   test(

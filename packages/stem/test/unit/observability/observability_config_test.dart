@@ -1,9 +1,5 @@
 import 'package:test/test.dart';
-import 'package:stem/src/core/envelope.dart';
-import 'package:stem/src/observability/config.dart';
-import 'package:stem/src/observability/metrics.dart';
-import 'package:stem/src/signals/payloads.dart';
-import 'package:stem/src/signals/stem_signals.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('ObservabilityConfig', () {

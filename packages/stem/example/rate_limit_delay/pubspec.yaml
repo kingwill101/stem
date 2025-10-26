@@ -9,6 +9,8 @@ dependencies:
   stem:
     path: ../..
   redis: ^4.0.0
+  stem_redis:
+    path: ../../../stem_redis
 
 dev_dependencies:
   lints: ^6.0.0

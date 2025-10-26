@@ -10,6 +10,8 @@ dependencies:
   shelf_router: ^1.1.4
   stem:
     path: ../../..
+  stem_redis:
+    path: ../../../../stem_redis
 
 dev_dependencies:
   lints: ^6.0.0

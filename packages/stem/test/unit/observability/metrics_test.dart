@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   setUp(() {

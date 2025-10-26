@@ -6,3 +6,6 @@ workspace:
   - packages/dashboard	
   - packages/stem_sqlite	
   - packages/stem_adapter_tests
+  - packages/stem_redis
+  - packages/stem_postgres
+  - packages/stem_cli

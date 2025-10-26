@@ -4,9 +4,6 @@ import 'dart:isolate';
 
 import 'package:test/test.dart';
 import 'package:stem/stem.dart';
-import 'package:stem/src/control/control_messages.dart';
-import 'package:stem/src/control/in_memory_revoke_store.dart';
-import 'package:stem/src/control/revoke_store.dart';
 
 void main() {
   group('Worker', () {

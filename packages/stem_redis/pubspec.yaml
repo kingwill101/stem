@@ -1,0 +1,20 @@
+name: stem_redis
+description: Redis broker, result backend, and scheduler utilities for Stem.
+version: 0.1.0-wip
+publish_to: "none"
+resolution: workspace
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  redis: ^4.0.0
+  stem:
+    path: ../stem
+  collection: ^1.18.0
+  async: ^2.13.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3
+  stem_adapter_tests:
+    path: ../stem_adapter_tests

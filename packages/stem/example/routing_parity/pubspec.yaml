@@ -8,3 +8,5 @@ environment:
 dependencies:
   stem:
     path: ../..
+  stem_redis:
+    path: ../../../stem_redis

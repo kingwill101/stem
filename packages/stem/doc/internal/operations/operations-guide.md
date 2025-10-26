@@ -33,25 +33,26 @@ Stem reads configuration from environment variables. The most common settings ar
 
 Keep credentials in a secret manager (Vault, GCP Secret Manager, AWS Secrets Manager) and inject them as environment variables.
 
-For local smoke tests the repository includes `docker/testing/docker-compose.yml`,
+For local smoke tests the repository includes `packages/stem_cli/docker/testing/docker-compose.yml`,
 which launches Postgres and Redis with ports exposed at `65432`/`56379`. Always
 start these containers and export the matching environment variables before
 running tests:
 
 ```bash
-docker compose -f docker/testing/docker-compose.yml up -d postgres redis
+docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d postgres redis
 
 export STEM_TEST_REDIS_URL=redis://127.0.0.1:56379
 export STEM_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test
 export STEM_TEST_POSTGRES_TLS_URL=$STEM_TEST_POSTGRES_URL
-export STEM_TEST_POSTGRES_TLS_CA_CERT=docker/testing/certs/postgres-root.crt
+export STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/certs/postgres-root.crt
 ```
 
-With the services running, execute `dart test test/integration` to exercise
-adapters against the live dependencies. Set `STEM_TLS_CA_CERT` (as shown above)
-to enable certificate validation when pointing Stem at the bundled Postgres
-instance. You can also run `source ./_init_test_env` to start the services and
-export the variables in one step.
+With the services running, execute `dart test` in `packages/stem_redis`,
+`packages/stem_postgres`, and `packages/stem_cli` to exercise adapters against the
+live dependencies. Set `STEM_TLS_CA_CERT` (as shown above) to enable certificate
+validation when pointing Stem at the bundled Postgres instance. You can also run
+`source packages/stem_cli/_init_test_env` to start the services and export the
+variables in one step.
 
 ## Deployment Topologies
 

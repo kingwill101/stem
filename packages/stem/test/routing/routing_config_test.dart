@@ -1,4 +1,4 @@
-import 'package:stem/src/routing/routing_config.dart';
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {

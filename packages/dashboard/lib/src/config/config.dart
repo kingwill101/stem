@@ -1,8 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
-// ignore: implementation_imports
-import 'package:stem/src/routing/subscription_loader.dart';
+import 'package:stem_cli/stem_cli.dart';
 
 class DashboardConfig {
   DashboardConfig._({

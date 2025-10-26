@@ -6,12 +6,11 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:stem/stem.dart';
-import 'package:stem/src/cli/cli_runner.dart';
-import 'package:stem/src/cli/utilities.dart';
+import 'package:stem_cli/stem_cli.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
 import '../config/config.dart';
-import '../stem/control_messages.dart';
 import 'models.dart';
 
 abstract class DashboardDataSource {

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:test/test.dart';
-import 'package:stem/src/observability/heartbeat.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   test('worker heartbeat serializes and parses correctly', () {

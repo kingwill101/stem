@@ -6,6 +6,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();

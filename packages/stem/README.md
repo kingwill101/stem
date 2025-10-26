@@ -14,11 +14,13 @@ ecosystem.
 ## Install
 
 ```bash
-dart pub add stem
-dart pub global activate stem
+dart pub add stem           # core runtime APIs
+dart pub add stem_redis     # Redis broker + result backend
+dart pub add stem_postgres  # (optional) Postgres broker + backend
+dart pub global activate stem_cli
 ```
 
-Add the pub-cache bin directory to your `PATH` so the `stem` CLI is available:
+Add the pub-cache bin directory to your `PATH` so the `stem_cli` tool is available:
 
 ```bash
 export PATH="$HOME/.pub-cache/bin:$PATH"
@@ -30,6 +32,7 @@ stem --help
 ```dart
 import 'dart:async';
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 
 class HelloTask implements TaskHandler<void> {
   @override
@@ -74,7 +77,7 @@ Future<void> main() async {
 - **Scheduling** – Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
 - **Observability** – Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
 - **Security** – Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
-- **Adapters** – Redis Streams broker + Redis/Postgres result backends and schedule stores; in-memory drivers for tests.
+- **Adapters** – In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
 - **Specs & tooling** – OpenSpec change workflow, quality gates (`tool/quality/run_quality_checks.sh`), chaos/regression suites.
 
 ## Documentation & Examples
@@ -95,13 +98,13 @@ Start the dockerised dependencies and export the integration variables before
 invoking the test suite:
 
 ```bash
-source ./_init_test_env
+source packages/stem_cli/_init_test_env
 dart test
 ```
 
-The helper script launches `docker/testing/docker-compose.yml` (Redis +
-Postgres) and populates `STEM_TEST_*` environment variables needed by the
-integration suites.
+The helper script launches `packages/stem_cli/docker/testing/docker-compose.yml`
+(Redis + Postgres) and populates `STEM_TEST_*` environment variables needed by
+the integration suites.
 
 ### Adapter Contract Tests
 

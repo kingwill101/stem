@@ -14,13 +14,13 @@ can be reused across brokers and backends.
 
 1. Start the test services with TLS enabled:
    ```bash
-   docker compose -f docker/testing/docker-compose.yml up postgres redis -d
+   docker compose -f ../../stem_cli/docker/testing/docker-compose.yml up postgres redis -d
    ```
 2. Export the environment expected by the scripts:
    ```bash
    export STEM_BROKER_URL=redis://127.0.0.1:56379
    export STEM_RESULT_BACKEND_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test
-   export STEM_TLS_CA_CERT=docker/testing/certs/postgres-root.crt
+   export STEM_TLS_CA_CERT=../../stem_cli/docker/testing/certs/postgres-root.crt
    # Optional: allow verification bypass during CA troubleshooting
    # export STEM_TLS_ALLOW_INSECURE=true
    ```
@@ -37,5 +37,5 @@ can be reused across brokers and backends.
 
 Stop the containers when you're done:
 ```bash
-docker compose -f docker/testing/docker-compose.yml down
+docker compose -f ../../stem_cli/docker/testing/docker-compose.yml down
 ```

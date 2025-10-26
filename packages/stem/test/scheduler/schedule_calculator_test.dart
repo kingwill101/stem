@@ -3,9 +3,7 @@ import 'dart:math';
 import 'package:test/test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/scheduler/schedule_calculator.dart';
-import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/stem.dart';
 
 void main() {
   group('ScheduleCalculator', () {

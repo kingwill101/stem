@@ -11,3 +11,5 @@ dependencies:
   mailer: ^6.1.0
   stem:
     path: ../..
+  stem_redis:
+    path: ../../../stem_redis
