@@ -37,3 +37,11 @@ const like = 'sample';
 TODO: Tell users more about the package: where to find more information, how to 
 contribute to the package, how to file issues, what response they can expect 
 from the package authors, and more.
+
+### Contract Test Suite
+
+`stem_sqlite` consumes the shared adapter test harness in
+`packages/stem_adapter_tests`. Add the harness as a `dev_dependency` and run
+`dart test` to execute `runBrokerContractTests` and `runResultBackendContractTests`
+against the SQLite adapters. See `test/broker/sqlite_broker_test.dart` and
+`test/backend/sqlite_result_backend_test.dart` for reference wiring.

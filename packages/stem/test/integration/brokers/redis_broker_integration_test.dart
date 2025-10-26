@@ -6,6 +6,7 @@ import 'package:async/async.dart';
 import 'package:stem/src/brokers/redis_broker.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -19,56 +20,25 @@ void main() {
     return;
   }
 
-  test('Redis broker end-to-end', () async {
-    final namespace = _uniqueNamespace();
-    final broker = await RedisStreamsBroker.connect(
-      redisUrl,
-      namespace: namespace,
-    );
-    try {
-      final queue = _uniqueQueue();
-      final first = Envelope(
-        name: 'integration.redis.echo',
-        args: const {'value': 'hi'},
-        queue: queue,
-      );
-      final second = Envelope(
-        name: 'integration.redis.echo',
-        args: const {'value': 'second'},
-        queue: queue,
-      );
-
-      await broker.publish(first);
-      await broker.publish(second);
-
-      final iterator = StreamIterator(
-        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 1),
-      );
-      expect(await iterator.moveNext(), isTrue);
-      final delivery = iterator.current;
-      expect(delivery.envelope.id, first.id);
-
-      await broker.nack(delivery, requeue: true);
-
-      expect(await iterator.moveNext(), isTrue);
-      final secondDelivery = iterator.current;
-      expect(secondDelivery.envelope.name, second.name);
-      expect(secondDelivery.envelope.args, second.args);
-      await broker.ack(secondDelivery);
-
-      expect(await iterator.moveNext(), isTrue);
-      final redelivered = iterator.current;
-      expect(redelivered.envelope.id, first.id);
-      expect(redelivered.envelope.attempt, delivery.envelope.attempt + 1);
-      await broker.ack(redelivered);
-      await iterator.cancel();
-
-      expect(await broker.inflightCount(queue), 0);
-      await broker.purge(queue);
-    } finally {
-      await _safeCloseRedisBroker(broker);
-    }
-  });
+  runBrokerContractTests(
+    adapterName: 'Redis',
+    factory: BrokerContractFactory(
+      create: () async => RedisStreamsBroker.connect(
+        redisUrl,
+        namespace: _uniqueNamespace(),
+        defaultVisibilityTimeout: const Duration(seconds: 1),
+        claimInterval: const Duration(milliseconds: 200),
+        blockTime: const Duration(milliseconds: 100),
+      ),
+      dispose: (broker) => _safeCloseRedisBroker(broker as RedisStreamsBroker),
+    ),
+    settings: const BrokerContractSettings(
+      visibilityTimeout: Duration(seconds: 1),
+      leaseExtension: Duration(seconds: 1),
+      queueSettleDelay: Duration(milliseconds: 200),
+      replayDelay: Duration(milliseconds: 200),
+    ),
+  );
 
   test('Redis broker honours priority ordering', () async {
     final namespace = _uniqueNamespace();

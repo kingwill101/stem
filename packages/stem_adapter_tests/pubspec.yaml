@@ -1,0 +1,15 @@
+name: stem_adapter_tests
+description: Shared contract test suites for Stem broker and result backend adapters.
+version: 0.1.0-wip
+publish_to: "none"
+resolution: workspace
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  test: ^1.26.3
+  stem:
+    path: ../stem
+
+dev_dependencies:
+  lints: ^6.0.0

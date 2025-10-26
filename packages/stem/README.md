@@ -102,3 +102,17 @@ dart test
 The helper script launches `docker/testing/docker-compose.yml` (Redis +
 Postgres) and populates `STEM_TEST_*` environment variables needed by the
 integration suites.
+
+### Adapter Contract Tests
+
+Stem ships a reusable adapter contract suite in
+`packages/stem_adapter_tests`. Adapter packages (Redis broker/postgres
+backend, SQLite adapters, and any future integrations) add it as a
+`dev_dependency` and invoke `runBrokerContractTests` /
+`runResultBackendContractTests` from their integration tests. The harness
+exercises core behaviours—enqueue/ack/nack, dead-letter replay, lease
+extension, result persistence, group aggregation, and heartbeat storage—so
+all adapters stay aligned with the broker and result backend contracts. See
+`test/integration/brokers/postgres_broker_integration_test.dart` and
+`test/integration/backends/postgres_backend_integration_test.dart` for
+reference usage.

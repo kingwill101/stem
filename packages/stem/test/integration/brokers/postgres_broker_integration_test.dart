@@ -5,6 +5,7 @@ import 'package:stem/src/brokers/postgres_broker.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -19,59 +20,24 @@ void main() {
     return;
   }
 
-  test('Postgres broker end-to-end', () async {
-    final broker = await PostgresBroker.connect(
-      connectionString,
-      applicationName: 'stem-postgres-integration',
-    );
-    try {
-      final queue = _uniqueQueue();
-      final envelope = Envelope(
-        name: 'integration.echo',
-        args: const <String, Object?>{'value': 'hello'},
-        queue: queue,
-      );
-
-      await broker.publish(envelope);
-      expect(await broker.pendingCount(queue), 1);
-
-      final delivery = await broker
-          .consume(RoutingSubscription.singleQueue(queue))
-          .first;
-      expect(delivery.envelope.id, envelope.id);
-      expect(delivery.envelope.queue, queue);
-
-      await broker.deadLetter(delivery, reason: 'integration-test');
-
-      final page = await broker.listDeadLetters(queue);
-      expect(page.entries, hasLength(1));
-      expect(page.entries.first.reason, 'integration-test');
-
-      final dryRun = await broker.replayDeadLetters(
-        queue,
-        limit: 1,
-        dryRun: true,
-      );
-      expect(dryRun.dryRun, isTrue);
-
-      final replay = await broker.replayDeadLetters(queue, limit: 1);
-      expect(replay.dryRun, isFalse);
-      expect(replay.entries, hasLength(1));
-
-      final redelivery = await broker
-          .consume(RoutingSubscription.singleQueue(queue))
-          .first;
-      expect(redelivery.envelope.id, envelope.id);
-      expect(redelivery.envelope.attempt, envelope.attempt + 1);
-
-      await broker.ack(redelivery);
-      expect(await broker.pendingCount(queue), 0);
-      expect(await broker.purgeDeadLetters(queue), 0);
-      await broker.purge(queue);
-    } finally {
-      await broker.close();
-    }
-  });
+  runBrokerContractTests(
+    adapterName: 'Postgres',
+    factory: BrokerContractFactory(
+      create: () async => PostgresBroker.connect(
+        connectionString,
+        applicationName: 'stem-postgres-contract-tests',
+        defaultVisibilityTimeout: const Duration(seconds: 1),
+        pollInterval: const Duration(milliseconds: 50),
+      ),
+      dispose: (broker) => (broker as PostgresBroker).close(),
+    ),
+    settings: const BrokerContractSettings(
+      visibilityTimeout: Duration(seconds: 1),
+      leaseExtension: Duration(seconds: 1),
+      queueSettleDelay: Duration(milliseconds: 250),
+      replayDelay: Duration(milliseconds: 250),
+    ),
+  );
 
   test('Postgres broker honours priority ordering', () async {
     final broker = await PostgresBroker.connect(

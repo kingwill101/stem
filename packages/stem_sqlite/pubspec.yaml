@@ -20,3 +20,5 @@ dev_dependencies:
   drift_dev: ^2.15.0
   lints: ^6.0.0
   test: ^1.26.3
+  stem_adapter_tests:
+    path: ../stem_adapter_tests

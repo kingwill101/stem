@@ -44,6 +44,8 @@ dev_dependencies:
   gha: ^0.0.2
   gha_cli: ^1.0.1
   async: ^2.13.0
+  stem_adapter_tests:
+    path: ../stem_adapter_tests
 
 false_secrets:
   - /example/microservice/certs/*
