@@ -9,9 +9,12 @@ environment:
 dependencies:
   intl: ^0.20.2
   meta: ^1.17.0
+  drift: ^2.15.0
   routed: ^0.1.0
   routed_hotwire: ^0.1.0
   stem: 
+  stem_sqlite:
+    path: ../stem_sqlite
 
 dev_dependencies:
   lints: ^6.0.0

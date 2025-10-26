@@ -1,8 +1,14 @@
-import 'dart:async';
+// ignore_for_file: implementation_imports
 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:drift/drift.dart';
 import 'package:stem/stem.dart';
 import 'package:stem/src/cli/cli_runner.dart';
 import 'package:stem/src/cli/utilities.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
 
 import '../config/config.dart';
 import '../stem/control_messages.dart';
@@ -258,4 +264,210 @@ class StemDashboardService implements DashboardDataSource {
   }
 
   static const _controlConsumerGroup = 'stem-dashboard-control';
+}
+
+class SqliteDashboardService implements DashboardDataSource {
+  SqliteDashboardService._({
+    required this.databaseFile,
+    required SqliteConnections metrics,
+    required SqliteBroker broker,
+  }) : _metrics = metrics,
+       _broker = broker;
+
+  static Future<SqliteDashboardService> connect(File file) async {
+    file.parent.createSync(recursive: true);
+    final metrics = await SqliteConnections.open(file, readOnly: true);
+    final broker = await SqliteBroker.open(file);
+    return SqliteDashboardService._(
+      databaseFile: file,
+      metrics: metrics,
+      broker: broker,
+    );
+  }
+
+  final File databaseFile;
+  final SqliteConnections _metrics;
+  final SqliteBroker _broker;
+
+  StemSqliteDatabase get _db => _metrics.db;
+
+  @override
+  Future<List<QueueSummary>> fetchQueueSummaries() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final queueRows = await _db
+        .customSelect(
+          'SELECT queue FROM stem_queue_jobs '
+          'UNION '
+          'SELECT queue FROM stem_dead_letters',
+          readsFrom: {_db.stemQueueJobs, _db.stemDeadLetters},
+        )
+        .get();
+
+    final queues = queueRows
+        .map((row) => (row.data['queue'] as String?)?.trim())
+        .whereType<String>()
+        .where((queue) => queue.isNotEmpty)
+        .toSet();
+    if (queues.isEmpty) {
+      queues.add('default');
+    }
+
+    final pendingRows = await _db
+        .customSelect(
+          'SELECT queue, COUNT(*) AS c FROM stem_queue_jobs '
+          'WHERE (not_before IS NULL OR not_before <= ?1) '
+          'AND (locked_until IS NULL OR locked_until <= ?1) '
+          'GROUP BY queue',
+          variables: [Variable.withInt(now)],
+          readsFrom: {_db.stemQueueJobs},
+        )
+        .get();
+    final inflightRows = await _db
+        .customSelect(
+          'SELECT queue, COUNT(*) AS c FROM stem_queue_jobs '
+          'WHERE locked_until IS NOT NULL AND locked_until > ?1 '
+          'GROUP BY queue',
+          variables: [Variable.withInt(now)],
+          readsFrom: {_db.stemQueueJobs},
+        )
+        .get();
+    final deadRows = await _db
+        .customSelect(
+          'SELECT queue, COUNT(*) AS c FROM stem_dead_letters GROUP BY queue',
+          readsFrom: {_db.stemDeadLetters},
+        )
+        .get();
+
+    Map<String, int> buildCountMap(List<Map<String, Object?>> rows) {
+      final counts = <String, int>{};
+      for (final raw in rows) {
+        final queue = raw['queue'] as String?;
+        final count = raw['c'] as num?;
+        if (queue != null && count != null) {
+          counts[queue] = count.toInt();
+        }
+      }
+      return counts;
+    }
+
+    final pendingMap = buildCountMap(
+      pendingRows.map((row) => row.data).toList(growable: false),
+    );
+    final inflightMap = buildCountMap(
+      inflightRows.map((row) => row.data).toList(growable: false),
+    );
+    final deadMap = buildCountMap(
+      deadRows.map((row) => row.data).toList(growable: false),
+    );
+
+    final orderedQueues = queues.toList()..sort();
+    return orderedQueues
+        .map(
+          (queue) => QueueSummary(
+            queue: queue,
+            pending: pendingMap[queue] ?? 0,
+            inflight: inflightMap[queue] ?? 0,
+            deadLetters: deadMap[queue] ?? 0,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<List<WorkerStatus>> fetchWorkerStatuses() async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final rows = await _db
+        .customSelect(
+          'SELECT worker_id, namespace, timestamp, isolate_count, inflight, '
+          'queues, last_lease_renewal, version, extras '
+          'FROM stem_worker_heartbeats '
+          'WHERE expires_at > ?1 '
+          'ORDER BY worker_id ASC',
+          variables: [Variable.withInt(now)],
+          readsFrom: {_db.stemWorkerHeartbeats},
+        )
+        .get();
+    if (rows.isEmpty) return const [];
+
+    return rows.map((row) => _statusFromRow(row.data)).toList(growable: false);
+  }
+
+  @override
+  Future<void> enqueueTask(EnqueueRequest request) async {
+    final envelope = Envelope(
+      id: generateEnvelopeId(),
+      name: request.task,
+      args: request.args,
+      queue: request.queue,
+      priority: request.priority,
+      maxRetries: request.maxRetries,
+      meta: const {'source': 'dashboard'},
+    );
+    await _broker.publish(envelope);
+  }
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    bool dryRun = false,
+  }) {
+    final bounded = limit.clamp(1, 500);
+    return _broker.replayDeadLetters(queue, limit: bounded, dryRun: dryRun);
+  }
+
+  @override
+  Future<List<ControlReplyMessage>> sendControlCommand(
+    ControlCommandMessage command, {
+    Duration timeout = const Duration(seconds: 5),
+  }) async {
+    // Control channels are not yet supported for SQLite deployments.
+    return const [];
+  }
+
+  @override
+  Future<void> close() async {
+    await _broker.close();
+    await _metrics.close();
+  }
+
+  WorkerStatus _statusFromRow(Map<String, Object?> row) {
+    final timestamp = (row['timestamp'] as num?)?.toInt() ?? 0;
+    return WorkerStatus(
+      workerId: row['worker_id'] as String? ?? 'unknown',
+      namespace: row['namespace'] as String? ?? 'stem',
+      timestamp: DateTime.fromMillisecondsSinceEpoch(timestamp).toUtc(),
+      isolateCount: (row['isolate_count'] as num?)?.toInt() ?? 0,
+      inflight: (row['inflight'] as num?)?.toInt() ?? 0,
+      queues: _decodeQueues(row['queues'] as String? ?? '[]'),
+      extras: _decodeExtras(row['extras'] as String?),
+    );
+  }
+
+  Map<String, Object?> _decodeExtras(String? raw) {
+    if (raw == null || raw.isEmpty) return const {};
+    try {
+      return (jsonDecode(raw) as Map).cast<String, Object?>();
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  List<WorkerQueueInfo> _decodeQueues(String raw) {
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map(
+              (entry) =>
+                  WorkerQueueInfo.fromJson(entry.cast<String, Object?>()),
+            )
+            .toList(growable: false);
+      }
+    } catch (_) {
+      // ignore
+    }
+    return const [];
+  }
 }

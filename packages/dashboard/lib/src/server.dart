@@ -41,10 +41,11 @@ Future<void> runDashboardServer({
   DashboardDataSource? service,
   DashboardState? state,
 }) async {
-  final resolvedConfig = config ?? DashboardConfig.load();
   final serviceOwner = service == null;
+  final resolvedConfig =
+      config ?? (serviceOwner ? DashboardConfig.load() : null);
   final dashboardService =
-      service ?? await StemDashboardService.connect(resolvedConfig);
+      service ?? await StemDashboardService.connect(resolvedConfig!);
   final stateOwner = state == null;
   final dashboardState = state ?? DashboardState(service: dashboardService);
 
