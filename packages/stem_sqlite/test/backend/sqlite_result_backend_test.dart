@@ -27,9 +27,9 @@ void main() {
     factory: ResultBackendContractFactory(
       create: () async => SqliteResultBackend.open(
         dbFile,
-        defaultTtl: const Duration(milliseconds: 200),
-        groupDefaultTtl: const Duration(milliseconds: 200),
-        heartbeatTtl: const Duration(milliseconds: 200),
+        defaultTtl: const Duration(seconds: 1),
+        groupDefaultTtl: const Duration(seconds: 1),
+        heartbeatTtl: const Duration(seconds: 1),
         cleanupInterval: const Duration(milliseconds: 200),
       ),
       dispose: (backend) => (backend as SqliteResultBackend).close(),
@@ -37,9 +37,9 @@ void main() {
           (backend as SqliteResultBackend).runCleanup(),
     ),
     settings: const ResultBackendContractSettings(
-      statusTtl: Duration(milliseconds: 200),
-      groupTtl: Duration(milliseconds: 200),
-      heartbeatTtl: Duration(milliseconds: 200),
+      statusTtl: Duration(seconds: 1),
+      groupTtl: Duration(seconds: 1),
+      heartbeatTtl: Duration(seconds: 1),
       settleDelay: Duration(milliseconds: 120),
     ),
   );

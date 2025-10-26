@@ -9,6 +9,8 @@ class BrokerContractSettings {
     this.leaseExtension = const Duration(milliseconds: 750),
     this.queueSettleDelay = const Duration(milliseconds: 150),
     this.replayDelay = const Duration(milliseconds: 200),
+    this.verifyPriorityOrdering = true,
+    this.verifyBroadcastFanout = false,
   });
 
   /// Expected default visibility timeout used by the adapter under test.
@@ -22,10 +24,21 @@ class BrokerContractSettings {
 
   /// Wait time after dead-letter replay to allow the job to become visible again.
   final Duration replayDelay;
+
+  /// Whether to verify priority ordering when the adapter reports support.
+  final bool verifyPriorityOrdering;
+
+  /// Whether to run the broadcast fan-out scenario (requires additional
+  /// broker instances supplied through the factory).
+  final bool verifyBroadcastFanout;
 }
 
 class BrokerContractFactory {
-  const BrokerContractFactory({required this.create, this.dispose});
+  const BrokerContractFactory({
+    required this.create,
+    this.dispose,
+    this.additionalBrokerFactory,
+  });
 
   /// Returns a fresh broker instance for each test case.
   final Future<Broker> Function() create;
@@ -33,6 +46,10 @@ class BrokerContractFactory {
   /// Optional disposer invoked after each test. When omitted the broker is
   /// closed via [Broker.close].
   final FutureOr<void> Function(Broker broker)? dispose;
+
+  /// Optional factory for creating additional broker instances used by
+  /// scenarios requiring multiple connections (for example broadcast fan-out).
+  final Future<Broker> Function()? additionalBrokerFactory;
 }
 
 /// Runs the canonical broker contract test suite for an adapter.
@@ -302,10 +319,118 @@ void runBrokerContractTests({
       expect(redelivery.envelope.id, delivery.envelope.id);
       await currentBroker.ack(redelivery);
       await laterIterator.cancel();
-      await iterator.cancel();
 
       await _purgeAll(currentBroker, queue);
     });
+    if (settings.verifyPriorityOrdering) {
+      test('priority ordering surfaces higher priority jobs first', () async {
+        final currentBroker = broker!;
+        if (!currentBroker.supportsPriority) {
+          return;
+        }
+
+        final queue = _queueName('priority');
+        final lowPriority = Envelope(
+          name: 'contract.priority.low',
+          args: const {'value': 'low'},
+          queue: queue,
+          priority: 1,
+        );
+        final highPriority = Envelope(
+          name: 'contract.priority.high',
+          args: const {'value': 'high'},
+          queue: queue,
+          priority: 9,
+        );
+
+        await currentBroker.publish(
+          lowPriority,
+          routing: RoutingInfo.queue(
+            queue: queue,
+            priority: lowPriority.priority,
+          ),
+        );
+        await currentBroker.publish(
+          highPriority,
+          routing: RoutingInfo.queue(
+            queue: queue,
+            priority: highPriority.priority,
+          ),
+        );
+
+        final iterator = StreamIterator(
+          currentBroker.consume(
+            RoutingSubscription.singleQueue(queue),
+            prefetch: 2,
+          ),
+        );
+
+        expect(
+          await iterator.moveNext().timeout(const Duration(seconds: 5)),
+          isTrue,
+        );
+        expect(iterator.current.envelope.id, highPriority.id);
+        await currentBroker.ack(iterator.current);
+
+        expect(
+          await iterator.moveNext().timeout(const Duration(seconds: 5)),
+          isTrue,
+        );
+        expect(iterator.current.envelope.id, lowPriority.id);
+        await currentBroker.ack(iterator.current);
+        await iterator.cancel();
+
+        await _purgeAll(currentBroker, queue);
+      });
+    }
+
+    if (settings.verifyBroadcastFanout &&
+        factory.additionalBrokerFactory != null) {
+      test('broadcast fan-out delivers to all subscribers', () async {
+        final publisher = broker!;
+        final workerOne = await factory.additionalBrokerFactory!();
+        final workerTwo = await factory.additionalBrokerFactory!();
+
+        try {
+          final queue = _queueName('broadcast');
+          final channel = '${queue}_broadcast';
+          final subscription = RoutingSubscription(
+            queues: [queue],
+            broadcastChannels: [channel],
+          );
+
+          final futureOne = workerOne.consume(subscription).first;
+          final futureTwo = workerTwo.consume(subscription).first;
+
+          await publisher.publish(
+            Envelope(
+              name: 'contract.broadcast',
+              args: const {'value': 'fanout'},
+              queue: queue,
+            ),
+            routing: RoutingInfo.broadcast(channel: channel),
+          );
+
+          final deliveryOne = await futureOne.timeout(
+            const Duration(seconds: 5),
+          );
+          final deliveryTwo = await futureTwo.timeout(
+            const Duration(seconds: 5),
+          );
+
+          expect(deliveryOne.envelope.name, 'contract.broadcast');
+          expect(deliveryTwo.envelope.name, 'contract.broadcast');
+
+          await workerOne.ack(deliveryOne);
+          await workerTwo.ack(deliveryTwo);
+        } finally {
+          if (factory.dispose != null) {
+            await factory.dispose!(workerOne);
+            await factory.dispose!(workerTwo);
+          }
+        }
+      });
+    }
   });
 }
 

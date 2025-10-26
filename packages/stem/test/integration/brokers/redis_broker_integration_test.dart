@@ -37,64 +37,9 @@ void main() {
       leaseExtension: Duration(seconds: 1),
       queueSettleDelay: Duration(milliseconds: 200),
       replayDelay: Duration(milliseconds: 200),
+      verifyBroadcastFanout: false,
     ),
   );
-
-  test('Redis broker honours priority ordering', () async {
-    final namespace = _uniqueNamespace();
-    final broker = await RedisStreamsBroker.connect(
-      redisUrl,
-      namespace: namespace,
-    );
-    try {
-      final queue = _uniqueQueue();
-      final lowPriority = Envelope(
-        name: 'integration.redis.low',
-        args: const {'value': 'low'},
-        queue: queue,
-        priority: 1,
-      );
-      final highPriority = Envelope(
-        name: 'integration.redis.high',
-        args: const {'value': 'high'},
-        queue: queue,
-        priority: 9,
-      );
-
-      await broker.publish(
-        lowPriority,
-        routing: RoutingInfo.queue(
-          queue: queue,
-          priority: lowPriority.priority,
-        ),
-      );
-      await broker.publish(
-        highPriority,
-        routing: RoutingInfo.queue(
-          queue: queue,
-          priority: highPriority.priority,
-        ),
-      );
-
-      final iterator = StreamIterator(
-        broker.consume(RoutingSubscription.singleQueue(queue), prefetch: 2),
-      );
-      expect(await iterator.moveNext(), isTrue);
-      final first = iterator.current;
-      expect(first.envelope.id, highPriority.id);
-      await broker.ack(first);
-
-      expect(await iterator.moveNext(), isTrue);
-      final second = iterator.current;
-      expect(second.envelope.id, lowPriority.id);
-      await broker.ack(second);
-      await iterator.cancel();
-
-      await broker.purge(queue);
-    } finally {
-      await _safeCloseRedisBroker(broker);
-    }
-  });
 
   test('purge clears priority stream data', () async {
     final namespace = _uniqueNamespace();

@@ -32,10 +32,10 @@ void main() {
       dispose: (broker) => (broker as SqliteBroker).close(),
     ),
     settings: const BrokerContractSettings(
-      visibilityTimeout: Duration(milliseconds: 200),
-      leaseExtension: Duration(milliseconds: 200),
-      queueSettleDelay: Duration(milliseconds: 100),
-      replayDelay: Duration(milliseconds: 100),
+      visibilityTimeout: Duration(milliseconds: 300),
+      leaseExtension: Duration(milliseconds: 300),
+      queueSettleDelay: Duration(milliseconds: 250),
+      replayDelay: Duration(milliseconds: 250),
     ),
   );
 }

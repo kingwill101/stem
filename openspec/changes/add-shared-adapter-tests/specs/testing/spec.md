@@ -2,10 +2,10 @@
 ### Requirement: Shared Broker Contract Tests
 Stem MUST expose a shared broker contract test suite that adapter packages can invoke to validate core broker behaviour.
 
-#### Scenario: Broker Contract Suite Ensures Ack And DLQ Semantics
+#### Scenario: Broker Contract Suite Ensures Core Semantics
 - **GIVEN** an adapter provides a factory that creates a `Broker` implementation
 - **WHEN** the shared suite runs
-- **THEN** it verifies publish → consume → ack/nack flows, delayed delivery, lease expiry recovery, purge behaviour, and dead-letter replay using the provided broker factory.
+- **THEN** it verifies publish → consume → ack/nack flows, delayed delivery, lease expiry recovery, purge behaviour, priority ordering (when supported), dead-letter replay, and optional broadcast fan-out using the provided broker factory and supplemental hooks.
 
 ### Requirement: Shared Result Backend Contract Tests
 Stem MUST expose a shared result backend contract test suite that adapter packages can invoke to validate persistence requirements.
