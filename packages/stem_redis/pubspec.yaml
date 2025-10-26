@@ -1,6 +1,6 @@
 name: stem_redis
 description: Redis broker, result backend, and scheduler utilities for Stem.
-version: 0.1.0-wip
+version: 0.1.0-alpha.3
 publish_to: "none"
 resolution: workspace
 environment:
