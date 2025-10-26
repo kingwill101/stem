@@ -1,0 +1,51 @@
+name: stem
+description: "Stem is a Dart-native background job platform with Redis Streams, retries, scheduling, observability, and security tooling."
+version: 0.1.0-alpha.2
+repository: https://github.com/kingwill101/stem
+resolution: workspace
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+# Add regular dependencies here.
+dependencies:
+  collection: ^1.18.0
+  args: ^2.5.0
+  dartastic_opentelemetry: ^0.9.3
+  dartastic_opentelemetry_api: ^0.8.8
+  redis: ^4.0.0
+  contextual: ^2.0.0
+  yaml: ^3.1.3
+  crypto: ^3.0.3
+  cryptography: ^2.7.0
+  postgres: ^3.5.9
+  path: ^1.9.1
+  glob: ^2.1.3
+  timezone: ^0.10.1
+  sqlite3: ^2.7.1
+
+keywords:
+  - background-jobs
+  - task-queue
+  - redis
+  - scheduler
+  - dartastic-opentelemetry
+  - dart
+
+topics:
+  - background-processing
+  - message-queue
+  - redis
+  - observability
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3
+  coverage: ^1.15.0
+  gha: ^0.0.2
+  gha_cli: ^1.0.1
+  async: ^2.13.0
+
+false_secrets:
+  - /example/microservice/certs/*
+  - /example/postgres_tls/certs/*
+  - /docker/testing/postgres/certs/*

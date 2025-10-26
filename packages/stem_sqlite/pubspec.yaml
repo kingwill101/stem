@@ -1,0 +1,21 @@
+name: stem_sqlite
+description: SQLite broker and result backend for Stem.
+version: 0.1.0-wip
+publish_to: "none"
+resolution: workspace
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  drift: ^2.15.0
+  sqlite3: ^2.9.3
+  path: ^1.9.1
+  collection: ^1.18.0
+  stem:
+    path: ../../
+
+dev_dependencies:
+  build_runner: ^2.4.8
+  drift_dev: ^2.15.0
+  lints: ^6.0.0
+  test: ^1.26.3

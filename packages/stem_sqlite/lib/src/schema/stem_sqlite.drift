@@ -1,0 +1,90 @@
+CREATE TABLE stem_queue_jobs (
+  id TEXT NOT NULL PRIMARY KEY,
+  queue TEXT NOT NULL,
+  envelope TEXT NOT NULL,
+  attempt INTEGER NOT NULL DEFAULT 0,
+  max_retries INTEGER NOT NULL DEFAULT 0,
+  priority INTEGER NOT NULL DEFAULT 0,
+  not_before INTEGER,
+  locked_at INTEGER,
+  locked_until INTEGER,
+  locked_by TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX stem_queue_jobs_queue_priority_idx
+  ON stem_queue_jobs (queue, priority DESC, created_at);
+
+CREATE INDEX stem_queue_jobs_not_before_idx
+  ON stem_queue_jobs (not_before);
+
+CREATE TABLE stem_dead_letters (
+  id TEXT NOT NULL PRIMARY KEY,
+  queue TEXT NOT NULL,
+  envelope TEXT NOT NULL,
+  reason TEXT,
+  meta TEXT,
+  dead_at INTEGER NOT NULL
+);
+
+CREATE INDEX stem_dead_letters_queue_dead_at_idx
+  ON stem_dead_letters (queue, dead_at DESC);
+
+CREATE TABLE stem_task_results (
+  id TEXT NOT NULL PRIMARY KEY,
+  state TEXT NOT NULL,
+  payload TEXT,
+  error TEXT,
+  attempt INTEGER NOT NULL DEFAULT 0,
+  meta TEXT NOT NULL DEFAULT '{}',
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX stem_task_results_expires_at_idx
+  ON stem_task_results (expires_at);
+
+CREATE TABLE stem_groups (
+  id TEXT NOT NULL PRIMARY KEY,
+  expected INTEGER NOT NULL,
+  meta TEXT NOT NULL DEFAULT '{}',
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX stem_groups_expires_at_idx
+  ON stem_groups (expires_at);
+
+CREATE TABLE stem_group_results (
+  group_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  state TEXT NOT NULL,
+  payload TEXT,
+  error TEXT,
+  attempt INTEGER NOT NULL DEFAULT 0,
+  meta TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (group_id, task_id)
+);
+
+CREATE INDEX stem_group_results_group_idx
+  ON stem_group_results (group_id);
+
+CREATE TABLE stem_worker_heartbeats (
+  worker_id TEXT NOT NULL PRIMARY KEY,
+  namespace TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  isolate_count INTEGER NOT NULL,
+  inflight INTEGER NOT NULL,
+  queues TEXT NOT NULL DEFAULT '[]',
+  last_lease_renewal INTEGER,
+  version TEXT NOT NULL,
+  extras TEXT NOT NULL DEFAULT '{}',
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX stem_worker_heartbeats_expires_at_idx
+  ON stem_worker_heartbeats (expires_at);
