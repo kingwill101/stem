@@ -86,6 +86,9 @@ class _StubTaskHandler implements TaskHandler<void> {
   TaskOptions get options => const TaskOptions();
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override

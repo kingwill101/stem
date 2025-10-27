@@ -347,6 +347,9 @@ class _BlockingTask implements TaskHandler<void> {
   TaskOptions get options => const TaskOptions(maxRetries: 0);
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
@@ -368,6 +371,9 @@ class _LoopingTask implements TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(maxRetries: 0);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
 
   @override
   TaskEntrypoint? get isolateEntrypoint => null;

@@ -249,6 +249,9 @@ class _SuccessTask implements TaskHandler<String> {
   TaskOptions get options => const TaskOptions(maxRetries: 1);
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override

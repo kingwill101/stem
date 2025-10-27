@@ -1282,6 +1282,9 @@ class _SuccessTask implements TaskHandler<String> {
   TaskOptions get options => const TaskOptions(maxRetries: 3);
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
@@ -1315,6 +1318,9 @@ class _FlakyTask implements TaskHandler<void> {
   TaskOptions get options => const TaskOptions(maxRetries: 3);
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
@@ -1333,6 +1339,9 @@ class _AlwaysFailTask implements TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(maxRetries: 1);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
 
   @override
   TaskEntrypoint? get isolateEntrypoint => null;

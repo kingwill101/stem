@@ -100,6 +100,9 @@ class _EchoTask implements TaskHandler<int> {
   TaskOptions get options => const TaskOptions();
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
@@ -114,6 +117,9 @@ class _SumTask implements TaskHandler<int> {
 
   @override
   TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
 
   @override
   TaskEntrypoint? get isolateEntrypoint => null;

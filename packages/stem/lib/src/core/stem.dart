@@ -36,6 +36,18 @@ class Stem {
     defaultSender: 'stem',
   );
 
+  /// Enqueue a typed task using a [TaskCall] wrapper produced by a [TaskDefinition].
+  Future<String> enqueueCall<TArgs, TResult>(TaskCall<TArgs, TResult> call) {
+    return enqueue(
+      call.name,
+      args: call.encodeArgs(),
+      headers: call.headers,
+      options: call.resolveOptions(),
+      notBefore: call.notBefore,
+      meta: call.meta,
+    );
+  }
+
   /// Enqueue a task by name.
   Future<String> enqueue(
     String name, {

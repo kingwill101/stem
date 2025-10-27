@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 import 'envelope.dart';
 import 'task_invocation.dart';
@@ -737,6 +738,9 @@ abstract class TaskHandler<R> {
   /// The options for this task handler.
   TaskOptions get options;
 
+  /// Describes the task for tooling and documentation.
+  TaskMetadata get metadata => const TaskMetadata();
+
   /// Executes the task with the given [context] and [args].
   Future<R> call(TaskContext context, Map<String, Object?> args);
 
@@ -748,10 +752,13 @@ abstract class TaskHandler<R> {
 /// Registry mapping task names to handler implementations.
 abstract class TaskRegistry {
   /// Registers the [handler] with this registry.
-  void register(TaskHandler handler);
+  void register(TaskHandler handler, {bool overrideExisting = false});
 
   /// Resolves the handler for the given [name], or null if not found.
   TaskHandler? resolve(String name);
+
+  /// All handlers currently registered.
+  Iterable<TaskHandler> get handlers;
 }
 
 /// Default in-memory registry implementation.
@@ -760,13 +767,127 @@ class SimpleTaskRegistry implements TaskRegistry {
 
   @override
   /// Registers the [handler] in this registry.
-  void register(TaskHandler handler) {
+  void register(TaskHandler handler, {bool overrideExisting = false}) {
+    final existing = _handlers[handler.name];
+    if (existing != null && !overrideExisting) {
+      throw ArgumentError(
+        'Task handler "${handler.name}" is already registered.',
+      );
+    }
     _handlers[handler.name] = handler;
   }
 
   @override
   /// Resolves the handler for the given [name], or returns null if not found.
   TaskHandler? resolve(String name) => _handlers[name];
+
+  @override
+  Iterable<TaskHandler> get handlers => UnmodifiableListView(_handlers.values);
+}
+
+/// Optional task metadata for documentation and tooling.
+class TaskMetadata {
+  const TaskMetadata({
+    this.description,
+    this.tags = const [],
+    this.idempotent = false,
+    this.attributes = const {},
+  });
+
+  /// Human-readable description of the task.
+  final String? description;
+
+  /// Arbitrary tags that describe behavior (e.g. "idempotent", "critical").
+  final List<String> tags;
+
+  /// Whether the task is safe to execute multiple times with the same args.
+  final bool idempotent;
+
+  /// Additional metadata for tooling and dashboards.
+  final Map<String, Object?> attributes;
+}
+
+typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
+typedef TaskMetaBuilder<TArgs> = Map<String, Object?> Function(TArgs args);
+
+/// Declarative task definition to build typed enqueue calls.
+class TaskDefinition<TArgs, TResult> {
+  const TaskDefinition({
+    required this.name,
+    required TaskArgsEncoder<TArgs> encodeArgs,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    this.defaultOptions = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
+  }) : _encodeArgs = encodeArgs,
+       _encodeMeta = encodeMeta;
+
+  /// The logical task name registered in the registry.
+  final String name;
+
+  /// Default options applied to every call unless overridden.
+  final TaskOptions defaultOptions;
+
+  /// Metadata associated with this task for documentation/tooling.
+  final TaskMetadata metadata;
+
+  final TaskArgsEncoder<TArgs> _encodeArgs;
+  final TaskMetaBuilder<TArgs>? _encodeMeta;
+
+  /// Build a typed call which can be passed to `Stem.enqueueCall`.
+  TaskCall<TArgs, TResult> call(
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+  }) {
+    final metaBuilder = _encodeMeta;
+    final resolvedMeta =
+        meta ?? (metaBuilder != null ? metaBuilder(args) : const {});
+    return TaskCall._(
+      definition: this,
+      args: args,
+      headers: Map.unmodifiable(headers),
+      options: options,
+      notBefore: notBefore,
+      meta: Map.unmodifiable(resolvedMeta),
+    );
+  }
+
+  Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
+
+  Map<String, Object?> encodeMeta(TArgs args) {
+    final metaBuilder = _encodeMeta;
+    return metaBuilder != null ? metaBuilder(args) : const {};
+  }
+}
+
+/// Represents a pending enqueue operation built from a [TaskDefinition].
+class TaskCall<TArgs, TResult> {
+  const TaskCall._({
+    required this.definition,
+    required this.args,
+    required this.headers,
+    required this.meta,
+    this.options,
+    this.notBefore,
+  });
+
+  final TaskDefinition<TArgs, TResult> definition;
+  final TArgs args;
+  final Map<String, String> headers;
+  final TaskOptions? options;
+  final DateTime? notBefore;
+  final Map<String, Object?> meta;
+
+  /// Task name resolved from the definition.
+  String get name => definition.name;
+
+  /// Encoded arguments ready for enqueue.
+  Map<String, Object?> encodeArgs() => definition.encodeArgs(args);
+
+  /// Resolve final options combining call overrides with defaults.
+  TaskOptions resolveOptions() => options ?? definition.defaultOptions;
 }
 
 /// Retry strategy used to compute the next backoff delay.

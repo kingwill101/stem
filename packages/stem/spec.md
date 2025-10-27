@@ -272,12 +272,84 @@ class TaskOptions {
 abstract class TaskHandler<R> {
   String get name;
   TaskOptions get options;
+  TaskMetadata get metadata => const TaskMetadata();
   Future<R> call(TaskContext ctx, Map<String, dynamic> args);
 }
 
+class TaskMetadata {
+  final String? description;
+  final List<String> tags;
+  final bool idempotent;
+  final Map<String, Object?> attributes;
+
+  const TaskMetadata({
+    this.description,
+    this.tags = const [],
+    this.idempotent = false,
+    this.attributes = const {},
+  });
+}
+
 abstract class TaskRegistry {
-  void register(TaskHandler handler);
+  void register(TaskHandler handler, {bool overrideExisting = false});
   TaskHandler? resolve(String name);
+  Iterable<TaskHandler> get handlers;
+}
+
+typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
+
+class TaskDefinition<TArgs, TResult> {
+  const TaskDefinition({
+    required this.name,
+    required TaskArgsEncoder<TArgs> encodeArgs,
+    this.defaultOptions = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
+  }) : _encodeArgs = encodeArgs;
+
+  final String name;
+  final TaskOptions defaultOptions;
+  final TaskMetadata metadata;
+  final TaskArgsEncoder<TArgs> _encodeArgs;
+
+  TaskCall<TArgs, TResult> call(
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+  }) =>
+      TaskCall<TArgs, TResult>(
+        definition: this,
+        args: args,
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+      );
+
+  Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
+}
+
+class TaskCall<TArgs, TResult> {
+  const TaskCall({
+    required this.definition,
+    required this.args,
+    required this.headers,
+    this.options,
+    this.notBefore,
+    this.meta = const {},
+  });
+
+  final TaskDefinition<TArgs, TResult> definition;
+  final TArgs args;
+  final Map<String, String> headers;
+  final TaskOptions? options;
+  final DateTime? notBefore;
+  final Map<String, Object?> meta;
+
+  String get name => definition.name;
+  Map<String, Object?> encodeArgs() => definition.encodeArgs(args);
+  TaskOptions resolveOptions() => options ?? definition.defaultOptions;
 }
 
 class TaskContext {
@@ -861,20 +933,31 @@ class TaskOptions {
 abstract class TaskHandler<R> {
   String get name;
   TaskOptions get options;
+  TaskMetadata get metadata => const TaskMetadata();
   Future<R> call(TaskContext ctx, Map<String, dynamic> args);
 }
 
 abstract class TaskRegistry {
-  void register(TaskHandler handler);
+  void register(TaskHandler handler, {bool overrideExisting = false});
   TaskHandler? resolve(String name);
+  Iterable<TaskHandler> get handlers;
 }
 
 class SimpleTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler> _m = {};
   @override
-  void register(TaskHandler handler) => _m[handler.name] = handler;
+  void register(TaskHandler handler, {bool overrideExisting = false}) {
+    if (_m.containsKey(handler.name) && !overrideExisting) {
+      throw ArgumentError('Task handler "${handler.name}" already registered');
+    }
+    _m[handler.name] = handler;
+  }
+
   @override
   TaskHandler? resolve(String name) => _m[name];
+
+  @override
+  Iterable<TaskHandler> get handlers => _m.values;
 }
 
 class TaskContext {

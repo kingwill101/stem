@@ -16,6 +16,9 @@ class HelloTask implements TaskHandler<void> {
   );
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
     final who = args['name'] as String? ?? 'world';
     print('Hello $who (attempt ${context.attempt})');

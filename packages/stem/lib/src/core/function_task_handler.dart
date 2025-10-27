@@ -10,6 +10,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
     required this.name,
     required TaskEntrypoint entrypoint,
     this.options = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
   }) : _entrypoint = entrypoint;
 
   @override
@@ -17,6 +18,9 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
 
   @override
   final TaskOptions options;
+
+  @override
+  final TaskMetadata metadata;
 
   final TaskEntrypoint _entrypoint;
 
