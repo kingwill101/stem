@@ -27,7 +27,7 @@ class _TestHandler implements TaskHandler<void> {
 }
 
 class _DuplicateHandler extends _TestHandler {
-  _DuplicateHandler(String name) : super(name);
+  _DuplicateHandler(super.name);
 }
 
 class _FakeBroker implements Broker {

@@ -3,29 +3,23 @@ import 'routing_config.dart';
 /// Describes the routing decision for an enqueue request.
 class RouteDecision {
   RouteDecision.queue({
-    required QueueDefinition queue,
+    required QueueDefinition this.queue,
     String? selectedAlias,
-    RouteDefinition? route,
-    int? priorityOverride,
+    this.route,
+    this.priorityOverride,
     Iterable<QueueDefinition> fallbackQueues = const [],
   }) : type = RouteDecisionType.queue,
-       queue = queue,
        broadcast = null,
-       route = route,
-       priorityOverride = priorityOverride,
        selectedQueueAlias = selectedAlias ?? queue.name,
        fallbackQueues = List.unmodifiable(fallbackQueues),
        broadcastChannel = null;
 
   RouteDecision.broadcast({
-    required BroadcastDefinition broadcast,
-    RouteDefinition? route,
-    int? priorityOverride,
+    required BroadcastDefinition this.broadcast,
+    this.route,
+    this.priorityOverride,
   }) : type = RouteDecisionType.broadcast,
        queue = null,
-       broadcast = broadcast,
-       route = route,
-       priorityOverride = priorityOverride,
        selectedQueueAlias = null,
        fallbackQueues = const [],
        broadcastChannel = broadcast.name;

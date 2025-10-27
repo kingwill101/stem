@@ -57,7 +57,7 @@ void main() {
         ),
       );
 
-      signal.connect((_, __) => throw StateError('boom'));
+      signal.connect((_, _) => throw StateError('boom'));
 
       await signal.emit(null);
 

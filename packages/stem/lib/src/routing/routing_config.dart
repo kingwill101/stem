@@ -10,12 +10,11 @@ import 'package:yaml/yaml.dart';
 /// while preserving default alias semantics for backwards compatibility.
 class RoutingConfig {
   RoutingConfig({
-    required DefaultQueueConfig defaultQueue,
+    required this.defaultQueue,
     required Map<String, QueueDefinition> queues,
     List<RouteDefinition>? routes,
     Map<String, BroadcastDefinition>? broadcasts,
-  }) : defaultQueue = defaultQueue,
-       queues = Map.unmodifiable(queues),
+  }) : queues = Map.unmodifiable(queues),
        routes = List.unmodifiable(routes ?? const []),
        broadcasts = Map.unmodifiable(broadcasts ?? const {});
 

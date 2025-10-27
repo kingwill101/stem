@@ -368,7 +368,7 @@ class ScheduleEntry {
     required this.id,
     required this.taskName,
     required this.queue,
-    required ScheduleSpec spec,
+    required this.spec,
     Map<String, Object?>? args,
     Map<String, Object?>? kwargs,
     this.enabled = true,
@@ -387,8 +387,7 @@ class ScheduleEntry {
     this.updatedAt,
     this.version = 0,
     Map<String, Object?>? meta,
-  }) : spec = spec,
-       args = Map.unmodifiable(args ?? const {}),
+  }) : args = Map.unmodifiable(args ?? const {}),
        kwargs = Map.unmodifiable(kwargs ?? const {}),
        meta = Map.unmodifiable(meta ?? const {});
 

@@ -66,7 +66,7 @@ class SignalFilter<T> {
 
   final SignalPredicate<T> _predicate;
 
-  static bool _alwaysTrue<T>(T _, SignalContext __) => true;
+  static bool _alwaysTrue<T>(T _, SignalContext _) => true;
 
   /// Allows all payloads through the filter.
   static SignalFilter<T> allowAll<T>() => SignalFilter<T>._(_alwaysTrue);
@@ -91,23 +91,16 @@ class Signal<T> {
   Signal({
     required this.name,
     SignalFilter<T>? defaultFilter,
-    SignalDispatchConfig? config,
-  }) : _defaultFilter = defaultFilter ?? SignalFilter.allowAll<T>(),
-       _config = config ?? const SignalDispatchConfig();
+    this.config = const SignalDispatchConfig(),
+  }) : _defaultFilter = defaultFilter ?? SignalFilter.allowAll<T>();
 
   final String name;
 
   final SignalFilter<T> _defaultFilter;
 
-  SignalDispatchConfig _config;
+  SignalDispatchConfig config;
 
   final List<_Listener<T>> _listeners = <_Listener<T>>[];
-
-  SignalDispatchConfig get config => _config;
-
-  set config(SignalDispatchConfig value) {
-    _config = value;
-  }
 
   bool get hasListeners => _listeners.isNotEmpty;
 
@@ -131,7 +124,7 @@ class Signal<T> {
   }
 
   Future<void> emit(T payload, {String? sender}) async {
-    if (!_config.enabled || _listeners.isEmpty) {
+    if (!config.enabled || _listeners.isEmpty) {
       return;
     }
 
@@ -147,7 +140,7 @@ class Signal<T> {
       try {
         await listener.handler(payload, context);
       } catch (error, stackTrace) {
-        _config.onError?.call(name, error, stackTrace);
+        config.onError?.call(name, error, stackTrace);
       } finally {
         if (listener.once) {
           _listeners.remove(listener);
