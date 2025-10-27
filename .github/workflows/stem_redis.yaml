@@ -1,0 +1,29 @@
+name: stem_redis
+
+on:
+  push:
+    paths:
+      - 'packages/stem_redis/**'
+      - 'packages/stem/**'
+      - 'packages/stem_adapter_tests/**'
+      - 'pubspec.yaml'
+  pull_request:
+    paths:
+      - 'packages/stem_redis/**'
+      - 'packages/stem/**'
+      - 'packages/stem_adapter_tests/**'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Install dependencies
+        run: dart pub get
+      - name: Run stem_redis tests
+        run: dart test packages/stem_redis
