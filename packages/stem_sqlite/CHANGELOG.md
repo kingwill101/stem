@@ -1,3 +1,3 @@
-## 1.0.0
+## 0.1.0-alpha.3
 
-- Initial version.
+- First public alpha release extracted from the core Stem workspace.

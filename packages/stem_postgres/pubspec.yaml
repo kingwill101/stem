@@ -17,3 +17,4 @@ dev_dependencies:
   lints: ^6.0.0
   test: ^1.26.3
   stem_adapter_tests: ^0.1.0-alpha.3
+  stem_cli: ^0.1.0-alpha.3
