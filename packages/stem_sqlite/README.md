@@ -1,47 +1,61 @@
-<!-- 
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# stem_sqlite
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages). 
+[![pub package](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite)
+[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.0-blue.svg)](https://dart.dev)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/kingwill101/stem/blob/main/LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages). 
--->
+SQLite broker and result backend implementations for the Stem runtime. Use it
+to embed Stem into single-node or desktop deployments without external
+infrastructure.
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+## Install
 
-## Features
+```bash
+dart pub add stem_sqlite
+```
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
+Add the core runtime if you haven't already:
 
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
+```bash
+dart pub add stem
+```
 
 ## Usage
 
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
-
 ```dart
-const like = 'sample';
+import 'package:stem/stem.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
+
+Future<void> main() async {
+  final registry = SimpleTaskRegistry()
+    ..register(FunctionTaskHandler(name: 'demo.sqlite', handler: print));
+
+  final broker = await SqliteBroker.open(
+    SqliteConnection.inMemory(), // or SqliteConnection.file('stem.db')
+  );
+  final backend = await SqliteResultBackend.open(
+    SqliteConnection.inMemory(),
+  );
+
+  final stem = Stem(broker: broker, backend: backend, registry: registry);
+  await stem.enqueue('demo.sqlite', args: {'name': 'Stem'});
+}
 ```
 
-## Additional information
+## Tests
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+The package bundles compliance tests from `stem_adapter_tests`. Running
 
-### Contract Test Suite
+```bash
+dart test
+```
 
-`stem_sqlite` consumes the shared adapter test harness in
-`packages/stem_adapter_tests`. Add the harness as a `dev_dependency` and run
-`dart test` to execute `runBrokerContractTests` and `runResultBackendContractTests`
-against the SQLite adapters. See `test/broker/sqlite_broker_test.dart` and
-`test/backend/sqlite_result_backend_test.dart` for reference wiring.
+executes the shared broker and backend contract suites against the SQLite
+adapters.
+
+## Support
+
+Report issues or feature requests on the
+[GitHub tracker](https://github.com/kingwill101/stem/issues). Commercial support
+is available via [Buy Me A Coffee](https://www.buymeacoffee.com/kingwill101).
