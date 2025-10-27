@@ -21,6 +21,8 @@ dart pub add stem
 
 ## Usage
 
+### Direct enqueue
+
 ```dart
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
@@ -38,6 +40,47 @@ Future<void> main() async {
 
   final stem = Stem(broker: broker, registry: registry, backend: backend);
   await stem.enqueue('demo.pg', args: {'name': 'Stem'});
+}
+```
+
+### Typed `TaskDefinition`
+
+```dart
+import 'package:stem/stem.dart';
+import 'package:stem_postgres/stem_postgres.dart';
+
+final demoPg = TaskDefinition<PgArgs, void>(
+  name: 'demo.pg',
+  encodeArgs: (args) => {'name': args.name},
+  metadata: TaskMetadata(description: 'Postgres-backed demo task'),
+);
+
+class PgArgs {
+  const PgArgs({required this.name});
+  final String name;
+}
+
+Future<void> main() async {
+  final registry = SimpleTaskRegistry()
+    ..register(
+      FunctionTaskHandler<void>(
+        name: demoPg.name,
+        entrypoint: (context, args) async {
+          print('Hello ${(args['name'] as String?) ?? 'world'}');
+        },
+        metadata: demoPg.metadata,
+      ),
+    );
+
+  final broker = await PostgresBroker.connect(
+    'postgresql://postgres:postgres@localhost:5432/stem',
+  );
+  final backend = await PostgresResultBackend.connect(
+    'postgresql://postgres:postgres@localhost:5432/stem',
+  );
+
+  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  await stem.enqueueCall(demoPg(const PgArgs(name: 'Stem')));
 }
 ```
 

@@ -22,6 +22,8 @@ dart pub add stem
 
 ## Usage
 
+### Direct enqueue
+
 ```dart
 import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
@@ -35,6 +37,43 @@ Future<void> main() async {
 
   final stem = Stem(broker: broker, registry: registry, backend: backend);
   await stem.enqueue('demo.hello', args: {'name': 'Stem'});
+}
+```
+
+### Typed `TaskDefinition`
+
+```dart
+import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+
+final helloTask = TaskDefinition<HelloArgs, void>(
+  name: 'demo.hello',
+  encodeArgs: (args) => {'name': args.name},
+  metadata: TaskMetadata(description: 'Redis backed hello world'),
+);
+
+class HelloArgs {
+  const HelloArgs({required this.name});
+  final String name;
+}
+
+Future<void> main() async {
+  final registry = SimpleTaskRegistry()
+    ..register(
+      FunctionTaskHandler<void>(
+        name: helloTask.name,
+        entrypoint: (context, args) async {
+          print('Hello ${(args['name'] as String?) ?? 'world'}');
+        },
+        metadata: helloTask.metadata,
+      ),
+    );
+
+  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
+  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
+
+  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  await stem.enqueueCall(helloTask(const HelloArgs(name: 'Stem')));
 }
 ```
 

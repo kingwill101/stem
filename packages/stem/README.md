@@ -29,6 +29,8 @@ stem --help
 
 ## Quick Start
 
+### Direct enqueue (map-based)
+
 ```dart
 import 'dart:async';
 import 'package:stem/stem.dart';
@@ -63,6 +65,58 @@ Future<void> main() async {
 
   unawaited(worker.start());
   await stem.enqueue('demo.hello', args: {'name': 'Stem'});
+  await Future<void>.delayed(const Duration(seconds: 1));
+  await worker.shutdown();
+  await broker.close();
+  await backend.close();
+}
+```
+
+### Typed helpers with `TaskDefinition`
+
+Use the new typed wrapper when you want compile-time checking and shared metadata:
+
+```dart
+class HelloTask implements TaskHandler<void> {
+  static final definition = TaskDefinition<HelloArgs, void>(
+    name: 'demo.hello',
+    encodeArgs: (args) => {'name': args.name},
+    metadata: TaskMetadata(description: 'Simple hello world example'),
+  );
+
+  @override
+  String get name => 'demo.hello';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 3);
+
+  @override
+  TaskMetadata get metadata => definition.metadata;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    final who = args['name'] as String? ?? 'world';
+    print('Hello $who (attempt ${context.attempt})');
+  }
+}
+
+class HelloArgs {
+  const HelloArgs({required this.name});
+  final String name;
+}
+
+Future<void> main() async {
+  final registry = SimpleTaskRegistry()..register(HelloTask());
+  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
+  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
+
+  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final worker = Worker(broker: broker, registry: registry, backend: backend);
+
+  unawaited(worker.start());
+  await stem.enqueueCall(
+    HelloTask.definition(const HelloArgs(name: 'Stem')),
+  );
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
   await broker.close();

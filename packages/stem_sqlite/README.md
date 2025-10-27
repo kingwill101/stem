@@ -23,6 +23,8 @@ dart pub add stem
 
 ## Usage
 
+### Direct enqueue
+
 ```dart
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
@@ -40,6 +42,43 @@ Future<void> main() async {
 
   final stem = Stem(broker: broker, backend: backend, registry: registry);
   await stem.enqueue('demo.sqlite', args: {'name': 'Stem'});
+}
+```
+
+### Typed `TaskDefinition`
+
+```dart
+import 'package:stem/stem.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
+
+final demoSqlite = TaskDefinition<SqliteArgs, void>(
+  name: 'demo.sqlite',
+  encodeArgs: (args) => {'name': args.name},
+  metadata: TaskMetadata(description: 'SQLite-backed demo task'),
+);
+
+class SqliteArgs {
+  const SqliteArgs({required this.name});
+  final String name;
+}
+
+Future<void> main() async {
+  final registry = SimpleTaskRegistry()
+    ..register(
+      FunctionTaskHandler<void>(
+        name: demoSqlite.name,
+        entrypoint: (context, args) async {
+          print('Hello ${(args['name'] as String?) ?? 'world'}');
+        },
+        metadata: demoSqlite.metadata,
+      ),
+    );
+
+  final broker = await SqliteBroker.open(SqliteConnection.inMemory());
+  final backend = await SqliteResultBackend.open(SqliteConnection.inMemory());
+
+  final stem = Stem(broker: broker, backend: backend, registry: registry);
+  await stem.enqueueCall(demoSqlite(const SqliteArgs(name: 'Stem')));
 }
 ```
 
