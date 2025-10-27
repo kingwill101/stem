@@ -38,14 +38,10 @@ dev_dependencies:
   gha: ^0.0.2
   gha_cli: ^1.0.1
   async: ^2.13.0
-  stem_adapter_tests:
-    path: ../stem_adapter_tests
-  stem_cli:
-    path: ../stem_cli
-  stem_redis:
-    path: ../stem_redis
-  stem_postgres:
-    path: ../stem_postgres
+  stem_adapter_tests: ^0.1.0-alpha.3
+  stem_cli: ^0.1.0-alpha.3
+  stem_redis: ^0.1.0-alpha.3
+  stem_postgres: ^0.1.0-alpha.3
 
 false_secrets:
   - /example/microservice/certs/*

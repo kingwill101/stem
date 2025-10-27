@@ -4,7 +4,7 @@ version: 0.1.0
 publish_to: "none"
 resolution: workspace
 environment:
-  sdk: ">=3.9.0 <4.0.0"
+  sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
   intl: ^0.20.2
@@ -12,16 +12,11 @@ dependencies:
   drift: ^2.15.0
   routed: ^0.1.0
   routed_hotwire: ^0.1.0
-  stem:
-    path: ../stem
-  stem_cli:
-    path: ../stem_cli
-  stem_redis:
-    path: ../stem_redis
-  stem_postgres:
-    path: ../stem_postgres
-  stem_sqlite:
-    path: ../stem_sqlite
+  stem: ^0.1.0-alpha.3
+  stem_cli: ^0.1.0-alpha.3
+  stem_redis: ^0.1.0-alpha.3
+  stem_postgres: ^0.1.0-alpha.3
+  stem_sqlite: ^0.1.0-alpha.3
 
 dev_dependencies:
   lints: ^6.0.0
