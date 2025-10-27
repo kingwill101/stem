@@ -124,6 +124,19 @@ Future<void> main() async {
 }
 ```
 
+You can also build requests fluently with the `TaskEnqueueBuilder`:
+
+```dart
+final taskId = await TaskEnqueueBuilder(
+  definition: HelloTask.definition,
+  args: const HelloArgs(name: 'Tenant A'),
+)
+  ..header('x-tenant', 'tenant-a')
+  ..priority(5)
+  ..delay(const Duration(seconds: 30))
+  .enqueueWith(stem);
+```
+
 ## Features
 
 - **Task pipeline** – enqueue with delays, priorities, idempotency helpers, and retries.
@@ -173,3 +186,15 @@ all adapters stay aligned with the broker and result backend contracts. See
 `test/integration/brokers/postgres_broker_integration_test.dart` and
 `test/integration/backends/postgres_backend_integration_test.dart` for
 reference usage.
+
+### Testing helpers
+
+Use `FakeStem` from `package:stem/stem.dart` in unit tests when you want to
+record enqueued jobs without standing up brokers:
+
+```dart
+final fake = FakeStem();
+await fake.enqueue('tasks.email', args: {'id': 1});
+final recorded = fake.enqueues.single;
+expect(recorded.name, 'tasks.email');
+```

@@ -34,6 +34,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 
@@ -94,6 +95,7 @@ void main() {
           revokeStore: InMemoryRevokeStore(),
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 
@@ -144,6 +146,7 @@ void main() {
             backend: backend,
             routing: RoutingRegistry(RoutingConfig.legacy()),
             dispose: () async {},
+            registry: registry,
           ),
         );
 
@@ -205,6 +208,7 @@ void main() {
           revokeStore: revokeStore,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: registry,
         ),
       );
 
@@ -250,6 +254,7 @@ void main() {
           revokeStore: revokeStore,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: registry,
         ),
       );
 
@@ -311,6 +316,7 @@ void main() {
           revokeStore: revokeStore,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: registry,
         ),
       );
 

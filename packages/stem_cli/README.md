@@ -27,6 +27,21 @@ Out of the box the CLI knows how to talk to the Redis and Postgres adapters
 provided by `stem_redis` and `stem_postgres`. Custom adapters can be supported by
 wrapping the CLI context builders (see `src/cli/utilities.dart`).
 
+## Task Registry Introspection
+
+List tasks that the current CLI context knows about:
+
+```bash
+stem tasks ls
+# or JSON
+stem tasks ls --json | jq
+```
+
+The command relies on the active `CliContext` exposing a `TaskRegistry`
+(`CliContext.registry`). When you run the CLI alongside your application, pass a
+custom `contextBuilder` that wires in the registry you use to boot workers so
+the CLI can display descriptions, tags, and idempotency markers.
+
 ## Local Integration Stack
 
 The package includes the docker compose stack used by integration suites. Start

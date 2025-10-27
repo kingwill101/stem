@@ -72,8 +72,7 @@ class _FakeBroker implements Broker {
     String queue, {
     int limit = 50,
     int offset = 0,
-  }) async =>
-      const DeadLetterPage(entries: []);
+  }) async => const DeadLetterPage(entries: []);
 
   @override
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {}
@@ -91,12 +90,14 @@ class _FakeBroker implements Broker {
     DateTime? since,
     Duration? delay,
     bool dryRun = false,
-  }) async =>
-      DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+  }) async => DeadLetterReplayResult(entries: const [], dryRun: dryRun);
 
   @override
-  Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit}) async =>
-      0;
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) async => 0;
 
   @override
   bool get supportsDelayed => true;
@@ -112,6 +113,26 @@ class _Args {
 
 void main() {
   group('SimpleTaskRegistry', () {
+    test('emits registration events', () async {
+      final registry = SimpleTaskRegistry();
+      final events = <TaskRegistrationEvent>[];
+      final sub = registry.onRegister.listen(events.add);
+
+      final first = _TestHandler('sample.task');
+      final second = _TestHandler('sample.task');
+
+      registry.register(first);
+      registry.register(second, overrideExisting: true);
+
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await sub.cancel();
+
+      expect(events, hasLength(2));
+      expect(events.first.name, 'sample.task');
+      expect(events.first.overridden, isFalse);
+      expect(events.last.overridden, isTrue);
+      expect(events.last.handler, same(second));
+    });
     test('throws when registering duplicate handler without override', () {
       final registry = SimpleTaskRegistry();
       registry.register(_DuplicateHandler('sample.task'));
@@ -207,6 +228,34 @@ void main() {
       expect(broker.lastEnvelope!.headers['x-id'], 'abc');
       expect(broker.lastEnvelope!.queue, 'custom');
       expect(broker.lastEnvelope!.meta, containsPair('source', 'test'));
+    });
+  });
+
+  group('TaskEnqueueBuilder', () {
+    test('builds TaskCall with overrides', () {
+      final definition = TaskDefinition<_Args, void>(
+        name: 'demo.task',
+        encodeArgs: (args) => {'value': args.value},
+      );
+
+      final builder =
+          TaskEnqueueBuilder<_Args, void>(
+              definition: definition,
+              args: _Args(7),
+            )
+            ..header('x-id', 'abc')
+            ..meta('source', 'test')
+            ..priority(5)
+            ..queue('fast')
+            ..delay(const Duration(seconds: 1));
+
+      final call = builder.build();
+      expect(call.headers['x-id'], 'abc');
+      expect(call.meta['source'], 'test');
+      expect(call.resolveOptions().priority, 5);
+      expect(call.resolveOptions().queue, 'fast');
+      expect(call.notBefore, isNotNull);
+      expect(call.encodeArgs(), {'value': 7});
     });
   });
 }

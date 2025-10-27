@@ -64,14 +64,28 @@ class Stem {
     final targetName = decision.targetName;
     final resolvedPriority = decision.effectivePriority(options.priority);
 
+    final handler = registry.resolve(name);
+    if (handler == null) {
+      throw ArgumentError.value(name, 'name', 'Task is not registered');
+    }
+    final metadata = handler.metadata;
+
+    final spanAttributes = <String, Object>{
+      'stem.task': name,
+      'stem.queue': targetName,
+      'stem.routing.target_type': decision.isBroadcast ? 'broadcast' : 'queue',
+      'stem.task.idempotent': metadata.idempotent,
+    };
+    if (metadata.description != null && metadata.description!.isNotEmpty) {
+      spanAttributes['stem.task.description'] = metadata.description!;
+    }
+    if (metadata.tags.isNotEmpty) {
+      spanAttributes['stem.task.tags'] = List<String>.from(metadata.tags);
+    }
+
     return tracer.trace(
       'stem.enqueue',
       () async {
-        final handler = registry.resolve(name);
-        if (handler == null) {
-          throw ArgumentError.value(name, 'name', 'Task is not registered');
-        }
-
         final traceHeaders = Map<String, String>.from(headers);
         tracer.injectTraceContext(traceHeaders);
 
@@ -126,13 +140,7 @@ class Stem {
         return envelope.id;
       },
       spanKind: dotel.SpanKind.producer,
-      attributes: {
-        'stem.task': name,
-        'stem.queue': targetName,
-        'stem.routing.target_type': decision.isBroadcast
-            ? 'broadcast'
-            : 'queue',
-      },
+      attributes: spanAttributes,
     );
   }
 
@@ -150,4 +158,9 @@ class Stem {
 
     await run(0);
   }
+}
+
+extension TaskEnqueueBuilderExtension<TArgs, TResult>
+    on TaskEnqueueBuilder<TArgs, TResult> {
+  Future<String> enqueueWith(Stem stem) => stem.enqueueCall(build());
 }

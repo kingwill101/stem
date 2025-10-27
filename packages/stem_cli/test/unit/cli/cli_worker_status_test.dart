@@ -31,6 +31,7 @@ void main() {
         dispose: () async {
           broker.dispose();
         },
+        registry: SimpleTaskRegistry(),
       ),
     );
 
@@ -67,6 +68,7 @@ void main() {
         dispose: () async {
           broker.dispose();
         },
+        registry: SimpleTaskRegistry(),
       ),
     );
 

@@ -40,3 +40,4 @@ export 'src/control/control_messages.dart';
 export 'src/control/revoke_store.dart';
 export 'src/control/in_memory_revoke_store.dart';
 export 'src/control/file_revoke_store.dart';
+export 'src/testing/fake_stem.dart';

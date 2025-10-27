@@ -941,16 +941,25 @@ abstract class TaskRegistry {
   void register(TaskHandler handler, {bool overrideExisting = false});
   TaskHandler? resolve(String name);
   Iterable<TaskHandler> get handlers;
+  Stream<TaskRegistrationEvent> get onRegister;
 }
 
 class SimpleTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler> _m = {};
+  final _onRegister = StreamController<TaskRegistrationEvent>.broadcast();
   @override
   void register(TaskHandler handler, {bool overrideExisting = false}) {
     if (_m.containsKey(handler.name) && !overrideExisting) {
       throw ArgumentError('Task handler "${handler.name}" already registered');
     }
     _m[handler.name] = handler;
+    _onRegister.add(
+      TaskRegistrationEvent(
+        name: handler.name,
+        handler: handler,
+        overridden: overrideExisting,
+      ),
+    );
   }
 
   @override
@@ -958,6 +967,9 @@ class SimpleTaskRegistry implements TaskRegistry {
 
   @override
   Iterable<TaskHandler> get handlers => _m.values;
+
+  @override
+  Stream<TaskRegistrationEvent> get onRegister => _onRegister.stream;
 }
 
 class TaskContext {

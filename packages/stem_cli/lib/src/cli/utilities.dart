@@ -111,6 +111,7 @@ Future<CliContext> createDefaultContext({
         await disposer();
       }
     },
+    registry: null,
   );
 }
 

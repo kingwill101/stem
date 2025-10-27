@@ -32,6 +32,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 
@@ -59,6 +60,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 
@@ -89,6 +91,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 
@@ -112,6 +115,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
+          registry: SimpleTaskRegistry(),
         ),
       );
 

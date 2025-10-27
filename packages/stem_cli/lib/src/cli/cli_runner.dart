@@ -11,6 +11,7 @@ import 'package:stem_cli/src/cli/routing.dart';
 import 'package:stem_cli/src/cli/schedule.dart';
 import 'package:stem_cli/src/cli/utilities.dart';
 import 'package:stem_cli/src/cli/worker.dart';
+import 'package:stem_cli/src/cli/tasks.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
@@ -29,6 +30,7 @@ class StemCommandRunner extends CommandRunner<int> {
     addCommand(DlqCommand(dependencies));
     addCommand(HealthCommand(dependencies));
     addCommand(RoutingCommand(dependencies));
+    addCommand(TasksCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -338,6 +340,7 @@ class CliContext {
     this.revokeStore,
     required this.routing,
     required this.dispose,
+    this.registry,
   });
 
   final Broker broker;
@@ -345,4 +348,5 @@ class CliContext {
   final RevokeStore? revokeStore;
   final RoutingRegistry routing;
   final Future<void> Function() dispose;
+  final TaskRegistry? registry;
 }
