@@ -1,0 +1,152 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    depends_on:
+      - jaeger
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.56
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.listen-address=:9090"
+      - "--web.route-prefix=/prometheus"
+      - "--web.external-url=http://localhost:8080/prometheus/"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - otel-collector
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SERVER_DOMAIN: localhost
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    user: "0"
+    ports:
+      - "6379:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: example/microservice/dashboard/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 3080
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  enqueuer:
+    build:
+      context: ../..
+      dockerfile: example/microservice/enqueuer/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      PORT: ${PORT:-8081}
+    depends_on:
+      - redis
+      - otel-collector
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: example/microservice/worker/Dockerfile
+    env_file:
+      - .env.example
+    depends_on:
+      - redis
+      - otel-collector
+    restart: unless-stopped
+
+  worker2:
+    build:
+      context: ../..
+      dockerfile: example/microservice/worker/Dockerfile
+    env_file:
+      - .env.example
+    depends_on:
+      - redis
+      - otel-collector
+    restart: unless-stopped
+
+  worker3:
+    build:
+      context: ../..
+      dockerfile: example/microservice/worker/Dockerfile
+    env_file:
+      - .env.example
+    depends_on:
+      - redis
+      - otel-collector
+    restart: unless-stopped
+
+  beat:
+    build:
+      context: ../..
+      dockerfile: example/microservice/beat/Dockerfile
+    env_file:
+      - .env.example
+    environment:
+      STEM_SCHEDULE_FILE: "/config/schedules.yaml"
+    depends_on:
+      - redis
+      - otel-collector
+    volumes:
+      - ./schedules.example.yaml:/config/schedules.yaml:ro
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - dashboard
+      - enqueuer
+      - grafana
+      - prometheus
+      - jaeger
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  grafana-data:

@@ -1,0 +1,27 @@
+name: dashboard
+
+on:
+  push:
+    paths:
+      - 'packages/dashboard/**'
+      - 'packages/stem/**'
+      - 'pubspec.yaml'
+  pull_request:
+    paths:
+      - 'packages/dashboard/**'
+      - 'packages/stem/**'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Install dependencies
+        run: dart pub get
+      - name: Run dashboard tests
+        run: dart test packages/dashboard

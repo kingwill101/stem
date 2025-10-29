@@ -1,0 +1,15 @@
+name: stem_retry_task_demo
+description: Demonstrates Stem retry behavior with a task that fails through all attempts.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis
+
+dev_dependencies:
+  lints: ^6.0.0

@@ -1,0 +1,17 @@
+name: stem_redis_postgres_enqueuer
+publish_to: 'none'
+description: Enqueuer using Redis broker and Postgres backend.
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../../..
+  stem_redis:
+    path: ../../../../stem_redis
+  stem_postgres:
+    path: ../../../../stem_postgres
+
+dev_dependencies:
+  lints: ^6.0.0

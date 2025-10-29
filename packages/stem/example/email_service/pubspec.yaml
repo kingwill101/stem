@@ -1,0 +1,15 @@
+name: stem_email_service_example
+description: Email notification service example using Stem task queue.
+publish_to: "none"
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  shelf: ^1.4.1
+  shelf_router: ^1.1.4
+  mailer: ^6.1.0
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis

@@ -8,7 +8,7 @@
 - Specify broker maintenance requirements covering priority stream purges and timer teardown when consumers disconnect.
 - Extend CLI health requirements to detect both Redis and Postgres backends.
 - Require heartbeat transports to honour shared TLS configuration.
-- Implement the fixes, add regression tests, and exercise them against `docker/testing/docker-compose.yml` so we validate the integrated stack.
+- Implement the fixes, add regression tests, and exercise them against `packages/stem_cli/docker/testing/docker-compose.yml` so we validate the integrated stack.
 
 ## Impact
 - Prevents phantom deliveries after purge operations and stops idle brokers from hammering Redis with claim commands.

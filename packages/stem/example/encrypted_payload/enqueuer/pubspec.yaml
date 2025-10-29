@@ -1,0 +1,16 @@
+name: stem_encrypted_enqueuer
+publish_to: 'none'
+description: Enqueues encrypted payloads before handing them to Stem.
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  cryptography: ^2.5.0
+  stem:
+    path: ../../..
+  stem_redis:
+    path: ../../../../stem_redis
+
+dev_dependencies:
+  lints: ^6.0.0

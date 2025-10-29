@@ -1,0 +1,15 @@
+name: stem_microservice_worker
+description: Dedicated worker process consuming Stem tasks via Redis.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../../..
+  stem_redis:
+    path: ../../../../stem_redis
+
+dev_dependencies:
+  lints: ^6.0.0

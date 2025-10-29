@@ -1,0 +1,15 @@
+name: stem_mixed_postgres_worker
+publish_to: 'none'
+description: Worker that consumes from Postgres broker and stores results in Postgres.
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../../..
+  stem_postgres:
+    path: ../../../../stem_postgres
+
+dev_dependencies:
+  lints: ^6.0.0

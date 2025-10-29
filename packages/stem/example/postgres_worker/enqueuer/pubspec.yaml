@@ -1,0 +1,15 @@
+name: stem_postgres_enqueuer
+publish_to: 'none'
+description: Example enqueuer that uses Postgres for broker and result backend.
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../../..
+  stem_postgres:
+    path: ../../../../stem_postgres
+
+dev_dependencies:
+  lints: ^6.0.0

@@ -1,0 +1,166 @@
+import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
+
+import '../observability/tracing.dart';
+import '../routing/routing_config.dart';
+import '../routing/routing_registry.dart';
+import '../security/signing.dart';
+import '../signals/emitter.dart';
+import 'contracts.dart';
+import 'envelope.dart';
+import 'retry.dart';
+
+/// Facade used by producer applications to enqueue tasks.
+class Stem {
+  Stem({
+    required this.broker,
+    required this.registry,
+    this.backend,
+    RetryStrategy? retryStrategy,
+    List<Middleware> middleware = const [],
+    this.signer,
+    RoutingRegistry? routing,
+  }) : routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
+       retryStrategy =
+           retryStrategy ??
+           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+       middleware = List.unmodifiable(middleware);
+
+  final Broker broker;
+  final TaskRegistry registry;
+  final ResultBackend? backend;
+  final RetryStrategy retryStrategy;
+  final List<Middleware> middleware;
+  final PayloadSigner? signer;
+  final RoutingRegistry routing;
+  static const StemSignalEmitter _signals = StemSignalEmitter(
+    defaultSender: 'stem',
+  );
+
+  /// Enqueue a typed task using a [TaskCall] wrapper produced by a [TaskDefinition].
+  Future<String> enqueueCall<TArgs, TResult>(TaskCall<TArgs, TResult> call) {
+    return enqueue(
+      call.name,
+      args: call.encodeArgs(),
+      headers: call.headers,
+      options: call.resolveOptions(),
+      notBefore: call.notBefore,
+      meta: call.meta,
+    );
+  }
+
+  /// Enqueue a task by name.
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+  }) async {
+    final tracer = StemTracer.instance;
+    final decision = routing.resolve(
+      RouteRequest(task: name, headers: headers, queue: options.queue),
+    );
+    final targetName = decision.targetName;
+    final resolvedPriority = decision.effectivePriority(options.priority);
+
+    final handler = registry.resolve(name);
+    if (handler == null) {
+      throw ArgumentError.value(name, 'name', 'Task is not registered');
+    }
+    final metadata = handler.metadata;
+
+    final spanAttributes = <String, Object>{
+      'stem.task': name,
+      'stem.queue': targetName,
+      'stem.routing.target_type': decision.isBroadcast ? 'broadcast' : 'queue',
+      'stem.task.idempotent': metadata.idempotent,
+    };
+    if (metadata.description != null && metadata.description!.isNotEmpty) {
+      spanAttributes['stem.task.description'] = metadata.description!;
+    }
+    if (metadata.tags.isNotEmpty) {
+      spanAttributes['stem.task.tags'] = List<String>.from(metadata.tags);
+    }
+
+    return tracer.trace(
+      'stem.enqueue',
+      () async {
+        final traceHeaders = Map<String, String>.from(headers);
+        tracer.injectTraceContext(traceHeaders);
+
+        Envelope envelope = Envelope(
+          name: name,
+          args: args,
+          headers: traceHeaders,
+          queue: targetName,
+          notBefore: notBefore,
+          priority: resolvedPriority,
+          maxRetries: options.maxRetries,
+          visibilityTimeout: options.visibilityTimeout,
+          meta: meta,
+        );
+        if (signer != null) {
+          envelope = await signer!.sign(envelope);
+        }
+
+        final routingInfo = decision.isBroadcast
+            ? RoutingInfo.broadcast(
+                channel: decision.broadcastChannel!,
+                delivery: decision.broadcast!.delivery,
+                meta: decision.broadcast!.metadata,
+              )
+            : RoutingInfo.queue(
+                queue: decision.queue!.name,
+                exchange: decision.queue!.exchange,
+                routingKey: decision.queue!.routingKey,
+                priority: resolvedPriority,
+              );
+
+        await _signals.beforeTaskPublish(envelope);
+
+        await _runEnqueueMiddleware(envelope, () async {
+          await broker.publish(envelope, routing: routingInfo);
+          if (backend != null) {
+            await backend!.set(
+              envelope.id,
+              TaskState.queued,
+              attempt: envelope.attempt,
+              meta: {
+                ...meta,
+                'queue': targetName,
+                'maxRetries': envelope.maxRetries,
+              },
+            );
+          }
+        });
+
+        await _signals.afterTaskPublish(envelope);
+
+        return envelope.id;
+      },
+      spanKind: dotel.SpanKind.producer,
+      attributes: spanAttributes,
+    );
+  }
+
+  Future<void> _runEnqueueMiddleware(
+    Envelope envelope,
+    Future<void> Function() action,
+  ) async {
+    Future<void> run(int index) async {
+      if (index >= middleware.length) {
+        await action();
+        return;
+      }
+      await middleware[index].onEnqueue(envelope, () => run(index + 1));
+    }
+
+    await run(0);
+  }
+}
+
+extension TaskEnqueueBuilderExtension<TArgs, TResult>
+    on TaskEnqueueBuilder<TArgs, TResult> {
+  Future<String> enqueueWith(Stem stem) => stem.enqueueCall(build());
+}
