@@ -18,6 +18,7 @@ import '../observability/heartbeat_transport.dart';
 import '../observability/tracing.dart';
 import '../security/signing.dart';
 import '../core/task_invocation.dart';
+import '../core/unique_task_coordinator.dart';
 import 'isolate_pool.dart';
 import 'worker_config.dart';
 import '../signals/emitter.dart';
@@ -44,7 +45,9 @@ class Worker {
   ///
   /// The [broker] handles message consumption and publishing. The [registry]
   /// provides task handlers. The [backend] stores task results and state.
-  /// Optional [rateLimiter] enforces rate limits per task. [middleware] allows
+  /// Optional [rateLimiter] enforces rate limits per task. [uniqueTaskCoordinator]
+  /// coordinates deduplicated tasks so locks are released when runs finish.
+  /// [middleware] allows
   /// intercepting task lifecycle events. [retryStrategy] determines retry
   /// delays on failure. [queue] specifies the queue to consume from, defaulting
   /// to 'default'. [consumerName] identifies this worker instance. [concurrency]
@@ -64,6 +67,7 @@ class Worker {
     this.rateLimiter,
     this.middleware = const [],
     this.revokeStore,
+    this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
     this.queue = 'default',
     RoutingSubscription? subscription,
@@ -158,6 +162,7 @@ class Worker {
   final RetryStrategy retryStrategy;
   final String queue;
   final String? consumerName;
+  final UniqueTaskCoordinator? uniqueTaskCoordinator;
   final int concurrency;
   final int prefetchMultiplier;
   final int prefetch;
@@ -376,6 +381,7 @@ class Worker {
         final handler = registry.resolve(envelope.name);
         if (handler == null) {
           await broker.deadLetter(delivery, reason: 'unregistered-task');
+          await _releaseUniqueLock(envelope);
           return;
         }
 
@@ -385,6 +391,7 @@ class Worker {
 
         if (_isTaskRevoked(envelope.id)) {
           await _handleRevokedDelivery(delivery, envelope, groupId: groupId);
+          await _releaseUniqueLock(envelope);
           return;
         }
 
@@ -399,6 +406,7 @@ class Worker {
               stack,
               groupId,
             );
+            await _releaseUniqueLock(envelope);
             return;
           }
         }
@@ -619,6 +627,9 @@ class Worker {
             result: result,
             state: completionState,
           );
+          if (_isTerminalState(completionState)) {
+            await _releaseUniqueLock(envelope);
+          }
         }
       },
       context: parentContext,
@@ -750,6 +761,48 @@ class Worker {
     if (active != null) {
       active.lastLeaseRenewal = now;
     }
+  }
+
+  Future<void> _releaseUniqueLock(Envelope envelope) async {
+    final coordinator = uniqueTaskCoordinator;
+    if (coordinator == null) return;
+    final uniqueKey = envelope.meta[UniqueTaskMetadata.key];
+    final owner = envelope.meta[UniqueTaskMetadata.owner];
+    if (uniqueKey is! String || owner is! String) return;
+    try {
+      final released = await coordinator.release(uniqueKey, owner);
+      if (!released) {
+        stemLogger.debug(
+          'Unique lock already released or expired',
+          Context(
+            _logContext({
+              'task': envelope.name,
+              'id': envelope.id,
+              'unique': uniqueKey,
+            }),
+          ),
+        );
+      }
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Failed to release unique task lock',
+        Context(
+          _logContext({
+            'task': envelope.name,
+            'id': envelope.id,
+            'unique': uniqueKey.toString(),
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+        ),
+      );
+    }
+  }
+
+  bool _isTerminalState(TaskState state) {
+    return state == TaskState.succeeded ||
+        state == TaskState.failed ||
+        state == TaskState.cancelled;
   }
 
   Future<void> _handleSignatureFailure(

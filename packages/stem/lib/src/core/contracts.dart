@@ -1103,6 +1103,15 @@ abstract class LockStore {
     Duration ttl = const Duration(seconds: 30),
     String? owner,
   });
+
+  /// Returns the owner currently holding the lock for [key], or null if unlocked.
+  Future<String?> ownerOf(String key);
+
+  /// Releases the lock identified by [key] if held by [owner].
+  ///
+  /// Returns `true` when the lock was released, otherwise `false` (e.g. owner
+  /// mismatch or already expired).
+  Future<bool> release(String key, String owner);
 }
 
 abstract class Lock {

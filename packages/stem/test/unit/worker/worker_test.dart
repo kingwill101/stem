@@ -56,6 +56,70 @@ void main() {
       broker.dispose();
     });
 
+    test('releases unique lock after task completion', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final coordinator = UniqueTaskCoordinator(
+        lockStore: InMemoryLockStore(),
+        defaultTtl: const Duration(seconds: 5),
+      );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'unique-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        uniqueTaskCoordinator: coordinator,
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        uniqueTaskCoordinator: coordinator,
+      );
+
+      const options = TaskOptions(
+        unique: true,
+        uniqueFor: Duration(seconds: 5),
+      );
+      final firstId = await stem.enqueue('tasks.success', options: options);
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == firstId,
+        ),
+      );
+
+      final secondId = await stem.enqueue('tasks.success', options: options);
+      expect(secondId, isNot(firstId));
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == secondId,
+        ),
+      );
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('emits task lifecycle signals for successful execution', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 

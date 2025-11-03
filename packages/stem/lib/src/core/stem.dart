@@ -1,5 +1,8 @@
+import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
+import '../observability/logging.dart';
+import '../observability/metrics.dart';
 import '../observability/tracing.dart';
 import '../routing/routing_config.dart';
 import '../routing/routing_registry.dart';
@@ -8,6 +11,7 @@ import '../signals/emitter.dart';
 import 'contracts.dart';
 import 'envelope.dart';
 import 'retry.dart';
+import 'unique_task_coordinator.dart';
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem {
@@ -15,6 +19,7 @@ class Stem {
     required this.broker,
     required this.registry,
     this.backend,
+    this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
     this.signer,
@@ -28,6 +33,7 @@ class Stem {
   final Broker broker;
   final TaskRegistry registry;
   final ResultBackend? backend;
+  final UniqueTaskCoordinator? uniqueTaskCoordinator;
   final RetryStrategy retryStrategy;
   final List<Middleware> middleware;
   final PayloadSigner? signer;
@@ -100,6 +106,58 @@ class Stem {
           visibilityTimeout: options.visibilityTimeout,
           meta: meta,
         );
+
+        if (options.unique) {
+          final coordinator = uniqueTaskCoordinator;
+          if (coordinator == null) {
+            throw StateError(
+              'Task "$name" is configured as unique but no UniqueTaskCoordinator is set on Stem.',
+            );
+          }
+          final claim = await coordinator.acquire(
+            envelope: envelope,
+            options: options,
+          );
+          if (!claim.isAcquired) {
+            final existingId = claim.existingTaskId;
+            if (existingId != null) {
+              stemLogger.info(
+                'Unique task deduplicated',
+                Context({
+                  'task': name,
+                  'queue': targetName,
+                  'existingId': existingId,
+                  'attemptedId': envelope.id,
+                }),
+              );
+              StemMetrics.instance.increment(
+                'stem.tasks.deduplicated',
+                tags: {'task': name, 'queue': targetName},
+              );
+              await _recordDuplicateAttempt(existingId, envelope);
+              return existingId;
+            }
+            stemLogger.warning(
+              'Unique task deduplication failed to resolve existing task id',
+              Context({
+                'task': name,
+                'queue': targetName,
+                'attemptedId': envelope.id,
+              }),
+            );
+            return envelope.id;
+          }
+          final expiresAt = claim.computeExpiry(DateTime.now());
+          envelope = envelope.copyWith(
+            meta: {
+              ...envelope.meta,
+              UniqueTaskMetadata.key: claim.uniqueKey,
+              UniqueTaskMetadata.owner: claim.owner,
+              UniqueTaskMetadata.expiresAt: expiresAt.toIso8601String(),
+            },
+          );
+        }
+
         if (signer != null) {
           envelope = await signer!.sign(envelope);
         }
@@ -127,7 +185,7 @@ class Stem {
               TaskState.queued,
               attempt: envelope.attempt,
               meta: {
-                ...meta,
+                ...envelope.meta,
                 'queue': targetName,
                 'maxRetries': envelope.maxRetries,
               },
@@ -157,6 +215,54 @@ class Stem {
     }
 
     await run(0);
+  }
+
+  Future<void> _recordDuplicateAttempt(
+    String taskId,
+    Envelope duplicate,
+  ) async {
+    if (backend == null) return;
+    try {
+      final status = await backend!.get(taskId);
+      if (status == null) return;
+      final existingDuplicates = status.meta[UniqueTaskMetadata.duplicates];
+      final duplicates = <Map<String, Object?>>[];
+      if (existingDuplicates is List) {
+        for (final entry in existingDuplicates) {
+          if (entry is Map) {
+            duplicates.add(entry.cast<String, Object?>());
+          }
+        }
+      }
+      duplicates.add({
+        'taskId': duplicate.id,
+        'timestamp': DateTime.now().toIso8601String(),
+        'headers': duplicate.headers,
+        'meta': duplicate.meta,
+      });
+      final updatedMeta = {
+        ...status.meta,
+        UniqueTaskMetadata.duplicates: duplicates,
+      };
+      await backend!.set(
+        status.id,
+        status.state,
+        payload: status.payload,
+        error: status.error,
+        attempt: status.attempt,
+        meta: updatedMeta,
+      );
+    } catch (error, stack) {
+      stemLogger.warning(
+        'Failed recording unique task duplicate',
+        Context({
+          'taskId': taskId,
+          'duplicateId': duplicate.id,
+          'error': error.toString(),
+          'stack': stack.toString(),
+        }),
+      );
+    }
   }
 }
 
