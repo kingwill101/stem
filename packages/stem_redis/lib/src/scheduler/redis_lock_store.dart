@@ -122,7 +122,7 @@ end
     return result == 1;
   }
 
-  Future<void> _release(String redisKey, String owner) async {
+  Future<bool> _release(String redisKey, String owner) async {
     const script = '''
 if redis.call("GET", KEYS[1]) == ARGV[1] then
   return redis.call("DEL", KEYS[1])
@@ -130,8 +130,18 @@ else
   return 0
 end
 ''';
-    await _send(['EVAL', script, '1', redisKey, owner]);
+    final result = await _send(['EVAL', script, '1', redisKey, owner]);
+    return result == 1;
   }
+
+  @override
+  Future<String?> ownerOf(String key) async {
+    final result = await _send(['GET', _key(key)]);
+    return result is String ? result : result?.toString();
+  }
+
+  @override
+  Future<bool> release(String key, String owner) => _release(_key(key), owner);
 }
 
 class _RedisLock implements Lock {
@@ -152,5 +162,7 @@ class _RedisLock implements Lock {
   Future<bool> renew(Duration ttl) => store._renew(redisKey, owner, ttl);
 
   @override
-  Future<void> release() => store._release(redisKey, owner);
+  Future<void> release() async {
+    await store._release(redisKey, owner);
+  }
 }
