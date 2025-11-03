@@ -3,6 +3,7 @@ import 'dart:math';
 
 import '../core/contracts.dart';
 import '../core/envelope.dart';
+import '../core/chord_metadata.dart';
 
 /// A function that builds an [Envelope] describing a task to schedule.
 typedef TaskSignature = Envelope Function();
@@ -88,9 +89,11 @@ class Canvas {
     String? groupId,
   }) async {
     final id = groupId ?? _generateId('grp');
-    await backend.initGroup(
-      GroupDescriptor(id: id, expected: signatures.length),
-    );
+    if (groupId == null) {
+      await backend.initGroup(
+        GroupDescriptor(id: id, expected: signatures.length),
+      );
+    }
     final ids = <String>[];
     for (final signature in signatures) {
       final raw = signature();
@@ -189,18 +192,22 @@ class Canvas {
       throw ArgumentError('Chord body must have at least one task');
     }
     final chordId = _generateId('chord');
+    final callbackEnvelope = callback();
     await backend.initGroup(
       GroupDescriptor(
         id: chordId,
         expected: body.length,
-        meta: {'callback': callback().name},
+        meta: {ChordMetadata.callbackEnvelope: callbackEnvelope.toJson()},
       ),
     );
     await group(body, groupId: chordId);
 
     final completer = Completer<String>();
     unawaited(
-      _monitorChord(chordId, callback, completer).catchError((error, stack) {
+      _monitorChord(chordId, callbackEnvelope.id, completer).catchError((
+        error,
+        stack,
+      ) {
         if (!completer.isCompleted) {
           completer.completeError(error, stack);
         }
@@ -209,13 +216,10 @@ class Canvas {
     return completer.future;
   }
 
-  /// Monitors a chord group until completion, then publishes the callback.
-  ///
-  /// Completes [completer] with the callback task id when published, or with
-  /// an error if any body task failed.
+  /// Monitors [chordId] until the callback is enqueued or the body fails.
   Future<void> _monitorChord(
     String chordId,
-    TaskSignature callback,
+    String callbackId,
     Completer<String> completer,
   ) async {
     while (true) {
@@ -224,42 +228,25 @@ class Canvas {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         continue;
       }
-      if (!status.isComplete) {
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-        continue;
-      }
-      final allSucceeded = status.results.values.every(
-        (s) => s.state == TaskState.succeeded,
+      final hasFailure = status.results.values.any(
+        (s) => s.state == TaskState.failed || s.state == TaskState.cancelled,
       );
-      if (!allSucceeded) {
+      if (hasFailure) {
         if (!completer.isCompleted) {
           completer.completeError('Chord $chordId failed due to task failure');
         }
         return;
       }
-      final envelope = callback();
-      final payload = status.results.values.map((s) => s.payload).toList();
-      await broker.publish(
-        envelope.copyWith(
-          headers: {...envelope.headers, 'stem-chord-id': chordId},
-          meta: {...envelope.meta, 'chordResults': payload},
-        ),
-      );
-      await backend.set(
-        envelope.id,
-        TaskState.queued,
-        attempt: envelope.attempt,
-        meta: {
-          ...envelope.meta,
-          'queue': envelope.queue,
-          'chordId': chordId,
-          'chordResults': payload,
-        },
-      );
-      if (!completer.isCompleted) {
-        completer.complete(envelope.id);
+
+      final callbackStatus = await backend.get(callbackId);
+      if (callbackStatus != null) {
+        if (!completer.isCompleted) {
+          completer.complete(callbackId);
+        }
+        return;
       }
-      break;
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
   }
 

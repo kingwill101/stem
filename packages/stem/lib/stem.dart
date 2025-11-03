@@ -12,6 +12,7 @@ export 'src/core/task_invocation.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';
 export 'src/core/unique_task_coordinator.dart';
+export 'src/core/chord_metadata.dart';
 export 'src/backend/in_memory_backend.dart';
 export 'src/brokers/in_memory_broker.dart';
 export 'src/canvas/canvas.dart';

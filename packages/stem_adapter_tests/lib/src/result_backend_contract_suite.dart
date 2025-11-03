@@ -153,6 +153,32 @@ void runResultBackendContractTests({
       expect(missing, isNull);
     });
 
+    test('claimChord allows only a single claimant', () async {
+      final currentBackend = backend!;
+      const groupId = 'contract-chord';
+      await currentBackend.initGroup(
+        GroupDescriptor(
+          id: groupId,
+          expected: 1,
+          ttl: settings.groupTtl,
+          meta: const {},
+        ),
+      );
+
+      final first = await currentBackend.claimChord(
+        groupId,
+        callbackTaskId: 'cb-task',
+        dispatchedAt: DateTime.now(),
+      );
+      expect(first, isTrue);
+
+      final second = await currentBackend.claimChord(groupId);
+      expect(second, isFalse);
+
+      final status = await currentBackend.getGroup(groupId);
+      expect(status?.meta[ChordMetadata.callbackTaskId], 'cb-task');
+    });
+
     test('worker heartbeats stored and listed', () async {
       final currentBackend = backend!;
       const workerId = 'contract-worker';

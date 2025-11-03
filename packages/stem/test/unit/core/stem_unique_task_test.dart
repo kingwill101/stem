@@ -15,7 +15,9 @@ void main() {
           ..register(
             FunctionTaskHandler<void>(
               name: 'demo.unique',
-              entrypoint: (_, __) async {},
+              entrypoint: (_, _) async {
+                return null;
+              },
             ),
           );
         final coordinator = UniqueTaskCoordinator(

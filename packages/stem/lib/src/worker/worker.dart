@@ -6,6 +6,7 @@ import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
 import '../core/contracts.dart';
+import '../core/chord_metadata.dart';
 import '../core/envelope.dart';
 import '../core/retry.dart';
 import '../control/control_messages.dart';
@@ -561,8 +562,9 @@ class Worker {
             attempt: envelope.attempt,
             meta: successMeta,
           );
+          GroupStatus? groupStatus;
           if (groupId != null) {
-            await backend.addGroupResult(groupId, successStatus);
+            groupStatus = await backend.addGroupResult(groupId, successStatus);
           }
           StemMetrics.instance.increment(
             'stem.tasks.succeeded',
@@ -588,6 +590,9 @@ class Worker {
             _workerInfoSnapshot,
             result: result,
           );
+          if (groupStatus != null) {
+            await _maybeDispatchChord(groupStatus);
+          }
           completionState = TaskState.succeeded;
         } on TaskRevokedException catch (_) {
           _cancelLeaseTimer(delivery.receipt);
@@ -791,6 +796,104 @@ class Worker {
             'task': envelope.name,
             'id': envelope.id,
             'unique': uniqueKey.toString(),
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+        ),
+      );
+    }
+  }
+
+  Future<void> _maybeDispatchChord(GroupStatus status) async {
+    if (!status.isComplete) return;
+    final allSucceeded = status.results.values.every(
+      (s) => s.state == TaskState.succeeded,
+    );
+    if (!allSucceeded) return;
+
+    final callbackData = status.meta[ChordMetadata.callbackEnvelope];
+    if (callbackData is! Map) {
+      return;
+    }
+
+    final resultsPayload = status.results.values.map((s) => s.payload).toList();
+    final dispatchedAt = DateTime.now().toUtc();
+    final callbackTaskId =
+        (callbackData['id'] as String?) ?? generateEnvelopeId();
+
+    final claimed = await backend.claimChord(
+      status.id,
+      callbackTaskId: callbackTaskId,
+      dispatchedAt: dispatchedAt,
+    );
+    if (!claimed) {
+      return;
+    }
+
+    try {
+      Envelope callbackEnvelope = Envelope.fromJson(
+        callbackData.cast<String, Object?>(),
+      );
+      callbackEnvelope = callbackEnvelope.copyWith(
+        id: callbackTaskId,
+        headers: {...callbackEnvelope.headers, 'stem-chord-id': status.id},
+        meta: {
+          ...callbackEnvelope.meta,
+          'chordId': status.id,
+          'chordResults': resultsPayload,
+        },
+      );
+
+      if (signer != null && signer!.config.canSign) {
+        callbackEnvelope = await signer!.sign(callbackEnvelope);
+      } else if (signer != null && !signer!.config.canSign) {
+        stemLogger.warning(
+          'Chord callback signing skipped due to incomplete signing config',
+          Context(
+            _logContext({
+              'chord': status.id,
+              'callback': callbackEnvelope.name,
+            }),
+          ),
+        );
+      }
+
+      await broker.publish(callbackEnvelope);
+      await backend.set(
+        callbackEnvelope.id,
+        TaskState.queued,
+        attempt: callbackEnvelope.attempt,
+        meta: {
+          ...callbackEnvelope.meta,
+          'queue': callbackEnvelope.queue,
+          'chordId': status.id,
+          'dispatchedAt': dispatchedAt.toIso8601String(),
+        },
+      );
+      StemMetrics.instance.increment(
+        'stem.chords.dispatched',
+        tags: {'callback': callbackEnvelope.name},
+      );
+      stemLogger.info(
+        'Chord {chord} dispatched callback {task}',
+        Context(
+          _logContext({
+            'chord': status.id,
+            'callback': callbackEnvelope.name,
+            'taskId': callbackEnvelope.id,
+          }),
+        ),
+      );
+    } catch (error, stack) {
+      StemMetrics.instance.increment(
+        'stem.chords.dispatch_failed',
+        tags: {'chord': status.id},
+      );
+      stemLogger.warning(
+        'Failed to dispatch chord callback',
+        Context(
+          _logContext({
+            'chord': status.id,
             'error': error.toString(),
             'stack': stack.toString(),
           }),

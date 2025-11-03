@@ -360,6 +360,17 @@ abstract class ResultBackend {
 
   /// Updates the expiration for the given [taskId].
   Future<void> expire(String taskId, Duration ttl);
+
+  /// Attempts to claim responsibility for dispatching the chord callback for
+  /// [groupId]. Returns `true` only for the first caller; subsequent callers
+  /// receive `false` once the chord has been claimed. When [callbackTaskId] or
+  /// [dispatchedAt] are provided, implementations SHOULD persist them with the
+  /// group metadata so other components can observe dispatch progress.
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  });
 }
 
 /// Schedule entry persisted by a Beat-like scheduler.

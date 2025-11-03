@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../core/contracts.dart';
+import '../core/chord_metadata.dart';
 import '../observability/heartbeat.dart';
 
 /// Simple in-memory result backend used for tests and local development.
@@ -21,6 +22,7 @@ class InMemoryResultBackend implements ResultBackend {
 
   final Map<String, _GroupEntry> _groups = {};
   final Map<String, Timer> _groupExpiry = {};
+  final Set<String> _claimedChords = {};
   final Map<String, _HeartbeatEntry> _heartbeats = {};
   final Map<String, Timer> _heartbeatExpiry = {};
 
@@ -84,6 +86,7 @@ class InMemoryResultBackend implements ResultBackend {
       descriptor: descriptor,
       expiresAt: DateTime.now().add(descriptor.ttl ?? groupDefaultTtl),
     );
+    _claimedChords.remove(descriptor.id);
     _scheduleGroupExpiry(descriptor.id, descriptor.ttl ?? groupDefaultTtl);
   }
 
@@ -96,7 +99,7 @@ class InMemoryResultBackend implements ResultBackend {
       id: groupId,
       expected: group.descriptor.expected,
       results: Map.unmodifiable(group.results),
-      meta: group.descriptor.meta,
+      meta: group.meta,
     );
   }
 
@@ -122,6 +125,29 @@ class InMemoryResultBackend implements ResultBackend {
     if (entry == null) return;
     entry.expiresAt = DateTime.now().add(ttl);
     _scheduleExpiry(taskId, ttl);
+  }
+
+  @override
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  }) async {
+    final added = _claimedChords.add(groupId);
+    if (!added) {
+      return false;
+    }
+    final group = _groups[groupId];
+    if (group != null) {
+      group.meta['stem.chord.claimed'] = true;
+      if (callbackTaskId != null) {
+        group.meta[ChordMetadata.callbackTaskId] = callbackTaskId;
+      }
+      if (dispatchedAt != null) {
+        group.meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
+      }
+    }
+    return true;
   }
 
   @override
@@ -172,6 +198,7 @@ class InMemoryResultBackend implements ResultBackend {
   void _removeGroup(String key) {
     _groupExpiry.remove(key)?.cancel();
     _groups.remove(key);
+    _claimedChords.remove(key);
   }
 
   void _scheduleHeartbeatExpiry(String key, Duration ttl) {
@@ -204,9 +231,11 @@ class _Entry {
 }
 
 class _GroupEntry {
-  _GroupEntry({required this.descriptor, required this.expiresAt});
+  _GroupEntry({required this.descriptor, required this.expiresAt})
+    : meta = Map<String, Object?>.from(descriptor.meta);
 
   final GroupDescriptor descriptor;
+  final Map<String, Object?> meta;
   final Map<String, TaskStatus> results = {};
   DateTime expiresAt;
 }
