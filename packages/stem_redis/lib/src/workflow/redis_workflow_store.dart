@@ -8,15 +8,19 @@ class RedisWorkflowStore implements WorkflowStore {
     this._connection,
     this._command, {
     required this.namespace,
-  });
+    required WorkflowClock clock,
+  }) : _clock = clock;
 
   final RedisConnection _connection;
   final Command _command;
   final String namespace;
+  final WorkflowClock _clock;
+  int _idCounter = 0;
 
   static Future<RedisWorkflowStore> connect(
     String uri, {
     String namespace = 'stem',
+    WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isEmpty ? 'localhost' : parsed.host;
@@ -34,7 +38,12 @@ class RedisWorkflowStore implements WorkflowStore {
         await command.send_object(['SELECT', db]);
       }
     }
-    return RedisWorkflowStore._(connection, command, namespace: namespace);
+    return RedisWorkflowStore._(
+      connection,
+      command,
+      namespace: namespace,
+      clock: clock,
+    );
   }
 
   Future<dynamic> _send(List<Object?> cmd) => _command.send_object(cmd);
@@ -48,6 +57,28 @@ class RedisWorkflowStore implements WorkflowStore {
   String _watchersTopicKey(String topic) =>
       '$namespace:wf:watchers:topic:$topic';
   String _runKeyPrefix() => '$namespace:wf:';
+
+  Map<String, Object?> _prepareSuspensionData(
+    Map<String, Object?>? source, {
+    DateTime? resumeAt,
+    DateTime? deadline,
+    String? topic,
+  }) {
+    final result = <String, Object?>{};
+    if (source != null) {
+      result.addAll(source);
+    }
+    if (resumeAt != null && !result.containsKey('resumeAt')) {
+      result['resumeAt'] = resumeAt.toIso8601String();
+    }
+    if (deadline != null && !result.containsKey('deadline')) {
+      result['deadline'] = deadline.toIso8601String();
+    }
+    if (topic != null && topic.isNotEmpty && !result.containsKey('topic')) {
+      result['topic'] = topic;
+    }
+    return result;
+  }
 
   static const _luaRegisterWatcher = r'''
 local runKey = KEYS[1]
@@ -188,8 +219,9 @@ return 1
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final now = DateTime.now();
-    final id = 'wf-${now.microsecondsSinceEpoch}';
+    final now = _clock.now();
+    final nowIso = now.toIso8601String();
+    final id = 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final command = [
       'HSET',
       _runKey(id),
@@ -200,9 +232,9 @@ return 1
       'params',
       jsonEncode(params),
       'created_at',
-      now.toIso8601String(),
+      nowIso,
       'updated_at',
-      now.toIso8601String(),
+      nowIso,
     ];
     if (cancellationPolicy != null && !cancellationPolicy.isEmpty) {
       command
@@ -276,7 +308,7 @@ return 1
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
-    final nowIso = DateTime.now().toIso8601String();
+    final nowIso = _clock.now().toIso8601String();
     await _send(['HSET', _stepsKey(runId), stepName, jsonEncode(value)]);
     final score =
         await _send(['ZSCORE', _orderKey(runId), stepName]) as String?;
@@ -294,7 +326,8 @@ return 1
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now().toIso8601String();
+    final metadata = _prepareSuspensionData(data, resumeAt: when);
+    final now = _clock.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -305,7 +338,7 @@ return 1
       'wait_topic',
       '',
       'suspension_data',
-      jsonEncode(data),
+      jsonEncode(metadata),
       'updated_at',
       now,
     ]);
@@ -325,7 +358,13 @@ return 1
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now().toIso8601String();
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
+    final now = _clock.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -336,7 +375,7 @@ return 1
       'resume_at',
       deadline?.millisecondsSinceEpoch.toString() ?? '',
       'suspension_data',
-      jsonEncode(data),
+      jsonEncode(metadata),
       'updated_at',
       now,
     ]);
@@ -359,22 +398,36 @@ return 1
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now();
+    final now = _clock.now();
     final nowIso = now.toIso8601String();
+    final nowMillis = now.millisecondsSinceEpoch.toString();
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     final deadlineMillis = deadline != null
         ? deadline.millisecondsSinceEpoch.toString()
         : '';
-    final suspensionData = jsonEncode(data ?? const <String, Object?>{});
+    final suspensionData = jsonEncode(metadata);
     final watcherPayload = jsonEncode({
       'runId': runId,
       'stepName': stepName,
       'topic': topic,
-      'data': data ?? const <String, Object?>{},
+      'data': metadata,
       'createdAt': nowIso,
       if (deadline != null) 'deadline': deadline.toIso8601String(),
       'watchersTopicKey': _watchersTopicKey(topic),
       'topicSetKey': _topicKey(topic),
     });
+    await suspendOnTopic(
+      runId,
+      stepName,
+      topic,
+      deadline: deadline,
+      data: metadata,
+    );
     await _send([
       'EVAL',
       _luaRegisterWatcher,
@@ -388,7 +441,7 @@ return 1
       suspensionData,
       deadlineMillis,
       nowIso,
-      now.millisecondsSinceEpoch.toString(),
+      nowMillis,
       watcherPayload,
       WorkflowStatus.suspended.name,
       topic,
@@ -397,7 +450,7 @@ return 1
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
-    final now = DateTime.now().toIso8601String();
+    final now = _clock.now().toIso8601String();
     await _removeWatcher(runId);
     await _send([
       'HSET',
@@ -416,7 +469,7 @@ return 1
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
-    final now = DateTime.now().toIso8601String();
+    final now = _clock.now().toIso8601String();
     await _removeWatcher(runId);
     await _send([
       'HSET',
@@ -440,7 +493,7 @@ return 1
     StackTrace stack, {
     bool terminal = false,
   }) async {
-    final now = DateTime.now().toIso8601String();
+    final now = _clock.now().toIso8601String();
     if (terminal) {
       await _removeWatcher(runId);
     }
@@ -460,7 +513,7 @@ return 1
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final run = await get(runId);
     final waitTopic = run?.waitTopic;
-    final now = DateTime.now().toIso8601String();
+    final now = _clock.now().toIso8601String();
     await _removeWatcher(runId);
     await _send([
       'HSET',
@@ -527,7 +580,7 @@ return 1
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
-    final nowIso = DateTime.now().toIso8601String();
+    final nowIso = _clock.now().toIso8601String();
     final results =
         await _send([
               'EVAL',
@@ -612,7 +665,7 @@ return 1
   @override
   Future<void> cancel(String runId, {String? reason}) async {
     final state = await get(runId);
-    final now = DateTime.now();
+    final now = _clock.now();
     final cancellationData = <String, Object?>{
       'reason': reason ?? 'cancelled',
       'cancelledAt': now.toIso8601String(),

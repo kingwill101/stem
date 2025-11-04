@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -10,17 +8,20 @@ void main() {
   late Stem stem;
   late InMemoryWorkflowStore store;
   late WorkflowRuntime runtime;
+  late FakeWorkflowClock clock;
 
   setUp(() {
     broker = InMemoryBroker();
     backend = InMemoryResultBackend();
     registry = SimpleTaskRegistry();
     stem = Stem(broker: broker, registry: registry, backend: backend);
-    store = InMemoryWorkflowStore();
+    clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+    store = InMemoryWorkflowStore(clock: clock);
     runtime = WorkflowRuntime(
       stem: stem,
       store: store,
       eventBus: InMemoryEventBus(store),
+      clock: clock,
       pollInterval: const Duration(milliseconds: 25),
       leaseExtension: const Duration(seconds: 5),
     );
@@ -116,9 +117,8 @@ void main() {
     expect(suspended?.resumeAt, isNotNull);
 
     // Simulate beat loop discovering the due run.
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-    await runtime.start(); // ensure timer is running
-    final due = await store.dueRuns(DateTime.now());
+    clock.advance(const Duration(milliseconds: 30));
+    final due = await store.dueRuns(clock.now());
     for (final id in due) {
       final state = await store.get(id);
       await store.markResumed(id, data: state?.suspensionData);
@@ -155,8 +155,8 @@ void main() {
     final suspended = await store.get(runId);
     expect(suspended?.status, WorkflowStatus.suspended);
 
-    await Future<void>.delayed(const Duration(milliseconds: 40));
-    final due = await store.dueRuns(DateTime.now());
+    clock.advance(const Duration(milliseconds: 40));
+    final due = await store.dueRuns(clock.now());
     for (final id in due) {
       final state = await store.get(id);
       await store.markResumed(id, data: state?.suspensionData);
@@ -255,7 +255,7 @@ void main() {
     final initial = await store.get(runId);
     expect(initial?.updatedAt, isNotNull);
 
-    await Future<void>.delayed(const Duration(milliseconds: 2));
+    clock.advance(const Duration(milliseconds: 2));
     await runtime.executeRun(runId);
 
     final completed = await store.get(runId);
@@ -299,8 +299,8 @@ void main() {
     expect(afterSleep?.cursor, 0);
     expect(afterSleep?.resumeAt, isNotNull);
 
-    await Future<void>.delayed(const Duration(milliseconds: 25));
-    final due = await store.dueRuns(DateTime.now());
+    clock.advance(const Duration(milliseconds: 25));
+    final due = await store.dueRuns(clock.now());
     for (final id in due) {
       final state = await store.get(id);
       await store.markResumed(id, data: state?.suspensionData);
@@ -487,8 +487,8 @@ void main() {
     expect(suspended?.status, WorkflowStatus.suspended);
     expect(suspended?.resumeAt, isNotNull);
 
-    await Future<void>.delayed(const Duration(milliseconds: 30));
-    final due = await store.dueRuns(DateTime.now());
+    clock.advance(const Duration(milliseconds: 30));
+    final due = await store.dueRuns(clock.now());
     for (final id in due) {
       final state = await store.get(id);
       await store.markResumed(id, data: state?.suspensionData);
@@ -526,8 +526,8 @@ void main() {
     final suspended = await store.get(runId);
     expect(suspended?.status, WorkflowStatus.suspended);
 
-    await Future<void>.delayed(const Duration(milliseconds: 40));
-    final due = await store.dueRuns(DateTime.now());
+    clock.advance(const Duration(milliseconds: 40));
+    final due = await store.dueRuns(clock.now());
     for (final id in due) {
       final state = await store.get(id);
       await store.markResumed(id, data: state?.suspensionData);
@@ -663,7 +663,7 @@ void main() {
       ),
     );
 
-    await Future<void>.delayed(const Duration(milliseconds: 15));
+    clock.advance(const Duration(milliseconds: 15));
     await runtime.executeRun(runId);
 
     final state = await store.get(runId);
@@ -672,7 +672,6 @@ void main() {
   });
 
   test('maxSuspendDuration cancels runs that stay suspended', () async {
-    await runtime.start();
     runtime.registerWorkflow(
       Flow(
         name: 'suspend.workflow',
@@ -697,7 +696,8 @@ void main() {
     );
 
     await runtime.executeRun(runId);
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+    clock.advance(const Duration(milliseconds: 80));
+    await runtime.executeRun(runId);
 
     final state = await store.get(runId);
     expect(state?.status, WorkflowStatus.cancelled);

@@ -1,4 +1,5 @@
 import 'flow_step.dart';
+import 'workflow_clock.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -20,8 +21,10 @@ class FlowContext {
     required this.previousResult,
     required this.stepIndex,
     this.iteration = 0,
+    WorkflowClock clock = const SystemWorkflowClock(),
     Object? resumeData,
-  }) : _resumeData = resumeData;
+  }) : _clock = clock,
+       _resumeData = resumeData;
 
   final String workflow;
   final String runId;
@@ -30,6 +33,7 @@ class FlowContext {
   final Object? previousResult;
   final int stepIndex;
   final int iteration;
+  final WorkflowClock _clock;
 
   FlowStepControl? _control;
   Object? _resumeData;
@@ -56,7 +60,7 @@ class FlowContext {
       final resumeAtRaw = resume['resumeAt'];
       if (type == 'sleep' && resumeAtRaw is String) {
         final resumeAt = DateTime.tryParse(resumeAtRaw);
-        if (resumeAt != null && !resumeAt.isAfter(DateTime.now())) {
+        if (resumeAt != null && !resumeAt.isAfter(_clock.now())) {
           _control = FlowStepControl.continueRun();
           return _control!;
         }

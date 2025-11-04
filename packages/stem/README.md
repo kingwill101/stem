@@ -215,6 +215,7 @@ Inside a script step you can access the same metadata as `FlowContext`:
 
 ### Durable workflow semantics
 
+- Chords dispatch from workers. Once every branch completes, any worker may enqueue the callback, ensuring producer crashes do not block completion.
 - Steps may run multiple times. The runtime replays a step from the top after
   every suspension (sleep, awaited event, rewind) and after worker crashes, so
   handlers must be idempotent.
@@ -346,3 +347,20 @@ await fake.enqueue('tasks.email', args: {'id': 1});
 final recorded = fake.enqueues.single;
 expect(recorded.name, 'tasks.email');
 ```
+
+- `FakeWorkflowClock` keeps workflow tests deterministic. Inject the same clock
+  into your runtime and store, then advance it directly instead of sleeping:
+
+  ```dart
+  final clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+  final store = InMemoryWorkflowStore(clock: clock);
+  final runtime = WorkflowRuntime(
+    stem: stem,
+    store: store,
+    eventBus: InMemoryEventBus(store),
+    clock: clock,
+  );
+
+  clock.advance(const Duration(seconds: 5));
+  final dueRuns = await store.dueRuns(clock.now());
+  ```

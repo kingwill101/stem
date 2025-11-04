@@ -6,11 +6,16 @@ import '../core/workflow_status.dart';
 import '../core/workflow_store.dart';
 import '../core/workflow_step_entry.dart';
 import '../core/workflow_watcher.dart';
+import '../core/workflow_clock.dart';
 
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
 /// Not safe for production as state is lost on process exit.
 class InMemoryWorkflowStore implements WorkflowStore {
+  InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
+    : _clock = clock;
+
+  final WorkflowClock _clock;
   final _runs = <String, RunState>{};
   final _steps = <String, Map<String, Object?>>{};
   final _suspendedTopics = <String, Set<String>>{};
@@ -19,10 +24,33 @@ class InMemoryWorkflowStore implements WorkflowStore {
   final _watchersByRun = <String, _WatcherRecord>{};
   int _counter = 0;
 
-  Map<String, Object?>? _cloneData(Map<String, Object?>? source) {
-    if (source == null) return null;
-    return Map.unmodifiable(Map<String, Object?>.from(source));
+  Map<String, Object?> _prepareSuspensionData(
+    Map<String, Object?>? source, {
+    DateTime? resumeAt,
+    DateTime? deadline,
+    String? topic,
+  }) {
+    final result = <String, Object?>{};
+    if (source != null) {
+      result.addAll(source);
+    }
+    if (resumeAt != null && !result.containsKey('resumeAt')) {
+      result['resumeAt'] = resumeAt.toIso8601String();
+    }
+    if (deadline != null && !result.containsKey('deadline')) {
+      result['deadline'] = deadline.toIso8601String();
+    }
+    if (topic != null && topic.isNotEmpty && !result.containsKey('topic')) {
+      result['topic'] = topic;
+    }
+    return Map.unmodifiable(result);
   }
+
+  Map<String, Object?> _freeze(Map<String, Object?> data) =>
+      Map.unmodifiable(Map<String, Object?>.from(data));
+
+  Map<String, Object?>? _freezeNullable(Map<String, Object?>? data) =>
+      data == null ? null : _freeze(data);
 
   String _baseStepName(String name) {
     final index = name.indexOf('#');
@@ -49,7 +77,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final now = DateTime.now();
+    final now = _clock.now();
     final id = 'wf-${now.microsecondsSinceEpoch}-${_counter++}';
     _runs[id] = RunState(
       id: id,
@@ -94,7 +122,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _steps[runId]?[stepName] = value;
     final state = _runs[runId];
     if (state != null) {
-      _runs[runId] = state.copyWith(updatedAt: DateTime.now());
+      _runs[runId] = state.copyWith(updatedAt: _clock.now());
     }
   }
 
@@ -111,9 +139,9 @@ class InMemoryWorkflowStore implements WorkflowStore {
       status: WorkflowStatus.suspended,
       cursor: state.cursor,
       resumeAt: when,
-      suspensionData: _cloneData(data),
+      suspensionData: _prepareSuspensionData(data, resumeAt: when),
       waitTopic: null,
-      updatedAt: DateTime.now(),
+      updatedAt: _clock.now(),
     );
     _due.putIfAbsent(when, () => <String>{}).add(runId);
   }
@@ -128,12 +156,18 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }) async {
     final state = _runs[runId];
     if (state == null) return;
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       waitTopic: topic,
       resumeAt: deadline,
-      suspensionData: _cloneData(data),
-      updatedAt: DateTime.now(),
+      suspensionData: metadata,
+      updatedAt: _clock.now(),
     );
     _suspendedTopics.putIfAbsent(topic, () => <String>{}).add(runId);
     if (deadline != null) {
@@ -149,20 +183,26 @@ class InMemoryWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     await suspendOnTopic(
       runId,
       stepName,
       topic,
       deadline: deadline,
-      data: data,
+      data: metadata,
     );
     final record = _WatcherRecord(
       runId: runId,
       stepName: stepName,
       topic: topic,
-      createdAt: DateTime.now(),
+      createdAt: _clock.now(),
       deadline: deadline,
-      data: _cloneData(data) ?? const <String, Object?>{},
+      data: metadata,
     );
     final topicMap = _watchersByTopic.putIfAbsent(topic, () => LinkedHashMap());
     topicMap[runId] = record;
@@ -176,7 +216,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
-      updatedAt: DateTime.now(),
+      updatedAt: _clock.now(),
     );
   }
 
@@ -191,7 +231,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: const <String, Object?>{},
-      updatedAt: DateTime.now(),
+      updatedAt: _clock.now(),
     );
   }
 
@@ -210,7 +250,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
-      updatedAt: DateTime.now(),
+      updatedAt: _clock.now(),
     );
   }
 
@@ -223,8 +263,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       status: WorkflowStatus.running,
       resumeAt: null,
       waitTopic: null,
-      suspensionData: _cloneData(data),
-      updatedAt: DateTime.now(),
+      suspensionData: _freezeNullable(data) ?? const <String, Object?>{},
+      updatedAt: _clock.now(),
     );
     for (final entry in _due.values) {
       entry.remove(runId);
@@ -282,7 +322,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }) async {
     final topicMap = _watchersByTopic[topic];
     if (topicMap == null || topicMap.isEmpty) return const [];
-    final now = DateTime.now();
+    final now = _clock.now();
     final ids = topicMap.keys.take(limit).toList(growable: false);
     final results = <WorkflowWatcherResolution>[];
     for (final runId in ids) {
@@ -312,7 +352,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
         status: WorkflowStatus.running,
         waitTopic: null,
         resumeAt: null,
-        suspensionData: _cloneData(metadata),
+        suspensionData: _freeze(metadata),
         updatedAt: now,
       );
       for (final entry in _due.values) {
@@ -357,7 +397,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     final state = _runs[runId];
     if (state == null) return;
     _removeWatcherForRun(runId);
-    final now = DateTime.now();
+    final now = _clock.now();
     final cancellationData = <String, Object?>{
       'reason': reason ?? 'cancelled',
       'cancelledAt': now.toIso8601String(),
@@ -421,7 +461,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: targetIndex,
-      suspensionData: _cloneData(<String, Object?>{
+      suspensionData: _freeze(<String, Object?>{
         'step': stepName,
         'iteration': 0,
         'iterationStep': stepName,

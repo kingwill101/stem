@@ -15,6 +15,7 @@ import '../core/workflow_script_context.dart';
 import '../core/run_state.dart';
 import '../core/workflow_status.dart';
 import '../core/workflow_store.dart';
+import '../core/workflow_clock.dart';
 import 'workflow_registry.dart';
 
 const String workflowRunTaskName = 'stem.workflow.run';
@@ -30,12 +31,14 @@ class WorkflowRuntime {
     required Stem stem,
     required WorkflowStore store,
     required EventBus eventBus,
+    WorkflowClock clock = const SystemWorkflowClock(),
     Duration pollInterval = const Duration(milliseconds: 500),
     this.leaseExtension = const Duration(seconds: 30),
     this.queue = 'workflow',
   }) : _stem = stem,
        _store = store,
        _eventBus = eventBus,
+       _clock = clock,
        _pollInterval = pollInterval;
 
   final Stem _stem;
@@ -45,6 +48,7 @@ class WorkflowRuntime {
   final Duration leaseExtension;
   final WorkflowRegistry _registry = WorkflowRegistry();
   final String queue;
+  final WorkflowClock _clock;
   final StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'workflow',
   );
@@ -53,6 +57,7 @@ class WorkflowRuntime {
   bool _started = false;
 
   WorkflowRegistry get registry => _registry;
+  WorkflowClock get clock => _clock;
 
   /// Registers a workflow definition so it can be scheduled via
   /// [startWorkflow]. Typically invoked by `StemWorkflowApp` during startup.
@@ -117,7 +122,7 @@ class WorkflowRuntime {
         if (state == null) {
           continue;
         }
-        final now = DateTime.now();
+        final now = _clock.now();
         if (await _maybeCancelForPolicy(state, now: now)) {
           continue;
         }
@@ -134,7 +139,7 @@ class WorkflowRuntime {
     if (_started) return;
     _started = true;
     _timer = Timer.periodic(_pollInterval, (_) async {
-      final now = DateTime.now();
+      final now = _clock.now();
       final due = await _store.dueRuns(now);
       for (final runId in due) {
         final state = await _store.get(runId);
@@ -188,7 +193,7 @@ class WorkflowRuntime {
     if (runState.isTerminal) {
       return;
     }
-    final now = DateTime.now();
+    final now = _clock.now();
     if (await _maybeCancelForPolicy(runState, now: now)) {
       return;
     }
@@ -245,7 +250,7 @@ class WorkflowRuntime {
 
     while (cursor < definition.steps.length) {
       if (policy != null && policy.maxRunDuration != null) {
-        final elapsed = DateTime.now().difference(runState.createdAt);
+        final elapsed = _clock.now().difference(runState.createdAt);
         if (elapsed >= policy.maxRunDuration!) {
           await _cancelForPolicy(
             runState,
@@ -293,6 +298,7 @@ class WorkflowRuntime {
         previousResult: previousResult,
         stepIndex: cursor,
         iteration: iteration,
+        clock: _clock,
         resumeData: resumeData,
       );
       resumeData = null;
@@ -319,7 +325,7 @@ class WorkflowRuntime {
           'iteration': iteration,
           'iterationStep': step.name,
         };
-        final suspendedAt = DateTime.now();
+        final suspendedAt = _clock.now();
         metadata['suspendedAt'] = suspendedAt.toIso8601String();
         DateTime? policyDeadline;
         final suspendLimit = policy?.maxSuspendDuration;
@@ -644,7 +650,7 @@ class WorkflowRuntime {
     await _store.cancel(state.id, reason: reason);
     final payloadMetadata = <String, Object?>{
       'policy': reason,
-      'cancelledAt': DateTime.now().toIso8601String(),
+      'cancelledAt': _clock.now().toIso8601String(),
       ...metadata,
     };
     await _signals.workflowRunCancelled(
@@ -703,13 +709,15 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
        _suspensionStep =
            (suspensionData?['iterationStep'] ?? suspensionData?['step'])
                as String?,
-       _suspensionIteration = suspensionData?['iteration'] as int?;
+       _suspensionIteration = suspensionData?['iteration'] as int?,
+       clock = runtime.clock;
 
   final WorkflowRuntime runtime;
   final RunState runState;
   final TaskContext? taskContext;
   final Map<String, int> _completedIterations;
   final WorkflowCancellationPolicy? policy;
+  final WorkflowClock clock;
   Object? _previousResult;
   int _stepIndex;
   bool _wasSuspended = false;
@@ -739,7 +747,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     _lastStepName = name;
     final policy = this.policy;
     if (policy != null && policy.maxRunDuration != null) {
-      final elapsed = DateTime.now().difference(runState.createdAt);
+      final elapsed = clock.now().difference(runState.createdAt);
       if (elapsed >= policy.maxRunDuration!) {
         await runtime._cancelForPolicy(
           runState,
@@ -854,7 +862,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     if (control.data != null && control.data!.isNotEmpty) {
       metadata.addAll(control.data!);
     }
-    final now = DateTime.now();
+    final now = clock.now();
     metadata['suspendedAt'] = now.toIso8601String();
     DateTime? policyDeadline;
     final suspendLimit = policy?.maxSuspendDuration;
@@ -982,7 +990,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
       final resumeAtRaw = resume['resumeAt'];
       if (type == 'sleep' && resumeAtRaw is String) {
         final resumeAt = DateTime.tryParse(resumeAtRaw);
-        if (resumeAt != null && !resumeAt.isAfter(DateTime.now())) {
+        if (resumeAt != null && !resumeAt.isAfter(execution.clock.now())) {
           _control = const _ScriptControl.continueRun();
           return;
         }

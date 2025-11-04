@@ -19,11 +19,16 @@ void _ensureColumn(
 }
 
 class SqliteWorkflowStore implements WorkflowStore {
-  SqliteWorkflowStore._(this._db);
+  SqliteWorkflowStore._(this._db, this._clock);
 
   final Database _db;
+  final WorkflowClock _clock;
+  int _idCounter = 0;
 
-  factory SqliteWorkflowStore.open(File file) {
+  factory SqliteWorkflowStore.open(
+    File file, {
+    WorkflowClock clock = const SystemWorkflowClock(),
+  }) {
     final db = sqlite3.open(file.path);
     db.execute('PRAGMA journal_mode = WAL;');
     db.execute('PRAGMA synchronous = NORMAL;');
@@ -85,7 +90,29 @@ class SqliteWorkflowStore implements WorkflowStore {
       'updated_at',
       "INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER))",
     );
-    return SqliteWorkflowStore._(db);
+    return SqliteWorkflowStore._(db, clock);
+  }
+
+  Map<String, Object?> _prepareSuspensionData(
+    Map<String, Object?>? source, {
+    DateTime? resumeAt,
+    DateTime? deadline,
+    String? topic,
+  }) {
+    final result = <String, Object?>{};
+    if (source != null) {
+      result.addAll(source);
+    }
+    if (resumeAt != null && !result.containsKey('resumeAt')) {
+      result['resumeAt'] = resumeAt.toIso8601String();
+    }
+    if (deadline != null && !result.containsKey('deadline')) {
+      result['deadline'] = deadline.toIso8601String();
+    }
+    if (topic != null && topic.isNotEmpty && !result.containsKey('topic')) {
+      result['topic'] = topic;
+    }
+    return result;
   }
 
   @override
@@ -96,8 +123,9 @@ class SqliteWorkflowStore implements WorkflowStore {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final id = 'wf-${DateTime.now().microsecondsSinceEpoch}-${_random()}';
+    final nowInstant = _clock.now();
+    final now = nowInstant.millisecondsSinceEpoch;
+    final id = 'wf-${nowInstant.microsecondsSinceEpoch}-${_idCounter++}';
     final policyJson = cancellationPolicy == null || cancellationPolicy.isEmpty
         ? null
         : jsonEncode(cancellationPolicy.toJson());
@@ -190,7 +218,7 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
     _db.execute('BEGIN IMMEDIATE');
     try {
       _db.execute(
@@ -198,7 +226,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         [runId, stepName, jsonEncode(value)],
       );
       _db.execute('UPDATE wf_runs SET updated_at = ? WHERE id = ?', [
-        now,
+        nowMillis,
         runId,
       ]);
       _db.execute('COMMIT');
@@ -215,15 +243,16 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final metadata = _prepareSuspensionData(data, resumeAt: when);
     _db.execute(
       'UPDATE wf_runs SET status = ?, resume_at = ?, wait_topic = NULL, '
       'suspension_data = ?, updated_at = ? WHERE id = ?',
       [
         WorkflowStatus.suspended.name,
         when.millisecondsSinceEpoch,
-        jsonEncode(data),
-        now,
+        jsonEncode(metadata),
+        nowMillis,
         runId,
       ],
     );
@@ -237,7 +266,13 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     _db.execute(
       'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
       'suspension_data = ?, updated_at = ? WHERE id = ?',
@@ -245,8 +280,8 @@ class SqliteWorkflowStore implements WorkflowStore {
         WorkflowStatus.suspended.name,
         topic,
         deadline?.millisecondsSinceEpoch,
-        jsonEncode(data),
-        now,
+        jsonEncode(metadata),
+        nowMillis,
         runId,
       ],
     );
@@ -260,8 +295,14 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final payload = jsonEncode(data ?? const <String, Object?>{});
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
+    final payload = jsonEncode(metadata);
     final deadlineMillis = deadline?.millisecondsSinceEpoch;
     _db.execute('BEGIN IMMEDIATE');
     try {
@@ -274,7 +315,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         'data = excluded.data, '
         'created_at = excluded.created_at, '
         'deadline = excluded.deadline',
-        [runId, stepName, topic, payload, now, deadlineMillis],
+        [runId, stepName, topic, payload, nowMillis, deadlineMillis],
       );
       _db.execute(
         'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
@@ -284,7 +325,7 @@ class SqliteWorkflowStore implements WorkflowStore {
           topic,
           deadlineMillis,
           payload,
-          now,
+          nowMillis,
           runId,
         ],
       );
@@ -297,23 +338,23 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
     _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
       'updated_at = ? WHERE id = ?',
-      [WorkflowStatus.running.name, now, runId],
+      [WorkflowStatus.running.name, nowMillis, runId],
     );
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
     _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, result = ?, suspension_data = NULL, '
       'updated_at = ? WHERE id = ?',
-      [WorkflowStatus.completed.name, jsonEncode(result), now, runId],
+      [WorkflowStatus.completed.name, jsonEncode(result), nowMillis, runId],
     );
   }
 
@@ -324,7 +365,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     StackTrace stack, {
     bool terminal = false,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
     if (terminal) {
       _deleteWatcher(runId);
     }
@@ -333,7 +374,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       [
         (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
         jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
-        now,
+        nowMillis,
         runId,
       ],
     );
@@ -341,12 +382,12 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowMillis = _clock.now().millisecondsSinceEpoch;
     _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
       'suspension_data = ?, updated_at = ? WHERE id = ?',
-      [WorkflowStatus.running.name, jsonEncode(data), now, runId],
+      [WorkflowStatus.running.name, jsonEncode(data), nowMillis, runId],
     );
   }
 
@@ -393,7 +434,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
-    final now = DateTime.now();
+    final now = _clock.now();
     final nowMs = now.millisecondsSinceEpoch;
     final nowIso = now.toIso8601String();
     _db.execute('BEGIN IMMEDIATE');
@@ -479,10 +520,11 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final nowInstant = _clock.now();
+    final now = nowInstant.millisecondsSinceEpoch;
     final cancellation = jsonEncode({
       'reason': reason ?? 'cancelled',
-      'cancelledAt': DateTime.fromMillisecondsSinceEpoch(now).toIso8601String(),
+      'cancelledAt': nowInstant.toIso8601String(),
     });
     _deleteWatcher(runId);
     _db.execute(
@@ -629,6 +671,4 @@ class SqliteWorkflowStore implements WorkflowStore {
     if (index == -1) return name;
     return name.substring(0, index);
   }
-
-  int _random() => DateTime.now().microsecondsSinceEpoch & 0xFFFF;
 }

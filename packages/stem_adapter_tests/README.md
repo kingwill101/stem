@@ -24,7 +24,9 @@ void main() {
     factory: BrokerContractFactory(create: createBroker),
   );
 
-  final storeFactory = WorkflowStoreContractFactory(create: createWorkflowStore);
+  final storeFactory = WorkflowStoreContractFactory(
+    create: createWorkflowStore,
+  );
 
   runWorkflowStoreContractTests(
     adapterName: 'my-adapter',
@@ -37,11 +39,19 @@ void main() {
     factory: storeFactory,
   );
 }
+
+Future<WorkflowStore> createWorkflowStore(FakeWorkflowClock clock) async {
+  return MyWorkflowStore(clock: clock);
+}
 ```
 
 The workflow store suite exercises durable watcher semantics (`registerWatcher`,
 `resolveWatchers`, and `listWatchers`) so adapters must capture event payloads
 atomically and expose waiting runs for operator tooling.
+
+The factory receives a shared `FakeWorkflowClock`. Inject the same instance into
+your `WorkflowRuntime` during facade tests so both the runtime and store observe
+the same deterministic timeline.
 
 ## Versioning
 

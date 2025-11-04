@@ -11,13 +11,16 @@ class PostgresWorkflowStore implements WorkflowStore {
     this._client, {
     required this.schema,
     required this.namespace,
+    required WorkflowClock clock,
     Uuid? uuid,
-  }) : _uuid = uuid ?? const Uuid();
+  }) : _uuid = uuid ?? const Uuid(),
+       _clock = clock;
 
   final PostgresClient _client;
   final String schema;
   final String namespace;
   final Uuid _uuid;
+  final WorkflowClock _clock;
 
   String get _tablePrefix => namespace.isNotEmpty ? '${namespace}_' : '';
 
@@ -29,6 +32,28 @@ class PostgresWorkflowStore implements WorkflowStore {
   String get _watchersTopicIndex =>
       '${_tablePrefix}workflow_watchers_topic_idx';
 
+  Map<String, Object?> _prepareSuspensionData(
+    Map<String, Object?>? source, {
+    DateTime? resumeAt,
+    DateTime? deadline,
+    String? topic,
+  }) {
+    final result = <String, Object?>{};
+    if (source != null) {
+      result.addAll(source);
+    }
+    if (resumeAt != null && !result.containsKey('resumeAt')) {
+      result['resumeAt'] = resumeAt.toIso8601String();
+    }
+    if (deadline != null && !result.containsKey('deadline')) {
+      result['deadline'] = deadline.toIso8601String();
+    }
+    if (topic != null && topic.isNotEmpty && !result.containsKey('topic')) {
+      result['topic'] = topic;
+    }
+    return result;
+  }
+
   /// Connects to a PostgreSQL database and ensures the workflow tables exist.
   static Future<PostgresWorkflowStore> connect(
     String uri, {
@@ -37,6 +62,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     String? applicationName,
     TlsConfig? tls,
     Uuid? uuid,
+    WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
     final client = PostgresClient(
       uri,
@@ -47,6 +73,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       client,
       schema: schema,
       namespace: namespace,
+      clock: clock,
       uuid: uuid,
     );
     await store._initialize();
@@ -133,11 +160,28 @@ class PostgresWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final id = _uuid.v7();
+    final now = _nowUtc();
     await _client.run((Connection conn) async {
       await conn.execute(
         Sql.named('''
-          INSERT INTO $_runsTable (id, workflow, status, params, cancellation_policy)
-          VALUES (@id, @workflow, @status, @params::jsonb, @policy::jsonb)
+          INSERT INTO $_runsTable (
+            id,
+            workflow,
+            status,
+            params,
+            cancellation_policy,
+            created_at,
+            updated_at
+          )
+          VALUES (
+            @id,
+            @workflow,
+            @status,
+            @params::jsonb,
+            @policy::jsonb,
+            @createdAt,
+            @updatedAt
+          )
         '''),
         parameters: {
           'id': id,
@@ -147,6 +191,8 @@ class PostgresWorkflowStore implements WorkflowStore {
           'policy': cancellationPolicy == null
               ? null
               : jsonEncode(cancellationPolicy.toJson()),
+          'createdAt': now,
+          'updatedAt': now,
         },
       );
     });
@@ -177,28 +223,30 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await conn.execute('BEGIN');
       try {
         await conn.execute(
           Sql.named('''
-            INSERT INTO $_stepsTable (run_id, name, value)
-            VALUES (@runId, @name, @value::jsonb)
+            INSERT INTO $_stepsTable (run_id, name, value, created_at)
+            VALUES (@runId, @name, @value::jsonb, @createdAt)
             ON CONFLICT (run_id, name) DO NOTHING
           '''),
           parameters: {
             'runId': runId,
             'name': stepName,
             'value': jsonEncode(value),
+            'createdAt': now,
           },
         );
 
         await conn.execute(
           Sql.named('''
             UPDATE $_runsTable
-               SET updated_at = NOW()
+               SET updated_at = @updatedAt
              WHERE id = @runId
           '''),
-          parameters: {'runId': runId},
+          parameters: {'runId': runId, 'updatedAt': now},
         );
 
         await conn.execute('COMMIT');
@@ -216,22 +264,25 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
+    final metadata = _prepareSuspensionData(data, resumeAt: when);
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
              SET status = @status,
                  resume_at = @resumeAt,
                  wait_topic = NULL,
-                 suspension_data = COALESCE(@data::jsonb, suspension_data),
-                 updated_at = NOW()
+                 suspension_data = @data::jsonb,
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
           'status': WorkflowStatus.suspended.name,
           'resumeAt': when,
-          'data': data != null ? jsonEncode(data) : null,
+          'data': jsonEncode(metadata),
           'id': runId,
+          'updatedAt': now,
         },
       );
     });
@@ -245,7 +296,14 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -253,15 +311,16 @@ class PostgresWorkflowStore implements WorkflowStore {
                  wait_topic = @topic,
                  resume_at = @deadline,
                  suspension_data = @data::jsonb,
-                 updated_at = NOW()
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
           'status': WorkflowStatus.suspended.name,
           'topic': topic,
           'deadline': deadline,
-          'data': data != null ? jsonEncode(data) : null,
+          'data': jsonEncode(metadata),
           'id': runId,
+          'updatedAt': now,
         },
       );
     });
@@ -275,26 +334,41 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final metadata = _prepareSuspensionData(
+      data,
+      resumeAt: deadline,
+      deadline: deadline,
+      topic: topic,
+    );
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await conn.execute('BEGIN');
       try {
         await conn.execute(
           Sql.named('''
-            INSERT INTO $_watchersTable (run_id, step_name, topic, data, deadline)
-            VALUES (@runId, @stepName, @topic, @data::jsonb, @deadline)
+            INSERT INTO $_watchersTable (
+              run_id,
+              step_name,
+              topic,
+              data,
+              deadline,
+              created_at
+            )
+            VALUES (@runId, @stepName, @topic, @data::jsonb, @deadline, @createdAt)
             ON CONFLICT (run_id) DO UPDATE
               SET step_name = EXCLUDED.step_name,
                   topic = EXCLUDED.topic,
                   data = EXCLUDED.data,
                   deadline = EXCLUDED.deadline,
-                  created_at = NOW()
+                  created_at = @createdAt
           '''),
           parameters: {
             'runId': runId,
             'stepName': stepName,
             'topic': topic,
-            'data': data != null ? jsonEncode(data) : null,
+            'data': jsonEncode(metadata),
             'deadline': deadline,
+            'createdAt': now,
           },
         );
 
@@ -304,16 +378,17 @@ class PostgresWorkflowStore implements WorkflowStore {
                SET status = @status,
                    wait_topic = @topic,
                    resume_at = @deadline,
-                   suspension_data = COALESCE(@data::jsonb, suspension_data),
-                   updated_at = NOW()
+                   suspension_data = @data::jsonb,
+                   updated_at = @updatedAt
              WHERE id = @id
           '''),
           parameters: {
             'status': WorkflowStatus.suspended.name,
             'topic': topic,
             'deadline': deadline,
-            'data': data != null ? jsonEncode(data) : null,
+            'data': jsonEncode(metadata),
             'id': runId,
+            'updatedAt': now,
           },
         );
         await conn.execute('COMMIT');
@@ -327,6 +402,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
@@ -334,10 +410,14 @@ class PostgresWorkflowStore implements WorkflowStore {
              SET status = @status,
                  resume_at = NULL,
                  wait_topic = NULL,
-                 updated_at = NOW()
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
-        parameters: {'status': WorkflowStatus.running.name, 'id': runId},
+        parameters: {
+          'status': WorkflowStatus.running.name,
+          'id': runId,
+          'updatedAt': now,
+        },
       );
     });
   }
@@ -345,6 +425,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> markCompleted(String runId, Object? result) async {
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
@@ -354,13 +435,14 @@ class PostgresWorkflowStore implements WorkflowStore {
                  resume_at = NULL,
                  wait_topic = NULL,
                  suspension_data = NULL,
-                 updated_at = NOW()
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
           'status': WorkflowStatus.completed.name,
           'result': result != null ? jsonEncode(result) : null,
           'id': runId,
+          'updatedAt': now,
         },
       );
     });
@@ -374,6 +456,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     bool terminal = false,
   }) async {
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       if (terminal) {
         await _deleteWatcherForRun(conn, runId);
       }
@@ -382,7 +465,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           UPDATE $_runsTable
              SET status = @status,
                  last_error = @error::jsonb,
-                 updated_at = NOW()
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
@@ -393,6 +476,7 @@ class PostgresWorkflowStore implements WorkflowStore {
             'stack': stack.toString(),
           }),
           'id': runId,
+          'updatedAt': now,
         },
       );
     });
@@ -401,6 +485,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     await _client.run((Connection conn) async {
+      final now = _nowUtc();
       await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
@@ -410,13 +495,14 @@ class PostgresWorkflowStore implements WorkflowStore {
                  wait_topic = NULL,
                  suspension_data =
                      COALESCE(@data::jsonb, suspension_data),
-                 updated_at = NOW()
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
           'status': WorkflowStatus.running.name,
           'data': data != null ? jsonEncode(data) : null,
           'id': runId,
+          'updatedAt': now,
         },
       );
     });
@@ -454,10 +540,10 @@ class PostgresWorkflowStore implements WorkflowStore {
             Sql.named('''
               UPDATE $_runsTable
                  SET resume_at = NULL,
-                     updated_at = NOW()
+                     updated_at = @updatedAt
                WHERE id = ANY(@ids)
             '''),
-            parameters: {'ids': ids},
+            parameters: {'ids': ids, 'updatedAt': now.toUtc()},
           );
         }
 
@@ -524,7 +610,8 @@ class PostgresWorkflowStore implements WorkflowStore {
           await conn.execute('COMMIT');
           return const <WorkflowWatcherResolution>[];
         }
-        final now = DateTime.now();
+        final now = _clock.now();
+        final nowUtc = now.toUtc();
         final resolutions = <WorkflowWatcherResolution>[];
         for (final row in rows) {
           final runId = row[0] as String;
@@ -548,13 +635,14 @@ class PostgresWorkflowStore implements WorkflowStore {
                      wait_topic = NULL,
                      resume_at = NULL,
                      suspension_data = @data::jsonb,
-                     updated_at = NOW()
+                     updated_at = @updatedAt
                WHERE id = @id
             '''),
             parameters: {
               'status': WorkflowStatus.running.name,
               'data': jsonEncode(metadata),
               'id': runId,
+              'updatedAt': nowUtc,
             },
           );
 
@@ -615,6 +703,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> cancel(String runId, {String? reason}) async {
     await _client.run((Connection conn) async {
+      final now = _clock.now();
       await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
@@ -623,17 +712,18 @@ class PostgresWorkflowStore implements WorkflowStore {
                  resume_at = NULL,
                  wait_topic = NULL,
                  suspension_data = NULL,
-                 cancellation_data = jsonb_build_object(
-                   'reason', COALESCE(@reason, 'cancelled'),
-                   'cancelledAt', to_jsonb(NOW())
-                 ),
-                 updated_at = NOW()
+                 cancellation_data = @data::jsonb,
+                 updated_at = @updatedAt
            WHERE id = @id
         '''),
         parameters: {
           'status': WorkflowStatus.cancelled.name,
           'id': runId,
-          'reason': reason,
+          'data': jsonEncode({
+            'reason': reason ?? 'cancelled',
+            'cancelledAt': now.toIso8601String(),
+          }),
+          'updatedAt': now.toUtc(),
         },
       );
     });
@@ -807,6 +897,8 @@ class PostgresWorkflowStore implements WorkflowStore {
       parameters: {'id': runId},
     );
   }
+
+  DateTime _nowUtc() => _clock.now().toUtc();
 
   Map<String, Object?> _decodeMap(dynamic value) {
     if (value == null) return const {};

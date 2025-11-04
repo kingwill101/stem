@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -16,9 +14,11 @@ void runWorkflowScriptFacadeTests({
     SimpleTaskRegistry? registry;
     Stem? stem;
     WorkflowRuntime? runtime;
+    late FakeWorkflowClock clock;
 
     setUp(() async {
-      store = await factory.create();
+      clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+      store = await factory.create(clock);
       broker = InMemoryBroker();
       backend = InMemoryResultBackend();
       registry = SimpleTaskRegistry();
@@ -27,6 +27,7 @@ void runWorkflowScriptFacadeTests({
         stem: stem!,
         store: store!,
         eventBus: InMemoryEventBus(store!),
+        clock: clock,
         pollInterval: const Duration(milliseconds: 50),
       );
       registry!.register(runtime!.workflowRunnerHandler());
@@ -106,8 +107,8 @@ void runWorkflowScriptFacadeTests({
       expect(suspended?.status, WorkflowStatus.suspended);
       expect(suspended?.resumeAt, isNotNull);
 
-      await Future<void>.delayed(const Duration(milliseconds: 40));
-      final due = await currentStore.dueRuns(DateTime.now());
+      clock.advance(const Duration(milliseconds: 40));
+      final due = await currentStore.dueRuns(clock.now());
       for (final id in due) {
         final state = await currentStore.get(id);
         await currentStore.markResumed(id, data: state?.suspensionData);

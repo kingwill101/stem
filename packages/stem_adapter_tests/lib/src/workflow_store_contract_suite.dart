@@ -6,7 +6,7 @@ import 'package:test/test.dart';
 class WorkflowStoreContractFactory {
   const WorkflowStoreContractFactory({required this.create, this.dispose});
 
-  final Future<WorkflowStore> Function() create;
+  final Future<WorkflowStore> Function(FakeWorkflowClock clock) create;
   final FutureOr<void> Function(WorkflowStore store)? dispose;
 }
 
@@ -16,9 +16,11 @@ void runWorkflowStoreContractTests({
 }) {
   group('$adapterName workflow store contract', () {
     WorkflowStore? store;
+    late FakeWorkflowClock clock;
 
     setUp(() async {
-      store = await factory.create();
+      clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+      store = await factory.create(clock);
     });
 
     tearDown(() async {
@@ -83,7 +85,7 @@ void runWorkflowStoreContractTests({
       expect(initial?.updatedAt, isNotNull);
 
       // Ensure the timestamp resolution has time to advance on fast systems.
-      await Future<void>.delayed(const Duration(milliseconds: 2));
+      clock.advance(const Duration(milliseconds: 2));
 
       await current.saveStep(runId, 'heartbeat', true);
       final after = await current.get(runId);
@@ -162,7 +164,7 @@ void runWorkflowStoreContractTests({
         params: const {},
       );
 
-      final resumeAt = DateTime.now().subtract(const Duration(seconds: 1));
+      final resumeAt = clock.now().subtract(const Duration(seconds: 1));
       await current.suspendUntil(
         runId,
         'step-a',
@@ -173,11 +175,11 @@ void runWorkflowStoreContractTests({
       final suspended = await current.get(runId);
       expect(suspended?.suspensionData?['resumeAt'], isNotNull);
 
-      final due = await current.dueRuns(DateTime.now());
+      final due = await current.dueRuns(clock.now());
       expect(due, contains(runId));
 
       // Once selected, the run should not appear again until resuspended.
-      final second = await current.dueRuns(DateTime.now());
+      final second = await current.dueRuns(clock.now());
       expect(second, isEmpty);
 
       await current.markResumed(runId);
@@ -197,7 +199,7 @@ void runWorkflowStoreContractTests({
         runId,
         'step-b',
         'user.updated',
-        deadline: DateTime.now().add(const Duration(hours: 1)),
+        deadline: clock.now().add(const Duration(hours: 1)),
         data: const {'topic': true},
       );
 
@@ -264,7 +266,7 @@ void runWorkflowStoreContractTests({
         workflow: 'contract.workflow',
         params: const {},
       );
-      final deadline = DateTime.now().add(const Duration(minutes: 5));
+      final deadline = clock.now().add(const Duration(minutes: 5));
 
       await current.registerWatcher(
         runId,

@@ -11,7 +11,7 @@ void main() {
   final sqliteDirectories = Expando<Directory>('sqlite-directory');
 
   final inMemoryFactory = WorkflowStoreContractFactory(
-    create: () async => InMemoryWorkflowStore(),
+    create: (clock) async => InMemoryWorkflowStore(clock: clock),
   );
   runWorkflowStoreContractTests(
     adapterName: 'in-memory',
@@ -23,10 +23,10 @@ void main() {
   );
 
   final sqliteFactory = WorkflowStoreContractFactory(
-    create: () async {
+    create: (clock) async {
       final tmpDir = await Directory.systemTemp.createTemp('wf-sqlite');
       final file = File(p.join(tmpDir.path, 'workflow.sqlite'));
-      final store = SqliteWorkflowStore.open(file);
+      final store = SqliteWorkflowStore.open(file, clock: clock);
       sqliteDirectories[store] = tmpDir;
       return store;
     },
@@ -46,9 +46,10 @@ void main() {
   final redisUrl =
       Platform.environment['REDIS_URL'] ?? 'redis://127.0.0.1:56379/0';
   final redisFactory = WorkflowStoreContractFactory(
-    create: () async => RedisWorkflowStore.connect(
+    create: (clock) async => RedisWorkflowStore.connect(
       redisUrl,
       namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
+      clock: clock,
     ),
     dispose: (store) async {
       if (store is RedisWorkflowStore) {
@@ -63,9 +64,10 @@ void main() {
       Platform.environment['POSTGRES_URL'] ??
       'postgresql://postgres:postgres@127.0.0.1:65432/stem_test';
   final postgresFactory = WorkflowStoreContractFactory(
-    create: () async => PostgresWorkflowStore.connect(
+    create: (clock) async => PostgresWorkflowStore.connect(
       postgresUrl,
       namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
+      clock: clock,
     ),
     dispose: (store) async {
       if (store is PostgresWorkflowStore) {
