@@ -42,6 +42,22 @@ The command relies on the active `CliContext` exposing a `TaskRegistry`
 custom `contextBuilder` that wires in the registry you use to boot workers so
 the CLI can display descriptions, tags, and idempotency markers.
 
+## Workflow Introspection
+
+Inspect suspended workflows and cancellation policies:
+
+```bash
+stem wf waiters --topic user.updated
+# JSON output
+stem wf waiters --topic user.updated --json | jq
+
+# Display detailed metadata for a specific run
+stem wf show <runId> --json | jq
+
+# Start a run with automatic cancellation limits
+stem wf start reports.generate --max-run 30m --max-suspend 2m
+```
+
 ## Local Integration Stack
 
 The package includes the docker compose stack used by integration suites. Start

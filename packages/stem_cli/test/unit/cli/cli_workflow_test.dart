@@ -122,6 +122,37 @@ void main() {
       expect(payload['steps'], isList);
     });
 
+    test('start accepts cancellation policy flags', () async {
+      final out = StringBuffer();
+      final err = StringBuffer();
+      final code = await runStemCli(
+        [
+          'wf',
+          'start',
+          'demo.workflow',
+          '--max-run',
+          '1m',
+          '--max-suspend',
+          '10s',
+        ],
+        out: out,
+        err: err,
+        contextBuilder: _buildCliContext,
+        workflowContextBuilder: _buildWorkflowContext,
+      );
+
+      expect(code, equals(0), reason: err.toString());
+      final run = (await store.listRuns(limit: 1)).first;
+      expect(
+        run.cancellationPolicy?.maxRunDuration,
+        equals(const Duration(minutes: 1)),
+      );
+      expect(
+        run.cancellationPolicy?.maxSuspendDuration,
+        equals(const Duration(seconds: 10)),
+      );
+    });
+
     test('cancel transitions run to cancelled', () async {
       await runStemCli(
         ['wf', 'start', 'demo.workflow'],
@@ -171,6 +202,44 @@ void main() {
       expect(code, equals(0), reason: err.toString());
       final steps = await store.listSteps(run.id);
       expect(steps.map((s) => s.name), ['step-a']);
+    });
+
+    test('waiters --json lists runs suspended on a topic', () async {
+      final runId = await store.createRun(
+        workflow: 'demo.workflow',
+        params: const {},
+      );
+      await store.suspendOnTopic(
+        runId,
+        'step-event',
+        'user.updated',
+        data: {
+          'step': 'step-event',
+          'iteration': 0,
+          'iterationStep': 'step-event',
+          'type': 'event',
+          'topic': 'user.updated',
+          'suspendedAt': DateTime.now().toIso8601String(),
+        },
+      );
+
+      final out = StringBuffer();
+      final err = StringBuffer();
+      final code = await runStemCli(
+        ['wf', 'waiters', '--topic', 'user.updated', '--json'],
+        out: out,
+        err: err,
+        contextBuilder: _buildCliContext,
+        workflowContextBuilder: _buildWorkflowContext,
+      );
+
+      expect(code, equals(0), reason: err.toString());
+      final payload = jsonDecode(out.toString()) as List<dynamic>;
+      expect(payload, isNotEmpty);
+      final first = payload.first as Map<String, dynamic>;
+      expect(first['id'], equals(runId));
+      expect(first['topic'], equals('user.updated'));
+      expect(first['step'], equals('step-event'));
     });
   });
 }

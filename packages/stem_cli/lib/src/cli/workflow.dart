@@ -15,6 +15,7 @@ class WorkflowCommand extends Command<int> {
     addSubcommand(_WorkflowCancelCommand(dependencies));
     addSubcommand(_WorkflowRewindCommand(dependencies));
     addSubcommand(_WorkflowEmitCommand(dependencies));
+    addSubcommand(_WorkflowWaitersCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -44,6 +45,15 @@ class _WorkflowStartCommand extends Command<int> {
       ..addOption(
         'ttl',
         help: 'Optional TTL (e.g. 10m, 2h) for the workflow record.',
+      )
+      ..addOption(
+        'max-run',
+        help: 'Auto-cancel the run after this duration (e.g. 15m, 2h).',
+      )
+      ..addOption(
+        'max-suspend',
+        help:
+            'Auto-cancel when a suspension exceeds this duration (e.g. 30s, 5m).',
       );
   }
 
@@ -81,6 +91,35 @@ class _WorkflowStartCommand extends Command<int> {
     }
     final parent = (args['parent'] as String?)?.trim();
     final ttlValue = parseOptionalDuration(args['ttl'] as String?);
+    Duration? maxRun;
+    final maxRunRaw = args['max-run'] as String?;
+    if (maxRunRaw != null && maxRunRaw.trim().isNotEmpty) {
+      maxRun = parseOptionalDuration(maxRunRaw);
+      if (maxRun == null) {
+        dependencies.err.writeln(
+          'Invalid --max-run value. Expected formats like 30s, 5m, 2h.',
+        );
+        return 64;
+      }
+    }
+    Duration? maxSuspend;
+    final maxSuspendRaw = args['max-suspend'] as String?;
+    if (maxSuspendRaw != null && maxSuspendRaw.trim().isNotEmpty) {
+      maxSuspend = parseOptionalDuration(maxSuspendRaw);
+      if (maxSuspend == null) {
+        dependencies.err.writeln(
+          'Invalid --max-suspend value. Expected formats like 30s, 5m, 2h.',
+        );
+        return 64;
+      }
+    }
+    WorkflowCancellationPolicy? cancellationPolicy;
+    if (maxRun != null || maxSuspend != null) {
+      cancellationPolicy = WorkflowCancellationPolicy(
+        maxRunDuration: maxRun,
+        maxSuspendDuration: maxSuspend,
+      );
+    }
     WorkflowCliContext? workflowContext;
     try {
       workflowContext = await dependencies.createWorkflowContext();
@@ -99,6 +138,7 @@ class _WorkflowStartCommand extends Command<int> {
         params: params,
         parentRunId: parent?.isEmpty ?? true ? null : parent,
         ttl: ttlValue,
+        cancellationPolicy: cancellationPolicy,
       );
       dependencies.out.writeln('Started workflow: $runId');
       return 0;
@@ -239,6 +279,170 @@ class _WorkflowListCommand extends Command<int> {
         '${padCell(reason ?? '-', 20)}',
       );
     }
+  }
+}
+
+class _WorkflowWaitersCommand extends Command<int> {
+  _WorkflowWaitersCommand(this.dependencies) {
+    argParser
+      ..addOption('topic', help: 'Filter by suspension topic.')
+      ..addOption('limit', defaultsTo: '20', help: 'Number of runs to display.')
+      ..addFlag(
+        'json',
+        negatable: false,
+        defaultsTo: false,
+        help: 'Emit output in JSON format.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'waiters';
+
+  @override
+  final String description =
+      'List workflow runs currently suspended (optionally by topic).';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final limit = parseOptionalInt(
+      args['limit'] as String?,
+      'limit',
+      dependencies.err,
+      min: 1,
+    );
+    if (limit == null) {
+      return 64;
+    }
+    final topic = (args['topic'] as String?)?.trim();
+    final jsonOutput = args['json'] as bool? ?? false;
+
+    WorkflowCliContext? workflowContext;
+    try {
+      workflowContext = await dependencies.createWorkflowContext();
+      final store = workflowContext.store;
+      final List<RunState> runs;
+      if (topic != null && topic.isNotEmpty) {
+        final ids = await store.runsWaitingOn(topic, limit: limit);
+        runs = <RunState>[];
+        for (final id in ids) {
+          final state = await store.get(id);
+          if (state != null) runs.add(state);
+        }
+      } else {
+        runs = await store.listRuns(
+          status: WorkflowStatus.suspended,
+          limit: limit,
+        );
+      }
+      if (runs.isEmpty) {
+        dependencies.out.writeln(
+          topic != null && topic.isNotEmpty
+              ? 'No workflow runs waiting on "$topic".'
+              : 'No suspended workflow runs found.',
+        );
+        return 0;
+      }
+      if (jsonOutput) {
+        final payload = runs.map(_encodeSuspendedRun).toList();
+        dependencies.out.writeln(jsonEncode(payload));
+      } else {
+        _renderWaitersTable(runs);
+      }
+      return 0;
+    } catch (error, stackTrace) {
+      dependencies.err
+        ..writeln('Failed to list waiting workflow runs: $error')
+        ..writeln(stackTrace);
+      return 70;
+    } finally {
+      if (workflowContext != null) {
+        await workflowContext.dispose();
+      }
+    }
+  }
+
+  Map<String, Object?> _encodeSuspendedRun(RunState run) {
+    final suspension = run.suspensionData ?? const <String, Object?>{};
+    final suspendedAt =
+        parseIsoTimestamp(suspension['suspendedAt'] as String?) ??
+        run.updatedAt ??
+        run.createdAt;
+    final resumeAt =
+        parseIsoTimestamp(
+          suspension['resumeAt'] as String? ??
+              suspension['deadline'] as String? ??
+              suspension['policyDeadline'] as String?,
+        ) ??
+        run.resumeAt;
+    return {
+      'id': run.id,
+      'workflow': run.workflow,
+      'status': run.status.name,
+      'step': suspension['step'],
+      'topic': suspension['topic'] ?? run.waitTopic,
+      'suspendedAt': suspendedAt.toIso8601String(),
+      'resumeAt': resumeAt?.toIso8601String(),
+      'suspensionData': suspension,
+      'cancellationPolicy': run.cancellationPolicy?.toJson(),
+      'cancellationData': run.cancellationData,
+    };
+  }
+
+  void _renderWaitersTable(List<RunState> runs) {
+    final out = dependencies.out;
+    out.writeln(
+      '${padCell('ID', 26)}  '
+      '${padCell('WORKFLOW', 20)}  '
+      '${padCell('STEP', 20)}  '
+      '${padCell('TOPIC', 20)}  '
+      '${padCell('SINCE', 26)}  '
+      '${padCell('DEADLINE', 26)}  '
+      '${padCell('POLICY', 20)}',
+    );
+    out.writeln('-' * 164);
+    for (final run in runs) {
+      final suspension = run.suspensionData ?? const <String, Object?>{};
+      final step = suspension['step'] as String? ?? '-';
+      final topic = suspension['topic'] as String? ?? run.waitTopic ?? '-';
+      final suspendedAt =
+          parseIsoTimestamp(suspension['suspendedAt'] as String?) ??
+          run.updatedAt ??
+          run.createdAt;
+      final resumeAt =
+          parseIsoTimestamp(
+            suspension['resumeAt'] as String? ??
+                suspension['deadline'] as String? ??
+                suspension['policyDeadline'] as String?,
+          ) ??
+          run.resumeAt;
+      final policySummary = _summarisePolicy(run.cancellationPolicy);
+      out.writeln(
+        '${padCell(run.id, 26)}  '
+        '${padCell(run.workflow, 20)}  '
+        '${padCell(step, 20)}  '
+        '${padCell(topic, 20)}  '
+        '${padCell(suspendedAt.toIso8601String(), 26)}  '
+        '${padCell(resumeAt?.toIso8601String() ?? '-', 26)}  '
+        '${padCell(policySummary, 20)}',
+      );
+    }
+  }
+
+  String _summarisePolicy(WorkflowCancellationPolicy? policy) {
+    if (policy == null || policy.isEmpty) return '-';
+    final parts = <String>[];
+    final runLimit = policy.maxRunDuration;
+    if (runLimit != null) {
+      parts.add('run=${formatReadableDuration(runLimit)}');
+    }
+    final suspendLimit = policy.maxSuspendDuration;
+    if (suspendLimit != null) {
+      parts.add('suspend=${formatReadableDuration(suspendLimit)}');
+    }
+    return parts.isEmpty ? '-' : parts.join(', ');
   }
 }
 
