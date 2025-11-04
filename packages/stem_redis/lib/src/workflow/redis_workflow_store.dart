@@ -57,9 +57,11 @@ class RedisWorkflowStore implements WorkflowStore {
     required Map<String, Object?> params,
     String? parentRunId,
     Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final id = 'wf-${DateTime.now().microsecondsSinceEpoch}';
-    await _send([
+    final now = DateTime.now();
+    final id = 'wf-${now.microsecondsSinceEpoch}';
+    final command = [
       'HSET',
       _runKey(id),
       'workflow',
@@ -68,7 +70,17 @@ class RedisWorkflowStore implements WorkflowStore {
       WorkflowStatus.running.name,
       'params',
       jsonEncode(params),
-    ]);
+      'created_at',
+      now.toIso8601String(),
+      'updated_at',
+      now.toIso8601String(),
+    ];
+    if (cancellationPolicy != null && !cancellationPolicy.isEmpty) {
+      command
+        ..add('cancellation_policy')
+        ..add(jsonEncode(cancellationPolicy.toJson()));
+    }
+    await _send(command);
     await _send(['DEL', _stepsKey(id), _orderKey(id)]);
     return id;
   }
@@ -83,6 +95,24 @@ class RedisWorkflowStore implements WorkflowStore {
     }
     final params = _decodeMap(map['params']);
     final suspension = _decodeMap(map['suspension_data']);
+    final createdAt = _decodeDateTime(map['created_at']);
+    final updatedAt = _decodeDateTime(map['updated_at']);
+    WorkflowCancellationPolicy? policy;
+    final policyRaw = map['cancellation_policy'];
+    if (policyRaw != null && policyRaw.isNotEmpty) {
+      policy = WorkflowCancellationPolicy.fromJson(_decode(policyRaw));
+      if (policy != null && policy.isEmpty) {
+        policy = null;
+      }
+    }
+    Map<String, Object?>? cancellationData;
+    final cancellationRaw = map['cancellation_data'];
+    if (cancellationRaw != null && cancellationRaw.isNotEmpty) {
+      final decoded = _decode(cancellationRaw);
+      if (decoded is Map) {
+        cancellationData = decoded.cast<String, Object?>();
+      }
+    }
     final stepNames = await _send(['HKEYS', _stepsKey(runId)]) as List? ?? [];
     final cursor = stepNames.cast<String>().map(_baseStepName).toSet().length;
     return RunState(
@@ -99,6 +129,12 @@ class RedisWorkflowStore implements WorkflowStore {
       resumeAt: _decodeMillis(map['resume_at']),
       lastError: _decodeMap(map['last_error']),
       suspensionData: suspension,
+      createdAt: createdAt,
+      updatedAt: updatedAt == DateTime.fromMillisecondsSinceEpoch(0)
+          ? null
+          : updatedAt,
+      cancellationPolicy: policy,
+      cancellationData: cancellationData,
     );
   }
 
@@ -127,6 +163,7 @@ class RedisWorkflowStore implements WorkflowStore {
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -138,6 +175,8 @@ class RedisWorkflowStore implements WorkflowStore {
       '',
       'suspension_data',
       jsonEncode(data),
+      'updated_at',
+      now,
     ]);
     await _send([
       'ZADD',
@@ -155,6 +194,7 @@ class RedisWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -166,6 +206,8 @@ class RedisWorkflowStore implements WorkflowStore {
       deadline?.millisecondsSinceEpoch.toString() ?? '',
       'suspension_data',
       jsonEncode(data),
+      'updated_at',
+      now,
     ]);
     await _send(['SADD', _topicKey(topic), runId]);
     if (deadline != null) {
@@ -180,6 +222,7 @@ class RedisWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -189,12 +232,15 @@ class RedisWorkflowStore implements WorkflowStore {
       '',
       'wait_topic',
       '',
+      'updated_at',
+      now,
     ]);
     await _send(['ZREM', _dueKey(), runId]);
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -204,6 +250,8 @@ class RedisWorkflowStore implements WorkflowStore {
       jsonEncode(result),
       'suspension_data',
       '',
+      'updated_at',
+      now,
     ]);
     await _send(['ZREM', _dueKey(), runId]);
   }
@@ -215,6 +263,7 @@ class RedisWorkflowStore implements WorkflowStore {
     StackTrace stack, {
     bool terminal = false,
   }) async {
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -222,6 +271,8 @@ class RedisWorkflowStore implements WorkflowStore {
       (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
       'last_error',
       jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
+      'updated_at',
+      now,
     ]);
   }
 
@@ -229,6 +280,7 @@ class RedisWorkflowStore implements WorkflowStore {
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final run = await get(runId);
     final waitTopic = run?.waitTopic;
+    final now = DateTime.now().toIso8601String();
     await _send([
       'HSET',
       _runKey(runId),
@@ -240,6 +292,8 @@ class RedisWorkflowStore implements WorkflowStore {
       '',
       'suspension_data',
       jsonEncode(data),
+      'updated_at',
+      now,
     ]);
     await _send(['ZREM', _dueKey(), runId]);
     if (waitTopic != null) {
@@ -278,6 +332,11 @@ class RedisWorkflowStore implements WorkflowStore {
   @override
   Future<void> cancel(String runId, {String? reason}) async {
     final state = await get(runId);
+    final now = DateTime.now();
+    final cancellationData = <String, Object?>{
+      'reason': reason ?? 'cancelled',
+      'cancelledAt': now.toIso8601String(),
+    };
     await _send([
       'HSET',
       _runKey(runId),
@@ -289,6 +348,10 @@ class RedisWorkflowStore implements WorkflowStore {
       '',
       'suspension_data',
       '',
+      'cancellation_data',
+      jsonEncode(cancellationData),
+      'updated_at',
+      now.toIso8601String(),
     ]);
     await _send(['ZREM', _dueKey(), runId]);
     final waitTopic = state?.waitTopic;
@@ -427,6 +490,13 @@ class RedisWorkflowStore implements WorkflowStore {
     final millis = int.tryParse(value);
     if (millis == null) return null;
     return DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  DateTime _decodeDateTime(String? value) {
+    if (value == null || value.isEmpty) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   String? _normalizeString(String? value) {

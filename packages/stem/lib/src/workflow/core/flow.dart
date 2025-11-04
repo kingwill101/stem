@@ -9,7 +9,7 @@ class Flow {
   Flow({
     required String name,
     required void Function(FlowBuilder builder) build,
-  }) : definition = WorkflowDefinition(name: name, build: build);
+  }) : definition = WorkflowDefinition.flow(name: name, build: build);
 
   final WorkflowDefinition definition;
 }

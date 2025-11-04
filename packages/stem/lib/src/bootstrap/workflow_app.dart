@@ -1,5 +1,7 @@
 import '../workflow/core/flow.dart';
 import '../workflow/core/workflow_definition.dart';
+import '../workflow/core/workflow_script.dart';
+import '../workflow/core/workflow_cancellation_policy.dart';
 import '../workflow/core/run_state.dart';
 import '../workflow/core/workflow_store.dart';
 import '../workflow/core/event_bus.dart';
@@ -53,6 +55,9 @@ class StemWorkflowApp {
     Map<String, Object?> params = const {},
     String? parentRunId,
     Duration? ttl,
+
+    /// Optional policy that enforces automatic run cancellation.
+    WorkflowCancellationPolicy? cancellationPolicy,
   }) {
     if (!_started) {
       return start().then(
@@ -61,6 +66,7 @@ class StemWorkflowApp {
           params: params,
           parentRunId: parentRunId,
           ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
         ),
       );
     }
@@ -69,6 +75,7 @@ class StemWorkflowApp {
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
     );
   }
 
@@ -115,6 +122,7 @@ class StemWorkflowApp {
   static Future<StemWorkflowApp> create({
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
     StemApp? stemApp,
     StemBrokerFactory? broker,
     StemBackendFactory? backend,
@@ -156,6 +164,9 @@ class StemWorkflowApp {
     for (final flow in flows) {
       runtime.registerWorkflow(flow.definition);
     }
+    for (final script in scripts) {
+      runtime.registerWorkflow(script.definition);
+    }
 
     return StemWorkflowApp._(
       app: appInstance,
@@ -173,6 +184,7 @@ class StemWorkflowApp {
   static Future<StemWorkflowApp> inMemory({
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
@@ -180,6 +192,7 @@ class StemWorkflowApp {
     return StemWorkflowApp.create(
       workflows: workflows,
       flows: flows,
+      scripts: scripts,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
       storeFactory: WorkflowStoreFactory.inMemory(),

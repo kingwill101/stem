@@ -288,5 +288,41 @@ void runWorkflowStoreContractTests({
       final steps = await current.listSteps(runId);
       expect(steps.map((s) => s.name), ['repeat#0', 'repeat#1', 'tail']);
     });
+
+    test('createRun persists cancellation policy metadata', () async {
+      final current = store!;
+      final policy = const WorkflowCancellationPolicy(
+        maxRunDuration: Duration(minutes: 5),
+        maxSuspendDuration: Duration(minutes: 1),
+      );
+      final runId = await current.createRun(
+        workflow: 'policy.workflow',
+        params: const {},
+        cancellationPolicy: policy,
+      );
+
+      final state = await current.get(runId);
+      expect(state, isNotNull);
+      expect(state!.cancellationPolicy?.maxRunDuration, policy.maxRunDuration);
+      expect(
+        state.cancellationPolicy?.maxSuspendDuration,
+        policy.maxSuspendDuration,
+      );
+      expect(state.createdAt, isNotNull);
+    });
+
+    test('cancel persists cancellation data reason', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'cancel.workflow',
+        params: const {},
+      );
+
+      await current.cancel(runId, reason: 'maxRunDuration');
+
+      final state = await current.get(runId);
+      expect(state?.status, WorkflowStatus.cancelled);
+      expect(state?.cancellationData?['reason'], 'maxRunDuration');
+    });
   });
 }

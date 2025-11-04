@@ -1,6 +1,7 @@
 import 'run_state.dart';
 import 'workflow_status.dart';
 import 'workflow_step_entry.dart';
+import 'workflow_cancellation_policy.dart';
 
 /// Persistent storage for workflow runs, checkpoints, and suspensions.
 abstract class WorkflowStore {
@@ -9,6 +10,9 @@ abstract class WorkflowStore {
     required Map<String, Object?> params,
     String? parentRunId,
     Duration? ttl,
+
+    /// Optional cancellation policy that will be enforced by the runtime.
+    WorkflowCancellationPolicy? cancellationPolicy,
   });
 
   Future<RunState?> get(String runId);

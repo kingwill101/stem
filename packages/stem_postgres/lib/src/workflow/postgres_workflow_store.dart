@@ -63,6 +63,8 @@ class PostgresWorkflowStore implements WorkflowStore {
           resume_at TIMESTAMPTZ,
           last_error JSONB,
           suspension_data JSONB,
+          cancellation_policy JSONB,
+          cancellation_data JSONB,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
@@ -90,6 +92,16 @@ class PostgresWorkflowStore implements WorkflowStore {
         ON $_runsTable(wait_topic)
         WHERE wait_topic IS NOT NULL
       ''');
+
+      await conn.execute('''
+        ALTER TABLE $_runsTable
+        ADD COLUMN IF NOT EXISTS cancellation_policy JSONB
+      ''');
+
+      await conn.execute('''
+        ALTER TABLE $_runsTable
+        ADD COLUMN IF NOT EXISTS cancellation_data JSONB
+      ''');
     });
   }
 
@@ -99,19 +111,23 @@ class PostgresWorkflowStore implements WorkflowStore {
     required Map<String, Object?> params,
     String? parentRunId,
     Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final id = _uuid.v7();
     await _client.run((Connection conn) async {
       await conn.execute(
         Sql.named('''
-          INSERT INTO $_runsTable (id, workflow, status, params)
-          VALUES (@id, @workflow, @status, @params::jsonb)
+          INSERT INTO $_runsTable (id, workflow, status, params, cancellation_policy)
+          VALUES (@id, @workflow, @status, @params::jsonb, @policy::jsonb)
         '''),
         parameters: {
           'id': id,
           'workflow': workflow,
           'status': WorkflowStatus.running.name,
           'params': jsonEncode(params),
+          'policy': cancellationPolicy == null
+              ? null
+              : jsonEncode(cancellationPolicy.toJson()),
         },
       );
     });
@@ -381,10 +397,18 @@ class PostgresWorkflowStore implements WorkflowStore {
                  resume_at = NULL,
                  wait_topic = NULL,
                  suspension_data = NULL,
+                 cancellation_data = jsonb_build_object(
+                   'reason', COALESCE(@reason, 'cancelled'),
+                   'cancelledAt', to_jsonb(NOW())
+                 ),
                  updated_at = NOW()
            WHERE id = @id
         '''),
-        parameters: {'status': WorkflowStatus.cancelled.name, 'id': runId},
+        parameters: {
+          'status': WorkflowStatus.cancelled.name,
+          'id': runId,
+          'reason': reason,
+        },
       );
     });
   }
@@ -580,7 +604,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     final result = await conn.execute(
       Sql.named('''
         SELECT id, workflow, status, params, result, wait_topic,
-               resume_at, last_error, suspension_data
+               resume_at, last_error, suspension_data,
+               created_at, updated_at, cancellation_policy, cancellation_data
         FROM $_runsTable
         WHERE id = @id
       '''),
@@ -597,6 +622,12 @@ class PostgresWorkflowStore implements WorkflowStore {
       parameters: {'id': runId},
     );
     final cursor = (cursorResult.first.first as int?) ?? 0;
+    final createdAt =
+        (row[9] as DateTime?) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    final updatedAt = row[10] as DateTime?;
+    final policyMap = _decodeMap(row[11]);
+    final cancellationData = _decodeMap(row[12]);
+
     return RunState(
       id: row[0] as String,
       workflow: row[1] as String,
@@ -611,6 +642,12 @@ class PostgresWorkflowStore implements WorkflowStore {
       resumeAt: row[6] as DateTime?,
       lastError: _decodeMap(row[7]),
       suspensionData: _decodeMap(row[8]),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      cancellationPolicy: policyMap.isEmpty
+          ? null
+          : WorkflowCancellationPolicy.fromJson(policyMap),
+      cancellationData: cancellationData.isEmpty ? null : cancellationData,
     );
   }
 }

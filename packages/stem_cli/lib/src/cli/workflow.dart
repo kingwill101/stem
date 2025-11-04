@@ -189,6 +189,10 @@ class _WorkflowListCommand extends Command<int> {
                 'resumeAt': run.resumeAt?.toIso8601String(),
                 'result': run.result,
                 'lastError': run.lastError,
+                'createdAt': run.createdAt.toIso8601String(),
+                'updatedAt': run.updatedAt?.toIso8601String(),
+                'cancellationPolicy': run.cancellationPolicy?.toJson(),
+                'cancellationData': run.cancellationData,
               },
             )
             .toList();
@@ -219,17 +223,20 @@ class _WorkflowListCommand extends Command<int> {
       '${padCell('STATUS', 10)}  '
       '${padCell('CURSOR', 6)}  '
       '${padCell('WAITING', 20)}  '
-      '${padCell('RESUME_AT', 26)}',
+      '${padCell('RESUME_AT', 26)}  '
+      '${padCell('CANCEL_REASON', 20)}',
     );
-    out.writeln('-' * 116);
+    out.writeln('-' * 138);
     for (final run in runs) {
+      final reason = run.cancellationData?['reason'] as String?;
       out.writeln(
         '${padCell(run.id, 26)}  '
         '${padCell(run.workflow, 20)}  '
         '${padCell(run.status.name, 10)}  '
         '${padCell(run.cursor.toString(), 6, alignRight: true)}  '
         '${padCell(run.waitTopic ?? '-', 20)}  '
-        '${padCell(run.resumeAt?.toIso8601String() ?? '-', 26)}',
+        '${padCell(run.resumeAt?.toIso8601String() ?? '-', 26)}  '
+        '${padCell(reason ?? '-', 20)}',
       );
     }
   }
@@ -288,6 +295,10 @@ class _WorkflowShowCommand extends Command<int> {
               'waitTopic': state.waitTopic,
               'resumeAt': state.resumeAt?.toIso8601String(),
               'lastError': state.lastError,
+              'createdAt': state.createdAt.toIso8601String(),
+              'updatedAt': state.updatedAt?.toIso8601String(),
+              'cancellationPolicy': state.cancellationPolicy?.toJson(),
+              'cancellationData': state.cancellationData,
             },
             'steps': steps
                 .map(
@@ -326,10 +337,21 @@ class _WorkflowShowCommand extends Command<int> {
       ..writeln('Cursor: ${state.cursor}')
       ..writeln('Wait Topic: ${state.waitTopic ?? '-'}')
       ..writeln('Resume At: ${state.resumeAt?.toIso8601String() ?? '-'}')
+      ..writeln('Created At: ${state.createdAt.toIso8601String()}')
+      ..writeln('Updated At: ${state.updatedAt?.toIso8601String() ?? '-'}')
       ..writeln('Params: ${jsonEncode(state.params)}')
       ..writeln('Result: ${jsonEncode(state.result)}');
     if (state.lastError != null && state.lastError!.isNotEmpty) {
       out.writeln('Last Error: ${jsonEncode(state.lastError)}');
+    }
+    if (state.cancellationPolicy != null &&
+        !state.cancellationPolicy!.isEmpty) {
+      out.writeln(
+        'Cancellation Policy: ${jsonEncode(state.cancellationPolicy!.toJson())}',
+      );
+    }
+    if (state.cancellationData != null && state.cancellationData!.isNotEmpty) {
+      out.writeln('Cancellation Data: ${jsonEncode(state.cancellationData)}');
     }
     if (steps.isEmpty) {
       out.writeln('No checkpoints recorded.');

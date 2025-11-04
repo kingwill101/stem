@@ -23,6 +23,19 @@ void main() {
     adapterName: 'MyBroker',
     factory: BrokerContractFactory(create: createBroker),
   );
+
+  final storeFactory = WorkflowStoreContractFactory(create: createWorkflowStore);
+
+  runWorkflowStoreContractTests(
+    adapterName: 'my-adapter',
+    factory: storeFactory,
+  );
+
+  // Facade coverage validates the high-level workflow DSL across adapters.
+  runWorkflowScriptFacadeTests(
+    adapterName: 'my-adapter',
+    factory: storeFactory,
+  );
 }
 ```
 

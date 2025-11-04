@@ -10,67 +10,75 @@ import 'package:stem_sqlite/stem_sqlite.dart';
 void main() {
   final sqliteDirectories = Expando<Directory>('sqlite-directory');
 
+  final inMemoryFactory = WorkflowStoreContractFactory(
+    create: () async => InMemoryWorkflowStore(),
+  );
   runWorkflowStoreContractTests(
     adapterName: 'in-memory',
-    factory: WorkflowStoreContractFactory(
-      create: () async => InMemoryWorkflowStore(),
-    ),
+    factory: inMemoryFactory,
+  );
+  runWorkflowScriptFacadeTests(
+    adapterName: 'in-memory',
+    factory: inMemoryFactory,
   );
 
-  runWorkflowStoreContractTests(
-    adapterName: 'sqlite',
-    factory: WorkflowStoreContractFactory(
-      create: () async {
-        final tmpDir = await Directory.systemTemp.createTemp('wf-sqlite');
-        final file = File(p.join(tmpDir.path, 'workflow.sqlite'));
-        final store = SqliteWorkflowStore.open(file);
-        sqliteDirectories[store] = tmpDir;
-        return store;
-      },
-      dispose: (store) async {
-        if (store is SqliteWorkflowStore) {
-          await store.close();
-          final directory = sqliteDirectories[store];
-          if (directory != null && directory.existsSync()) {
-            directory.deleteSync(recursive: true);
-          }
+  final sqliteFactory = WorkflowStoreContractFactory(
+    create: () async {
+      final tmpDir = await Directory.systemTemp.createTemp('wf-sqlite');
+      final file = File(p.join(tmpDir.path, 'workflow.sqlite'));
+      final store = SqliteWorkflowStore.open(file);
+      sqliteDirectories[store] = tmpDir;
+      return store;
+    },
+    dispose: (store) async {
+      if (store is SqliteWorkflowStore) {
+        await store.close();
+        final directory = sqliteDirectories[store];
+        if (directory != null && directory.existsSync()) {
+          directory.deleteSync(recursive: true);
         }
-      },
-    ),
+      }
+    },
   );
+  runWorkflowStoreContractTests(adapterName: 'sqlite', factory: sqliteFactory);
+  runWorkflowScriptFacadeTests(adapterName: 'sqlite', factory: sqliteFactory);
 
   final redisUrl =
       Platform.environment['REDIS_URL'] ?? 'redis://127.0.0.1:56379/0';
-  runWorkflowStoreContractTests(
-    adapterName: 'redis',
-    factory: WorkflowStoreContractFactory(
-      create: () async => RedisWorkflowStore.connect(
-        redisUrl,
-        namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
-      ),
-      dispose: (store) async {
-        if (store is RedisWorkflowStore) {
-          await store.close();
-        }
-      },
+  final redisFactory = WorkflowStoreContractFactory(
+    create: () async => RedisWorkflowStore.connect(
+      redisUrl,
+      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
     ),
+    dispose: (store) async {
+      if (store is RedisWorkflowStore) {
+        await store.close();
+      }
+    },
   );
+  runWorkflowStoreContractTests(adapterName: 'redis', factory: redisFactory);
+  runWorkflowScriptFacadeTests(adapterName: 'redis', factory: redisFactory);
 
   final postgresUrl =
       Platform.environment['POSTGRES_URL'] ??
       'postgresql://postgres:postgres@127.0.0.1:65432/stem_test';
+  final postgresFactory = WorkflowStoreContractFactory(
+    create: () async => PostgresWorkflowStore.connect(
+      postgresUrl,
+      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
+    ),
+    dispose: (store) async {
+      if (store is PostgresWorkflowStore) {
+        await store.close();
+      }
+    },
+  );
   runWorkflowStoreContractTests(
     adapterName: 'postgres',
-    factory: WorkflowStoreContractFactory(
-      create: () async => PostgresWorkflowStore.connect(
-        postgresUrl,
-        namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
-      ),
-      dispose: (store) async {
-        if (store is PostgresWorkflowStore) {
-          await store.close();
-        }
-      },
-    ),
+    factory: postgresFactory,
+  );
+  runWorkflowScriptFacadeTests(
+    adapterName: 'postgres',
+    factory: postgresFactory,
   );
 }

@@ -336,6 +336,139 @@ void main() {
     expect(steps.map((s) => s.name), contains('await-step#0'));
   });
 
+  test('script facade executes sequential steps', () async {
+    String? previousSeen;
+
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.basic',
+        run: (script) async {
+          final first = await script.step('first', (step) async => 'ready');
+          final second = await script.step('second', (step) async {
+            previousSeen = step.previousResult as String?;
+            return '$first-done';
+          });
+          return second;
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.basic');
+    await runtime.executeRun(runId);
+
+    final state = await store.get(runId);
+    expect(state?.status, WorkflowStatus.completed);
+    expect(state?.result, 'ready-done');
+    expect(previousSeen, 'ready');
+    expect(await store.readStep(runId, 'first'), 'ready');
+    expect(await store.readStep(runId, 'second'), 'ready-done');
+  });
+
+  test('script step sleep suspends and resumes', () async {
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.sleep',
+        run: (script) async {
+          await script.step('wait', (step) async {
+            final resume = step.takeResumeData();
+            if (resume != true) {
+              await step.sleep(const Duration(milliseconds: 20));
+              return 'waiting';
+            }
+            return 'slept';
+          });
+          return 'done';
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.sleep');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.resumeAt, isNotNull);
+
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    final due = await store.dueRuns(DateTime.now());
+    for (final id in due) {
+      final state = await store.get(id);
+      await store.markResumed(id, data: state?.suspensionData);
+      await runtime.executeRun(id);
+    }
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(completed?.result, 'done');
+    expect(await store.readStep(runId, 'wait'), 'slept');
+  });
+
+  test('script awaitEvent resumes with payload', () async {
+    Map<String, Object?>? resumePayload;
+
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.event',
+        run: (script) async {
+          final result = await script.step('wait', (step) async {
+            final resume = step.takeResumeData();
+            if (resume == null) {
+              await step.awaitEvent('user.updated');
+              return 'waiting';
+            }
+            resumePayload = resume as Map<String, Object?>?;
+            return resumePayload?['id'];
+          });
+          return result;
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.event');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, 'user.updated');
+
+    await runtime.emit('user.updated', const {'id': 'user-42'});
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(resumePayload?['id'], 'user-42');
+    expect(completed?.result, 'user-42');
+  });
+
+  test('script autoVersion step persists sequential checkpoints', () async {
+    final iterations = <int>[];
+
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.autoversion',
+        run: (script) async {
+          for (var i = 0; i < 3; i++) {
+            await script.step<int>('repeat', (step) async {
+              iterations.add(step.iteration);
+              return step.iteration;
+            }, autoVersion: true);
+          }
+          return iterations.length;
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.autoversion');
+    await runtime.executeRun(runId);
+
+    expect(iterations, [0, 1, 2]);
+    expect(await store.readStep(runId, 'repeat#0'), 0);
+    expect(await store.readStep(runId, 'repeat#1'), 1);
+    expect(await store.readStep(runId, 'repeat#2'), 2);
+    final state = await store.get(runId);
+    expect(state?.result, 3);
+  });
+
   test('records failures and propagates errors', () async {
     runtime.registerWorkflow(
       Flow(
@@ -374,5 +507,63 @@ void main() {
 
     final state = await store.get(runId);
     expect(state?.status, WorkflowStatus.cancelled);
+  });
+
+  test('maxRunDuration cancels runs that exceed the limit', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'duration.workflow',
+        build: (flow) {
+          flow.step('fast', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow(
+      'duration.workflow',
+      cancellationPolicy: const WorkflowCancellationPolicy(
+        maxRunDuration: Duration(milliseconds: 5),
+      ),
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 15));
+    await runtime.executeRun(runId);
+
+    final state = await store.get(runId);
+    expect(state?.status, WorkflowStatus.cancelled);
+    expect(state?.cancellationData?['reason'], 'maxRunDuration');
+  });
+
+  test('maxSuspendDuration cancels runs that stay suspended', () async {
+    await runtime.start();
+    runtime.registerWorkflow(
+      Flow(
+        name: 'suspend.workflow',
+        build: (flow) {
+          flow.step('sleep', (context) async {
+            final resume = context.takeResumeData();
+            if (resume != true) {
+              context.sleep(const Duration(milliseconds: 100));
+              return null;
+            }
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow(
+      'suspend.workflow',
+      cancellationPolicy: const WorkflowCancellationPolicy(
+        maxSuspendDuration: Duration(milliseconds: 20),
+      ),
+    );
+
+    await runtime.executeRun(runId);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    final state = await store.get(runId);
+    expect(state?.status, WorkflowStatus.cancelled);
+    expect(state?.cancellationData?['reason'], 'maxSuspendDuration');
   });
 }

@@ -2,20 +2,59 @@ import 'dart:async';
 
 import 'flow_context.dart';
 import 'flow_step.dart';
+import 'workflow_script_context.dart';
 
 /// Declarative workflow definition built via [FlowBuilder].
+typedef WorkflowScriptBody =
+    FutureOr<Object?> Function(WorkflowScriptContext context);
+
+enum WorkflowDefinitionKind { flow, script }
+
+/// Declarative workflow definition built via [FlowBuilder] or a higher-level
+/// script facade. The definition captures the ordered steps that the runtime
+/// will execute along with optional script metadata used by the facade runner.
 class WorkflowDefinition {
-  WorkflowDefinition({
+  WorkflowDefinition._({
     required this.name,
+    required WorkflowDefinitionKind kind,
+    required List<FlowStep> steps,
+    this.scriptBody,
+  }) : _kind = kind,
+       _steps = steps;
+
+  factory WorkflowDefinition.flow({
+    required String name,
     required void Function(FlowBuilder builder) build,
   }) {
-    build(FlowBuilder(_steps));
+    final steps = <FlowStep>[];
+    build(FlowBuilder(steps));
+    return WorkflowDefinition._(
+      name: name,
+      kind: WorkflowDefinitionKind.flow,
+      steps: steps,
+    );
+  }
+
+  factory WorkflowDefinition.script({
+    required String name,
+    required WorkflowScriptBody run,
+  }) {
+    return WorkflowDefinition._(
+      name: name,
+      kind: WorkflowDefinitionKind.script,
+      steps: const [],
+      scriptBody: run,
+    );
   }
 
   final String name;
-  final List<FlowStep> _steps = [];
+  final WorkflowDefinitionKind _kind;
+  final List<FlowStep> _steps;
+  final WorkflowScriptBody? scriptBody;
 
   List<FlowStep> get steps => List.unmodifiable(_steps);
+
+  bool get isScript => _kind == WorkflowDefinitionKind.script;
 }
 
 /// Builder used by [Flow] to capture workflow steps in declaration order.

@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import '../core/run_state.dart';
+import '../core/workflow_cancellation_policy.dart';
 import '../core/workflow_status.dart';
 import '../core/workflow_store.dart';
 import '../core/workflow_step_entry.dart';
@@ -32,15 +33,20 @@ class InMemoryWorkflowStore implements WorkflowStore {
     required Map<String, Object?> params,
     String? parentRunId,
     Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final id = 'wf-${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
+    final now = DateTime.now();
+    final id = 'wf-${now.microsecondsSinceEpoch}-${_counter++}';
     _runs[id] = RunState(
       id: id,
       workflow: workflow,
       status: WorkflowStatus.running,
       cursor: 0,
       params: Map.unmodifiable(params),
+      createdAt: now,
+      updatedAt: now,
       suspensionData: const <String, Object?>{},
+      cancellationPolicy: cancellationPolicy,
     );
     _steps[id] = {};
     return id;
@@ -89,6 +95,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: when,
       suspensionData: _cloneData(data),
       waitTopic: null,
+      updatedAt: DateTime.now(),
     );
     _due.putIfAbsent(when, () => <String>{}).add(runId);
   }
@@ -108,6 +115,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       waitTopic: topic,
       resumeAt: deadline,
       suspensionData: _cloneData(data),
+      updatedAt: DateTime.now(),
     );
     _suspendedTopics.putIfAbsent(topic, () => <String>{}).add(runId);
     if (deadline != null) {
@@ -119,7 +127,10 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
     if (state == null) return;
-    _runs[runId] = state.copyWith(status: WorkflowStatus.running);
+    _runs[runId] = state.copyWith(
+      status: WorkflowStatus.running,
+      updatedAt: DateTime.now(),
+    );
   }
 
   @override
@@ -132,6 +143,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: const <String, Object?>{},
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -147,6 +159,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -159,6 +172,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: _cloneData(data),
+      updatedAt: DateTime.now(),
     );
     for (final entry in _due.values) {
       entry.remove(runId);
@@ -208,11 +222,18 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<void> cancel(String runId, {String? reason}) async {
     final state = _runs[runId];
     if (state == null) return;
+    final now = DateTime.now();
+    final cancellationData = <String, Object?>{
+      'reason': reason ?? 'cancelled',
+      'cancelledAt': now.toIso8601String(),
+    };
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.cancelled,
       waitTopic: null,
       resumeAt: null,
       suspensionData: const <String, Object?>{},
+      cancellationData: cancellationData,
+      updatedAt: now,
     );
     for (final entry in _due.values) {
       entry.remove(runId);

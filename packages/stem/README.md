@@ -160,6 +160,59 @@ print(state?.status); // WorkflowStatus.completed
 await app.shutdown();
 ```
 
+### Workflow script facade
+
+Prefer the high-level `WorkflowScript` facade when you want to author a
+workflow as a single async function. The facade wraps `FlowBuilder` so your
+code can `await script.step`, `await step.sleep`, and `await step.awaitEvent`
+while retaining the same durability semantics (checkpoints, resume payloads,
+auto-versioning) as the lower-level API:
+
+```dart
+final app = await StemWorkflowApp.inMemory(
+  scripts: [
+    WorkflowScript(
+      name: 'orders.workflow',
+      run: (script) async {
+        final checkout = await script.step('checkout', (step) async {
+          return await chargeCustomer(step.params['userId'] as String);
+        });
+
+        await script.step('poll-shipment', (step) async {
+          final resume = step.takeResumeData();
+          if (resume != true) {
+            await step.sleep(const Duration(seconds: 30));
+            return 'waiting';
+          }
+          final status = await fetchShipment(checkout.id);
+          if (!status.isComplete) {
+            await step.sleep(const Duration(seconds: 30));
+            return 'waiting';
+          }
+          return status.value;
+        }, autoVersion: true);
+
+        final receipt = await script.step('notify', (step) async {
+          await sendReceiptEmail(checkout);
+          return 'emailed';
+        });
+
+        return receipt;
+      },
+    ),
+  ],
+);
+```
+
+Inside a script step you can access the same metadata as `FlowContext`:
+
+- `step.previousResult` contains the prior step’s persisted value.
+- `step.iteration` tracks the current auto-version suffix when
+  `autoVersion: true` is set.
+- `step.idempotencyKey('scope')` builds stable outbound identifiers.
+- `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
+  you can branch on resume paths.
+
 ### Durable workflow semantics
 
 - Steps may run multiple times. The runtime replays a step from the top after
@@ -187,6 +240,10 @@ await app.shutdown();
 - Use `autoVersion: true` on steps that you plan to re-execute (e.g. after
   rewinding). Each completion stores a checkpoint like `step#0`, `step#1`, ... and
   the handler receives the current iteration via `ctx.iteration`.
+- Set an optional `WorkflowCancellationPolicy` when starting runs to auto-cancel
+  workflows that exceed a wall-clock budget or stay suspended beyond an allowed
+  duration. When a policy trips, the run transitions to `cancelled` and the
+  reason is surfaced via `stem wf show`.
 
 ```dart
 flow.step(
@@ -197,6 +254,15 @@ flow.step(
     final item = items[iteration];
     return await process(item);
   },
+);
+
+final runId = await runtime.startWorkflow(
+  'demo.workflow',
+  params: const {'userId': '42'},
+  cancellationPolicy: const WorkflowCancellationPolicy(
+    maxRunDuration: Duration(minutes: 15),
+    maxSuspendDuration: Duration(minutes: 5),
+  ),
 );
 ```
 
@@ -222,6 +288,7 @@ drivers by importing the adapter you need.
 - Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
 - [workflows](example/workflows/) - end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis). See `versioned_rewind.dart` for auto-versioned step rewinds.
+- [cancellation_policy](example/workflows/cancellation_policy.dart) - demonstrates auto-cancelling long workflows using `WorkflowCancellationPolicy`.
 - [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
 - [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.
 - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
