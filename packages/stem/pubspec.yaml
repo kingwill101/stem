@@ -42,6 +42,8 @@ dev_dependencies:
   stem_cli: ^0.1.0-alpha.3
   stem_redis: ^0.1.0-alpha.3
   stem_postgres: ^0.1.0-alpha.3
+  stem_sqlite: ^0.1.0-alpha.3
+  path: ^1.9.1
 
 false_secrets:
   - /example/microservice/certs/*

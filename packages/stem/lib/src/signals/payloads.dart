@@ -2,6 +2,9 @@ import '../control/control_messages.dart';
 import '../core/contracts.dart';
 import '../core/envelope.dart';
 
+/// Status of a workflow run emitted via signals.
+enum WorkflowRunStatus { running, suspended, completed, failed, cancelled }
+
 /// Basic metadata representing a worker that emitted a signal.
 class WorkerInfo {
   const WorkerInfo({
@@ -174,6 +177,22 @@ class WorkerChildLifecyclePayload {
 
   final WorkerInfo worker;
   final int isolateId;
+}
+
+class WorkflowRunPayload {
+  const WorkflowRunPayload({
+    required this.runId,
+    required this.workflow,
+    required this.status,
+    this.step,
+    this.metadata = const {},
+  });
+
+  final String runId;
+  final String workflow;
+  final WorkflowRunStatus status;
+  final String? step;
+  final Map<String, Object?> metadata;
 }
 
 class ScheduleEntryDuePayload {

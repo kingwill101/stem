@@ -137,11 +137,64 @@ final taskId = await TaskEnqueueBuilder(
   .enqueueWith(stem);
 ```
 
+### Bootstrap helpers
+
+Spin up a full runtime in one call using the bootstrap APIs:
+
+```dart
+final app = await StemWorkflowApp.inMemory(
+  flows: [
+    Flow(
+      name: 'demo.workflow',
+      build: (flow) {
+        flow.step('hello', (ctx) async => 'done');
+      },
+    ),
+  ],
+);
+
+final runId = await app.startWorkflow('demo.workflow');
+final state = await app.waitForCompletion(runId);
+print(state?.status); // WorkflowStatus.completed
+
+await app.shutdown();
+```
+
+### Durable workflow semantics
+
+- Steps may run multiple times. The runtime replays a step from the top after
+  every suspension (sleep, awaited event, rewind) and after worker crashes, so
+  handlers must be idempotent.
+- Use `ctx.takeResumeData()` to detect whether a step is resuming. Call it at
+  the start of the handler and branch accordingly.
+- When you suspend, provide a marker in the `data` payload so the resumed step
+  can distinguish the wake-up path. For example:
+
+  ```dart
+  final resume = ctx.takeResumeData();
+  if (resume != 'awake') {
+    ctx.sleep(const Duration(milliseconds: 200),
+        data: const {'payload': 'awake'});
+    return null;
+  }
+  ```
+
+- Awaited events behave the same way: the emitted payload is delivered via
+  `takeResumeData()` when the run resumes.
+- Only return values you want persisted. If a handler returns `null`, the
+  runtime treats it as “no result yet” and will run the step again on resume.
+
+Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
+`postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace
+drivers by importing the adapter you need.
+
 ## Features
 
 - **Task pipeline** – enqueue with delays, priorities, idempotency helpers, and retries.
 - **Workers** – isolate pools with soft/hard time limits, autoscaling, and remote control (`stem worker ping|revoke|shutdown`).
 - **Scheduling** – Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
+- **Workflows** – Durable `Flow` runtime with pluggable stores (in-memory,
+  Redis, Postgres, SQLite) and CLI introspection via `stem wf`.
 - **Observability** – Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
 - **Security** – Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
 - **Adapters** – In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
@@ -152,6 +205,7 @@ final taskId = await TaskEnqueueBuilder(
 - Full docs: [Full docs](.site/docs) (run `npm install && npm start` inside `.site/`).
 - Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
+- [workflows](example/workflows/) – end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis).
 - [rate_limit_delay](example/rate_limit_delay) – delayed enqueue, priority clamping, Redis rate limiter.
 - [dlq_sandbox](example/dlq_sandbox) – dead-letter inspection and replay via CLI.
 - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) – production-style topologies.

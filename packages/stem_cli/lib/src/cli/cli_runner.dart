@@ -12,6 +12,7 @@ import 'package:stem_cli/src/cli/schedule.dart';
 import 'package:stem_cli/src/cli/utilities.dart';
 import 'package:stem_cli/src/cli/worker.dart';
 import 'package:stem_cli/src/cli/tasks.dart';
+import 'package:stem_cli/src/cli/workflow.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
@@ -31,6 +32,7 @@ class StemCommandRunner extends CommandRunner<int> {
     addCommand(HealthCommand(dependencies));
     addCommand(RoutingCommand(dependencies));
     addCommand(TasksCommand(dependencies));
+    addCommand(WorkflowCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -54,6 +56,7 @@ Future<int> runStemCli(
   Future<CliContext> Function()? contextBuilder,
   Map<String, String>? environment,
   ScheduleContextBuilder? scheduleContextBuilder,
+  WorkflowContextBuilder? workflowContextBuilder,
 }) async {
   final stdoutSink = out ?? stdout;
   final stderrSink = err ?? stderr;
@@ -71,6 +74,7 @@ Future<int> runStemCli(
     scheduleFilePath: scheduleFilePath,
     cliContextBuilder: cliContextBuilder,
     scheduleContextBuilder: scheduleContextBuilder,
+    workflowContextBuilder: workflowContextBuilder,
   );
 
   final runner = StemCommandRunner(dependencies: dependencies);

@@ -1,0 +1,91 @@
+import 'flow_step.dart';
+
+/// Context provided to each workflow step invocation.
+///
+/// The engine replays a step from the beginning whenever the run resumes from a
+/// suspension (sleep, awaited event, manual rewind). Steps should therefore
+/// treat `sleep`/`awaitEvent` as signalling mechanisms rather than control-flow
+/// exits. Use [takeResumeData] to distinguish between the initial invocation and
+/// resumption payloads supplied by the runtime.
+class FlowContext {
+  FlowContext({
+    required this.runId,
+    required this.stepName,
+    required this.params,
+    required this.previousResult,
+    required this.stepIndex,
+    Object? resumeData,
+  }) : _resumeData = resumeData;
+
+  final String runId;
+  final String stepName;
+  final Map<String, Object?> params;
+  final Object? previousResult;
+  final int stepIndex;
+
+  FlowStepControl? _control;
+  Object? _resumeData;
+
+  /// Suspends the workflow until the delay elapses.
+  ///
+  /// After the delay, the worker replays the **same step** from the top. To
+  /// avoid re-scheduling the sleep repeatedly, stash a marker in [data] and
+  /// branch on [takeResumeData]; for example:
+  ///
+  /// ```dart
+  /// final resume = ctx.takeResumeData();
+  /// if (resume != 'awake') {
+  ///   ctx.sleep(const Duration(seconds: 1), data: const {'payload': 'awake'});
+  ///   return null;
+  /// }
+  /// ```
+  FlowStepControl sleep(Duration duration, {Map<String, Object?>? data}) {
+    _control = FlowStepControl.sleep(duration, data: data);
+    return _control!;
+  }
+
+  /// Suspends the workflow until an event with [topic] is emitted.
+  ///
+  /// When the event bus resumes the run, the payload is made available via
+  /// [takeResumeData]. Steps should always read and clear the payload to avoid
+  /// processing the same message on subsequent replays.
+  FlowStepControl awaitEvent(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    _control = FlowStepControl.awaitTopic(
+      topic,
+      deadline: deadline,
+      data: data,
+    );
+    return _control!;
+  }
+
+  /// Injects a payload that will be returned the next time [takeResumeData] is
+  /// called. Primarily used by the runtime; tests may also leverage it to mock
+  /// resumption data.
+  void resumeWith(Object? payload) {
+    _resumeData = payload;
+  }
+
+  /// Returns the payload supplied when the run was resumed, or `null` if this
+  /// is the first invocation.
+  ///
+  /// The method consumes the payload so subsequent calls during the same step
+  /// return `null`. This makes it safe to guard control-flow with a simple
+  /// `if (takeResumeData() == null) { ... }` pattern.
+  Object? takeResumeData() {
+    final value = _resumeData;
+    _resumeData = null;
+    return value;
+  }
+
+  /// Consumes the control directive queued by [sleep] or [awaitEvent]. Steps do
+  /// not normally call this directly; it exists for the runtime orchestrator.
+  FlowStepControl? takeControl() {
+    final value = _control;
+    _control = null;
+    return value;
+  }
+}

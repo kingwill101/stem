@@ -295,4 +295,61 @@ class StemSignalEmitter {
       sender: _senderOverride(sender),
     );
   }
+
+  Future<void> workflowRunStarted(
+    WorkflowRunPayload payload, {
+    String? sender,
+  }) {
+    return StemSignals.workflowRunStarted.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
+
+  Future<void> workflowRunSuspended(
+    WorkflowRunPayload payload, {
+    String? sender,
+  }) {
+    return StemSignals.workflowRunSuspended.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
+
+  Future<void> workflowRunResumed(
+    WorkflowRunPayload payload, {
+    String? sender,
+  }) {
+    return StemSignals.workflowRunResumed.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
+
+  Future<void> workflowRunCompleted(
+    WorkflowRunPayload payload, {
+    String? sender,
+  }) {
+    return StemSignals.workflowRunCompleted.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
+
+  Future<void> workflowRunFailed(WorkflowRunPayload payload, {String? sender}) {
+    return StemSignals.workflowRunFailed.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
+
+  Future<void> workflowRunCancelled(
+    WorkflowRunPayload payload, {
+    String? sender,
+  }) {
+    return StemSignals.workflowRunCancelled.emit(
+      payload,
+      sender: _senderOverride(sender),
+    );
+  }
 }

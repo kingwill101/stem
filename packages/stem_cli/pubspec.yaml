@@ -11,6 +11,7 @@ dependencies:
   stem: ^0.1.0-alpha.3
   stem_redis: ^0.1.0-alpha.3
   stem_postgres: ^0.1.0-alpha.3
+  stem_sqlite: ^0.1.0-alpha.3
   redis: ^4.0.0
   postgres: ^3.5.9
   async: ^2.13.0

@@ -6,8 +6,7 @@ import 'package:test/test.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 
 void main() {
-  final runMultiTests =
-      Platform.environment['STEM_CLI_RUN_MULTI'] == 'true';
+  final runMultiTests = Platform.environment['STEM_CLI_RUN_MULTI'] == 'true';
   if (!runMultiTests) {
     test(
       'worker multi integration (skipped)',

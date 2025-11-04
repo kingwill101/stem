@@ -211,6 +211,31 @@ class InMemoryResultBackend implements ResultBackend {
     _heartbeats.remove(key);
   }
 
+  /// Cancels timers and closes any active watchers.
+  Future<void> dispose() async {
+    for (final timer in _expiryTimers.values) {
+      timer.cancel();
+    }
+    _expiryTimers.clear();
+    for (final controller in _watchers.values) {
+      await controller.close();
+    }
+    _watchers.clear();
+
+    for (final timer in _groupExpiry.values) {
+      timer.cancel();
+    }
+    _groupExpiry.clear();
+    _groups.clear();
+    _claimedChords.clear();
+
+    for (final timer in _heartbeatExpiry.values) {
+      timer.cancel();
+    }
+    _heartbeatExpiry.clear();
+    _heartbeats.clear();
+  }
+
   void _pruneExpiredHeartbeats() {
     final now = DateTime.now();
     final stale = _heartbeats.entries

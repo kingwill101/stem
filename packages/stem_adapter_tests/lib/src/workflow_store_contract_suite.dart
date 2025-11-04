@@ -1,0 +1,214 @@
+import 'dart:async';
+
+import 'package:stem/stem.dart';
+import 'package:test/test.dart';
+
+class WorkflowStoreContractFactory {
+  const WorkflowStoreContractFactory({required this.create, this.dispose});
+
+  final Future<WorkflowStore> Function() create;
+  final FutureOr<void> Function(WorkflowStore store)? dispose;
+}
+
+void runWorkflowStoreContractTests({
+  required String adapterName,
+  required WorkflowStoreContractFactory factory,
+}) {
+  group('$adapterName workflow store contract', () {
+    WorkflowStore? store;
+
+    setUp(() async {
+      store = await factory.create();
+    });
+
+    tearDown(() async {
+      final instance = store;
+      if (instance != null && factory.dispose != null) {
+        await factory.dispose!(instance);
+      }
+      store = null;
+    });
+
+    test('createRun persists metadata and cursor defaults to zero', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {'user': 1},
+      );
+
+      final state = await current.get(runId);
+      expect(state, isNotNull);
+      expect(state!.workflow, 'contract.workflow');
+      expect(state.status, WorkflowStatus.running);
+      expect(state.cursor, 0);
+      expect(state.params['user'], 1);
+    });
+
+    test('saveStep/readStep/rewind maintain checkpoints', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.saveStep(runId, 'step-a', const {'value': 1});
+      await current.saveStep(runId, 'step-b', 2);
+      await current.saveStep(runId, 'step-c', 'done');
+
+      expect(await current.readStep<Map<String, Object?>>(runId, 'step-a'), {
+        'value': 1,
+      });
+      expect(await current.readStep<int>(runId, 'step-b'), 2);
+
+      await current.rewindToStep(runId, 'step-b');
+
+      expect(await current.readStep(runId, 'step-b'), isNull);
+      expect(await current.readStep(runId, 'step-c'), isNull);
+      expect(await current.readStep<Map<String, Object?>>(runId, 'step-a'), {
+        'value': 1,
+      });
+
+      final state = await current.get(runId);
+      expect(state?.cursor, 1);
+    });
+
+    test('suspendUntil/dueRuns/markResumed workflow lifecycle', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      final resumeAt = DateTime.now().subtract(const Duration(seconds: 1));
+      await current.suspendUntil(
+        runId,
+        'step-a',
+        resumeAt,
+        data: const {'reason': 'delay'},
+      );
+
+      final due = await current.dueRuns(DateTime.now());
+      expect(due, contains(runId));
+
+      // Once selected, the run should not appear again until resuspended.
+      final second = await current.dueRuns(DateTime.now());
+      expect(second, isEmpty);
+
+      await current.markResumed(runId);
+      final state = await current.get(runId);
+      expect(state?.status, WorkflowStatus.running);
+      expect(state?.waitTopic, isNull);
+    });
+
+    test('suspendOnTopic/runsWaitingOn/cancel workflow lifecycle', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.suspendOnTopic(
+        runId,
+        'step-b',
+        'user.updated',
+        deadline: DateTime.now().add(const Duration(hours: 1)),
+        data: const {'topic': true},
+      );
+
+      final waiting = await current.runsWaitingOn('user.updated');
+      expect(waiting, contains(runId));
+
+      await current.cancel(runId);
+      final state = await current.get(runId);
+      expect(state?.status, WorkflowStatus.cancelled);
+      expect(state?.waitTopic, isNull);
+    });
+
+    test('markCompleted stores result and clears suspension data', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.markCompleted(runId, const {'output': 'ok'});
+
+      final state = await current.get(runId);
+      expect(state?.status, WorkflowStatus.completed);
+      expect(state?.result, {'output': 'ok'});
+      expect(state?.suspensionData, isEmpty);
+    });
+
+    test('markFailed records last error metadata', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.markFailed(
+        runId,
+        StateError('contract failure'),
+        StackTrace.current,
+      );
+
+      final state = await current.get(runId);
+      expect(state?.status, WorkflowStatus.running);
+      expect(state?.lastError, isNotEmpty);
+      expect(state?.lastError?['error'], contains('contract failure'));
+
+      await current.markFailed(
+        runId,
+        ArgumentError('boom'),
+        StackTrace.current,
+        terminal: true,
+      );
+
+      final failed = await current.get(runId);
+      expect(failed?.status, WorkflowStatus.failed);
+    });
+
+    test('listRuns supports workflow/status filters', () async {
+      final current = store!;
+      final first = await current.createRun(
+        workflow: 'contract.a',
+        params: const {},
+      );
+      final second = await current.createRun(
+        workflow: 'contract.b',
+        params: const {},
+      );
+      await current.markCompleted(first, null);
+
+      final all = await current.listRuns(limit: 10);
+      final ids = all.map((state) => state.id).toList();
+      expect(ids, containsAll([first, second]));
+
+      final onlyA = await current.listRuns(workflow: 'contract.a', limit: 10);
+      expect(onlyA, hasLength(1));
+      expect(onlyA.first.workflow, 'contract.a');
+      expect(onlyA.first.status, WorkflowStatus.completed);
+
+      final completed = await current.listRuns(
+        status: WorkflowStatus.completed,
+        limit: 10,
+      );
+      expect(completed.map((s) => s.id), contains(first));
+    });
+
+    test('listSteps returns checkpoints in execution order', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+      await current.saveStep(runId, 'step-a', 1);
+      await current.saveStep(runId, 'step-b', 2);
+      await current.saveStep(runId, 'step-c', 3);
+
+      final steps = await current.listSteps(runId);
+      expect(steps.map((s) => s.name), ['step-a', 'step-b', 'step-c']);
+      expect(steps.map((s) => s.value), [1, 2, 3]);
+    });
+  });
+}
