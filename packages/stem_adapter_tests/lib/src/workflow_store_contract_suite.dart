@@ -72,6 +72,25 @@ void runWorkflowStoreContractTests({
       expect(state?.cursor, 1);
     });
 
+    test('saveStep refreshes updatedAt heartbeat', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      final initial = await current.get(runId);
+      expect(initial?.updatedAt, isNotNull);
+
+      // Ensure the timestamp resolution has time to advance on fast systems.
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+
+      await current.saveStep(runId, 'heartbeat', true);
+      final after = await current.get(runId);
+      expect(after?.updatedAt, isNotNull);
+      expect(after!.updatedAt!.isAfter(initial!.updatedAt!), isTrue);
+    });
+
     test(
       'autoVersion checkpoints persist and rewind with iteration metadata',
       () async {

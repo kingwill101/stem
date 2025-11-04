@@ -202,6 +202,29 @@ void main() {
     expect(completed?.result, 'ready');
   });
 
+  test('saveStep refreshes run heartbeat', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'heartbeat.workflow',
+        build: (flow) {
+          flow.step('first', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('heartbeat.workflow');
+    final initial = await store.get(runId);
+    expect(initial?.updatedAt, isNotNull);
+
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(completed?.updatedAt, isNotNull);
+    expect(completed!.updatedAt!.isAfter(initial!.updatedAt!), isTrue);
+  });
+
   test('sleep then event workflow reaches terminal state', () async {
     runtime.registerWorkflow(
       Flow(

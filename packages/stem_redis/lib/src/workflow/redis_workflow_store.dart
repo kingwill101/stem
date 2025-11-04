@@ -276,6 +276,7 @@ return 1
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
+    final nowIso = DateTime.now().toIso8601String();
     await _send(['HSET', _stepsKey(runId), stepName, jsonEncode(value)]);
     final score =
         await _send(['ZSCORE', _orderKey(runId), stepName]) as String?;
@@ -283,6 +284,7 @@ return 1
       final next = await _send(['ZCARD', _orderKey(runId)]) as int? ?? 0;
       await _send(['ZADD', _orderKey(runId), next.toString(), stepName]);
     }
+    await _send(['HSET', _runKey(runId), 'updated_at', nowIso]);
   }
 
   @override

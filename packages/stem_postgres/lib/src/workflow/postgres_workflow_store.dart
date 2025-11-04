@@ -177,18 +177,35 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-          INSERT INTO $_stepsTable (run_id, name, value)
-          VALUES (@runId, @name, @value::jsonb)
-          ON CONFLICT (run_id, name) DO NOTHING
-        '''),
-        parameters: {
-          'runId': runId,
-          'name': stepName,
-          'value': jsonEncode(value),
-        },
-      );
+      await conn.execute('BEGIN');
+      try {
+        await conn.execute(
+          Sql.named('''
+            INSERT INTO $_stepsTable (run_id, name, value)
+            VALUES (@runId, @name, @value::jsonb)
+            ON CONFLICT (run_id, name) DO NOTHING
+          '''),
+          parameters: {
+            'runId': runId,
+            'name': stepName,
+            'value': jsonEncode(value),
+          },
+        );
+
+        await conn.execute(
+          Sql.named('''
+            UPDATE $_runsTable
+               SET updated_at = NOW()
+             WHERE id = @runId
+          '''),
+          parameters: {'runId': runId},
+        );
+
+        await conn.execute('COMMIT');
+      } catch (error) {
+        await conn.execute('ROLLBACK');
+        rethrow;
+      }
     });
   }
 

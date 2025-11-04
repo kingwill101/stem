@@ -92,6 +92,10 @@ class InMemoryWorkflowStore implements WorkflowStore {
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     _steps[runId]?[stepName] = value;
+    final state = _runs[runId];
+    if (state != null) {
+      _runs[runId] = state.copyWith(updatedAt: DateTime.now());
+    }
   }
 
   @override

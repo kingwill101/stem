@@ -37,7 +37,7 @@ class RunState {
   final Map<String, Object?>? lastError;
   final Map<String, Object?>? suspensionData;
 
-  /// Timestamp of the most recent state mutation, if any.
+  /// Timestamp of the most recent state mutation / heartbeat, if any.
   final DateTime? updatedAt;
 
   /// Cancellation policy that was configured when the run started, if any.

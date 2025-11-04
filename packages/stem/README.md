@@ -222,6 +222,9 @@ Inside a script step you can access the same metadata as `FlowContext`:
   registers the run in the store so the next emitted payload is persisted
   atomically and delivered exactly once on resume. Operators can inspect
   suspended runs via `WorkflowStore.listWatchers` or `runsWaitingOn`.
+- Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
+  `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
+  actively-owned runs from ones that need recovery.
 - Use `ctx.takeResumeData()` to detect whether a step is resuming. Call it at
   the start of the handler and branch accordingly.
 - When you suspend, provide a marker in the `data` payload so the resumed step

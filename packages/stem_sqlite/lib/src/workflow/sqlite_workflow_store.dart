@@ -190,10 +190,22 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
-    _db.execute(
-      'INSERT OR REPLACE INTO wf_steps(run_id, name, value) VALUES(?, ?, ?)',
-      [runId, stepName, jsonEncode(value)],
-    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      _db.execute(
+        'INSERT OR REPLACE INTO wf_steps(run_id, name, value) VALUES(?, ?, ?)',
+        [runId, stepName, jsonEncode(value)],
+      );
+      _db.execute('UPDATE wf_runs SET updated_at = ? WHERE id = ?', [
+        now,
+        runId,
+      ]);
+      _db.execute('COMMIT');
+    } catch (error) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
   }
 
   @override

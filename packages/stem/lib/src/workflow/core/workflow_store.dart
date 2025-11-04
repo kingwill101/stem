@@ -20,6 +20,10 @@ abstract class WorkflowStore {
 
   Future<T?> readStep<T>(String runId, String stepName);
 
+  /// Saves a checkpoint for [stepName] and refreshes the run heartbeat.
+  ///
+  /// Implementations MUST atomically persist the checkpoint and update the run's
+  /// last-modified timestamp so operators can identify active ownership.
   Future<void> saveStep<T>(String runId, String stepName, T value);
 
   /// Suspends [runId] until the given [when].
