@@ -2,6 +2,7 @@ import 'run_state.dart';
 import 'workflow_status.dart';
 import 'workflow_step_entry.dart';
 import 'workflow_cancellation_policy.dart';
+import 'workflow_watcher.dart';
 
 /// Persistent storage for workflow runs, checkpoints, and suspensions.
 abstract class WorkflowStore {
@@ -43,6 +44,38 @@ abstract class WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   });
+
+  /// Registers a durable watcher for [topic] so the runtime can resume
+  /// [stepName] when an event is emitted.
+  ///
+  /// Implementations MUST persist the suspension metadata and watcher record
+  /// atomically so an incoming payload can be recorded even if no worker is
+  /// currently running. When a [deadline] is provided the run should surface in
+  /// [dueRuns] once the deadline passes so timeouts can resume the workflow.
+  Future<void> registerWatcher(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  });
+
+  /// Resolves watchers listening on [topic], persisting [payload] and marking
+  /// runs ready to resume atomically. Returns the resolved watchers so the
+  /// runtime can enqueue follow-up work.
+  ///
+  /// The returned [WorkflowWatcherResolution] objects MUST include the merged
+  /// suspension metadata (`resumeData`) that will be exposed to
+  /// `FlowContext.takeResumeData`/`WorkflowScriptStepContext.takeResumeData`.
+  Future<List<WorkflowWatcherResolution>> resolveWatchers(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  });
+
+  /// Lists outstanding watchers for [topic] (primarily for operator tooling).
+  /// The metadata helps CLIs and dashboards explain why a run is waiting.
+  Future<List<WorkflowWatcher>> listWatchers(String topic, {int limit = 256});
 
   Future<void> markRunning(String runId, {String? stepName});
 

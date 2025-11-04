@@ -5,6 +5,7 @@ import '../core/workflow_cancellation_policy.dart';
 import '../core/workflow_status.dart';
 import '../core/workflow_store.dart';
 import '../core/workflow_step_entry.dart';
+import '../core/workflow_watcher.dart';
 
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
@@ -14,6 +15,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
   final _steps = <String, Map<String, Object?>>{};
   final _suspendedTopics = <String, Set<String>>{};
   final _due = SplayTreeMap<DateTime, Set<String>>();
+  final _watchersByTopic = <String, LinkedHashMap<String, _WatcherRecord>>{};
+  final _watchersByRun = <String, _WatcherRecord>{};
   int _counter = 0;
 
   Map<String, Object?>? _cloneData(Map<String, Object?>? source) {
@@ -25,6 +28,17 @@ class InMemoryWorkflowStore implements WorkflowStore {
     final index = name.indexOf('#');
     if (index == -1) return name;
     return name.substring(0, index);
+  }
+
+  void _removeWatcherForRun(String runId) {
+    final record = _watchersByRun.remove(runId);
+    if (record == null) return;
+    final topicMap = _watchersByTopic[record.topic];
+    topicMap?.remove(runId);
+    if (topicMap != null && topicMap.isEmpty) {
+      _watchersByTopic.remove(record.topic);
+    }
+    _suspendedTopics[record.topic]?.remove(runId);
   }
 
   @override
@@ -124,9 +138,38 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  Future<void> registerWatcher(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) async {
+    await suspendOnTopic(
+      runId,
+      stepName,
+      topic,
+      deadline: deadline,
+      data: data,
+    );
+    final record = _WatcherRecord(
+      runId: runId,
+      stepName: stepName,
+      topic: topic,
+      createdAt: DateTime.now(),
+      deadline: deadline,
+      data: _cloneData(data) ?? const <String, Object?>{},
+    );
+    final topicMap = _watchersByTopic.putIfAbsent(topic, () => LinkedHashMap());
+    topicMap[runId] = record;
+    _watchersByRun[runId] = record;
+  }
+
+  @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
     if (state == null) return;
+    _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
       updatedAt: DateTime.now(),
@@ -137,6 +180,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<void> markCompleted(String runId, Object? result) async {
     final state = _runs[runId];
     if (state == null) return;
+    _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.completed,
       result: result,
@@ -156,6 +200,9 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }) async {
     final state = _runs[runId];
     if (state == null) return;
+    if (terminal) {
+      _removeWatcherForRun(runId);
+    }
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
@@ -167,6 +214,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final state = _runs[runId];
     if (state == null) return;
+    _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
       resumeAt: null,
@@ -213,15 +261,98 @@ class InMemoryWorkflowStore implements WorkflowStore {
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
+    final watchers = _watchersByTopic[topic];
+    if (watchers != null && watchers.isNotEmpty) {
+      return watchers.keys.take(limit).toList(growable: false);
+    }
     final runs = _suspendedTopics[topic];
     if (runs == null) return const [];
     return runs.take(limit).toList(growable: false);
   }
 
   @override
+  Future<List<WorkflowWatcherResolution>> resolveWatchers(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  }) async {
+    final topicMap = _watchersByTopic[topic];
+    if (topicMap == null || topicMap.isEmpty) return const [];
+    final now = DateTime.now();
+    final ids = topicMap.keys.take(limit).toList(growable: false);
+    final results = <WorkflowWatcherResolution>[];
+    for (final runId in ids) {
+      final record = topicMap.remove(runId);
+      if (record == null) continue;
+      _watchersByRun.remove(runId);
+      final state = _runs[runId];
+      if (state == null) {
+        final topicSet = _suspendedTopics[topic];
+        topicSet?.remove(runId);
+        if (topicSet != null && topicSet.isEmpty) {
+          _suspendedTopics.remove(topic);
+        }
+        continue;
+      }
+      final metadata = Map<String, Object?>.from(record.data);
+      metadata['type'] = 'event';
+      metadata['topic'] = topic;
+      metadata['payload'] = payload;
+      metadata.putIfAbsent('step', () => record.stepName);
+      metadata.putIfAbsent(
+        'iterationStep',
+        () => metadata['step'] ?? record.stepName,
+      );
+      metadata['deliveredAt'] = now.toIso8601String();
+      _runs[runId] = state.copyWith(
+        status: WorkflowStatus.running,
+        waitTopic: null,
+        resumeAt: null,
+        suspensionData: _cloneData(metadata),
+        updatedAt: now,
+      );
+      for (final entry in _due.values) {
+        entry.remove(runId);
+      }
+      final topicSet = _suspendedTopics[topic];
+      topicSet?.remove(runId);
+      if (topicSet != null && topicSet.isEmpty) {
+        _suspendedTopics.remove(topic);
+      }
+      results.add(
+        WorkflowWatcherResolution(
+          runId: runId,
+          stepName: record.stepName,
+          topic: topic,
+          resumeData: metadata,
+        ),
+      );
+    }
+    if (topicMap.isEmpty) {
+      _watchersByTopic.remove(topic);
+    }
+    return results;
+  }
+
+  @override
+  Future<List<WorkflowWatcher>> listWatchers(
+    String topic, {
+    int limit = 256,
+  }) async {
+    final topicMap = _watchersByTopic[topic];
+    if (topicMap == null || topicMap.isEmpty) return const [];
+    final results = <WorkflowWatcher>[];
+    for (final record in topicMap.values.take(limit)) {
+      results.add(record.toWatcher());
+    }
+    return results;
+  }
+
+  @override
   Future<void> cancel(String runId, {String? reason}) async {
     final state = _runs[runId];
     if (state == null) return;
+    _removeWatcherForRun(runId);
     final now = DateTime.now();
     final cancellationData = <String, Object?>{
       'reason': reason ?? 'cancelled',
@@ -256,6 +387,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     if (steps == null) return;
     final state = _runs[runId];
     if (state == null) return;
+    _removeWatcherForRun(runId);
     final entries = steps.entries.toList();
     final baseIndexMap = <String, int>{};
     var nextIndex = 0;
@@ -335,4 +467,31 @@ class InMemoryWorkflowStore implements WorkflowStore {
     }
     return entries;
   }
+}
+
+class _WatcherRecord {
+  _WatcherRecord({
+    required this.runId,
+    required this.stepName,
+    required this.topic,
+    required this.createdAt,
+    this.deadline,
+    Map<String, Object?> data = const {},
+  }) : data = Map.unmodifiable(Map<String, Object?>.from(data));
+
+  final String runId;
+  final String stepName;
+  final String topic;
+  final DateTime createdAt;
+  final DateTime? deadline;
+  final Map<String, Object?> data;
+
+  WorkflowWatcher toWatcher() => WorkflowWatcher(
+    runId: runId,
+    stepName: stepName,
+    topic: topic,
+    createdAt: createdAt,
+    deadline: deadline,
+    data: data,
+  );
 }

@@ -25,6 +25,9 @@ class PostgresWorkflowStore implements WorkflowStore {
   String get _stepsTable => '$schema.${_tablePrefix}workflow_steps';
   String get _resumeIndex => '${_tablePrefix}workflow_runs_resume_idx';
   String get _topicIndex => '${_tablePrefix}workflow_runs_topic_idx';
+  String get _watchersTable => '$schema.${_tablePrefix}workflow_watchers';
+  String get _watchersTopicIndex =>
+      '${_tablePrefix}workflow_watchers_topic_idx';
 
   /// Connects to a PostgreSQL database and ensures the workflow tables exist.
   static Future<PostgresWorkflowStore> connect(
@@ -91,6 +94,22 @@ class PostgresWorkflowStore implements WorkflowStore {
         CREATE INDEX IF NOT EXISTS $_topicIndex
         ON $_runsTable(wait_topic)
         WHERE wait_topic IS NOT NULL
+      ''');
+
+      await conn.execute('''
+        CREATE TABLE IF NOT EXISTS $_watchersTable (
+          run_id TEXT PRIMARY KEY REFERENCES $_runsTable(id) ON DELETE CASCADE,
+          step_name TEXT NOT NULL,
+          topic TEXT NOT NULL,
+          data JSONB,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          deadline TIMESTAMPTZ
+        )
+      ''');
+
+      await conn.execute('''
+        CREATE INDEX IF NOT EXISTS $_watchersTopicIndex
+        ON $_watchersTable(topic, created_at)
       ''');
 
       await conn.execute('''
@@ -232,8 +251,66 @@ class PostgresWorkflowStore implements WorkflowStore {
   }
 
   @override
+  Future<void> registerWatcher(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) async {
+    await _client.run((Connection conn) async {
+      await conn.execute('BEGIN');
+      try {
+        await conn.execute(
+          Sql.named('''
+            INSERT INTO $_watchersTable (run_id, step_name, topic, data, deadline)
+            VALUES (@runId, @stepName, @topic, @data::jsonb, @deadline)
+            ON CONFLICT (run_id) DO UPDATE
+              SET step_name = EXCLUDED.step_name,
+                  topic = EXCLUDED.topic,
+                  data = EXCLUDED.data,
+                  deadline = EXCLUDED.deadline,
+                  created_at = NOW()
+          '''),
+          parameters: {
+            'runId': runId,
+            'stepName': stepName,
+            'topic': topic,
+            'data': data != null ? jsonEncode(data) : null,
+            'deadline': deadline,
+          },
+        );
+
+        await conn.execute(
+          Sql.named('''
+            UPDATE $_runsTable
+               SET status = @status,
+                   wait_topic = @topic,
+                   resume_at = @deadline,
+                   suspension_data = COALESCE(@data::jsonb, suspension_data),
+                   updated_at = NOW()
+             WHERE id = @id
+          '''),
+          parameters: {
+            'status': WorkflowStatus.suspended.name,
+            'topic': topic,
+            'deadline': deadline,
+            'data': data != null ? jsonEncode(data) : null,
+            'id': runId,
+          },
+        );
+        await conn.execute('COMMIT');
+      } catch (error) {
+        await conn.execute('ROLLBACK');
+        rethrow;
+      }
+    });
+  }
+
+  @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     await _client.run((Connection conn) async {
+      await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -251,6 +328,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> markCompleted(String runId, Object? result) async {
     await _client.run((Connection conn) async {
+      await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -279,6 +357,9 @@ class PostgresWorkflowStore implements WorkflowStore {
     bool terminal = false,
   }) async {
     await _client.run((Connection conn) async {
+      if (terminal) {
+        await _deleteWatcherForRun(conn, runId);
+      }
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -303,6 +384,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     await _client.run((Connection conn) async {
+      await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -376,20 +458,147 @@ class PostgresWorkflowStore implements WorkflowStore {
     return _client.run((Connection conn) async {
       final result = await conn.execute(
         Sql.named('''
-          SELECT id
-            FROM $_runsTable
-           WHERE wait_topic = @topic
+          SELECT run_id
+            FROM $_watchersTable
+           WHERE topic = @topic
+           ORDER BY created_at ASC
            LIMIT @limit
         '''),
         parameters: {'topic': topic, 'limit': limit},
       );
-      return result.map((row) => row.first as String).toList(growable: false);
+      if (result.isNotEmpty) {
+        return result.map((row) => row.first as String).toList(growable: false);
+      }
+      final fallback = await conn.execute(
+        Sql.named('''
+          SELECT id
+            FROM $_runsTable
+           WHERE wait_topic = @topic
+           ORDER BY created_at ASC
+           LIMIT @limit
+        '''),
+        parameters: {'topic': topic, 'limit': limit},
+      );
+      return fallback.map((row) => row.first as String).toList(growable: false);
+    });
+  }
+
+  @override
+  Future<List<WorkflowWatcherResolution>> resolveWatchers(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  }) async {
+    return _client.run((Connection conn) async {
+      await conn.execute('BEGIN');
+      try {
+        final rows = await conn.execute(
+          Sql.named('''
+            SELECT run_id, step_name, data
+              FROM $_watchersTable
+             WHERE topic = @topic
+             ORDER BY created_at ASC
+             LIMIT @limit
+             FOR UPDATE SKIP LOCKED
+          '''),
+          parameters: {'topic': topic, 'limit': limit},
+        );
+        if (rows.isEmpty) {
+          await conn.execute('COMMIT');
+          return const <WorkflowWatcherResolution>[];
+        }
+        final now = DateTime.now();
+        final resolutions = <WorkflowWatcherResolution>[];
+        for (final row in rows) {
+          final runId = row[0] as String;
+          final stepName = row[1] as String;
+          final data = _decodeMap(row[2]);
+          final metadata = Map<String, Object?>.from(data);
+          metadata['type'] = 'event';
+          metadata['topic'] = topic;
+          metadata['payload'] = payload;
+          metadata.putIfAbsent('step', () => stepName);
+          metadata.putIfAbsent(
+            'iterationStep',
+            () => metadata['step'] ?? stepName,
+          );
+          metadata['deliveredAt'] = now.toIso8601String();
+
+          await conn.execute(
+            Sql.named('''
+              UPDATE $_runsTable
+                 SET status = @status,
+                     wait_topic = NULL,
+                     resume_at = NULL,
+                     suspension_data = @data::jsonb,
+                     updated_at = NOW()
+               WHERE id = @id
+            '''),
+            parameters: {
+              'status': WorkflowStatus.running.name,
+              'data': jsonEncode(metadata),
+              'id': runId,
+            },
+          );
+
+          await conn.execute(
+            Sql.named('DELETE FROM $_watchersTable WHERE run_id = @id'),
+            parameters: {'id': runId},
+          );
+
+          resolutions.add(
+            WorkflowWatcherResolution(
+              runId: runId,
+              stepName: stepName,
+              topic: topic,
+              resumeData: metadata,
+            ),
+          );
+        }
+        await conn.execute('COMMIT');
+        return resolutions;
+      } catch (error) {
+        await conn.execute('ROLLBACK');
+        rethrow;
+      }
+    });
+  }
+
+  @override
+  Future<List<WorkflowWatcher>> listWatchers(
+    String topic, {
+    int limit = 256,
+  }) async {
+    return _client.run((Connection conn) async {
+      final rows = await conn.execute(
+        Sql.named('''
+          SELECT run_id, step_name, data, created_at, deadline
+            FROM $_watchersTable
+           WHERE topic = @topic
+           ORDER BY created_at ASC
+           LIMIT @limit
+        '''),
+        parameters: {'topic': topic, 'limit': limit},
+      );
+      return rows
+          .map(
+            (row) => WorkflowWatcher(
+              runId: row[0] as String,
+              stepName: row[1] as String,
+              topic: topic,
+              createdAt: row[3] as DateTime,
+              deadline: row[4] as DateTime?,
+              data: _decodeMap(row[2]),
+            ),
+          )
+          .toList(growable: false);
     });
   }
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
     await _client.run((Connection conn) async {
+      await _deleteWatcherForRun(conn, runId);
       await conn.execute(
         Sql.named('''
           UPDATE $_runsTable
@@ -418,6 +627,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     await _client.run((Connection conn) async {
       await conn.execute('BEGIN');
       try {
+        await _deleteWatcherForRun(conn, runId);
         final names = await conn.execute(
           Sql.named('''
             SELECT name, position
@@ -572,6 +782,13 @@ class PostgresWorkflowStore implements WorkflowStore {
 
   Future<void> close() async {
     await _client.close();
+  }
+
+  Future<void> _deleteWatcherForRun(Connection conn, String runId) async {
+    await conn.execute(
+      Sql.named('DELETE FROM $_watchersTable WHERE run_id = @id'),
+      parameters: {'id': runId},
+    );
   }
 
   Map<String, Object?> _decodeMap(dynamic value) {

@@ -218,6 +218,10 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - Steps may run multiple times. The runtime replays a step from the top after
   every suspension (sleep, awaited event, rewind) and after worker crashes, so
   handlers must be idempotent.
+- Event waits are durable watchers. When a step calls `awaitEvent`, the runtime
+  registers the run in the store so the next emitted payload is persisted
+  atomically and delivered exactly once on resume. Operators can inspect
+  suspended runs via `WorkflowStore.listWatchers` or `runsWaitingOn`.
 - Use `ctx.takeResumeData()` to detect whether a step is resuming. Call it at
   the start of the handler and branch accordingly.
 - When you suspend, provide a marker in the `data` payload so the resumed step

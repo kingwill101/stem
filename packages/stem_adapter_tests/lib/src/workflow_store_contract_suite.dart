@@ -188,6 +188,84 @@ void runWorkflowStoreContractTests({
       expect(state?.waitTopic, isNull);
     });
 
+    test('registerWatcher resolves payload exactly once', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.registerWatcher(
+        runId,
+        'event-step',
+        'contract.topic',
+        data: const <String, Object?>{
+          'step': 'event-step',
+          'iteration': 0,
+          'iterationStep': 'event-step',
+        },
+      );
+
+      final waiting = await current.runsWaitingOn('contract.topic');
+      expect(waiting, contains(runId));
+
+      final watchers = await current.listWatchers('contract.topic');
+      expect(watchers, isNotEmpty);
+      expect(watchers.first.runId, runId);
+      expect(watchers.first.stepName, 'event-step');
+
+      final resolutions = await current.resolveWatchers(
+        'contract.topic',
+        const <String, Object?>{'value': 42},
+      );
+      expect(resolutions, hasLength(1));
+      final resolution = resolutions.first;
+      expect(resolution.runId, runId);
+      expect(resolution.stepName, 'event-step');
+      expect(resolution.topic, 'contract.topic');
+      expect(resolution.resumeData['payload'], {'value': 42});
+      expect(resolution.resumeData['topic'], 'contract.topic');
+
+      expect(await current.listWatchers('contract.topic'), isEmpty);
+
+      final after = await current.runsWaitingOn('contract.topic');
+      expect(after, isEmpty);
+
+      final state = await current.get(runId);
+      expect(state, isNotNull);
+      expect(state!.suspensionData?['payload'], {'value': 42});
+    });
+
+    test('listWatchers exposes metadata including deadlines', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+      final deadline = DateTime.now().add(const Duration(minutes: 5));
+
+      await current.registerWatcher(
+        runId,
+        'inspect-step',
+        'contract.inspect',
+        deadline: deadline,
+        data: const <String, Object?>{'note': 'contract-test'},
+      );
+
+      final watchers = await current.listWatchers('contract.inspect');
+      expect(watchers, hasLength(1));
+      final watcher = watchers.first;
+      expect(watcher.runId, runId);
+      expect(watcher.stepName, 'inspect-step');
+      expect(watcher.topic, 'contract.inspect');
+      expect(watcher.data['note'], 'contract-test');
+      expect(watcher.deadline, isNotNull);
+      if (watcher.deadline != null) {
+        final delta = watcher.deadline!.difference(deadline).abs();
+        expect(delta.inSeconds < 5, isTrue);
+      }
+    });
+
     test('markCompleted stores result and clears suspension data', () async {
       final current = store!;
       final runId = await current.createRun(

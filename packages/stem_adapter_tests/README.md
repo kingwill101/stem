@@ -39,6 +39,10 @@ void main() {
 }
 ```
 
+The workflow store suite exercises durable watcher semantics (`registerWatcher`,
+`resolveWatchers`, and `listWatchers`) so adapters must capture event payloads
+atomically and expose waiting runs for operator tooling.
+
 ## Versioning
 
 This package follows the same release cadence as the `stem` runtime.

@@ -102,26 +102,30 @@ class WorkflowRuntime {
   /// before being re-enqueued.
   Future<void> emit(String topic, Map<String, Object?> payload) async {
     await _eventBus.emit(topic, payload);
-    final runIds = await _store.runsWaitingOn(topic);
-    for (final runId in runIds) {
-      final state = await _store.get(runId);
-      if (state == null) {
-        continue;
+    const batchSize = 256;
+    while (true) {
+      final resolutions = await _store.resolveWatchers(
+        topic,
+        payload,
+        limit: batchSize,
+      );
+      if (resolutions.isEmpty) {
+        break;
       }
-      final now = DateTime.now();
-      if (await _maybeCancelForPolicy(state, now: now)) {
-        continue;
+      for (final resolution in resolutions) {
+        final state = await _store.get(resolution.runId);
+        if (state == null) {
+          continue;
+        }
+        final now = DateTime.now();
+        if (await _maybeCancelForPolicy(state, now: now)) {
+          continue;
+        }
+        await _enqueueRun(resolution.runId);
       }
-      final metadata = <String, Object?>{};
-      final existing = state.suspensionData;
-      if (existing != null && existing.isNotEmpty) {
-        metadata.addAll(existing);
+      if (resolutions.length < batchSize) {
+        break;
       }
-      metadata['type'] = 'event';
-      metadata['topic'] = topic;
-      metadata['payload'] = payload;
-      await _store.markResumed(runId, data: metadata);
-      await _enqueueRun(runId);
     }
   }
 
@@ -368,7 +372,7 @@ class WorkflowRuntime {
           if (controlData != null && controlData.isNotEmpty) {
             metadata.addAll(controlData);
           }
-          await _store.suspendOnTopic(
+          await _store.registerWatcher(
             runId,
             step.name,
             control.topic!,
@@ -892,7 +896,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
           metadata['policyDeadlineApplied'] = true;
         }
       }
-      await runtime._store.suspendOnTopic(
+      await runtime._store.registerWatcher(
         runId,
         stepName,
         control.topic!,

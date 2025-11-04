@@ -58,6 +58,19 @@ class SqliteWorkflowStore implements WorkflowStore {
     db.execute(
       'CREATE INDEX IF NOT EXISTS wf_runs_topic_idx ON wf_runs(wait_topic)',
     );
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS wf_watchers (
+        run_id TEXT PRIMARY KEY REFERENCES wf_runs(id) ON DELETE CASCADE,
+        step_name TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        data TEXT,
+        created_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER)),
+        deadline INTEGER
+      )
+    ''');
+    db.execute(
+      'CREATE INDEX IF NOT EXISTS wf_watchers_topic_idx ON wf_watchers(topic, created_at)',
+    );
     _ensureColumn(db, 'wf_runs', 'cancellation_policy', 'TEXT');
     _ensureColumn(db, 'wf_runs', 'cancellation_data', 'TEXT');
     _ensureColumn(
@@ -228,8 +241,52 @@ class SqliteWorkflowStore implements WorkflowStore {
   }
 
   @override
+  Future<void> registerWatcher(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final payload = jsonEncode(data ?? const <String, Object?>{});
+    final deadlineMillis = deadline?.millisecondsSinceEpoch;
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      _db.execute(
+        'INSERT INTO wf_watchers(run_id, step_name, topic, data, created_at, deadline) '
+        'VALUES(?, ?, ?, ?, ?, ?) '
+        'ON CONFLICT(run_id) DO UPDATE SET '
+        'step_name = excluded.step_name, '
+        'topic = excluded.topic, '
+        'data = excluded.data, '
+        'created_at = excluded.created_at, '
+        'deadline = excluded.deadline',
+        [runId, stepName, topic, payload, now, deadlineMillis],
+      );
+      _db.execute(
+        'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
+        'suspension_data = ?, updated_at = ? WHERE id = ?',
+        [
+          WorkflowStatus.suspended.name,
+          topic,
+          deadlineMillis,
+          payload,
+          now,
+          runId,
+        ],
+      );
+      _db.execute('COMMIT');
+    } catch (error) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
       'updated_at = ? WHERE id = ?',
@@ -240,6 +297,7 @@ class SqliteWorkflowStore implements WorkflowStore {
   @override
   Future<void> markCompleted(String runId, Object? result) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, result = ?, suspension_data = NULL, '
       'updated_at = ? WHERE id = ?',
@@ -255,6 +313,9 @@ class SqliteWorkflowStore implements WorkflowStore {
     bool terminal = false,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    if (terminal) {
+      _deleteWatcher(runId);
+    }
     _db.execute(
       'UPDATE wf_runs SET status = ?, last_error = ?, updated_at = ? WHERE id = ?',
       [
@@ -269,6 +330,7 @@ class SqliteWorkflowStore implements WorkflowStore {
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
+    _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
       'suspension_data = ?, updated_at = ? WHERE id = ?',
@@ -296,11 +358,111 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
-    final rows = _db.select(
+    final watcherRows = _db.select(
+      'SELECT run_id FROM wf_watchers WHERE topic = ? '
+      'ORDER BY created_at ASC LIMIT ?',
+      [topic, limit],
+    );
+    if (watcherRows.isNotEmpty) {
+      return watcherRows
+          .map((row) => row['run_id'] as String)
+          .toList(growable: false);
+    }
+    final fallback = _db.select(
       'SELECT id FROM wf_runs WHERE wait_topic = ? LIMIT ?',
       [topic, limit],
     );
-    return rows.map((r) => r['id'] as String).toList(growable: false);
+    return fallback.map((r) => r['id'] as String).toList(growable: false);
+  }
+
+  @override
+  Future<List<WorkflowWatcherResolution>> resolveWatchers(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  }) async {
+    final now = DateTime.now();
+    final nowMs = now.millisecondsSinceEpoch;
+    final nowIso = now.toIso8601String();
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      final rows = _db.select(
+        'SELECT run_id, step_name, data FROM wf_watchers '
+        'WHERE topic = ? ORDER BY created_at ASC LIMIT ?',
+        [topic, limit],
+      );
+      if (rows.isEmpty) {
+        _db.execute('COMMIT');
+        return const [];
+      }
+      final resolutions = <WorkflowWatcherResolution>[];
+      for (final row in rows) {
+        final runId = row['run_id'] as String;
+        final stepName = row['step_name'] as String;
+        final stored = _decodeMap(row['data'] as String?);
+        final metadata = Map<String, Object?>.from(stored);
+        metadata['type'] = 'event';
+        metadata['topic'] = topic;
+        metadata['payload'] = payload;
+        metadata.putIfAbsent('step', () => stepName);
+        metadata.putIfAbsent(
+          'iterationStep',
+          () => metadata['step'] ?? stepName,
+        );
+        metadata['deliveredAt'] = nowIso;
+
+        _db.execute(
+          'UPDATE wf_runs SET status = ?, wait_topic = NULL, resume_at = NULL, '
+          'suspension_data = ?, updated_at = ? WHERE id = ?',
+          [WorkflowStatus.running.name, jsonEncode(metadata), nowMs, runId],
+        );
+
+        _db.execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
+
+        resolutions.add(
+          WorkflowWatcherResolution(
+            runId: runId,
+            stepName: stepName,
+            topic: topic,
+            resumeData: metadata,
+          ),
+        );
+      }
+      _db.execute('COMMIT');
+      return resolutions;
+    } catch (error) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<WorkflowWatcher>> listWatchers(
+    String topic, {
+    int limit = 256,
+  }) async {
+    final rows = _db.select(
+      'SELECT run_id, step_name, data, created_at, deadline '
+      'FROM wf_watchers WHERE topic = ? ORDER BY created_at ASC LIMIT ?',
+      [topic, limit],
+    );
+    if (rows.isEmpty) {
+      return const [];
+    }
+    return rows
+        .map(
+          (row) => WorkflowWatcher(
+            runId: row['run_id'] as String,
+            stepName: row['step_name'] as String,
+            topic: topic,
+            createdAt:
+                _decodeDate(row['created_at'] as int?) ??
+                DateTime.fromMillisecondsSinceEpoch(0),
+            deadline: _decodeDate(row['deadline'] as int?),
+            data: _decodeMap(row['data'] as String?),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -310,6 +472,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       'reason': reason ?? 'cancelled',
       'cancelledAt': DateTime.fromMillisecondsSinceEpoch(now).toIso8601String(),
     });
+    _deleteWatcher(runId);
     _db.execute(
       'UPDATE wf_runs SET status = ?, suspension_data = NULL, wait_topic = NULL, '
       'resume_at = NULL, cancellation_data = ?, updated_at = ? WHERE id = ?',
@@ -319,6 +482,7 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> rewindToStep(String runId, String stepName) async {
+    _deleteWatcher(runId);
     final stepRows = _db.select(
       'SELECT name, value FROM wf_steps WHERE run_id = ? ORDER BY rowid',
       [runId],
@@ -426,6 +590,10 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   Future<void> close() async {
     _db.dispose();
+  }
+
+  void _deleteWatcher(String runId) {
+    _db.execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
   }
 
   Map<String, Object?> _decodeMap(String? input) {

@@ -166,6 +166,42 @@ void main() {
     expect(observedPayload, 'user-123');
   });
 
+  test('emit persists payload before worker resumes execution', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.persisted',
+        build: (flow) {
+          flow.step('wait', (context) async {
+            final resume = context.takeResumeData();
+            if (resume == null) {
+              context.awaitEvent('persist.event');
+              return null;
+            }
+            final payload = resume as Map<String, Object?>;
+            return payload['value'];
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.persisted');
+    await runtime.executeRun(runId);
+
+    await runtime.emit('persist.event', const <String, Object?>{
+      'value': 'ready',
+    });
+
+    final afterEmit = await store.get(runId);
+    expect(afterEmit?.status, WorkflowStatus.running);
+    expect(afterEmit?.suspensionData?['payload'], {'value': 'ready'});
+
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(completed?.result, 'ready');
+  });
+
   test('sleep then event workflow reaches terminal state', () async {
     runtime.registerWorkflow(
       Flow(

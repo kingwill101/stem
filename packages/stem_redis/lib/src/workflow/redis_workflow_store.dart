@@ -44,6 +44,135 @@ class RedisWorkflowStore implements WorkflowStore {
   String _orderKey(String id) => '$namespace:wf:$id:order';
   String _topicKey(String topic) => '$namespace:wf:topic:$topic';
   String _dueKey() => '$namespace:wf:due';
+  String _watchersHashKey() => '$namespace:wf:watchers';
+  String _watchersTopicKey(String topic) =>
+      '$namespace:wf:watchers:topic:$topic';
+  String _runKeyPrefix() => '$namespace:wf:';
+
+  static const _luaRegisterWatcher = r'''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local topicSetKey = KEYS[3]
+local dueKey = KEYS[4]
+local watchersTopicKey = KEYS[5]
+
+local runId = ARGV[1]
+local suspensionData = ARGV[2]
+local deadlineMs = ARGV[3]
+local nowIso = ARGV[4]
+local nowScore = tonumber(ARGV[5])
+local watcherPayload = ARGV[6]
+local status = ARGV[7]
+local topic = ARGV[8]
+
+local existing = redis.call('HGET', watchersHash, runId)
+if existing then
+  local parsed = cjson.decode(existing)
+  if parsed['watchersTopicKey'] then
+    redis.call('ZREM', parsed['watchersTopicKey'], runId)
+  end
+  if parsed['topicSetKey'] then
+    redis.call('SREM', parsed['topicSetKey'], runId)
+  end
+end
+
+redis.call('HSET', runKey,
+  'status', status,
+  'wait_topic', topic,
+  'resume_at', deadlineMs,
+  'suspension_data', suspensionData,
+  'updated_at', nowIso)
+
+redis.call('HSET', watchersHash, runId, watcherPayload)
+redis.call('ZADD', watchersTopicKey, nowScore, runId)
+redis.call('SADD', topicSetKey, runId)
+
+if deadlineMs ~= '' then
+  redis.call('ZADD', dueKey, deadlineMs, runId)
+else
+  redis.call('ZREM', dueKey, runId)
+end
+
+return 1
+''';
+
+  static const _luaResolveWatchers = r'''
+local watchersHash = KEYS[1]
+local dueKey = KEYS[2]
+local watchersTopicKey = KEYS[3]
+local topicSetKey = KEYS[4]
+
+local runKeyPrefix = ARGV[1]
+local payloadJson = ARGV[2]
+local topic = ARGV[3]
+local limit = tonumber(ARGV[4])
+local nowIso = ARGV[5]
+local runningStatus = ARGV[6]
+
+local payload = cjson.decode(payloadJson)
+local members = redis.call('ZRANGE', watchersTopicKey, 0, limit - 1)
+local results = {}
+for _, runId in ipairs(members) do
+  local rawWatcher = redis.call('HGET', watchersHash, runId)
+  if rawWatcher then
+    local watcher = cjson.decode(rawWatcher)
+    redis.call('HDEL', watchersHash, runId)
+    local watcherTopicKey = watcher['watchersTopicKey'] or watchersTopicKey
+    local watcherTopicSet = watcher['topicSetKey'] or topicSetKey
+    redis.call('ZREM', watcherTopicKey, runId)
+    redis.call('SREM', watcherTopicSet, runId)
+    redis.call('ZREM', dueKey, runId)
+    local metadata = watcher['data'] or {}
+    metadata['type'] = 'event'
+    metadata['topic'] = topic
+    metadata['payload'] = payload
+    metadata['step'] = metadata['step'] or watcher['stepName']
+    metadata['iterationStep'] = metadata['iterationStep'] or watcher['stepName']
+    metadata['deliveredAt'] = nowIso
+    local runKey = runKeyPrefix .. runId
+    redis.call('HSET', runKey,
+      'status', runningStatus,
+      'wait_topic', '',
+      'resume_at', '',
+      'suspension_data', cjson.encode(metadata),
+      'updated_at', nowIso)
+    table.insert(results, cjson.encode({
+      runId = runId,
+      stepName = watcher['stepName'],
+      topic = topic,
+      resumeData = metadata
+    }))
+  else
+    redis.call('ZREM', watchersTopicKey, runId)
+    redis.call('SREM', topicSetKey, runId)
+    redis.call('ZREM', dueKey, runId)
+  end
+end
+return results
+''';
+
+  static const _luaRemoveWatcher = r'''
+local watchersHash = KEYS[1]
+local dueKey = KEYS[2]
+
+local runId = ARGV[1]
+
+local existing = redis.call('HGET', watchersHash, runId)
+if not existing then
+  return 0
+end
+
+local watcher = cjson.decode(existing)
+redis.call('HDEL', watchersHash, runId)
+if watcher['watchersTopicKey'] then
+  redis.call('ZREM', watcher['watchersTopicKey'], runId)
+end
+if watcher['topicSetKey'] then
+  redis.call('SREM', watcher['topicSetKey'], runId)
+end
+redis.call('ZREM', dueKey, runId)
+return 1
+''';
 
   String _baseStepName(String name) {
     final hashIndex = name.indexOf('#');
@@ -221,8 +350,53 @@ class RedisWorkflowStore implements WorkflowStore {
   }
 
   @override
+  Future<void> registerWatcher(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) async {
+    final now = DateTime.now();
+    final nowIso = now.toIso8601String();
+    final deadlineMillis = deadline != null
+        ? deadline.millisecondsSinceEpoch.toString()
+        : '';
+    final suspensionData = jsonEncode(data ?? const <String, Object?>{});
+    final watcherPayload = jsonEncode({
+      'runId': runId,
+      'stepName': stepName,
+      'topic': topic,
+      'data': data ?? const <String, Object?>{},
+      'createdAt': nowIso,
+      if (deadline != null) 'deadline': deadline.toIso8601String(),
+      'watchersTopicKey': _watchersTopicKey(topic),
+      'topicSetKey': _topicKey(topic),
+    });
+    await _send([
+      'EVAL',
+      _luaRegisterWatcher,
+      '5',
+      _runKey(runId),
+      _watchersHashKey(),
+      _topicKey(topic),
+      _dueKey(),
+      _watchersTopicKey(topic),
+      runId,
+      suspensionData,
+      deadlineMillis,
+      nowIso,
+      now.millisecondsSinceEpoch.toString(),
+      watcherPayload,
+      WorkflowStatus.suspended.name,
+      topic,
+    ]);
+  }
+
+  @override
   Future<void> markRunning(String runId, {String? stepName}) async {
     final now = DateTime.now().toIso8601String();
+    await _removeWatcher(runId);
     await _send([
       'HSET',
       _runKey(runId),
@@ -241,6 +415,7 @@ class RedisWorkflowStore implements WorkflowStore {
   @override
   Future<void> markCompleted(String runId, Object? result) async {
     final now = DateTime.now().toIso8601String();
+    await _removeWatcher(runId);
     await _send([
       'HSET',
       _runKey(runId),
@@ -264,6 +439,9 @@ class RedisWorkflowStore implements WorkflowStore {
     bool terminal = false,
   }) async {
     final now = DateTime.now().toIso8601String();
+    if (terminal) {
+      await _removeWatcher(runId);
+    }
     await _send([
       'HSET',
       _runKey(runId),
@@ -281,6 +459,7 @@ class RedisWorkflowStore implements WorkflowStore {
     final run = await get(runId);
     final waitTopic = run?.waitTopic;
     final now = DateTime.now().toIso8601String();
+    await _removeWatcher(runId);
     await _send([
       'HSET',
       _runKey(runId),
@@ -324,9 +503,108 @@ class RedisWorkflowStore implements WorkflowStore {
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
+    final ordered =
+        await _send([
+              'ZRANGE',
+              _watchersTopicKey(topic),
+              '0',
+              (limit - 1).toString(),
+            ])
+            as List?;
+    if (ordered != null && ordered.isNotEmpty) {
+      return ordered.cast<String>().take(limit).toList(growable: false);
+    }
     final entries = await _send(['SMEMBERS', _topicKey(topic)]) as List?;
-    if (entries == null) return const [];
+    if (entries == null || entries.isEmpty) return const [];
     return entries.cast<String>().take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<List<WorkflowWatcherResolution>> resolveWatchers(
+    String topic,
+    Map<String, Object?> payload, {
+    int limit = 256,
+  }) async {
+    final nowIso = DateTime.now().toIso8601String();
+    final results =
+        await _send([
+              'EVAL',
+              _luaResolveWatchers,
+              '4',
+              _watchersHashKey(),
+              _dueKey(),
+              _watchersTopicKey(topic),
+              _topicKey(topic),
+              _runKeyPrefix(),
+              jsonEncode(payload),
+              topic,
+              limit.toString(),
+              nowIso,
+              WorkflowStatus.running.name,
+            ])
+            as List?;
+    if (results == null || results.isEmpty) {
+      return const [];
+    }
+    final resolutions = <WorkflowWatcherResolution>[];
+    for (final raw in results.cast<String>()) {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final resume = decoded['resumeData'];
+      resolutions.add(
+        WorkflowWatcherResolution(
+          runId: decoded['runId'] as String,
+          stepName: decoded['stepName'] as String,
+          topic: decoded['topic'] as String,
+          resumeData: resume is Map
+              ? resume.cast<String, Object?>()
+              : const <String, Object?>{},
+        ),
+      );
+    }
+    return resolutions;
+  }
+
+  @override
+  Future<List<WorkflowWatcher>> listWatchers(
+    String topic, {
+    int limit = 256,
+  }) async {
+    final members =
+        await _send([
+              'ZRANGE',
+              _watchersTopicKey(topic),
+              '0',
+              (limit - 1).toString(),
+            ])
+            as List?;
+    if (members == null || members.isEmpty) {
+      return const [];
+    }
+    final watchers = <WorkflowWatcher>[];
+    for (final runId in members.cast<String>()) {
+      final raw = await _send(['HGET', _watchersHashKey(), runId]) as String?;
+      if (raw == null || raw.isEmpty) {
+        continue;
+      }
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+      final createdAtIso = decoded['createdAt'] as String?;
+      final deadlineIso = decoded['deadline'] as String?;
+      final data = decoded['data'];
+      watchers.add(
+        WorkflowWatcher(
+          runId: runId,
+          stepName: decoded['stepName'] as String,
+          topic: (decoded['topic'] as String?) ?? topic,
+          createdAt: createdAtIso != null
+              ? DateTime.tryParse(createdAtIso) ??
+                    DateTime.fromMillisecondsSinceEpoch(0)
+              : DateTime.fromMillisecondsSinceEpoch(0),
+          deadline: deadlineIso != null ? DateTime.tryParse(deadlineIso) : null,
+          data: data is Map ? data.cast<String, Object?>() : const {},
+        ),
+      );
+    }
+    return watchers;
   }
 
   @override
@@ -337,6 +615,7 @@ class RedisWorkflowStore implements WorkflowStore {
       'reason': reason ?? 'cancelled',
       'cancelledAt': now.toIso8601String(),
     };
+    await _removeWatcher(runId);
     await _send([
       'HSET',
       _runKey(runId),
@@ -362,6 +641,7 @@ class RedisWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> rewindToStep(String runId, String stepName) async {
+    await _removeWatcher(runId);
     final names = await _send(['ZRANGE', _orderKey(runId), '0', '-1']) as List?;
     if (names == null) return;
     final baseIndexMap = <String, int>{};
@@ -472,6 +752,17 @@ class RedisWorkflowStore implements WorkflowStore {
 
   Future<void> close() async {
     await _connection.close();
+  }
+
+  Future<void> _removeWatcher(String runId) async {
+    await _send([
+      'EVAL',
+      _luaRemoveWatcher,
+      '2',
+      _watchersHashKey(),
+      _dueKey(),
+      runId,
+    ]);
   }
 
   Map<String, Object?> _decodeMap(String? value) {

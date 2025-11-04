@@ -6,6 +6,7 @@ export 'core/workflow_definition.dart';
 export 'core/workflow_cancellation_policy.dart';
 export 'core/workflow_script.dart';
 export 'core/workflow_script_context.dart';
+export 'core/workflow_watcher.dart';
 export 'core/workflow_status.dart';
 export 'core/workflow_step_entry.dart';
 export 'core/workflow_store.dart';
