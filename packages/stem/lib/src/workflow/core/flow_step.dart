@@ -55,6 +55,10 @@ class FlowStepControl {
     deadline: deadline,
     data: data,
   );
+
+  /// Continue execution without suspending.
+  factory FlowStepControl.continueRun() =>
+      FlowStepControl._(FlowControlType.continueRun);
 }
 
 enum FlowControlType { continueRun, sleep, waitForEvent }

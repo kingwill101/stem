@@ -225,6 +225,9 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
   `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
   actively-owned runs from ones that need recovery.
+- Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
+  runtime skips re-suspending once the stored `resumeAt` is reached so loop
+  handlers can simply call `sleep` without extra guards.
 - Use `ctx.takeResumeData()` to detect whether a step is resuming. Call it at
   the start of the handler and branch accordingly.
 - When you suspend, provide a marker in the `data` payload so the resumed step

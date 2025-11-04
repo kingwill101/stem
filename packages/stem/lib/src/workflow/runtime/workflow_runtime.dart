@@ -313,7 +313,7 @@ class WorkflowRuntime {
         rethrow;
       }
       final control = context.takeControl();
-      if (control != null) {
+      if (control != null && control.type != FlowControlType.continueRun) {
         final metadata = <String, Object?>{
           'step': step.name,
           'iteration': iteration,
@@ -797,8 +797,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
 
     final control = stepContext.takeControl();
     if (control != null) {
-      await _suspend(control, name, iteration);
-      throw const _WorkflowScriptSuspended();
+      if (control.type != _ScriptControlType.continueRun) {
+        await _suspend(control, name, iteration);
+        throw const _WorkflowScriptSuspended();
+      }
     }
 
     await runtime._store.saveStep(runId, checkpointName, result);
@@ -841,6 +843,9 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     String stepName,
     int iteration,
   ) async {
+    if (control.type == _ScriptControlType.continueRun) {
+      return;
+    }
     final metadata = <String, Object?>{
       'step': stepName,
       'iteration': iteration,
@@ -971,6 +976,18 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
 
   @override
   Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {
+    final resume = _resumeData;
+    if (resume is Map<String, Object?>) {
+      final type = resume['type'];
+      final resumeAtRaw = resume['resumeAt'];
+      if (type == 'sleep' && resumeAtRaw is String) {
+        final resumeAt = DateTime.tryParse(resumeAtRaw);
+        if (resumeAt != null && !resumeAt.isAfter(DateTime.now())) {
+          _control = const _ScriptControl.continueRun();
+          return;
+        }
+      }
+    }
     _control = _ScriptControl.sleep(
       duration,
       data == null ? null : Map<String, Object?>.from(data),
@@ -1014,7 +1031,7 @@ class _WorkflowScriptSuspended implements Exception {
   const _WorkflowScriptSuspended();
 }
 
-enum _ScriptControlType { sleep, waitForEvent }
+enum _ScriptControlType { continueRun, sleep, waitForEvent }
 
 class _ScriptControl {
   const _ScriptControl.sleep(this.delay, this.data)
@@ -1025,6 +1042,13 @@ class _ScriptControl {
   const _ScriptControl.waitForEvent(this.topic, this.deadline, this.data)
     : type = _ScriptControlType.waitForEvent,
       delay = null;
+
+  const _ScriptControl.continueRun()
+    : type = _ScriptControlType.continueRun,
+      delay = null,
+      topic = null,
+      deadline = null,
+      data = null;
 
   final _ScriptControlType type;
   final Duration? delay;

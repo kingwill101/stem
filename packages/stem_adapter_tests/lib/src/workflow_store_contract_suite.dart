@@ -170,6 +170,9 @@ void runWorkflowStoreContractTests({
         data: const {'reason': 'delay'},
       );
 
+      final suspended = await current.get(runId);
+      expect(suspended?.suspensionData?['resumeAt'], isNotNull);
+
       final due = await current.dueRuns(DateTime.now());
       expect(due, contains(runId));
 

@@ -130,6 +130,45 @@ void main() {
     expect(completed?.result, 'slept-done');
   });
 
+  test('sleep auto resumes without manual guard', () async {
+    var iterations = 0;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'sleep.autoresume.workflow',
+        build: (flow) {
+          flow.step('loop', (context) async {
+            iterations += 1;
+            if (iterations == 1) {
+              context.sleep(const Duration(milliseconds: 20));
+              return 'waiting';
+            }
+            return 'resumed';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('sleep.autoresume.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    final due = await store.dueRuns(DateTime.now());
+    for (final id in due) {
+      final state = await store.get(id);
+      await store.markResumed(id, data: state?.suspensionData);
+      await runtime.executeRun(id);
+    }
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(iterations, 2);
+    expect(completed?.result, 'resumed');
+  });
+
   test('awaitEvent suspends and resumes with payload', () async {
     String? observedPayload;
 
@@ -460,6 +499,45 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(completed?.result, 'done');
     expect(await store.readStep(runId, 'wait'), 'slept');
+  });
+
+  test('script sleep auto resumes without manual guard', () async {
+    var iterations = 0;
+
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.sleep.autoresume',
+        run: (script) async {
+          return script.step('loop', (step) async {
+            iterations += 1;
+            if (iterations == 1) {
+              await step.sleep(const Duration(milliseconds: 20));
+              return 'waiting';
+            }
+            return 'resumed';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.sleep.autoresume');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+
+    await Future<void>.delayed(const Duration(milliseconds: 40));
+    final due = await store.dueRuns(DateTime.now());
+    for (final id in due) {
+      final state = await store.get(id);
+      await store.markResumed(id, data: state?.suspensionData);
+      await runtime.executeRun(id);
+    }
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(iterations, 2);
+    expect(completed?.result, 'resumed');
   });
 
   test('script awaitEvent resumes with payload', () async {

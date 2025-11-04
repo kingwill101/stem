@@ -48,6 +48,20 @@ class FlowContext {
   /// }
   /// ```
   FlowStepControl sleep(Duration duration, {Map<String, Object?>? data}) {
+    // When resuming from a previous sleep we may already have a wake timestamp
+    // in the resume payload. Avoid re-suspending if the delay has elapsed.
+    final resume = _resumeData;
+    if (resume is Map<String, Object?>) {
+      final type = resume['type'];
+      final resumeAtRaw = resume['resumeAt'];
+      if (type == 'sleep' && resumeAtRaw is String) {
+        final resumeAt = DateTime.tryParse(resumeAtRaw);
+        if (resumeAt != null && !resumeAt.isAfter(DateTime.now())) {
+          _control = FlowStepControl.continueRun();
+          return _control!;
+        }
+      }
+    }
     _control = FlowStepControl.sleep(duration, data: data);
     return _control!;
   }
