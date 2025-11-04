@@ -7,12 +7,19 @@ import 'flow_context.dart';
 /// The [handler] may execute multiple times when a run resumes from a
 /// suspension or retry. Ensure the logic is idempotent and uses values stored
 /// in the [FlowContext] (e.g. via `context.previousResult` or
-/// `context.takeResumeData()`).
+/// `context.takeResumeData()`). When [autoVersion] is `true`, each time the step
+/// completes its checkpoint is stored as `<name>#<iteration>` so repeated
+/// executions do not overwrite previous results.
 class FlowStep {
-  FlowStep({required this.name, required this.handler});
+  FlowStep({
+    required this.name,
+    required this.handler,
+    this.autoVersion = false,
+  });
 
   final String name;
   final FutureOr<dynamic> Function(FlowContext context) handler;
+  final bool autoVersion;
 }
 
 /// Control directive emitted by a workflow step to suspend execution.

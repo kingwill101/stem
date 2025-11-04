@@ -72,6 +72,70 @@ void runWorkflowStoreContractTests({
       expect(state?.cursor, 1);
     });
 
+    test(
+      'autoVersion checkpoints persist and rewind with iteration metadata',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
+
+        await current.saveStep(runId, 'repeat#0', 'first');
+        await current.saveStep(runId, 'repeat#1', 'second');
+        await current.saveStep(runId, 'tail', 'done');
+
+        var state = await current.get(runId);
+        expect(state?.cursor, 2); // repeat + tail
+
+        expect(await current.readStep(runId, 'repeat#0'), 'first');
+        expect(await current.readStep(runId, 'repeat#1'), 'second');
+
+        await current.rewindToStep(runId, 'repeat');
+
+        expect(await current.readStep(runId, 'repeat#0'), isNull);
+        expect(await current.readStep(runId, 'repeat#1'), isNull);
+        expect(await current.readStep(runId, 'tail'), isNull);
+
+        state = await current.get(runId);
+        expect(state?.cursor, 0);
+        expect(state?.status, WorkflowStatus.suspended);
+        expect(state?.suspensionData?['step'], 'repeat');
+        expect(state?.suspensionData?['iteration'], 0);
+        expect(state?.suspensionData?['iterationStep'], 'repeat');
+      },
+    );
+
+    test('listRuns reports logical cursor for versioned checkpoints', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+
+      await current.saveStep(runId, 'repeat#0', 'first');
+      await current.saveStep(runId, 'repeat#1', 'second');
+      await current.saveStep(runId, 'tail', 'done');
+
+      final active = await current.listRuns(
+        workflow: 'contract.workflow',
+        limit: 5,
+      );
+      expect(active, isNotEmpty);
+      final run = active.firstWhere((state) => state.id == runId);
+      expect(run.cursor, 2); // repeat + tail
+
+      await current.rewindToStep(runId, 'repeat');
+      final rewound = await current.listRuns(
+        workflow: 'contract.workflow',
+        limit: 5,
+      );
+      final updated = rewound.firstWhere((state) => state.id == runId);
+      expect(updated.cursor, 0);
+      expect(updated.status, WorkflowStatus.suspended);
+      expect(updated.suspensionData?['iteration'], 0);
+    });
+
     test('suspendUntil/dueRuns/markResumed workflow lifecycle', () async {
       final current = store!;
       final runId = await current.createRun(
@@ -209,6 +273,20 @@ void runWorkflowStoreContractTests({
       final steps = await current.listSteps(runId);
       expect(steps.map((s) => s.name), ['step-a', 'step-b', 'step-c']);
       expect(steps.map((s) => s.value), [1, 2, 3]);
+    });
+
+    test('listSteps includes versioned checkpoints in order', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+      await current.saveStep(runId, 'repeat#0', 'first');
+      await current.saveStep(runId, 'repeat#1', 'second');
+      await current.saveStep(runId, 'tail', 'done');
+
+      final steps = await current.listSteps(runId);
+      expect(steps.map((s) => s.name), ['repeat#0', 'repeat#1', 'tail']);
     });
   });
 }

@@ -120,42 +120,7 @@ class PostgresWorkflowStore implements WorkflowStore {
 
   @override
   Future<RunState?> get(String runId) async {
-    return _client.run((Connection conn) async {
-      final result = await conn.execute(
-        Sql.named('''
-          SELECT id, workflow, status, params, result, wait_topic,
-                 resume_at, last_error, suspension_data
-          FROM $_runsTable
-          WHERE id = @id
-        '''),
-        parameters: {'id': runId},
-      );
-      if (result.isEmpty) return null;
-      final row = result.first;
-      final cursorResult = await conn.execute(
-        Sql.named('''
-          SELECT COUNT(*) FROM $_stepsTable
-          WHERE run_id = @id
-        '''),
-        parameters: {'id': runId},
-      );
-      final cursor = (cursorResult.first.first as int?) ?? 0;
-      return RunState(
-        id: row[0] as String,
-        workflow: row[1] as String,
-        status: WorkflowStatus.values.firstWhere(
-          (value) => value.name == row[2],
-          orElse: () => WorkflowStatus.running,
-        ),
-        cursor: cursor,
-        params: _decodeMap(row[3]),
-        result: _decodeValue(row[4]),
-        waitTopic: row[5] as String?,
-        resumeAt: row[6] as DateTime?,
-        lastError: _decodeMap(row[7]),
-        suspensionData: _decodeMap(row[8]),
-      );
-    });
+    return _client.run((Connection conn) => _readRunState(conn, runId));
   }
 
   @override
@@ -429,30 +394,73 @@ class PostgresWorkflowStore implements WorkflowStore {
     await _client.run((Connection conn) async {
       await conn.execute('BEGIN');
       try {
-        final target = await conn.execute(
+        final names = await conn.execute(
           Sql.named('''
-            SELECT position
+            SELECT name, position
               FROM $_stepsTable
-             WHERE run_id = @runId AND name = @name
-            LIMIT 1
+             WHERE run_id = @runId
+             ORDER BY position ASC
           '''),
-          parameters: {'runId': runId, 'name': stepName},
+          parameters: {'runId': runId},
         );
-
-        if (target.isEmpty) {
+        if (names.isEmpty) {
           await conn.execute('ROLLBACK');
           return;
         }
 
-        final position = target.first.first as int;
+        final namesList = names.map((row) => row[0] as String).toList();
+        final baseIndexMap = <String, int>{};
+        var nextIndex = 0;
+        final entryIndexes = <int>[];
+        for (final name in namesList) {
+          final base = _baseStepName(name);
+          baseIndexMap.putIfAbsent(base, () => nextIndex++);
+          entryIndexes.add(baseIndexMap[base]!);
+        }
+        final targetIndex = baseIndexMap[stepName];
+        if (targetIndex == null) {
+          await conn.execute('ROLLBACK');
+          return;
+        }
+
+        final toDelete = <String>[];
+        for (var i = 0; i < namesList.length; i++) {
+          final baseIndex = entryIndexes[i];
+          if (baseIndex >= targetIndex) {
+            toDelete.add(namesList[i]);
+          }
+        }
+
+        if (toDelete.isNotEmpty) {
+          for (final name in toDelete) {
+            await conn.execute(
+              Sql.named('''
+                DELETE FROM $_stepsTable
+                 WHERE run_id = @runId AND name = @name
+              '''),
+              parameters: {'runId': runId, 'name': name},
+            );
+          }
+        }
 
         await conn.execute(
           Sql.named('''
-            DELETE FROM $_stepsTable
-             WHERE run_id = @runId
-               AND position >= @position
+            UPDATE $_runsTable
+               SET status = @status,
+                   wait_topic = NULL,
+                   resume_at = NULL,
+                   suspension_data = jsonb_build_object(
+                     'step', @stepName::text,
+                     'iteration', 0,
+                     'iterationStep', @stepName::text
+                   )
+             WHERE id = @runId
           '''),
-          parameters: {'runId': runId, 'position': position},
+          parameters: {
+            'status': WorkflowStatus.suspended.name,
+            'stepName': stepName,
+            'runId': runId,
+          },
         );
 
         await conn.execute('COMMIT');
@@ -480,42 +488,28 @@ class PostgresWorkflowStore implements WorkflowStore {
         conditions.add('status = @status');
         parameters['status'] = status.name;
       }
-      final buffer = StringBuffer(
-        'SELECT r.id, r.workflow, r.status, r.params, r.result, '
-        'r.wait_topic, r.resume_at, r.last_error, r.suspension_data, '
-        '(SELECT COUNT(*) FROM $_stepsTable s WHERE s.run_id = r.id) AS cursor '
-        'FROM $_runsTable r',
-      );
+      final buffer = StringBuffer('SELECT id FROM $_runsTable');
       if (conditions.isNotEmpty) {
         buffer.write(' WHERE ${conditions.join(' AND ')}');
       }
-      buffer.write(' ORDER BY r.created_at DESC LIMIT @limit');
+      buffer.write(' ORDER BY created_at DESC LIMIT @limit');
 
       final rows = await conn.execute(
         Sql.named(buffer.toString()),
         parameters: parameters,
       );
-      return rows
-          .map((row) {
-            final statusName = row[2] as String;
-            final statusValue = WorkflowStatus.values.firstWhere(
-              (value) => value.name == statusName,
-              orElse: () => WorkflowStatus.running,
-            );
-            return RunState(
-              id: row[0] as String,
-              workflow: row[1] as String,
-              status: statusValue,
-              cursor: (row[9] as int?) ?? 0,
-              params: _decodeMap(row[3]).cast<String, Object?>(),
-              result: _decodeValue(row[4]),
-              waitTopic: row[5] as String?,
-              resumeAt: row[6] as DateTime?,
-              lastError: _decodeMap(row[7]).cast<String, Object?>(),
-              suspensionData: _decodeMap(row[8]),
-            );
-          })
-          .toList(growable: false);
+
+      final states = <RunState>[];
+      for (final row in rows) {
+        final state = await _readRunState(conn, row[0] as String);
+        if (state != null) {
+          states.add(state);
+        }
+        if (states.length >= limit) {
+          break;
+        }
+      }
+      return states;
     });
   }
 
@@ -560,10 +554,12 @@ class PostgresWorkflowStore implements WorkflowStore {
     if (value == null) return const {};
     if (value is String) {
       final decoded = jsonDecode(value);
-      return decoded is Map ? decoded.cast<String, Object?>() : const {};
+      return decoded is Map
+          ? decoded.map((key, value) => MapEntry(key as String, value))
+          : const {};
     }
     if (value is Map) {
-      return value.cast<String, Object?>();
+      return value.map((key, value) => MapEntry(key.toString(), value));
     }
     return const {};
   }
@@ -571,8 +567,56 @@ class PostgresWorkflowStore implements WorkflowStore {
   Object? _decodeValue(dynamic value) {
     if (value == null) return null;
     if (value is String) {
-      return jsonDecode(value);
+      try {
+        return jsonDecode(value);
+      } catch (_) {
+        return value;
+      }
     }
     return value;
   }
+
+  Future<RunState?> _readRunState(Connection conn, String runId) async {
+    final result = await conn.execute(
+      Sql.named('''
+        SELECT id, workflow, status, params, result, wait_topic,
+               resume_at, last_error, suspension_data
+        FROM $_runsTable
+        WHERE id = @id
+      '''),
+      parameters: {'id': runId},
+    );
+    if (result.isEmpty) return null;
+    final row = result.first;
+    final cursorResult = await conn.execute(
+      Sql.named('''
+        SELECT COUNT(DISTINCT split_part(name, '#', 1))
+        FROM $_stepsTable
+        WHERE run_id = @id
+      '''),
+      parameters: {'id': runId},
+    );
+    final cursor = (cursorResult.first.first as int?) ?? 0;
+    return RunState(
+      id: row[0] as String,
+      workflow: row[1] as String,
+      status: WorkflowStatus.values.firstWhere(
+        (value) => value.name == row[2],
+        orElse: () => WorkflowStatus.running,
+      ),
+      cursor: cursor,
+      params: _decodeMap(row[3]),
+      result: _decodeValue(row[4]),
+      waitTopic: row[5] as String?,
+      resumeAt: row[6] as DateTime?,
+      lastError: _decodeMap(row[7]),
+      suspensionData: _decodeMap(row[8]),
+    );
+  }
+}
+
+String _baseStepName(String name) {
+  final index = name.indexOf('#');
+  if (index == -1) return name;
+  return name.substring(0, index);
 }

@@ -45,6 +45,12 @@ class RedisWorkflowStore implements WorkflowStore {
   String _topicKey(String topic) => '$namespace:wf:topic:$topic';
   String _dueKey() => '$namespace:wf:due';
 
+  String _baseStepName(String name) {
+    final hashIndex = name.indexOf('#');
+    if (hashIndex == -1) return name;
+    return name.substring(0, hashIndex);
+  }
+
   @override
   Future<String> createRun({
     required String workflow,
@@ -77,7 +83,8 @@ class RedisWorkflowStore implements WorkflowStore {
     }
     final params = _decodeMap(map['params']);
     final suspension = _decodeMap(map['suspension_data']);
-    final cursor = await _send(['HLEN', _stepsKey(runId)]) as int? ?? 0;
+    final stepNames = await _send(['HKEYS', _stepsKey(runId)]) as List? ?? [];
+    final cursor = stepNames.cast<String>().map(_baseStepName).toSet().length;
     return RunState(
       id: runId,
       workflow: map['workflow']!,
@@ -294,23 +301,52 @@ class RedisWorkflowStore implements WorkflowStore {
   Future<void> rewindToStep(String runId, String stepName) async {
     final names = await _send(['ZRANGE', _orderKey(runId), '0', '-1']) as List?;
     if (names == null) return;
-    final index = names.cast<String>().indexOf(stepName);
-    if (index == -1) return;
-    final keep = names.cast<String>().take(index).toList();
-    final stepValues = <String, String>{};
-    for (final name in keep) {
-      final value = await _send(['HGET', _stepsKey(runId), name]);
-      if (value != null) {
-        stepValues[name] = value as String;
+    final baseIndexMap = <String, int>{};
+    var nextIndex = 0;
+    final entryIndexes = <int>[];
+    final castNames = names.cast<String>();
+    for (final name in castNames) {
+      final base = _baseStepName(name);
+      baseIndexMap.putIfAbsent(base, () => nextIndex++);
+      entryIndexes.add(baseIndexMap[base]!);
+    }
+    final targetIndex = baseIndexMap[stepName];
+    if (targetIndex == null) return;
+
+    final keep = <String>{};
+    for (var i = 0; i < castNames.length; i++) {
+      final baseIndex = entryIndexes[i];
+      if (baseIndex < targetIndex) {
+        keep.add(castNames[i]);
+      } else {
+        break;
       }
     }
-    await _send(['DEL', _stepsKey(runId), _orderKey(runId)]);
-    var score = 0;
-    for (final entry in stepValues.entries) {
-      await _send(['HSET', _stepsKey(runId), entry.key, entry.value]);
-      await _send(['ZADD', _orderKey(runId), score.toString(), entry.key]);
-      score += 1;
+
+    for (final name in castNames) {
+      if (!keep.contains(name)) {
+        await _send(['HDEL', _stepsKey(runId), name]);
+        await _send(['ZREM', _orderKey(runId), name]);
+      }
     }
+
+    const iterations = 0;
+    await _send([
+      'HSET',
+      _runKey(runId),
+      'status',
+      WorkflowStatus.suspended.name,
+      'wait_topic',
+      '',
+      'resume_at',
+      '',
+      'suspension_data',
+      jsonEncode({
+        'step': stepName,
+        'iteration': iterations,
+        'iterationStep': stepName,
+      }),
+    ]);
   }
 
   @override

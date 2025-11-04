@@ -30,10 +30,17 @@ class FlowBuilder {
   /// beginning whenever the run resumes from a suspension, so it should be
   /// idempotent and leverage [FlowContext] helpers (persisted step results,
   /// resume data) to make forward progress.
+  ///
+  /// When [autoVersion] is `true`, the runtime stores checkpoints using a
+  /// `name#iteration` convention so each execution is tracked separately and the
+  /// handler receives the iteration number via [FlowContext.iteration].
   void step(
     String name,
-    FutureOr<dynamic> Function(FlowContext context) handler,
-  ) {
-    _steps.add(FlowStep(name: name, handler: handler));
+    FutureOr<dynamic> Function(FlowContext context) handler, {
+    bool autoVersion = false,
+  }) {
+    _steps.add(
+      FlowStep(name: name, handler: handler, autoVersion: autoVersion),
+    );
   }
 }

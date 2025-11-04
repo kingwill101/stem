@@ -20,6 +20,12 @@ class InMemoryWorkflowStore implements WorkflowStore {
     return Map.unmodifiable(Map<String, Object?>.from(source));
   }
 
+  String _baseStepName(String name) {
+    final index = name.indexOf('#');
+    if (index == -1) return name;
+    return name.substring(0, index);
+  }
+
   @override
   Future<String> createRun({
     required String workflow,
@@ -44,7 +50,15 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<RunState?> get(String runId) async {
     final state = _runs[runId];
     if (state == null) return null;
-    final cursor = _steps[runId]?.length ?? 0;
+    final steps = _steps[runId];
+    var cursor = 0;
+    if (steps != null) {
+      final seen = <String>{};
+      for (final name in steps.keys) {
+        seen.add(_baseStepName(name));
+      }
+      cursor = seen.length;
+    }
     return state.copyWith(cursor: cursor);
   }
 
@@ -221,17 +235,41 @@ class InMemoryWorkflowStore implements WorkflowStore {
     if (steps == null) return;
     final state = _runs[runId];
     if (state == null) return;
-    final keys = steps.keys.toList();
-    final targetIndex = keys.indexOf(stepName);
-    if (targetIndex == -1) {
+    final entries = steps.entries.toList();
+    final baseIndexMap = <String, int>{};
+    var nextIndex = 0;
+    final entryIndexes = <int>[];
+    for (final entry in entries) {
+      final base = _baseStepName(entry.key);
+      baseIndexMap.putIfAbsent(base, () => nextIndex++);
+      entryIndexes.add(baseIndexMap[base]!);
+    }
+    final targetIndex = baseIndexMap[stepName];
+    if (targetIndex == null) {
       return;
     }
-    final retained = steps.entries.where((entry) {
-      final index = keys.indexOf(entry.key);
-      return index < targetIndex;
-    });
-    _steps[runId] = Map.fromEntries(retained);
-    _runs[runId] = state.copyWith(cursor: targetIndex);
+    final retained = <MapEntry<String, Object?>>[];
+    for (var i = 0; i < entries.length; i++) {
+      final baseIndex = entryIndexes[i];
+      if (baseIndex < targetIndex) {
+        retained.add(entries[i]);
+      } else if (baseIndex == targetIndex) {
+        // Drop all iterations for the target step so the runtime restarts from iteration 0.
+        continue;
+      } else {
+        break;
+      }
+    }
+    _steps[runId] = LinkedHashMap.fromEntries(retained);
+    _runs[runId] = state.copyWith(
+      status: WorkflowStatus.suspended,
+      cursor: targetIndex,
+      suspensionData: _cloneData(<String, Object?>{
+        'step': stepName,
+        'iteration': 0,
+        'iterationStep': stepName,
+      }),
+    );
   }
 
   @override
@@ -248,7 +286,15 @@ class InMemoryWorkflowStore implements WorkflowStore {
     final limited = candidates.take(limit);
     final results = <RunState>[];
     for (final state in limited) {
-      final cursor = _steps[state.id]?.length ?? 0;
+      final steps = _steps[state.id];
+      var cursor = 0;
+      if (steps != null) {
+        final seen = <String>{};
+        for (final name in steps.keys) {
+          seen.add(_baseStepName(name));
+        }
+        cursor = seen.length;
+      }
       results.add(state.copyWith(cursor: cursor));
     }
     return results;

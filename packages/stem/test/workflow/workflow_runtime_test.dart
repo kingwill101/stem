@@ -266,6 +266,76 @@ void main() {
     expect(extendCalls, isNotEmpty);
   });
 
+  test('autoVersion stores sequential checkpoints when rewound', () async {
+    final iterations = <int>[];
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'repeat.workflow',
+        build: (flow) {
+          flow.step('repeat', (context) async {
+            iterations.add(context.iteration);
+            return 'value-${context.iteration}';
+          }, autoVersion: true);
+          flow.step('tail', (context) async => context.previousResult);
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('repeat.workflow');
+    await runtime.executeRun(runId);
+
+    var steps = await store.listSteps(runId);
+    expect(iterations, [0]);
+    expect(steps.map((s) => s.name), containsAll(['repeat#0', 'tail']));
+
+    await store.rewindToStep(runId, 'repeat');
+    final rewoundState = await store.get(runId);
+    expect(rewoundState?.status, WorkflowStatus.suspended);
+    await runtime.executeRun(runId);
+
+    steps = await store.listSteps(runId);
+    expect(iterations, [0, 0]);
+    expect(steps.map((s) => s.name), containsAll(['repeat#0', 'tail']));
+  });
+
+  test('autoVersion preserves iteration across suspension', () async {
+    final iterations = <int>[];
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'await.workflow',
+        build: (flow) {
+          flow.step('await-step', (context) async {
+            iterations.add(context.iteration);
+            final resume = context.takeResumeData();
+            if (resume == null) {
+              context.awaitEvent('loop.event');
+              return null;
+            }
+            return (resume as Map<String, Object?>)['value'];
+          }, autoVersion: true);
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('await.workflow');
+    await runtime.executeRun(runId);
+
+    // Step should be suspended waiting on event.
+    var state = await store.get(runId);
+    expect(state?.status, WorkflowStatus.suspended);
+
+    await runtime.emit('loop.event', const {'value': 'done'});
+    await runtime.executeRun(runId);
+
+    state = await store.get(runId);
+    expect(state?.status, WorkflowStatus.completed);
+    expect(iterations, [0, 0]);
+    final steps = await store.listSteps(runId);
+    expect(steps.map((s) => s.name), contains('await-step#0'));
+  });
+
   test('records failures and propagates errors', () async {
     runtime.registerWorkflow(
       Flow(

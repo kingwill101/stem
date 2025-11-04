@@ -7,6 +7,10 @@ import 'flow_step.dart';
 /// treat `sleep`/`awaitEvent` as signalling mechanisms rather than control-flow
 /// exits. Use [takeResumeData] to distinguish between the initial invocation and
 /// resumption payloads supplied by the runtime.
+///
+/// [iteration] indicates how many times the step has already completed when
+/// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
+/// derive unique identifiers.
 class FlowContext {
   FlowContext({
     required this.workflow,
@@ -15,6 +19,7 @@ class FlowContext {
     required this.params,
     required this.previousResult,
     required this.stepIndex,
+    this.iteration = 0,
     Object? resumeData,
   }) : _resumeData = resumeData;
 
@@ -24,6 +29,7 @@ class FlowContext {
   final Map<String, Object?> params;
   final Object? previousResult;
   final int stepIndex;
+  final int iteration;
 
   FlowStepControl? _control;
   Object? _resumeData;
@@ -92,9 +98,13 @@ class FlowContext {
   }
 
   /// Returns a stable idempotency key derived from the workflow, run, and
-  /// [scope]. Defaults to the current [stepName] when no scope is provided.
+  /// [scope]. Defaults to the current [stepName] (including iteration suffix
+  /// when [iteration] > 0) when no scope is provided.
   String idempotencyKey([String? scope]) {
-    final effectiveScope = (scope == null || scope.isEmpty) ? stepName : scope;
+    final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
+    final effectiveScope = (scope == null || scope.isEmpty)
+        ? defaultScope
+        : scope;
     return '$workflow/$runId/$effectiveScope';
   }
 }

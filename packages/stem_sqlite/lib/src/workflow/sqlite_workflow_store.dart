@@ -70,9 +70,21 @@ class SqliteWorkflowStore implements WorkflowStore {
     final params = _decodeMap(row['params'] as String?);
     final suspension = _decodeMap(row['suspension_data'] as String?);
     final cursor =
-        _db.select('SELECT COUNT(*) AS count FROM wf_steps WHERE run_id = ?', [
-              runId,
-            ]).first['count']
+        _db
+                .select(
+                  '''
+          SELECT COUNT(
+            DISTINCT CASE instr(name, '#')
+              WHEN 0 THEN name
+              ELSE substr(name, 1, instr(name, '#') - 1)
+            END
+          ) AS count
+          FROM wf_steps
+          WHERE run_id = ?
+          ''',
+                  [runId],
+                )
+                .first['count']
             as int;
     return RunState(
       id: row['id'] as String,
@@ -231,10 +243,26 @@ class SqliteWorkflowStore implements WorkflowStore {
       'SELECT name, value FROM wf_steps WHERE run_id = ? ORDER BY rowid',
       [runId],
     );
-    final steps = stepRows.map((row) => row['name'] as String).toList();
-    final targetIndex = steps.indexOf(stepName);
-    if (targetIndex == -1) return;
-    final keep = stepRows.take(targetIndex).toList();
+    final names = stepRows.map((row) => row['name'] as String).toList();
+    final baseIndexMap = <String, int>{};
+    var nextIndex = 0;
+    final entryIndexes = <int>[];
+    for (final name in names) {
+      final base = _baseStepName(name);
+      baseIndexMap.putIfAbsent(base, () => nextIndex++);
+      entryIndexes.add(baseIndexMap[base]!);
+    }
+    final targetIndex = baseIndexMap[stepName];
+    if (targetIndex == null) return;
+    final keep = <Map<String, Object?>>[];
+    for (var i = 0; i < stepRows.length; i++) {
+      final baseIndex = entryIndexes[i];
+      if (baseIndex < targetIndex) {
+        keep.add(stepRows[i]);
+      } else {
+        break;
+      }
+    }
     _db.execute('DELETE FROM wf_steps WHERE run_id = ?', [runId]);
     for (final row in keep) {
       _db.execute(
@@ -242,6 +270,20 @@ class SqliteWorkflowStore implements WorkflowStore {
         [runId, row['name'], row['value']],
       );
     }
+    const iterations = 0;
+    _db.execute(
+      'UPDATE wf_runs SET status = ?, wait_topic = NULL, resume_at = NULL, '
+      'suspension_data = ? WHERE id = ?',
+      [
+        WorkflowStatus.suspended.name,
+        jsonEncode({
+          'step': stepName,
+          'iteration': iterations,
+          'iterationStep': stepName,
+        }),
+        runId,
+      ],
+    );
   }
 
   @override
@@ -320,6 +362,12 @@ class SqliteWorkflowStore implements WorkflowStore {
   DateTime? _decodeDate(int? millis) {
     if (millis == null) return null;
     return DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  String _baseStepName(String name) {
+    final index = name.indexOf('#');
+    if (index == -1) return name;
+    return name.substring(0, index);
   }
 
   int _random() => DateTime.now().microsecondsSinceEpoch & 0xFFFF;

@@ -8,7 +8,7 @@
 
  Stem is a Dart-native background job platform. It gives you Celery-style
 task execution with a Dart-first API, Redis Streams integration, retries,
-scheduling, observability, and security tooling—all without leaving the Dart
+scheduling, observability, and security tooling-all without leaving the Dart
 ecosystem.
 
 ## Install
@@ -181,9 +181,24 @@ await app.shutdown();
 - Awaited events behave the same way: the emitted payload is delivered via
   `takeResumeData()` when the run resumes.
 - Only return values you want persisted. If a handler returns `null`, the
-  runtime treats it as “no result yet” and will run the step again on resume.
+  runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so
   retries reuse the same stable identifier (`workflow/run/scope`).
+- Use `autoVersion: true` on steps that you plan to re-execute (e.g. after
+  rewinding). Each completion stores a checkpoint like `step#0`, `step#1`, ... and
+  the handler receives the current iteration via `ctx.iteration`.
+
+```dart
+flow.step(
+  'process-item',
+  autoVersion: true,
+  (ctx) async {
+    final iteration = ctx.iteration;
+    final item = items[iteration];
+    return await process(item);
+  },
+);
+```
 
 Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
 `postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace
@@ -191,29 +206,29 @@ drivers by importing the adapter you need.
 
 ## Features
 
-- **Task pipeline** – enqueue with delays, priorities, idempotency helpers, and retries.
-- **Workers** – isolate pools with soft/hard time limits, autoscaling, and remote control (`stem worker ping|revoke|shutdown`).
-- **Scheduling** – Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
-- **Workflows** – Durable `Flow` runtime with pluggable stores (in-memory,
+- **Task pipeline** - enqueue with delays, priorities, idempotency helpers, and retries.
+- **Workers** - isolate pools with soft/hard time limits, autoscaling, and remote control (`stem worker ping|revoke|shutdown`).
+- **Scheduling** - Beat-style scheduler with interval/cron/solar/clocked entries and drift tracking.
+- **Workflows** - Durable `Flow` runtime with pluggable stores (in-memory,
   Redis, Postgres, SQLite) and CLI introspection via `stem wf`.
-- **Observability** – Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
-- **Security** – Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
-- **Adapters** – In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
-- **Specs & tooling** – OpenSpec change workflow, quality gates (`tool/quality/run_quality_checks.sh`), chaos/regression suites.
+- **Observability** - Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
+- **Security** - Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
+- **Adapters** - In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
+- **Specs & tooling** - OpenSpec change workflow, quality gates (`tool/quality/run_quality_checks.sh`), chaos/regression suites.
 
 ## Documentation & Examples
 
 - Full docs: [Full docs](.site/docs) (run `npm install && npm start` inside `.site/`).
 - Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
-- [workflows](example/workflows/) – end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis).
-- [rate_limit_delay](example/rate_limit_delay) – delayed enqueue, priority clamping, Redis rate limiter.
-- [dlq_sandbox](example/dlq_sandbox) – dead-letter inspection and replay via CLI.
-- [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) – production-style topologies.
-- [unique_tasks](example/unique_tasks/unique_task_example.dart) – enables `TaskOptions.unique` with a shared lock store.
-- [security examples](example/security/*) – payload signing + TLS profiles.
-- [postgres_tls](example/postgres_tls) – Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
-- [otel_metrics](example/otel_metrics) – OTLP collectors + Grafana dashboards.
+- [workflows](example/workflows/) - end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis). See `versioned_rewind.dart` for auto-versioned step rewinds.
+- [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
+- [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.
+- [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
+- [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
+- [security examples](example/security/*) - payload signing + TLS profiles.
+- [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
+- [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.
 
 ## Running Tests Locally
 
@@ -236,8 +251,8 @@ Stem ships a reusable adapter contract suite in
 backend, SQLite adapters, and any future integrations) add it as a
 `dev_dependency` and invoke `runBrokerContractTests` /
 `runResultBackendContractTests` from their integration tests. The harness
-exercises core behaviours—enqueue/ack/nack, dead-letter replay, lease
-extension, result persistence, group aggregation, and heartbeat storage—so
+exercises core behaviours-enqueue/ack/nack, dead-letter replay, lease
+extension, result persistence, group aggregation, and heartbeat storage-so
 all adapters stay aligned with the broker and result backend contracts. See
 `test/integration/brokers/postgres_broker_integration_test.dart` and
 `test/integration/backends/postgres_backend_integration_test.dart` for

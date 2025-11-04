@@ -10,6 +10,7 @@ import '../core/event_bus.dart';
 import '../core/flow_context.dart';
 import '../core/flow_step.dart';
 import '../core/workflow_definition.dart';
+import '../core/run_state.dart';
 import '../core/workflow_status.dart';
 import '../core/workflow_store.dart';
 import 'workflow_registry.dart';
@@ -193,16 +194,29 @@ class WorkflowRuntime {
       );
     }
 
-    var cursor = runState.cursor;
+    final suspensionData = runState.suspensionData;
+    final completedIterations = await _loadCompletedIterations(runId);
+    var cursor = _computeCursor(definition, runState, completedIterations);
     Object? previousResult;
-    Object? resumeData = runState.suspensionData?['payload'];
     if (cursor > 0) {
       final prevStep = definition.steps[cursor - 1];
-      previousResult = await _store.readStep(runId, prevStep.name);
+      final completedCount = completedIterations[prevStep.name] ?? 0;
+      if (completedCount > 0) {
+        final checkpoint = _checkpointName(prevStep, completedCount - 1);
+        previousResult = await _store.readStep(runId, checkpoint);
+      }
     }
+    Object? resumeData = suspensionData?['payload'];
 
     while (cursor < definition.steps.length) {
       final step = definition.steps[cursor];
+      final iteration = step.autoVersion
+          ? _currentIterationForStep(step, completedIterations, suspensionData)
+          : 0;
+      final checkpointName = step.autoVersion
+          ? _versionedName(step.name, iteration)
+          : step.name;
+
       await _store.markRunning(runId, stepName: step.name);
       await _extendLease(taskContext);
       await _signals.workflowRunResumed(
@@ -214,7 +228,7 @@ class WorkflowRuntime {
         ),
       );
 
-      final cached = await _store.readStep<Object?>(runId, step.name);
+      final cached = await _store.readStep<Object?>(runId, checkpointName);
       if (cached != null) {
         previousResult = cached;
         cursor += 1;
@@ -229,6 +243,7 @@ class WorkflowRuntime {
         params: runState.params,
         previousResult: previousResult,
         stepIndex: cursor,
+        iteration: iteration,
         resumeData: resumeData,
       );
       resumeData = null;
@@ -250,12 +265,15 @@ class WorkflowRuntime {
       }
       final control = context.takeControl();
       if (control != null) {
+        final metadata = <String, Object?>{
+          'step': step.name,
+          'iteration': iteration,
+          'iterationStep': step.name,
+        };
         if (control.type == FlowControlType.sleep) {
           final resumeAt = DateTime.now().add(control.delay!);
-          final metadata = <String, Object?>{
-            'type': 'sleep',
-            'resumeAt': resumeAt.toIso8601String(),
-          };
+          metadata['type'] = 'sleep';
+          metadata['resumeAt'] = resumeAt.toIso8601String();
           final controlData = control.data;
           if (controlData != null && controlData.isNotEmpty) {
             metadata.addAll(controlData);
@@ -275,12 +293,11 @@ class WorkflowRuntime {
             ),
           );
         } else if (control.type == FlowControlType.waitForEvent) {
-          final metadata = <String, Object?>{
-            'type': 'event',
-            'topic': control.topic,
-            if (control.deadline != null)
-              'deadline': control.deadline!.toIso8601String(),
-          };
+          metadata['type'] = 'event';
+          metadata['topic'] = control.topic;
+          if (control.deadline != null) {
+            metadata['deadline'] = control.deadline!.toIso8601String();
+          }
           final controlData = control.data;
           if (controlData != null && controlData.isNotEmpty) {
             metadata.addAll(controlData);
@@ -310,8 +327,13 @@ class WorkflowRuntime {
         return;
       }
 
-      await _store.saveStep(runId, step.name, result);
+      await _store.saveStep(runId, checkpointName, result);
       await _extendLease(taskContext);
+      if (step.autoVersion) {
+        completedIterations[step.name] = iteration + 1;
+      } else {
+        completedIterations[step.name] = 1;
+      }
       previousResult = result;
       cursor += 1;
     }
@@ -326,6 +348,77 @@ class WorkflowRuntime {
         metadata: {'result': previousResult},
       ),
     );
+  }
+
+  Future<Map<String, int>> _loadCompletedIterations(String runId) async {
+    final entries = await _store.listSteps(runId);
+    final counts = <String, int>{};
+    for (final entry in entries) {
+      final base = _baseStepName(entry.name);
+      final suffix = _parseIterationSuffix(entry.name);
+      final nextIndex = suffix != null ? suffix + 1 : 1;
+      final current = counts[base] ?? 0;
+      if (nextIndex > current) counts[base] = nextIndex;
+    }
+    return counts;
+  }
+
+  int _computeCursor(
+    WorkflowDefinition definition,
+    RunState runState,
+    Map<String, int> completedIterations,
+  ) {
+    final suspendedStep = runState.suspensionData?['step'] as String?;
+    if (suspendedStep != null) {
+      final index = definition.steps.indexWhere((s) => s.name == suspendedStep);
+      if (index >= 0) {
+        return index;
+      }
+    }
+
+    var cursor = 0;
+    for (final step in definition.steps) {
+      final completed = completedIterations[step.name] ?? 0;
+      if (completed == 0) {
+        break;
+      }
+      cursor += 1;
+    }
+    return cursor;
+  }
+
+  int _currentIterationForStep(
+    FlowStep step,
+    Map<String, int> completedIterations,
+    Map<String, Object?>? suspensionData,
+  ) {
+    if (!step.autoVersion) return 0;
+    final suspendedStep = suspensionData?['iterationStep'] as String?;
+    if (suspendedStep == step.name) {
+      final suspendedIteration = suspensionData?['iteration'] as int?;
+      if (suspendedIteration != null) {
+        return suspendedIteration;
+      }
+    }
+    return completedIterations[step.name] ?? 0;
+  }
+
+  String _versionedName(String name, int iteration) => '$name#$iteration';
+
+  String _checkpointName(FlowStep step, int iteration) =>
+      step.autoVersion ? _versionedName(step.name, iteration) : step.name;
+
+  int? _parseIterationSuffix(String name) {
+    final hashIndex = name.lastIndexOf('#');
+    if (hashIndex == -1) return null;
+    final suffix = name.substring(hashIndex + 1);
+    return int.tryParse(suffix);
+  }
+
+  String _baseStepName(String name) {
+    final hashIndex = name.indexOf('#');
+    if (hashIndex == -1) return name;
+    return name.substring(0, hashIndex);
   }
 
   Future<void> _extendLease(TaskContext? context) async {
