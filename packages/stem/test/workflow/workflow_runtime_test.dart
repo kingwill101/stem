@@ -22,6 +22,7 @@ void main() {
       store: store,
       eventBus: InMemoryEventBus(store),
       pollInterval: const Duration(milliseconds: 25),
+      leaseExtension: const Duration(seconds: 5),
     );
     registry.register(runtime.workflowRunnerHandler());
   });
@@ -55,6 +56,37 @@ void main() {
     expect(await store.readStep(runId, 'finish'), 'ready-done');
   });
 
+  test('extends lease when checkpoints persist', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'lease.workflow',
+        build: (flow) {
+          flow.step('only', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final extendCalls = <Duration>[];
+    final context = TaskContext(
+      id: 'lease-task',
+      attempt: 1,
+      headers: <String, String>{},
+      meta: <String, Object?>{},
+      heartbeat: () {},
+      extendLease: (duration) async => extendCalls.add(duration),
+      progress: (_, {data}) async {},
+    );
+
+    final runId = await runtime.startWorkflow('lease.workflow');
+    await runtime.executeRun(runId, taskContext: context);
+
+    expect(extendCalls, isNotEmpty);
+    expect(
+      extendCalls.every((duration) => duration == runtime.leaseExtension),
+      isTrue,
+    );
+  });
+
   test('suspends on sleep and resumes after delay', () async {
     runtime.registerWorkflow(
       Flow(
@@ -62,13 +94,10 @@ void main() {
         build: (flow) {
           flow.step('wait', (context) async {
             final resume = context.takeResumeData();
-            if (resume == 'awake') {
+            if (resume == true) {
               return 'slept';
             }
-            context.sleep(
-              const Duration(milliseconds: 20),
-              data: const {'payload': 'awake'},
-            );
+            context.sleep(const Duration(milliseconds: 20));
             return null;
           });
           flow.step(
@@ -144,14 +173,11 @@ void main() {
         build: (flow) {
           flow.step('initial', (context) async {
             final resume = context.takeResumeData();
-            if (resume != 'awake') {
-              context.sleep(
-                const Duration(milliseconds: 20),
-                data: const {'payload': 'awake'},
-              );
+            if (resume != true) {
+              context.sleep(const Duration(milliseconds: 20));
               return null;
             }
-            return resume;
+            return 'awake';
           });
 
           flow.step('await-event', (context) async {
@@ -194,6 +220,50 @@ void main() {
     final completed = await store.get(runId);
     expect(completed?.status, WorkflowStatus.completed);
     expect(completed?.result, 'event received');
+  });
+
+  test('idempotency helper returns stable key across retries', () async {
+    int attempts = 0;
+    final observedKeys = <String>[];
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'idempotency.workflow',
+        build: (flow) {
+          flow.step('idempotent-call', (context) async {
+            final key = context.idempotencyKey('charge');
+            observedKeys.add(key);
+            if (attempts++ == 0) {
+              throw StateError('transient');
+            }
+            return key;
+          });
+        },
+      ).definition,
+    );
+
+    final extendCalls = <Duration>[];
+    final context = TaskContext(
+      id: 'idempotent-task',
+      attempt: 1,
+      headers: <String, String>{},
+      meta: <String, Object?>{},
+      heartbeat: () {},
+      extendLease: (duration) async => extendCalls.add(duration),
+      progress: (_, {data}) async {},
+    );
+
+    final runId = await runtime.startWorkflow('idempotency.workflow');
+    await expectLater(
+      () => runtime.executeRun(runId, taskContext: context),
+      throwsA(isA<StateError>()),
+    );
+
+    await runtime.executeRun(runId, taskContext: context);
+
+    expect(observedKeys.length, 2);
+    expect(observedKeys.first, observedKeys.last);
+    expect(extendCalls, isNotEmpty);
   });
 
   test('records failures and propagates errors', () async {

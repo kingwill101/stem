@@ -28,6 +28,7 @@ class WorkflowRuntime {
     required WorkflowStore store,
     required EventBus eventBus,
     Duration pollInterval = const Duration(milliseconds: 500),
+    this.leaseExtension = const Duration(seconds: 30),
     this.queue = 'workflow',
   }) : _stem = stem,
        _store = store,
@@ -38,6 +39,7 @@ class WorkflowRuntime {
   final WorkflowStore _store;
   final EventBus _eventBus;
   final Duration _pollInterval;
+  final Duration leaseExtension;
   final WorkflowRegistry _registry = WorkflowRegistry();
   final String queue;
   final StemSignalEmitter _signals = StemSignalEmitter(
@@ -94,7 +96,16 @@ class WorkflowRuntime {
     await _eventBus.emit(topic, payload);
     final runIds = await _store.runsWaitingOn(topic);
     for (final runId in runIds) {
-      await _store.markResumed(runId, data: {'payload': payload});
+      final state = await _store.get(runId);
+      final metadata = <String, Object?>{};
+      final existing = state?.suspensionData;
+      if (existing != null && existing.isNotEmpty) {
+        metadata.addAll(existing);
+      }
+      metadata['type'] = 'event';
+      metadata['topic'] = topic;
+      metadata['payload'] = payload;
+      await _store.markResumed(runId, data: metadata);
       await _enqueueRun(runId);
     }
   }
@@ -143,7 +154,7 @@ class WorkflowRuntime {
   ///
   /// Safe to invoke multiple times; if the run is already terminal the call is
   /// a no-op.
-  Future<void> executeRun(String runId) async {
+  Future<void> executeRun(String runId, {TaskContext? taskContext}) async {
     final runState = await _store.get(runId);
     if (runState == null) {
       return;
@@ -193,6 +204,7 @@ class WorkflowRuntime {
     while (cursor < definition.steps.length) {
       final step = definition.steps[cursor];
       await _store.markRunning(runId, stepName: step.name);
+      await _extendLease(taskContext);
       await _signals.workflowRunResumed(
         WorkflowRunPayload(
           runId: runId,
@@ -206,10 +218,12 @@ class WorkflowRuntime {
       if (cached != null) {
         previousResult = cached;
         cursor += 1;
+        await _extendLease(taskContext);
         continue;
       }
 
       final context = FlowContext(
+        workflow: runState.workflow,
         runId: runId,
         stepName: step.name,
         params: runState.params,
@@ -238,12 +252,16 @@ class WorkflowRuntime {
       if (control != null) {
         if (control.type == FlowControlType.sleep) {
           final resumeAt = DateTime.now().add(control.delay!);
-          await _store.suspendUntil(
-            runId,
-            step.name,
-            resumeAt,
-            data: control.data,
-          );
+          final metadata = <String, Object?>{
+            'type': 'sleep',
+            'resumeAt': resumeAt.toIso8601String(),
+          };
+          final controlData = control.data;
+          if (controlData != null && controlData.isNotEmpty) {
+            metadata.addAll(controlData);
+          }
+          metadata.putIfAbsent('payload', () => true);
+          await _store.suspendUntil(runId, step.name, resumeAt, data: metadata);
           await _signals.workflowRunSuspended(
             WorkflowRunPayload(
               runId: runId,
@@ -257,12 +275,22 @@ class WorkflowRuntime {
             ),
           );
         } else if (control.type == FlowControlType.waitForEvent) {
+          final metadata = <String, Object?>{
+            'type': 'event',
+            'topic': control.topic,
+            if (control.deadline != null)
+              'deadline': control.deadline!.toIso8601String(),
+          };
+          final controlData = control.data;
+          if (controlData != null && controlData.isNotEmpty) {
+            metadata.addAll(controlData);
+          }
           await _store.suspendOnTopic(
             runId,
             step.name,
             control.topic!,
             deadline: control.deadline,
-            data: control.data,
+            data: metadata,
           );
           await _signals.workflowRunSuspended(
             WorkflowRunPayload(
@@ -283,11 +311,13 @@ class WorkflowRuntime {
       }
 
       await _store.saveStep(runId, step.name, result);
+      await _extendLease(taskContext);
       previousResult = result;
       cursor += 1;
     }
 
     await _store.markCompleted(runId, previousResult);
+    await _extendLease(taskContext);
     await _signals.workflowRunCompleted(
       WorkflowRunPayload(
         runId: runId,
@@ -296,6 +326,16 @@ class WorkflowRuntime {
         metadata: {'result': previousResult},
       ),
     );
+  }
+
+  Future<void> _extendLease(TaskContext? context) async {
+    if (context == null) return;
+    if (leaseExtension.inMicroseconds <= 0) return;
+    try {
+      await context.extendLease(leaseExtension);
+    } catch (_) {
+      // Ignore lease extension failures; broker will fall back to default TTL.
+    }
   }
 
   Future<void> _enqueueRun(String runId) async {
@@ -331,6 +371,6 @@ class _WorkflowRunTaskHandler implements TaskHandler<void> {
     if (runId == null) {
       throw ArgumentError('workflow.run missing runId');
     }
-    await runtime.executeRun(runId);
+    await runtime.executeRun(runId, taskContext: context);
   }
 }

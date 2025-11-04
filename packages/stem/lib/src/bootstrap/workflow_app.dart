@@ -122,6 +122,7 @@ class StemWorkflowApp {
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
   }) async {
     final appInstance =
         stemApp ??
@@ -143,6 +144,7 @@ class StemWorkflowApp {
       store: store,
       eventBus: eventBus,
       pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
       queue: workerConfig.queue,
     );
 
@@ -173,6 +175,7 @@ class StemWorkflowApp {
     Iterable<Flow> flows = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
   }) {
     return StemWorkflowApp.create(
       workflows: workflows,
@@ -183,6 +186,7 @@ class StemWorkflowApp {
       eventBusFactory: WorkflowEventBusFactory.inMemory(),
       workerConfig: workerConfig,
       pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
     );
   }
 }

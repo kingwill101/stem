@@ -172,9 +172,8 @@ await app.shutdown();
 
   ```dart
   final resume = ctx.takeResumeData();
-  if (resume != 'awake') {
-    ctx.sleep(const Duration(milliseconds: 200),
-        data: const {'payload': 'awake'});
+  if (resume != true) {
+    ctx.sleep(const Duration(milliseconds: 200));
     return null;
   }
   ```
@@ -183,6 +182,8 @@ await app.shutdown();
   `takeResumeData()` when the run resumes.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as “no result yet” and will run the step again on resume.
+- Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so
+  retries reuse the same stable identifier (`workflow/run/scope`).
 
 Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
 `postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace

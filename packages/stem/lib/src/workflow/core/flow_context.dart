@@ -9,6 +9,7 @@ import 'flow_step.dart';
 /// resumption payloads supplied by the runtime.
 class FlowContext {
   FlowContext({
+    required this.workflow,
     required this.runId,
     required this.stepName,
     required this.params,
@@ -17,6 +18,7 @@ class FlowContext {
     Object? resumeData,
   }) : _resumeData = resumeData;
 
+  final String workflow;
   final String runId;
   final String stepName;
   final Map<String, Object?> params;
@@ -34,8 +36,8 @@ class FlowContext {
   ///
   /// ```dart
   /// final resume = ctx.takeResumeData();
-  /// if (resume != 'awake') {
-  ///   ctx.sleep(const Duration(seconds: 1), data: const {'payload': 'awake'});
+  /// if (resume != true) {
+  ///   ctx.sleep(const Duration(seconds: 1));
   ///   return null;
   /// }
   /// ```
@@ -87,5 +89,12 @@ class FlowContext {
     final value = _control;
     _control = null;
     return value;
+  }
+
+  /// Returns a stable idempotency key derived from the workflow, run, and
+  /// [scope]. Defaults to the current [stepName] when no scope is provided.
+  String idempotencyKey([String? scope]) {
+    final effectiveScope = (scope == null || scope.isEmpty) ? stepName : scope;
+    return '$workflow/$runId/$effectiveScope';
   }
 }

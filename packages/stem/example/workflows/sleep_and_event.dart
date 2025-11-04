@@ -13,14 +13,11 @@ Future<void> main() async {
         build: (flow) {
           flow.step('initial', (ctx) async {
             final resumePayload = ctx.takeResumeData();
-            if (resumePayload != 'awake') {
-              ctx.sleep(
-                const Duration(milliseconds: 200),
-                data: const {'payload': 'awake'},
-              );
+            if (resumePayload != true) {
+              ctx.sleep(const Duration(milliseconds: 200));
               return null;
             }
-            return resumePayload;
+            return 'awake';
           });
 
           flow.step('await-event', (ctx) async {

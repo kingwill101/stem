@@ -15,6 +15,11 @@ class InMemoryWorkflowStore implements WorkflowStore {
   final _due = SplayTreeMap<DateTime, Set<String>>();
   int _counter = 0;
 
+  Map<String, Object?>? _cloneData(Map<String, Object?>? source) {
+    if (source == null) return null;
+    return Map.unmodifiable(Map<String, Object?>.from(source));
+  }
+
   @override
   Future<String> createRun({
     required String workflow,
@@ -68,7 +73,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       status: WorkflowStatus.suspended,
       cursor: state.cursor,
       resumeAt: when,
-      suspensionData: data,
+      suspensionData: _cloneData(data),
       waitTopic: null,
     );
     _due.putIfAbsent(when, () => <String>{}).add(runId);
@@ -88,7 +93,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       status: WorkflowStatus.suspended,
       waitTopic: topic,
       resumeAt: deadline,
-      suspensionData: data,
+      suspensionData: _cloneData(data),
     );
     _suspendedTopics.putIfAbsent(topic, () => <String>{}).add(runId);
     if (deadline != null) {
@@ -139,7 +144,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       status: WorkflowStatus.running,
       resumeAt: null,
       waitTopic: null,
-      suspensionData: data,
+      suspensionData: _cloneData(data),
     );
     for (final entry in _due.values) {
       entry.remove(runId);
