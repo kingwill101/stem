@@ -11,37 +11,12 @@ void main() {
       'build-and-test': Job(
         name: 'Build and Test',
         runsOn: RunnerSpec.single('ubuntu-latest'),
-        env: const {
-          'STEM_TEST_REDIS_URL': 'redis://127.0.0.1:56379',
-          'STEM_TEST_POSTGRES_URL':
-              'postgresql://postgres:postgres@127.0.0.1:65432/stem_test',
-          'STEM_TEST_POSTGRES_TLS_URL':
-              'postgresql://postgres:postgres@127.0.0.1:65432/stem_test',
-          'STEM_TEST_POSTGRES_TLS_CA_CERT':
-              'packages/stem_cli/docker/testing/certs/postgres-root.crt',
-          'STEM_CHAOS_REDIS_URL': 'redis://127.0.0.1:56379/15',
-        },
-        services: const {
-          'redis': ServiceContainer(
-            image: 'redis:7',
-            ports: ['56379:6379'],
-            options:
-                '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 5',
-          ),
-          'postgres': ServiceContainer(
-            image: 'postgres:15-alpine',
-            env: {
-              'POSTGRES_USER': 'postgres',
-              'POSTGRES_PASSWORD': 'postgres',
-              'POSTGRES_DB': 'stem_test',
-            },
-            ports: ['65432:5432'],
-            options:
-                '--health-cmd "pg_isready -U postgres" --health-interval 10s --health-timeout 5s --health-retries 5',
-          ),
-        },
         steps: [
           checkout(),
+          const Step(
+            name: 'Start test services',
+            uses: './.github/actions/setup-test-services',
+          ),
           setupDart(sdk: 'stable'),
           const Step(name: 'Fetch dependencies', run: 'dart pub get'),
           const Step(
