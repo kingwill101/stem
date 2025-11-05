@@ -21,7 +21,7 @@ jobs:
       - name: Fetch dependencies
         run: dart pub get
       - name: Run quality checks
-        run: tool/quality/run_quality_checks.sh
+        run: bash packages/stem/tool/quality/run_quality_checks.sh
         env:
           COVERAGE_THRESHOLD: "60"
       - name: Validate OpenSpec changes

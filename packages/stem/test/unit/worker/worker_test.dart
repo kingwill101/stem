@@ -88,10 +88,7 @@ void main() {
           () => Envelope(name: 'tasks.body', args: const {'value': 2}),
           () => Envelope(name: 'tasks.body', args: const {'value': 5}),
         ],
-        callback: () => Envelope(
-          name: 'tasks.chord.callback',
-          args: const {},
-        ),
+        callback: () => Envelope(name: 'tasks.chord.callback', args: const {}),
       );
 
       await _waitForCallbackSuccess(backend, callbackId);
