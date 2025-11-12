@@ -1,0 +1,16 @@
+name: Setup test services
+
+runs:
+  using: composite
+  steps:
+    - name: Start Redis/Postgres containers
+      shell: bash
+      run: docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d
+    - name: Export STEM_TEST_* environment variables
+      shell: bash
+      run: |
+        echo "STEM_TEST_REDIS_URL=redis://127.0.0.1:56379" >> "$GITHUB_ENV"
+        echo "STEM_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
+        echo "STEM_TEST_POSTGRES_TLS_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
+        echo "STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/certs/postgres-root.crt" >> "$GITHUB_ENV"
+        echo "STEM_CHAOS_REDIS_URL=redis://127.0.0.1:56379/15" >> "$GITHUB_ENV"

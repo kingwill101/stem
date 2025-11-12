@@ -12,11 +12,11 @@ dependencies:
   drift: ^2.15.0
   routed: ^0.1.0
   routed_hotwire: ^0.1.0
-  stem: ^0.1.0-alpha.3
-  stem_cli: ^0.1.0-alpha.3
-  stem_redis: ^0.1.0-alpha.3
-  stem_postgres: ^0.1.0-alpha.3
-  stem_sqlite: ^0.1.0-alpha.3
+  stem: ^0.1.0-alpha.4
+  stem_cli: ^0.1.0-alpha.4
+  stem_redis: ^0.1.0-alpha.4
+  stem_postgres: ^0.1.0-alpha.4
+  stem_sqlite: ^0.1.0-alpha.4
 
 dev_dependencies:
   lints: ^6.0.0

@@ -176,6 +176,7 @@ class _RecordingBackend implements ResultBackend {
   final Map<String, StreamController<TaskStatus>> _controllers = {};
   final Map<String, GroupStatus> _groups = {};
   WorkerHeartbeat? lastHeartbeat;
+  final Set<String> _claimedChords = {};
 
   @override
   Future<TaskStatus?> get(String taskId) async => records
@@ -256,6 +257,33 @@ class _RecordingBackend implements ResultBackend {
 
   @override
   Future<GroupStatus?> getGroup(String groupId) async => _groups[groupId];
+
+  @override
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  }) async {
+    final added = _claimedChords.add(groupId);
+    if (!added) return false;
+    final existing = _groups[groupId];
+    if (existing != null) {
+      final meta = Map<String, Object?>.from(existing.meta);
+      if (callbackTaskId != null) {
+        meta[ChordMetadata.callbackTaskId] = callbackTaskId;
+      }
+      if (dispatchedAt != null) {
+        meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
+      }
+      _groups[groupId] = GroupStatus(
+        id: existing.id,
+        expected: existing.expected,
+        results: existing.results,
+        meta: meta,
+      );
+    }
+    return true;
+  }
 
   @override
   Future<void> expire(String taskId, Duration ttl) async {}

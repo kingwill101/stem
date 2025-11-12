@@ -11,18 +11,18 @@ void main() {
       'build-and-test': Job(
         name: 'Build and Test',
         runsOn: RunnerSpec.single('ubuntu-latest'),
-        services: const {
-          'redis': ServiceContainer(image: 'redis:7', ports: ['6379:6379']),
-        },
         steps: [
           checkout(),
+          const Step(
+            name: 'Start test services',
+            uses: './.github/actions/setup-test-services',
+          ),
           setupDart(sdk: 'stable'),
           const Step(name: 'Fetch dependencies', run: 'dart pub get'),
           const Step(
             name: 'Run quality checks',
-            run: 'tool/quality/run_quality_checks.sh',
+            run: 'bash packages/stem/tool/quality/run_quality_checks.sh',
             env: {
-              'STEM_CHAOS_REDIS_URL': 'redis://127.0.0.1:6379/15',
               'COVERAGE_THRESHOLD': '60',
             },
           ),

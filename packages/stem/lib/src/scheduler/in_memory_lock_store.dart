@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import '../core/contracts.dart';
 
@@ -16,9 +17,34 @@ class InMemoryLockStore implements LockStore {
     if (existing != null && !existing.isExpired(now)) {
       return null;
     }
-    final lock = _InMemoryLock(key, now.add(ttl), this);
+    final resolvedOwner = owner ?? _InMemoryLock.generateOwner();
+    final lock = _InMemoryLock(key, resolvedOwner, now.add(ttl), this);
     _locks[key] = lock;
     return lock;
+  }
+
+  @override
+  Future<String?> ownerOf(String key) async {
+    final lock = _locks[key];
+    if (lock == null) return null;
+    if (lock.isExpired(DateTime.now())) {
+      _locks.remove(key);
+      return null;
+    }
+    return lock.owner;
+  }
+
+  @override
+  Future<bool> release(String key, String owner) async {
+    final lock = _locks[key];
+    if (lock == null) {
+      return false;
+    }
+    if (lock.owner != owner) {
+      return false;
+    }
+    _locks.remove(key);
+    return true;
   }
 
   void releaseLock(String key) {
@@ -27,10 +53,14 @@ class InMemoryLockStore implements LockStore {
 }
 
 class _InMemoryLock implements Lock {
-  _InMemoryLock(this.key, this.expiresAt, this.store);
+  _InMemoryLock(this.key, this.owner, this.expiresAt, this.store);
+
+  static String generateOwner() =>
+      'owner-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
 
   @override
   final String key;
+  final String owner;
   DateTime expiresAt;
   final InMemoryLockStore store;
 

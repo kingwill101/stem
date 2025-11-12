@@ -7,3 +7,9 @@ export 'src/scheduler/redis_lock_store.dart' show RedisLockStore;
 export 'src/control/redis_revoke_store.dart' show RedisRevokeStore;
 export 'src/observability/redis_heartbeat_transport.dart'
     show RedisHeartbeatTransport, RedisHeartbeatCommandFactory;
+export 'src/workflow/redis_factories.dart'
+    show
+        redisBrokerFactory,
+        redisResultBackendFactory,
+        redisWorkflowStoreFactory;
+export 'src/workflow/redis_workflow_store.dart' show RedisWorkflowStore;

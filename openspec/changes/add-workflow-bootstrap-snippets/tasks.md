@@ -1,0 +1,5 @@
+- [ ] Expose store bootstrap snippets (SQL/Lua/schema) via adapter libraries.
+- [ ] Add CLI command(s) `stem wf bootstrap <backend>` to print the snippets.
+- [ ] Update documentation referencing how to audit/apply these snippets.
+- [ ] Add tests ensuring CLI outputs stay in sync with adapter exports.
+- [ ] Run CLI tests, `dart analyze`, `dart format`, and `openspec validate add-workflow-bootstrap-snippets --strict`.

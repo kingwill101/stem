@@ -360,6 +360,17 @@ abstract class ResultBackend {
 
   /// Updates the expiration for the given [taskId].
   Future<void> expire(String taskId, Duration ttl);
+
+  /// Attempts to claim responsibility for dispatching the chord callback for
+  /// [groupId]. Returns `true` only for the first caller; subsequent callers
+  /// receive `false` once the chord has been claimed. When [callbackTaskId] or
+  /// [dispatchedAt] are provided, implementations SHOULD persist them with the
+  /// group metadata so other components can observe dispatch progress.
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  });
 }
 
 /// Schedule entry persisted by a Beat-like scheduler.
@@ -1103,6 +1114,15 @@ abstract class LockStore {
     Duration ttl = const Duration(seconds: 30),
     String? owner,
   });
+
+  /// Returns the owner currently holding the lock for [key], or null if unlocked.
+  Future<String?> ownerOf(String key);
+
+  /// Releases the lock identified by [key] if held by [owner].
+  ///
+  /// Returns `true` when the lock was released, otherwise `false` (e.g. owner
+  /// mismatch or already expired).
+  Future<bool> release(String key, String owner);
 }
 
 abstract class Lock {

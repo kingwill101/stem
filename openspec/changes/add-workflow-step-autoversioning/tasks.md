@@ -1,0 +1,6 @@
+- [x] Add an `autoVersion` flag to `FlowBuilder.step`/`FlowStep` and surface the current iteration via `FlowContext.iteration`.
+- [x] Teach `WorkflowRuntime` to track per-step iteration counters, derive checkpoint keys with suffixes (`name#n`), and persist/resume the counter through `RunState` suspension data.
+- [x] Update in-memory, Redis, Postgres, and SQLite workflow stores and their tests to ensure suffixed checkpoint names persist and enumerate correctly.
+- [x] Document the feature (README + example) showing how to process multiple items with a single versioned step.
+- [x] Expand workflow runtime tests to cover multi-iteration completion, suspension, and crash/retry scenarios for versioned steps.
+- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-workflow-step-autoversioning --strict`.

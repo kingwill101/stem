@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:stem_redis/stem_redis.dart';
 import 'package:test/test.dart';
 
@@ -30,6 +31,22 @@ void main() async {
     );
     return;
   }
+
+  runLockStoreContractTests(
+    adapterName: 'Redis',
+    factory: LockStoreContractFactory(
+      create: () async => RedisLockStore.connect(
+        uri,
+        namespace:
+            'stem-lock-contract-${DateTime.now().microsecondsSinceEpoch}',
+      ),
+      dispose: (store) => (store as RedisLockStore).close(),
+    ),
+    settings: const LockStoreContractSettings(
+      initialTtl: Duration(milliseconds: 250),
+      expiryBackoff: Duration(milliseconds: 250),
+    ),
+  );
 
   late RedisStreamsBroker broker;
   late RedisResultBackend backend;

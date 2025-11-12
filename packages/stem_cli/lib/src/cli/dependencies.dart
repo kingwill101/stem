@@ -7,8 +7,11 @@ import 'package:stem_cli/src/cli/schedule.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 import 'file_schedule_repository.dart';
+import 'utilities.dart';
+import 'workflow_context.dart';
 
 typedef ScheduleContextBuilder = Future<ScheduleCliContext> Function();
+typedef WorkflowContextBuilder = Future<WorkflowCliContext> Function();
 
 class StemCommandDependencies {
   StemCommandDependencies({
@@ -18,8 +21,10 @@ class StemCommandDependencies {
     required this.scheduleFilePath,
     required CliContextBuilder cliContextBuilder,
     ScheduleContextBuilder? scheduleContextBuilder,
+    WorkflowContextBuilder? workflowContextBuilder,
   }) : _cliContextBuilder = cliContextBuilder,
-       _scheduleContextBuilder = scheduleContextBuilder;
+       _scheduleContextBuilder = scheduleContextBuilder,
+       _workflowContextBuilder = workflowContextBuilder;
 
   final StringSink out;
   final StringSink err;
@@ -28,6 +33,7 @@ class StemCommandDependencies {
 
   final CliContextBuilder _cliContextBuilder;
   final ScheduleContextBuilder? _scheduleContextBuilder;
+  final WorkflowContextBuilder? _workflowContextBuilder;
 
   Future<CliContext> createCliContext() => _cliContextBuilder();
 
@@ -39,6 +45,14 @@ class StemCommandDependencies {
       repoPath: scheduleFilePath,
       environment: environment,
     );
+  }
+
+  Future<WorkflowCliContext> createWorkflowContext() {
+    final builder = _workflowContextBuilder;
+    if (builder != null) {
+      return builder();
+    }
+    return createDefaultWorkflowContext(environment: environment);
   }
 }
 

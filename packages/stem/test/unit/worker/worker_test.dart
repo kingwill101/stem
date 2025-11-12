@@ -56,6 +56,115 @@ void main() {
       broker.dispose();
     });
 
+    test('dispatches chord callback when body completes', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(_ChordBodyTask())
+        ..register(_ChordCallbackTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'chord-worker',
+        concurrency: 2,
+        prefetchMultiplier: 1,
+      );
+
+      await worker.start();
+
+      final canvas = Canvas(
+        broker: broker,
+        backend: backend,
+        registry: registry,
+      );
+
+      final callbackId = await canvas.chord(
+        body: [
+          () => Envelope(name: 'tasks.body', args: const {'value': 2}),
+          () => Envelope(name: 'tasks.body', args: const {'value': 5}),
+        ],
+        callback: () => Envelope(name: 'tasks.chord.callback', args: const {}),
+      );
+
+      await _waitForCallbackSuccess(backend, callbackId);
+      final status = await backend.get(callbackId);
+      expect(status?.state, TaskState.succeeded);
+      expect(status?.payload, equals(7));
+      expect(status?.meta['chordResults'], equals([2, 5]));
+
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('releases unique lock after task completion', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final coordinator = UniqueTaskCoordinator(
+        lockStore: InMemoryLockStore(),
+        defaultTtl: const Duration(seconds: 5),
+      );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'unique-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        uniqueTaskCoordinator: coordinator,
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        uniqueTaskCoordinator: coordinator,
+      );
+
+      const options = TaskOptions(
+        unique: true,
+        uniqueFor: Duration(seconds: 5),
+      );
+      final firstId = await stem.enqueue('tasks.success', options: options);
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == firstId,
+        ),
+      );
+
+      final secondId = await stem.enqueue('tasks.success', options: options);
+      expect(secondId, isNot(firstId));
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == secondId,
+        ),
+      );
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('emits task lifecycle signals for successful execution', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 
@@ -1294,6 +1403,47 @@ class _SuccessTask implements TaskHandler<String> {
   }
 }
 
+class _ChordBodyTask implements TaskHandler<int> {
+  @override
+  String get name => 'tasks.body';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<int> call(TaskContext context, Map<String, Object?> args) async {
+    return (args['value'] as num).toInt();
+  }
+}
+
+class _ChordCallbackTask implements TaskHandler<int> {
+  @override
+  String get name => 'tasks.chord.callback';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<int> call(TaskContext context, Map<String, Object?> args) async {
+    final results = (context.meta['chordResults'] as List?) ?? const [];
+    return results
+        .map((value) => (value as num?)?.toInt() ?? 0)
+        .fold<int>(0, (sum, value) => sum + value);
+  }
+}
+
 Future<void> _waitFor(
   bool Function() predicate, {
   Duration timeout = const Duration(seconds: 2),
@@ -1305,6 +1455,26 @@ Future<void> _waitFor(
       throw TimeoutException('Condition not met within $timeout');
     }
     await Future<void>.delayed(pollInterval);
+  }
+}
+
+Future<void> _waitForCallbackSuccess(
+  ResultBackend backend,
+  String taskId, {
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    final status = await backend.get(taskId);
+    if (status?.state == TaskState.succeeded) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException(
+        'Callback $taskId did not succeed within $timeout',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 25));
   }
 }
 

@@ -13,15 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: "actions/checkout@v4"
+      - name: Start test services
+        uses: ./.github/actions/setup-test-services
       - uses: "dart-lang/setup-dart@v1"
         with:
           sdk: stable
       - name: Fetch dependencies
         run: dart pub get
       - name: Run quality checks
-        run: tool/quality/run_quality_checks.sh
+        run: bash packages/stem/tool/quality/run_quality_checks.sh
         env:
-          STEM_CHAOS_REDIS_URL: redis://127.0.0.1:6379/15
           COVERAGE_THRESHOLD: "60"
       - name: Validate OpenSpec changes
         run: |-
@@ -44,8 +45,3 @@ jobs:
         run: dart run scripts/test_monolith.dart
       - name: Microservice smoke test
         run: dart run scripts/test_microservice.dart
-    services:
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379

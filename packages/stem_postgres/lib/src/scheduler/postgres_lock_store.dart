@@ -160,17 +160,37 @@ class PostgresLockStore implements LockStore {
     });
   }
 
-  Future<void> _release(String key, String owner) async {
-    await _client.run((conn) async {
-      await conn.execute(
+  Future<bool> _release(String key, String owner) async {
+    return _client.run((conn) async {
+      final result = await conn.execute(
         Sql.named('''
         DELETE FROM ${_tableName()}
         WHERE key = @key AND owner = @owner
         '''),
         parameters: {'key': key, 'owner': owner},
       );
+      return result.affectedRows > 0;
     });
   }
+
+  @override
+  Future<String?> ownerOf(String key) async {
+    return _client.run((conn) async {
+      final result = await conn.execute(
+        Sql.named('''
+        SELECT owner
+        FROM ${_tableName()}
+        WHERE key = @key AND expires_at > NOW()
+        '''),
+        parameters: {'key': key},
+      );
+      if (result.isEmpty) return null;
+      return result.first.toColumnMap()['owner'] as String?;
+    });
+  }
+
+  @override
+  Future<bool> release(String key, String owner) => _release(key, owner);
 }
 
 class _PostgresLock implements Lock {
@@ -185,5 +205,7 @@ class _PostgresLock implements Lock {
   Future<bool> renew(Duration ttl) => store._renew(key, owner, ttl);
 
   @override
-  Future<void> release() => store._release(key, owner);
+  Future<void> release() async {
+    await store._release(key, owner);
+  }
 }

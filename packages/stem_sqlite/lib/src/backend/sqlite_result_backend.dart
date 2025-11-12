@@ -272,6 +272,39 @@ class SqliteResultBackend implements ResultBackend {
         .write(StemTaskResultsCompanion(expiresAt: Value(expiresAt)));
   }
 
+  @override
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  }) async {
+    return _connections.runInTransaction((txn) async {
+      final query = txn.select(txn.stemGroups)
+        ..where((tbl) => tbl.id.equals(groupId));
+      final row = await query.getSingleOrNull();
+      if (row == null) {
+        return false;
+      }
+
+      final meta = _decodeMap(row.meta);
+      if (meta['stem.chord.claimed'] == true) {
+        return false;
+      }
+      meta['stem.chord.claimed'] = true;
+      if (callbackTaskId != null) {
+        meta[ChordMetadata.callbackTaskId] = callbackTaskId;
+      }
+      if (dispatchedAt != null) {
+        meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
+      }
+
+      await (txn.update(txn.stemGroups)..where((tbl) => tbl.id.equals(groupId)))
+          .write(StemGroupsCompanion(meta: Value(jsonEncode(meta))));
+
+      return true;
+    });
+  }
+
   void _startCleanupTimer() {
     _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(cleanupInterval, (_) {

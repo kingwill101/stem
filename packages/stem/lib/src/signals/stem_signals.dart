@@ -51,6 +51,12 @@ class StemSignals {
   static const String scheduleEntryFailedName = 'schedule-entry-failed';
   static const String controlCommandReceivedName = 'control-command-received';
   static const String controlCommandCompletedName = 'control-command-completed';
+  static const String workflowRunStartedName = 'workflow-run-started';
+  static const String workflowRunSuspendedName = 'workflow-run-suspended';
+  static const String workflowRunResumedName = 'workflow-run-resumed';
+  static const String workflowRunCompletedName = 'workflow-run-completed';
+  static const String workflowRunFailedName = 'workflow-run-failed';
+  static const String workflowRunCancelledName = 'workflow-run-cancelled';
 
   static StemSignalConfiguration _configuration =
       const StemSignalConfiguration();
@@ -148,6 +154,42 @@ class StemSignals {
       Signal<WorkerChildLifecyclePayload>(
         name: workerChildShutdownName,
         config: _dispatchConfigFor(workerChildShutdownName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunStarted =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunStartedName,
+        config: _dispatchConfigFor(workflowRunStartedName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunSuspended =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunSuspendedName,
+        config: _dispatchConfigFor(workflowRunSuspendedName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunResumed =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunResumedName,
+        config: _dispatchConfigFor(workflowRunResumedName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunCompleted =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunCompletedName,
+        config: _dispatchConfigFor(workflowRunCompletedName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunFailed =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunFailedName,
+        config: _dispatchConfigFor(workflowRunFailedName),
+      );
+
+  static final Signal<WorkflowRunPayload> workflowRunCancelled =
+      Signal<WorkflowRunPayload>(
+        name: workflowRunCancelledName,
+        config: _dispatchConfigFor(workflowRunCancelledName),
       );
 
   static final Signal<ScheduleEntryDuePayload> scheduleEntryDue =

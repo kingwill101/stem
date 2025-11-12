@@ -40,6 +40,10 @@ void main() {
       backend: backend,
       consumerName: 'chaos-worker',
       heartbeatTransport: const NoopHeartbeatTransport(),
+      retryStrategy: ExponentialJitterRetryStrategy(
+        base: const Duration(milliseconds: 200),
+        max: const Duration(seconds: 1),
+      ),
     );
 
     await worker.start();
@@ -89,6 +93,7 @@ class _ChaosEnvironment {
       final broker = await RedisStreamsBroker.connect(
         redisUrl,
         namespace: namespace,
+        blockTime: const Duration(seconds: 1),
       );
       final backend = await RedisResultBackend.connect(
         redisUrl,
@@ -98,6 +103,7 @@ class _ChaosEnvironment {
         broker: broker,
         backend: backend,
         dispose: () async {
+          await broker.close();
           await backend.close();
         },
       );

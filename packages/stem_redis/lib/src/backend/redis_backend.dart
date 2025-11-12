@@ -103,6 +103,7 @@ class RedisResultBackend implements ResultBackend {
   String _taskKey(String id) => '$namespace:result:$id';
   String _groupKey(String id) => '$namespace:group:$id';
   String _groupResultsKey(String id) => '$namespace:group:$id:results';
+  String _chordClaimKey(String id) => '$namespace:group:$id:claim';
   String _workerHeartbeatKey(String id) => '$namespace:worker:heartbeat:$id';
   String _workerHeartbeatIndexKey() => '$namespace:worker:heartbeats';
 
@@ -177,6 +178,7 @@ class RedisResultBackend implements ResultBackend {
       _groupResultsKey(descriptor.id),
       ttl.inMilliseconds.toString(),
     ]);
+    await _send(['DEL', _chordClaimKey(descriptor.id)]);
   }
 
   @override
@@ -234,6 +236,49 @@ class RedisResultBackend implements ResultBackend {
   @override
   Future<void> expire(String taskId, Duration ttl) async {
     await _send(['PEXPIRE', _taskKey(taskId), ttl.inMilliseconds.toString()]);
+  }
+
+  @override
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  }) async {
+    final ttl = await _send(['PTTL', _groupKey(groupId)]);
+    final ttlMs = _asInt(ttl);
+    final result = await _send([
+      'SET',
+      _chordClaimKey(groupId),
+      '1',
+      'NX',
+      if (ttlMs > 0) ...['PX', ttlMs.toString()],
+    ]);
+    final claimed = result == 'OK';
+    if (!claimed) return false;
+
+    final descriptorRaw = await _send(['GET', _groupKey(groupId)]) as String?;
+    if (descriptorRaw == null) {
+      return true;
+    }
+    final descriptor = jsonDecode(descriptorRaw) as Map<String, Object?>;
+    final meta = (descriptor['meta'] as Map?)?.cast<String, Object?>() ?? {};
+    meta['stem.chord.claimed'] = true;
+    if (callbackTaskId != null) {
+      meta[ChordMetadata.callbackTaskId] = callbackTaskId;
+    }
+    if (dispatchedAt != null) {
+      meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
+    }
+    descriptor['meta'] = meta;
+
+    final args = ['SET', _groupKey(groupId), jsonEncode(descriptor)];
+    if (ttlMs > 0) {
+      args
+        ..add('PX')
+        ..add(ttlMs.toString());
+    }
+    await _send(args);
+    return true;
   }
 
   @override

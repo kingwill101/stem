@@ -1,4 +1,18 @@
 
+## 0.1.0-alpha.4
+
+- Introduced **Durable Workflows** end-to-end: auto-versioned steps, iteration-
+  aware contexts, and durable event watchers so long-running flows replay safely
+  and resume with persisted payloads.
+- Added a `WorkflowClock` abstraction (with `FakeWorkflowClock`) so runtimes and
+  stores can record deterministic timestamps during testing.
+- Refined sleep/await behaviour: persisted wake timestamps now prevent
+  re-suspending once a delay has elapsed, and `saveStep` refreshes run heartbeats
+  so active workers retain ownership.
+- Updated all workflow stores to consume injected clock metadata, ensuring
+  suspension payloads include `resumeAt`/`deadline` values without relying on
+  `DateTime.now()`.
+
 ## 0.1.0-alpha.3
 
 - Split Redis/Postgres adapters and CLI into dedicated packages (`stem_redis`,

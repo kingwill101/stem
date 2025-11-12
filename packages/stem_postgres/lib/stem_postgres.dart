@@ -7,3 +7,9 @@ export 'src/scheduler/postgres_lock_store.dart' show PostgresLockStore;
 export 'src/control/postgres_revoke_store.dart' show PostgresRevokeStore;
 export 'src/postgres/postgres_client.dart' show PostgresClient;
 export 'src/postgres/postgres_migrations.dart' show PostgresMigrations;
+export 'src/workflow/postgres_factories.dart'
+    show
+        postgresBrokerFactory,
+        postgresResultBackendFactory,
+        postgresWorkflowStoreFactory;
+export 'src/workflow/postgres_workflow_store.dart' show PostgresWorkflowStore;

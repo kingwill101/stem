@@ -5,8 +5,10 @@ import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/revoke_store_factory.dart';
 import 'package:stem_cli/src/cli/subscription_loader.dart';
+import 'package:stem_cli/src/cli/workflow_context.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
 
 Duration? parseOptionalDuration(String? value) {
   if (value == null) return null;
@@ -113,6 +115,92 @@ Future<CliContext> createDefaultContext({
     },
     registry: null,
   );
+}
+
+Future<WorkflowCliContext> createDefaultWorkflowContext({
+  Map<String, String>? environment,
+}) async {
+  final env = environment ?? Platform.environment;
+  final config = StemConfig.fromEnvironment(env);
+  final cliContext = await createDefaultContext(environment: env);
+  final registry = cliContext.registry ?? SimpleTaskRegistry();
+  final stem = Stem(
+    broker: cliContext.broker,
+    registry: registry,
+    backend: cliContext.backend,
+    routing: cliContext.routing,
+  );
+
+  final namespace = env['STEM_WORKFLOW_NAMESPACE']?.trim().isNotEmpty == true
+      ? env['STEM_WORKFLOW_NAMESPACE']!.trim()
+      : 'stem';
+  final store = await _connectWorkflowStore(
+    env['STEM_WORKFLOW_STORE_URL'],
+    namespace: namespace,
+    tls: config.tls,
+  );
+  final runtime = WorkflowRuntime(
+    stem: stem,
+    store: store,
+    eventBus: InMemoryEventBus(store),
+  );
+  registry.register(runtime.workflowRunnerHandler());
+
+  return WorkflowCliContext(
+    runtime: runtime,
+    store: store,
+    dispose: () async {
+      await runtime.dispose();
+      await _disposeWorkflowStore(store);
+      await cliContext.dispose();
+    },
+  );
+}
+
+Future<WorkflowStore> _connectWorkflowStore(
+  String? url, {
+  required String namespace,
+  required TlsConfig tls,
+}) async {
+  final trimmed = url?.trim();
+  if (trimmed == null || trimmed.isEmpty || trimmed == 'memory') {
+    return InMemoryWorkflowStore();
+  }
+  final uri = Uri.parse(trimmed);
+  switch (uri.scheme) {
+    case 'redis':
+    case 'rediss':
+      return RedisWorkflowStore.connect(trimmed, namespace: namespace);
+    case 'postgres':
+    case 'postgresql':
+    case 'postgresql+ssl':
+    case 'postgres+ssl':
+      return PostgresWorkflowStore.connect(
+        trimmed,
+        namespace: namespace,
+        applicationName: 'stem-cli-workflow',
+        tls: tls,
+      );
+    case 'sqlite':
+      final path = uri.path.isNotEmpty ? uri.path : 'workflow.sqlite';
+      return SqliteWorkflowStore.open(File(path));
+    case 'file':
+      return SqliteWorkflowStore.open(File(uri.toFilePath()));
+    case 'memory':
+      return InMemoryWorkflowStore();
+    default:
+      throw StateError('Unsupported workflow store scheme: ${uri.scheme}');
+  }
+}
+
+Future<void> _disposeWorkflowStore(WorkflowStore store) async {
+  if (store is RedisWorkflowStore) {
+    await store.close();
+  } else if (store is PostgresWorkflowStore) {
+    await store.close();
+  } else if (store is SqliteWorkflowStore) {
+    await store.close();
+  }
 }
 
 RoutingRegistry _loadRoutingRegistry(StemConfig config) {

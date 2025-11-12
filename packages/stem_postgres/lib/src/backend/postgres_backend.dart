@@ -512,6 +512,65 @@ class PostgresResultBackend implements ResultBackend {
     });
   }
 
+  @override
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  }) async {
+    final table = _tableName('groups');
+    return _client.run((Connection conn) async {
+      final result = await conn.execute(
+        Sql.named('''
+        UPDATE $table
+        SET meta = jsonb_set(
+              COALESCE(meta, '{}'::jsonb),
+              '{"stem.chord.claimed"}',
+              'true'::jsonb,
+              true)
+        WHERE id = @id
+          AND COALESCE(meta->>'stem.chord.claimed', 'false') <> 'true'
+        '''),
+        parameters: {'id': groupId},
+      );
+      if (result.affectedRows == 0) {
+        return false;
+      }
+
+      if (callbackTaskId != null) {
+        await conn.execute(
+          Sql.named('''
+          UPDATE $table
+          SET meta = jsonb_set(
+                COALESCE(meta, '{}'::jsonb),
+                '{"${ChordMetadata.callbackTaskId}"}',
+                to_jsonb(@callbackTaskId::text),
+                true)
+          WHERE id = @id
+          '''),
+          parameters: {'id': groupId, 'callbackTaskId': callbackTaskId},
+        );
+      }
+
+      if (dispatchedAt != null) {
+        await conn.execute(
+          Sql.named('''
+          UPDATE $table
+          SET meta = jsonb_set(
+                COALESCE(meta, '{}'::jsonb),
+                '{"${ChordMetadata.dispatchedAt}"}',
+                to_jsonb(@dispatched_at::timestamptz),
+                true)
+          WHERE id = @id
+          '''),
+          parameters: {'id': groupId, 'dispatched_at': dispatchedAt},
+        );
+      }
+
+      return true;
+    });
+  }
+
   dynamic _decodeJson(Object? value) {
     if (value == null) return null;
     if (value is String) {

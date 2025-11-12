@@ -22,6 +22,7 @@ jobs:
       STEM_CLI_RUN_MULTI: 'false'
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-test-services
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
