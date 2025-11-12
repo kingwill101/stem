@@ -6,6 +6,10 @@
   propagate suspension `resumeAt`/`deadline` data across Redis structures.
 - Improved queue maintenance by purging priority streams and shutting down claim
   timers when consumers stop, preventing spurious reclaims.
+- Published `redisWorkflowStoreFactory` so CLI tooling and integration tests can
+  spin up Redis-backed Durable Workflow stores with one helper.
+- Added lock-store contract coverage for `RedisLockStore`, validating the
+  semantics required by `TaskOptions.unique` and scheduler coordination.
 
 ## 0.1.0-alpha.3
 

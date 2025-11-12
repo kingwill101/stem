@@ -1,7 +1,11 @@
 ## 0.1.0-alpha.4
 
-- Added durable workflow introspection commands (runs, watchers, cancellations)
-  so the CLI surfaces the new runtime metadata powering Durable Workflows.
+- Introduced the `stem wf` command group for starting runs, listing history and
+  suspended waiters, showing checkpoints, cancelling/rewinding, and emitting
+  events so operators can drive Durable Workflows end-to-end from the CLI.
+- Added `stem tasks ls` to print registered task metadata (description, tags,
+  idempotency) or emit JSON for automation, making registries auditable before
+  deploys.
 - Extended `stem health` to probe Postgres result backends alongside Redis,
   surfacing backend-specific diagnostics.
 - Aligned dependencies with the workflow clock release so `stem test` and the

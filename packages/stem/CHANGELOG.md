@@ -12,6 +12,12 @@
 - Updated all workflow stores to consume injected clock metadata, ensuring
   suspension payloads include `resumeAt`/`deadline` values without relying on
   `DateTime.now()`.
+- Wired `TaskOptions.unique` into the runtime via the new
+  `UniqueTaskCoordinator`, allowing clusters to deduplicate submissions using
+  shared `LockStore`s and surface duplicate metadata when a clash occurs.
+- Workers now coordinate chord callbacks through `ResultBackend.claimChord`,
+  persisting callback ids and dispatch timestamps so fan-in callbacks run exactly
+  once even after crashes or retry storms.
 
 ## 0.1.0-alpha.3
 

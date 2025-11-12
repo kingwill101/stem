@@ -6,6 +6,8 @@
   while `saveStep` updates run heartbeats for better ownership tracking.
 - Suspension records capture `resumeAt`/`deadline` values sourced from the
   injected workflow clock.
+- Published `sqliteWorkflowStoreFactory` so local development and CLI tooling
+  can bootstrap SQLite-backed Durable Workflows without external services.
 
 ## 0.1.0-alpha.3
 

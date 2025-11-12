@@ -7,6 +7,11 @@
   suspension records track `resumeAt`/`deadline`.
 - Implemented chord-claiming improvements and claim-timer cleanup to keep
   Postgres queues healthy during purges and consumer shutdown.
+- Shipped `postgresWorkflowStoreFactory` so CLI tooling and integration tests
+  can bootstrap Postgres-backed Durable Workflows with a single helper.
+- Added lock-store contract coverage for `PostgresLockStore`, ensuring the
+  semantics required by `TaskOptions.unique` and scheduler coordination stay
+  portable across adapters.
 
 ## 0.1.0-alpha.3
 
