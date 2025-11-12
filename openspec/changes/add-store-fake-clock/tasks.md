@@ -1,0 +1,5 @@
+- [x] Introduce a `WorkflowClock` abstraction with real and fake implementations.
+- [x] Inject the clock into `WorkflowRuntime` and stores (in-memory, Redis, Postgres, SQLite) so they no longer call `DateTime.now()` directly.
+- [x] Update runtime tests to use the fake clock instead of `Future.delayed`.
+- [x] Document the testing pattern for adapters and mention the new clock in developer docs.
+- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-store-fake-clock --strict`.

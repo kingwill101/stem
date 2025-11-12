@@ -1,0 +1,6 @@
+- [x] Thread `TaskContext` through `WorkflowRuntime.executeRun` and extend leases after checkpoints using `context.extendLease`.
+- [x] Normalise suspension metadata for sleep/event controls and update in-memory store plus tests to prove resume without re-suspend.
+- [x] Apply the suspension metadata behaviour to Redis, Postgres, and SQLite workflow stores (no signature changes) and add adapter tests if needed.
+- [x] Add `FlowContext.idempotencyKey` helper with documentation and example usage (sleep/event sample, README).
+- [x] Expand workflow contract tests to cover lease refresh invocation, sleep replay without re-suspend, event payload replay, and idempotency helper guidance; run `dart test` suites.
+- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-workflow-durability-enhancements --strict`.

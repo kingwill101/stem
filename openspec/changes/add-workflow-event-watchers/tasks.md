@@ -1,0 +1,7 @@
+- [x] Extend `WorkflowStore` with watcher registration/resolution APIs and update in-memory store accordingly.
+- [x] Implement durable watcher storage for Postgres (new tables + transactional SQL) with accompanying tests.
+- [x] Implement durable watcher storage for Redis (Lua script, topic sets) with accompanying tests.
+- [x] Implement durable watcher storage for SQLite (table updates + tests).
+- [x] Update `WorkflowRuntime.emit`/`awaitEvent` logic to use the new APIs and populate payload resume data exactly once.
+- [x] Document the semantics (README + operator guide) and add workflow runtime tests covering payload races, timeouts, and crash recovery.
+- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-workflow-event-watchers --strict`.
