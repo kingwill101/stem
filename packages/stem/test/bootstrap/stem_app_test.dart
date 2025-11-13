@@ -80,37 +80,39 @@ void main() {
       }
     });
 
-    test('waitForCompletion does not decode when workflow is cancelled',
-        () async {
-      final flow = Flow(
-        name: 'workflow.cancelled',
-        build: (builder) {
-          builder.step('noop', (ctx) async => 'done');
-        },
-      );
-
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
-      try {
-        var decodeInvocations = 0;
-        final runId = await workflowApp.startWorkflow('workflow.cancelled');
-        await workflowApp.runtime.cancelWorkflow(runId);
-
-        final run = await workflowApp.waitForCompletion<Object?>(
-          runId,
-          decode: (payload) {
-            decodeInvocations += 1;
-            return payload;
+    test(
+      'waitForCompletion does not decode when workflow is cancelled',
+      () async {
+        final flow = Flow(
+          name: 'workflow.cancelled',
+          build: (builder) {
+            builder.step('noop', (ctx) async => 'done');
           },
         );
 
-        expect(run, isNotNull);
-        expect(run!.status, WorkflowStatus.cancelled);
-        expect(run.value, isNull);
-        expect(decodeInvocations, 0);
-      } finally {
-        await workflowApp.shutdown();
-      }
-    });
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          var decodeInvocations = 0;
+          final runId = await workflowApp.startWorkflow('workflow.cancelled');
+          await workflowApp.runtime.cancelWorkflow(runId);
+
+          final run = await workflowApp.waitForCompletion<Object?>(
+            runId,
+            decode: (payload) {
+              decodeInvocations += 1;
+              return payload;
+            },
+          );
+
+          expect(run, isNotNull);
+          expect(run!.status, WorkflowStatus.cancelled);
+          expect(run.value, isNull);
+          expect(decodeInvocations, 0);
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
 
     test('waitForCompletion returns non-terminal state on timeout', () async {
       final flow = Flow(

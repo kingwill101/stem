@@ -234,6 +234,71 @@ if (result?.isCompleted == true) {
 }
 ```
 
+### Typed task completion
+
+Producers can now wait for individual task results using `Stem.waitForTask<T>`
+with optional decoders. The helper returns a `TaskResult<T>` containing the
+underlying `TaskStatus`, decoded payload, and a timeout flag:
+
+```dart
+final taskId = await stem.enqueueCall(
+  ChargeCustomer.definition.call(ChargeArgs(orderId: '123')),
+);
+
+final charge = await stem.waitForTask<ChargeReceipt>(
+  taskId,
+  decode: (payload) => ChargeReceipt.fromJson(
+    payload! as Map<String, Object?>,
+  ),
+);
+if (charge?.isSucceeded == true) {
+  print('Captured ${charge!.value!.total}');
+} else if (charge?.isFailed == true) {
+  log.severe('Charge failed: ${charge!.status.error}');
+}
+```
+
+### Typed canvas helpers
+
+`TaskSignature<T>` (and the `task<T>()` helper) lets you declare the result type
+for canvas primitives. The existing `Canvas.group`, `Canvas.chain`, and
+`Canvas.chord` APIs now accept generics so typed values flow through sequential
+steps, groups, and chords without manual casts:
+
+```dart
+final dispatch = await canvas.group<OrderSummary>([
+  task<OrderSummary>(
+    'orders.fetch',
+    args: {'storeId': 42},
+    decode: (payload) => OrderSummary.fromJson(
+      payload! as Map<String, Object?>,
+    ),
+  ),
+  task<OrderSummary>('orders.refresh'),
+]);
+
+dispatch.results.listen((result) {
+  if (result.isSucceeded) {
+    dashboard.update(result.value!);
+  }
+});
+
+final chainResult = await canvas.chain<int>([
+  task<int>('metrics.seed', args: {'value': 1}),
+  task<int>('metrics.bump', args: {'add': 3}),
+]);
+print(chainResult.value); // 4
+
+final chordResult = await canvas.chord<double>(
+  body: [
+    task<double>('image.resize', args: {'size': 256}),
+    task<double>('image.resize', args: {'size': 512}),
+  ],
+  callback: task('image.aggregate'),
+);
+print('Body results: ${chordResult.values}');
+```
+
 ### Durable workflow semantics
 
 - Chords dispatch from workers. Once every branch completes, any worker may enqueue the callback, ensuring producer crashes do not block completion.

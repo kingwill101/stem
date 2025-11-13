@@ -143,6 +143,13 @@ abstract class Broker {
 /// Logical task status across enqueue, running, success, failure states.
 enum TaskState { queued, running, succeeded, failed, retried, cancelled }
 
+extension TaskStateX on TaskState {
+  bool get isTerminal =>
+      this == TaskState.succeeded ||
+      this == TaskState.failed ||
+      this == TaskState.cancelled;
+}
+
 /// Canonical task record stored in the result backend.
 class TaskStatus {
   TaskStatus({
@@ -861,6 +868,7 @@ class TaskMetadata {
 
 typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
 typedef TaskMetaBuilder<TArgs> = Map<String, Object?> Function(TArgs args);
+typedef TaskResultDecoder<TResult> = TResult Function(Object? payload);
 
 /// Event emitted when a task handler registers with a registry.
 class TaskRegistrationEvent {
@@ -888,6 +896,7 @@ class TaskDefinition<TArgs, TResult> {
     TaskMetaBuilder<TArgs>? encodeMeta,
     this.defaultOptions = const TaskOptions(),
     this.metadata = const TaskMetadata(),
+    this.decodeResult,
   }) : _encodeArgs = encodeArgs,
        _encodeMeta = encodeMeta;
 
@@ -899,6 +908,7 @@ class TaskDefinition<TArgs, TResult> {
 
   /// Metadata associated with this task for documentation/tooling.
   final TaskMetadata metadata;
+  final TaskResultDecoder<TResult>? decodeResult;
 
   final TaskArgsEncoder<TArgs> _encodeArgs;
   final TaskMetaBuilder<TArgs>? _encodeMeta;
@@ -929,6 +939,15 @@ class TaskDefinition<TArgs, TResult> {
   Map<String, Object?> encodeMeta(TArgs args) {
     final metaBuilder = _encodeMeta;
     return metaBuilder != null ? metaBuilder(args) : const {};
+  }
+
+  TResult? decode(Object? payload) {
+    if (payload == null) return null;
+    final decoder = decodeResult;
+    if (decoder != null) {
+      return decoder(payload);
+    }
+    return payload as TResult?;
   }
 }
 

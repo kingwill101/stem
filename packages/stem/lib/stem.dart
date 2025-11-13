@@ -11,6 +11,7 @@ export 'src/core/function_task_handler.dart';
 export 'src/core/task_invocation.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';
+export 'src/core/task_result.dart';
 export 'src/core/unique_task_coordinator.dart';
 export 'src/core/chord_metadata.dart';
 export 'src/backend/in_memory_backend.dart';
