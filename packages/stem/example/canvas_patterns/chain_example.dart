@@ -44,18 +44,18 @@ Future<void> main() async {
   await worker.start();
 
   final canvas = Canvas(broker: broker, backend: backend, registry: registry);
-  final chainId = await canvas.chain([
+  final chainResult = await canvas.chain<Object?>([
     task('fetch.user'),
     task('enrich.user'),
     task('send.email'),
   ]);
 
   await _waitFor(() async {
-    final status = await backend.get(chainId);
+    final status = await backend.get(chainResult.finalTaskId);
     return status?.state == TaskState.succeeded;
   });
 
-  final status = await backend.get(chainId);
+  final status = await backend.get(chainResult.finalTaskId);
   print('Chain completed with state: ${status?.state}');
 
   await worker.shutdown();

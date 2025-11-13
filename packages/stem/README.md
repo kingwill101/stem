@@ -299,6 +299,52 @@ final chordResult = await canvas.chord<double>(
 print('Body results: ${chordResult.values}');
 ```
 
+### Task result encoders
+
+By default Stem stores handler payloads exactly as returned (JSON-friendly
+structures). Configure a `TaskResultEncoder` when bootstrapping `StemApp`,
+`StemWorkflowApp`, or `Canvas` to plug in custom serialization (encryption,
+compression, base64 wrappers, etc.):
+
+```dart
+import 'dart:convert';
+
+class Base64ResultEncoder extends TaskResultEncoder {
+  const Base64ResultEncoder();
+
+  @override
+  Object? encode(Object? value) {
+    if (value is String) {
+      return base64Encode(utf8.encode(value));
+    }
+    return value;
+  }
+
+  @override
+  Object? decode(Object? stored) {
+    if (stored is String) {
+      return utf8.decode(base64Decode(stored));
+    }
+    return stored;
+  }
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  resultEncoder: const Base64ResultEncoder(),
+);
+
+final canvas = Canvas(
+  broker: broker,
+  backend: backend,
+  registry: registry,
+  resultEncoder: const Base64ResultEncoder(),
+);
+```
+
+Encoders run exactly once per persistence/read cycle and fall back to the JSON
+behavior when none is provided.
+
 ### Durable workflow semantics
 
 - Chords dispatch from workers. Once every branch completes, any worker may enqueue the callback, ensuring producer crashes do not block completion.

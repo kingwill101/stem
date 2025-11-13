@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:math';
 
+import '../backend/encoding_result_backend.dart';
+import '../core/chord_metadata.dart';
 import '../core/contracts.dart';
 import '../core/envelope.dart';
-import '../core/chord_metadata.dart';
 import '../core/task_result.dart';
+import '../core/task_result_encoder.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -139,10 +141,12 @@ class Canvas {
   /// supplied to influence ID generation in tests.
   Canvas({
     required this.broker,
-    required this.backend,
+    required ResultBackend backend,
     required this.registry,
+    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
     Random? random,
-  }) : _random = random ?? Random();
+  }) : backend = withTaskResultEncoder(backend, resultEncoder),
+       _random = random ?? Random();
 
   /// The message broker used to publish task envelopes.
   final Broker broker;

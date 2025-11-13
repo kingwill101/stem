@@ -8,6 +8,7 @@ import '../workflow/core/workflow_status.dart';
 import '../workflow/core/workflow_store.dart';
 import '../workflow/core/event_bus.dart';
 import '../workflow/runtime/workflow_runtime.dart';
+import '../core/task_result_encoder.dart';
 import 'factories.dart';
 import 'stem_app.dart';
 
@@ -167,6 +168,7 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
   }) async {
     final appInstance =
         stemApp ??
@@ -175,6 +177,7 @@ class StemWorkflowApp {
           broker: broker ?? StemBrokerFactory.inMemory(),
           backend: backend ?? StemBackendFactory.inMemory(),
           workerConfig: workerConfig,
+          resultEncoder: resultEncoder,
         );
 
     final storeFactoryInstance =
@@ -224,6 +227,7 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
   }) {
     return StemWorkflowApp.create(
       workflows: workflows,
@@ -236,6 +240,7 @@ class StemWorkflowApp {
       workerConfig: workerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
+      resultEncoder: resultEncoder,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -85,5 +87,46 @@ void main() {
         await app.shutdown();
       }
     });
+
+    test('respects custom result encoder', () async {
+      final app = await StemApp.inMemory(
+        tasks: [
+          FunctionTaskHandler<String>(
+            name: 'typed.custom',
+            entrypoint: (context, args) async => 'secret-text',
+          ),
+        ],
+        resultEncoder: const _Base64TaskResultEncoder(),
+      );
+      await app.start();
+      try {
+        final taskId = await app.stem.enqueue('typed.custom');
+        final result = await app.stem.waitForTask<String>(taskId);
+        expect(result?.value, 'secret-text');
+        expect(result?.status.payload, 'secret-text');
+      } finally {
+        await app.shutdown();
+      }
+    });
   });
+}
+
+class _Base64TaskResultEncoder extends TaskResultEncoder {
+  const _Base64TaskResultEncoder();
+
+  @override
+  Object? encode(Object? value) {
+    if (value is String) {
+      return base64Encode(utf8.encode(value));
+    }
+    return value;
+  }
+
+  @override
+  Object? decode(Object? stored) {
+    if (stored is String) {
+      return utf8.decode(base64Decode(stored));
+    }
+    return stored;
+  }
 }

@@ -15,8 +15,7 @@ void main() {
         await app.start();
 
         final taskId = await app.stem.enqueue('test.echo');
-        final backend = app.backend as InMemoryResultBackend;
-        final completed = await backend
+        final completed = await app.backend
             .watch(taskId)
             .firstWhere((status) => status.state == TaskState.succeeded)
             .timeout(const Duration(seconds: 1));
