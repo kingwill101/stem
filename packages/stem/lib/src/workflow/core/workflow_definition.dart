@@ -5,15 +5,15 @@ import 'flow_step.dart';
 import 'workflow_script_context.dart';
 
 /// Declarative workflow definition built via [FlowBuilder].
-typedef WorkflowScriptBody =
-    FutureOr<Object?> Function(WorkflowScriptContext context);
+typedef WorkflowScriptBody<T extends Object?> =
+    FutureOr<T> Function(WorkflowScriptContext context);
 
 enum WorkflowDefinitionKind { flow, script }
 
 /// Declarative workflow definition built via [FlowBuilder] or a higher-level
 /// script facade. The definition captures the ordered steps that the runtime
 /// will execute along with optional script metadata used by the facade runner.
-class WorkflowDefinition {
+class WorkflowDefinition<T extends Object?> {
   WorkflowDefinition._({
     required this.name,
     required WorkflowDefinitionKind kind,
@@ -37,7 +37,7 @@ class WorkflowDefinition {
 
   factory WorkflowDefinition.script({
     required String name,
-    required WorkflowScriptBody run,
+    required WorkflowScriptBody<T> run,
   }) {
     return WorkflowDefinition._(
       name: name,
@@ -50,7 +50,7 @@ class WorkflowDefinition {
   final String name;
   final WorkflowDefinitionKind _kind;
   final List<FlowStep> _steps;
-  final WorkflowScriptBody? scriptBody;
+  final WorkflowScriptBody<T>? scriptBody;
 
   List<FlowStep> get steps => List.unmodifiable(_steps);
 

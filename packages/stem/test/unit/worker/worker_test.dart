@@ -83,16 +83,16 @@ void main() {
         registry: registry,
       );
 
-      final callbackId = await canvas.chord(
+      final chordResult = await canvas.chord<int>(
         body: [
-          () => Envelope(name: 'tasks.body', args: const {'value': 2}),
-          () => Envelope(name: 'tasks.body', args: const {'value': 5}),
+          task<int>('tasks.body', args: const {'value': 2}),
+          task<int>('tasks.body', args: const {'value': 5}),
         ],
-        callback: () => Envelope(name: 'tasks.chord.callback', args: const {}),
+        callback: task('tasks.chord.callback'),
       );
 
-      await _waitForCallbackSuccess(backend, callbackId);
-      final status = await backend.get(callbackId);
+      await _waitForCallbackSuccess(backend, chordResult.callbackTaskId);
+      final status = await backend.get(chordResult.callbackTaskId);
       expect(status?.state, TaskState.succeeded);
       expect(status?.payload, equals(7));
       expect(status?.meta['chordResults'], equals([2, 5]));

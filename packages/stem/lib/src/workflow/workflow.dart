@@ -4,6 +4,7 @@ export 'core/flow_step.dart';
 export 'core/run_state.dart';
 export 'core/workflow_definition.dart';
 export 'core/workflow_cancellation_policy.dart';
+export 'core/workflow_result.dart';
 export 'core/workflow_script.dart';
 export 'core/workflow_script_context.dart';
 export 'core/workflow_watcher.dart';

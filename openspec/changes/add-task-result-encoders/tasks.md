@@ -1,0 +1,5 @@
+- [ ] Design a `TaskResultEncoder` contract (encode/decode + content-type metadata) and thread it through `StemApp`, workers, canvas, and result backends with a JSON fallback.
+- [ ] Update each first-party backend (in-memory, Redis, Postgres, SQLite) so payload/heartbeat/group storage uses the encoder output and persists whatever binary/blob representation it returns.
+- [ ] Extend adapter tests to run with both the default JSON encoder and a sample custom encoder (e.g., base64 or gzip) to ensure encode/decode happens exactly once.
+- [ ] Document encoder configuration, migration advice, and security considerations in the README / docs.
+- [ ] Run `dart format`, `dart analyze`, targeted backend tests, and `openspec validate add-task-result-encoders --strict`.

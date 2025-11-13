@@ -1,4 +1,8 @@
 
+## unreleased
+
+- Typed workflow results with custom decoder option
+
 ## 0.1.0-alpha.4
 
 - Introduced **Durable Workflows** end-to-end: auto-versioned steps, iteration-

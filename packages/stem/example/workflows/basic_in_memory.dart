@@ -16,8 +16,8 @@ Future<void> main() async {
   );
 
   final runId = await app.startWorkflow('basic.hello');
-  final state = await app.waitForCompletion(runId);
-  print('Workflow $runId finished with result: ${state?.result}');
+  final result = await app.waitForCompletion<String>(runId);
+  print('Workflow $runId finished with result: ${result?.value}');
 
   await app.shutdown();
 }
