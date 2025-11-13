@@ -5,6 +5,7 @@ import 'envelope.dart';
 import 'task_invocation.dart';
 import '../observability/heartbeat.dart';
 import '../scheduler/schedule_spec.dart';
+import 'task_payload_encoder.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -851,6 +852,8 @@ class TaskMetadata {
     this.tags = const [],
     this.idempotent = false,
     this.attributes = const {},
+    this.resultEncoder,
+    this.argsEncoder,
   });
 
   /// Human-readable description of the task.
@@ -864,6 +867,14 @@ class TaskMetadata {
 
   /// Additional metadata for tooling and dashboards.
   final Map<String, Object?> attributes;
+
+  /// Optional result encoder override applied when persisting handler return
+  /// values. When null the runtime falls back to the configured default.
+  final TaskPayloadEncoder? resultEncoder;
+
+  /// Optional argument encoder override applied when publishing envelopes for
+  /// this task. When null the runtime falls back to the configured default.
+  final TaskPayloadEncoder? argsEncoder;
 }
 
 typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);

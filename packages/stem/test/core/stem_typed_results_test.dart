@@ -96,7 +96,7 @@ void main() {
             entrypoint: (context, args) async => 'secret-text',
           ),
         ],
-        resultEncoder: const _Base64TaskResultEncoder(),
+        resultEncoder: const _Base64TaskPayloadEncoder(),
       );
       await app.start();
       try {
@@ -108,11 +108,69 @@ void main() {
         await app.shutdown();
       }
     });
+
+    test('encodes and decodes task arguments with global encoder', () async {
+      final app = await StemApp.inMemory(
+        tasks: [
+          FunctionTaskHandler<String>(
+            name: 'typed.args',
+            entrypoint: (context, args) async {
+              return args['secret'] as String;
+            },
+          ),
+        ],
+        argsEncoder: const _JsonArgsTaskPayloadEncoder(),
+      );
+      await app.start();
+      try {
+        final taskId = await app.stem.enqueue(
+          'typed.args',
+          args: const {'secret': 'encrypted-text'},
+        );
+        final result = await app.stem.waitForTask<String>(taskId);
+        expect(result?.value, 'encrypted-text');
+      } finally {
+        await app.shutdown();
+      }
+    });
+
+    test('per-task encoders override the defaults', () async {
+      final app = await StemApp.inMemory(
+        tasks: [
+          FunctionTaskHandler<String>(
+            name: 'typed.override',
+            entrypoint: (context, args) async {
+              return args['secret'] as String;
+            },
+            metadata: const TaskMetadata(
+              argsEncoder: _JsonArgsTaskPayloadEncoder(),
+              resultEncoder: _Base64TaskPayloadEncoder(),
+            ),
+          ),
+        ],
+      );
+      await app.start();
+      try {
+        final taskId = await app.stem.enqueue(
+          'typed.override',
+          args: const {'secret': 'payload'},
+        );
+        final result = await app.stem.waitForTask<String>(taskId);
+        expect(result?.value, 'payload');
+        final status = await app.backend.get(taskId);
+        expect(
+          status?.meta[stemResultEncoderMetaKey],
+          const _Base64TaskPayloadEncoder().id,
+        );
+      } finally {
+        await app.shutdown();
+      }
+    });
   });
 }
 
-class _Base64TaskResultEncoder extends TaskResultEncoder {
-  const _Base64TaskResultEncoder();
+class _Base64TaskPayloadEncoder extends TaskPayloadEncoder {
+  const _Base64TaskPayloadEncoder();
 
   @override
   Object? encode(Object? value) {
@@ -126,6 +184,33 @@ class _Base64TaskResultEncoder extends TaskResultEncoder {
   Object? decode(Object? stored) {
     if (stored is String) {
       return utf8.decode(base64Decode(stored));
+    }
+    return stored;
+  }
+}
+
+class _JsonArgsTaskPayloadEncoder extends TaskPayloadEncoder {
+  const _JsonArgsTaskPayloadEncoder();
+
+  static const _blobKey = '__blob';
+
+  @override
+  Object? encode(Object? value) {
+    if (value == null) return null;
+    final encoded = jsonEncode(value);
+    return {_blobKey: base64Encode(utf8.encode(encoded))};
+  }
+
+  @override
+  Object? decode(Object? stored) {
+    if (stored is Map && stored[_blobKey] is String) {
+      final blob = stored[_blobKey] as String;
+      final decoded = utf8.decode(base64Decode(blob));
+      final result = jsonDecode(decoded);
+      if (result is Map<String, Object?>) {
+        return result;
+      }
+      return (result as Map).cast<String, Object?>();
     }
     return stored;
   }

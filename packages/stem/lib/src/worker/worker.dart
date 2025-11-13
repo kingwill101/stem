@@ -7,6 +7,7 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
 import '../core/contracts.dart';
 import '../core/chord_metadata.dart';
+import '../core/encoder_keys.dart';
 import '../core/envelope.dart';
 import '../core/retry.dart';
 import '../control/control_messages.dart';
@@ -19,6 +20,7 @@ import '../observability/heartbeat_transport.dart';
 import '../observability/tracing.dart';
 import '../security/signing.dart';
 import '../core/task_invocation.dart';
+import '../core/task_payload_encoder.dart';
 import '../core/unique_task_coordinator.dart';
 import 'isolate_pool.dart';
 import 'worker_config.dart';
@@ -84,7 +86,17 @@ class Worker {
     WorkerLifecycleConfig? lifecycle,
     ObservabilityConfig? observability,
     this.signer,
-  }) : workerHeartbeatInterval =
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+         encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       ),
+       workerHeartbeatInterval =
            observability?.heartbeatInterval ??
            workerHeartbeatInterval ??
            heartbeatInterval,
@@ -175,6 +187,7 @@ class Worker {
   final String namespace;
   final PayloadSigner? signer;
   final RevokeStore? revokeStore;
+  final TaskPayloadEncoderRegistry payloadEncoders;
 
   late final RoutingSubscription subscription;
   late final List<String> subscriptionQueues;
@@ -386,12 +399,20 @@ class Worker {
           return;
         }
 
+        final argsEncoder = _resolveArgsEncoder(handler);
+        final resultEncoder = _resolveResultEncoder(handler);
+
         await _runConsumeMiddleware(delivery);
 
         final groupId = envelope.headers['stem-group-id'];
 
         if (_isTaskRevoked(envelope.id)) {
-          await _handleRevokedDelivery(delivery, envelope, groupId: groupId);
+          await _handleRevokedDelivery(
+            delivery,
+            envelope,
+            resultEncoder,
+            groupId: groupId,
+          );
           await _releaseUniqueLock(envelope);
           return;
         }
@@ -403,6 +424,7 @@ class Worker {
             await _handleSignatureFailure(
               delivery,
               envelope,
+              resultEncoder,
               error,
               stack,
               groupId,
@@ -411,6 +433,7 @@ class Worker {
             return;
           }
         }
+        final decodedArgs = _decodeArgs(envelope, argsEncoder);
 
         final rateSpec = handler.options.rateLimit != null
             ? _parseRate(handler.options.rateLimit!)
@@ -438,11 +461,14 @@ class Worker {
               envelope.id,
               TaskState.retried,
               attempt: envelope.attempt,
-              meta: {
-                ...envelope.meta,
-                'rateLimited': true,
-                'retryAfterMs': backoff.inMilliseconds,
-              },
+              meta: _statusMeta(
+                envelope,
+                resultEncoder,
+                extra: {
+                  'rateLimited': true,
+                  'retryAfterMs': backoff.inMilliseconds,
+                },
+              ),
             );
             _events.add(
               WorkerEvent(
@@ -478,15 +504,16 @@ class Worker {
           tags: {'task': envelope.name, 'queue': envelope.queue},
         );
 
+        final runningMeta = _statusMeta(
+          envelope,
+          resultEncoder,
+          extra: {'queue': envelope.queue, 'worker': consumerName},
+        );
         await backend.set(
           envelope.id,
           TaskState.running,
           attempt: envelope.attempt,
-          meta: {
-            ...envelope.meta,
-            'queue': envelope.queue,
-            'worker': consumerName,
-          },
+          meta: runningMeta,
         );
 
         void checkTermination() => _enforceTerminationIfRequested(envelope.id);
@@ -531,7 +558,12 @@ class Worker {
             'stem.execute.${envelope.name}',
             () => _invokeWithMiddleware(
               context,
-              () => _executeWithHardLimit(handler, context, envelope),
+              () => _executeWithHardLimit(
+                handler,
+                context,
+                envelope,
+                decodedArgs,
+              ),
             ),
             spanKind: dotel.SpanKind.internal,
             attributes: spanAttributes,
@@ -540,12 +572,15 @@ class Worker {
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
 
-          final successMeta = {
-            ...envelope.meta,
-            'queue': envelope.queue,
-            'worker': consumerName,
-            'completedAt': DateTime.now().toIso8601String(),
-          };
+          final successMeta = _statusMeta(
+            envelope,
+            resultEncoder,
+            extra: {
+              'queue': envelope.queue,
+              'worker': consumerName,
+              'completedAt': DateTime.now().toIso8601String(),
+            },
+          );
           final successStatus = TaskStatus(
             id: envelope.id,
             state: TaskState.succeeded,
@@ -597,7 +632,12 @@ class Worker {
         } on TaskRevokedException catch (_) {
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
-          await _handleRevokedDelivery(delivery, envelope, groupId: groupId);
+          await _handleRevokedDelivery(
+            delivery,
+            envelope,
+            resultEncoder,
+            groupId: groupId,
+          );
           completionState = TaskState.cancelled;
         } catch (error, stack) {
           await _notifyErrorMiddleware(context, error, stack);
@@ -607,6 +647,7 @@ class Worker {
             handler,
             delivery,
             envelope,
+            resultEncoder,
             error,
             stack,
             groupId,
@@ -684,13 +725,14 @@ class Worker {
     TaskHandler handler,
     TaskContext context,
     Envelope envelope,
+    Map<String, Object?> args,
   ) {
     final hard = handler.options.hardTimeLimit;
     if (_shouldUseIsolate(handler)) {
-      return _runInIsolate(handler, context, envelope, hardTimeout: hard);
+      return _runInIsolate(handler, context, envelope, args, hardTimeout: hard);
     }
 
-    final future = handler.call(context, envelope.args);
+    final future = handler.call(context, args);
     if (hard == null) {
       return future;
     }
@@ -859,16 +901,19 @@ class Worker {
       }
 
       await broker.publish(callbackEnvelope);
+      final callbackHandler = registry.resolve(callbackEnvelope.name);
+      final callbackResultEncoder = _resolveResultEncoder(callbackHandler);
+      final callbackMeta = _withResultEncoderMeta({
+        ...callbackEnvelope.meta,
+        'queue': callbackEnvelope.queue,
+        'chordId': status.id,
+        'dispatchedAt': dispatchedAt.toIso8601String(),
+      }, callbackResultEncoder);
       await backend.set(
         callbackEnvelope.id,
         TaskState.queued,
         attempt: callbackEnvelope.attempt,
-        meta: {
-          ...callbackEnvelope.meta,
-          'queue': callbackEnvelope.queue,
-          'chordId': status.id,
-          'dispatchedAt': dispatchedAt.toIso8601String(),
-        },
+        meta: callbackMeta,
       );
       StemMetrics.instance.increment(
         'stem.chords.dispatched',
@@ -911,6 +956,7 @@ class Worker {
   Future<void> _handleSignatureFailure(
     Delivery delivery,
     Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
     SignatureVerificationException error,
     StackTrace stack,
     String? groupId,
@@ -924,13 +970,16 @@ class Worker {
       },
     );
 
-    final failureMeta = {
-      ...envelope.meta,
-      'queue': envelope.queue,
-      'worker': consumerName,
-      'failedAt': DateTime.now().toIso8601String(),
-      'security': 'signature-invalid',
-    };
+    final failureMeta = _statusMeta(
+      envelope,
+      resultEncoder,
+      extra: {
+        'queue': envelope.queue,
+        'worker': consumerName,
+        'failedAt': DateTime.now().toIso8601String(),
+        'security': 'signature-invalid',
+      },
+    );
 
     final failureStatus = TaskStatus(
       id: envelope.id,
@@ -1005,6 +1054,7 @@ class Worker {
     TaskHandler handler,
     Delivery delivery,
     Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
     Object error,
     StackTrace stack,
     String? groupId,
@@ -1020,6 +1070,11 @@ class Worker {
           notBefore: DateTime.now().add(delay),
         ),
       );
+      final retriedMeta = _statusMeta(
+        envelope,
+        resultEncoder,
+        extra: {'retryDelayMs': delay.inMilliseconds},
+      );
       await backend.set(
         envelope.id,
         TaskState.retried,
@@ -1030,7 +1085,7 @@ class Worker {
           stack: stack.toString(),
           retryable: true,
         ),
-        meta: {...envelope.meta, 'retryDelayMs': delay.inMilliseconds},
+        meta: retriedMeta,
       );
       StemMetrics.instance.increment(
         'stem.tasks.retried',
@@ -1053,12 +1108,15 @@ class Worker {
       );
       return TaskState.retried;
     } else {
-      final failureMeta = {
-        ...envelope.meta,
-        'queue': envelope.queue,
-        'worker': consumerName,
-        'failedAt': DateTime.now().toIso8601String(),
-      };
+      final failureMeta = _statusMeta(
+        envelope,
+        resultEncoder,
+        extra: {
+          'queue': envelope.queue,
+          'worker': consumerName,
+          'failedAt': DateTime.now().toIso8601String(),
+        },
+      );
       final failureStatus = TaskStatus(
         id: envelope.id,
         state: TaskState.failed,
@@ -1790,19 +1848,82 @@ class Worker {
     return _revocationFor(taskId) != null;
   }
 
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler? handler) {
+    final encoder = handler?.metadata.argsEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultArgsEncoder;
+  }
+
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler? handler) {
+    final encoder = handler?.metadata.resultEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultResultEncoder;
+  }
+
+  Map<String, Object?> _decodeArgs(
+    Envelope envelope,
+    TaskPayloadEncoder fallbackEncoder,
+  ) {
+    final encoderId =
+        envelope.headers[stemArgsEncoderHeader] ??
+        (envelope.meta[stemArgsEncoderMetaKey] as String?);
+    final encoder = encoderId != null
+        ? payloadEncoders.resolveArgs(encoderId)
+        : fallbackEncoder;
+    final decoded = encoder.decode(envelope.args);
+    return _castArgsMap(decoded, encoder);
+  }
+
+  Map<String, Object?> _castArgsMap(Object? value, TaskPayloadEncoder encoder) {
+    if (value == null) return const {};
+    if (value is Map<String, Object?>) {
+      return Map<String, Object?>.from(value);
+    }
+    if (value is Map) {
+      final result = <String, Object?>{};
+      value.forEach((key, entry) {
+        if (key is! String) {
+          throw StateError(
+            'Task args encoder ${encoder.id} must use string keys, found $key',
+          );
+        }
+        result[key] = entry;
+      });
+      return result;
+    }
+    throw StateError(
+      'Task args encoder ${encoder.id} must decode to Map<String, Object?> values, got ${value.runtimeType}.',
+    );
+  }
+
+  Map<String, Object?> _statusMeta(
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder, {
+    Map<String, Object?> extra = const {},
+  }) {
+    return _withResultEncoderMeta({...envelope.meta, ...extra}, resultEncoder);
+  }
+
+  Map<String, Object?> _withResultEncoderMeta(
+    Map<String, Object?> meta,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...meta, stemResultEncoderMetaKey: encoder.id};
+  }
+
   Future<void> _handleRevokedDelivery(
     Delivery delivery,
-    Envelope envelope, {
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder, {
     String? groupId,
   }) async {
     final revokeEntry = _revocationFor(envelope.id);
     await broker.ack(delivery);
-    final meta = {
-      ...envelope.meta,
-      'queue': envelope.queue,
-      'worker': consumerName,
-      'revoked': true,
-    };
+    final meta = _statusMeta(
+      envelope,
+      resultEncoder,
+      extra: {'queue': envelope.queue, 'worker': consumerName, 'revoked': true},
+    );
     if (revokeEntry?.reason != null) {
       meta['revokedReason'] = revokeEntry!.reason;
     }
@@ -2243,19 +2364,20 @@ class Worker {
   Future<Object?> _runInIsolate(
     TaskHandler handler,
     TaskContext context,
-    Envelope envelope, {
+    Envelope envelope,
+    Map<String, Object?> args, {
     Duration? hardTimeout,
   }) async {
     final entrypoint = handler.isolateEntrypoint;
     if (entrypoint == null) {
-      return handler.call(context, envelope.args);
+      return handler.call(context, args);
     }
 
     final pool = await _ensureIsolatePool();
 
     final outcome = await pool.execute(
       entrypoint,
-      envelope.args,
+      args,
       envelope.headers,
       envelope.meta,
       envelope.attempt,

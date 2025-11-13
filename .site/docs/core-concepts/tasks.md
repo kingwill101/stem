@@ -68,6 +68,63 @@ final registry = SimpleTaskRegistry()..register(EmailTask());
 </TabItem>
 </Tabs>
 
+## Typed Task Definitions
+
+Stem ships with `TaskDefinition<TArgs, TResult>` so producers get compile-time
+checks for required arguments and result types. A definition bundles the task
+name, argument encoder, optional metadata, and default `TaskOptions`. Build a
+call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
+or `Canvas` helpers:
+
+```dart
+import 'package:stem/stem.dart';
+
+class InvoicePayload {
+  const InvoicePayload({required this.invoiceId});
+  final String invoiceId;
+}
+
+class PublishInvoiceTask implements TaskHandler<void> {
+  static final definition = TaskDefinition<InvoicePayload, bool>(
+    name: 'invoice.publish',
+    encodeArgs: (payload) => {'invoiceId': payload.invoiceId},
+    metadata: const TaskMetadata(description: 'Publishes invoices downstream'),
+    defaultOptions: const TaskOptions(queue: 'billing'),
+  );
+
+  @override
+  String get name => definition.name;
+
+  @override
+  TaskOptions get options => definition.defaultOptions;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    final invoiceId = args['invoiceId'] as String;
+    await publishInvoice(invoiceId);
+  }
+}
+
+final stem = Stem(
+  broker: InMemoryBroker(),
+  registry: SimpleTaskRegistry()..register(PublishInvoiceTask()),
+  backend: InMemoryResultBackend(),
+);
+
+final taskId = await stem.enqueueCall(
+  PublishInvoiceTask.definition(const InvoicePayload(invoiceId: 'inv_42')),
+);
+final result = await stem.waitForTask<bool>(taskId);
+if (result?.isSucceeded == true) {
+  print('Invoice published');
+}
+```
+
+Typed results flow through `TaskResult<TResult>` when you call
+`Stem.waitForTask<TResult>`, `Canvas.group<T>`, `Canvas.chain<T>`, or
+`Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
+lets you deserialize complex objects before they reach application code.
+
 ## Configuring Retries
 
 Workers apply an `ExponentialJitterRetryStrategy` by default. Each retry is
@@ -121,3 +178,50 @@ const TaskOptions(
 
 With these practices in place, tasks can be retried safely and composed via
 chains, groups, and chords (see [Canvas Patterns](./canvas.md)).
+
+## Task Payload Encoders
+
+Handlers often need to encrypt, compress, or otherwise transform arguments and
+results before they leave the process. Stem exposes `TaskPayloadEncoder` so you
+can swap out the default JSON pass-through behavior:
+
+```dart title="Encoders/global.dart"
+import 'dart:convert';
+import 'package:stem/stem.dart';
+
+class Base64PayloadEncoder extends TaskPayloadEncoder {
+  const Base64PayloadEncoder();
+
+  @override
+  Object? encode(Object? value) =>
+      value is String ? base64Encode(utf8.encode(value)) : value;
+
+  @override
+  Object? decode(Object? stored) =>
+      stored is String ? utf8.decode(base64Decode(stored)) : stored;
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  argsEncoder: const Base64PayloadEncoder(),
+  resultEncoder: const Base64PayloadEncoder(),
+  additionalEncoders: const [MyOtherEncoder()],
+);
+```
+
+Workers automatically decode arguments once (`stem-args-encoder` header /
+`__stemArgsEncoder` meta) and encode results once (`__stemResultEncoder` meta)
+before writing to the backend. When you need task-specific behavior, set the
+metadata overrides:
+
+```dart
+@override
+TaskMetadata get metadata => const TaskMetadata(
+      argsEncoder: Base64PayloadEncoder(),
+      resultEncoder: Base64PayloadEncoder(),
+    );
+```
+
+Because encoders are centrally registered inside the
+`TaskPayloadEncoderRegistry`, every producer/worker instance that shares the
+registry can resolve encoder ids reliably—even across processes or languages.

@@ -8,7 +8,7 @@ import '../workflow/core/workflow_status.dart';
 import '../workflow/core/workflow_store.dart';
 import '../workflow/core/event_bus.dart';
 import '../workflow/runtime/workflow_runtime.dart';
-import '../core/task_result_encoder.dart';
+import '../core/task_payload_encoder.dart';
 import 'factories.dart';
 import 'stem_app.dart';
 
@@ -42,6 +42,12 @@ class StemWorkflowApp {
   ///
   /// Subsequent calls are ignored, so it is safe to call before every
   /// scheduling operation.
+  ///
+  /// Example:
+  /// ```dart
+  /// final app = await StemWorkflowApp.inMemory();
+  /// await app.start();
+  /// ```
   Future<void> start() async {
     if (_started) return;
     _started = true;
@@ -53,6 +59,13 @@ class StemWorkflowApp {
   ///
   /// Lazily starts the runtime on the first invocation so simple examples do
   /// not need to call [start] manually.
+  ///
+  /// Example:
+  /// ```dart
+  /// final app = await StemWorkflowApp.inMemory();
+  /// final runId = await app.startWorkflow('exampleWorkflow', params: {'key': 'value'});
+  /// print('Workflow started with ID: $runId');
+  /// ```
   Future<String> startWorkflow(
     String name, {
     Map<String, Object?> params = const {},
@@ -83,6 +96,16 @@ class StemWorkflowApp {
   }
 
   /// Returns the current [RunState] of a workflow run, or `null` if not found.
+  ///
+  /// Example:
+  /// ```dart
+  /// final runState = await app.getRun('runId123');
+  /// if (runState != null) {
+  ///   print('Workflow state: ${runState.status}');
+  /// } else {
+  ///   print('Run not found.');
+  /// }
+  /// ```
   Future<RunState?> getRun(String runId) => store.get(runId);
 
   /// Polls the workflow store until the run reaches a terminal state.
@@ -91,6 +114,16 @@ class StemWorkflowApp {
   /// via [WorkflowResult.value], optionally decoding through [decode]. Failed,
   /// cancelled, or timed-out waits return the original [RunState] metadata with
   /// `value == null` so callers can inspect errors or suspension details.
+  ///
+  /// Example:
+  /// ```dart
+  /// final result = await app.waitForCompletion<String>('runId123');
+  /// if (result != null && result.value != null) {
+  ///   print('Workflow completed with result: ${result.value}');
+  /// } else {
+  ///   print('Workflow did not complete successfully.');
+  /// }
+  /// ```
   Future<WorkflowResult<T>?> waitForCompletion<T extends Object?>(
     String runId, {
     Duration pollInterval = const Duration(milliseconds: 100),
@@ -144,6 +177,12 @@ class StemWorkflowApp {
   /// Stops the runtime, worker, and disposes associated resources.
   ///
   /// After shutdown the instance can be restarted by calling [start] again.
+  ///
+  /// Example:
+  /// ```dart
+  /// await app.shutdown();
+  /// print('App shutdown complete.');
+  /// ```
   Future<void> shutdown() async {
     await runtime.dispose();
     await app.shutdown();
@@ -156,6 +195,15 @@ class StemWorkflowApp {
   ///
   /// Useful for wiring Redis/Postgres adapters or sharing an existing
   /// [StemApp] instance with job processors.
+  ///
+  /// Example:
+  /// ```dart
+  /// final app = await StemWorkflowApp.create(
+  ///   workflows: [exampleWorkflow],
+  ///   broker: customBroker,
+  ///   backend: customBackend,
+  /// );
+  /// ```
   static Future<StemWorkflowApp> create({
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
@@ -168,7 +216,10 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
-    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
     final appInstance =
         stemApp ??
@@ -177,7 +228,10 @@ class StemWorkflowApp {
           broker: broker ?? StemBrokerFactory.inMemory(),
           backend: backend ?? StemBackendFactory.inMemory(),
           workerConfig: workerConfig,
+          encoderRegistry: encoderRegistry,
           resultEncoder: resultEncoder,
+          argsEncoder: argsEncoder,
+          additionalEncoders: additionalEncoders,
         );
 
     final storeFactoryInstance =
@@ -220,6 +274,13 @@ class StemWorkflowApp {
   /// Creates an in-memory workflow app (in-memory broker, backend, and store).
   ///
   /// Ideal for unit tests and examples since it requires no external services.
+  ///
+  /// Example:
+  /// ```dart
+  /// final app = await StemWorkflowApp.inMemory(
+  ///   workflows: [exampleWorkflow],
+  /// );
+  /// ```
   static Future<StemWorkflowApp> inMemory({
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
@@ -227,7 +288,10 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
-    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return StemWorkflowApp.create(
       workflows: workflows,
@@ -240,7 +304,10 @@ class StemWorkflowApp {
       workerConfig: workerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
+      encoderRegistry: encoderRegistry,
       resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
     );
   }
 }

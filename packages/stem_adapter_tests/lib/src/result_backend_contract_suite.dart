@@ -11,7 +11,7 @@ class ResultBackendContractSettings {
     this.groupTtl = const Duration(seconds: 1),
     this.heartbeatTtl = const Duration(seconds: 1),
     this.settleDelay = const Duration(milliseconds: 150),
-    this.encoders = const [JsonTaskResultEncoder(), _Base64ContractEncoder()],
+    this.encoders = const [JsonTaskPayloadEncoder(), _Base64ContractEncoder()],
   });
 
   /// Time-to-live used when asserting task status expiration.
@@ -27,7 +27,7 @@ class ResultBackendContractSettings {
   final Duration settleDelay;
 
   /// List of encoders used when executing the contract.
-  final List<TaskResultEncoder> encoders;
+  final List<TaskPayloadEncoder> encoders;
 }
 
 class ResultBackendContractFactory {
@@ -49,7 +49,7 @@ void runResultBackendContractTests({
       const ResultBackendContractSettings(),
 }) {
   final encoders = settings.encoders.isEmpty
-      ? const [JsonTaskResultEncoder()]
+      ? const [JsonTaskPayloadEncoder()]
       : settings.encoders;
 
   for (final encoder in encoders) {
@@ -59,7 +59,11 @@ void runResultBackendContractTests({
 
       setUp(() async {
         final instance = await factory.create();
-        backend = _ensureEncoder(instance, encoder);
+        final registry = TaskPayloadEncoderRegistry(
+          defaultResultEncoder: encoder,
+          defaultArgsEncoder: const JsonTaskPayloadEncoder(),
+        );
+        backend = withTaskPayloadEncoder(instance, registry);
       });
 
       tearDown(() async {
@@ -85,13 +89,16 @@ void runResultBackendContractTests({
           meta: const {'code': 42},
         );
 
+        final statusMeta = _metaWithEncoder(encoder, const {
+          'origin': 'contract',
+        });
         await currentBackend.set(
           taskId,
           TaskState.succeeded,
           payload: const {'value': 'done'},
           error: error,
           attempt: 3,
-          meta: const {'origin': 'contract'},
+          meta: statusMeta,
         );
 
         await Future<void>.delayed(settings.settleDelay);
@@ -135,7 +142,7 @@ void runResultBackendContractTests({
           state: TaskState.succeeded,
           payload: const {'value': 1},
           attempt: 1,
-          meta: const {'meta': true},
+          meta: _metaWithEncoder(encoder, const {'meta': true}),
         );
 
         final afterFirst = await currentBackend.addGroupResult(groupId, first);
@@ -148,7 +155,7 @@ void runResultBackendContractTests({
           state: TaskState.failed,
           payload: const {'value': 2},
           attempt: 2,
-          meta: const {'meta': true},
+          meta: _metaWithEncoder(encoder, const {'meta': true}),
         );
 
         final afterSecond = await currentBackend.addGroupResult(
@@ -232,27 +239,104 @@ void runResultBackendContractTests({
             TaskState.succeeded,
             payload: bytes,
             attempt: 0,
-            meta: const {},
+            meta: _metaWithEncoder(encoder, const {}),
           );
           final status = await currentBackend.get('binary-task');
           expect(status?.payload, bytes);
         });
       }
+
+      test('encoder metadata survives status and group storage', () async {
+        final currentBackend = backend!;
+        const taskId = 'encoder-meta-task';
+        final meta = _metaWithEncoder(encoder, const {'origin': 'meta-test'});
+        await currentBackend.set(
+          taskId,
+          TaskState.succeeded,
+          payload: {'value': 'ok'},
+          attempt: 0,
+          meta: meta,
+        );
+        final stored = await currentBackend.get(taskId);
+        expect(stored, isNotNull);
+        expect(stored!.meta[stemResultEncoderMetaKey], encoder.id);
+        expect(stored.meta['origin'], 'meta-test');
+
+        const groupId = 'encoder-meta-group';
+        await currentBackend.initGroup(
+          GroupDescriptor(id: groupId, expected: 1),
+        );
+        final child = TaskStatus(
+          id: 'child-meta',
+          state: TaskState.succeeded,
+          payload: 'done',
+          attempt: 0,
+          meta: meta,
+        );
+        final groupStatus = await currentBackend.addGroupResult(groupId, child);
+        expect(groupStatus, isNotNull);
+        final resultMeta = groupStatus!.results['child-meta']?.meta;
+        expect(resultMeta?[stemResultEncoderMetaKey], encoder.id);
+        expect(resultMeta?['origin'], 'meta-test');
+      });
+
+      test('group results decode typed payloads via encoders', () async {
+        final currentBackend = backend!;
+        const groupId = 'typed-encoder-group';
+        await currentBackend.initGroup(
+          GroupDescriptor(id: groupId, expected: 2),
+        );
+
+        Object? payloadFor(int value) {
+          if (encoder is _Base64ContractEncoder) {
+            return Uint8List.fromList([value]);
+          }
+          return {'value': value};
+        }
+
+        int decodeTyped(Object? payload) {
+          if (payload is Uint8List && payload.isNotEmpty) {
+            return payload.first;
+          }
+          if (payload is Map && payload['value'] is num) {
+            return (payload['value'] as num).toInt();
+          }
+          throw StateError('Unexpected payload: $payload');
+        }
+
+        Future<GroupStatus?> addChild(String id, int value) {
+          final status = TaskStatus(
+            id: id,
+            state: TaskState.succeeded,
+            payload: payloadFor(value),
+            attempt: 0,
+            meta: _metaWithEncoder(encoder, const {}),
+          );
+          return currentBackend.addGroupResult(groupId, status);
+        }
+
+        final afterFirst = await addChild('child-a', 7);
+        expect(afterFirst, isNotNull);
+        expect(afterFirst!.isComplete, isFalse);
+
+        final completed = await addChild('child-b', 42);
+        expect(completed, isNotNull);
+        expect(completed!.isComplete, isTrue);
+
+        final fetched = await currentBackend.getGroup(groupId);
+        expect(fetched, isNotNull);
+        final values =
+            fetched!.results.values
+                .map((status) => decodeTyped(status.payload))
+                .toList()
+              ..sort();
+        expect(values, [7, 42]);
+        for (final status in fetched.results.values) {
+          expect(status.meta[stemResultEncoderMetaKey], encoder.id);
+        }
+      });
     });
   }
-}
-
-ResultBackend _ensureEncoder(ResultBackend backend, TaskResultEncoder encoder) {
-  if (backend is EncodingResultBackend) {
-    if (backend.encoder.runtimeType == encoder.runtimeType) {
-      return backend;
-    }
-    return EncodingResultBackend(backend.inner, encoder);
-  }
-  if (encoder is JsonTaskResultEncoder) {
-    return backend;
-  }
-  return withTaskResultEncoder(backend, encoder);
 }
 
 ResultBackend _unwrapBackend(ResultBackend backend) {
@@ -263,7 +347,14 @@ ResultBackend _unwrapBackend(ResultBackend backend) {
   return current;
 }
 
-class _Base64ContractEncoder extends TaskResultEncoder {
+Map<String, Object?> _metaWithEncoder(
+  TaskPayloadEncoder encoder,
+  Map<String, Object?> meta,
+) {
+  return {...meta, stemResultEncoderMetaKey: encoder.id};
+}
+
+class _Base64ContractEncoder extends TaskPayloadEncoder {
   const _Base64ContractEncoder();
 
   static const _key = '__b64payload';

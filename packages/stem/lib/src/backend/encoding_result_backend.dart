@@ -1,28 +1,26 @@
 import 'dart:async';
 
 import '../core/contracts.dart';
-import '../core/task_result_encoder.dart';
+import '../core/encoder_keys.dart';
+import '../core/task_payload_encoder.dart';
 import '../observability/heartbeat.dart';
 
-ResultBackend withTaskResultEncoder(
+ResultBackend withTaskPayloadEncoder(
   ResultBackend backend,
-  TaskResultEncoder encoder,
+  TaskPayloadEncoderRegistry registry,
 ) {
-  if (backend is EncodingResultBackend) {
-    // Avoid wrapping multiple times; replace encoder if different.
-    if (backend.encoder.runtimeType == encoder.runtimeType) {
-      return backend;
-    }
+  if (backend is EncodingResultBackend && backend.registry == registry) {
+    return backend;
   }
-  return EncodingResultBackend(backend, encoder);
+  return EncodingResultBackend(backend, registry);
 }
 
-/// Result backend decorator that applies [TaskResultEncoder] semantics.
+/// Result backend decorator that applies [TaskPayloadEncoder] semantics.
 class EncodingResultBackend implements ResultBackend {
-  EncodingResultBackend(this._inner, this.encoder);
+  EncodingResultBackend(this._inner, this.registry);
 
   final ResultBackend _inner;
-  final TaskResultEncoder encoder;
+  final TaskPayloadEncoderRegistry registry;
 
   ResultBackend get inner => _inner;
 
@@ -36,6 +34,8 @@ class EncodingResultBackend implements ResultBackend {
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) {
+    final encoderId = meta[stemResultEncoderMetaKey] as String?;
+    final encoder = registry.resolveResult(encoderId);
     final encodedPayload = encoder.encode(payload);
     return _inner.set(
       taskId,
@@ -105,6 +105,8 @@ class EncodingResultBackend implements ResultBackend {
   );
 
   TaskStatus _encodeStatus(TaskStatus status) {
+    final encoderId = status.meta[stemResultEncoderMetaKey] as String?;
+    final encoder = registry.resolveResult(encoderId);
     final encodedPayload = encoder.encode(status.payload);
     if (identical(encodedPayload, status.payload)) {
       return status;
@@ -121,6 +123,8 @@ class EncodingResultBackend implements ResultBackend {
   }
 
   TaskStatus _decodeStatus(TaskStatus status) {
+    final encoderId = status.meta[stemResultEncoderMetaKey] as String?;
+    final encoder = registry.resolveResult(encoderId);
     final decodedPayload = encoder.decode(status.payload);
     if (identical(decodedPayload, status.payload)) {
       return status;

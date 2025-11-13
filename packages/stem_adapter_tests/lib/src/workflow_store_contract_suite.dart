@@ -212,6 +212,41 @@ void runWorkflowStoreContractTests({
       expect(state?.waitTopic, isNull);
     });
 
+    test('runsWaitingOn returns all workflows suspended on a topic', () async {
+      final current = store!;
+      final runIds = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final runId = await current.createRun(
+          workflow: 'contract.workflow.$i',
+          params: const {},
+        );
+        await current.suspendOnTopic(
+          runId,
+          'group-step',
+          'group.topic',
+          data: {'index': i},
+        );
+        runIds.add(runId);
+      }
+
+      final waiting = await current.runsWaitingOn('group.topic');
+      expect(waiting.toSet(), runIds.toSet());
+
+      for (final runId in runIds) {
+        await current.markResumed(runId, data: {'payload': 'resume-$runId'});
+      }
+
+      final after = await current.runsWaitingOn('group.topic');
+      expect(after, isEmpty);
+
+      for (final runId in runIds) {
+        final state = await current.get(runId);
+        expect(state?.status, WorkflowStatus.running);
+        expect(state?.suspensionData?['payload'], 'resume-$runId');
+        expect(state?.waitTopic, isNull);
+      }
+    });
+
     test('registerWatcher resolves payload exactly once', () async {
       final current = store!;
       final runId = await current.createRun(

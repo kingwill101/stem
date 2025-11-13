@@ -1,6 +1,6 @@
 import '../core/contracts.dart';
 import '../core/stem.dart';
-import '../core/task_result_encoder.dart';
+import '../core/task_payload_encoder.dart';
 import '../core/unique_task_coordinator.dart';
 import '../security/signing.dart';
 import '../worker/worker.dart';
@@ -72,7 +72,10 @@ class StemApp {
     Iterable<Middleware> middleware = const [],
     PayloadSigner? signer,
     RoutingRegistry? routing,
-    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
     final taskRegistry = registry ?? SimpleTaskRegistry();
     for (final handler in tasks) {
@@ -84,9 +87,16 @@ class StemApp {
     final brokerInstance = await brokerFactory.create();
     final backendInstance = await backendFactory.create();
 
-    final encodedBackend = withTaskResultEncoder(
+    final payloadEncoders = ensureTaskPayloadEncoderRegistry(
+      encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+
+    final encodedBackend = withTaskPayloadEncoder(
       backendInstance,
-      resultEncoder,
+      payloadEncoders,
     );
 
     final stem = Stem(
@@ -98,6 +108,7 @@ class StemApp {
       middleware: middleware.toList(growable: false),
       routing: routing ?? RoutingRegistry(RoutingConfig.legacy()),
       signer: signer,
+      encoderRegistry: payloadEncoders,
     );
 
     final revoke = revokeStore ?? InMemoryRevokeStore();
@@ -112,6 +123,7 @@ class StemApp {
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
       prefetch: workerConfig.prefetch,
+      encoderRegistry: payloadEncoders,
     );
 
     final disposers = <Future<void> Function()>[
@@ -140,14 +152,20 @@ class StemApp {
   static Future<StemApp> inMemory({
     Iterable<TaskHandler> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
-    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return StemApp.create(
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
       workerConfig: workerConfig,
+      encoderRegistry: encoderRegistry,
       resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
     );
   }
 }

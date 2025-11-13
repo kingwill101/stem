@@ -7,18 +7,21 @@ void main() {
   group('EncodingResultBackend', () {
     test('encodes and decodes task payloads', () async {
       final inner = InMemoryResultBackend();
-      final backend = withTaskResultEncoder(
-        inner,
-        const _PrefixTaskResultEncoder(),
+      const encoder = _PrefixTaskPayloadEncoder();
+      final registry = TaskPayloadEncoderRegistry(
+        defaultResultEncoder: encoder,
+        defaultArgsEncoder: const JsonTaskPayloadEncoder(),
       );
+      final backend = withTaskPayloadEncoder(inner, registry);
 
       const taskId = 'task-encode';
+      final meta = {stemResultEncoderMetaKey: encoder.id};
       await backend.set(
         taskId,
         TaskState.succeeded,
         payload: 'hello',
         attempt: 0,
-        meta: const {},
+        meta: meta,
       );
 
       final status = await backend.get(taskId);
@@ -28,22 +31,25 @@ void main() {
 
     test('decodes watch streams and group results', () async {
       final inner = InMemoryResultBackend();
-      final backend = withTaskResultEncoder(
-        inner,
-        const _PrefixTaskResultEncoder(),
+      const encoder = _PrefixTaskPayloadEncoder();
+      final registry = TaskPayloadEncoderRegistry(
+        defaultResultEncoder: encoder,
+        defaultArgsEncoder: const JsonTaskPayloadEncoder(),
       );
+      final backend = withTaskPayloadEncoder(inner, registry);
 
       const taskId = 'watched-task';
 
       final events = <TaskStatus>[];
       final sub = backend.watch(taskId).listen(events.add);
 
+      final meta = {stemResultEncoderMetaKey: encoder.id};
       await backend.set(
         taskId,
         TaskState.succeeded,
         payload: 'world',
         attempt: 0,
-        meta: const {},
+        meta: meta,
       );
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -57,6 +63,7 @@ void main() {
         state: TaskState.succeeded,
         payload: 'group-value',
         attempt: 0,
+        meta: meta,
       );
       final updated = await backend.addGroupResult('grp', groupStatus);
       expect(updated, isNotNull);
@@ -68,8 +75,8 @@ void main() {
   });
 }
 
-class _PrefixTaskResultEncoder extends TaskResultEncoder {
-  const _PrefixTaskResultEncoder();
+class _PrefixTaskPayloadEncoder extends TaskPayloadEncoder {
+  const _PrefixTaskPayloadEncoder();
 
   @override
   Object? encode(Object? value) {

@@ -4,9 +4,10 @@ import 'dart:math';
 import '../backend/encoding_result_backend.dart';
 import '../core/chord_metadata.dart';
 import '../core/contracts.dart';
+import '../core/encoder_keys.dart';
 import '../core/envelope.dart';
 import '../core/task_result.dart';
-import '../core/task_result_encoder.dart';
+import '../core/task_payload_encoder.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -143,16 +144,28 @@ class Canvas {
     required this.broker,
     required ResultBackend backend,
     required this.registry,
-    TaskResultEncoder resultEncoder = const JsonTaskResultEncoder(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
     Random? random,
-  }) : backend = withTaskResultEncoder(backend, resultEncoder),
-       _random = random ?? Random();
+  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+         encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       ),
+       _random = random ?? Random() {
+    this.backend = withTaskPayloadEncoder(backend, payloadEncoders);
+  }
 
   /// The message broker used to publish task envelopes.
   final Broker broker;
 
+  final TaskPayloadEncoderRegistry payloadEncoders;
+
   /// The result backend used to record task states and group progress.
-  final ResultBackend backend;
+  late final ResultBackend backend;
 
   /// The task registry for resolving task metadata and handlers.
   final TaskRegistry registry;
@@ -165,13 +178,17 @@ class Canvas {
   /// The task is published to its configured queue and recorded as
   /// [TaskState.queued] in [backend]. Returns the task id.
   Future<String> send(TaskSignature signature) async {
-    final envelope = signature();
+    final (envelope, resultEncoder) = _prepareEnvelope(signature());
     await broker.publish(envelope);
+    final queuedMeta = _withResultEncoderMeta({
+      ...envelope.meta,
+      'queue': envelope.queue,
+    }, resultEncoder);
     await backend.set(
       envelope.id,
       TaskState.queued,
       attempt: envelope.attempt,
-      meta: {'queue': envelope.queue},
+      meta: queuedMeta,
     );
     return envelope.id;
   }
@@ -195,17 +212,23 @@ class Canvas {
     final taskIds = <String>[];
     for (final signature in signatures) {
       final raw = signature();
-      final envelope = raw.copyWith(
+      final grouped = raw.copyWith(
         headers: {...raw.headers, 'stem-group-id': id},
         meta: {...raw.meta, 'groupId': id},
       );
+      final (envelope, resultEncoder) = _prepareEnvelope(grouped);
       taskIds.add(envelope.id);
       await broker.publish(envelope);
+      final queuedMeta = _withResultEncoderMeta({
+        ...envelope.meta,
+        'queue': envelope.queue,
+        'groupId': id,
+      }, resultEncoder);
       await backend.set(
         envelope.id,
         TaskState.queued,
         attempt: envelope.attempt,
-        meta: {...envelope.meta, 'queue': envelope.queue, 'groupId': id},
+        meta: queuedMeta,
       );
     }
 
@@ -311,10 +334,11 @@ class Canvas {
         'stem-chain-index': '$index',
       };
       final envelope = raw.copyWith(headers: headers, meta: meta);
+      final (preparedEnvelope, resultEncoder) = _prepareEnvelope(envelope);
 
       late StreamSubscription<TaskStatus> sub;
       sub = backend
-          .watch(envelope.id)
+          .watch(preparedEnvelope.id)
           .listen(
             (status) async {
               if (status.state == TaskState.succeeded) {
@@ -327,7 +351,7 @@ class Canvas {
                   completer.complete(
                     TaskChainResult<T>(
                       chainId: chainId,
-                      finalTaskId: envelope.id,
+                      finalTaskId: preparedEnvelope.id,
                       finalStatus: status,
                       value: decoded,
                     ),
@@ -350,12 +374,16 @@ class Canvas {
             },
           );
 
-      await broker.publish(envelope);
+      await broker.publish(preparedEnvelope);
+      final queuedMeta = _withResultEncoderMeta(
+        preparedEnvelope.meta,
+        resultEncoder,
+      );
       await backend.set(
-        envelope.id,
+        preparedEnvelope.id,
         TaskState.queued,
-        attempt: envelope.attempt,
-        meta: meta,
+        attempt: preparedEnvelope.attempt,
+        meta: queuedMeta,
       );
     }
 
@@ -437,7 +465,9 @@ class Canvas {
       throw ArgumentError('Chord body must have at least one task');
     }
     final chordId = _generateId('chord');
-    final callbackEnvelope = callback();
+    var callbackEnvelope = callback();
+    final (encodedCallback, _) = _prepareEnvelope(callbackEnvelope);
+    callbackEnvelope = encodedCallback;
     await backend.initGroup(
       GroupDescriptor(
         id: chordId,
@@ -501,6 +531,90 @@ class Canvas {
       }
       return values;
     }
+  }
+
+  (Envelope, TaskPayloadEncoder) _prepareEnvelope(Envelope envelope) {
+    final handler = registry.resolve(envelope.name);
+    final argsEncoder = _resolveArgsEncoder(handler);
+    final resultEncoder = _resolveResultEncoder(handler);
+    final encodedArgs = _encodeArgs(envelope.args, argsEncoder);
+    final encodedHeaders = _withArgsEncoderHeader(
+      envelope.headers,
+      argsEncoder,
+    );
+    final encodedMeta = _withArgsEncoderMeta(envelope.meta, argsEncoder);
+    final encodedEnvelope = envelope.copyWith(
+      args: encodedArgs,
+      headers: encodedHeaders,
+      meta: encodedMeta,
+    );
+    return (encodedEnvelope, resultEncoder);
+  }
+
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler? handler) {
+    final encoder = handler?.metadata.argsEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultArgsEncoder;
+  }
+
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler? handler) {
+    final encoder = handler?.metadata.resultEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultResultEncoder;
+  }
+
+  Map<String, Object?> _encodeArgs(
+    Map<String, Object?> args,
+    TaskPayloadEncoder encoder,
+  ) {
+    final encoded = encoder.encode(args);
+    return _castArgsMap(encoded, encoder);
+  }
+
+  Map<String, Object?> _castArgsMap(
+    Object? encoded,
+    TaskPayloadEncoder encoder,
+  ) {
+    if (encoded == null) return const {};
+    if (encoded is Map<String, Object?>) {
+      return Map<String, Object?>.from(encoded);
+    }
+    if (encoded is Map) {
+      final result = <String, Object?>{};
+      encoded.forEach((key, value) {
+        if (key is! String) {
+          throw StateError(
+            'Task args encoder ${encoder.id} must use string keys, found $key',
+          );
+        }
+        result[key] = value;
+      });
+      return result;
+    }
+    throw StateError(
+      'Task args encoder ${encoder.id} must return Map<String, Object?> values, got ${encoded.runtimeType}.',
+    );
+  }
+
+  Map<String, Object?> _withArgsEncoderMeta(
+    Map<String, Object?> meta,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...meta, stemArgsEncoderMetaKey: encoder.id};
+  }
+
+  Map<String, String> _withArgsEncoderHeader(
+    Map<String, String> headers,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...headers, stemArgsEncoderHeader: encoder.id};
+  }
+
+  Map<String, Object?> _withResultEncoderMeta(
+    Map<String, Object?> meta,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...meta, stemResultEncoderMetaKey: encoder.id};
   }
 }
 

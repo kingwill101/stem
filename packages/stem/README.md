@@ -299,17 +299,17 @@ final chordResult = await canvas.chord<double>(
 print('Body results: ${chordResult.values}');
 ```
 
-### Task result encoders
+### Task payload encoders
 
-By default Stem stores handler payloads exactly as returned (JSON-friendly
-structures). Configure a `TaskResultEncoder` when bootstrapping `StemApp`,
+By default Stem stores handler arguments/results exactly as provided (JSON-friendly
+structures). Configure default `TaskPayloadEncoder`s when bootstrapping `StemApp`,
 `StemWorkflowApp`, or `Canvas` to plug in custom serialization (encryption,
-compression, base64 wrappers, etc.):
+compression, base64 wrappers, etc.) for both task arguments and persisted results:
 
 ```dart
 import 'dart:convert';
 
-class Base64ResultEncoder extends TaskResultEncoder {
+class Base64ResultEncoder extends TaskPayloadEncoder {
   const Base64ResultEncoder();
 
   @override
@@ -332,6 +332,8 @@ class Base64ResultEncoder extends TaskResultEncoder {
 final app = await StemApp.inMemory(
   tasks: [...],
   resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
+  additionalEncoders: const [MyOtherEncoder()],
 );
 
 final canvas = Canvas(
@@ -339,7 +341,32 @@ final canvas = Canvas(
   backend: backend,
   registry: registry,
   resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
 );
+```
+
+Every envelope published by Stem carries the argument encoder id in headers/meta
+(`stem-args-encoder` / `__stemArgsEncoder`) and every status stored in a result
+backend carries the result encoder id (`__stemResultEncoder`). Workers use the same
+`TaskPayloadEncoderRegistry` to resolve IDs, ensuring payloads are decoded exactly
+once regardless of how many custom encoders you register.
+
+Per-task overrides live on `TaskMetadata`, so both handlers and the corresponding
+`TaskDefinition` share the same configuration:
+
+```dart
+class SecretTask extends TaskHandler<void> {
+  static const _encoder = Base64ResultEncoder();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata(
+        description: 'Encrypt args + results',
+        argsEncoder: _encoder,
+        resultEncoder: _encoder,
+      );
+
+  // ...
+}
 ```
 
 Encoders run exactly once per persistence/read cycle and fall back to the JSON
