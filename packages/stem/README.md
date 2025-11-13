@@ -154,8 +154,9 @@ final app = await StemWorkflowApp.inMemory(
 );
 
 final runId = await app.startWorkflow('demo.workflow');
-final state = await app.waitForCompletion(runId);
-print(state?.status); // WorkflowStatus.completed
+final result = await app.waitForCompletion<String>(runId);
+print(result?.value); // 'hello world'
+print(result?.state.status); // WorkflowStatus.completed
 
 await app.shutdown();
 ```
@@ -192,7 +193,7 @@ final app = await StemWorkflowApp.inMemory(
           return status.value;
         }, autoVersion: true);
 
-        final receipt = await script.step('notify', (step) async {
+        final receipt = await script.step<String>('notify', (step) async {
           await sendReceiptEmail(checkout);
           return 'emailed';
         });
@@ -212,6 +213,26 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
 - `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
   you can branch on resume paths.
+
+### Typed workflow completion
+
+All workflow definitions (flows and scripts) accept an optional type argument
+representing the value they produce. `StemWorkflowApp.waitForCompletion<T>`
+exposes the decoded value along with the raw `RunState`, letting you work with
+domain models without manual casts:
+
+```dart
+final runId = await app.startWorkflow('orders.workflow');
+final result = await app.waitForCompletion<OrderReceipt>(
+  runId,
+  decode: (payload) => OrderReceipt.fromJson(payload! as Map<String, Object?>),
+);
+if (result?.isCompleted == true) {
+  print(result!.value?.total);
+} else if (result?.timedOut == true) {
+  inspectSuspension(result?.state);
+}
+```
 
 ### Durable workflow semantics
 

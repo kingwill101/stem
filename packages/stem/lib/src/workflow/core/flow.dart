@@ -4,12 +4,14 @@ import 'workflow_definition.dart';
 /// [FlowBuilder] DSL.
 ///
 /// A `Flow` is typically registered with `StemWorkflowApp` to make it available
-/// for scheduling via `startWorkflow`.
-class Flow {
+/// for scheduling via `startWorkflow`. Specify [T] to document the result type
+/// produced by the workflow; it defaults to [Object] for backwards
+/// compatibility.
+class Flow<T extends Object?> {
   Flow({
     required String name,
     required void Function(FlowBuilder builder) build,
-  }) : definition = WorkflowDefinition.flow(name: name, build: build);
+  }) : definition = WorkflowDefinition<T>.flow(name: name, build: build);
 
-  final WorkflowDefinition definition;
+  final WorkflowDefinition<T> definition;
 }

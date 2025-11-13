@@ -3,6 +3,8 @@ import '../workflow/core/workflow_definition.dart';
 import '../workflow/core/workflow_script.dart';
 import '../workflow/core/workflow_cancellation_policy.dart';
 import '../workflow/core/run_state.dart';
+import '../workflow/core/workflow_result.dart';
+import '../workflow/core/workflow_status.dart';
 import '../workflow/core/workflow_store.dart';
 import '../workflow/core/event_bus.dart';
 import '../workflow/runtime/workflow_runtime.dart';
@@ -84,24 +86,58 @@ class StemWorkflowApp {
 
   /// Polls the workflow store until the run reaches a terminal state.
   ///
-  /// If [timeout] elapses, the most recent non-terminal state is returned so
-  /// callers can inspect the suspension reason.
-  Future<RunState?> waitForCompletion(
+  /// When the workflow completes successfully the persisted result is surfaced
+  /// via [WorkflowResult.value], optionally decoding through [decode]. Failed,
+  /// cancelled, or timed-out waits return the original [RunState] metadata with
+  /// `value == null` so callers can inspect errors or suspension details.
+  Future<WorkflowResult<T>?> waitForCompletion<T extends Object?>(
     String runId, {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
+    T Function(Object? payload)? decode,
   }) async {
     final startedAt = DateTime.now();
     while (true) {
       final state = await store.get(runId);
-      if (state == null || state.isTerminal) {
-        return state;
+      if (state == null) {
+        return null;
+      }
+      if (state.isTerminal) {
+        return _buildResult(state, decode, timedOut: false);
       }
       if (timeout != null && DateTime.now().difference(startedAt) >= timeout) {
-        return state;
+        return _buildResult(state, decode, timedOut: true);
       }
       await Future<void>.delayed(pollInterval);
     }
+  }
+
+  WorkflowResult<T> _buildResult<T extends Object?>(
+    RunState state,
+    T Function(Object? payload)? decode, {
+    required bool timedOut,
+  }) {
+    final value = state.status == WorkflowStatus.completed
+        ? _decodeResult(state.result, decode)
+        : null;
+    return WorkflowResult<T>(
+      runId: state.id,
+      status: state.status,
+      state: state,
+      value: value,
+      rawResult: state.result,
+      timedOut: timedOut && !state.isTerminal,
+    );
+  }
+
+  T? _decodeResult<T extends Object?>(
+    Object? payload,
+    T Function(Object? payload)? decode,
+  ) {
+    if (decode != null) {
+      return decode(payload);
+    }
+    return payload as T?;
   }
 
   /// Stops the runtime, worker, and disposes associated resources.
