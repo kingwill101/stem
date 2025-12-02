@@ -76,7 +76,7 @@ Future<void> main(List<String> args) async {
         );
       }
 
-      final groupId = await canvas.group([
+      final dispatch = await canvas.group<Object?>([
         for (final name in names)
           task(
             'greeting.send',
@@ -84,6 +84,8 @@ Future<void> main(List<String> args) async {
             options: const TaskOptions(queue: 'greetings'),
           ),
       ]);
+      await dispatch.dispose();
+      final groupId = dispatch.groupId;
 
       return Response.ok(
         jsonEncode({'groupId': groupId, 'count': names.length}),

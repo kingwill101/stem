@@ -56,6 +56,43 @@ final stem = Stem(
 </TabItem>
 </Tabs>
 
+### Payload encoders
+
+Result backends now respect pluggable `TaskPayloadEncoder`s. Producers encode
+arguments before publishing, workers decode them once before invoking handlers,
+and handler return values are encoded before they hit the backend. Every stored
+status contains the encoder id (`__stemResultEncoder`), letting other processes
+decode payloads without guessing formats.
+
+Configure defaults when bootstrapping `Stem`, `StemApp`, `Canvas`, or workflow
+apps:
+
+```dart title="lib/bootstrap_encoders.dart"
+import 'dart:convert';
+import 'package:stem/stem.dart';
+
+class Base64PayloadEncoder extends TaskPayloadEncoder {
+  const Base64PayloadEncoder();
+  @override
+  Object? encode(Object? value) =>
+      value is String ? base64Encode(utf8.encode(value)) : value;
+  @override
+  Object? decode(Object? stored) =>
+      stored is String ? utf8.decode(base64Decode(stored)) : stored;
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  argsEncoder: const JsonTaskPayloadEncoder(),
+  resultEncoder: const Base64PayloadEncoder(),
+  additionalEncoders: const [GzipPayloadEncoder()],
+);
+```
+
+Handlers needing bespoke treatment can override `TaskMetadata.argsEncoder` and
+`TaskMetadata.resultEncoder`; the worker ensures only that task uses the custom
+encoder while the rest fall back to the global defaults.
+
 ## Schedule & lock stores
 
 ```dart title="lib/beat_bootstrap.dart"

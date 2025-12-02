@@ -29,10 +29,10 @@ Future<void> main() async {
 
   final canvas = Canvas(broker: broker, backend: backend, registry: registry);
   const groupHandle = 'squares-demo';
-  await canvas.group([
-    task('square', args: <String, Object?>{'value': 2}),
-    task('square', args: <String, Object?>{'value': 3}),
-    task('square', args: <String, Object?>{'value': 4}),
+  final dispatch = await canvas.group<int>([
+    task<int>('square', args: <String, Object?>{'value': 2}),
+    task<int>('square', args: <String, Object?>{'value': 3}),
+    task<int>('square', args: <String, Object?>{'value': 4}),
   ], groupId: groupHandle);
 
   await _waitFor(() async {
@@ -40,9 +40,12 @@ Future<void> main() async {
     return status?.results.length == 3;
   });
 
-  final groupStatus = await backend.getGroup(groupHandle);
-  final squares = groupStatus?.results.values.map((s) => s.payload).toList();
+  final squares = await dispatch.results
+      .map((result) => result.value)
+      .whereType<int>()
+      .toList();
   print('Group results: $squares');
+  await dispatch.dispose();
 
   await worker.shutdown();
   broker.dispose();

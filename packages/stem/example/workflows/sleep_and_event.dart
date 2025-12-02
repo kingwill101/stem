@@ -48,8 +48,8 @@ Future<void> main() async {
 
   await app.runtime.emit('demo.event', {'message': 'event received'});
 
-  final state = await app.waitForCompletion(runId);
-  print('Workflow $runId resumed and completed with: ${state?.result}');
+  final result = await app.waitForCompletion<String>(runId);
+  print('Workflow $runId resumed and completed with: ${result?.value}');
 
   await app.shutdown();
 }

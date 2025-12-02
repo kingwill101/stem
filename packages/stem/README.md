@@ -154,8 +154,9 @@ final app = await StemWorkflowApp.inMemory(
 );
 
 final runId = await app.startWorkflow('demo.workflow');
-final state = await app.waitForCompletion(runId);
-print(state?.status); // WorkflowStatus.completed
+final result = await app.waitForCompletion<String>(runId);
+print(result?.value); // 'hello world'
+print(result?.state.status); // WorkflowStatus.completed
 
 await app.shutdown();
 ```
@@ -192,7 +193,7 @@ final app = await StemWorkflowApp.inMemory(
           return status.value;
         }, autoVersion: true);
 
-        final receipt = await script.step('notify', (step) async {
+        final receipt = await script.step<String>('notify', (step) async {
           await sendReceiptEmail(checkout);
           return 'emailed';
         });
@@ -212,6 +213,164 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
 - `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
   you can branch on resume paths.
+
+### Typed workflow completion
+
+All workflow definitions (flows and scripts) accept an optional type argument
+representing the value they produce. `StemWorkflowApp.waitForCompletion<T>`
+exposes the decoded value along with the raw `RunState`, letting you work with
+domain models without manual casts:
+
+```dart
+final runId = await app.startWorkflow('orders.workflow');
+final result = await app.waitForCompletion<OrderReceipt>(
+  runId,
+  decode: (payload) => OrderReceipt.fromJson(payload! as Map<String, Object?>),
+);
+if (result?.isCompleted == true) {
+  print(result!.value?.total);
+} else if (result?.timedOut == true) {
+  inspectSuspension(result?.state);
+}
+```
+
+### Typed task completion
+
+Producers can now wait for individual task results using `Stem.waitForTask<T>`
+with optional decoders. The helper returns a `TaskResult<T>` containing the
+underlying `TaskStatus`, decoded payload, and a timeout flag:
+
+```dart
+final taskId = await stem.enqueueCall(
+  ChargeCustomer.definition.call(ChargeArgs(orderId: '123')),
+);
+
+final charge = await stem.waitForTask<ChargeReceipt>(
+  taskId,
+  decode: (payload) => ChargeReceipt.fromJson(
+    payload! as Map<String, Object?>,
+  ),
+);
+if (charge?.isSucceeded == true) {
+  print('Captured ${charge!.value!.total}');
+} else if (charge?.isFailed == true) {
+  log.severe('Charge failed: ${charge!.status.error}');
+}
+```
+
+### Typed canvas helpers
+
+`TaskSignature<T>` (and the `task<T>()` helper) lets you declare the result type
+for canvas primitives. The existing `Canvas.group`, `Canvas.chain`, and
+`Canvas.chord` APIs now accept generics so typed values flow through sequential
+steps, groups, and chords without manual casts:
+
+```dart
+final dispatch = await canvas.group<OrderSummary>([
+  task<OrderSummary>(
+    'orders.fetch',
+    args: {'storeId': 42},
+    decode: (payload) => OrderSummary.fromJson(
+      payload! as Map<String, Object?>,
+    ),
+  ),
+  task<OrderSummary>('orders.refresh'),
+]);
+
+dispatch.results.listen((result) {
+  if (result.isSucceeded) {
+    dashboard.update(result.value!);
+  }
+});
+
+final chainResult = await canvas.chain<int>([
+  task<int>('metrics.seed', args: {'value': 1}),
+  task<int>('metrics.bump', args: {'add': 3}),
+]);
+print(chainResult.value); // 4
+
+final chordResult = await canvas.chord<double>(
+  body: [
+    task<double>('image.resize', args: {'size': 256}),
+    task<double>('image.resize', args: {'size': 512}),
+  ],
+  callback: task('image.aggregate'),
+);
+print('Body results: ${chordResult.values}');
+```
+
+### Task payload encoders
+
+By default Stem stores handler arguments/results exactly as provided (JSON-friendly
+structures). Configure default `TaskPayloadEncoder`s when bootstrapping `StemApp`,
+`StemWorkflowApp`, or `Canvas` to plug in custom serialization (encryption,
+compression, base64 wrappers, etc.) for both task arguments and persisted results:
+
+```dart
+import 'dart:convert';
+
+class Base64ResultEncoder extends TaskPayloadEncoder {
+  const Base64ResultEncoder();
+
+  @override
+  Object? encode(Object? value) {
+    if (value is String) {
+      return base64Encode(utf8.encode(value));
+    }
+    return value;
+  }
+
+  @override
+  Object? decode(Object? stored) {
+    if (stored is String) {
+      return utf8.decode(base64Decode(stored));
+    }
+    return stored;
+  }
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
+  additionalEncoders: const [MyOtherEncoder()],
+);
+
+final canvas = Canvas(
+  broker: broker,
+  backend: backend,
+  registry: registry,
+  resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
+);
+```
+
+Every envelope published by Stem carries the argument encoder id in headers/meta
+(`stem-args-encoder` / `__stemArgsEncoder`) and every status stored in a result
+backend carries the result encoder id (`__stemResultEncoder`). Workers use the same
+`TaskPayloadEncoderRegistry` to resolve IDs, ensuring payloads are decoded exactly
+once regardless of how many custom encoders you register.
+
+Per-task overrides live on `TaskMetadata`, so both handlers and the corresponding
+`TaskDefinition` share the same configuration:
+
+```dart
+class SecretTask extends TaskHandler<void> {
+  static const _encoder = Base64ResultEncoder();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata(
+        description: 'Encrypt args + results',
+        argsEncoder: _encoder,
+        resultEncoder: _encoder,
+      );
+
+  // ...
+}
+```
+
+Encoders run exactly once per persistence/read cycle and fall back to the JSON
+behavior when none is provided.
 
 ### Durable workflow semantics
 

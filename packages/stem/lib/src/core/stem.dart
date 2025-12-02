@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 
@@ -9,8 +11,11 @@ import '../routing/routing_registry.dart';
 import '../security/signing.dart';
 import '../signals/emitter.dart';
 import 'contracts.dart';
+import 'encoder_keys.dart';
 import 'envelope.dart';
 import 'retry.dart';
+import 'task_payload_encoder.dart';
+import 'task_result.dart';
 import 'unique_task_coordinator.dart';
 
 /// Facade used by producer applications to enqueue tasks.
@@ -24,7 +29,17 @@ class Stem {
     List<Middleware> middleware = const [],
     this.signer,
     RoutingRegistry? routing,
-  }) : routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+         encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       ),
+       routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
        retryStrategy =
            retryStrategy ??
            ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
@@ -38,6 +53,7 @@ class Stem {
   final List<Middleware> middleware;
   final PayloadSigner? signer;
   final RoutingRegistry routing;
+  final TaskPayloadEncoderRegistry payloadEncoders;
   static const StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'stem',
   );
@@ -75,6 +91,8 @@ class Stem {
       throw ArgumentError.value(name, 'name', 'Task is not registered');
     }
     final metadata = handler.metadata;
+    final argsEncoder = _resolveArgsEncoder(handler);
+    final resultEncoder = _resolveResultEncoder(handler);
 
     final spanAttributes = <String, Object>{
       'stem.task': name,
@@ -94,17 +112,23 @@ class Stem {
       () async {
         final traceHeaders = Map<String, String>.from(headers);
         tracer.injectTraceContext(traceHeaders);
+        final encodedHeaders = _withArgsEncoderHeader(
+          traceHeaders,
+          argsEncoder,
+        );
+        final encodedArgs = _encodeArgs(args, argsEncoder);
+        final encodedMeta = _withArgsEncoderMeta(meta, argsEncoder);
 
         Envelope envelope = Envelope(
           name: name,
-          args: args,
-          headers: traceHeaders,
+          args: encodedArgs,
+          headers: encodedHeaders,
           queue: targetName,
           notBefore: notBefore,
           priority: resolvedPriority,
           maxRetries: options.maxRetries,
           visibilityTimeout: options.visibilityTimeout,
-          meta: meta,
+          meta: encodedMeta,
         );
 
         if (options.unique) {
@@ -180,15 +204,16 @@ class Stem {
         await _runEnqueueMiddleware(envelope, () async {
           await broker.publish(envelope, routing: routingInfo);
           if (backend != null) {
+            final queuedMeta = _withResultEncoderMeta({
+              ...envelope.meta,
+              'queue': targetName,
+              'maxRetries': envelope.maxRetries,
+            }, resultEncoder);
             await backend!.set(
               envelope.id,
               TaskState.queued,
               attempt: envelope.attempt,
-              meta: {
-                ...envelope.meta,
-                'queue': targetName,
-                'maxRetries': envelope.maxRetries,
-              },
+              meta: queuedMeta,
             );
           }
         });
@@ -200,6 +225,80 @@ class Stem {
       spanKind: dotel.SpanKind.producer,
       attributes: spanAttributes,
     );
+  }
+
+  /// Waits for [taskId] to reach a terminal state and returns a typed view of
+  /// the final [TaskStatus]. Requires [backend] to be configured; otherwise a
+  /// [StateError] is thrown.
+  Future<TaskResult<T>?> waitForTask<T extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    T Function(Object? payload)? decode,
+  }) async {
+    final resultBackend = backend;
+    if (resultBackend == null) {
+      throw StateError(
+        'Stem.waitForTask requires a configured result backend.',
+      );
+    }
+    TaskStatus? lastStatus = await resultBackend.get(taskId);
+    if (lastStatus != null && lastStatus.state.isTerminal) {
+      return TaskResult<T>(
+        taskId: taskId,
+        status: lastStatus,
+        value: lastStatus.state == TaskState.succeeded
+            ? _decodeTaskPayload(lastStatus.payload, decode)
+            : null,
+        rawPayload: lastStatus.payload,
+      );
+    }
+
+    final completer = Completer<TaskResult<T>?>();
+    late final StreamSubscription<TaskStatus> subscription;
+    Timer? timer;
+
+    void complete(TaskStatus? status, {required bool timedOut}) {
+      if (completer.isCompleted) return;
+      timer?.cancel();
+      subscription.cancel();
+      if (status == null) {
+        completer.complete(null);
+        return;
+      }
+      completer.complete(
+        TaskResult<T>(
+          taskId: taskId,
+          status: status,
+          value: status.state == TaskState.succeeded
+              ? _decodeTaskPayload(status.payload, decode)
+              : null,
+          rawPayload: status.payload,
+          timedOut: timedOut && !status.state.isTerminal,
+        ),
+      );
+    }
+
+    subscription = resultBackend
+        .watch(taskId)
+        .listen(
+          (status) {
+            lastStatus = status;
+            if (status.state.isTerminal) {
+              complete(status, timedOut: false);
+            }
+          },
+          onError: (error, stack) {
+            if (!completer.isCompleted) {
+              completer.completeError(error, stack);
+            }
+          },
+        );
+
+    if (timeout != null) {
+      timer = Timer(timeout, () => complete(lastStatus, timedOut: true));
+    }
+
+    return completer.future;
   }
 
   Future<void> _runEnqueueMiddleware(
@@ -263,6 +362,83 @@ class Stem {
         }),
       );
     }
+  }
+
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler handler) {
+    final encoder = handler.metadata.argsEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultArgsEncoder;
+  }
+
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler handler) {
+    final encoder = handler.metadata.resultEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultResultEncoder;
+  }
+
+  Map<String, Object?> _encodeArgs(
+    Map<String, Object?> args,
+    TaskPayloadEncoder encoder,
+  ) {
+    final encoded = encoder.encode(args);
+    return _castArgsMap(encoded, encoder);
+  }
+
+  Map<String, Object?> _castArgsMap(
+    Object? encoded,
+    TaskPayloadEncoder encoder,
+  ) {
+    if (encoded == null) return const {};
+    if (encoded is Map<String, Object?>) {
+      return Map<String, Object?>.from(encoded);
+    }
+    if (encoded is Map) {
+      final result = <String, Object?>{};
+      encoded.forEach((key, value) {
+        if (key is! String) {
+          throw StateError(
+            'Task args encoder ${encoder.id} must use string keys, found $key',
+          );
+        }
+        result[key] = value;
+      });
+      return result;
+    }
+    throw StateError(
+      'Task args encoder ${encoder.id} must return Map<String, Object?> values, got ${encoded.runtimeType}.',
+    );
+  }
+
+  Map<String, Object?> _withArgsEncoderMeta(
+    Map<String, Object?> meta,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...meta, stemArgsEncoderMetaKey: encoder.id};
+  }
+
+  Map<String, String> _withArgsEncoderHeader(
+    Map<String, String> headers,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...headers, stemArgsEncoderHeader: encoder.id};
+  }
+
+  Map<String, Object?> _withResultEncoderMeta(
+    Map<String, Object?> meta,
+    TaskPayloadEncoder encoder,
+  ) {
+    return {...meta, stemResultEncoderMetaKey: encoder.id};
+  }
+
+  T? _decodeTaskPayload<T extends Object?>(
+    Object? payload,
+    T Function(Object? payload)? decode,
+  ) {
+    if (payload == null) return null;
+    if (decode != null) {
+      return decode(payload);
+    }
+    return payload as T?;
   }
 }
 

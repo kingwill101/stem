@@ -5,6 +5,7 @@ import 'envelope.dart';
 import 'task_invocation.dart';
 import '../observability/heartbeat.dart';
 import '../scheduler/schedule_spec.dart';
+import 'task_payload_encoder.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -142,6 +143,13 @@ abstract class Broker {
 
 /// Logical task status across enqueue, running, success, failure states.
 enum TaskState { queued, running, succeeded, failed, retried, cancelled }
+
+extension TaskStateX on TaskState {
+  bool get isTerminal =>
+      this == TaskState.succeeded ||
+      this == TaskState.failed ||
+      this == TaskState.cancelled;
+}
 
 /// Canonical task record stored in the result backend.
 class TaskStatus {
@@ -844,6 +852,8 @@ class TaskMetadata {
     this.tags = const [],
     this.idempotent = false,
     this.attributes = const {},
+    this.resultEncoder,
+    this.argsEncoder,
   });
 
   /// Human-readable description of the task.
@@ -857,10 +867,19 @@ class TaskMetadata {
 
   /// Additional metadata for tooling and dashboards.
   final Map<String, Object?> attributes;
+
+  /// Optional result encoder override applied when persisting handler return
+  /// values. When null the runtime falls back to the configured default.
+  final TaskPayloadEncoder? resultEncoder;
+
+  /// Optional argument encoder override applied when publishing envelopes for
+  /// this task. When null the runtime falls back to the configured default.
+  final TaskPayloadEncoder? argsEncoder;
 }
 
 typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
 typedef TaskMetaBuilder<TArgs> = Map<String, Object?> Function(TArgs args);
+typedef TaskResultDecoder<TResult> = TResult Function(Object? payload);
 
 /// Event emitted when a task handler registers with a registry.
 class TaskRegistrationEvent {
@@ -888,6 +907,7 @@ class TaskDefinition<TArgs, TResult> {
     TaskMetaBuilder<TArgs>? encodeMeta,
     this.defaultOptions = const TaskOptions(),
     this.metadata = const TaskMetadata(),
+    this.decodeResult,
   }) : _encodeArgs = encodeArgs,
        _encodeMeta = encodeMeta;
 
@@ -899,6 +919,7 @@ class TaskDefinition<TArgs, TResult> {
 
   /// Metadata associated with this task for documentation/tooling.
   final TaskMetadata metadata;
+  final TaskResultDecoder<TResult>? decodeResult;
 
   final TaskArgsEncoder<TArgs> _encodeArgs;
   final TaskMetaBuilder<TArgs>? _encodeMeta;
@@ -929,6 +950,15 @@ class TaskDefinition<TArgs, TResult> {
   Map<String, Object?> encodeMeta(TArgs args) {
     final metaBuilder = _encodeMeta;
     return metaBuilder != null ? metaBuilder(args) : const {};
+  }
+
+  TResult? decode(Object? payload) {
+    if (payload == null) return null;
+    final decoder = decodeResult;
+    if (decoder != null) {
+      return decoder(payload);
+    }
+    return payload as TResult?;
   }
 }
 
