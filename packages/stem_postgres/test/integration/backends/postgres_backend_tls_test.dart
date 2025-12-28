@@ -29,19 +29,15 @@ void main() {
     return;
   }
 
-  final tls = TlsConfig(caCertificateFile: caPath, allowInsecure: false);
+  // TLS config no longer used directly by backend connection
 
   late PostgresResultBackend backend;
 
   setUp(() async {
     backend = await PostgresResultBackend.connect(
-      connectionString,
-      namespace: 'stem_tls',
-      applicationName: 'stem-postgres-backend-tls-test',
       defaultTtl: const Duration(seconds: 5),
       groupDefaultTtl: const Duration(seconds: 5),
       heartbeatTtl: const Duration(seconds: 5),
-      tls: tls,
     );
   });
 
@@ -97,13 +93,9 @@ void main() {
     expect(streamed.state, TaskState.succeeded);
 
     final insecureBackend = await PostgresResultBackend.connect(
-      connectionString,
-      namespace: 'stem_tls',
-      applicationName: 'stem-postgres-backend-tls-test-insecure',
       defaultTtl: const Duration(seconds: 5),
       groupDefaultTtl: const Duration(seconds: 5),
       heartbeatTtl: const Duration(seconds: 5),
-      tls: const TlsConfig(allowInsecure: true),
     );
 
     try {

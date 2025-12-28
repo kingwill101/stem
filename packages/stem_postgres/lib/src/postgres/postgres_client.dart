@@ -1,10 +1,71 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
 import 'package:postgres/postgres.dart';
 
 import 'package:stem/stem.dart';
+
+/// Lightweight result wrapper to avoid exposing the postgres driver types.
+class PostgresResult extends IterableBase<PostgresRow> {
+  PostgresResult._(this._rows, this.affectedRows);
+
+  factory PostgresResult.fromResult(Result result) {
+    final rows = result
+        .map(
+          (row) => PostgresRow(
+            List<Object?>.from(row),
+            row.toColumnMap(),
+          ),
+        )
+        .toList(growable: false);
+    return PostgresResult._(rows, result.affectedRows);
+  }
+
+  final List<PostgresRow> _rows;
+  final int affectedRows;
+
+  @override
+  Iterator<PostgresRow> get iterator => _rows.iterator;
+
+  int get length => _rows.length;
+  bool get isEmpty => _rows.isEmpty;
+  bool get isNotEmpty => _rows.isNotEmpty;
+  PostgresRow get first => _rows.first;
+
+  PostgresRow operator [](int index) => _rows[index];
+}
+
+class PostgresRow {
+  PostgresRow(this._values, this._columnMap);
+
+  final List<Object?> _values;
+  final Map<String, Object?> _columnMap;
+
+  Object? operator [](int index) => _values[index];
+
+  Object? get first => _values.first;
+
+  Map<String, Object?> toColumnMap() => _columnMap;
+}
+
+class PostgresSession {
+  PostgresSession(this._connection);
+
+  final Connection _connection;
+
+  Future<PostgresResult> execute(
+    String sql, {
+    Map<String, Object?>? parameters,
+  }) async {
+    final result = await _connection.execute(
+      Sql.named(sql),
+      parameters: parameters,
+    );
+    return PostgresResult.fromResult(result);
+  }
+}
 
 class PostgresClient {
   PostgresClient(
@@ -22,12 +83,12 @@ class PostgresClient {
   Future<void>? _opening;
   Future<void> _operationChain = Future<void>.value();
 
-  Future<T> run<T>(Future<T> Function(Connection conn) action) {
+  Future<T> run<T>(Future<T> Function(PostgresSession session) action) {
     final completer = Completer<T>();
     _operationChain = _operationChain.then((_) async {
       try {
         final conn = await _ensureOpen();
-        final result = await action(conn);
+        final result = await action(PostgresSession(conn));
         completer.complete(result);
       } catch (error, stack) {
         completer.completeError(error, stack);

@@ -20,9 +20,6 @@ void main() {
     adapterName: 'Postgres',
     factory: ResultBackendContractFactory(
       create: () async => PostgresResultBackend.connect(
-        connectionString,
-        applicationName: 'stem-postgres-backend-test',
-        namespace: 'stem',
         defaultTtl: const Duration(seconds: 1),
         groupDefaultTtl: const Duration(seconds: 1),
         heartbeatTtl: const Duration(seconds: 1),

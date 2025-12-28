@@ -1,5 +1,6 @@
 import 'dart:io';
 
+// ignore: unused_import
 import 'package:postgres/postgres.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
@@ -22,8 +23,7 @@ void main() {
 
   Future<void> clearTables() async {
     await adminClient.run((conn) async {
-      await conn.execute('DELETE FROM public.${namespace}_schedule_locks');
-      await conn.execute('DELETE FROM public.${namespace}_schedule_entries');
+      await conn.execute('DELETE FROM public.stem_schedules');
     });
   }
 
@@ -32,7 +32,6 @@ void main() {
     store = await PostgresScheduleStore.connect(
       connectionString,
       namespace: namespace,
-      lockTtl: const Duration(milliseconds: 300),
       applicationName: 'stem-postgres-schedule-test',
     );
     await clearTables();
@@ -58,7 +57,7 @@ void main() {
 
     final rows = await adminClient.run((conn) async {
       return conn.execute(
-        'SELECT id, next_run_at, enabled FROM public.${namespace}_schedule_entries',
+        'SELECT id, next_run_at, enabled FROM public.stem_schedules',
       );
     });
     expect(rows, isNotEmpty, reason: 'entry should be persisted');
@@ -75,7 +74,7 @@ void main() {
 
     final manualDueRows = await adminClient.run((conn) async {
       return conn.execute(
-        'SELECT id FROM public.${namespace}_schedule_entries WHERE enabled = true AND next_run_at <= NOW()',
+        'SELECT id FROM public.stem_schedules WHERE enabled = true AND next_run_at <= NOW()',
       );
     });
     expect(
@@ -84,37 +83,21 @@ void main() {
       reason: 'manual due query should find entry',
     );
 
-    final manualDueWithJoin = await adminClient.run((conn) async {
+    final manualDueNoLocks = await adminClient.run((conn) async {
       return conn.execute(
-        Sql.named('''
+        '''
         SELECT e.id
-        FROM public.${namespace}_schedule_entries e
-        LEFT JOIN public.${namespace}_schedule_locks l ON e.id = l.id
-        WHERE e.enabled = true AND e.next_run_at <= @now AND l.id IS NULL
+        FROM public.stem_schedules e
+        WHERE e.enabled = true AND e.next_run_at <= @now
         ORDER BY e.next_run_at ASC
         LIMIT @limit
-        '''),
+        ''',
         parameters: {'now': dueNow, 'limit': 5},
       );
     });
-    expect(manualDueWithJoin, isNotEmpty);
-
-    final lockCountBefore = await adminClient.run((conn) async {
-      final result = await conn.execute(
-        'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
-      );
-      return result.first.first as int;
-    });
-    expect(lockCountBefore, equals(0));
+    expect(manualDueNoLocks, isNotEmpty);
 
     final first = await store.due(dueNow, limit: 5);
-    final lockCountAfter = await adminClient.run((conn) async {
-      final result = await conn.execute(
-        'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
-      );
-      return result.first.first as int;
-    });
-    expect(lockCountAfter, equals(1));
     expect(first, hasLength(1));
     expect(first.single.id, entry.id);
 

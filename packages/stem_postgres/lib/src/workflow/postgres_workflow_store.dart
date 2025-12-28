@@ -1,36 +1,26 @@
 import 'dart:convert';
 
-import 'package:postgres/postgres.dart';
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-import 'package:stem_postgres/stem_postgres.dart' show PostgresClient;
 import 'package:uuid/uuid.dart';
 
-/// PostgreSQL-backed [WorkflowStore] implementation.
+import '../connection.dart';
+import '../database/models/workflow_models.dart';
+
+/// PostgreSQL-backed [WorkflowStore] implementation using ormed ORM.
 class PostgresWorkflowStore implements WorkflowStore {
   PostgresWorkflowStore._(
-    this._client, {
-    required this.schema,
+    this._connections, {
     required this.namespace,
     required WorkflowClock clock,
     Uuid? uuid,
-  }) : _uuid = uuid ?? const Uuid(),
-       _clock = clock;
+  })  : _uuid = uuid ?? const Uuid(),
+        _clock = clock;
 
-  final PostgresClient _client;
-  final String schema;
+  final PostgresConnections _connections;
   final String namespace;
   final Uuid _uuid;
   final WorkflowClock _clock;
-
-  String get _tablePrefix => namespace.isNotEmpty ? '${namespace}_' : '';
-
-  String get _runsTable => '$schema.${_tablePrefix}workflow_runs';
-  String get _stepsTable => '$schema.${_tablePrefix}workflow_steps';
-  String get _resumeIndex => '${_tablePrefix}workflow_runs_resume_idx';
-  String get _topicIndex => '${_tablePrefix}workflow_runs_topic_idx';
-  String get _watchersTable => '$schema.${_tablePrefix}workflow_watchers';
-  String get _watchersTopicIndex =>
-      '${_tablePrefix}workflow_watchers_topic_idx';
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -54,7 +44,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     return result;
   }
 
-  /// Connects to a PostgreSQL database and ensures the workflow tables exist.
+  /// Connects to a PostgreSQL database and ensures workflow tables exist.
   static Future<PostgresWorkflowStore> connect(
     String uri, {
     String schema = 'public',
@@ -64,91 +54,19 @@ class PostgresWorkflowStore implements WorkflowStore {
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
-    final client = PostgresClient(
-      uri,
-      applicationName: applicationName,
-      tls: tls,
+    final connections = await PostgresConnections.open(
+      connectionString: uri,
     );
-    final store = PostgresWorkflowStore._(
-      client,
-      schema: schema,
+    return PostgresWorkflowStore._(
+      connections,
       namespace: namespace,
       clock: clock,
       uuid: uuid,
     );
-    await store._initialize();
-    return store;
   }
 
-  Future<void> _initialize() async {
-    await _client.run((Connection conn) async {
-      await conn.execute('''
-        CREATE TABLE IF NOT EXISTS $_runsTable (
-          id TEXT PRIMARY KEY,
-          workflow TEXT NOT NULL,
-          status TEXT NOT NULL,
-          params JSONB NOT NULL,
-          result JSONB,
-          wait_topic TEXT,
-          resume_at TIMESTAMPTZ,
-          last_error JSONB,
-          suspension_data JSONB,
-          cancellation_policy JSONB,
-          cancellation_data JSONB,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-      ''');
-
-      await conn.execute('''
-        CREATE TABLE IF NOT EXISTS $_stepsTable (
-          run_id TEXT NOT NULL REFERENCES $_runsTable(id) ON DELETE CASCADE,
-          name TEXT NOT NULL,
-          value JSONB,
-          position BIGSERIAL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (run_id, name)
-        )
-      ''');
-
-      await conn.execute('''
-        CREATE INDEX IF NOT EXISTS $_resumeIndex
-        ON $_runsTable(resume_at)
-        WHERE resume_at IS NOT NULL
-      ''');
-
-      await conn.execute('''
-        CREATE INDEX IF NOT EXISTS $_topicIndex
-        ON $_runsTable(wait_topic)
-        WHERE wait_topic IS NOT NULL
-      ''');
-
-      await conn.execute('''
-        CREATE TABLE IF NOT EXISTS $_watchersTable (
-          run_id TEXT PRIMARY KEY REFERENCES $_runsTable(id) ON DELETE CASCADE,
-          step_name TEXT NOT NULL,
-          topic TEXT NOT NULL,
-          data JSONB,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-          deadline TIMESTAMPTZ
-        )
-      ''');
-
-      await conn.execute('''
-        CREATE INDEX IF NOT EXISTS $_watchersTopicIndex
-        ON $_watchersTable(topic, created_at)
-      ''');
-
-      await conn.execute('''
-        ALTER TABLE $_runsTable
-        ADD COLUMN IF NOT EXISTS cancellation_policy JSONB
-      ''');
-
-      await conn.execute('''
-        ALTER TABLE $_runsTable
-        ADD COLUMN IF NOT EXISTS cancellation_data JSONB
-      ''');
-    });
+  Future<void> close() async {
+    await _connections.close();
   }
 
   @override
@@ -160,99 +78,120 @@ class PostgresWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final id = _uuid.v7();
-    final now = _nowUtc();
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-          INSERT INTO $_runsTable (
-            id,
-            workflow,
-            status,
-            params,
-            cancellation_policy,
-            created_at,
-            updated_at
-          )
-          VALUES (
-            @id,
-            @workflow,
-            @status,
-            @params::jsonb,
-            @policy::jsonb,
-            @createdAt,
-            @updatedAt
-          )
-        '''),
-        parameters: {
-          'id': id,
-          'workflow': workflow,
-          'status': WorkflowStatus.running.name,
-          'params': jsonEncode(params),
-          'policy': cancellationPolicy == null
-              ? null
-              : jsonEncode(cancellationPolicy.toJson()),
-          'createdAt': now,
-          'updatedAt': now,
-        },
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      final run = $StemWorkflowRun(
+        id: id,
+        workflow: workflow,
+        status: WorkflowStatus.running.name,
+        params: jsonEncode(params),
+        cancellationPolicy: cancellationPolicy == null
+            ? null
+            : jsonEncode(cancellationPolicy.toJson()),
+        createdAt: now,
+        updatedAt: now,
       );
+
+      await ctx.repository<$StemWorkflowRun>().insert(run);
     });
+
     return id;
   }
 
   @override
   Future<RunState?> get(String runId) async {
-    return _client.run((Connection conn) => _readRunState(conn, runId));
+    return _readRunState(_connections.context, runId);
+  }
+
+  Future<RunState?> _readRunState(QueryContext ctx, String runId) async {
+    final run = await ctx
+        .query<$StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .first();
+
+    if (run == null) return null;
+
+    // Count distinct base step names for cursor
+    final steps = await ctx
+        .query<$StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .get();
+
+    final baseSteps = <String>{};
+    for (final step in steps) {
+      baseSteps.add(_baseStepName(step.name));
+    }
+
+    return RunState(
+      id: run.id,
+      workflow: run.workflow,
+      status: WorkflowStatus.values.firstWhere(
+        (v) => v.name == run.status,
+        orElse: () => WorkflowStatus.running,
+      ),
+      cursor: baseSteps.length,
+      params: _decodeMap(run.params),
+      result: _decodeValue(run.result),
+      waitTopic: run.waitTopic,
+      resumeAt: run.resumeAt,
+      lastError: _decodeMap(run.lastError),
+      suspensionData: _decodeMap(run.suspensionData),
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+      cancellationPolicy: run.cancellationPolicy != null
+          ? WorkflowCancellationPolicy.fromJson(
+              _decodeMap(run.cancellationPolicy))
+          : null,
+      cancellationData: _decodeMap(run.cancellationData),
+    );
   }
 
   @override
   Future<T?> readStep<T>(String runId, String stepName) async {
-    return _client.run((Connection conn) async {
-      final result = await conn.execute(
-        Sql.named('''
-          SELECT value
-          FROM $_stepsTable
-          WHERE run_id = @runId AND name = @name
-        '''),
-        parameters: {'runId': runId, 'name': stepName},
-      );
-      if (result.isEmpty) return null;
-      return _decodeValue(result.first.first) as T?;
-    });
+    final ctx = _connections.context;
+    final step = await ctx
+        .query<$StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('name', stepName)
+        .first();
+
+    if (step == null) return null;
+    return _decodeValue(step.value) as T?;
   }
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await conn.execute('BEGIN');
-      try {
-        await conn.execute(
-          Sql.named('''
-            INSERT INTO $_stepsTable (run_id, name, value, created_at)
-            VALUES (@runId, @name, @value::jsonb, @createdAt)
-            ON CONFLICT (run_id, name) DO NOTHING
-          '''),
-          parameters: {
-            'runId': runId,
-            'name': stepName,
-            'value': jsonEncode(value),
-            'createdAt': now,
-          },
-        );
+    final now = _clock.now().toUtc();
 
-        await conn.execute(
-          Sql.named('''
-            UPDATE $_runsTable
-               SET updated_at = @updatedAt
-             WHERE id = @runId
-          '''),
-          parameters: {'runId': runId, 'updatedAt': now},
-        );
+    await _connections.runInTransaction((ctx) async {
+      final existing = await ctx
+          .query<$StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('name', stepName)
+          .first();
 
-        await conn.execute('COMMIT');
-      } catch (error) {
-        await conn.execute('ROLLBACK');
-        rethrow;
+      final step = $StemWorkflowStep(
+        runId: runId,
+        name: stepName,
+        value: jsonEncode(value),
+      );
+
+      if (existing != null) {
+        await ctx.repository<$StemWorkflowStep>().update(step);
+      } else {
+        await ctx.repository<$StemWorkflowStep>().insert(step);
+      }
+
+      // Update run's updatedAt
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(updatedAt: now);
+        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -264,27 +203,25 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
+    final now = _clock.now().toUtc();
     final metadata = _prepareSuspensionData(data, resumeAt: when);
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 resume_at = @resumeAt,
-                 wait_topic = NULL,
-                 suspension_data = @data::jsonb,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.suspended.name,
-          'resumeAt': when,
-          'data': jsonEncode(metadata),
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+
+    await _connections.runInTransaction((ctx) async {
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.suspended.name,
+          resumeAt: when,
+          waitTopic: null,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
@@ -296,33 +233,30 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final now = _clock.now().toUtc();
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
       deadline: deadline,
       topic: topic,
     );
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 wait_topic = @topic,
-                 resume_at = @deadline,
-                 suspension_data = @data::jsonb,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.suspended.name,
-          'topic': topic,
-          'deadline': deadline,
-          'data': jsonEncode(metadata),
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+
+    await _connections.runInTransaction((ctx) async {
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.suspended.name,
+          waitTopic: topic,
+          resumeAt: deadline,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
@@ -340,111 +274,94 @@ class PostgresWorkflowStore implements WorkflowStore {
       deadline: deadline,
       topic: topic,
     );
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await conn.execute('BEGIN');
-      try {
-        await conn.execute(
-          Sql.named('''
-            INSERT INTO $_watchersTable (
-              run_id,
-              step_name,
-              topic,
-              data,
-              deadline,
-              created_at
-            )
-            VALUES (@runId, @stepName, @topic, @data::jsonb, @deadline, @createdAt)
-            ON CONFLICT (run_id) DO UPDATE
-              SET step_name = EXCLUDED.step_name,
-                  topic = EXCLUDED.topic,
-                  data = EXCLUDED.data,
-                  deadline = EXCLUDED.deadline,
-                  created_at = @createdAt
-          '''),
-          parameters: {
-            'runId': runId,
-            'stepName': stepName,
-            'topic': topic,
-            'data': jsonEncode(metadata),
-            'deadline': deadline,
-            'createdAt': now,
-          },
-        );
+    final now = _clock.now().toUtc();
 
-        await conn.execute(
-          Sql.named('''
-            UPDATE $_runsTable
-               SET status = @status,
-                   wait_topic = @topic,
-                   resume_at = @deadline,
-                   suspension_data = @data::jsonb,
-                   updated_at = @updatedAt
-             WHERE id = @id
-          '''),
-          parameters: {
-            'status': WorkflowStatus.suspended.name,
-            'topic': topic,
-            'deadline': deadline,
-            'data': jsonEncode(metadata),
-            'id': runId,
-            'updatedAt': now,
-          },
+    await _connections.runInTransaction((ctx) async {
+      // Check if watcher already exists
+      final existing = await ctx
+          .query<$StemWorkflowWatcher>()
+          .whereEquals('runId', runId)
+          .first();
+
+      final watcher = $StemWorkflowWatcher(
+        runId: runId,
+        stepName: stepName,
+        topic: topic,
+        data: jsonEncode(metadata),
+        deadline: deadline,
+        createdAt: now,
+      );
+
+      if (existing != null) {
+        await ctx.repository<$StemWorkflowWatcher>().update(watcher);
+      } else {
+        await ctx.repository<$StemWorkflowWatcher>().insert(watcher);
+      }
+
+      // Update the associated run
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.suspended.name,
+          waitTopic: topic,
+          resumeAt: deadline,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: now,
         );
-        await conn.execute('COMMIT');
-      } catch (error) {
-        await conn.execute('ROLLBACK');
-        rethrow;
+        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await _deleteWatcherForRun(conn, runId);
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 resume_at = NULL,
-                 wait_topic = NULL,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.running.name,
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.running.name,
+          resumeAt: null,
+          waitTopic: null,
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await _deleteWatcherForRun(conn, runId);
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 result = @result::jsonb,
-                 resume_at = NULL,
-                 wait_topic = NULL,
-                 suspension_data = NULL,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.completed.name,
-          'result': result != null ? jsonEncode(result) : null,
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.completed.name,
+          result: result != null ? jsonEncode(result) : null,
+          suspensionData: null,
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
@@ -455,135 +372,113 @@ class PostgresWorkflowStore implements WorkflowStore {
     StackTrace stack, {
     bool terminal = false,
   }) async {
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
       if (terminal) {
-        await _deleteWatcherForRun(conn, runId);
+        await _deleteWatcher(ctx, runId);
       }
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 last_error = @error::jsonb,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status':
-              (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
-          'error': jsonEncode({
+
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: terminal ? WorkflowStatus.failed.name : run.status,
+          lastError: jsonEncode({
             'error': error.toString(),
             'stack': stack.toString(),
           }),
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
-    await _client.run((Connection conn) async {
-      final now = _nowUtc();
-      await _deleteWatcherForRun(conn, runId);
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 resume_at = NULL,
-                 wait_topic = NULL,
-                 suspension_data =
-                     COALESCE(@data::jsonb, suspension_data),
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.running.name,
-          'data': data != null ? jsonEncode(data) : null,
-          'id': runId,
-          'updatedAt': now,
-        },
-      );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.running.name,
+          resumeAt: null,
+          waitTopic: null,
+          suspensionData: data != null ? jsonEncode(data) : null,
+          updatedAt: now,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
   @override
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
-    return _client.run((Connection conn) async {
-      await conn.execute('BEGIN');
-      try {
-        final selected = await conn.execute(
-          Sql.named('''
-            SELECT id
-              FROM $_runsTable
-             WHERE resume_at IS NOT NULL
-               AND resume_at <= @now
-               AND status = @status
-             ORDER BY resume_at ASC
-             LIMIT @limit
-             FOR UPDATE SKIP LOCKED
-          '''),
-          parameters: {
-            'now': now,
-            'status': WorkflowStatus.suspended.name,
-            'limit': limit,
-          },
-        );
+    return _connections.runInTransaction((ctx) async {
+      // SELECT runs where resume_at has passed
+      final dueRuns = await ctx
+          .query<$StemWorkflowRun>()
+          .whereNotNull('resumeAt')
+          .where('resumeAt', now, PredicateOperator.lessThanOrEqual)
+          .whereEquals('status', WorkflowStatus.suspended.name)
+          .limit(limit)
+          .get();
 
-        final ids = selected
-            .map((row) => row.first as String)
-            .toList(growable: false);
-
-        if (ids.isNotEmpty) {
-          await conn.execute(
-            Sql.named('''
-              UPDATE $_runsTable
-                 SET resume_at = NULL,
-                     updated_at = @updatedAt
-               WHERE id = ANY(@ids)
-            '''),
-            parameters: {'ids': ids, 'updatedAt': now.toUtc()},
-          );
-        }
-
-        await conn.execute('COMMIT');
-        return ids;
-      } catch (error) {
-        await conn.execute('ROLLBACK');
-        rethrow;
+      if (dueRuns.isEmpty) {
+        return const <String>[];
       }
+
+      // Update all to clear resume_at
+      final nowUtc = now.toUtc();
+      for (final run in dueRuns) {
+        final updated = run.copyWith(
+          resumeAt: null,
+          updatedAt: nowUtc,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
+
+      return dueRuns.map((r) => r.id).toList(growable: false);
     });
   }
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
-    return _client.run((Connection conn) async {
-      final result = await conn.execute(
-        Sql.named('''
-          SELECT run_id
-            FROM $_watchersTable
-           WHERE topic = @topic
-           ORDER BY created_at ASC
-           LIMIT @limit
-        '''),
-        parameters: {'topic': topic, 'limit': limit},
-      );
-      if (result.isNotEmpty) {
-        return result.map((row) => row.first as String).toList(growable: false);
-      }
-      final fallback = await conn.execute(
-        Sql.named('''
-          SELECT id
-            FROM $_runsTable
-           WHERE wait_topic = @topic
-           ORDER BY created_at ASC
-           LIMIT @limit
-        '''),
-        parameters: {'topic': topic, 'limit': limit},
-      );
-      return fallback.map((row) => row.first as String).toList(growable: false);
-    });
+    final ctx = _connections.context;
+    // Check watchers first
+    final watcherRows = await ctx
+        .query<$StemWorkflowWatcher>()
+        .whereEquals('topic', topic)
+        .limit(limit)
+        .get();
+
+    if (watcherRows.isNotEmpty) {
+      return watcherRows
+          .map((row) => row.runId)
+          .toList(growable: false);
+    }
+
+    // Fallback to runs with wait_topic
+    final fallbackRows = await ctx
+        .query<$StemWorkflowRun>()
+        .whereEquals('waitTopic', topic)
+        .limit(limit)
+        .get();
+
+    return fallbackRows
+        .map((r) => r.id)
+        .toList(growable: false);
   }
 
   @override
@@ -592,80 +487,66 @@ class PostgresWorkflowStore implements WorkflowStore {
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
-    return _client.run((Connection conn) async {
-      await conn.execute('BEGIN');
-      try {
-        final rows = await conn.execute(
-          Sql.named('''
-            SELECT run_id, step_name, data
-              FROM $_watchersTable
-             WHERE topic = @topic
-             ORDER BY created_at ASC
-             LIMIT @limit
-             FOR UPDATE SKIP LOCKED
-          '''),
-          parameters: {'topic': topic, 'limit': limit},
-        );
-        if (rows.isEmpty) {
-          await conn.execute('COMMIT');
-          return const <WorkflowWatcherResolution>[];
-        }
-        final now = _clock.now();
-        final nowUtc = now.toUtc();
-        final resolutions = <WorkflowWatcherResolution>[];
-        for (final row in rows) {
-          final runId = row[0] as String;
-          final stepName = row[1] as String;
-          final data = _decodeMap(row[2]);
-          final metadata = Map<String, Object?>.from(data);
-          metadata['type'] = 'event';
-          metadata['topic'] = topic;
-          metadata['payload'] = payload;
-          metadata.putIfAbsent('step', () => stepName);
-          metadata.putIfAbsent(
-            'iterationStep',
-            () => metadata['step'] ?? stepName,
-          );
-          metadata['deliveredAt'] = now.toIso8601String();
+    return _connections.runInTransaction((ctx) async {
+      final watchers = await ctx
+          .query<$StemWorkflowWatcher>()
+          .whereEquals('topic', topic)
+          .limit(limit)
+          .get();
 
-          await conn.execute(
-            Sql.named('''
-              UPDATE $_runsTable
-                 SET status = @status,
-                     wait_topic = NULL,
-                     resume_at = NULL,
-                     suspension_data = @data::jsonb,
-                     updated_at = @updatedAt
-               WHERE id = @id
-            '''),
-            parameters: {
-              'status': WorkflowStatus.running.name,
-              'data': jsonEncode(metadata),
-              'id': runId,
-              'updatedAt': nowUtc,
-            },
-          );
-
-          await conn.execute(
-            Sql.named('DELETE FROM $_watchersTable WHERE run_id = @id'),
-            parameters: {'id': runId},
-          );
-
-          resolutions.add(
-            WorkflowWatcherResolution(
-              runId: runId,
-              stepName: stepName,
-              topic: topic,
-              resumeData: metadata,
-            ),
-          );
-        }
-        await conn.execute('COMMIT');
-        return resolutions;
-      } catch (error) {
-        await conn.execute('ROLLBACK');
-        rethrow;
+      if (watchers.isEmpty) {
+        return const <WorkflowWatcherResolution>[];
       }
+
+      final resolutions = <WorkflowWatcherResolution>[];
+      final now = _clock.now();
+      final nowUtc = now.toUtc();
+
+      for (final watcher in watchers) {
+        // Build metadata for resumption
+        final data = _decodeMap(watcher.data);
+        final metadata = Map<String, Object?>.from(data);
+        metadata['type'] = 'event';
+        metadata['topic'] = topic;
+        metadata['payload'] = payload;
+        metadata.putIfAbsent('step', () => watcher.stepName);
+        metadata.putIfAbsent(
+          'iterationStep',
+          () => metadata['step'] ?? watcher.stepName,
+        );
+        metadata['deliveredAt'] = now.toIso8601String();
+
+        // Update run to mark as running with resolved metadata
+        final run = await ctx
+            .query<$StemWorkflowRun>()
+            .whereEquals('id', watcher.runId)
+            .first();
+
+        if (run != null) {
+          final updated = run.copyWith(
+            status: WorkflowStatus.running.name,
+            waitTopic: null,
+            resumeAt: null,
+            suspensionData: jsonEncode(metadata),
+            updatedAt: nowUtc,
+          );
+          await ctx.repository<$StemWorkflowRun>().update(updated);
+        }
+
+        // Delete the watcher (resolved)
+        await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
+
+        resolutions.add(
+          WorkflowWatcherResolution(
+            runId: watcher.runId,
+            stepName: watcher.stepName,
+            topic: topic,
+            resumeData: metadata,
+          ),
+        );
+      }
+
+      return resolutions;
     });
   }
 
@@ -674,140 +555,117 @@ class PostgresWorkflowStore implements WorkflowStore {
     String topic, {
     int limit = 256,
   }) async {
-    return _client.run((Connection conn) async {
-      final rows = await conn.execute(
-        Sql.named('''
-          SELECT run_id, step_name, data, created_at, deadline
-            FROM $_watchersTable
-           WHERE topic = @topic
-           ORDER BY created_at ASC
-           LIMIT @limit
-        '''),
-        parameters: {'topic': topic, 'limit': limit},
-      );
-      return rows
-          .map(
-            (row) => WorkflowWatcher(
-              runId: row[0] as String,
-              stepName: row[1] as String,
-              topic: topic,
-              createdAt: row[3] as DateTime,
-              deadline: row[4] as DateTime?,
-              data: _decodeMap(row[2]),
-            ),
-          )
-          .toList(growable: false);
-    });
+    final ctx = _connections.context;
+    final rows = await ctx
+        .query<$StemWorkflowWatcher>()
+        .whereEquals('topic', topic)
+        .limit(limit)
+        .get();
+
+    if (rows.isEmpty) {
+      return const [];
+    }
+
+    return rows
+        .map(
+          (row) => WorkflowWatcher(
+            runId: row.runId,
+            stepName: row.stepName,
+            topic: topic,
+            createdAt: row.createdAt,
+            deadline: row.deadline,
+            data: _decodeMap(row.data),
+          ),
+        )
+        .toList(growable: false);
   }
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
-    await _client.run((Connection conn) async {
-      final now = _clock.now();
-      await _deleteWatcherForRun(conn, runId);
-      await conn.execute(
-        Sql.named('''
-          UPDATE $_runsTable
-             SET status = @status,
-                 resume_at = NULL,
-                 wait_topic = NULL,
-                 suspension_data = NULL,
-                 cancellation_data = @data::jsonb,
-                 updated_at = @updatedAt
-           WHERE id = @id
-        '''),
-        parameters: {
-          'status': WorkflowStatus.cancelled.name,
-          'id': runId,
-          'data': jsonEncode({
-            'reason': reason ?? 'cancelled',
-            'cancelledAt': now.toIso8601String(),
-          }),
-          'updatedAt': now.toUtc(),
-        },
-      );
+    final now = _clock.now();
+    final nowUtc = now.toUtc();
+    final cancellation = jsonEncode({
+      'reason': reason ?? 'cancelled',
+      'cancelledAt': now.toIso8601String(),
+    });
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.cancelled.name,
+          suspensionData: null,
+          waitTopic: null,
+          resumeAt: null,
+          cancellationData: cancellation,
+          updatedAt: nowUtc,
+        );
+        await ctx.repository<$StemWorkflowRun>().update(updated);
+      }
     });
   }
 
   @override
   Future<void> rewindToStep(String runId, String stepName) async {
-    await _client.run((Connection conn) async {
-      await conn.execute('BEGIN');
-      try {
-        await _deleteWatcherForRun(conn, runId);
-        final names = await conn.execute(
-          Sql.named('''
-            SELECT name, position
-              FROM $_stepsTable
-             WHERE run_id = @runId
-             ORDER BY position ASC
-          '''),
-          parameters: {'runId': runId},
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final stepRows = await ctx
+          .query<$StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .get();
+
+      // Calculate which steps to keep
+      final names = stepRows.map((row) => row.name).toList();
+      final baseIndexMap = <String, int>{};
+      var nextIndex = 0;
+      final entryIndexes = <int>[];
+
+      for (final name in names) {
+        final base = _baseStepName(name);
+        baseIndexMap.putIfAbsent(base, () => nextIndex++);
+        entryIndexes.add(baseIndexMap[base]!);
+      }
+
+      final targetIndex = baseIndexMap[stepName];
+      if (targetIndex == null) return;
+
+      // Delete steps after target and re-insert kept ones
+      final keep = <StemWorkflowStep>[];
+      for (var i = 0; i < stepRows.length; i++) {
+        final baseIndex = entryIndexes[i];
+        if (baseIndex < targetIndex) {
+          keep.add(stepRows[i]);
+        } else {
+          await ctx.repository<$StemWorkflowStep>().delete(stepRows[i]);
+        }
+      }
+
+      // Update run status
+      final run = await ctx
+          .query<$StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .first();
+
+      if (run != null) {
+        final updated = run.copyWith(
+          status: WorkflowStatus.suspended.name,
+          waitTopic: null,
+          resumeAt: null,
+          suspensionData: jsonEncode({
+            'step': stepName,
+            'iteration': 0,
+            'iterationStep': stepName,
+          }),
+          updatedAt: _clock.now().toUtc(),
         );
-        if (names.isEmpty) {
-          await conn.execute('ROLLBACK');
-          return;
-        }
-
-        final namesList = names.map((row) => row[0] as String).toList();
-        final baseIndexMap = <String, int>{};
-        var nextIndex = 0;
-        final entryIndexes = <int>[];
-        for (final name in namesList) {
-          final base = _baseStepName(name);
-          baseIndexMap.putIfAbsent(base, () => nextIndex++);
-          entryIndexes.add(baseIndexMap[base]!);
-        }
-        final targetIndex = baseIndexMap[stepName];
-        if (targetIndex == null) {
-          await conn.execute('ROLLBACK');
-          return;
-        }
-
-        final toDelete = <String>[];
-        for (var i = 0; i < namesList.length; i++) {
-          final baseIndex = entryIndexes[i];
-          if (baseIndex >= targetIndex) {
-            toDelete.add(namesList[i]);
-          }
-        }
-
-        if (toDelete.isNotEmpty) {
-          for (final name in toDelete) {
-            await conn.execute(
-              Sql.named('''
-                DELETE FROM $_stepsTable
-                 WHERE run_id = @runId AND name = @name
-              '''),
-              parameters: {'runId': runId, 'name': name},
-            );
-          }
-        }
-
-        await conn.execute(
-          Sql.named('''
-            UPDATE $_runsTable
-               SET status = @status,
-                   wait_topic = NULL,
-                   resume_at = NULL,
-                   suspension_data = jsonb_build_object(
-                     'step', @stepName::text,
-                     'iteration', 0,
-                     'iterationStep', @stepName::text
-                   )
-             WHERE id = @runId
-          '''),
-          parameters: {
-            'status': WorkflowStatus.suspended.name,
-            'stepName': stepName,
-            'runId': runId,
-          },
-        );
-
-        await conn.execute('COMMIT');
-      } catch (error) {
-        await conn.execute('ROLLBACK');
-        rethrow;
+        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -818,168 +676,102 @@ class PostgresWorkflowStore implements WorkflowStore {
     WorkflowStatus? status,
     int limit = 50,
   }) async {
-    return _client.run((Connection conn) async {
-      final conditions = <String>[];
-      final parameters = <String, Object?>{'limit': limit};
-      if (workflow != null) {
-        conditions.add('workflow = @workflow');
-        parameters['workflow'] = workflow;
-      }
-      if (status != null) {
-        conditions.add('status = @status');
-        parameters['status'] = status.name;
-      }
-      final buffer = StringBuffer('SELECT id FROM $_runsTable');
-      if (conditions.isNotEmpty) {
-        buffer.write(' WHERE ${conditions.join(' AND ')}');
-      }
-      buffer.write(' ORDER BY created_at DESC LIMIT @limit');
+    final ctx = _connections.context;
+    var query = ctx.query<$StemWorkflowRun>();
 
-      final rows = await conn.execute(
-        Sql.named(buffer.toString()),
-        parameters: parameters,
-      );
+    if (workflow != null) {
+      query = query.whereEquals('workflow', workflow);
+    }
 
-      final states = <RunState>[];
-      for (final row in rows) {
-        final state = await _readRunState(conn, row[0] as String);
-        if (state != null) {
-          states.add(state);
-        }
-        if (states.length >= limit) {
-          break;
-        }
+    if (status != null) {
+      query = query.whereEquals('status', status.name);
+    }
+
+    final ids = await query
+        .limit(limit)
+        .get()
+        .then((runs) => runs.map((r) => r.id).toList());
+
+    final results = <RunState>[];
+    for (final id in ids) {
+      final state = await _readRunState(ctx, id);
+      if (state != null) {
+        results.add(state);
       }
-      return states;
-    });
+    }
+
+    return results;
   }
 
   @override
   Future<List<WorkflowStepEntry>> listSteps(String runId) async {
-    return _client.run((Connection conn) async {
-      final result = await conn.execute(
-        Sql.named('''
-          SELECT name, value, position, created_at
-            FROM $_stepsTable
-           WHERE run_id = @runId
-           ORDER BY position ASC
-        '''),
-        parameters: {'runId': runId},
+    final ctx = _connections.context;
+    final rows = await ctx
+        .query<$StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .get();
+
+    final entries = <WorkflowStepEntry>[];
+    var position = 0;
+
+    for (final row in rows) {
+      entries.add(
+        WorkflowStepEntry(
+          name: row.name,
+          value: _decodeValue(row.value),
+          position: position,
+        ),
       );
-      final entries = <WorkflowStepEntry>[];
-      for (final row in result) {
-        final positionValue = row[2];
-        final position = positionValue is int
-            ? positionValue
-            : positionValue is num
-            ? positionValue.toInt()
-            : entries.length;
-        entries.add(
-          WorkflowStepEntry(
-            name: row[0] as String,
-            value: _decodeValue(row[1]),
-            position: position,
-            completedAt: row[3] as DateTime?,
-          ),
-        );
-      }
-      return entries;
-    });
-  }
-
-  Future<void> close() async {
-    await _client.close();
-  }
-
-  Future<void> _deleteWatcherForRun(Connection conn, String runId) async {
-    await conn.execute(
-      Sql.named('DELETE FROM $_watchersTable WHERE run_id = @id'),
-      parameters: {'id': runId},
-    );
-  }
-
-  DateTime _nowUtc() => _clock.now().toUtc();
-
-  Map<String, Object?> _decodeMap(dynamic value) {
-    if (value == null) return const {};
-    if (value is String) {
-      final decoded = jsonDecode(value);
-      return decoded is Map
-          ? decoded.map((key, value) => MapEntry(key as String, value))
-          : const {};
+      position += 1;
     }
-    if (value is Map) {
-      return value.map((key, value) => MapEntry(key.toString(), value));
+
+    return entries;
+  }
+
+  Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
+    final watcher = await ctx
+        .query<$StemWorkflowWatcher>()
+        .whereEquals('runId', runId)
+        .first();
+
+    if (watcher != null) {
+      await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
+    }
+  }
+
+  Map<String, Object?> _decodeMap(dynamic input) {
+    if (input == null) return const {};
+    if (input is String) {
+      try {
+        final decoded = jsonDecode(input);
+        return decoded is Map
+            ? decoded.map((key, value) => MapEntry(key as String, value))
+            : const {};
+      } catch (_) {
+        return const {};
+      }
+    }
+    if (input is Map) {
+      return input.map((key, value) => MapEntry(key.toString(), value));
     }
     return const {};
   }
 
-  Object? _decodeValue(dynamic value) {
-    if (value == null) return null;
-    if (value is String) {
+  Object? _decodeValue(dynamic input) {
+    if (input == null) return null;
+    if (input is String) {
       try {
-        return jsonDecode(value);
+        return jsonDecode(input);
       } catch (_) {
-        return value;
+        return input;
       }
     }
-    return value;
+    return input;
   }
 
-  Future<RunState?> _readRunState(Connection conn, String runId) async {
-    final result = await conn.execute(
-      Sql.named('''
-        SELECT id, workflow, status, params, result, wait_topic,
-               resume_at, last_error, suspension_data,
-               created_at, updated_at, cancellation_policy, cancellation_data
-        FROM $_runsTable
-        WHERE id = @id
-      '''),
-      parameters: {'id': runId},
-    );
-    if (result.isEmpty) return null;
-    final row = result.first;
-    final cursorResult = await conn.execute(
-      Sql.named('''
-        SELECT COUNT(DISTINCT split_part(name, '#', 1))
-        FROM $_stepsTable
-        WHERE run_id = @id
-      '''),
-      parameters: {'id': runId},
-    );
-    final cursor = (cursorResult.first.first as int?) ?? 0;
-    final createdAt =
-        (row[9] as DateTime?) ?? DateTime.fromMillisecondsSinceEpoch(0);
-    final updatedAt = row[10] as DateTime?;
-    final policyMap = _decodeMap(row[11]);
-    final cancellationData = _decodeMap(row[12]);
-
-    return RunState(
-      id: row[0] as String,
-      workflow: row[1] as String,
-      status: WorkflowStatus.values.firstWhere(
-        (value) => value.name == row[2],
-        orElse: () => WorkflowStatus.running,
-      ),
-      cursor: cursor,
-      params: _decodeMap(row[3]),
-      result: _decodeValue(row[4]),
-      waitTopic: row[5] as String?,
-      resumeAt: row[6] as DateTime?,
-      lastError: _decodeMap(row[7]),
-      suspensionData: _decodeMap(row[8]),
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      cancellationPolicy: policyMap.isEmpty
-          ? null
-          : WorkflowCancellationPolicy.fromJson(policyMap),
-      cancellationData: cancellationData.isEmpty ? null : cancellationData,
-    );
+  String _baseStepName(String name) {
+    final index = name.indexOf('#');
+    if (index == -1) return name;
+    return name.substring(0, index);
   }
-}
-
-String _baseStepName(String name) {
-  final index = name.indexOf('#');
-  if (index == -1) return name;
-  return name.substring(0, index);
 }
