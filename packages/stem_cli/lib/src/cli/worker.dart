@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:args/args.dart';
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:redis/redis.dart' as redis;
 import 'package:path/path.dart' as p;
 import 'package:stem/stem.dart';
@@ -36,7 +35,7 @@ class WorkerCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a worker subcommand.', usage);
+    throw Exception('Specify a worker subcommand.');
   }
 }
 

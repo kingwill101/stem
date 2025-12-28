@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:args/args.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/revoke_store_factory.dart';
@@ -47,7 +47,6 @@ Future<CliContext> createDefaultContext({
   } else if (isPostgresScheme(brokerUri.scheme)) {
     final postgresBroker = await PostgresBroker.connect(
       config.brokerUrl,
-      applicationName: 'stem-cli',
       tls: config.tls,
     );
     broker = postgresBroker;
@@ -73,13 +72,16 @@ Future<CliContext> createDefaultContext({
       disposables.add(() => redisBackend.close());
     } else if (isPostgresScheme(backendUri.scheme)) {
       final postgresBackend = await PostgresResultBackend.connect(
-        backendUrl,
-        namespace: 'stem',
-        applicationName: 'stem-cli',
-        tls: config.tls,
+        connectionString: backendUrl,
       );
       backend = postgresBackend;
       disposables.add(() => postgresBackend.close());
+    } else if (backendUri.scheme == 'sqlite') {
+      final sqliteBackend = await SqliteResultBackend.connect(
+        connectionString: backendUrl,
+      );
+      backend = sqliteBackend;
+      disposables.add(() => sqliteBackend.close());
     } else if (backendUri.scheme == 'memory') {
       backend = InMemoryResultBackend();
     } else {

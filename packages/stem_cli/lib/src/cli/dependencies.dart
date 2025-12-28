@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:artisanal/artisanal.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/schedule.dart';
@@ -22,12 +23,18 @@ class StemCommandDependencies {
     required CliContextBuilder cliContextBuilder,
     ScheduleContextBuilder? scheduleContextBuilder,
     WorkflowContextBuilder? workflowContextBuilder,
-  }) : _cliContextBuilder = cliContextBuilder,
+  }) : console = Console(
+         out: (line) => out.writeln(line),
+         err: (line) => err.writeln(line),
+         interactive: stdin.hasTerminal,
+       ),
+       _cliContextBuilder = cliContextBuilder,
        _scheduleContextBuilder = scheduleContextBuilder,
        _workflowContextBuilder = workflowContextBuilder;
 
   final StringSink out;
   final StringSink err;
+  final Console console;
   final Map<String, String> environment;
   final String? scheduleFilePath;
 

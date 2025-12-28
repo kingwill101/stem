@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
 import 'package:stem_cli/src/cli/file_schedule_repository.dart';
@@ -25,7 +25,7 @@ class ObserveCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify an observe subcommand.', usage);
+    throw Exception('Specify an observe subcommand.');
   }
 }
 

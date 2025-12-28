@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
 import 'package:stem_cli/src/cli/utilities.dart';
@@ -32,7 +32,7 @@ class ScheduleCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a schedule subcommand.', usage);
+    throw Exception('Specify a schedule subcommand.');
   }
 }
 

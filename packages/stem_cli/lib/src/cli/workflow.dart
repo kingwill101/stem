@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 
 import 'dependencies.dart';
@@ -28,7 +28,7 @@ class WorkflowCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a workflow subcommand.', usage);
+    throw Exception('Specify a workflow subcommand.');
   }
 }
 

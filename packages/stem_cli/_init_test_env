@@ -1,12 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve script directory robustly for bash and zsh
+SCRIPT_SOURCE="${BASH_SOURCE:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 COMPOSE_FILE="$SCRIPT_DIR/docker/testing/docker-compose.yml"
+
+# Detect whether the script is sourced (bash/zsh) to decide env export behavior
+SOURCED=0
+if [ -n "${ZSH_VERSION-}" ]; then
+  case ${ZSH_EVAL_CONTEXT:-} in *:file) SOURCED=1;; esac
+elif [ -n "${BASH_VERSION-}" ]; then
+  [[ "${BASH_SOURCE[0]}" != "$0" ]] && SOURCED=1 || true
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   >&2 echo "Docker is required to run integration dependencies. Install Docker and retry."
-  return 1 2>/dev/null || exit 1
+  # 'return' only works when sourced; fall back to exit when executed
+  if [ "$SOURCED" -eq 1 ]; then return 1; else exit 1; fi
 fi
 
 echo "Starting Redis/Postgres test services (docker compose)..."
@@ -16,7 +27,7 @@ REDIS_URL="redis://127.0.0.1:56379"
 POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
 CA_CERT_PATH="$SCRIPT_DIR/docker/testing/certs/postgres-root.crt"
 
-if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+if [ "$SOURCED" -eq 1 ]; then
   export STEM_TEST_REDIS_URL="$REDIS_URL"
   export STEM_TEST_POSTGRES_URL="$POSTGRES_URL"
   export STEM_TEST_POSTGRES_TLS_URL="$POSTGRES_URL"

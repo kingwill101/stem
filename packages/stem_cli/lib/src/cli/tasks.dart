@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 
 import 'cli_runner.dart';
@@ -23,7 +23,7 @@ class TasksCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a subcommand.', usage);
+    throw Exception('Specify a subcommand.');
   }
 }
 
@@ -77,8 +77,6 @@ class _TasksListCommand extends Command<int> {
       }
 
       return 0;
-    } on UsageException {
-      rethrow;
     } catch (error, stackTrace) {
       dependencies.err
         ..writeln('Failed to list tasks: $error')

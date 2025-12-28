@@ -1,28 +1,174 @@
 services:
+  # PostgreSQL with TLS support for stem_postgres integration tests
   postgres:
     build:
       context: ../..
       dockerfile: docker/testing/postgres/Dockerfile
     restart: unless-stopped
+    container_name: stem-postgres-test
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: stem_test
-    command: ["postgres", "-c", "ssl=on", "-c", "ssl_cert_file=/etc/postgres/certs/server.crt", "-c", "ssl_key_file=/etc/postgres/certs/server.key", "-c", "ssl_ca_file=/etc/postgres/certs/root.crt"]
+    command:
+      - "postgres"
+      - "-c"
+      - "ssl=on"
+      - "-c"
+      - "ssl_cert_file=/etc/postgres/certs/server.crt"
+      - "-c"
+      - "ssl_key_file=/etc/postgres/certs/server.key"
+      - "-c"
+      - "ssl_ca_file=/etc/postgres/certs/root.crt"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_duration=on"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "max_connections=200"
     ports:
       - "65432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
-      timeout: 3s
-      retries: 5
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "PostgreSQL for Stem testing (broker, backend, scheduler)"
 
+  # Redis for Stem broker and locks
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    container_name: stem-redis-test
+    command:
+      - "redis-server"
+      - "--loglevel"
+      - "notice"
+      - "--databases"
+      - "10"
+      - "--appendonly"
+      - "no"
     ports:
       - "56379:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "Redis for Stem testing (broker, locks, schedules)"
+
+  # Prometheus for observability testing (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    container_name: stem-prometheus-test
+    environment:
+      TZ: UTC
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=24h"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
       retries: 5
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "Prometheus for metrics collection and testing"
+    depends_on:
+      - postgres
+      - redis
+
+  # Grafana for dashboard testing (optional)
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    container_name: stem-grafana-test
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_INSTALL_PLUGINS: "redis-datasource"
+      GF_PATHS_LOGS: "/var/log/grafana"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "Grafana for dashboard and observability testing"
+    depends_on:
+      - prometheus
+
+  # OpenTelemetry Collector for tracing (optional)
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    restart: unless-stopped
+    container_name: stem-otel-collector-test
+    environment:
+      GOGC: "80"
+    ports:
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP HTTP receiver
+      - "8888:8888"  # Prometheus metrics
+      - "13133:13133" # health_check
+    volumes:
+      - ./collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    command:
+      - "--config=/etc/otel-collector-config.yaml"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:13133"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "OpenTelemetry Collector for tracing and metrics"
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  stem-testing:
+    driver: bridge
+    name: stem-testing
