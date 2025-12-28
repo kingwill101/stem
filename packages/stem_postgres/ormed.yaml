@@ -1,0 +1,13 @@
+driver:
+  type: postgres
+  options:
+    url: postgresql://postgres:postgres@localhost:65432/stem_test
+    logging: true
+migrations:
+  directory: lib/src/database/migrations
+  registry: lib/src/database/migrations.dart
+  ledger_table: orm_migrations
+  schema_dump: database/schema.sql
+seeds:
+  directory: lib/src/database/seeders
+  registry: lib/src/database/seeders.dart
