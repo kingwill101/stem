@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
 import 'package:meta/meta.dart';
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
 import '../connection.dart';
-import '../database.dart';
+import '../models/models.dart';
 
 class SqliteResultBackend implements ResultBackend {
   SqliteResultBackend._(
@@ -16,7 +15,7 @@ class SqliteResultBackend implements ResultBackend {
     required this.groupDefaultTtl,
     required this.heartbeatTtl,
     required this.cleanupInterval,
-  }) : _db = _connections.db {
+  }) : _context = _connections.context {
     _startCleanupTimer();
   }
 
@@ -37,8 +36,59 @@ class SqliteResultBackend implements ResultBackend {
     );
   }
 
+  /// Connects to a SQLite database from a connection string (path URI).
+  ///
+  /// The [connectionString] should be in the format:
+  /// `sqlite:///path/to/database.db` or `sqlite:///:memory:`
+  ///
+  /// If the parent directory doesn't exist, it will be created.
+  ///
+  /// Example:
+  /// ```dart
+  /// final backend = await SqliteResultBackend.connect(
+  ///   connectionString: 'sqlite:///var/lib/app/stem.db',
+  /// );
+  /// ```
+  static Future<SqliteResultBackend> connect({
+    String? connectionString,
+    Duration defaultTtl = const Duration(days: 1),
+    Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
+    Duration cleanupInterval = const Duration(minutes: 1),
+  }) async {
+    if (connectionString == null) {
+      throw ArgumentError(
+        'connectionString is required for SqliteResultBackend.connect(). '
+        'Use open() to connect via ormed.yaml instead.',
+      );
+    }
+
+    // Parse sqlite:// URIs
+    var path = connectionString;
+    if (connectionString.startsWith('sqlite://')) {
+      path = connectionString.replaceFirst('sqlite://', '');
+      // Handle sqlite:///:memory:
+      if (path.startsWith(':')) {
+        path = ':$path';
+      }
+    }
+
+    final file = File(path);
+    if (path != ':memory:' && !file.parent.existsSync()) {
+      file.parent.createSync(recursive: true);
+    }
+
+    return open(
+      file,
+      defaultTtl: defaultTtl,
+      groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
+      cleanupInterval: cleanupInterval,
+    );
+  }
+
   final SqliteConnections _connections;
-  final StemSqliteDatabase _db;
+  final QueryContext _context;
   final Duration defaultTtl;
   final Duration groupDefaultTtl;
   final Duration heartbeatTtl;
@@ -73,7 +123,7 @@ class SqliteResultBackend implements ResultBackend {
     Duration? ttl,
   }) async {
     final now = DateTime.now();
-    final expiresAt = now.add(ttl ?? defaultTtl).millisecondsSinceEpoch;
+    final expiresAt = now.add(ttl ?? defaultTtl);
     final status = TaskStatus(
       id: taskId,
       state: state,
@@ -81,22 +131,19 @@ class SqliteResultBackend implements ResultBackend {
       error: error,
       meta: meta,
       attempt: attempt,
-      updatedAt: now,
     );
 
     await _connections.runInTransaction((txn) async {
-      final companion = StemTaskResultsCompanion(
-        id: Value(taskId),
-        state: Value(state.name),
-        payload: Value(_encodeJson(payload)),
-        error: Value(error == null ? null : jsonEncode(error.toJson())),
-        attempt: Value(attempt),
-        meta: Value(jsonEncode(meta)),
-        expiresAt: Value(expiresAt),
-        createdAt: Value(now.millisecondsSinceEpoch),
-        updatedAt: Value(now.millisecondsSinceEpoch),
-      );
-      await txn.into(txn.stemTaskResults).insertOnConflictUpdate(companion);
+      final model = $StemTaskResult(
+        id: taskId,
+        state: state.name,
+        payload: _wrapScalarJson(payload),
+        error: error?.toJson(),
+        attempt: attempt,
+        meta: meta,
+        expiresAt: expiresAt,
+      ).toTracked();
+      await txn.repository<StemTaskResult>().upsert(model, uniqueBy: ['id']);
     });
 
     _watchers[taskId]?.add(status);
@@ -104,13 +151,12 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<TaskStatus?> get(String taskId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final row =
-        await (_db.select(_db.stemTaskResults)..where(
-              (tbl) =>
-                  tbl.id.equals(taskId) & tbl.expiresAt.isBiggerThanValue(now),
-            ))
-            .getSingleOrNull();
+    final now = DateTime.now();
+    final row = await _context
+        .query<StemTaskResult>()
+        .whereEquals('id', taskId)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
+        .firstOrNull();
     return row == null ? null : _taskStatusFromRow(row);
   }
 
@@ -133,73 +179,70 @@ class SqliteResultBackend implements ResultBackend {
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
     final now = DateTime.now();
-    final expiresAt = now.add(heartbeatTtl).millisecondsSinceEpoch;
+    final expiresAt = now.add(heartbeatTtl);
     await _connections.runInTransaction((txn) async {
-      final companion = StemWorkerHeartbeatsCompanion(
-        workerId: Value(heartbeat.workerId),
-        namespace: Value(heartbeat.namespace),
-        timestamp: Value(heartbeat.timestamp.millisecondsSinceEpoch),
-        isolateCount: Value(heartbeat.isolateCount),
-        inflight: Value(heartbeat.inflight),
-        queues: Value(
-          jsonEncode(heartbeat.queues.map((queue) => queue.toJson()).toList()),
-        ),
-        lastLeaseRenewal: Value(
-          heartbeat.lastLeaseRenewal?.millisecondsSinceEpoch,
-        ),
-        version: Value(heartbeat.version),
-        extras: Value(jsonEncode(heartbeat.extras)),
-        expiresAt: Value(expiresAt),
-        createdAt: Value(now.millisecondsSinceEpoch),
+      final model = StemWorkerHeartbeat(
+        workerId: heartbeat.workerId,
+        namespace: heartbeat.namespace,
+        timestamp: heartbeat.timestamp,
+        isolateCount: heartbeat.isolateCount,
+        inflight: heartbeat.inflight,
+        queues: {
+          'items':
+              heartbeat.queues.map((queue) => queue.toJson()).toList(),
+        },
+        lastLeaseRenewal: heartbeat.lastLeaseRenewal,
+        version: heartbeat.version,
+        extras: heartbeat.extras,
+        expiresAt: expiresAt,
+      ).toTracked();
+      await txn.repository<StemWorkerHeartbeat>().upsert(
+        model,
+        uniqueBy: ['workerId'],
       );
-      await txn
-          .into(txn.stemWorkerHeartbeats)
-          .insertOnConflictUpdate(companion);
     });
   }
 
   @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final row =
-        await (_db.select(_db.stemWorkerHeartbeats)..where(
-              (tbl) =>
-                  tbl.workerId.equals(workerId) &
-                  tbl.expiresAt.isBiggerThanValue(now),
-            ))
-            .getSingleOrNull();
+    final now = DateTime.now();
+    final row = await _context
+        .query<StemWorkerHeartbeat>()
+        .whereEquals('workerId', workerId)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
+        .firstOrNull();
     return row == null ? null : _heartbeatFromRow(row);
   }
 
   @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final rows =
-        await (_db.select(_db.stemWorkerHeartbeats)
-              ..where((tbl) => tbl.expiresAt.isBiggerThanValue(now))
-              ..orderBy([(tbl) => OrderingTerm.asc(tbl.workerId)]))
-            .get();
+    final now = DateTime.now();
+    final rows = await _context
+        .query<StemWorkerHeartbeat>()
+        .where('expiresAt', now, PredicateOperator.greaterThan)
+        .orderBy('workerId')
+        .get();
     return rows.map(_heartbeatFromRow).toList(growable: false);
   }
 
   @override
   Future<void> initGroup(GroupDescriptor descriptor) async {
     final now = DateTime.now();
-    final expiresAt = now
-        .add(descriptor.ttl ?? groupDefaultTtl)
-        .millisecondsSinceEpoch;
+    final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
     await _connections.runInTransaction((txn) async {
-      final companion = StemGroupsCompanion(
-        id: Value(descriptor.id),
-        expected: Value(descriptor.expected),
-        meta: Value(jsonEncode(descriptor.meta)),
-        expiresAt: Value(expiresAt),
-        createdAt: Value(now.millisecondsSinceEpoch),
+      await txn.repository<StemGroup>().upsert(
+        StemGroupInsertDto(
+          id: descriptor.id,
+          expected: descriptor.expected,
+          meta: descriptor.meta,
+          expiresAt: expiresAt,
+        ),
+        uniqueBy: ['id'],
       );
-      await txn.into(txn.stemGroups).insertOnConflictUpdate(companion);
-      final delete = txn.delete(txn.stemGroupResults)
-        ..where((tbl) => tbl.groupId.equals(descriptor.id));
-      await delete.go();
+      await txn
+          .query<StemGroupResult>()
+          .whereEquals('groupId', descriptor.id)
+          .delete();
     });
   }
 
@@ -208,21 +251,20 @@ class SqliteResultBackend implements ResultBackend {
     final exists = await _groupExists(groupId);
     if (!exists) return null;
 
-    final now = DateTime.now();
     await _connections.runInTransaction((txn) async {
-      final companion = StemGroupResultsCompanion(
-        groupId: Value(groupId),
-        taskId: Value(status.id),
-        state: Value(status.state.name),
-        payload: Value(_encodeJson(status.payload)),
-        error: Value(
-          status.error == null ? null : jsonEncode(status.error!.toJson()),
-        ),
-        attempt: Value(status.attempt),
-        meta: Value(jsonEncode(status.meta)),
-        createdAt: Value(now.millisecondsSinceEpoch),
+      final model = StemGroupResult(
+        groupId: groupId,
+        taskId: status.id,
+        state: status.state.name,
+        payload: _wrapScalarJson(status.payload),
+        error: status.error?.toJson(),
+        attempt: status.attempt,
+        meta: status.meta,
       );
-      await txn.into(txn.stemGroupResults).insertOnConflictUpdate(companion);
+      await txn.repository<StemGroupResult>().upsert(
+        model,
+        uniqueBy: ['groupId', 'taskId'],
+      );
     });
 
     return getGroup(groupId);
@@ -230,28 +272,29 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<GroupStatus?> getGroup(String groupId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final groupRow =
-        await (_db.select(_db.stemGroups)..where(
-              (tbl) =>
-                  tbl.id.equals(groupId) & tbl.expiresAt.isBiggerThanValue(now),
-            ))
-            .getSingleOrNull();
+    final now = DateTime.now();
+    final groupRow = await _context
+        .query<StemGroup>()
+        .whereEquals('id', groupId)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
+        .firstOrNull();
     if (groupRow == null) return null;
 
-    final resultRows = await (_db.select(
-      _db.stemGroupResults,
-    )..where((tbl) => tbl.groupId.equals(groupId))).get();
+    final resultRows = await _context
+        .query<StemGroupResult>()
+        .whereEquals('groupId', groupId)
+        .get();
     final results = <String, TaskStatus>{};
     for (final row in resultRows) {
+      final error = row.error is Map
+          ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+          : null;
       results[row.taskId] = TaskStatus(
         id: row.taskId,
         state: TaskState.values.firstWhere((s) => s.name == row.state),
-        payload: _decodeJson(row.payload),
-        error: row.error == null
-            ? null
-            : TaskError.fromJson(_decodeMap(row.error!)),
-        meta: _decodeMap(row.meta),
+        payload: _unwrapScalarJson(row.payload),
+        error: error,
+        meta: row.meta,
         attempt: row.attempt,
       );
     }
@@ -260,16 +303,17 @@ class SqliteResultBackend implements ResultBackend {
       id: groupRow.id,
       expected: groupRow.expected,
       results: results,
-      meta: _decodeMap(groupRow.meta),
+      meta: groupRow.meta,
     );
   }
 
   @override
   Future<void> expire(String taskId, Duration ttl) async {
-    final expiresAt = DateTime.now().add(ttl).millisecondsSinceEpoch;
-    await (_db.update(_db.stemTaskResults)
-          ..where((tbl) => tbl.id.equals(taskId)))
-        .write(StemTaskResultsCompanion(expiresAt: Value(expiresAt)));
+    final expiresAt = DateTime.now().add(ttl);
+    await _context.repository<StemTaskResult>().update(
+      StemTaskResultUpdateDto(expiresAt: expiresAt),
+      where: StemTaskResultPartial(id: taskId),
+    );
   }
 
   @override
@@ -279,14 +323,13 @@ class SqliteResultBackend implements ResultBackend {
     DateTime? dispatchedAt,
   }) async {
     return _connections.runInTransaction((txn) async {
-      final query = txn.select(txn.stemGroups)
-        ..where((tbl) => tbl.id.equals(groupId));
-      final row = await query.getSingleOrNull();
+      final row =
+          await txn.query<StemGroup>().whereEquals('id', groupId).firstOrNull();
       if (row == null) {
         return false;
       }
 
-      final meta = _decodeMap(row.meta);
+      final meta = Map<String, Object?>.from(row.meta);
       if (meta['stem.chord.claimed'] == true) {
         return false;
       }
@@ -298,8 +341,10 @@ class SqliteResultBackend implements ResultBackend {
         meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
       }
 
-      await (txn.update(txn.stemGroups)..where((tbl) => tbl.id.equals(groupId)))
-          .write(StemGroupsCompanion(meta: Value(jsonEncode(meta))));
+      await txn.repository<StemGroup>().update(
+        StemGroupUpdateDto(meta: meta),
+        where: StemGroupPartial(id: groupId),
+      );
 
       return true;
     });
@@ -314,131 +359,105 @@ class SqliteResultBackend implements ResultBackend {
   }
 
   Future<void> _runCleanupCycle() async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now();
     await _connections.runInTransaction((txn) async {
-      await txn.customUpdate(
-        'DELETE FROM stem_task_results WHERE expires_at <= ?1',
-        variables: [Variable.withInt(now)],
-        updates: {txn.stemTaskResults},
-      );
+      await txn
+          .query<StemTaskResult>()
+          .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
+          .delete();
 
-      final expiredGroups = await txn
-          .customSelect(
-            'SELECT id FROM stem_groups WHERE expires_at <= ?1',
-            variables: [Variable.withInt(now)],
-            readsFrom: {txn.stemGroups},
-          )
-          .get();
-      if (expiredGroups.isNotEmpty) {
-        final ids = expiredGroups
-            .map((row) => row.data['id'] as String)
-            .toList(growable: false);
-        final placeholders = List.filled(ids.length, '?').join(', ');
-        final variables = ids.map(Variable.withString).toList();
-        await txn.customUpdate(
-          'DELETE FROM stem_groups WHERE id IN ($placeholders)',
-          variables: variables,
-          updates: {txn.stemGroups},
-        );
-        await txn.customUpdate(
-          'DELETE FROM stem_group_results WHERE group_id IN ($placeholders)',
-          variables: variables,
-          updates: {txn.stemGroupResults},
-        );
+      final expiredIds = await txn
+          .query<StemGroup>()
+          .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
+          .pluck<String>('id');
+      if (expiredIds.isNotEmpty) {
+        await txn.query<StemGroup>().whereIn('id', expiredIds).delete();
+        await txn
+            .query<StemGroupResult>()
+            .whereIn('groupId', expiredIds)
+            .delete();
       }
 
-      await txn.customUpdate(
-        'DELETE FROM stem_worker_heartbeats WHERE expires_at <= ?1',
-        variables: [Variable.withInt(now)],
-        updates: {txn.stemWorkerHeartbeats},
-      );
+      await txn
+          .query<StemWorkerHeartbeat>()
+          .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
+          .delete();
     });
   }
 
   Future<bool> _groupExists(String groupId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final result = await _db
-        .customSelect(
-          'SELECT COUNT(*) AS c FROM stem_groups WHERE id = ?1 AND expires_at > ?2',
-          variables: [Variable.withString(groupId), Variable.withInt(now)],
-          readsFrom: {_db.stemGroups},
-        )
-        .getSingle();
-    return ((result.data['c'] as num?) ?? 0) > 0;
+    final now = DateTime.now();
+    return _context
+        .query<StemGroup>()
+        .whereEquals('id', groupId)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
+        .exists();
   }
 
   TaskStatus _taskStatusFromRow(StemTaskResult row) {
+    final error = row.error is Map
+        ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+        : null;
     return TaskStatus(
       id: row.id,
       state: TaskState.values.firstWhere((s) => s.name == row.state),
-      payload: _decodeJson(row.payload),
-      error: row.error == null
-          ? null
-          : TaskError.fromJson(_decodeMap(row.error!)),
-      meta: _decodeMap(row.meta),
+      payload: _unwrapScalarJson(row.payload),
+      error: error,
+      meta: row.meta,
       attempt: row.attempt,
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(row.updatedAt),
     );
+  }
+
+  static const _scalarWrapperKey = '__wrapped_scalar__';
+
+  Object? _wrapScalarJson(Object? value) {
+    if (value == null) return null;
+    if (value is Map || value is List) return value;
+    return {_scalarWrapperKey: true, 'value': value};
+  }
+
+  Object? _unwrapScalarJson(Object? value) {
+    if (value is Map && value[_scalarWrapperKey] == true) {
+      return value['value'];
+    }
+    return value;
   }
 
   WorkerHeartbeat _heartbeatFromRow(StemWorkerHeartbeat row) {
     return WorkerHeartbeat(
       workerId: row.workerId,
       namespace: row.namespace,
-      timestamp: DateTime.fromMillisecondsSinceEpoch(row.timestamp),
+      timestamp: row.timestamp,
       isolateCount: row.isolateCount,
       inflight: row.inflight,
       queues: _decodeHeartbeatQueues(row.queues),
-      lastLeaseRenewal: row.lastLeaseRenewal == null
-          ? null
-          : DateTime.fromMillisecondsSinceEpoch(row.lastLeaseRenewal!),
+      lastLeaseRenewal: row.lastLeaseRenewal,
       version: row.version,
-      extras: _decodeMap(row.extras),
+      extras: row.extras,
     );
   }
 
-  String? _encodeJson(Object? value) {
-    if (value == null) return null;
-    return jsonEncode(value);
-  }
+  List<QueueHeartbeat> _decodeHeartbeatQueues(Object? raw) {
+    if (raw == null) return const [];
 
-  Object? _decodeJson(String? value) {
-    if (value == null) return null;
-    try {
-      return jsonDecode(value);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Map<String, Object?> _decodeMap(String? value) {
-    if (value == null || value.isEmpty) return const {};
-    try {
-      final decoded = jsonDecode(value);
-      if (decoded is Map) {
-        return decoded.cast<String, Object?>();
+    final List<dynamic> items;
+    if (raw is Map) {
+      final mapped = raw['items'];
+      if (mapped is List) {
+        items = mapped;
+      } else {
+        return const [];
       }
-    } catch (_) {
-      // ignore malformed JSON and fall back to empty map
+    } else if (raw is List) {
+      items = raw;
+    } else {
+      return const [];
     }
-    return const {};
-  }
 
-  List<QueueHeartbeat> _decodeHeartbeatQueues(String raw) {
-    if (raw.isEmpty) return const [];
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        return decoded
-            .whereType<Map>()
-            .map(
-              (entry) => QueueHeartbeat.fromJson(entry.cast<String, Object?>()),
-            )
-            .toList(growable: false);
-      }
-    } catch (_) {
-      // ignore malformed JSON and fall back to empty list
-    }
-    return const [];
+    if (items.isEmpty) return const [];
+    return items
+        .whereType<Map>()
+        .map((entry) => QueueHeartbeat.fromJson(entry.cast<String, Object?>()))
+        .toList(growable: false);
   }
 }

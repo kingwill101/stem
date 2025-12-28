@@ -643,7 +643,7 @@ class SqliteWorkflowStore implements WorkflowStore {
   }
 
   Future<void> close() async {
-    _db.dispose();
+    _db.close();
   }
 
   void _deleteWatcher(String runId) {

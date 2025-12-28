@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart';
 import 'package:meta/meta.dart';
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
 import '../connection.dart';
-import '../database.dart';
+import '../models/models.dart';
 
 class SqliteBroker implements Broker {
   SqliteBroker._(
@@ -16,7 +15,7 @@ class SqliteBroker implements Broker {
     required this.pollInterval,
     required this.sweeperInterval,
     required this.deadLetterRetention,
-  }) : _db = _connections.db {
+  }) : _context = _connections.context {
     _startSweeper();
   }
 
@@ -38,7 +37,7 @@ class SqliteBroker implements Broker {
   }
 
   final SqliteConnections _connections;
-  final StemSqliteDatabase _db;
+  final QueryContext _context;
   final Duration defaultVisibilityTimeout;
   final Duration pollInterval;
   final Duration sweeperInterval;
@@ -94,7 +93,7 @@ class SqliteBroker implements Broker {
         queue: queue,
         priority: stored.priority,
         attempt: stored.attempt,
-        notBefore: stored.notBefore?.millisecondsSinceEpoch,
+        notBefore: stored.notBefore,
       );
     });
   }
@@ -139,9 +138,10 @@ class SqliteBroker implements Broker {
   @override
   Future<void> ack(Delivery delivery) async {
     final jobId = _parseReceipt(delivery.receipt);
-    await (_db.delete(
-      _db.stemQueueJobs,
-    )..where((tbl) => tbl.id.equals(jobId))).go();
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .delete();
   }
 
   @override
@@ -151,19 +151,18 @@ class SqliteBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(
-      _db.stemQueueJobs,
-    )..where((tbl) => tbl.id.equals(jobId))).write(
-      StemQueueJobsCompanion(
-        lockedAt: const Value(null),
-        lockedUntil: const Value(null),
-        lockedBy: const Value(null),
-        attempt: Value(delivery.envelope.attempt + 1),
-        notBefore: const Value(null),
-        updatedAt: Value(now),
-      ),
-    );
+    final now = DateTime.now();
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .update({
+          'lockedAt': null,
+          'lockedUntil': null,
+          'lockedBy': null,
+          'attempt': delivery.envelope.attempt + 1,
+          'notBefore': null,
+          'updatedAt': now,
+        });
   }
 
   @override
@@ -173,78 +172,65 @@ class SqliteBroker implements Broker {
     Map<String, Object?>? meta,
   }) async {
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await _connections.runInTransaction((txn) async {
-      final row = await (txn.select(
-        txn.stemQueueJobs,
-      )..where((tbl) => tbl.id.equals(jobId))).getSingleOrNull();
-      await (txn.delete(
-        txn.stemQueueJobs,
-      )..where((tbl) => tbl.id.equals(jobId))).go();
-      if (row != null) {
-        await txn
-            .into(txn.stemDeadLetters)
-            .insert(
-              StemDeadLettersCompanion.insert(
-                id: row.id,
-                queue: row.queue,
-                envelope: row.envelope,
-                reason: Value(reason),
-                meta: Value(meta == null ? null : jsonEncode(meta)),
-                deadAt: now,
-              ),
-            );
-      }
-    });
+    final now = DateTime.now();
+
+    final row =
+        await _context.query<StemQueueJob>().whereEquals('id', jobId).firstOrNull();
+    await _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
+    if (row != null) {
+      await _context.repository<StemDeadLetter>().insert(
+        StemDeadLetterInsertDto(
+          id: row.id,
+          queue: row.queue,
+          envelope: row.envelope,
+          reason: reason,
+          meta: meta,
+          deadAt: now,
+        ),
+      );
+    }
   }
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now().millisecondsSinceEpoch;
-    await (_db.update(
-      _db.stemQueueJobs,
-    )..where((tbl) => tbl.id.equals(jobId))).write(
-      StemQueueJobsCompanion(
-        lockedUntil: Value(now + by.inMilliseconds),
-        updatedAt: Value(now),
+    final now = DateTime.now();
+    await _context.repository<StemQueueJob>().update(
+      StemQueueJobUpdateDto(
+        lockedUntil: now.add(by),
       ),
+      where: StemQueueJobPartial(id: jobId),
     );
   }
 
   @override
   Future<void> purge(String queue) async {
-    await (_db.delete(
-      _db.stemQueueJobs,
-    )..where((tbl) => tbl.queue.equals(queue))).go();
+    await _context.query<StemQueueJob>().whereEquals('queue', queue).delete();
   }
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final result = await _db
-        .customSelect(
-          'SELECT COUNT(*) AS c FROM stem_queue_jobs WHERE queue = ?1 '
-          'AND (not_before IS NULL OR not_before <= ?2)',
-          variables: [Variable.withString(queue), Variable.withInt(now)],
-          readsFrom: {_db.stemQueueJobs},
-        )
-        .getSingle();
-    return (result.data['c'] as num?)?.toInt();
+    final now = DateTime.now();
+    return _context
+        .query<StemQueueJob>()
+        .whereEquals('queue', queue)
+        .where((query) {
+          query
+            ..whereNull('notBefore')
+            ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+        })
+        .count();
   }
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final result = await _db
-        .customSelect(
-          'SELECT COUNT(*) AS c FROM stem_queue_jobs WHERE queue = ?1 '
-          'AND locked_until IS NOT NULL AND locked_until > ?2',
-          variables: [Variable.withString(queue), Variable.withInt(now)],
-          readsFrom: {_db.stemQueueJobs},
-        )
-        .getSingle();
-    return (result.data['c'] as num?)?.toInt();
+    final now = DateTime.now();
+    return _context
+        .query<StemQueueJob>()
+        .whereEquals('queue', queue)
+        .whereNotNull('lockedUntil')
+        .where('lockedUntil', now, PredicateOperator.greaterThan)
+        .count();
   }
 
   @override
@@ -254,25 +240,25 @@ class SqliteBroker implements Broker {
     int offset = 0,
   }) async {
     if (limit <= 0) return const DeadLetterPage(entries: []);
-    final entries =
-        await (_db.select(_db.stemDeadLetters)
-              ..where((tbl) => tbl.queue.equals(queue))
-              ..orderBy([(tbl) => OrderingTerm.desc(tbl.deadAt)])
-              ..limit(limit, offset: offset))
-            .get()
-            .then(
-              (rows) => rows.map(_deadLetterFromRow).toList(growable: false),
-            );
+    final entries = await _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .orderBy('deadAt', descending: true)
+        .limit(limit)
+        .offset(offset)
+        .get()
+        .then((rows) => rows.map(_deadLetterFromRow).toList(growable: false));
     final nextOffset = entries.length < limit ? null : offset + limit;
     return DeadLetterPage(entries: entries, nextOffset: nextOffset);
   }
 
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
-    final row =
-        await (_db.select(_db.stemDeadLetters)
-              ..where((tbl) => tbl.queue.equals(queue) & tbl.id.equals(id)))
-            .getSingleOrNull();
+    final row = await _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('id', id)
+        .firstOrNull();
     return row == null ? null : _deadLetterFromRow(row);
   }
 
@@ -285,19 +271,16 @@ class SqliteBroker implements Broker {
     bool dryRun = false,
   }) async {
     final bounded = limit.clamp(1, 500);
-    final sinceMs = since?.millisecondsSinceEpoch;
+    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    if (since != null) {
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
+    }
     final rows =
-        await (_db.select(_db.stemDeadLetters)
-              ..where(
-                (tbl) =>
-                    tbl.queue.equals(queue) &
-                    (sinceMs == null
-                        ? const Constant<bool>(true)
-                        : tbl.deadAt.isBiggerOrEqualValue(sinceMs)),
-              )
-              ..orderBy([(tbl) => OrderingTerm.desc(tbl.deadAt)])
-              ..limit(bounded))
-            .get();
+        await query.orderBy('deadAt', descending: true).limit(bounded).get();
 
     final entries = rows.map(_deadLetterFromRow).toList(growable: false);
     if (dryRun || entries.isEmpty) {
@@ -315,11 +298,12 @@ class SqliteBroker implements Broker {
           queue: queue,
           priority: updatedEnvelope.priority,
           attempt: updatedEnvelope.attempt,
-          notBefore: updatedEnvelope.notBefore?.millisecondsSinceEpoch,
+          notBefore: updatedEnvelope.notBefore,
         );
-        await (txn.delete(
-          txn.stemDeadLetters,
-        )..where((tbl) => tbl.id.equals(entry.envelope.id))).go();
+        await txn
+            .query<StemDeadLetter>()
+            .whereEquals('id', entry.envelope.id)
+            .delete();
       }
     });
 
@@ -332,65 +316,90 @@ class SqliteBroker implements Broker {
     DateTime? since,
     int? limit,
   }) async {
-    final sinceMs = since?.millisecondsSinceEpoch;
     if (limit != null) {
-      final ids =
-          await (_db.select(_db.stemDeadLetters)
-                ..where((tbl) => tbl.queue.equals(queue))
-                ..orderBy([(tbl) => OrderingTerm.desc(tbl.deadAt)])
-                ..limit(limit))
-              .map((row) => row.id)
-              .get();
+      final ids = await _context
+          .query<StemDeadLetter>()
+          .whereEquals('queue', queue)
+          .orderBy('deadAt', descending: true)
+          .limit(limit)
+          .pluck<String>('id');
       if (ids.isEmpty) return 0;
-      await (_db.delete(
-        _db.stemDeadLetters,
-      )..where((tbl) => tbl.id.isIn(ids))).go();
+      await _context.query<StemDeadLetter>().whereIn('id', ids).delete();
       return ids.length;
     }
 
-    final delete = _db.delete(_db.stemDeadLetters)
-      ..where((tbl) => tbl.queue.equals(queue));
-    if (sinceMs != null) {
-      delete.where((tbl) => tbl.deadAt.isBiggerOrEqualValue(sinceMs));
+    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    if (since != null) {
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
     }
-    return delete.go();
+    return query.delete();
   }
 
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final visibilityMs = defaultVisibilityTimeout.inMilliseconds;
+    final now = DateTime.now();
+    final visibilityUntil = now.add(defaultVisibilityTimeout);
 
     return _connections.runInTransaction((txn) async {
       final candidate = await txn
-          .customSelect(
-            'SELECT * FROM stem_queue_jobs WHERE queue = ?1 '
-            'AND (not_before IS NULL OR not_before <= ?2) '
-            'AND (locked_until IS NULL OR locked_until <= ?2) '
-            'ORDER BY priority DESC, created_at ASC LIMIT 1',
-            variables: [Variable.withString(queue), Variable.withInt(now)],
-            readsFrom: {txn.stemQueueJobs},
-          )
-          .getSingleOrNull();
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .where((q) {
+            q
+              ..whereNull('notBefore')
+              ..orWhere(
+                'notBefore',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .where((q) {
+            q
+              ..whereNull('lockedUntil')
+              ..orWhere(
+                'lockedUntil',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .orderBy('priority', descending: true)
+          .orderBy('createdAt')
+          .limit(1)
+          .firstOrNull();
       if (candidate == null) return null;
 
-      final id = candidate.data['id'] as String;
-      final updated = await txn.customUpdate(
-        'UPDATE stem_queue_jobs SET locked_at = ?2, locked_until = ?3, '
-        'locked_by = ?4, updated_at = ?5 '
-        'WHERE id = ?1 AND (locked_until IS NULL OR locked_until <= ?6) '
-        'AND (not_before IS NULL OR not_before <= ?6)',
-        variables: [
-          Variable.withString(id),
-          Variable.withInt(now),
-          Variable.withInt(now + visibilityMs),
-          Variable.withString(consumerId),
-          Variable.withInt(now),
-          Variable.withInt(now),
-        ],
-        updates: {txn.stemQueueJobs},
-      );
+      final updated = await txn
+          .query<StemQueueJob>()
+          .whereEquals('id', candidate.id)
+          .where((q) {
+            q
+              ..whereNull('lockedUntil')
+              ..orWhere(
+                'lockedUntil',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .where((q) {
+            q
+              ..whereNull('notBefore')
+              ..orWhere(
+                'notBefore',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          })
+          .update({
+            'lockedAt': now,
+            'lockedUntil': visibilityUntil,
+            'lockedBy': consumerId,
+            'updatedAt': now,
+          });
       if (updated == 0) return null;
-      return _QueuedJob.fromRow(candidate.data);
+      return _QueuedJob.fromModel(candidate);
     });
   }
 
@@ -403,22 +412,33 @@ class SqliteBroker implements Broker {
   }
 
   Future<void> _runSweeperCycle() async {
-    final now = DateTime.now().millisecondsSinceEpoch;
+    final now = DateTime.now();
     await _connections.runInTransaction((txn) async {
-      await txn.customUpdate(
-        'UPDATE stem_queue_jobs SET locked_at = NULL, locked_until = NULL, '
-        'locked_by = NULL WHERE locked_until IS NOT NULL AND locked_until <= ?1',
-        variables: [Variable.withInt(now)],
-        updates: {txn.stemQueueJobs},
-      );
+      await txn
+          .query<StemQueueJob>()
+          .whereNotNull('lockedUntil')
+          .where(
+            'lockedUntil',
+            now,
+            PredicateOperator.lessThanOrEqual,
+          )
+          .update({
+            'lockedAt': null,
+            'lockedUntil': null,
+            'lockedBy': null,
+          });
+
       if (!deadLetterRetention.isNegative &&
           deadLetterRetention > Duration.zero) {
-        final cutoff = now - deadLetterRetention.inMilliseconds;
-        await txn.customUpdate(
-          'DELETE FROM stem_dead_letters WHERE dead_at <= ?1',
-          variables: [Variable.withInt(cutoff)],
-          updates: {txn.stemDeadLetters},
-        );
+        final cutoff = now.subtract(deadLetterRetention);
+        await txn
+            .query<StemDeadLetter>()
+            .where(
+              'deadAt',
+              cutoff,
+              PredicateOperator.lessThanOrEqual,
+            )
+            .delete();
       }
     });
   }
@@ -426,42 +446,35 @@ class SqliteBroker implements Broker {
   String _parseReceipt(String receipt) => receipt;
 
   Future<void> _insertJob(
-    StemSqliteDatabase db, {
+    QueryContext db, {
     required Envelope envelope,
     required String queue,
     required int priority,
     required int attempt,
-    int? notBefore,
+    DateTime? notBefore,
   }) async {
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final job = StemQueueJobsCompanion(
-      id: Value(envelope.id),
-      queue: Value(queue),
-      envelope: Value(jsonEncode(envelope.toJson())),
-      attempt: Value(attempt),
-      maxRetries: Value(envelope.maxRetries),
-      priority: Value(priority),
-      notBefore: Value(notBefore),
-      lockedAt: const Value(null),
-      lockedUntil: const Value(null),
-      lockedBy: const Value(null),
-      createdAt: Value(now),
-      updatedAt: Value(now),
-    );
-    await db.into(db.stemQueueJobs).insertOnConflictUpdate(job);
+    final model = StemQueueJob(
+      id: envelope.id,
+      queue: queue,
+      envelope: envelope.toJson(),
+      attempt: attempt,
+      maxRetries: envelope.maxRetries,
+      priority: priority,
+      notBefore: notBefore,
+      lockedAt: null,
+      lockedUntil: null,
+      lockedBy: null,
+    ).toTracked();
+    await db.repository<StemQueueJob>().upsert(model, uniqueBy: ['id']);
   }
 
   DeadLetterEntry _deadLetterFromRow(StemDeadLetter row) {
-    final envelope = Envelope.fromJson(
-      (jsonDecode(row.envelope) as Map).cast<String, Object?>(),
-    );
+    final envelope = Envelope.fromJson(row.envelope);
     return DeadLetterEntry(
       envelope: envelope,
       reason: row.reason,
-      meta: row.meta == null
-          ? null
-          : (jsonDecode(row.meta!) as Map).cast<String, Object?>(),
-      deadAt: DateTime.fromMillisecondsSinceEpoch(row.deadAt),
+      meta: row.meta,
+      deadAt: row.deadAt,
     );
   }
 }
@@ -536,13 +549,11 @@ class _QueuedJob {
   final String queue;
   final Envelope envelope;
 
-  factory _QueuedJob.fromRow(Map<String, Object?> row) {
-    final envelopeMap = (jsonDecode(row['envelope'] as String) as Map)
-        .cast<String, Object?>();
+  factory _QueuedJob.fromModel(StemQueueJob row) {
     return _QueuedJob(
-      id: row['id'] as String,
-      queue: row['queue'] as String,
-      envelope: Envelope.fromJson(envelopeMap),
+      id: row.id,
+      queue: row.queue,
+      envelope: Envelope.fromJson(row.envelope),
     );
   }
 

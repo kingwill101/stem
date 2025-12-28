@@ -13,6 +13,9 @@
 
 include: package:lints/recommended.yaml
 
+analyzer:
+  exclude:
+    - "**/*.orm.dart"
 # Uncomment the following section to specify additional rules.
 
 # linter:
