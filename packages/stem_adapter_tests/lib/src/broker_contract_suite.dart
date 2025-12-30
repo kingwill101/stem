@@ -455,10 +455,7 @@ void runBrokerContractTests({
         pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
-      await currentBroker.deadLetter(
-        delivery!,
-        reason: 'contract-delay',
-      );
+      await currentBroker.deadLetter(delivery!, reason: 'contract-delay');
 
       final delay = _scaledDelay(settings.queueSettleDelay);
       final replay = await currentBroker.replayDeadLetters(

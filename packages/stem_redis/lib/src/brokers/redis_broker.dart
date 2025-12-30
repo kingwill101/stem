@@ -1008,8 +1008,9 @@ class RedisStreamsBroker implements Broker {
       await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
       final replayEnvelope = candidate.entry.envelope.copyWith(
         attempt: candidate.entry.envelope.attempt + 1,
-        notBefore:
-            delay != null ? now.add(delay) : candidate.entry.envelope.notBefore,
+        notBefore: delay != null
+            ? now.add(delay)
+            : candidate.entry.envelope.notBefore,
         queue: queue,
       );
       final scheduledAt = replayEnvelope.notBefore;

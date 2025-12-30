@@ -472,13 +472,10 @@ class PostgresWorkflowStore implements WorkflowStore {
       // Update all to clear resume_at
       final nowUtc = now.toUtc();
       for (final run in dueRuns) {
-        await ctx.repository<StemWorkflowRun>().update(
-          {
-            'resume_at': null,
-            'updated_at': nowUtc,
-          },
-          where: StemWorkflowRunPartial(id: run.id),
-        );
+        await ctx.repository<StemWorkflowRun>().update({
+          'resume_at': null,
+          'updated_at': nowUtc,
+        }, where: StemWorkflowRunPartial(id: run.id));
       }
 
       return dueRuns.map((r) => r.id).toList(growable: false);
@@ -821,8 +818,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     return input;
   }
 
-  bool get _useWorkflowNamespace =>
-      namespace.isNotEmpty && namespace != 'stem';
+  bool get _useWorkflowNamespace => namespace.isNotEmpty && namespace != 'stem';
 
   String get _workflowNamespacePrefix => '$namespace::';
 

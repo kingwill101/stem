@@ -44,7 +44,7 @@ class ResultBackendContractFactory {
   final FutureOr<void> Function(ResultBackend backend)? beforeStatusExpiryCheck;
   final FutureOr<void> Function(ResultBackend backend)? beforeGroupExpiryCheck;
   final FutureOr<void> Function(ResultBackend backend)?
-      beforeHeartbeatExpiryCheck;
+  beforeHeartbeatExpiryCheck;
 }
 
 void runResultBackendContractTests({
@@ -349,9 +349,7 @@ void runResultBackendContractTests({
 
         await Future<void>.delayed(settings.groupTtl + settings.settleDelay);
         if (factory.beforeGroupExpiryCheck != null) {
-          await factory.beforeGroupExpiryCheck!(
-            _unwrapBackend(currentBackend),
-          );
+          await factory.beforeGroupExpiryCheck!(_unwrapBackend(currentBackend));
         }
 
         expect(await currentBackend.getGroup(groupId), isNull);
@@ -462,10 +460,7 @@ void runResultBackendContractTests({
         expect(stored.extras['version'], 2);
 
         final list = await currentBackend.listWorkerHeartbeats();
-        expect(
-          list.where((hb) => hb.workerId == workerId).length,
-          1,
-        );
+        expect(list.where((hb) => hb.workerId == workerId).length, 1);
       });
 
       test('worker heartbeats expire after ttl', () async {
@@ -483,7 +478,9 @@ void runResultBackendContractTests({
         );
 
         await currentBackend.setWorkerHeartbeat(heartbeat);
-        await Future<void>.delayed(settings.heartbeatTtl + settings.settleDelay);
+        await Future<void>.delayed(
+          settings.heartbeatTtl + settings.settleDelay,
+        );
         if (factory.beforeHeartbeatExpiryCheck != null) {
           await factory.beforeHeartbeatExpiryCheck!(
             _unwrapBackend(currentBackend),
