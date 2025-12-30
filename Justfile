@@ -4,10 +4,19 @@ ROOT := justfile_directory()
 INIT_ENV := ROOT + "/packages/stem_cli/_init_test_env"
 
 test:
-    @set -euo pipefail; \
-      source "{{INIT_ENV}}"; \
+    @set -uo pipefail; \
+      if ! source "{{INIT_ENV}}"; then exit 1; fi; \
+      failures=""; \
       for dir in "{{ROOT}}"/packages/*; do \
-        if [ -f "$$dir/pubspec.yaml" ]; then \
-          (cd "$$dir" && dart test --fail-fast); \
+        if [ -f "$dir/pubspec.yaml" ]; then \
+          pkg="$(basename "$dir")"; \
+          echo "==> $pkg"; \
+          if ! (cd "$dir" && dart test --fail-fast); then \
+            failures="$failures $pkg"; \
+          fi; \
         fi; \
-      done
+      done; \
+      if [ -n "$failures" ]; then \
+        echo "Failed packages:$failures"; \
+        exit 1; \
+      fi
