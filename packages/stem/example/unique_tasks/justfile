@@ -13,7 +13,7 @@ build:
     @true
 
 run:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/unique_tasks/unique_task_example.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/unique_tasks/unique_task_example.dart
 
 clean:
     @true

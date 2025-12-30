@@ -171,3 +171,8 @@ scattering logic across the codebase.
 You now have dashboards, CLI tooling, and remote control over workers. Finish
 the onboarding journey by applying security hardening, TLS, and production
 checklists in [Prepare for Production](./production-checklist.md).
+
+If you want more hands-on drills:
+
+- Run `example/ops_health_suite` to practice `stem health` and `stem observe` flows.
+- Run `example/scheduler_observability` to watch drift metrics and schedule signals.

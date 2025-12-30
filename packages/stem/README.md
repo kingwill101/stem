@@ -509,8 +509,15 @@ drivers by importing the adapter you need.
 - [cancellation_policy](example/workflows/cancellation_policy.dart) - demonstrates auto-cancelling long workflows using `WorkflowCancellationPolicy`.
 - [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
 - [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.
+- [autoscaling_demo](example/autoscaling_demo) - autoscaling worker concurrency under queue backlog.
+- [scheduler_observability](example/scheduler_observability) - Beat drift metrics, schedule signals, and CLI checks.
 - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
+- [progress_heartbeat](example/progress_heartbeat) - task progress + heartbeat reporting.
+- [worker_control_lab](example/worker_control_lab) - worker ping/stats/revoke/shutdown drills.
 - [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
+- [signing_key_rotation](example/signing_key_rotation) - rotate HMAC signing keys with overlap.
+- [ops_health_suite](example/ops_health_suite) - CLI health checks + queue/worker snapshots.
+- [quality_gates](example/quality_gates) - justfile-driven quality gate runner.
 - [security examples](example/security/*) - payload signing + TLS profiles.
 - [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
 - [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.

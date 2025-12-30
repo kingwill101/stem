@@ -1,0 +1,19 @@
+name: stem_signing_key_rotation
+description: Demonstrates rotating HMAC signing keys with overlap.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis
+
+dev_dependencies:
+  lints: ^6.0.0
+
+dependency_overrides:
+  stem:
+    path: ../..

@@ -12,7 +12,7 @@ build:
     cd "{{ROOT}}" && dart pub get
 
 run:
-    cd "{{ROOT}}" && {{ENV_LOAD}} dart run bin/service.dart
+    cd "{{ROOT}}" && if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi dart run bin/service.dart
 
 clean:
     rm -rf "{{ROOT}}/.dart_tool"

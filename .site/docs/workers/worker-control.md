@@ -40,6 +40,9 @@ stem worker inspect --json
 stem worker revoke --task 1761057... --terminate
 ```
 
+For a runnable lab that exercises ping/stats/revoke/shutdown against real
+workers, see `example/worker_control_lab` in the repository.
+
 ## Autoscaling Concurrency
 
 Workers can autoscale their isolate pools between configured minimum and
@@ -69,6 +72,9 @@ The autoscaler samples broker queue depth alongside inflight counts to decide
 when to scale. Metrics expose the current setting via
 `stem.worker.concurrency`, and `stem worker stats --json` includes the live
 `activeConcurrency` value so dashboards can observe adjustments.
+
+See `example/autoscaling_demo` for a queue-backlog scenario that triggers
+scale-up and scale-down events.
 
 ## CLI Multi-Instance Management
 

@@ -13,13 +13,13 @@ build:
     @true
 
 run-chain:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/chain_example.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/chain_example.dart
 
 run-chord:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/chord_example.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/chord_example.dart
 
 run-group:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/group_example.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/canvas_patterns/group_example.dart
 
 run: run-chain
 

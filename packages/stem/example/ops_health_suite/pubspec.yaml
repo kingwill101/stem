@@ -1,0 +1,19 @@
+name: stem_ops_health_suite
+description: Demonstrates CLI health checks, heartbeats, and queue snapshots.
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis
+
+dev_dependencies:
+  lints: ^6.0.0
+
+dependency_overrides:
+  stem:
+    path: ../..

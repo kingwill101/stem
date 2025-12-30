@@ -13,22 +13,22 @@ build:
     @true
 
 run-basic:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/basic_in_memory.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/basic_in_memory.dart
 
 run-cancel:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/cancellation_policy.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/cancellation_policy.dart
 
 run-custom:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/custom_factories.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/custom_factories.dart
 
 run-sleep:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/sleep_and_event.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/sleep_and_event.dart
 
 run-sqlite:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/sqlite_store.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/sqlite_store.dart
 
 run-versioned:
-    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/workflows/versioned_rewind.dart
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/versioned_rewind.dart
 
 run: run-basic
 
