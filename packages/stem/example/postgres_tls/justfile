@@ -1,0 +1,35 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+STEM_ROOT := "{{ROOT}}/../.."
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-postgres-tls")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+COMPOSE_FILE := env_var_or_default(
+    "COMPOSE_FILE",
+    "{{ROOT}}/../../stem_cli/docker/testing/docker-compose.yml",
+)
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "postgres redis")
+COMPOSE_ENV := env_var_or_default("COMPOSE_ENV", "")
+
+build:
+    @true
+
+run-worker:
+    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/postgres_tls/bin/worker.dart
+
+run-enqueue:
+    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/postgres_tls/bin/enqueue.dart
+
+run: run-worker
+
+clean:
+    @true
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run-worker"
+    tmux split-window -t "{{SESSION}}:app" -v "cd \"{{ROOT}}\" && {{JUST}} run-enqueue"
+    tmux select-layout -t "{{SESSION}}:app" even-vertical
+    {{JUST}} tmux-attach

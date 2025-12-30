@@ -1,0 +1,27 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+STEM_ROOT := "{{ROOT}}/../.."
+COMPOSE_FILE := env_var_or_default("COMPOSE_FILE", "")
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "")
+COMPOSE_ENV := env_var_or_default("COMPOSE_ENV", "")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-daemonized-worker")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+
+build:
+    @true
+
+run-worker:
+    {{ENV_LOAD}} cd "{{STEM_ROOT}}" && dart run example/daemonized_worker/bin/worker.dart
+
+run: run-worker
+
+clean:
+    @true
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run"
+    {{JUST}} tmux-attach

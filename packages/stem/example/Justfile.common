@@ -1,0 +1,32 @@
+set shell := ["bash", "-cu"]
+
+JUST := "just"
+
+ENV_LOAD := "if [ -f \"{{ENV_FILE}}\" ]; then set -a; . \"{{ENV_FILE}}\"; set +a; elif [ -f \"{{ROOT}}/{{ENV_FILE}}\" ]; then set -a; . \"{{ROOT}}/{{ENV_FILE}}\"; set +a; fi"
+CLI_ROOT := env_var_or_default("CLI_ROOT", ROOT + "/../../../stem_cli")
+CLI_BUILD_DIR := env_var_or_default("CLI_BUILD_DIR", "build")
+
+deps-up:
+    @if [ -z "{{DEPS_SERVICES}}" ] || [ -z "{{COMPOSE_FILE}}" ]; then exit 0; else COMPOSE_PROJECT_NAME={{PROJECT_NAME}} {{COMPOSE_ENV}} docker compose -f "{{COMPOSE_FILE}}" up -d {{DEPS_SERVICES}}; fi
+
+deps-down:
+    @if [ -z "{{DEPS_SERVICES}}" ] || [ -z "{{COMPOSE_FILE}}" ]; then exit 0; else COMPOSE_PROJECT_NAME={{PROJECT_NAME}} {{COMPOSE_ENV}} docker compose -f "{{COMPOSE_FILE}}" down; fi
+
+tmux-guard:
+    @if ! command -v tmux >/dev/null 2>&1; then echo "tmux is required. Install tmux or use run-* targets."; exit 1; fi
+    @if tmux has-session -t "{{SESSION}}" 2>/dev/null; then if [ -n "${TMUX:-}" ]; then tmux switch-client -t "{{SESSION}}"; else tmux attach -t "{{SESSION}}"; fi; exit 0; fi
+
+tmux-prep:
+    {{JUST}} deps-up
+    {{JUST}} build
+    {{JUST}} build-cli
+
+tmux-attach:
+    @if [ -t 1 ]; then if [ -n "${TMUX:-}" ]; then tmux switch-client -t "{{SESSION}}"; else tmux attach -t "{{SESSION}}"; fi; else echo "tmux session {{SESSION}} started."; fi
+
+build-cli:
+    cd "{{CLI_ROOT}}"; dart pub get
+    cd "{{CLI_ROOT}}"; dart build cli -t bin/stem.dart -o "{{CLI_BUILD_DIR}}"
+
+stem *ARGS:
+    {{ENV_LOAD}}; export REDIS_PORT="${REDIS_PORT:-6379}"; export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"; export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"; export STEM_REVOKE_STORE_URL="${STEM_REVOKE_STORE_URL:-redis://localhost:${REDIS_PORT}/2}"; if [ -d "{{CLI_ROOT}}/{{CLI_BUILD_DIR}}/bundle/bin" ]; then "{{CLI_ROOT}}/{{CLI_BUILD_DIR}}/bundle/bin"/* {{ARGS}}; else cd "{{CLI_ROOT}}"; dart run bin/stem.dart {{ARGS}}; fi
