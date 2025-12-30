@@ -1,0 +1,11 @@
+set shell := ["bash", "-cu"]
+
+ROOT := justfile_directory() + "/../.."
+INIT_ENV := ROOT + "/packages/stem_cli/_init_test_env"
+PACKAGE_DIR := justfile_directory()
+
+test:
+    @set -euo pipefail; \
+      source "{{INIT_ENV}}"; \
+      cd "{{PACKAGE_DIR}}"; \
+      dart test --fail-fast
