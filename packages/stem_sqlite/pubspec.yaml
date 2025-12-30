@@ -7,8 +7,8 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
-  ormed: ^0.1.0-dev+5
-  ormed_sqlite: ^0.1.0-dev+5
+  ormed: ^0.1.0-dev+6
+  ormed_sqlite: ^0.1.0-dev+6
   args: ^2.6.0
   path: ^1.9.1
   collection: ^1.18.0
