@@ -1,8 +1,8 @@
-import 'package:ormed_cli/runtime.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem_sqlite/orm_registry.g.dart';
 
 import 'seeders/database_seeder.dart';
+import 'seed_runtime.dart';
 // <ORM-SEED-IMPORTS>
 // </ORM-SEED-IMPORTS>
 
