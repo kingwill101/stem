@@ -6,6 +6,7 @@ build/
 textwrap/
 examples/microservice/certs/
 examples/security/*/certs/
+packages/dashboard/storage/
 # IDE / OS
 .idea/
 .vscode/
