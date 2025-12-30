@@ -35,10 +35,37 @@ String _daemonStubPath() {
   );
 }
 
+Future<Process> _startHealthcheckStub() async {
+  if (Platform.isWindows) {
+    final script = _daemonStubPath();
+    return Process.start(Platform.resolvedExecutable, [
+      '--disable-dart-dev',
+      script,
+    ]);
+  }
+  return Process.start('sleep', ['30']);
+}
+
 void main() {
   group('worker healthcheck', () {
     late Directory tempDir;
     Process? stubProcess;
+
+    Future<void> _waitForPid(int pid) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      while (DateTime.now().isBefore(deadline)) {
+        final running = Platform.isWindows
+            ? Process.killPid(pid)
+            : Platform.isLinux
+            ? Directory('/proc/$pid').existsSync()
+            : (await Process.run('kill', ['-0', '$pid'])).exitCode == 0;
+        if (running) {
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      throw StateError('Timed out waiting for worker PID $pid to be running.');
+    }
 
     setUp(() async {
       tempDir = await Directory.systemTemp.createTemp('stem-health');
@@ -60,11 +87,15 @@ void main() {
 
     test('reports ok when pid is alive', () async {
       final pidFile = p.join(tempDir.path, 'alpha.pid');
-      final script = _daemonStubPath();
-      stubProcess = await Process.start(Platform.resolvedExecutable, [
-        '--disable-dart-dev',
-        script,
-      ]);
+      stubProcess = await _startHealthcheckStub();
+      final exited = await stubProcess!.exitCode.timeout(
+        const Duration(milliseconds: 100),
+        onTimeout: () => -1,
+      );
+      if (exited != -1) {
+        throw StateError('Healthcheck stub exited early with code $exited.');
+      }
+      await _waitForPid(stubProcess!.pid);
       File(pidFile).writeAsStringSync('${stubProcess!.pid}\n');
 
       final out = StringBuffer();
