@@ -43,7 +43,8 @@ class PostgresLockStore implements LockStore {
     String? owner,
   }) async {
     final ownerValue = _owner(owner);
-    final expiresAt = DateTime.now().add(ttl);
+    final now = DateTime.now().toUtc();
+    final expiresAt = now.add(ttl);
     final ctx = _connections.context;
 
     try {
@@ -52,13 +53,13 @@ class PostgresLockStore implements LockStore {
           key: key,
           owner: ownerValue,
           expiresAt: expiresAt,
-          createdAt: DateTime.now(),
+          createdAt: now,
         ),
       );
       return _PostgresLock(store: this, key: key, owner: ownerValue);
     } catch (_) {
       // Lock exists, try to clean up expired and retry
-      final now = DateTime.now();
+      final now = DateTime.now().toUtc();
       final expired = await ctx
           .query<$StemLock>()
           .whereEquals('key', key)
@@ -76,7 +77,7 @@ class PostgresLockStore implements LockStore {
             key: key,
             owner: ownerValue,
             expiresAt: expiresAt,
-            createdAt: DateTime.now(),
+            createdAt: now,
           ),
         );
         return _PostgresLock(store: this, key: key, owner: ownerValue);
@@ -87,14 +88,15 @@ class PostgresLockStore implements LockStore {
   }
 
   Future<bool> _renew(String key, String owner, Duration ttl) async {
-    final expiresAt = DateTime.now().add(ttl);
+    final now = DateTime.now().toUtc();
+    final expiresAt = now.add(ttl);
     final ctx = _connections.context;
 
     final locks = await ctx
         .query<$StemLock>()
         .whereEquals('key', key)
         .whereEquals('owner', owner)
-        .where('expiresAt', DateTime.now(), PredicateOperator.greaterThan)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
         .get();
 
     if (locks.isEmpty) return false;
@@ -126,10 +128,11 @@ class PostgresLockStore implements LockStore {
   @override
   Future<String?> ownerOf(String key) async {
     final ctx = _connections.context;
+    final now = DateTime.now().toUtc();
     final locks = await ctx
         .query<$StemLock>()
         .whereEquals('key', key)
-        .where('expiresAt', DateTime.now(), PredicateOperator.greaterThan)
+        .where('expiresAt', now, PredicateOperator.greaterThan)
         .get();
 
     if (locks.isEmpty) return null;

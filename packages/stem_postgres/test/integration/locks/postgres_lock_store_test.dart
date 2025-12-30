@@ -28,8 +28,8 @@ void main() {
       dispose: (store) => (store as PostgresLockStore).close(),
     ),
     settings: const LockStoreContractSettings(
-      initialTtl: Duration(milliseconds: 300),
-      expiryBackoff: Duration(milliseconds: 300),
+      initialTtl: Duration(seconds: 1),
+      expiryBackoff: Duration(seconds: 1),
     ),
   );
 }
