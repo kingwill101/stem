@@ -3,7 +3,7 @@ services:
     image: redis:7.2-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   postgres:
     image: postgres:14
@@ -13,7 +13,7 @@ services:
       POSTGRES_USER: stem
       POSTGRES_PASSWORD: stem
     ports:
-      - "65433:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stem -d stem_demo"]
       interval: 5s
@@ -23,7 +23,7 @@ services:
   enqueuer:
     build:
       context: ../..
-      dockerfile: examples/redis_postgres_worker/enqueuer/Dockerfile
+      dockerfile: example/redis_postgres_worker/enqueuer/Dockerfile
       target: dev
     env_file:
       - .env.example
@@ -37,7 +37,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: examples/redis_postgres_worker/worker/Dockerfile
+      dockerfile: example/redis_postgres_worker/worker/Dockerfile
       target: dev
     env_file:
       - .env.example

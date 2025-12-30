@@ -4,7 +4,7 @@ services:
   redis:
     image: redis:7.2
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
     volumes:
@@ -13,13 +13,14 @@ services:
   mailhog:
     image: mailhog/mailhog:v1.0.1
     ports:
-      - "8025:8025"
+      - "${SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
     restart: unless-stopped
 
   enqueuer:
     build:
       context: ../..
-      dockerfile: examples/email_service/Dockerfile.enqueuer
+      dockerfile: example/email_service/Dockerfile.enqueuer
       target: dev
     env_file:
       - .env.example
@@ -30,18 +31,22 @@ services:
     depends_on:
       - redis
       - mailhog
+    volumes:
+      - ./routing.yaml:/config/routing.yaml:ro
     restart: unless-stopped
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/email_service/Dockerfile.worker
+      dockerfile: example/email_service/Dockerfile.worker
       target: dev
     env_file:
       - .env.example
     depends_on:
       - redis
       - mailhog
+    volumes:
+      - ./routing.yaml:/config/routing.yaml:ro
     restart: unless-stopped
 
 volumes:

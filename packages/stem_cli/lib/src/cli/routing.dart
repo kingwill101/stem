@@ -21,7 +21,7 @@ class RoutingCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw Exception('Specify a routing subcommand.',);
+    throw Exception('Specify a routing subcommand.');
   }
 }
 

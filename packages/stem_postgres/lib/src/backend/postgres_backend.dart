@@ -189,7 +189,7 @@ class PostgresResultBackend implements ResultBackend {
           .query<StemGroup>()
           .whereEquals('id', descriptor.id)
           .first();
-      
+
       if (existing == null) {
         // Insert new group - timestamps will use DEFAULT
         await txn.repository<StemGroup>().insert(
@@ -211,7 +211,7 @@ class PostgresResultBackend implements ResultBackend {
           where: StemGroupPartial(id: descriptor.id),
         );
       }
-      
+
       await txn
           .query<StemGroupResult>()
           .whereEquals('groupId', descriptor.id)
@@ -265,9 +265,7 @@ class PostgresResultBackend implements ResultBackend {
         timestamp: heartbeat.timestamp,
         isolateCount: heartbeat.isolateCount,
         inflight: heartbeat.inflight,
-        queues: {
-          'items': heartbeat.queues.map((q) => q.toJson()).toList(),
-        },
+        queues: {'items': heartbeat.queues.map((q) => q.toJson()).toList()},
         lastLeaseRenewal: heartbeat.lastLeaseRenewal,
         version: heartbeat.version,
         extras: heartbeat.extras,
@@ -310,8 +308,10 @@ class PostgresResultBackend implements ResultBackend {
     DateTime? dispatchedAt,
   }) async {
     return _connections.runInTransaction((txn) async {
-      final row =
-          await txn.query<StemGroup>().whereEquals('id', groupId).firstOrNull();
+      final row = await txn
+          .query<StemGroup>()
+          .whereEquals('id', groupId)
+          .firstOrNull();
       if (row == null) return false;
       final meta = Map<String, Object?>.from(row.meta);
       if (meta['stem.chord.claimed'] == true) return false;

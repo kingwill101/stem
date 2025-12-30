@@ -8,4 +8,4 @@ Stem's SQLite adapters are designed for embedded deployments (desktop, mobile, e
 - Run periodic sweepers to reclaim expired locks and clean TTL'd rows. The adapters expose maintenance hooks for this purpose.
 - Vacuum during maintenance windows if the file grows significantly after large bursts of jobs.
 
-The new `stem_sqlite` package bundles the schema (via Drift) and connection helpers that apply the recommended pragmas automatically.
+The `stem_sqlite` package bundles schema migrations via Ormed and applies the recommended pragmas automatically.

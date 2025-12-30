@@ -20,9 +20,7 @@ class PostgresScheduleStore implements ScheduleStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final connections = await PostgresConnections.open(
-      connectionString: uri,
-    );
+    final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresScheduleStore._(connections);
   }
 
@@ -231,7 +229,9 @@ class PostgresScheduleStore implements ScheduleStore {
       args: _decodeMap(model.args),
       kwargs: _decodeMap(model.kwargs),
       enabled: model.enabled,
-      jitter: model.jitter != null ? Duration(milliseconds: model.jitter!) : null,
+      jitter: model.jitter != null
+          ? Duration(milliseconds: model.jitter!)
+          : null,
       lastRunAt: model.lastRunAt,
       nextRunAt: model.nextRunAt,
       lastJitter: model.lastJitter != null

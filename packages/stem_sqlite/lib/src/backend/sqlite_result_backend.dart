@@ -188,8 +188,7 @@ class SqliteResultBackend implements ResultBackend {
         isolateCount: heartbeat.isolateCount,
         inflight: heartbeat.inflight,
         queues: {
-          'items':
-              heartbeat.queues.map((queue) => queue.toJson()).toList(),
+          'items': heartbeat.queues.map((queue) => queue.toJson()).toList(),
         },
         lastLeaseRenewal: heartbeat.lastLeaseRenewal,
         version: heartbeat.version,
@@ -323,8 +322,10 @@ class SqliteResultBackend implements ResultBackend {
     DateTime? dispatchedAt,
   }) async {
     return _connections.runInTransaction((txn) async {
-      final row =
-          await txn.query<StemGroup>().whereEquals('id', groupId).firstOrNull();
+      final row = await txn
+          .query<StemGroup>()
+          .whereEquals('id', groupId)
+          .firstOrNull();
       if (row == null) {
         return false;
       }

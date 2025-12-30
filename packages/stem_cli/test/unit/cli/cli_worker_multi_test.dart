@@ -5,6 +5,36 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 
+String _daemonStubPath() {
+  final cwd = Directory.current.path;
+  final local = p.join(cwd, 'test', 'support', 'fixtures', 'daemon_stub.dart');
+  if (File(local).existsSync()) {
+    return local;
+  }
+  final workspace = p.join(
+    cwd,
+    'packages',
+    'stem_cli',
+    'test',
+    'support',
+    'fixtures',
+    'daemon_stub.dart',
+  );
+  if (File(workspace).existsSync()) {
+    return workspace;
+  }
+  return p.normalize(
+    p.join(
+      p.dirname(Platform.script.toFilePath()),
+      '..',
+      '..',
+      'support',
+      'fixtures',
+      'daemon_stub.dart',
+    ),
+  );
+}
+
 void main() {
   final runMultiTests = Platform.environment['STEM_CLI_RUN_MULTI'] == 'true';
   if (!runMultiTests) {
@@ -42,7 +72,7 @@ void main() {
       logTemplate = p.join(tempDir.path, '%n.log');
       envFilePath = p.join(tempDir.path, 'stem.env');
 
-      final scriptPath = p.absolute('test/support/fixtures/daemon_stub.dart');
+      final scriptPath = _daemonStubPath();
       final commandLine =
           '${Platform.resolvedExecutable} --disable-dart-dev "${scriptPath.replaceAll('"', '\\"')}"';
 

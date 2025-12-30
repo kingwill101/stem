@@ -23,7 +23,7 @@ class StemGroup extends Model<StemGroup> with TimestampsTZ {
   @OrmField(columnName: 'expires_at')
   final DateTime expiresAt;
 
-  @OrmRelation.hasMany(target:StemGroupResult, foreignKey: 'group_id')
+  @OrmRelation.hasMany(target: StemGroupResult, foreignKey: 'group_id')
   @OrmField(ignore: true)
   final List<StemGroupResult> results = const [];
 }

@@ -188,6 +188,35 @@ void runWorkflowStoreContractTests({
       expect(state?.waitTopic, isNull);
     });
 
+    test('dueRuns honors limit and leaves remaining runs due', () async {
+      final current = store!;
+      final resumeAt = clock.now().subtract(const Duration(seconds: 1));
+      final runIds = <String>[];
+
+      for (var i = 0; i < 3; i++) {
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {'batch': true},
+        );
+        await current.suspendUntil(
+          runId,
+          'step-$i',
+          resumeAt,
+          data: {'index': i},
+        );
+        runIds.add(runId);
+      }
+
+      final firstBatch = await current.dueRuns(clock.now(), limit: 2);
+      expect(firstBatch.length, 2);
+
+      final secondBatch = await current.dueRuns(clock.now(), limit: 2);
+      expect(secondBatch.length, 1);
+
+      final combined = {...firstBatch, ...secondBatch}.toSet();
+      expect(combined, runIds.toSet());
+    });
+
     test('suspendOnTopic/runsWaitingOn/cancel workflow lifecycle', () async {
       final current = store!;
       final runId = await current.createRun(

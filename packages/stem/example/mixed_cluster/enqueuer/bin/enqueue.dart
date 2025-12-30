@@ -91,10 +91,7 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
     throw StateError('STEM_RESULT_BACKEND_URL must be set for Postgres Stem');
   }
   final backend = await PostgresResultBackend.connect(
-    backendUrl,
-    namespace: 'stem_demo',
-    applicationName: 'stem-mixed-enqueuer',
-    tls: config.tls,
+    connectionString: backendUrl,
   );
 
   final registry = SimpleTaskRegistry()
@@ -117,4 +114,5 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) => 'noop';
+) =>
+    'noop';

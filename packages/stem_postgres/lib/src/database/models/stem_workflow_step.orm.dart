@@ -12,7 +12,7 @@ const FieldDefinition _$StemWorkflowStepRunIdField = FieldDefinition(
   columnName: 'run_id',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
+  isPrimaryKey: true,
   isNullable: false,
   isUnique: false,
   isIndexed: false,
@@ -24,7 +24,7 @@ const FieldDefinition _$StemWorkflowStepNameField = FieldDefinition(
   columnName: 'name',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
+  isPrimaryKey: true,
   isNullable: false,
   isUnique: false,
   isIndexed: false,
@@ -41,19 +41,6 @@ const FieldDefinition _$StemWorkflowStepValueField = FieldDefinition(
   isUnique: false,
   isIndexed: false,
   autoIncrement: false,
-);
-
-const FieldDefinition _$StemWorkflowStepIdField = FieldDefinition(
-  name: 'id',
-  columnName: 'id',
-  dartType: 'int',
-  resolvedType: 'int',
-  isPrimaryKey: true,
-  isNullable: false,
-  isUnique: true,
-  isIndexed: true,
-  autoIncrement: true,
-  columnType: 'INTEGER',
 );
 
 Map<String, Object?> _encodeStemWorkflowStepUntracked(
@@ -76,7 +63,6 @@ final ModelDefinition<$StemWorkflowStep> _$StemWorkflowStepDefinition =
         _$StemWorkflowStepRunIdField,
         _$StemWorkflowStepNameField,
         _$StemWorkflowStepValueField,
-        _$StemWorkflowStepIdField,
       ],
       relations: const [],
       softDeleteColumn: 'deleted_at',
@@ -213,11 +199,6 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
       'run_id': registry.encodeField(_$StemWorkflowStepRunIdField, model.runId),
       'name': registry.encodeField(_$StemWorkflowStepNameField, model.name),
       'value': registry.encodeField(_$StemWorkflowStepValueField, model.value),
-      if (model.hasAttribute('id'))
-        'id': registry.encodeField(
-          _$StemWorkflowStepIdField,
-          model.getAttribute<int>('id'),
-        ),
     };
   }
 
@@ -242,8 +223,6 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
       _$StemWorkflowStepValueField,
       data['value'],
     );
-    final int stemWorkflowStepIdValue =
-        registry.decodeField<int>(_$StemWorkflowStepIdField, data['id']) ?? 0;
     final model = $StemWorkflowStep(
       runId: stemWorkflowStepRunIdValue,
       name: stemWorkflowStepNameValue,
@@ -253,7 +232,6 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
       'run_id': stemWorkflowStepRunIdValue,
       'name': stemWorkflowStepNameValue,
       'value': stemWorkflowStepValueValue,
-      if (data.containsKey('id')) 'id': stemWorkflowStepIdValue,
     });
     return model;
   }

@@ -24,8 +24,15 @@ class DashboardState {
   Map<String, WorkerStatus> _previousWorkers = const {};
   final _events = <DashboardEvent>[];
   Future<void> _polling = Future.value();
+  DateTime? _lastPollAt;
+  DashboardThroughput _throughput = const DashboardThroughput(
+    interval: Duration.zero,
+    processed: 0,
+    enqueued: 0,
+  );
 
   List<DashboardEvent> get events => List.unmodifiable(_events);
+  DashboardThroughput get throughput => _throughput;
 
   Future<void> start() async {
     await _runPoll();
@@ -48,6 +55,7 @@ class DashboardState {
   Future<void> _poll() async {
     final queues = await service.fetchQueueSummaries();
     final workers = await service.fetchWorkerStatuses();
+    _updateThroughput(queues);
 
     _generateQueueEvents(_previousQueues, queues);
     _generateWorkerEvents(_previousWorkers, {
@@ -56,6 +64,38 @@ class DashboardState {
 
     _previousQueues = queues;
     _previousWorkers = {for (final worker in workers) worker.workerId: worker};
+  }
+
+  void _updateThroughput(List<QueueSummary> queues) {
+    final now = DateTime.now().toUtc();
+    if (_lastPollAt == null) {
+      _lastPollAt = now;
+      return;
+    }
+    final interval = now.difference(_lastPollAt!);
+    if (interval.inMilliseconds <= 0) {
+      _lastPollAt = now;
+      return;
+    }
+    final prevPending = _sumPending(_previousQueues);
+    final currPending = _sumPending(queues);
+    final delta = currPending - prevPending;
+    final processed = delta < 0 ? -delta : 0;
+    final enqueued = delta > 0 ? delta : 0;
+    _throughput = DashboardThroughput(
+      interval: interval,
+      processed: processed,
+      enqueued: enqueued,
+    );
+    _lastPollAt = now;
+  }
+
+  int _sumPending(List<QueueSummary> queues) {
+    var total = 0;
+    for (final summary in queues) {
+      total += summary.pending;
+    }
+    return total;
   }
 
   void _generateQueueEvents(

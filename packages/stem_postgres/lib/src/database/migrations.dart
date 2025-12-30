@@ -3,17 +3,14 @@ import 'dart:convert';
 import 'package:ormed/migrations.dart';
 
 // <ORM-MIGRATION-IMPORTS>
-import 'migrations/m_20251227071920_stem.dart';// </ORM-MIGRATION-IMPORTS>
+import 'migrations/m_20251227071920_stem.dart'; // </ORM-MIGRATION-IMPORTS>
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
   MigrationEntry(
-    id: MigrationId(
-      DateTime(2025, 12, 27, 7, 19, 20),
-      'm_20251227071920_stem',
-    ),
+    id: MigrationId(DateTime(2025, 12, 27, 7, 19, 20), 'm_20251227071920_stem'),
     migration: const Stem(),
-  ),// </ORM-MIGRATION-REGISTRY>
+  ), // </ORM-MIGRATION-REGISTRY>
 ];
 
 /// Build migration descriptors sorted by timestamp.
@@ -46,8 +43,7 @@ void main(List<String> args) {
     final snapshotIndex = args.indexOf('--schema-snapshot');
     SchemaSnapshot? snapshot;
     if (snapshotIndex != -1) {
-      final decoded =
-          utf8.decode(base64.decode(args[snapshotIndex + 1]));
+      final decoded = utf8.decode(base64.decode(args[snapshotIndex + 1]));
       final payload = jsonDecode(decoded) as Map<String, Object?>;
       snapshot = SchemaSnapshot.fromJson(payload);
     }

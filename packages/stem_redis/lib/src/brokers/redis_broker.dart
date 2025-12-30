@@ -17,13 +17,15 @@ class RedisStreamsBroker implements Broker {
     this.delayedDrainBatch = 128,
     this.defaultVisibilityTimeout = const Duration(seconds: 30),
     this.claimInterval = const Duration(seconds: 30),
-  });
+    bool useSharedConnectionForConsumers = false,
+  }) : _useSharedConnectionForConsumers = useSharedConnectionForConsumers;
 
   final String namespace;
   final Duration blockTime;
   final int delayedDrainBatch;
   final Duration defaultVisibilityTimeout;
   final Duration claimInterval;
+  final bool _useSharedConnectionForConsumers;
 
   final Uri _uri;
   final TlsConfig? _tls;
@@ -129,6 +131,7 @@ class RedisStreamsBroker implements Broker {
     int delayedDrainBatch = 128,
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration claimInterval = const Duration(seconds: 30),
+    bool useSharedConnectionForConsumers = true,
   }) {
     return RedisStreamsBroker._(
       uri ?? Uri.parse('redis://localhost:6379/0'),
@@ -140,6 +143,7 @@ class RedisStreamsBroker implements Broker {
       delayedDrainBatch: delayedDrainBatch,
       defaultVisibilityTimeout: defaultVisibilityTimeout,
       claimInterval: claimInterval,
+      useSharedConnectionForConsumers: useSharedConnectionForConsumers,
     );
   }
 
@@ -479,6 +483,8 @@ class RedisStreamsBroker implements Broker {
     final streamKeys = _priorityStreamKeys(queue);
     final broadcastChannels = subscription.broadcastChannels;
     final claimTimerKeys = <String>{};
+    RedisConnection? consumerConnection;
+    Command? consumerCommand;
 
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>.broadcast(
@@ -487,12 +493,60 @@ class RedisStreamsBroker implements Broker {
         for (final key in claimTimerKeys) {
           _claimTimers.remove(key)?.cancel();
         }
+        if (consumerConnection != null &&
+            !identical(consumerConnection, _connection)) {
+          try {
+            unawaited(consumerConnection!.close());
+          } catch (_) {}
+          consumerConnection = null;
+          consumerCommand = null;
+        }
         if (!controller.isClosed) {
           unawaited(controller.close());
         }
       },
     );
     _controllers.add(controller);
+
+    Future<Command> ensureConsumerCommand() async {
+      if (_useSharedConnectionForConsumers) {
+        return _command;
+      }
+      if (consumerCommand != null) return consumerCommand!;
+      final connection = RedisConnection();
+      final command = await _openCommand(_uri, _tls, connection);
+      consumerConnection = connection;
+      consumerCommand = command;
+      return command;
+    }
+
+    Future<dynamic> sendConsumerCommand(
+      List<Object> command, {
+      int attempt = 0,
+    }) async {
+      try {
+        if (_useSharedConnectionForConsumers) {
+          return await _sendWithRetry(command, attempt: attempt);
+        }
+        final cmd = await ensureConsumerCommand();
+        return await cmd.send_object(command);
+      } catch (error) {
+        if (_shouldSuppressClosedError(error) || _closed) {
+          return null;
+        }
+        if (attempt == 0) {
+          if (!_useSharedConnectionForConsumers) {
+            try {
+              await consumerConnection?.close();
+            } catch (_) {}
+            consumerConnection = null;
+            consumerCommand = null;
+          }
+          return sendConsumerCommand(command, attempt: attempt + 1);
+        }
+        rethrow;
+      }
+    }
 
     Future<void> loop() async {
       while (!controller.isClosed && !_closed) {
@@ -502,7 +556,7 @@ class RedisStreamsBroker implements Broker {
         await _drainDelayed(queue);
         dynamic result;
         try {
-          result = await _send([
+          result = await sendConsumerCommand([
             'XREADGROUP',
             'GROUP',
             group,
@@ -518,9 +572,6 @@ class RedisStreamsBroker implements Broker {
         } catch (error) {
           if (_shouldSuppressClosedError(error)) {
             return;
-          }
-          if (await _recoverFromConnectionError(error)) {
-            continue;
           }
           if ('$error'.contains('NOGROUP')) {
             for (final stream in streamKeys) {
@@ -546,7 +597,7 @@ class RedisStreamsBroker implements Broker {
 
     loop();
     for (final stream in streamKeys) {
-      final key = _scheduleClaim(stream, group, consumer);
+      final key = _scheduleClaim(stream, group, consumer, controller);
       claimTimerKeys.add(key);
     }
 
@@ -556,6 +607,7 @@ class RedisStreamsBroker implements Broker {
         _broadcastStreamKey(channel),
         _broadcastGroupKey(channel, consumer),
         consumer,
+        controller,
       );
       claimTimerKeys.add(key);
     }
@@ -571,11 +623,54 @@ class RedisStreamsBroker implements Broker {
     Future<void>(() async {
       final streamKey = _broadcastStreamKey(channel);
       final group = _broadcastGroupKey(channel, consumer);
+      RedisConnection? broadcastConnection;
+      Command? broadcastCommand;
+
+      Future<Command> ensureBroadcastCommand() async {
+        if (_useSharedConnectionForConsumers) {
+          return _command;
+        }
+        if (broadcastCommand != null) return broadcastCommand!;
+        final connection = RedisConnection();
+        final command = await _openCommand(_uri, _tls, connection);
+        broadcastConnection = connection;
+        broadcastCommand = command;
+        return command;
+      }
+
+      Future<dynamic> sendBroadcastCommand(
+        List<Object> command, {
+        int attempt = 0,
+      }) async {
+        try {
+          if (_useSharedConnectionForConsumers) {
+            return await _sendWithRetry(command, attempt: attempt);
+          }
+          final cmd = await ensureBroadcastCommand();
+          return await cmd.send_object(command);
+        } catch (error) {
+          if (_shouldSuppressClosedError(error) || _closed) {
+            return null;
+          }
+          if (attempt == 0) {
+            if (!_useSharedConnectionForConsumers) {
+              try {
+                await broadcastConnection?.close();
+              } catch (_) {}
+              broadcastConnection = null;
+              broadcastCommand = null;
+            }
+            return sendBroadcastCommand(command, attempt: attempt + 1);
+          }
+          rethrow;
+        }
+      }
+
       while (!controller.isClosed && !_closed) {
         await _ensureBroadcastGroup(channel, consumer);
         dynamic result;
         try {
-          result = await _send([
+          result = await sendBroadcastCommand([
             'XREADGROUP',
             'GROUP',
             group,
@@ -591,9 +686,6 @@ class RedisStreamsBroker implements Broker {
         } catch (error) {
           if (_shouldSuppressClosedError(error)) {
             return;
-          }
-          if (await _recoverFromConnectionError(error)) {
-            continue;
           }
           if ('$error'.contains('NOGROUP')) {
             _groupsCreated.remove('$streamKey|$group');
@@ -612,6 +704,14 @@ class RedisStreamsBroker implements Broker {
           }
           controller.add(delivery);
         }
+      }
+      if (broadcastConnection != null &&
+          !identical(broadcastConnection, _connection)) {
+        try {
+          await broadcastConnection!.close();
+        } catch (_) {}
+        broadcastConnection = null;
+        broadcastCommand = null;
       }
     });
   }
@@ -669,6 +769,55 @@ class RedisStreamsBroker implements Broker {
     return deliveries;
   }
 
+  List<Delivery> _parseClaimedDeliveries({
+    required String streamKey,
+    required String group,
+    required String consumer,
+    required List<dynamic> entries,
+  }) {
+    final deliveries = <Delivery>[];
+    for (final entry in entries) {
+      if (entry is! List || entry.length < 2) {
+        continue;
+      }
+      final id = entry[0]?.toString();
+      final fields = entry[1];
+      if (id == null || fields is! List) {
+        continue;
+      }
+      final map = <String, String>{};
+      for (var i = 0; i < fields.length - 1; i += 2) {
+        final field = fields[i].toString();
+        final value = fields[i + 1].toString();
+        map[field] = value;
+      }
+      final envelope = _envelopeFromMap(map);
+      final receipt = '$streamKey|$group|$consumer|$id';
+      final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
+      final isBroadcast = streamKey.startsWith('$namespace:broadcast:');
+      final route = isBroadcast
+          ? RoutingInfo.broadcast(
+              channel: envelope.queue,
+              delivery: map['delivery'] ?? 'at-least-once',
+            )
+          : RoutingInfo.queue(
+              queue: envelope.queue,
+              priority: envelope.priority,
+            );
+      deliveries.add(
+        Delivery(
+          envelope: envelope,
+          receipt: receipt,
+          leaseExpiresAt: lease == Duration.zero
+              ? null
+              : DateTime.now().add(lease),
+          route: route,
+        ),
+      );
+    }
+    return deliveries;
+  }
+
   Envelope _envelopeFromMap(Map<String, String> map) {
     return Envelope(
       id: map['id'],
@@ -696,10 +845,18 @@ class RedisStreamsBroker implements Broker {
   String _claimTimerKey(String stream, String group, String consumer) =>
       '$stream|$group|$consumer';
 
-  String _scheduleClaim(String stream, String group, String consumer) {
+  String _scheduleClaim(
+    String stream,
+    String group,
+    String consumer,
+    StreamController<Delivery> controller,
+  ) {
     final key = _claimTimerKey(stream, group, consumer);
     _claimTimers[key]?.cancel();
     _claimTimers[key] = Timer.periodic(claimInterval, (_) async {
+      if (controller.isClosed || _closed) {
+        return;
+      }
       dynamic result;
       try {
         result = await _send([
@@ -711,7 +868,6 @@ class RedisStreamsBroker implements Broker {
           '0-0',
           'COUNT',
           delayedDrainBatch.toString(),
-          'JUSTID',
         ]);
       } catch (error) {
         if (_shouldSuppressClosedError(error)) {
@@ -723,28 +879,19 @@ class RedisStreamsBroker implements Broker {
         rethrow;
       }
       if (result is List && result.length >= 2) {
-        final ids = result[1];
-        if (ids is List && ids.isNotEmpty) {
-          for (final id in ids) {
-            try {
-              await _send([
-                'XCLAIM',
-                stream,
-                group,
-                consumer,
-                '0',
-                id,
-                'JUSTID',
-              ]);
-            } catch (error) {
-              if (_shouldSuppressClosedError(error)) {
-                return;
-              }
-              if (await _recoverFromConnectionError(error)) {
-                return;
-              }
-              rethrow;
+        final entries = result[1];
+        if (entries is List && entries.isNotEmpty) {
+          final deliveries = _parseClaimedDeliveries(
+            streamKey: stream,
+            group: group,
+            consumer: consumer,
+            entries: entries,
+          );
+          for (final delivery in deliveries) {
+            if (controller.isClosed) {
+              break;
             }
+            controller.add(delivery);
           }
         }
       }
@@ -861,9 +1008,21 @@ class RedisStreamsBroker implements Broker {
       await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
       final replayEnvelope = candidate.entry.envelope.copyWith(
         attempt: candidate.entry.envelope.attempt + 1,
-        notBefore: delay != null ? now.add(delay) : null,
+        notBefore:
+            delay != null ? now.add(delay) : candidate.entry.envelope.notBefore,
+        queue: queue,
       );
-      await _enqueue(queue, replayEnvelope.copyWith(queue: queue));
+      final scheduledAt = replayEnvelope.notBefore;
+      if (scheduledAt != null && scheduledAt.isAfter(now)) {
+        await _send([
+          'ZADD',
+          _delayedKey(queue),
+          scheduledAt.millisecondsSinceEpoch.toString(),
+          jsonEncode(replayEnvelope.toJson()),
+        ]);
+      } else {
+        await _enqueue(queue, replayEnvelope);
+      }
     }
     return DeadLetterReplayResult(
       entries: selected.map((e) => e.entry).toList(),
@@ -935,8 +1094,8 @@ class RedisStreamsBroker implements Broker {
     for (final stream in _priorityStreamKeys(queue)) {
       await _ensureGroupForStream(queue, stream);
       try {
-        final length = await _send(['XLEN', stream]);
-        total += _asInt(length);
+        final lag = await _groupLag(stream, _groupKey(queue));
+        total += lag;
       } catch (error) {
         if ('$error'.contains('NOGROUP')) {
           _groupsCreated.remove('$stream|${_groupKey(queue)}');
@@ -946,8 +1105,6 @@ class RedisStreamsBroker implements Broker {
         rethrow;
       }
     }
-    final delayed = await _send(['ZCARD', _delayedKey(queue)]);
-    total += _asInt(delayed);
     return total;
   }
 
@@ -971,6 +1128,36 @@ class RedisStreamsBroker implements Broker {
       }
     }
     return total;
+  }
+
+  Future<int> _groupLag(String stream, String group) async {
+    final result = await _send(['XINFO', 'GROUPS', stream]);
+    if (result is! List || result.isEmpty) {
+      return 0;
+    }
+    for (final entry in result) {
+      if (entry is! List || entry.isEmpty) {
+        continue;
+      }
+      final data = _listToMap(entry);
+      if (data['name']?.toString() != group) {
+        continue;
+      }
+      final lag = data['lag'];
+      if (lag == null) return 0;
+      return _asInt(lag);
+    }
+    return 0;
+  }
+
+  Map<String, Object?> _listToMap(List<dynamic> entry) {
+    final map = <String, Object?>{};
+    for (var i = 0; i + 1 < entry.length; i += 2) {
+      final key = entry[i]?.toString() ?? '';
+      if (key.isEmpty) continue;
+      map[key] = entry[i + 1];
+    }
+    return map;
   }
 
   DeadLetterEntry? _decodeDeadLetter(String raw) {

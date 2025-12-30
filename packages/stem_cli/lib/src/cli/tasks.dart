@@ -72,6 +72,10 @@ class _TasksListCommand extends Command<int> {
         if (handlers.isEmpty) {
           dependencies.out.writeln('No tasks registered.');
         } else {
+          final io = dependencies.console;
+          if (io.interactive) {
+            io.section('Registered tasks');
+          }
           _renderTable(handlers);
         }
       }

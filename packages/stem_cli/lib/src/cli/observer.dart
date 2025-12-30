@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
 import 'package:stem_cli/src/cli/file_schedule_repository.dart';
 import 'package:stem_cli/src/cli/utilities.dart';
@@ -50,7 +51,12 @@ class ObserveMetricsCommand extends Command<int> {
 
 class ObserveQueuesCommand extends Command<int> {
   ObserveQueuesCommand(this.dependencies) {
-    argParser.addOption('file', abbr: 'f', help: 'Path to queue snapshot JSON');
+    argParser.addOption(
+      'file',
+      abbr: 'f',
+      help:
+          'Path to queue snapshot JSON (omit to query the live broker/backend).',
+    );
   }
 
   final StemCommandDependencies dependencies;
@@ -66,11 +72,17 @@ class ObserveQueuesCommand extends Command<int> {
     final out = dependencies.out;
     final err = dependencies.err;
     final path = argResults!['file'] as String?;
+    ObservabilityReport report;
     if (path == null) {
-      err.writeln('Missing --file pointing to queue snapshot JSON.');
-      return 64;
+      try {
+        report = await _loadLiveReport(dependencies, includeQueues: true);
+      } catch (error) {
+        err.writeln('Failed to load live queue snapshot: $error');
+        return 64;
+      }
+    } else {
+      report = ObservabilityReport.fromFile(path);
     }
-    final report = ObservabilityReport.fromFile(path);
     if (report.queues.isEmpty) {
       out.writeln('No queue data.');
       return 0;
@@ -93,7 +105,7 @@ class ObserveWorkersCommand extends Command<int> {
     argParser.addOption(
       'file',
       abbr: 'f',
-      help: 'Path to worker snapshot JSON',
+      help: 'Path to worker snapshot JSON (omit to query the live backend).',
     );
   }
 
@@ -110,11 +122,17 @@ class ObserveWorkersCommand extends Command<int> {
     final out = dependencies.out;
     final err = dependencies.err;
     final path = argResults!['file'] as String?;
+    ObservabilityReport report;
     if (path == null) {
-      err.writeln('Missing --file pointing to worker snapshot JSON.');
-      return 64;
+      try {
+        report = await _loadLiveReport(dependencies, includeWorkers: true);
+      } catch (error) {
+        err.writeln('Failed to load live worker snapshot: $error');
+        return 64;
+      }
+    } else {
+      report = ObservabilityReport.fromFile(path);
     }
-    final report = ObservabilityReport.fromFile(path);
     if (report.workers.isEmpty) {
       out.writeln('No worker data.');
       return 0;
@@ -134,7 +152,11 @@ class ObserveWorkersCommand extends Command<int> {
 
 class ObserveDlqCommand extends Command<int> {
   ObserveDlqCommand(this.dependencies) {
-    argParser.addOption('file', abbr: 'f', help: 'Path to DLQ snapshot JSON');
+    argParser.addOption(
+      'file',
+      abbr: 'f',
+      help: 'Path to DLQ snapshot JSON (omit to query the live broker).',
+    );
   }
 
   final StemCommandDependencies dependencies;
@@ -150,11 +172,17 @@ class ObserveDlqCommand extends Command<int> {
     final out = dependencies.out;
     final err = dependencies.err;
     final path = argResults!['file'] as String?;
+    ObservabilityReport report;
     if (path == null) {
-      err.writeln('Missing --file pointing to DLQ snapshot JSON.');
-      return 64;
+      try {
+        report = await _loadLiveReport(dependencies, includeDlq: true);
+      } catch (error) {
+        err.writeln('Failed to load live DLQ snapshot: $error');
+        return 64;
+      }
+    } else {
+      report = ObservabilityReport.fromFile(path);
     }
-    final report = ObservabilityReport.fromFile(path);
     if (report.dlq.isEmpty) {
       out.writeln('Dead letter queue is empty.');
       return 0;
@@ -170,6 +198,158 @@ class ObserveDlqCommand extends Command<int> {
     }
     return 0;
   }
+}
+
+Future<ObservabilityReport> _loadLiveReport(
+  StemCommandDependencies dependencies, {
+  bool includeQueues = false,
+  bool includeWorkers = false,
+  bool includeDlq = false,
+}) async {
+  final config = StemConfig.fromEnvironment(dependencies.environment);
+  final context = await dependencies.createCliContext();
+  try {
+    final queues = includeQueues || includeDlq
+        ? await _discoverQueues(config, context)
+        : const <String>{};
+    final queueSnapshots = includeQueues
+        ? await _loadQueueSnapshots(context.broker, queues)
+        : const <QueueSnapshot>[];
+    final workerSnapshots = includeWorkers
+        ? await _loadWorkerSnapshots(context.backend)
+        : const <WorkerSnapshot>[];
+    final dlqSnapshots = includeDlq
+        ? await _loadDlqSnapshots(context.broker, queues)
+        : const <DlqEntrySnapshot>[];
+    return ObservabilityReport(
+      queues: queueSnapshots,
+      workers: workerSnapshots,
+      dlq: dlqSnapshots,
+    );
+  } finally {
+    await context.dispose();
+  }
+}
+
+Future<Set<String>> _discoverQueues(
+  StemConfig config,
+  CliContext context,
+) async {
+  final names = <String>{};
+  if (config.defaultQueue.trim().isNotEmpty) {
+    names.add(config.defaultQueue.trim());
+  }
+  names.addAll(config.workerQueues.where((q) => q.trim().isNotEmpty));
+  final routing = context.routing.config;
+  if (routing.defaultQueue.queue.trim().isNotEmpty) {
+    names.add(routing.defaultQueue.queue.trim());
+  }
+  names.addAll(routing.queues.keys.where((q) => q.trim().isNotEmpty));
+  final backend = context.backend;
+  if (backend != null) {
+    try {
+      final heartbeats = await backend.listWorkerHeartbeats();
+      for (final heartbeat in heartbeats) {
+        for (final queue in heartbeat.queues) {
+          if (queue.name.trim().isNotEmpty) {
+            names.add(queue.name.trim());
+          }
+        }
+        final subscriptions = heartbeat.extras['subscriptions'];
+        if (subscriptions is Map) {
+          final queues = subscriptions['queues'];
+          if (queues is List) {
+            for (final entry in queues) {
+              final name = entry?.toString().trim();
+              if (name != null && name.isNotEmpty) {
+                names.add(name);
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // Ignore backend discovery failures.
+    }
+  }
+  if (names.isEmpty) {
+    names.add(config.defaultQueue);
+  }
+  return names;
+}
+
+Future<List<QueueSnapshot>> _loadQueueSnapshots(
+  Broker broker,
+  Set<String> queues,
+) async {
+  final snapshots = <QueueSnapshot>[];
+  for (final queue in queues) {
+    final pending = await broker.pendingCount(queue) ?? 0;
+    final inflight = await broker.inflightCount(queue) ?? 0;
+    snapshots.add(
+      QueueSnapshot(queue: queue, pending: pending, inflight: inflight),
+    );
+  }
+  snapshots.sort((a, b) => a.queue.compareTo(b.queue));
+  return snapshots;
+}
+
+Future<List<WorkerSnapshot>> _loadWorkerSnapshots(
+  ResultBackend? backend,
+) async {
+  if (backend == null) return const [];
+  try {
+    final heartbeats = await backend.listWorkerHeartbeats();
+    final snapshots = heartbeats
+        .map(
+          (heartbeat) => WorkerSnapshot(
+            id: heartbeat.workerId,
+            active: heartbeat.isolateCount,
+            lastHeartbeat: heartbeat.timestamp,
+          ),
+        )
+        .toList(growable: false);
+    return snapshots..sort((a, b) => a.id.compareTo(b.id));
+  } catch (_) {
+    return const [];
+  }
+}
+
+Future<List<DlqEntrySnapshot>> _loadDlqSnapshots(
+  Broker broker,
+  Set<String> queues,
+) async {
+  const pageSize = 200;
+  const maxIterations = 10;
+  const maxEntries = 1000;
+  final entries = <DlqEntrySnapshot>[];
+  for (final queue in queues) {
+    var offset = 0;
+    for (var iteration = 0; iteration < maxIterations; iteration++) {
+      final page = await broker.listDeadLetters(
+        queue,
+        limit: pageSize,
+        offset: offset,
+      );
+      for (final entry in page.entries) {
+        entries.add(
+          DlqEntrySnapshot(
+            queue: entry.envelope.queue,
+            taskId: entry.envelope.id,
+            reason: entry.reason ?? 'Unknown',
+            deadAt: entry.deadAt,
+          ),
+        );
+        if (entries.length >= maxEntries) {
+          return entries;
+        }
+      }
+      final next = page.nextOffset;
+      if (next == null) break;
+      offset = next;
+    }
+  }
+  return entries;
 }
 
 class ObserveSchedulesCommand extends Command<int> {

@@ -40,13 +40,14 @@ String buildPageContent({
   required DashboardPage page,
   required List<QueueSummary> queues,
   required List<WorkerStatus> workers,
+  DashboardThroughput? throughput,
   List<DashboardEvent> events = const [],
   TasksPageOptions tasksOptions = const TasksPageOptions(),
   WorkersPageOptions workersOptions = const WorkersPageOptions(),
 }) {
   switch (page) {
     case DashboardPage.overview:
-      return _overviewContent(queues, workers);
+      return _overviewContent(queues, workers, throughput);
     case DashboardPage.tasks:
       return _tasksContent(queues, tasksOptions);
     case DashboardPage.events:
@@ -56,7 +57,11 @@ String buildPageContent({
   }
 }
 
-String _overviewContent(List<QueueSummary> queues, List<WorkerStatus> workers) {
+String _overviewContent(
+  List<QueueSummary> queues,
+  List<WorkerStatus> workers,
+  DashboardThroughput? throughput,
+) {
   final totalPending = queues.fold<int>(
     0,
     (total, summary) => total + summary.pending,
@@ -75,6 +80,12 @@ String _overviewContent(List<QueueSummary> queues, List<WorkerStatus> workers) {
   )..sort((a, b) => (b.pending + b.inflight).compareTo(a.pending + a.inflight));
   final topQueues = busiest.take(5).toList();
 
+  final processedPerMin = throughput?.processedPerMinute ?? 0;
+  final enqueuedPerMin = throughput?.enqueuedPerMinute ?? 0;
+  final throughputHint = throughput == null
+      ? 'Waiting for another snapshot to estimate rate.'
+      : 'Net change over the last ${throughput.interval.inSeconds}s.';
+
   return '''
 <section class="page-header">
   <h1>Overview</h1>
@@ -84,8 +95,10 @@ String _overviewContent(List<QueueSummary> queues, List<WorkerStatus> workers) {
 </section>
 
 <section class="cards">
-  ${_metricCard('Queued', _formatInt(totalPending), 'Total tasks waiting across all queues.')}
+  ${_metricCard('Backlog (lag)', _formatInt(totalPending), 'Undelivered tasks waiting across all queues.')}
   ${_metricCard('Processing', _formatInt(totalInflight), 'Active envelopes currently being executed.')}
+  ${_metricCard('Processed / min', _formatRate(processedPerMin), throughputHint)}
+  ${_metricCard('Enqueued / min', _formatRate(enqueuedPerMin), throughputHint)}
   ${_metricCard('Dead letters', _formatInt(totalDead), 'Items held in dead letter queues.')}
   ${_metricCard('Active workers', _formatInt(activeWorkers), 'Workers that published heartbeats within the retention window.')}
 </section>
@@ -201,6 +214,12 @@ ${_renderTasksAlert(options)}
   </div>
 </section>
 ''';
+}
+
+String _formatRate(double value) {
+  if (value <= 0) return '0';
+  if (value < 1) return value.toStringAsFixed(2);
+  return _numberFormat.format(value.round());
 }
 
 String _eventsContent(List<DashboardEvent> events) {

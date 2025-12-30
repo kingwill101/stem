@@ -20,6 +20,7 @@ void main() {
     adapterName: 'Postgres',
     factory: ResultBackendContractFactory(
       create: () async => PostgresResultBackend.connect(
+        connectionString: connectionString,
         defaultTtl: const Duration(seconds: 1),
         groupDefaultTtl: const Duration(seconds: 1),
         heartbeatTtl: const Duration(seconds: 1),

@@ -42,12 +42,12 @@ consuming concurrently.
 2. Export environment variables for each worker:
 
    ```bash
-   export REDIS_STEM_BROKER_URL=redis://127.0.0.1:6380/0
-   export REDIS_STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6380/1
+   export REDIS_STEM_BROKER_URL=redis://127.0.0.1:6379/0
+   export REDIS_STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6379/1
    export REDIS_STEM_DEFAULT_QUEUE=redis-tasks
 
-   export POSTGRES_STEM_BROKER_URL=postgres://stem:stem@127.0.0.1:65434/stem_demo
-   export POSTGRES_STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:65434/stem_demo
+   export POSTGRES_STEM_BROKER_URL=postgres://stem:stem@127.0.0.1:5432/stem_demo
+   export POSTGRES_STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:5432/stem_demo
    export POSTGRES_STEM_DEFAULT_QUEUE=postgres-tasks
    ```
 
@@ -95,3 +95,18 @@ consuming concurrently.
 
 This setup mirrors a deployment where different workloads use different brokers
 and backends while sharing the same Stem codebase.
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example` and update hostnames to `localhost` for local runs.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-redis-worker
+just run-postgres-worker
+just run-enqueuer
+# Or:
+just tmux
+```

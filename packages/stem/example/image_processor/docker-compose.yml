@@ -13,7 +13,7 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: examples/image_processor/Dockerfile.api
+      dockerfile: example/image_processor/Dockerfile.api
       target: dev
     env_file:
       - .env
@@ -28,7 +28,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: examples/image_processor/Dockerfile.worker
+      dockerfile: example/image_processor/Dockerfile.worker
       target: dev
     env_file:
       - .env

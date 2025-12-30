@@ -14,8 +14,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     required this.namespace,
     required WorkflowClock clock,
     Uuid? uuid,
-  })  : _uuid = uuid ?? const Uuid(),
-        _clock = clock;
+  }) : _uuid = uuid ?? const Uuid(),
+       _clock = clock;
 
   final PostgresConnections _connections;
   final String namespace;
@@ -54,9 +54,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
-    final connections = await PostgresConnections.open(
-      connectionString: uri,
-    );
+    final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresWorkflowStore._(
       connections,
       namespace: namespace,
@@ -79,11 +77,12 @@ class PostgresWorkflowStore implements WorkflowStore {
   }) async {
     final id = _uuid.v7();
     final now = _clock.now().toUtc();
+    final workflowName = _encodeWorkflowName(workflow);
 
     await _connections.runInTransaction((ctx) async {
       final run = $StemWorkflowRun(
         id: id,
-        workflow: workflow,
+        workflow: workflowName,
         status: WorkflowStatus.running.name,
         params: jsonEncode(params),
         cancellationPolicy: cancellationPolicy == null
@@ -125,7 +124,7 @@ class PostgresWorkflowStore implements WorkflowStore {
 
     return RunState(
       id: run.id,
-      workflow: run.workflow,
+      workflow: _decodeWorkflowName(run.workflow),
       status: WorkflowStatus.values.firstWhere(
         (v) => v.name == run.status,
         orElse: () => WorkflowStatus.running,
@@ -133,7 +132,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       cursor: baseSteps.length,
       params: _decodeMap(run.params),
       result: _decodeValue(run.result),
-      waitTopic: run.waitTopic,
+      waitTopic: run.waitTopic == null ? null : _decodeTopic(run.waitTopic!),
       resumeAt: run.resumeAt,
       lastError: _decodeMap(run.lastError),
       suspensionData: _decodeMap(run.suspensionData),
@@ -141,7 +140,8 @@ class PostgresWorkflowStore implements WorkflowStore {
       updatedAt: run.updatedAt,
       cancellationPolicy: run.cancellationPolicy != null
           ? WorkflowCancellationPolicy.fromJson(
-              _decodeMap(run.cancellationPolicy))
+              _decodeMap(run.cancellationPolicy),
+            )
           : null,
       cancellationData: _decodeMap(run.cancellationData),
     );
@@ -151,7 +151,7 @@ class PostgresWorkflowStore implements WorkflowStore {
   Future<T?> readStep<T>(String runId, String stepName) async {
     final ctx = _connections.context;
     final step = await ctx
-        .query<$StemWorkflowStep>()
+        .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
         .whereEquals('name', stepName)
         .first();
@@ -166,32 +166,37 @@ class PostgresWorkflowStore implements WorkflowStore {
 
     await _connections.runInTransaction((ctx) async {
       final existing = await ctx
-          .query<$StemWorkflowStep>()
+          .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
           .whereEquals('name', stepName)
           .first();
 
-      final step = $StemWorkflowStep(
-        runId: runId,
-        name: stepName,
-        value: jsonEncode(value),
-      );
-
       if (existing != null) {
-        await ctx.repository<$StemWorkflowStep>().update(step);
+        await ctx.repository<StemWorkflowStep>().update(
+          StemWorkflowStepUpdateDto(value: jsonEncode(value)),
+          where: StemWorkflowStepPartial(runId: runId, name: stepName),
+        );
       } else {
-        await ctx.repository<$StemWorkflowStep>().insert(step);
+        await ctx.repository<StemWorkflowStep>().insert(
+          StemWorkflowStepInsertDto(
+            runId: runId,
+            name: stepName,
+            value: jsonEncode(value),
+          ),
+        );
       }
 
       // Update run's updatedAt
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(updatedAt: now);
-        await ctx.repository<$StemWorkflowRun>().update(updated);
+        await ctx.repository<StemWorkflowRun>().update(
+          StemWorkflowRunUpdateDto(updatedAt: now),
+          where: StemWorkflowRunPartial(id: runId),
+        );
       }
     });
   }
@@ -208,19 +213,22 @@ class PostgresWorkflowStore implements WorkflowStore {
 
     await _connections.runInTransaction((ctx) async {
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.suspended.name,
           resumeAt: when,
-          waitTopic: null,
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
+        ).toMap();
+        updates['wait_topic'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -234,6 +242,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     Map<String, Object?>? data,
   }) async {
     final now = _clock.now().toUtc();
+    final encodedTopic = _encodeTopic(topic);
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -243,19 +252,23 @@ class PostgresWorkflowStore implements WorkflowStore {
 
     await _connections.runInTransaction((ctx) async {
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.suspended.name,
-          waitTopic: topic,
+          waitTopic: encodedTopic,
           resumeAt: deadline,
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = deadline;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -268,6 +281,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    final encodedTopic = _encodeTopic(topic);
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -286,7 +300,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final watcher = $StemWorkflowWatcher(
         runId: runId,
         stepName: stepName,
-        topic: topic,
+        topic: encodedTopic,
         data: jsonEncode(metadata),
         deadline: deadline,
         createdAt: now,
@@ -300,19 +314,23 @@ class PostgresWorkflowStore implements WorkflowStore {
 
       // Update the associated run
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.suspended.name,
-          waitTopic: topic,
+          waitTopic: encodedTopic,
           resumeAt: deadline,
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = deadline;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -325,18 +343,21 @@ class PostgresWorkflowStore implements WorkflowStore {
       await _deleteWatcher(ctx, runId);
 
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.running.name,
-          resumeAt: null,
-          waitTopic: null,
           updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = null;
+        updates['wait_topic'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -349,18 +370,21 @@ class PostgresWorkflowStore implements WorkflowStore {
       await _deleteWatcher(ctx, runId);
 
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.completed.name,
-          result: result != null ? jsonEncode(result) : null,
-          suspensionData: null,
           updatedAt: now,
+        ).toMap();
+        updates['result'] = result != null ? jsonEncode(result) : null;
+        updates['suspension_data'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -380,20 +404,23 @@ class PostgresWorkflowStore implements WorkflowStore {
       }
 
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
-          status: terminal ? WorkflowStatus.failed.name : run.status,
+        final updates = StemWorkflowRunUpdateDto(
+          status: terminal ? WorkflowStatus.failed.name : null,
           lastError: jsonEncode({
             'error': error.toString(),
             'stack': stack.toString(),
           }),
           updatedAt: now,
+        ).toMap();
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -406,19 +433,22 @@ class PostgresWorkflowStore implements WorkflowStore {
       await _deleteWatcher(ctx, runId);
 
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.running.name,
-          resumeAt: null,
-          waitTopic: null,
-          suspensionData: data != null ? jsonEncode(data) : null,
           updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = null;
+        updates['wait_topic'] = null;
+        updates['suspension_data'] = data != null ? jsonEncode(data) : null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -428,7 +458,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     return _connections.runInTransaction((ctx) async {
       // SELECT runs where resume_at has passed
       final dueRuns = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereNotNull('resumeAt')
           .where('resumeAt', now, PredicateOperator.lessThanOrEqual)
           .whereEquals('status', WorkflowStatus.suspended.name)
@@ -442,11 +472,13 @@ class PostgresWorkflowStore implements WorkflowStore {
       // Update all to clear resume_at
       final nowUtc = now.toUtc();
       for (final run in dueRuns) {
-        final updated = run.copyWith(
-          resumeAt: null,
-          updatedAt: nowUtc,
+        await ctx.repository<StemWorkflowRun>().update(
+          {
+            'resume_at': null,
+            'updated_at': nowUtc,
+          },
+          where: StemWorkflowRunPartial(id: run.id),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
 
       return dueRuns.map((r) => r.id).toList(growable: false);
@@ -456,29 +488,26 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
     final ctx = _connections.context;
+    final encodedTopic = _encodeTopic(topic);
     // Check watchers first
     final watcherRows = await ctx
         .query<$StemWorkflowWatcher>()
-        .whereEquals('topic', topic)
+        .whereEquals('topic', encodedTopic)
         .limit(limit)
         .get();
 
     if (watcherRows.isNotEmpty) {
-      return watcherRows
-          .map((row) => row.runId)
-          .toList(growable: false);
+      return watcherRows.map((row) => row.runId).toList(growable: false);
     }
 
     // Fallback to runs with wait_topic
     final fallbackRows = await ctx
-        .query<$StemWorkflowRun>()
-        .whereEquals('waitTopic', topic)
+        .query<StemWorkflowRun>()
+        .whereEquals('waitTopic', encodedTopic)
         .limit(limit)
         .get();
 
-    return fallbackRows
-        .map((r) => r.id)
-        .toList(growable: false);
+    return fallbackRows.map((r) => r.id).toList(growable: false);
   }
 
   @override
@@ -488,9 +517,10 @@ class PostgresWorkflowStore implements WorkflowStore {
     int limit = 256,
   }) async {
     return _connections.runInTransaction((ctx) async {
+      final encodedTopic = _encodeTopic(topic);
       final watchers = await ctx
           .query<$StemWorkflowWatcher>()
-          .whereEquals('topic', topic)
+          .whereEquals('topic', encodedTopic)
           .limit(limit)
           .get();
 
@@ -518,19 +548,22 @@ class PostgresWorkflowStore implements WorkflowStore {
 
         // Update run to mark as running with resolved metadata
         final run = await ctx
-            .query<$StemWorkflowRun>()
+            .query<StemWorkflowRun>()
             .whereEquals('id', watcher.runId)
             .first();
 
         if (run != null) {
-          final updated = run.copyWith(
+          final updates = StemWorkflowRunUpdateDto(
             status: WorkflowStatus.running.name,
-            waitTopic: null,
-            resumeAt: null,
             suspensionData: jsonEncode(metadata),
             updatedAt: nowUtc,
+          ).toMap();
+          updates['wait_topic'] = null;
+          updates['resume_at'] = null;
+          await ctx.repository<StemWorkflowRun>().update(
+            updates,
+            where: StemWorkflowRunPartial(id: watcher.runId),
           );
-          await ctx.repository<$StemWorkflowRun>().update(updated);
         }
 
         // Delete the watcher (resolved)
@@ -556,9 +589,10 @@ class PostgresWorkflowStore implements WorkflowStore {
     int limit = 256,
   }) async {
     final ctx = _connections.context;
+    final encodedTopic = _encodeTopic(topic);
     final rows = await ctx
         .query<$StemWorkflowWatcher>()
-        .whereEquals('topic', topic)
+        .whereEquals('topic', encodedTopic)
         .limit(limit)
         .get();
 
@@ -571,7 +605,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           (row) => WorkflowWatcher(
             runId: row.runId,
             stepName: row.stepName,
-            topic: topic,
+            topic: _decodeTopic(row.topic),
             createdAt: row.createdAt,
             deadline: row.deadline,
             data: _decodeMap(row.data),
@@ -593,20 +627,23 @@ class PostgresWorkflowStore implements WorkflowStore {
       await _deleteWatcher(ctx, runId);
 
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
+        final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.cancelled.name,
-          suspensionData: null,
-          waitTopic: null,
-          resumeAt: null,
           cancellationData: cancellation,
           updatedAt: nowUtc,
+        ).toMap();
+        updates['suspension_data'] = null;
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -617,8 +654,9 @@ class PostgresWorkflowStore implements WorkflowStore {
       await _deleteWatcher(ctx, runId);
 
       final stepRows = await ctx
-          .query<$StemWorkflowStep>()
+          .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
+          .orderBy('name')
           .get();
 
       // Calculate which steps to keep
@@ -643,29 +681,34 @@ class PostgresWorkflowStore implements WorkflowStore {
         if (baseIndex < targetIndex) {
           keep.add(stepRows[i]);
         } else {
-          await ctx.repository<$StemWorkflowStep>().delete(stepRows[i]);
+          await ctx.driver.executeRaw(
+            'DELETE FROM stem_workflow_steps WHERE run_id = ? AND name = ?',
+            [runId, stepRows[i].name],
+          );
         }
       }
 
       // Update run status
       final run = await ctx
-          .query<$StemWorkflowRun>()
+          .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .first();
 
       if (run != null) {
-        final updated = run.copyWith(
-          status: WorkflowStatus.suspended.name,
-          waitTopic: null,
-          resumeAt: null,
-          suspensionData: jsonEncode({
-            'step': stepName,
-            'iteration': 0,
-            'iterationStep': stepName,
-          }),
-          updatedAt: _clock.now().toUtc(),
+        await ctx.repository<StemWorkflowRun>().update(
+          StemWorkflowRunUpdateDto(
+            status: WorkflowStatus.suspended.name,
+            waitTopic: null,
+            resumeAt: null,
+            suspensionData: jsonEncode({
+              'step': stepName,
+              'iteration': 0,
+              'iterationStep': stepName,
+            }),
+            updatedAt: _clock.now().toUtc(),
+          ),
+          where: StemWorkflowRunPartial(id: runId),
         );
-        await ctx.repository<$StemWorkflowRun>().update(updated);
       }
     });
   }
@@ -677,10 +720,16 @@ class PostgresWorkflowStore implements WorkflowStore {
     int limit = 50,
   }) async {
     final ctx = _connections.context;
-    var query = ctx.query<$StemWorkflowRun>();
+    var query = ctx.query<StemWorkflowRun>();
 
     if (workflow != null) {
-      query = query.whereEquals('workflow', workflow);
+      query = query.whereEquals('workflow', _encodeWorkflowName(workflow));
+    } else if (_useWorkflowNamespace) {
+      query = query.where(
+        'workflow',
+        '${_workflowNamespacePrefix}%',
+        PredicateOperator.like,
+      );
     }
 
     if (status != null) {
@@ -688,6 +737,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     }
 
     final ids = await query
+        .orderBy('updatedAt', descending: true)
+        .orderBy('id', descending: true)
         .limit(limit)
         .get()
         .then((runs) => runs.map((r) => r.id).toList());
@@ -707,8 +758,9 @@ class PostgresWorkflowStore implements WorkflowStore {
   Future<List<WorkflowStepEntry>> listSteps(String runId) async {
     final ctx = _connections.context;
     final rows = await ctx
-        .query<$StemWorkflowStep>()
+        .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .orderBy('name')
         .get();
 
     final entries = <WorkflowStepEntry>[];
@@ -767,6 +819,35 @@ class PostgresWorkflowStore implements WorkflowStore {
       }
     }
     return input;
+  }
+
+  bool get _useWorkflowNamespace =>
+      namespace.isNotEmpty && namespace != 'stem';
+
+  String get _workflowNamespacePrefix => '$namespace::';
+
+  String _encodeWorkflowName(String workflow) {
+    if (!_useWorkflowNamespace) return workflow;
+    return '$_workflowNamespacePrefix$workflow';
+  }
+
+  String _decodeWorkflowName(String workflow) {
+    if (!_useWorkflowNamespace) return workflow;
+    final prefix = _workflowNamespacePrefix;
+    return workflow.startsWith(prefix)
+        ? workflow.substring(prefix.length)
+        : workflow;
+  }
+
+  String _encodeTopic(String topic) {
+    if (!_useWorkflowNamespace) return topic;
+    return '$_workflowNamespacePrefix$topic';
+  }
+
+  String _decodeTopic(String topic) {
+    if (!_useWorkflowNamespace) return topic;
+    final prefix = _workflowNamespacePrefix;
+    return topic.startsWith(prefix) ? topic.substring(prefix.length) : topic;
   }
 
   String _baseStepName(String name) {

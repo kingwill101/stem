@@ -7,12 +7,12 @@ import 'seeders/database_seeder.dart';
 // </ORM-SEED-IMPORTS>
 
 final List<SeederRegistration> _seeders = <SeederRegistration>[
-// <ORM-SEED-REGISTRY>
+  // <ORM-SEED-REGISTRY>
   SeederRegistration(
     name: 'AppDatabaseSeeder',
     factory: (connection) => AppDatabaseSeeder(connection),
   ),
-// </ORM-SEED-REGISTRY>
+  // </ORM-SEED-REGISTRY>
 ];
 
 Future<void> runProjectSeeds(
@@ -20,16 +20,16 @@ Future<void> runProjectSeeds(
   List<String>? names,
   bool pretend = false,
 }) => runSeedRegistryOnConnection(
-      connection,
-      _seeders,
-      names: names,
-      pretend: pretend,
-      beforeRun: (conn) => bootstrapOrm(registry: conn.context.registry),
-    );
+  connection,
+  _seeders,
+  names: names,
+  pretend: pretend,
+  beforeRun: (conn) => bootstrapOrm(registry: conn.context.registry),
+);
 
 Future<void> main(List<String> args) => runSeedRegistryEntrypoint(
-      args: args,
-      seeds: _seeders,
-      beforeRun: (connection) =>
-          bootstrapOrm(registry: connection.context.registry),
-    );
+  args: args,
+  seeds: _seeders,
+  beforeRun: (connection) =>
+      bootstrapOrm(registry: connection.context.registry),
+);

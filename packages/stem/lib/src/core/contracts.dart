@@ -160,9 +160,7 @@ class TaskStatus {
     this.error,
     Map<String, Object?>? meta,
     required this.attempt,
-    DateTime? updatedAt,
-  }) : meta = Map.unmodifiable(meta ?? const {}),
-       updatedAt = updatedAt ?? DateTime.now();
+  }) : meta = Map.unmodifiable(meta ?? const {});
 
   /// The unique identifier for this task status.
   final String id;
@@ -182,9 +180,6 @@ class TaskStatus {
   /// The attempt number for this task execution.
   final int attempt;
 
-  /// The timestamp when this status was last updated.
-  final DateTime updatedAt;
-
   Map<String, Object?> toJson() => {
     'id': id,
     'state': state.name,
@@ -192,7 +187,6 @@ class TaskStatus {
     'error': error?.toJson(),
     'meta': meta,
     'attempt': attempt,
-    'updatedAt': updatedAt.toIso8601String(),
   };
 
   factory TaskStatus.fromJson(Map<String, Object?> json) {
@@ -208,9 +202,6 @@ class TaskStatus {
           : null,
       meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
       attempt: (json['attempt'] as num?)?.toInt() ?? 0,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'] as String)
-          : null,
     );
   }
 }

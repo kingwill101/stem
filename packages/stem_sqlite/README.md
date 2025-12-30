@@ -26,6 +26,7 @@ dart pub add stem
 ### Direct enqueue
 
 ```dart
+import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
@@ -33,12 +34,9 @@ Future<void> main() async {
   final registry = SimpleTaskRegistry()
     ..register(FunctionTaskHandler(name: 'demo.sqlite', handler: print));
 
-  final broker = await SqliteBroker.open(
-    SqliteConnection.inMemory(), // or SqliteConnection.file('stem.db')
-  );
-  final backend = await SqliteResultBackend.open(
-    SqliteConnection.inMemory(),
-  );
+  final dbFile = File('stem.db'); // or File(':memory:') for in-memory
+  final broker = await SqliteBroker.open(dbFile);
+  final backend = await SqliteResultBackend.open(dbFile);
 
   final stem = Stem(broker: broker, backend: backend, registry: registry);
   await stem.enqueue('demo.sqlite', args: {'name': 'Stem'});
@@ -48,6 +46,7 @@ Future<void> main() async {
 ### Typed `TaskDefinition`
 
 ```dart
+import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
@@ -74,13 +73,30 @@ Future<void> main() async {
       ),
     );
 
-  final broker = await SqliteBroker.open(SqliteConnection.inMemory());
-  final backend = await SqliteResultBackend.open(SqliteConnection.inMemory());
+  final dbFile = File('stem.db'); // or File(':memory:') for in-memory
+  final broker = await SqliteBroker.open(dbFile);
+  final backend = await SqliteResultBackend.open(dbFile);
 
   final stem = Stem(broker: broker, backend: backend, registry: registry);
   await stem.enqueueCall(demoSqlite(const SqliteArgs(name: 'Stem')));
 }
 ```
+
+### CLI usage
+
+The Stem CLI can target a SQLite result backend via a connection string. When
+you only need backend-backed commands, set a memory broker alongside the SQLite
+URL:
+
+```bash
+export STEM_BROKER_URL=memory://
+export STEM_RESULT_BACKEND_URL=sqlite:///absolute/path/to/stem.db
+
+stem observe tasks show --id <task-id>
+```
+
+Broker-required commands (enqueue, control, DLQ replay) still need a real
+broker URL.
 
 ## Tests
 

@@ -5,8 +5,8 @@ import 'stem_group.dart';
 part 'stem_group_result.orm.dart';
 
 @OrmModel(table: 'stem_group_results', primaryKey: ['groupId', 'taskId'])
-class StemGroupResult  extends Model<StemGroupResult> with TimestampsTZ {
-   const StemGroupResult({
+class StemGroupResult extends Model<StemGroupResult> with TimestampsTZ {
+  const StemGroupResult({
     required this.groupId,
     required this.taskId,
     required this.state,

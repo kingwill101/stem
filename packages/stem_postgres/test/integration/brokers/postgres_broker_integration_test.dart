@@ -24,6 +24,7 @@ void main() {
         applicationName: 'stem-postgres-contract-tests',
         defaultVisibilityTimeout: const Duration(seconds: 1),
         pollInterval: const Duration(milliseconds: 50),
+        sweeperInterval: const Duration(milliseconds: 200),
       ),
       dispose: (broker) => (broker as PostgresBroker).close(),
       additionalBrokerFactory: () async => PostgresBroker.connect(
@@ -31,6 +32,7 @@ void main() {
         applicationName: 'stem-postgres-contract-worker',
         defaultVisibilityTimeout: const Duration(seconds: 1),
         pollInterval: const Duration(milliseconds: 50),
+        sweeperInterval: const Duration(milliseconds: 200),
       ),
     ),
     settings: const BrokerContractSettings(

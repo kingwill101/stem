@@ -15,8 +15,8 @@ class PostgresBroker implements Broker {
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
     this.deadLetterRetention = const Duration(days: 7),
-  })  : _context = _connections.context,
-        _random = Random() {
+  }) : _context = _connections.context,
+       _random = Random() {
     _startSweeper();
   }
 
@@ -69,6 +69,7 @@ class PostgresBroker implements Broker {
       await runner.controller.close();
     }
     _consumers.clear();
+    await _dbLock.catchError((_, __) {});
     await _connections.close();
   }
 
@@ -87,7 +88,8 @@ class PostgresBroker implements Broker {
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
-    final resolvedRoute = routing ??
+    final resolvedRoute =
+        routing ??
         RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
 
     if (resolvedRoute.isBroadcast) {
@@ -138,7 +140,9 @@ class PostgresBroker implements Broker {
     String? consumerName,
   }) {
     if (subscription.queues.isEmpty) {
-      throw ArgumentError('RoutingSubscription must specify at least one queue.');
+      throw ArgumentError(
+        'RoutingSubscription must specify at least one queue.',
+      );
     }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
@@ -148,7 +152,8 @@ class PostgresBroker implements Broker {
 
     final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
-    final consumer = consumerName ??
+    final consumer =
+        consumerName ??
         'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
@@ -187,10 +192,7 @@ class PostgresBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     await _withDb(() {
-      return _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .delete();
+      return _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
     });
   }
 
@@ -207,17 +209,14 @@ class PostgresBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now().toUtc();
     await _withDb(() {
-      return _context
-          .query<StemQueueJob>()
-          .whereEquals('id', jobId)
-          .update({
-            'lockedAt': null,
-            'lockedUntil': null,
-            'lockedBy': null,
-            'attempt': delivery.envelope.attempt + 1,
-            'notBefore': null,
-            'updatedAt': now,
-          });
+      return _context.query<StemQueueJob>().whereEquals('id', jobId).update({
+        'lockedAt': null,
+        'lockedUntil': null,
+        'lockedBy': null,
+        'attempt': delivery.envelope.attempt + 1,
+        'notBefore': null,
+        'updatedAt': now,
+      });
     });
   }
 
@@ -278,9 +277,9 @@ class PostgresBroker implements Broker {
     final leaseUntil = DateTime.now().toUtc().add(by);
     await _withDb(() {
       return _context.repository<StemQueueJob>().update(
-            StemQueueJobUpdateDto(lockedUntil: leaseUntil),
-            where: StemQueueJobPartial(id: jobId),
-          );
+        StemQueueJobUpdateDto(lockedUntil: leaseUntil),
+        where: StemQueueJobPartial(id: jobId),
+      );
     });
   }
 
@@ -310,11 +309,11 @@ class PostgresBroker implements Broker {
     final now = DateTime.now().toUtc();
     return _withDb(() {
       return _context
-        .query<StemQueueJob>()
-        .whereEquals('queue', queue)
-        .whereNotNull('lockedUntil')
-        .where('lockedUntil', now, PredicateOperator.greaterThan)
-        .count();
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .whereNotNull('lockedUntil')
+          .where('lockedUntil', now, PredicateOperator.greaterThan)
+          .count();
     });
   }
 
@@ -348,10 +347,10 @@ class PostgresBroker implements Broker {
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
     final row = await _withDb(() {
       return _context
-        .query<StemDeadLetter>()
-        .whereEquals('queue', queue)
-        .whereEquals('id', id)
-        .firstOrNull();
+          .query<StemDeadLetter>()
+          .whereEquals('queue', queue)
+          .whereEquals('id', id)
+          .firstOrNull();
     });
     return row == null ? null : _deadLetterFromRow(row);
   }
@@ -367,7 +366,11 @@ class PostgresBroker implements Broker {
     final bounded = limit.clamp(1, 500);
     var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
     if (since != null) {
-      query = query.where('deadAt', since, PredicateOperator.greaterThanOrEqual);
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
     }
     final rows = await _withDb(() {
       return query.orderBy('deadAt', descending: true).limit(bounded).get();
@@ -429,7 +432,11 @@ class PostgresBroker implements Broker {
 
     var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
     if (since != null) {
-      query = query.where('deadAt', since, PredicateOperator.greaterThanOrEqual);
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
     }
     return _withDb(() => query.delete());
   }
@@ -440,46 +447,54 @@ class PostgresBroker implements Broker {
 
     return _withDb(() {
       return _connections.runInTransaction((txn) async {
-      final candidate = await txn
-          .query<StemQueueJob>()
-          .whereEquals('queue', queue)
-          .where((q) {
-            q
-              ..whereNull('notBefore')
-              ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
-          })
-          .where((q) {
-            q
-              ..whereNull('lockedUntil')
-              ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
-          })
-          .orderBy('priority', descending: true)
-          .orderBy('createdAt')
-          .limit(1)
-          .firstOrNull();
-      if (candidate == null) return null;
+        final candidate = await txn
+            .query<StemQueueJob>()
+            .whereEquals('queue', queue)
+            .where((q) {
+              q
+                ..whereNull('notBefore')
+                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+            })
+            .where((q) {
+              q
+                ..whereNull('lockedUntil')
+                ..orWhere(
+                  'lockedUntil',
+                  now,
+                  PredicateOperator.lessThanOrEqual,
+                );
+            })
+            .orderBy('priority', descending: true)
+            .orderBy('createdAt')
+            .limit(1)
+            .firstOrNull();
+        if (candidate == null) return null;
 
-      final updated = await txn
-          .query<StemQueueJob>()
-          .whereEquals('id', candidate.id)
-          .where((q) {
-            q
-              ..whereNull('lockedUntil')
-              ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
-          })
-          .where((q) {
-            q
-              ..whereNull('notBefore')
-              ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
-          })
-          .update({
-            'lockedAt': now,
-            'lockedUntil': visibilityUntil,
-            'lockedBy': consumerId,
-            'updatedAt': now,
-          });
-      if (updated == 0) return null;
-      return _QueuedJob.fromModel(candidate);
+        final updated = await txn
+            .query<StemQueueJob>()
+            .whereEquals('id', candidate.id)
+            .where((q) {
+              q
+                ..whereNull('lockedUntil')
+                ..orWhere(
+                  'lockedUntil',
+                  now,
+                  PredicateOperator.lessThanOrEqual,
+                );
+            })
+            .where((q) {
+              q
+                ..whereNull('notBefore')
+                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+            })
+            .update({
+              'lockedAt': now,
+              'lockedUntil': visibilityUntil,
+              'lockedBy': consumerId,
+              'updatedAt': now,
+            });
+        if (updated == 0) return null;
+        return _QueuedJob.fromModel(candidate);
       });
     });
   }
@@ -492,11 +507,11 @@ class PostgresBroker implements Broker {
     if (channels.isEmpty) return const <Delivery>[];
     final messages = await _withDb(() {
       return _context
-        .query<StemBroadcastMessage>()
-        .whereIn('channel', channels)
-        .orderBy('createdAt')
-        .limit(limit < 1 ? 1 : limit)
-        .get();
+          .query<StemBroadcastMessage>()
+          .whereIn('channel', channels)
+          .orderBy('createdAt')
+          .limit(limit < 1 ? 1 : limit)
+          .get();
     });
 
     final deliveries = <Delivery>[];
@@ -511,9 +526,9 @@ class PostgresBroker implements Broker {
       if (alreadyAcked) continue;
       deliveries.add(
         Delivery(
-          envelope: Envelope.fromJson(message.envelope).copyWith(
-            queue: message.channel,
-          ),
+          envelope: Envelope.fromJson(
+            message.envelope,
+          ).copyWith(queue: message.channel),
           receipt: jsonEncode({'messageId': message.id, 'worker': workerId}),
           leaseExpiresAt: null,
           route: RoutingInfo.broadcast(
@@ -538,9 +553,9 @@ class PostgresBroker implements Broker {
     ).toTracked();
     await _withDb(() {
       return _context.repository<StemBroadcastAck>().upsert(
-            ack,
-            uniqueBy: ['messageId', 'workerId'],
-          );
+        ack,
+        uniqueBy: ['messageId', 'workerId'],
+      );
     });
   }
 
@@ -560,11 +575,7 @@ class PostgresBroker implements Broker {
             .query<StemQueueJob>()
             .whereNotNull('lockedUntil')
             .where('lockedUntil', now, PredicateOperator.lessThanOrEqual)
-            .update({
-              'lockedAt': null,
-              'lockedUntil': null,
-              'lockedBy': null,
-            });
+            .update({'lockedAt': null, 'lockedUntil': null, 'lockedBy': null});
 
         if (!deadLetterRetention.isNegative &&
             deadLetterRetention > Duration.zero) {

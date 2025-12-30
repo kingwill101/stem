@@ -35,6 +35,10 @@ void main() {
       dispose: (backend) => (backend as SqliteResultBackend).close(),
       beforeStatusExpiryCheck: (backend) =>
           (backend as SqliteResultBackend).runCleanup(),
+      beforeGroupExpiryCheck: (backend) =>
+          (backend as SqliteResultBackend).runCleanup(),
+      beforeHeartbeatExpiryCheck: (backend) =>
+          (backend as SqliteResultBackend).runCleanup(),
     ),
     settings: const ResultBackendContractSettings(
       statusTtl: Duration(seconds: 1),

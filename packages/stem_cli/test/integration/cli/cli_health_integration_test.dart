@@ -19,6 +19,13 @@ void main() {
     if (!await servicesAvailable) {
       return;
     }
+    // Postgres adapters resolve ormed.yaml relative to cwd; point at the
+    // package config so health checks can open connections.
+    final originalDir = Directory.current;
+    Directory.current = Directory('../stem_postgres').absolute;
+    addTearDown(() {
+      Directory.current = originalDir;
+    });
 
     final stdoutBuffer = StringBuffer();
     final stderrBuffer = StringBuffer();
@@ -35,7 +42,7 @@ void main() {
 
     expect(exitCode, 0);
     final output = stdoutBuffer.toString();
-    expect(output, contains('[ok'));
+    expect(output.toLowerCase(), contains('[ok]'));
     expect(output, contains('broker: Connected to $redisUrl'));
     expect(output, contains('backend: Connected to $postgresUrl'));
     expect(stderrBuffer.isEmpty, isTrue);

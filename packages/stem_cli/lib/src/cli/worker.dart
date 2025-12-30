@@ -1072,6 +1072,9 @@ class WorkerStatusCommand extends Command<int> {
       );
     }
 
+    if (!jsonOutput && dependencies.console.interactive) {
+      dependencies.console.section('Worker heartbeats');
+    }
     return _printHeartbeatSnapshot(
       backendUrl,
       namespace,
@@ -1365,6 +1368,11 @@ Future<void> _publishControlCommand(
   required String namespace,
   required Set<String> targets,
 }) async {
+  await _prepareControlReplyQueue(
+    ctx,
+    namespace: namespace,
+    requestId: command.requestId,
+  );
   late final List<String> queueNames;
   if (targets.isEmpty) {
     queueNames = [ControlQueueNames.broadcast(namespace)];
@@ -1378,6 +1386,19 @@ Future<void> _publishControlCommand(
 
   for (final queue in queueNames) {
     await ctx.broker.publish(command.toEnvelope(queue: queue));
+  }
+}
+
+Future<void> _prepareControlReplyQueue(
+  CliContext ctx, {
+  required String namespace,
+  required String requestId,
+}) async {
+  final replyQueue = ControlQueueNames.reply(namespace, requestId);
+  try {
+    await ctx.broker.pendingCount(replyQueue);
+  } catch (_) {
+    // Best-effort: precreate the reply consumer group if possible.
   }
 }
 

@@ -10,3 +10,7 @@ dependencies:
     path: ../..
   stem_redis:
     path: ../../../stem_redis
+
+dependency_overrides:
+  stem:
+    path: ../..

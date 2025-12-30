@@ -13,12 +13,7 @@ class PostgresResult extends IterableBase<PostgresRow> {
 
   factory PostgresResult.fromResult(Result result) {
     final rows = result
-        .map(
-          (row) => PostgresRow(
-            List<Object?>.from(row),
-            row.toColumnMap(),
-          ),
-        )
+        .map((row) => PostgresRow(List<Object?>.from(row), row.toColumnMap()))
         .toList(growable: false);
     return PostgresResult._(rows, result.affectedRows);
   }

@@ -11,7 +11,10 @@ class Stem extends Migration {
       table.json('envelope');
       table.text('delivery').defaultValue('at-least-once');
       table.timestampsTz();
-      table.index(['channel', 'created_at'], name: 'stem_broadcast_messages_channel_created_idx');
+      table.index([
+        'channel',
+        'created_at',
+      ], name: 'stem_broadcast_messages_channel_created_idx');
     });
 
     schema.create('stem_broadcast_ack', (table) {
@@ -19,8 +22,16 @@ class Stem extends Migration {
       table.text('worker_id');
       table.timestampTz('acknowledged_at').nullable();
       table.timestampsTz();
-      table.primary(['message_id', 'worker_id'], name: 'stem_broadcast_ack_primary');
-      table.foreign(['message_id'], references: 'stem_broadcast_messages', referencedColumns: ['id'], onDelete: ReferenceAction.cascade);
+      table.primary([
+        'message_id',
+        'worker_id',
+      ], name: 'stem_broadcast_ack_primary');
+      table.foreign(
+        ['message_id'],
+        references: 'stem_broadcast_messages',
+        referencedColumns: ['id'],
+        onDelete: ReferenceAction.cascade,
+      );
     });
 
     schema.create('stem_queue_jobs', (table) {
@@ -35,10 +46,11 @@ class Stem extends Migration {
       table.timestampTz('locked_until').nullable();
       table.text('locked_by').nullable();
       table.timestampsTz();
-      table.index(
-        ['queue', 'priority', 'created_at'],
-        name: 'stem_queue_jobs_queue_priority_idx',
-      );
+      table.index([
+        'queue',
+        'priority',
+        'created_at',
+      ], name: 'stem_queue_jobs_queue_priority_idx');
       table.index(['not_before'], name: 'stem_queue_jobs_not_before_idx');
     });
 
@@ -49,10 +61,10 @@ class Stem extends Migration {
       table.text('reason').nullable();
       table.json('meta').nullable();
       table.timestampTz('dead_at');
-      table.index(
-        ['queue', 'dead_at'],
-        name: 'stem_dead_letters_queue_dead_at_idx',
-      );
+      table.index([
+        'queue',
+        'dead_at',
+      ], name: 'stem_dead_letters_queue_dead_at_idx');
     });
 
     schema.create('stem_task_results', (table) {
@@ -85,10 +97,10 @@ class Stem extends Migration {
       table.integer('attempt').defaultValue(0);
       table.json('meta').defaultValue('{}');
       table.timestampsTz();
-      table.primary(
-        ['group_id', 'task_id'],
-        name: 'stem_group_results_primary',
-      );
+      table.primary([
+        'group_id',
+        'task_id',
+      ], name: 'stem_group_results_primary');
       table.index(['group_id'], name: 'stem_group_results_group_idx');
       table.foreign(
         ['group_id'],
@@ -111,10 +123,9 @@ class Stem extends Migration {
       table.timestampTz('expires_at');
       table.timestampTz('deleted_at').nullable();
       table.timestampsTz();
-      table.index(
-        ['expires_at'],
-        name: 'stem_worker_heartbeats_expires_at_idx',
-      );
+      table.index([
+        'expires_at',
+      ], name: 'stem_worker_heartbeats_expires_at_idx');
     });
 
     schema.create('stem_locks', (table) {
@@ -147,7 +158,12 @@ class Stem extends Migration {
       table.text('name');
       table.text('value').nullable();
       table.primary(['run_id', 'name'], name: 'stem_workflow_steps_primary');
-      table.foreign(['run_id'], references: 'stem_workflow_runs', referencedColumns: ['id'], onDelete: ReferenceAction.cascade);
+      table.foreign(
+        ['run_id'],
+        references: 'stem_workflow_runs',
+        referencedColumns: ['id'],
+        onDelete: ReferenceAction.cascade,
+      );
     });
 
     schema.create('stem_workflow_watchers', (table) {
@@ -157,8 +173,16 @@ class Stem extends Migration {
       table.text('data').nullable();
       table.timestampTz('created_at');
       table.timestampTz('deadline').nullable();
-      table.foreign(['run_id'], references: 'stem_workflow_runs', referencedColumns: ['id'], onDelete: ReferenceAction.cascade);
-      table.index(['topic', 'created_at'], name: 'stem_workflow_watchers_topic_created_idx');
+      table.foreign(
+        ['run_id'],
+        references: 'stem_workflow_runs',
+        referencedColumns: ['id'],
+        onDelete: ReferenceAction.cascade,
+      );
+      table.index([
+        'topic',
+        'created_at',
+      ], name: 'stem_workflow_watchers_topic_created_idx');
     });
 
     schema.create('stem_revokes', (table) {

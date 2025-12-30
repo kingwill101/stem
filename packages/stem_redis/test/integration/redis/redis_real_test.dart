@@ -186,4 +186,52 @@ void main() async {
     expect(afterRelease, isNotNull);
     await afterRelease!.release();
   });
+
+  test('UniqueTaskCoordinator deduplicates with RedisLockStore', () async {
+    final coordinator = UniqueTaskCoordinator(
+      lockStore: lockStore,
+      namespace: 'stem-test:unique:${DateTime.now().microsecondsSinceEpoch}',
+      defaultTtl: const Duration(seconds: 1),
+    );
+    const options = TaskOptions(unique: true, uniqueFor: Duration(seconds: 1));
+
+    final envelope = Envelope(
+      name: 'integration.unique',
+      args: const {'id': 1},
+      queue: 'integration',
+    );
+    final first = await coordinator.acquire(
+      envelope: envelope,
+      options: options,
+    );
+    expect(first.isAcquired, isTrue);
+
+    final duplicate = Envelope(
+      name: 'integration.unique',
+      args: const {'id': 1},
+      queue: 'integration',
+    );
+    final second = await coordinator.acquire(
+      envelope: duplicate,
+      options: options,
+    );
+    expect(second.isAcquired, isFalse);
+    expect(second.existingTaskId, equals(envelope.id));
+
+    final released = await coordinator.release(first.uniqueKey, first.owner);
+    expect(released, isTrue);
+
+    final afterRelease = Envelope(
+      name: 'integration.unique',
+      args: const {'id': 1},
+      queue: 'integration',
+    );
+    final third = await coordinator.acquire(
+      envelope: afterRelease,
+      options: options,
+    );
+    expect(third.isAcquired, isTrue);
+
+    await coordinator.release(third.uniqueKey, third.owner);
+  });
 }

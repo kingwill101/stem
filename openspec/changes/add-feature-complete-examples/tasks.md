@@ -1,13 +1,13 @@
 ## Implementation
-- [ ] Audit existing examples to confirm reuse opportunities and avoid duplication (document gaps captured in proposal).
+- [x] Audit existing examples to confirm reuse opportunities and avoid duplication (document gaps captured in proposal).
 - [x] Scaffold rate-limit + delayed delivery demo (producer, worker, README, optional compose).
 - [x] Scaffold DLQ operations sandbox demonstrating failures, CLI inspection, and replay.
-- [ ] Scaffold worker control lab showing ping/stats/revoke/shutdown workflows (support multiple workers).
+- [x] Scaffold worker control lab showing ping/stats/revoke/shutdown workflows (support multiple workers).
 - [ ] Scaffold autoscaling demo illustrating dynamic concurrency adjustments with metrics verification.
 - [ ] Scaffold scheduler observability demo covering drift metrics, schedule-entry signals, and CLI checks.
 - [ ] Scaffold signing key rotation drill with overlapping keys and verification harness.
 - [ ] Scaffold ops health suite combining heartbeats, CLI observes, and healthcheck commands.
 - [ ] Scaffold quality gate runner example invoking chaos/perf/coverage scripts.
-- [ ] Scaffold progress + heartbeat reporting example and document consumption patterns.
+- [x] Scaffold progress + heartbeat reporting example and document consumption patterns.
 - [ ] Update documentation (example index + cross-links) referencing each new demo.
 - [ ] Add optional CI hooks or scripts to smoke-test new examples without bloating default pipelines.

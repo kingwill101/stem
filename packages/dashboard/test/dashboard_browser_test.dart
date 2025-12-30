@@ -1,6 +1,5 @@
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
-import 'package:server_testing/src/browser/browser_exception.dart';
 import 'package:stem/stem.dart' show DeadLetterEntry, DeadLetterReplayResult;
 import 'package:stem_dashboard/src/server.dart';
 import 'package:stem_dashboard/src/services/models.dart';
@@ -144,7 +143,7 @@ Future<void> main() async {
     await browser.visit('/');
     await browser.waiter.waitFor('.cards');
     await browser.assertSee('Overview');
-    await browser.assertSee('Queued');
+    await browser.assertSee('Pending');
     await browser.assertSee('42');
     await browser.assertSee('critical');
   });

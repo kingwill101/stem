@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
         "core-concepts/signals",
         "core-concepts/canvas",
         "core-concepts/observability",
+        "core-concepts/dashboard",
         "core-concepts/persistence",
         "core-concepts/cli-control",
       ],

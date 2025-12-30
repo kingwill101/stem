@@ -132,7 +132,6 @@ class HealthCommand extends Command<int> {
     final io = dependencies.console;
     final environment = dependencies.environment;
 
-
     final overrides = Map<String, String>.from(environment);
     final brokerOverride = (args['broker'] as String?)?.trim();
     if (brokerOverride != null && brokerOverride.isNotEmpty) {
@@ -202,10 +201,7 @@ class HealthCommand extends Command<int> {
     final uri = Uri.parse(url);
     if (isPostgresScheme(uri.scheme)) {
       try {
-        final broker = await PostgresBroker.connect(
-          url,
-          tls: tls,
-        );
+        final broker = await PostgresBroker.connect(url, tls: tls);
         await broker.close();
         return _HealthCheckResult(
           component: 'broker',

@@ -129,6 +129,65 @@ void main() {
     }
   });
 
+  test('concurrent consumers do not block publishes', () async {
+    final namespace = _uniqueNamespace();
+    const blockTime = Duration(milliseconds: 1500);
+    final broker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+      blockTime: blockTime,
+    );
+    StreamQueue<Delivery>? queueA;
+    StreamQueue<Delivery>? queueB;
+    try {
+      final queueAName = '${_uniqueQueue()}-a';
+      final queueBName = '${_uniqueQueue()}-b';
+      queueA = StreamQueue(
+        broker.consume(
+          RoutingSubscription.singleQueue(queueAName),
+          prefetch: 1,
+          consumerName: 'consumer-a-$queueAName',
+        ),
+      );
+      queueB = StreamQueue(
+        broker.consume(
+          RoutingSubscription.singleQueue(queueBName),
+          prefetch: 1,
+          consumerName: 'consumer-b-$queueBName',
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final envelope = Envelope(
+        name: 'integration.redis.concurrent',
+        args: const {'value': 'ok'},
+        queue: queueBName,
+      );
+      final publishWatch = Stopwatch()..start();
+      await broker.publish(envelope);
+      publishWatch.stop();
+
+      expect(
+        publishWatch.elapsedMilliseconds,
+        lessThan(blockTime.inMilliseconds ~/ 2),
+        reason: 'publish should not be delayed by another consumer',
+      );
+
+      final delivery = await queueB.next.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () =>
+            fail('consumer-b timed out waiting for concurrent message'),
+      );
+      expect(delivery.envelope.id, envelope.id);
+      await broker.ack(delivery);
+    } finally {
+      await queueA?.cancel(immediate: true);
+      await queueB?.cancel(immediate: true);
+      await _safeCloseRedisBroker(broker);
+    }
+  });
+
   test('Redis broadcast fan-out delivers to all subscribers', () async {
     final namespace = _uniqueNamespace();
     final publisher = await RedisStreamsBroker.connect(

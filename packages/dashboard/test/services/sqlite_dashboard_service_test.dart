@@ -2,22 +2,44 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:stem_dashboard/dashboard.dart';
+import 'package:stem_dashboard/src/config/config.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 import 'package:test/test.dart';
 
 void main() {
   late Directory tempDir;
   late File dbFile;
-  late SqliteDashboardService service;
+  late StemDashboardService service;
+  late SqliteBroker broker;
+  late SqliteResultBackend backend;
 
   setUp(() async {
     tempDir = Directory.systemTemp.createTempSync('stem_dashboard_sqlite_test');
     dbFile = File('${tempDir.path}/dashboard.db');
-    service = await SqliteDashboardService.connect(dbFile);
+
+    // Create broker and backend instances
+    broker = await SqliteBroker.open(dbFile);
+    backend = await SqliteResultBackend.open(dbFile);
+
+    // Create a minimal config for the dashboard
+    final config = DashboardConfig.fromEnvironment({
+      'STEM_BROKER_URL': 'sqlite:///${dbFile.path}',
+      'STEM_RESULT_BACKEND_URL': 'sqlite:///${dbFile.path}',
+      'STEM_WORKER_QUEUES': 'pending-queue,dead-queue,inflight-queue',
+    });
+
+    // Use fromInstances to inject our broker and backend
+    service = await StemDashboardService.fromInstances(
+      config: config,
+      broker: broker,
+      backend: backend,
+    );
   });
 
   tearDown(() async {
     await service.close();
+    await broker.close();
+    await backend.close();
     if (await dbFile.exists()) {
       await dbFile.delete();
     }
@@ -27,9 +49,6 @@ void main() {
   test(
     'fetchQueueSummaries aggregates pending, inflight, and dead counts',
     () async {
-      final broker = await SqliteBroker.open(dbFile);
-      addTearDown(broker.close);
-
       await broker.publish(
         Envelope(name: 'pending', args: const {}, queue: 'pending-queue'),
       );
@@ -72,12 +91,6 @@ void main() {
   );
 
   test('fetchWorkerStatuses reads heartbeats from the database', () async {
-    final backend = await SqliteResultBackend.open(
-      dbFile,
-      heartbeatTtl: const Duration(seconds: 5),
-    );
-    addTearDown(backend.close);
-
     await backend.setWorkerHeartbeat(
       WorkerHeartbeat(
         workerId: 'worker-sqlite',

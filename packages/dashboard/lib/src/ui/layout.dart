@@ -592,11 +592,27 @@ String renderLayout(DashboardPage page, String content) {
     window.stemDashboardEventsWs = socket;
   };
 
+  const scheduleOverviewRefresh = (page) => {
+    if (window.stemDashboardOverviewTimer) {
+      clearInterval(window.stemDashboardOverviewTimer);
+      window.stemDashboardOverviewTimer = null;
+    }
+    if (page !== 'overview') return;
+    window.stemDashboardOverviewTimer = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      if (!window.Turbo || !frame) return;
+      const url = window.location.pathname + window.location.search;
+      window.Turbo.visit(url, { frame: 'dashboard-content', action: 'replace' });
+    }, 5000);
+  };
+
   if (frame) {
     setActive(frame.dataset.page ?? '${page.name}');
-    if ((frame.dataset.page ?? '${page.name}') === 'events') {
+    const initialPage = frame.dataset.page ?? '${page.name}';
+    if (initialPage === 'events') {
       ensureEventsStream();
     }
+    scheduleOverviewRefresh(initialPage);
     document.addEventListener('turbo:frame-load', (event) => {
       if (event.target.id !== 'dashboard-content') return;
       const currentPage = event.target.dataset.page ?? '${page.name}';
@@ -604,6 +620,7 @@ String renderLayout(DashboardPage page, String content) {
       if (currentPage === 'events') {
         ensureEventsStream();
       }
+      scheduleOverviewRefresh(currentPage);
     });
   }
 

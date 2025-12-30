@@ -9,9 +9,10 @@ them to the browser via Turbo Streams while we wire the full signal bus.
 
 ## Getting Started
 
-1. Ensure the routed ecosystem checkout exists (the dependency overrides point
-   at `~/code/dart_packages/routed_ecosystem`). This gives us local copies of
-   `routed`, `routed_hotwire`, `server_testing`, and related tooling.
+1. Ensure the routed ecosystem checkout exists alongside this repo (the
+   dependency overrides point at `../routed_ecosystem` relative to
+   `packages/dashboard`). This gives us local copies of `routed`,
+   `routed_hotwire`, `server_testing`, and related tooling.
 2. From the repository root install dependencies for both Stem and the
    dashboard:
 

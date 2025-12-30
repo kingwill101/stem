@@ -39,7 +39,7 @@ leases, while Postgres stores task metadata and group results.
 
    ```bash
    export STEM_BROKER_URL=redis://127.0.0.1:6379/0
-   export STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:65433/stem_demo
+   export STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:5432/stem_demo
    export STEM_DEFAULT_QUEUE=hybrid
    ```
 
@@ -62,7 +62,7 @@ leases, while Postgres stores task metadata and group results.
 5. Inspect Postgres (optional):
 
    ```bash
-   psql postgres://stem:stem@127.0.0.1:65433/stem_demo \
+   psql postgres://stem:stem@127.0.0.1:5432/stem_demo \
      -c 'SELECT id,state,meta FROM stem_demo_task_results;'
    ```
 
@@ -74,3 +74,17 @@ leases, while Postgres stores task metadata and group results.
 
 The code uses the same APIs as production deployments; adapt configuration to
 match your environment (TLS, credentials, namespaces, etc.).
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example` and update hostnames to `localhost` for local runs.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-enqueuer
+# Or:
+just tmux
+```

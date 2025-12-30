@@ -148,6 +148,7 @@ Future<Response> _renderPage(
       page: page,
       queues: queues,
       workers: workers,
+      throughput: page == DashboardPage.overview ? state.throughput : null,
       events: page == DashboardPage.events ? state.events : const [],
       tasksOptions: tasksOptions,
       workersOptions: workersOptions,

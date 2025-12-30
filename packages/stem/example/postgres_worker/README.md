@@ -46,14 +46,14 @@ worker, and enqueues a few demo tasks.
 docker compose up postgres -d
 ```
 
-Postgres will listen on `127.0.0.1:65432` with database `stem_demo` and
+Postgres will listen on `127.0.0.1:5432` with database `stem_demo` and
 credentials `stem/stem`.
 
 ### 2. Export Stem environment variables
 
 ```bash
-export STEM_BROKER_URL=postgres://stem:stem@127.0.0.1:65432/stem_demo
-export STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:65432/stem_demo
+export STEM_BROKER_URL=postgres://stem:stem@127.0.0.1:5432/stem_demo
+export STEM_RESULT_BACKEND_URL=postgres://stem:stem@127.0.0.1:5432/stem_demo
 export STEM_DEFAULT_QUEUE=reports
 ```
 
@@ -84,7 +84,7 @@ processing output and stores task results in Postgres.
 ### 5. Inspect Postgres (optional)
 
 ```bash
-psql postgres://stem:stem@127.0.0.1:65432/stem_demo -c 'SELECT id,state,meta FROM stem_demo_task_results;'
+psql postgres://stem:stem@127.0.0.1:5432/stem_demo -c 'SELECT id,state,meta FROM stem_demo_task_results;'
 ```
 
 ### 6. Cleanup
@@ -99,3 +99,17 @@ docker compose -f docker-compose.yml down
 
 This example uses the same APIs as production deployments; adjust connection
 strings, TLS, and credentials to match your environment.
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example` and update hostnames to `localhost` for local runs.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-enqueuer
+# Or:
+just tmux
+```

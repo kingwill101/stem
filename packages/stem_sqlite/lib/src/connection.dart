@@ -41,11 +41,7 @@ Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
   final driver = SqliteDriverAdapter.file(file.path);
   final registry = buildOrmRegistry();
   final dataSource = DataSource(
-    DataSourceOptions(
-      driver: driver,
-      registry: registry,
-      database: file.path,
-    ),
+    DataSourceOptions(driver: driver, registry: registry, database: file.path),
   );
   await dataSource.init();
   if (!readOnly) {
@@ -63,10 +59,7 @@ Future<void> _runMigrations(File file) async {
   ensureSqliteDriverRegistration();
   final adapter = SqliteDriverAdapter.file(file.path);
   try {
-    final ledger = SqlMigrationLedger(
-      adapter,
-      tableName: 'orm_migrations',
-    );
+    final ledger = SqlMigrationLedger(adapter, tableName: 'orm_migrations');
     await ledger.ensureInitialized();
 
     final runner = MigrationRunner(

@@ -22,3 +22,13 @@ docker compose up --build
 ```
 
 Workers trust the public key(s) defined in `.env`, while the enqueuer signs with the private key. Rotate keys periodically following the security runbook.
+
+## Local build + Docker deps (just)
+
+The Justfile in this directory runs the microservice binaries locally while using this profile's `.env` for configuration.
+
+```bash
+just deps-up
+just build
+just tmux
+```

@@ -37,16 +37,16 @@ rate-limit-delay-worker-1    | [signal][retry] task=demo.throttled.render retry=
 1. Start Redis:
 
    ```bash
-   docker run --rm -p 6381:6379 redis:7-alpine
+   docker run --rm -p 6379:6379 redis:7-alpine
    ```
 
 2. In one terminal, run the worker:
 
    ```bash
    cd examples/rate_limit_delay
-   STEM_BROKER_URL=redis://localhost:6381/0 \
-   STEM_RESULT_BACKEND_URL=redis://localhost:6381/1 \
-   STEM_RATE_LIMIT_URL=redis://localhost:6381/2 \
+   STEM_BROKER_URL=redis://localhost:6379/0 \
+   STEM_RESULT_BACKEND_URL=redis://localhost:6379/1 \
+   STEM_RATE_LIMIT_URL=redis://localhost:6379/2 \
    dart run bin/worker.dart
    ```
 
@@ -54,8 +54,8 @@ rate-limit-delay-worker-1    | [signal][retry] task=demo.throttled.render retry=
 
    ```bash
    cd examples/rate_limit_delay
-   STEM_BROKER_URL=redis://localhost:6381/0 \
-   STEM_RESULT_BACKEND_URL=redis://localhost:6381/1 \
+   STEM_BROKER_URL=redis://localhost:6379/0 \
+   STEM_RESULT_BACKEND_URL=redis://localhost:6379/1 \
    dart run bin/producer.dart
    ```
 
@@ -84,4 +84,16 @@ docker compose exec worker \
 
 ```bash
 docker compose down
+```
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-producer
+# Or:
+just tmux
 ```

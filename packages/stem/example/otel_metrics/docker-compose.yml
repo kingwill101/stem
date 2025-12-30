@@ -5,8 +5,9 @@ services:
     volumes:
       - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "4318:4318"
-      - "8888:8888" # Prometheus metrics endpoint
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_PROM_PORT:-8889}:8888" # Prometheus metrics endpoint
     networks:
       - otel-network
     depends_on:
@@ -17,9 +18,7 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "4319:4318"
+      - "${JAEGER_UI_PORT:-16686}:16686"
     networks:
       - otel-network
 
@@ -28,7 +27,7 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     networks:
       - otel-network
     command:
@@ -40,7 +39,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_SECURITY_ADMIN_USER=admin
@@ -58,7 +57,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: examples/otel_metrics/Dockerfile
+      dockerfile: example/otel_metrics/Dockerfile
     environment:
       STEM_OTLP_ENDPOINT: http://collector:4318/v1/metrics
     networks:

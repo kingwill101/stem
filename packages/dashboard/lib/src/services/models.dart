@@ -16,6 +16,26 @@ class QueueSummary {
   int get total => pending + inflight;
 }
 
+class DashboardThroughput {
+  const DashboardThroughput({
+    required this.interval,
+    required this.processed,
+    required this.enqueued,
+  });
+
+  final Duration interval;
+  final int processed;
+  final int enqueued;
+
+  double get processedPerMinute => _perMinute(processed);
+  double get enqueuedPerMinute => _perMinute(enqueued);
+
+  double _perMinute(int count) {
+    if (interval.inMilliseconds <= 0) return 0;
+    return count / interval.inMilliseconds * 60000;
+  }
+}
+
 class WorkerQueueInfo {
   const WorkerQueueInfo({required this.name, required this.inflight});
 

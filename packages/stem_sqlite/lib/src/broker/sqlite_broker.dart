@@ -138,10 +138,7 @@ class SqliteBroker implements Broker {
   @override
   Future<void> ack(Delivery delivery) async {
     final jobId = _parseReceipt(delivery.receipt);
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .delete();
+    await _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
   }
 
   @override
@@ -152,17 +149,14 @@ class SqliteBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .update({
-          'lockedAt': null,
-          'lockedUntil': null,
-          'lockedBy': null,
-          'attempt': delivery.envelope.attempt + 1,
-          'notBefore': null,
-          'updatedAt': now,
-        });
+    await _context.query<StemQueueJob>().whereEquals('id', jobId).update({
+      'lockedAt': null,
+      'lockedUntil': null,
+      'lockedBy': null,
+      'attempt': delivery.envelope.attempt + 1,
+      'notBefore': null,
+      'updatedAt': now,
+    });
   }
 
   @override
@@ -174,8 +168,10 @@ class SqliteBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
 
-    final row =
-        await _context.query<StemQueueJob>().whereEquals('id', jobId).firstOrNull();
+    final row = await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .firstOrNull();
     await _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
     if (row != null) {
       await _context.repository<StemDeadLetter>().insert(
@@ -196,9 +192,7 @@ class SqliteBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
     await _context.repository<StemQueueJob>().update(
-      StemQueueJobUpdateDto(
-        lockedUntil: now.add(by),
-      ),
+      StemQueueJobUpdateDto(lockedUntil: now.add(by)),
       where: StemQueueJobPartial(id: jobId),
     );
   }
@@ -218,6 +212,11 @@ class SqliteBroker implements Broker {
           query
             ..whereNull('notBefore')
             ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+        })
+        .where((query) {
+          query
+            ..whereNull('lockedUntil')
+            ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
         })
         .count();
   }
@@ -279,8 +278,10 @@ class SqliteBroker implements Broker {
         PredicateOperator.greaterThanOrEqual,
       );
     }
-    final rows =
-        await query.orderBy('deadAt', descending: true).limit(bounded).get();
+    final rows = await query
+        .orderBy('deadAt', descending: true)
+        .limit(bounded)
+        .get();
 
     final entries = rows.map(_deadLetterFromRow).toList(growable: false);
     if (dryRun || entries.isEmpty) {
@@ -350,20 +351,12 @@ class SqliteBroker implements Broker {
           .where((q) {
             q
               ..whereNull('notBefore')
-              ..orWhere(
-                'notBefore',
-                now,
-                PredicateOperator.lessThanOrEqual,
-              );
+              ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
           })
           .where((q) {
             q
               ..whereNull('lockedUntil')
-              ..orWhere(
-                'lockedUntil',
-                now,
-                PredicateOperator.lessThanOrEqual,
-              );
+              ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
           })
           .orderBy('priority', descending: true)
           .orderBy('createdAt')
@@ -377,20 +370,12 @@ class SqliteBroker implements Broker {
           .where((q) {
             q
               ..whereNull('lockedUntil')
-              ..orWhere(
-                'lockedUntil',
-                now,
-                PredicateOperator.lessThanOrEqual,
-              );
+              ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
           })
           .where((q) {
             q
               ..whereNull('notBefore')
-              ..orWhere(
-                'notBefore',
-                now,
-                PredicateOperator.lessThanOrEqual,
-              );
+              ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
           })
           .update({
             'lockedAt': now,
@@ -417,27 +402,15 @@ class SqliteBroker implements Broker {
       await txn
           .query<StemQueueJob>()
           .whereNotNull('lockedUntil')
-          .where(
-            'lockedUntil',
-            now,
-            PredicateOperator.lessThanOrEqual,
-          )
-          .update({
-            'lockedAt': null,
-            'lockedUntil': null,
-            'lockedBy': null,
-          });
+          .where('lockedUntil', now, PredicateOperator.lessThanOrEqual)
+          .update({'lockedAt': null, 'lockedUntil': null, 'lockedBy': null});
 
       if (!deadLetterRetention.isNegative &&
           deadLetterRetention > Duration.zero) {
         final cutoff = now.subtract(deadLetterRetention);
         await txn
             .query<StemDeadLetter>()
-            .where(
-              'deadAt',
-              cutoff,
-              PredicateOperator.lessThanOrEqual,
-            )
+            .where('deadAt', cutoff, PredicateOperator.lessThanOrEqual)
             .delete();
       }
     });

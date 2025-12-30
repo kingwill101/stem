@@ -12,6 +12,8 @@ class BrokerContractSettings {
     this.verifyPriorityOrdering = true,
     this.verifyBroadcastFanout = false,
     this.requeueTimeout = const Duration(seconds: 5),
+    this.concurrentPublishTimeout = const Duration(seconds: 1),
+    this.concurrentDeliveryTimeout = const Duration(seconds: 5),
   });
 
   /// Expected default visibility timeout used by the adapter under test.
@@ -35,6 +37,12 @@ class BrokerContractSettings {
 
   /// Maximum time to wait for a requeued delivery to appear.
   final Duration requeueTimeout;
+
+  /// Maximum time allowed for publish to complete while other consumers are active.
+  final Duration concurrentPublishTimeout;
+
+  /// Maximum time to wait for a delivery in concurrent consumer scenarios.
+  final Duration concurrentDeliveryTimeout;
 }
 
 class BrokerContractFactory {
@@ -114,6 +122,118 @@ void runBrokerContractTests({
       await _purgeAll(currentBroker, queue);
     });
 
+    test('publish respects routing queue overrides', () async {
+      final currentBroker = broker!;
+      final queueA = _queueName('routing-a');
+      final queueB = _queueName('routing-b');
+      final envelope = Envelope(
+        name: 'contract.route.override',
+        args: const {},
+        queue: queueA,
+      );
+
+      await currentBroker.publish(
+        envelope,
+        routing: RoutingInfo.queue(queue: queueB),
+      );
+
+      final delivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queueB,
+        pollTimeout: const Duration(seconds: 5),
+      );
+      expect(delivery, isNotNull);
+      if (delivery != null) {
+        await currentBroker.ack(delivery);
+      }
+
+      final wrongQueue = await _expectDelivery(
+        broker: currentBroker,
+        queue: queueA,
+        pollTimeout: settings.queueSettleDelay * 3,
+      );
+      expect(
+        wrongQueue,
+        isNull,
+        reason: 'Routing overrides should not enqueue to $queueA',
+      );
+
+      await _purgeAll(currentBroker, queueA);
+      await _purgeAll(currentBroker, queueB);
+    });
+
+    test('pending/inflight counts track delivery lifecycle', () async {
+      final currentBroker = broker!;
+      final queue = _queueName('counts');
+      final pendingBefore = await currentBroker.pendingCount(queue);
+      final inflightBefore = await currentBroker.inflightCount(queue);
+      if (pendingBefore == null && inflightBefore == null) {
+        return;
+      }
+
+      final envelope = Envelope(
+        name: 'contract.counts',
+        args: const {},
+        queue: queue,
+      );
+      await currentBroker.publish(envelope);
+
+      if (pendingBefore != null) {
+        await _waitFor<int?>(
+          evaluate: () => currentBroker.pendingCount(queue),
+          predicate: (value) => (value ?? 0) >= 1,
+          timeout: settings.queueSettleDelay * 5,
+          pollInterval: settings.queueSettleDelay,
+        );
+      }
+
+      final iterator = StreamIterator(
+        currentBroker.consume(RoutingSubscription.singleQueue(queue)),
+      );
+      Delivery? delivery;
+      try {
+        delivery = await _nextIteratorDelivery(
+          iterator: iterator,
+          timeout: const Duration(seconds: 5),
+        );
+        expect(delivery, isNotNull);
+
+        if (inflightBefore != null) {
+          await _waitFor<int?>(
+            evaluate: () => currentBroker.inflightCount(queue),
+            predicate: (value) => (value ?? 0) >= 1,
+            timeout: settings.queueSettleDelay * 5,
+            pollInterval: settings.queueSettleDelay,
+          );
+        }
+
+        if (pendingBefore != null) {
+          await _waitFor<int?>(
+            evaluate: () => currentBroker.pendingCount(queue),
+            predicate: (value) => (value ?? 0) == 0,
+            timeout: settings.queueSettleDelay * 5,
+            pollInterval: settings.queueSettleDelay,
+          );
+        }
+      } finally {
+        if (delivery != null) {
+          await currentBroker.ack(delivery);
+        }
+        await iterator.cancel();
+      }
+
+      if (inflightBefore != null) {
+        await _waitFor<int?>(
+          evaluate: () => currentBroker.inflightCount(queue),
+          predicate: (value) => (value ?? 0) == 0,
+          timeout: settings.queueSettleDelay * 5,
+          pollInterval: settings.queueSettleDelay,
+        );
+      }
+
+      await _purgeAll(currentBroker, queue);
+    });
+
     test(
       'nack with requeue=true schedules the job for another attempt',
       () async {
@@ -152,6 +272,39 @@ void runBrokerContractTests({
       },
     );
 
+    test('nack with requeue=false does not re-deliver the job', () async {
+      final currentBroker = broker!;
+      final queue = _queueName('nack-drop');
+      final envelope = Envelope(
+        name: 'contract.nack.drop',
+        args: const {},
+        queue: queue,
+      );
+
+      await currentBroker.publish(envelope);
+
+      final delivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: const Duration(seconds: 5),
+      );
+      expect(delivery, isNotNull);
+      await currentBroker.nack(delivery!, requeue: false);
+
+      final redelivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: settings.queueSettleDelay * 4,
+      );
+      expect(
+        redelivery,
+        isNull,
+        reason: 'nack without requeue should not re-deliver the job',
+      );
+
+      await _purgeAll(currentBroker, queue);
+    });
+
     test('deadLetter moves the job to the dead letter queue', () async {
       final currentBroker = broker!;
       final queue = _queueName('dead-letter');
@@ -187,6 +340,43 @@ void runBrokerContractTests({
       await _purgeAll(currentBroker, queue);
     });
 
+    test('dead letter entries are retrievable and purgeable', () async {
+      final currentBroker = broker!;
+      final queue = _queueName('dead-letter-get');
+      final envelope = Envelope(
+        name: 'contract.dead.get',
+        args: const {},
+        queue: queue,
+      );
+
+      await currentBroker.publish(envelope);
+
+      final delivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: const Duration(seconds: 5),
+      );
+      expect(delivery, isNotNull);
+      await currentBroker.deadLetter(
+        delivery!,
+        reason: 'contract-get',
+        meta: const {'source': 'contract', 'severity': 'low'},
+      );
+
+      final entry = await currentBroker.getDeadLetter(queue, envelope.id);
+      expect(entry, isNotNull);
+      expect(entry!.envelope.id, envelope.id);
+      expect(entry.reason, 'contract-get');
+      expect(entry.meta['source'], 'contract');
+      expect(entry.meta['severity'], 'low');
+
+      final purged = await currentBroker.purgeDeadLetters(queue);
+      expect(purged, greaterThanOrEqualTo(1));
+
+      final afterPurge = await currentBroker.listDeadLetters(queue, limit: 1);
+      expect(afterPurge.entries, isEmpty);
+    });
+
     test('deadLetter + replay requeues failed jobs', () async {
       final currentBroker = broker!;
       final queue = _queueName('replay');
@@ -214,6 +404,8 @@ void runBrokerContractTests({
         dryRun: true,
       );
       expect(dryRun.dryRun, isTrue);
+      final afterDryRun = await currentBroker.getDeadLetter(queue, envelope.id);
+      expect(afterDryRun, isNotNull);
 
       final replay = await currentBroker.replayDeadLetters(queue, limit: 10);
       expect(replay.dryRun, isFalse);
@@ -230,16 +422,119 @@ void runBrokerContractTests({
       final retryIterator = StreamIterator(
         currentBroker.consume(RoutingSubscription.singleQueue(queue)),
       );
-      expect(
-        await retryIterator.moveNext().timeout(const Duration(seconds: 5)),
-        isTrue,
+      final retryTimeout = Duration(
+        milliseconds: settings.requeueTimeout.inMilliseconds * 2,
       );
-      final retry = retryIterator.current;
-      expect(retry.envelope.id, envelope.id);
-      await currentBroker.ack(retry);
+      final retry = await _nextIteratorDelivery(
+        iterator: retryIterator,
+        timeout: retryTimeout,
+      );
+      expect(retry, isNotNull);
+      if (retry != null) {
+        expect(retry.envelope.id, envelope.id);
+        await currentBroker.ack(retry);
+      }
       await retryIterator.cancel();
 
       await _purgeAll(currentBroker, queue);
+    });
+
+    test('replayDeadLetters respects delay scheduling', () async {
+      final currentBroker = broker!;
+      final queue = _queueName('replay-delay');
+      final envelope = Envelope(
+        name: 'contract.replay.delay',
+        args: const {},
+        queue: queue,
+      );
+
+      await currentBroker.publish(envelope);
+      final delivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: const Duration(seconds: 5),
+      );
+      expect(delivery, isNotNull);
+      await currentBroker.deadLetter(
+        delivery!,
+        reason: 'contract-delay',
+      );
+
+      final delay = _scaledDelay(settings.queueSettleDelay);
+      final replay = await currentBroker.replayDeadLetters(
+        queue,
+        limit: 10,
+        delay: delay,
+      );
+      expect(replay.dryRun, isFalse);
+
+      final early = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: delay ~/ 2,
+      );
+      expect(
+        early,
+        isNull,
+        reason: 'Replay delay should keep job hidden until due',
+      );
+
+      await Future<void>.delayed(delay + settings.queueSettleDelay);
+      final later = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: settings.requeueTimeout,
+      );
+      expect(later, isNotNull);
+      if (later != null) {
+        await currentBroker.ack(later);
+      }
+
+      await _purgeAll(currentBroker, queue);
+    });
+
+    test('concurrent subscriptions do not block publish', () async {
+      final currentBroker = broker!;
+      final queueA = _queueName('concurrent-a');
+      final queueB = _queueName('concurrent-b');
+      final iteratorA = StreamIterator(
+        currentBroker.consume(RoutingSubscription.singleQueue(queueA)),
+      );
+      final iteratorB = StreamIterator(
+        currentBroker.consume(RoutingSubscription.singleQueue(queueB)),
+      );
+      try {
+        await Future<void>.delayed(settings.queueSettleDelay);
+
+        final envelope = Envelope(
+          name: 'contract.concurrent.publish',
+          args: const {},
+          queue: queueB,
+        );
+
+        final publishWatch = Stopwatch()..start();
+        await currentBroker.publish(envelope);
+        publishWatch.stop();
+
+        expect(
+          publishWatch.elapsed,
+          lessThan(settings.concurrentPublishTimeout),
+          reason: 'publish should not be delayed by another consumer',
+        );
+
+        final delivery = await _nextIteratorDelivery(
+          iterator: iteratorB,
+          timeout: settings.concurrentDeliveryTimeout,
+        );
+        expect(delivery, isNotNull);
+        await currentBroker.ack(delivery!);
+      } finally {
+        await iteratorA.cancel();
+        await iteratorB.cancel();
+      }
+
+      await _purgeAll(currentBroker, queueA);
+      await _purgeAll(currentBroker, queueB);
     });
 
     test('purge removes pending jobs and clears dead letters', () async {
@@ -323,6 +618,86 @@ void runBrokerContractTests({
       expect(redelivery!.envelope.id, delivery.envelope.id);
       await currentBroker.ack(redelivery);
       await laterIterator.cancel();
+
+      await _purgeAll(currentBroker, queue);
+    });
+
+    test('unacked jobs become visible again after the lease expires', () async {
+      final currentBroker = broker!;
+      final queue = _queueName('lease-expiry');
+      final envelope = Envelope(
+        name: 'contract.lease.expiry',
+        args: const {},
+        queue: queue,
+        visibilityTimeout: settings.visibilityTimeout,
+      );
+
+      await currentBroker.publish(envelope);
+
+      final firstDelivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: const Duration(seconds: 5),
+      );
+      expect(firstDelivery, isNotNull);
+
+      await Future<void>.delayed(
+        settings.visibilityTimeout + settings.queueSettleDelay,
+      );
+
+      final redelivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: settings.requeueTimeout,
+      );
+      expect(
+        redelivery,
+        isNotNull,
+        reason: 'Expected unacked delivery to become visible again',
+      );
+      if (redelivery != null) {
+        await currentBroker.ack(redelivery);
+      }
+
+      await _purgeAll(currentBroker, queue);
+    });
+
+    test('delayed jobs are not visible until their scheduled time', () async {
+      final currentBroker = broker!;
+      if (!currentBroker.supportsDelayed) {
+        return;
+      }
+      final queue = _queueName('delayed');
+      final delay = _scaledDelay(settings.queueSettleDelay);
+      final envelope = Envelope(
+        name: 'contract.delayed',
+        args: const {},
+        queue: queue,
+        notBefore: DateTime.now().add(delay),
+      );
+
+      await currentBroker.publish(envelope);
+
+      final pendingBefore = await currentBroker.pendingCount(queue);
+      if (pendingBefore != null) {
+        expect(
+          pendingBefore,
+          equals(0),
+          reason: 'Delayed jobs should not count as pending yet',
+        );
+      }
+
+      await Future<void>.delayed(delay + settings.queueSettleDelay);
+
+      final delivery = await _expectDelivery(
+        broker: currentBroker,
+        queue: queue,
+        pollTimeout: settings.requeueTimeout,
+      );
+      expect(delivery, isNotNull);
+      if (delivery != null) {
+        await currentBroker.ack(delivery);
+      }
 
       await _purgeAll(currentBroker, queue);
     });
@@ -516,4 +891,9 @@ Future<Delivery?> _expectDelivery({
   } finally {
     await iterator.cancel();
   }
+}
+
+Duration _scaledDelay(Duration base) {
+  final ms = base.inMilliseconds * 4;
+  return Duration(milliseconds: ms <= 0 ? 200 : ms);
 }

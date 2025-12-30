@@ -35,11 +35,16 @@ class ResultBackendContractFactory {
     required this.create,
     this.dispose,
     this.beforeStatusExpiryCheck,
+    this.beforeGroupExpiryCheck,
+    this.beforeHeartbeatExpiryCheck,
   });
 
   final Future<ResultBackend> Function() create;
   final FutureOr<void> Function(ResultBackend backend)? dispose;
   final FutureOr<void> Function(ResultBackend backend)? beforeStatusExpiryCheck;
+  final FutureOr<void> Function(ResultBackend backend)? beforeGroupExpiryCheck;
+  final FutureOr<void> Function(ResultBackend backend)?
+      beforeHeartbeatExpiryCheck;
 }
 
 void runResultBackendContractTests({
@@ -125,6 +130,102 @@ void runResultBackendContractTests({
         expect(await currentBackend.get(taskId), isNull);
       });
 
+      test('set honors the provided ttl', () async {
+        final currentBackend = backend!;
+        const taskId = 'contract-task-ttl';
+        await currentBackend.set(
+          taskId,
+          TaskState.succeeded,
+          payload: const {'value': 'expire'},
+          attempt: 0,
+          meta: _metaWithEncoder(encoder, const {'ttl': true}),
+          ttl: settings.statusTtl,
+        );
+
+        await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
+        if (factory.beforeStatusExpiryCheck != null) {
+          await factory.beforeStatusExpiryCheck!(
+            _unwrapBackend(currentBackend),
+          );
+        }
+        expect(await currentBackend.get(taskId), isNull);
+      });
+
+      test('set overwrites existing status and clears error state', () async {
+        final currentBackend = backend!;
+        const taskId = 'contract-task-overwrite';
+        final error = TaskError(
+          type: 'OverwriteError',
+          message: 'oops',
+          retryable: false,
+        );
+
+        await currentBackend.set(
+          taskId,
+          TaskState.failed,
+          payload: const {'value': 'fail'},
+          error: error,
+          attempt: 1,
+          meta: _metaWithEncoder(encoder, const {'phase': 'failed'}),
+        );
+
+        await Future<void>.delayed(settings.settleDelay);
+
+        var stored = await currentBackend.get(taskId);
+        expect(stored, isNotNull);
+        expect(stored!.state, TaskState.failed);
+        expect(stored.error, isNotNull);
+        expect(stored.meta['phase'], 'failed');
+
+        await currentBackend.set(
+          taskId,
+          TaskState.succeeded,
+          payload: const {'value': 'ok'},
+          attempt: 2,
+          meta: _metaWithEncoder(encoder, const {'phase': 'success'}),
+        );
+
+        await Future<void>.delayed(settings.settleDelay);
+
+        stored = await currentBackend.get(taskId);
+        expect(stored, isNotNull);
+        expect(stored!.state, TaskState.succeeded);
+        expect(stored.error, isNull);
+        expect(stored.attempt, 2);
+        expect(stored.payload, {'value': 'ok'});
+        expect(stored.meta['phase'], 'success');
+      });
+
+      test('watch emits sequential updates for the same task', () async {
+        final currentBackend = backend!;
+        const taskId = 'contract-watch-multi';
+        final updatesFuture = currentBackend
+            .watch(taskId)
+            .take(2)
+            .toList()
+            .timeout(const Duration(seconds: 5));
+
+        await currentBackend.set(
+          taskId,
+          TaskState.running,
+          payload: const {'value': 'running'},
+          attempt: 1,
+          meta: _metaWithEncoder(encoder, const {'stage': 'running'}),
+        );
+        await currentBackend.set(
+          taskId,
+          TaskState.succeeded,
+          payload: const {'value': 'done'},
+          attempt: 1,
+          meta: _metaWithEncoder(encoder, const {'stage': 'done'}),
+        );
+
+        final updates = await updatesFuture;
+        expect(updates.length, 2);
+        expect(updates.first.state, TaskState.running);
+        expect(updates.last.state, TaskState.succeeded);
+      });
+
       test('group lifecycle operations', () async {
         final currentBackend = backend!;
         const groupId = 'contract-group';
@@ -178,6 +279,95 @@ void runResultBackendContractTests({
         expect(missing, isNull);
       });
 
+      test('initGroup resets existing group results', () async {
+        final currentBackend = backend!;
+        final groupId =
+            'contract-reset-${DateTime.now().microsecondsSinceEpoch}';
+        await currentBackend.initGroup(
+          GroupDescriptor(
+            id: groupId,
+            expected: 1,
+            meta: const {'init': true},
+            ttl: settings.groupTtl,
+          ),
+        );
+
+        await currentBackend.addGroupResult(
+          groupId,
+          TaskStatus(
+            id: 'child-reset',
+            state: TaskState.succeeded,
+            payload: const {'value': 'first'},
+            attempt: 0,
+            meta: _metaWithEncoder(encoder, const {}),
+          ),
+        );
+
+        final beforeReset = await currentBackend.getGroup(groupId);
+        expect(beforeReset, isNotNull);
+        expect(beforeReset!.results.length, 1);
+
+        await currentBackend.initGroup(
+          GroupDescriptor(
+            id: groupId,
+            expected: 2,
+            meta: const {'init': false},
+            ttl: settings.groupTtl,
+          ),
+        );
+
+        final afterReset = await currentBackend.getGroup(groupId);
+        expect(afterReset, isNotNull);
+        expect(afterReset!.results, isEmpty);
+        expect(afterReset.expected, 2);
+        expect(afterReset.meta['init'], isFalse);
+      });
+
+      test('group data expires after ttl', () async {
+        final currentBackend = backend!;
+        final groupId =
+            'contract-expiring-group-${DateTime.now().microsecondsSinceEpoch}';
+        await currentBackend.initGroup(
+          GroupDescriptor(
+            id: groupId,
+            expected: 1,
+            ttl: settings.groupTtl,
+            meta: const {'expires': true},
+          ),
+        );
+
+        await currentBackend.addGroupResult(
+          groupId,
+          TaskStatus(
+            id: 'child-expiring',
+            state: TaskState.succeeded,
+            payload: {'ok': true},
+            attempt: 0,
+            meta: _metaWithEncoder(encoder, const {}),
+          ),
+        );
+
+        await Future<void>.delayed(settings.groupTtl + settings.settleDelay);
+        if (factory.beforeGroupExpiryCheck != null) {
+          await factory.beforeGroupExpiryCheck!(
+            _unwrapBackend(currentBackend),
+          );
+        }
+
+        expect(await currentBackend.getGroup(groupId), isNull);
+        final lateAdd = await currentBackend.addGroupResult(
+          groupId,
+          TaskStatus(
+            id: 'child-late',
+            state: TaskState.succeeded,
+            payload: {'ok': false},
+            attempt: 0,
+            meta: _metaWithEncoder(encoder, const {}),
+          ),
+        );
+        expect(lateAdd, isNull);
+      });
+
       test('claimChord allows only a single claimant', () async {
         final currentBackend = backend!;
         const groupId = 'contract-chord';
@@ -190,10 +380,11 @@ void runResultBackendContractTests({
           ),
         );
 
+        final dispatchedAt = DateTime.now().toUtc();
         final first = await currentBackend.claimChord(
           groupId,
           callbackTaskId: 'cb-task',
-          dispatchedAt: DateTime.now(),
+          dispatchedAt: dispatchedAt,
         );
         expect(first, isTrue);
 
@@ -202,6 +393,10 @@ void runResultBackendContractTests({
 
         final status = await currentBackend.getGroup(groupId);
         expect(status?.meta[ChordMetadata.callbackTaskId], 'cb-task');
+        expect(
+          status?.meta[ChordMetadata.dispatchedAt],
+          dispatchedAt.toIso8601String(),
+        );
       });
 
       test('worker heartbeats stored and listed', () async {
@@ -228,6 +423,76 @@ void runResultBackendContractTests({
 
         final heartbeats = await currentBackend.listWorkerHeartbeats();
         expect(heartbeats.any((hb) => hb.workerId == workerId), isTrue);
+      });
+
+      test('worker heartbeats update existing entries', () async {
+        final currentBackend = backend!;
+        const workerId = 'contract-worker-update';
+        await currentBackend.setWorkerHeartbeat(
+          WorkerHeartbeat(
+            workerId: workerId,
+            namespace: 'contract',
+            timestamp: DateTime.now(),
+            isolateCount: 1,
+            inflight: 1,
+            queues: [QueueHeartbeat(name: 'default', inflight: 1)],
+            extras: const {'version': 1},
+          ),
+        );
+
+        await Future<void>.delayed(settings.settleDelay);
+
+        await currentBackend.setWorkerHeartbeat(
+          WorkerHeartbeat(
+            workerId: workerId,
+            namespace: 'contract',
+            timestamp: DateTime.now(),
+            isolateCount: 2,
+            inflight: 3,
+            queues: [QueueHeartbeat(name: 'default', inflight: 3)],
+            extras: const {'version': 2},
+          ),
+        );
+
+        await Future<void>.delayed(settings.settleDelay);
+
+        final stored = await currentBackend.getWorkerHeartbeat(workerId);
+        expect(stored, isNotNull);
+        expect(stored!.inflight, 3);
+        expect(stored.extras['version'], 2);
+
+        final list = await currentBackend.listWorkerHeartbeats();
+        expect(
+          list.where((hb) => hb.workerId == workerId).length,
+          1,
+        );
+      });
+
+      test('worker heartbeats expire after ttl', () async {
+        final currentBackend = backend!;
+        final workerId =
+            'contract-worker-${DateTime.now().microsecondsSinceEpoch}';
+        final heartbeat = WorkerHeartbeat(
+          workerId: workerId,
+          namespace: 'contract',
+          timestamp: DateTime.now(),
+          isolateCount: 1,
+          inflight: 0,
+          queues: [QueueHeartbeat(name: 'default', inflight: 0)],
+          extras: const {'key': 'value'},
+        );
+
+        await currentBackend.setWorkerHeartbeat(heartbeat);
+        await Future<void>.delayed(settings.heartbeatTtl + settings.settleDelay);
+        if (factory.beforeHeartbeatExpiryCheck != null) {
+          await factory.beforeHeartbeatExpiryCheck!(
+            _unwrapBackend(currentBackend),
+          );
+        }
+
+        expect(await currentBackend.getWorkerHeartbeat(workerId), isNull);
+        final list = await currentBackend.listWorkerHeartbeats();
+        expect(list.any((hb) => hb.workerId == workerId), isFalse);
       });
 
       if (encoder is _Base64ContractEncoder) {

@@ -118,7 +118,6 @@ class EncodingResultBackend implements ResultBackend {
       error: status.error,
       meta: status.meta,
       attempt: status.attempt,
-      updatedAt: status.updatedAt,
     );
   }
 
@@ -136,7 +135,6 @@ class EncodingResultBackend implements ResultBackend {
       error: status.error,
       meta: status.meta,
       attempt: status.attempt,
-      updatedAt: status.updatedAt,
     );
   }
 

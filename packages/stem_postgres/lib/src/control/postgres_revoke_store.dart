@@ -20,9 +20,7 @@ class PostgresRevokeStore implements RevokeStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final connections = await PostgresConnections.open(
-      connectionString: uri,
-    );
+    final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresRevokeStore._(connections, namespace: namespace);
   }
 
@@ -40,16 +38,18 @@ class PostgresRevokeStore implements RevokeStore {
         .get();
 
     return entries
-        .map((e) => RevokeEntry(
-              namespace: e.namespace,
-              taskId: e.taskId,
-              terminate: e.terminate,
-              reason: e.reason,
-              requestedBy: e.requestedBy,
-              issuedAt: e.issuedAt,
-              expiresAt: e.expiresAt,
-              version: e.version,
-            ))
+        .map(
+          (e) => RevokeEntry(
+            namespace: e.namespace,
+            taskId: e.taskId,
+            terminate: e.terminate,
+            reason: e.reason,
+            requestedBy: e.requestedBy,
+            issuedAt: e.issuedAt,
+            expiresAt: e.expiresAt,
+            version: e.version,
+          ),
+        )
         .toList()
       ..sort((a, b) => a.version.compareTo(b.version));
   }
@@ -87,7 +87,8 @@ class PostgresRevokeStore implements RevokeStore {
             .whereEquals('taskId', entry.taskId)
             .first();
 
-        final shouldUpdate = existing == null || existing.version < entry.version;
+        final shouldUpdate =
+            existing == null || existing.version < entry.version;
 
         if (shouldUpdate) {
           final model = $StemRevokeEntry(

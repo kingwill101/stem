@@ -74,12 +74,20 @@ Future<void> main() async {
   final firstId = await stem.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
-    options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 15)),
+    options: const TaskOptions(
+      queue: 'email',
+      unique: true,
+      uniqueFor: Duration(minutes: 15),
+    ),
   );
   final secondId = await stem.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
-    options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 15)),
+    options: const TaskOptions(
+      queue: 'email',
+      unique: true,
+      uniqueFor: Duration(minutes: 15),
+    ),
   );
 
   print('first enqueue id:  $firstId');

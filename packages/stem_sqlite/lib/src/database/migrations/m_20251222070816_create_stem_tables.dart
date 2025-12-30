@@ -17,10 +17,11 @@ class CreateStemTables extends Migration {
       table.timestamp('locked_until').nullable();
       table.text('locked_by').nullable();
       table.timestampsTz();
-      table.index(
-        ['queue', 'priority', 'created_at'],
-        name: 'stem_queue_jobs_queue_priority_idx',
-      );
+      table.index([
+        'queue',
+        'priority',
+        'created_at',
+      ], name: 'stem_queue_jobs_queue_priority_idx');
       table.index(['not_before'], name: 'stem_queue_jobs_not_before_idx');
     });
 
@@ -31,10 +32,10 @@ class CreateStemTables extends Migration {
       table.text('reason').nullable();
       table.json('meta').nullable();
       table.timestamp('dead_at');
-      table.index(
-        ['queue', 'dead_at'],
-        name: 'stem_dead_letters_queue_dead_at_idx',
-      );
+      table.index([
+        'queue',
+        'dead_at',
+      ], name: 'stem_dead_letters_queue_dead_at_idx');
     });
 
     schema.create('stem_task_results', (table) {
@@ -67,10 +68,10 @@ class CreateStemTables extends Migration {
       table.integer('attempt').defaultValue(0);
       table.json('meta').defaultValue('{}');
       table.timestampsTz();
-      table.primary(
-        ['group_id', 'task_id'],
-        name: 'stem_group_results_primary',
-      );
+      table.primary([
+        'group_id',
+        'task_id',
+      ], name: 'stem_group_results_primary');
       table.index(['group_id'], name: 'stem_group_results_group_idx');
       table.foreign(
         ['group_id'],
@@ -93,10 +94,9 @@ class CreateStemTables extends Migration {
       table.timestamp('expires_at');
       table.timestamp('deleted_at').nullable();
       table.timestampsTz();
-      table.index(
-        ['expires_at'],
-        name: 'stem_worker_heartbeats_expires_at_idx',
-      );
+      table.index([
+        'expires_at',
+      ], name: 'stem_worker_heartbeats_expires_at_idx');
     });
   }
 

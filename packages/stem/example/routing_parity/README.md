@@ -30,7 +30,7 @@ Open two terminals:
    dart run bin/publisher.dart
    ```
 
-Redis defaults to `redis://localhost:56379`. Override the connection with
+Redis defaults to `redis://localhost:6379`. Override the connection with
 `ROUTING_DEMO_REDIS_URL` if needed.
 
 When you are done, stop the worker and bring down Redis:
@@ -53,3 +53,15 @@ docker compose down
 
 Inspect `lib/routing_demo.dart` to see the embedded routing configuration and
 task handlers that power the demo.
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-publisher
+# Or:
+just tmux
+```

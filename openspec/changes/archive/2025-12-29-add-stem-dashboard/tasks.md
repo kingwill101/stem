@@ -5,7 +5,7 @@
 - [x] Implement the Overview page (metrics cards + recent activity table) backed by live/polled data.
 - [x] Implement the Tasks page with sortable tables, row expansion, filtering, and enqueue controls for demo jobs.
 - [x] Implement the Events page showing a live stream/log of task lifecycle events with expandable rows.
-- [ ] Implement the Workers page with status tables and actions (ping, pause, shutdown, replay DLQ) wired to backend methods.
+- [x] Implement the Workers page with status tables and actions (ping, pause, shutdown, replay DLQ) wired to backend methods.
 - [x] Add service layer(s) that mediate between the dashboard and Stem core (or Redis scripts) for fetching/updating state; include tests or contract expectations.
-- [ ] Provide documentation (README + docs site entry) explaining how to run the dashboard, configure the local routed packages, and expose Stem endpoints.
+- [x] Provide documentation (README + docs site entry) explaining how to run the dashboard, configure the local routed packages, and expose Stem endpoints.
 - [x] Validate with `dart format`, `dart analyze`, `dart test`, and `openspec validate add-stem-dashboard --strict`.

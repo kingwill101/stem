@@ -372,6 +372,54 @@ class SecretTask extends TaskHandler<void> {
 Encoders run exactly once per persistence/read cycle and fall back to the JSON
 behavior when none is provided.
 
+### Unique task deduplication
+
+Set `TaskOptions(unique: true)` to prevent duplicate enqueues when a matching
+task is already in-flight. Stem uses a `UniqueTaskCoordinator` backed by a
+`LockStore` (Redis or in-memory) to claim uniqueness before publishing:
+
+```dart
+final lockStore = await RedisLockStore.connect('redis://localhost:6379');
+final unique = UniqueTaskCoordinator(
+  lockStore: lockStore,
+  defaultTtl: const Duration(minutes: 5),
+);
+
+final stem = Stem(
+  broker: broker,
+  registry: registry,
+  backend: backend,
+  uniqueTaskCoordinator: unique,
+);
+```
+
+The unique key is derived from:
+
+- task name
+- queue name
+- task arguments
+- headers
+- metadata (excluding keys prefixed with `stem.`)
+
+Keys are canonicalized (sorted maps, stable JSON) so equivalent inputs produce
+the same hash. Use `uniqueFor` to control the TTL; when unset, the coordinator
+falls back to `visibilityTimeout` or its default TTL.
+
+Override the unique key when needed:
+
+```dart
+final id = await stem.enqueue(
+  'orders.sync',
+  args: {'id': 42},
+  options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),
+  meta: {UniqueTaskMetadata.override: 'order-42'},
+);
+```
+
+When a duplicate is skipped, Stem returns the existing task id, emits the
+`stem.tasks.deduplicated` metric, and appends a duplicate entry to the result
+backend metadata under `stem.unique.duplicates`.
+
 ### Durable workflow semantics
 
 - Chords dispatch from workers. Once every branch completes, any worker may enqueue the callback, ensuring producer crashes do not block completion.

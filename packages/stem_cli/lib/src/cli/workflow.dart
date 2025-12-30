@@ -5,6 +5,7 @@ import 'package:stem/stem.dart';
 
 import 'dependencies.dart';
 import 'utilities.dart';
+import 'workflow_agent_help.dart';
 import 'workflow_context.dart';
 
 class WorkflowCommand extends Command<int> {
@@ -16,6 +17,7 @@ class WorkflowCommand extends Command<int> {
     addSubcommand(_WorkflowRewindCommand(dependencies));
     addSubcommand(_WorkflowEmitCommand(dependencies));
     addSubcommand(_WorkflowWaitersCommand(dependencies));
+    addSubcommand(_WorkflowAgentHelpCommand(dependencies));
   }
 
   final StemCommandDependencies dependencies;
@@ -443,6 +445,27 @@ class _WorkflowWaitersCommand extends Command<int> {
       parts.add('suspend=${formatReadableDuration(suspendLimit)}');
     }
     return parts.isEmpty ? '-' : parts.join(', ');
+  }
+}
+
+class _WorkflowAgentHelpCommand extends Command<int> {
+  _WorkflowAgentHelpCommand(this.dependencies);
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'agent-help';
+
+  @override
+  final String description = 'Print workflow guidance for AGENTS/CLAUDE docs.';
+
+  @override
+  Future<int> run() async {
+    final parentCommand = parent;
+    final commands = parentCommand?.subcommands.values ?? const [];
+    final markdown = buildWorkflowAgentHelpMarkdown(commands);
+    dependencies.out.writeln(markdown);
+    return 0;
   }
 }
 

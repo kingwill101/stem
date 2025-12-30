@@ -14,8 +14,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     required this.namespace,
     required WorkflowClock clock,
     Uuid? uuid,
-  })  : _uuid = uuid ?? const Uuid(),
-        _clock = clock;
+  }) : _uuid = uuid ?? const Uuid(),
+       _clock = clock;
 
   final PostgresConnections _connections;
   final String namespace;
@@ -54,9 +54,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
-    final connections = await PostgresConnections.open(
-      connectionString: uri,
-    );
+    final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresWorkflowStore._(
       connections,
       namespace: namespace,
@@ -141,7 +139,8 @@ class PostgresWorkflowStore implements WorkflowStore {
       updatedAt: run.updatedAt,
       cancellationPolicy: run.cancellationPolicy != null
           ? WorkflowCancellationPolicy.fromJson(
-              _decodeMap(run.cancellationPolicy))
+              _decodeMap(run.cancellationPolicy),
+            )
           : null,
       cancellationData: _decodeMap(run.cancellationData),
     );
@@ -512,9 +511,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         .get();
 
     if (watcherRows.isNotEmpty) {
-      return watcherRows
-          .map((row) => row.runId)
-          .toList(growable: false);
+      return watcherRows.map((row) => row.runId).toList(growable: false);
     }
 
     // Fallback to runs with wait_topic
@@ -524,9 +521,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         .limit(limit)
         .get();
 
-    return fallbackRows
-        .map((r) => r.id)
-        .toList(growable: false);
+    return fallbackRows.map((r) => r.id).toList(growable: false);
   }
 
   @override
@@ -673,6 +668,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final stepRows = await ctx
           .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
+          .orderBy('name')
           .get();
 
       // Calculate which steps to keep
@@ -697,7 +693,10 @@ class PostgresWorkflowStore implements WorkflowStore {
         if (baseIndex < targetIndex) {
           keep.add(stepRows[i]);
         } else {
-          await ctx.repository<StemWorkflowStep>().delete(stepRows[i]);
+          await ctx.driver.executeRaw(
+            'DELETE FROM stem_workflow_steps WHERE run_id = ? AND name = ?',
+            [runId, stepRows[i].name],
+          );
         }
       }
 
@@ -745,6 +744,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     }
 
     final ids = await query
+        .orderBy('updatedAt', descending: true)
+        .orderBy('id', descending: true)
         .limit(limit)
         .get()
         .then((runs) => runs.map((r) => r.id).toList());
@@ -766,6 +767,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final rows = await ctx
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .orderBy('name')
         .get();
 
     final entries = <WorkflowStepEntry>[];

@@ -40,5 +40,4 @@ class StemWorkerHeartbeat extends Model<StemWorkerHeartbeat>
 
   @OrmField(columnName: 'expires_at')
   final DateTime expiresAt;
-
 }

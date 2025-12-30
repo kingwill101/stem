@@ -1,0 +1,5 @@
+- [x] Add a new CLI command `stem wf agent-help` that prints workflow-specific assistant guidance.
+- [x] Create/maintain a Markdown template summarising workflow CLI commands, safety tips, and idempotency guidance.
+- [x] Write tests ensuring the command outputs required sections and stays in sync with CLI options.
+- [x] Update documentation to instruct teams to run the command when refreshing AGENTS/CLAUDE docs.
+- [x] Run CLI tests, `dart analyze`, `dart format`, and `openspec validate add-workflow-agent-help --strict`.

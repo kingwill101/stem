@@ -24,9 +24,7 @@ class PostgresLockStore implements LockStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final connections = await PostgresConnections.open(
-      connectionString: uri,
-    );
+    final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresLockStore._(connections);
   }
 

@@ -42,5 +42,4 @@ class StemQueueJob extends Model<StemQueueJob> with Timestamps {
 
   @OrmField(columnName: 'locked_by')
   final String? lockedBy;
-
 }

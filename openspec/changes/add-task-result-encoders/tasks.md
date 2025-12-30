@@ -1,6 +1,0 @@
-- [ ] Design a `TaskPayloadEncoder` contract (encode/decode + content-type metadata) and thread it through `StemApp`, workers, canvas, and result backends with a JSON fallback.
-- [ ] Allow task definitions to override the global result encoder and add a corresponding `TaskArgsEncoder` hook so enqueue/dequeue paths can encode/decode arguments symmetrically.
-- [ ] Update each first-party backend (in-memory, Redis, Postgres, SQLite) so payload/heartbeat/group storage uses the encoder output and persists whatever binary/blob representation it returns.
-- [ ] Extend adapter tests to run with both the default JSON encoder and a sample custom encoder (e.g., base64 or gzip) to ensure encode/decode happens exactly once for both results and arguments.
-- [ ] Document encoder configuration, migration advice, and security considerations in the README / docs (covering global + per-task overrides for results and args).
-- [ ] Run `dart format`, `dart analyze`, targeted backend tests, and `openspec validate add-task-result-encoders --strict`.
