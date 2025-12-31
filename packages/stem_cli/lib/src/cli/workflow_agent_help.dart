@@ -1,4 +1,4 @@
-import 'package:args/command_runner.dart' as args;
+import 'package:artisanal/args.dart' as args;
 
 String buildWorkflowAgentHelpMarkdown(
   Iterable<args.Command<dynamic>> commands,
