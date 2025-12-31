@@ -1,6 +1,9 @@
 import 'dart:io';
 
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/stem_schedule_entry.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
@@ -17,16 +20,16 @@ void main() {
 
   const namespace = 'test_sched';
   late PostgresScheduleStore store;
-  late PostgresClient adminClient;
+  late PostgresConnections adminConnections;
 
   Future<void> clearTables() async {
-    await adminClient.run((conn) async {
-      await conn.execute('DELETE FROM public.stem_schedules');
-    });
+    await adminConnections.context.query<$StemScheduleEntry>().delete();
   }
 
   setUp(() async {
-    adminClient = PostgresClient(connectionString);
+    adminConnections = await PostgresConnections.open(
+      connectionString: connectionString,
+    );
     store = await PostgresScheduleStore.connect(
       connectionString,
       namespace: namespace,
@@ -38,7 +41,7 @@ void main() {
   tearDown(() async {
     await clearTables();
     await store.close();
-    await adminClient.close();
+    await adminConnections.close();
   });
 
   test('due acquires locks and respects lock expiry', () async {
@@ -53,13 +56,11 @@ void main() {
 
     await store.upsert(entry);
 
-    final rows = await adminClient.run((conn) async {
-      return conn.execute(
-        'SELECT id, next_run_at, enabled FROM public.stem_schedules',
-      );
-    });
+    final rows = await adminConnections.context
+        .query<$StemScheduleEntry>()
+        .get();
     expect(rows, isNotEmpty, reason: 'entry should be persisted');
-    final storedNextRun = rows.first[1]! as DateTime;
+    final storedNextRun = rows.first.nextRunAt!;
     expect(
       storedNextRun.isBefore(
         DateTime.now().toUtc().add(const Duration(seconds: 1)),
@@ -70,30 +71,30 @@ void main() {
 
     final dueNow = DateTime.now().toUtc();
 
-    final manualDueRows = await adminClient.run((conn) async {
-      return conn.execute(
-        'SELECT id FROM public.stem_schedules WHERE enabled = true AND '
-        'next_run_at <= NOW()',
-      );
-    });
+    final manualDueRows = await adminConnections.context
+        .query<$StemScheduleEntry>()
+        .where((PredicateBuilder<$StemScheduleEntry> q) {
+          q
+            ..where('enabled', true, PredicateOperator.equals)
+            ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+        })
+        .get();
     expect(
       manualDueRows,
       isNotEmpty,
       reason: 'manual due query should find entry',
     );
 
-    final manualDueNoLocks = await adminClient.run((conn) async {
-      return conn.execute(
-        '''
-        SELECT e.id
-        FROM public.stem_schedules e
-        WHERE e.enabled = true AND e.next_run_at <= @now
-        ORDER BY e.next_run_at ASC
-        LIMIT @limit
-        ''',
-        parameters: {'now': dueNow, 'limit': 5},
-      );
-    });
+    final manualDueNoLocks = await adminConnections.context
+        .query<$StemScheduleEntry>()
+        .where((PredicateBuilder<$StemScheduleEntry> q) {
+          q
+            ..where('enabled', true, PredicateOperator.equals)
+            ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+        })
+        .orderBy('nextRunAt')
+        .limit(5)
+        .get();
     expect(manualDueNoLocks, isNotEmpty);
 
     final first = await store.due(dueNow, limit: 5);
