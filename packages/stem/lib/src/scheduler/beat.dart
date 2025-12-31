@@ -218,7 +218,7 @@ class Beat {
         executedAt: executedAt,
         drift: drift,
       );
-    } on Exception catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Beat dispatch failed for {schedule}: {error}',
         Context({

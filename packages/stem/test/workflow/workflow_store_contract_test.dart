@@ -26,7 +26,7 @@ void main() {
     create: (clock) async {
       final tmpDir = await Directory.systemTemp.createTemp('wf-sqlite');
       final file = File(p.join(tmpDir.path, 'workflow.sqlite'));
-      final store = SqliteWorkflowStore.open(file, clock: clock);
+      final store = await SqliteWorkflowStore.open(file, clock: clock);
       sqliteDirectories[store] = tmpDir;
       return store;
     },
