@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
 import 'package:stem/stem.dart';
@@ -8,6 +9,7 @@ import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
 void main() {
+  final random = math.Random();
   final sqliteDirectories = Expando<Directory>('sqlite-directory');
 
   final inMemoryFactory = WorkflowStoreContractFactory(
@@ -48,7 +50,7 @@ void main() {
   final redisFactory = WorkflowStoreContractFactory(
     create: (clock) async => RedisWorkflowStore.connect(
       redisUrl,
-      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
+      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
       clock: clock,
     ),
     dispose: (store) async {
@@ -66,7 +68,7 @@ void main() {
   final postgresFactory = WorkflowStoreContractFactory(
     create: (clock) async => PostgresWorkflowStore.connect(
       postgresUrl,
-      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}',
+      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
       clock: clock,
     ),
     dispose: (store) async {

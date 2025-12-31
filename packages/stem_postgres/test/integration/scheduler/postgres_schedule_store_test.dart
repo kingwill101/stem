@@ -18,148 +18,157 @@ void main() {
     return;
   }
 
-  const namespace = 'test_sched';
-  late PostgresScheduleStore store;
-  late PostgresConnections adminConnections;
+  group('postgres schedule store', () {
+    late PostgresScheduleStore store;
+    late PostgresConnections adminConnections;
+    late String testNamespace;
 
-  Future<void> clearTables() async {
-    await adminConnections.context.query<$StemScheduleEntry>().delete();
-  }
+    setUp(() async {
+      // Create a unique namespace for this test to avoid conflicts
+      testNamespace = 'test_sched_${DateTime.now().microsecondsSinceEpoch}';
+      
+      adminConnections = await PostgresConnections.open(
+        connectionString: connectionString,
+      );
+      store = await PostgresScheduleStore.connect(
+        connectionString,
+        namespace: testNamespace,
+        applicationName: 'stem-postgres-schedule-test',
+      );
+    });
 
-  setUp(() async {
-    adminConnections = await PostgresConnections.open(
-      connectionString: connectionString,
-    );
-    store = await PostgresScheduleStore.connect(
-      connectionString,
-      namespace: namespace,
-      applicationName: 'stem-postgres-schedule-test',
-    );
-    await clearTables();
-  });
+    tearDown(() async {
+      // Clean up schedule entries created during the test
+      try {
+        await adminConnections.context.query<$StemScheduleEntry>().delete();
+      } catch (_) {
+        // Ignore cleanup errors
+      }
+      try {
+        await store.close();
+        await adminConnections.close();
+      } catch (_) {
+        // Ignore connection close errors
+      }
+    });
 
-  tearDown(() async {
-    await clearTables();
-    await store.close();
-    await adminConnections.close();
-  });
+    test('due acquires locks and respects lock expiry', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-1',
+        taskName: 'task.example',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
+      );
 
-  test('due acquires locks and respects lock expiry', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-1',
-      taskName: 'task.example',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
+      await store.upsert(entry);
 
-    await store.upsert(entry);
+      final rows = await adminConnections.context
+          .query<$StemScheduleEntry>()
+          .get();
+      expect(rows, isNotEmpty, reason: 'entry should be persisted');
+      final storedNextRun = rows.first.nextRunAt!;
+      expect(
+        storedNextRun.isBefore(
+          DateTime.now().toUtc().add(const Duration(seconds: 1)),
+        ),
+        isTrue,
+        reason: 'next_run_at should be in the past',
+      );
 
-    final rows = await adminConnections.context
-        .query<$StemScheduleEntry>()
-        .get();
-    expect(rows, isNotEmpty, reason: 'entry should be persisted');
-    final storedNextRun = rows.first.nextRunAt!;
-    expect(
-      storedNextRun.isBefore(
-        DateTime.now().toUtc().add(const Duration(seconds: 1)),
-      ),
-      isTrue,
-      reason: 'next_run_at should be in the past',
-    );
+      final dueNow = DateTime.now().toUtc();
 
-    final dueNow = DateTime.now().toUtc();
+      final manualDueRows = await adminConnections.context
+          .query<$StemScheduleEntry>()
+          .where((PredicateBuilder<$StemScheduleEntry> q) {
+            q
+              ..where('enabled', true, PredicateOperator.equals)
+              ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+          })
+          .get();
+      expect(
+        manualDueRows,
+        isNotEmpty,
+        reason: 'manual due query should find entry',
+      );
 
-    final manualDueRows = await adminConnections.context
-        .query<$StemScheduleEntry>()
-        .where((PredicateBuilder<$StemScheduleEntry> q) {
-          q
-            ..where('enabled', true, PredicateOperator.equals)
-            ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
-        })
-        .get();
-    expect(
-      manualDueRows,
-      isNotEmpty,
-      reason: 'manual due query should find entry',
-    );
+      final manualDueNoLocks = await adminConnections.context
+          .query<$StemScheduleEntry>()
+          .where((PredicateBuilder<$StemScheduleEntry> q) {
+            q
+              ..where('enabled', true, PredicateOperator.equals)
+              ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+          })
+          .orderBy('nextRunAt')
+          .limit(5)
+          .get();
+      expect(manualDueNoLocks, isNotEmpty);
 
-    final manualDueNoLocks = await adminConnections.context
-        .query<$StemScheduleEntry>()
-        .where((PredicateBuilder<$StemScheduleEntry> q) {
-          q
-            ..where('enabled', true, PredicateOperator.equals)
-            ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
-        })
-        .orderBy('nextRunAt')
-        .limit(5)
-        .get();
-    expect(manualDueNoLocks, isNotEmpty);
+      final first = await store.due(dueNow, limit: 5);
+      expect(first, hasLength(1));
+      expect(first.single.id, entry.id);
 
-    final first = await store.due(dueNow, limit: 5);
-    expect(first, hasLength(1));
-    expect(first.single.id, entry.id);
+      final second = await store.due(DateTime.now().toUtc(), limit: 5);
+      expect(second, isEmpty);
 
-    final second = await store.due(DateTime.now().toUtc(), limit: 5);
-    expect(second, isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final third = await store.due(DateTime.now().toUtc(), limit: 5);
+      expect(third, hasLength(1));
+      expect(third.single.id, entry.id);
+    });
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    final third = await store.due(DateTime.now().toUtc(), limit: 5);
-    expect(third, hasLength(1));
-    expect(third.single.id, entry.id);
-  });
+    test('upsert updates entry and releases lock', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-2',
+        taskName: 'task.update',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
+      );
 
-  test('upsert updates entry and releases lock', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-2',
-      taskName: 'task.update',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
+      await store.upsert(entry);
+      final first = await store.due(DateTime.now().toUtc());
+      expect(first, hasLength(1));
 
-    await store.upsert(entry);
-    final first = await store.due(DateTime.now().toUtc());
-    expect(first, hasLength(1));
+      final updated = first.single.copyWith(
+        nextRunAt: now.add(const Duration(minutes: 5)),
+        meta: const {'updated': true},
+      );
+      await store.upsert(updated);
 
-    final updated = first.single.copyWith(
-      nextRunAt: now.add(const Duration(minutes: 5)),
-      meta: const {'updated': true},
-    );
-    await store.upsert(updated);
+      final second = await store.due(DateTime.now().toUtc());
+      expect(second, isEmpty);
 
-    final second = await store.due(DateTime.now().toUtc());
-    expect(second, isEmpty);
+      final futureDue = await store.due(
+        DateTime.now().toUtc().add(const Duration(minutes: 6)),
+      );
+      expect(futureDue, hasLength(1));
+      expect(futureDue.single.meta['updated'], isTrue);
+    });
 
-    final futureDue = await store.due(
-      DateTime.now().toUtc().add(const Duration(minutes: 6)),
-    );
-    expect(futureDue, hasLength(1));
-    expect(futureDue.single.meta['updated'], isTrue);
-  });
+    test('remove deletes schedule entry', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-3',
+        taskName: 'task.remove',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
+      );
 
-  test('remove deletes schedule entry', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-3',
-      taskName: 'task.remove',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
+      await store.upsert(entry);
+      expect(
+        (await store.due(DateTime.now().toUtc())).map((e) => e.id),
+        contains(entry.id),
+      );
 
-    await store.upsert(entry);
-    expect(
-      (await store.due(DateTime.now().toUtc())).map((e) => e.id),
-      contains(entry.id),
-    );
-
-    await store.remove(entry.id);
-    final remaining = await store.due(
-      DateTime.now().toUtc().add(const Duration(minutes: 1)),
-    );
-    expect(remaining, isEmpty);
+      await store.remove(entry.id);
+      final remaining = await store.due(
+        DateTime.now().toUtc().add(const Duration(minutes: 1)),
+      );
+      expect(remaining, isEmpty);
+    });
   });
 }
