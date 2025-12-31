@@ -1,0 +1,3 @@
+tags:
+  chaos:
+    description: Runs chaos suite against Redis when STEM_CHAOS_REDIS_URL is provided.

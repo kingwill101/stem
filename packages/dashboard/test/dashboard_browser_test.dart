@@ -1,5 +1,11 @@
+import 'dart:async';
+
 import 'package:routed_testing/routed_testing.dart';
 import 'package:server_testing/server_testing.dart';
+import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
+    as driver_manager;
+import 'package:server_testing/src/browser/interfaces/browser_type.dart'
+    show BrowserLaunchOptions;
 import 'package:stem/stem.dart' show DeadLetterEntry, DeadLetterReplayResult;
 import 'package:stem_dashboard/src/server.dart';
 import 'package:stem_dashboard/src/services/models.dart';
@@ -87,6 +93,50 @@ class _FakeDashboardService implements DashboardDataSource {
   }
 }
 
+Future<T> _withPrintFilter<T>(Future<T> Function() action) {
+  return runZoned(
+    action,
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        if (line.startsWith('exited with code:')) {
+          return;
+        }
+        parent.print(zone, line);
+      },
+    ),
+  );
+}
+
+void _dashboardBrowserTest(
+  String description,
+  Future<void> Function(Browser browser) callback,
+) {
+  test(description, () async {
+    final config = TestBootstrap.currentConfig;
+    final type = TestBootstrap.browserTypes[config.browserName];
+    if (type == null) {
+      throw ArgumentError(
+        'Could not find BrowserType for ${config.browserName}. Ensure testBootstrap is configured correctly and the browser name is supported.',
+      );
+    }
+
+    final launchOptions = BrowserLaunchOptions(
+      headless: config.headless,
+      baseUrl: config.baseUrl,
+      proxy: config.proxy,
+    );
+
+    await _withPrintFilter(() async {
+      final browser = await type.launch(launchOptions, useAsync: true);
+      try {
+        await callback(browser);
+      } finally {
+        await browser.quit();
+      }
+    });
+  });
+}
+
 Future<void> main() async {
   final service = _FakeDashboardService(
     queues: const [
@@ -138,9 +188,13 @@ Future<void> main() async {
     await handler.close();
     await state.dispose();
     await service.close();
+    await _withPrintFilter(() async {
+      await driver_manager.DriverManager.stopAll();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
   });
 
-  await browserTest('overview renders metrics from backend', (browser) async {
+  _dashboardBrowserTest('overview renders metrics from backend', (browser) async {
     await browser.visit('/');
     await browser.waiter.waitFor('.cards');
     await browser.assertSee('Overview');
@@ -149,7 +203,7 @@ Future<void> main() async {
     await browser.assertSee('critical');
   });
 
-  await browserTest('tasks form enqueues payload', (browser) async {
+  _dashboardBrowserTest('tasks form enqueues payload', (browser) async {
     service.reset();
 
     await browser.visit('/tasks');
@@ -181,7 +235,7 @@ return fetch('/tasks/enqueue', {
     expect(service.lastEnqueue!.args, {'userId': 123});
   });
 
-  await browserTest('workers control endpoint posts commands', (browser) async {
+  _dashboardBrowserTest('workers control endpoint posts commands', (browser) async {
     service.reset();
 
     await browser.visit('/workers');
@@ -202,7 +256,7 @@ return fetch('/workers/control', {
     expect(command.payload['mode'], 'soft');
   });
 
-  await browserTest('queue replay form replays dead letters', (browser) async {
+  _dashboardBrowserTest('queue replay form replays dead letters', (browser) async {
     service.reset();
 
     await browser.visit('/workers');

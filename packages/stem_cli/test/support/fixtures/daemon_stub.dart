@@ -14,7 +14,7 @@ Future<void> main(List<String> args) async {
   }
 
   final completer = Completer<void>();
-  final fallback = Timer(const Duration(seconds: 30), () {
+  final fallback = Timer(const Duration(seconds: 5), () {
     if (!completer.isCompleted) {
       completer.complete();
     }
