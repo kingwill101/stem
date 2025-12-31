@@ -11,8 +11,14 @@ test:
         if [ -f "$dir/pubspec.yaml" ]; then \
           pkg="$(basename "$dir")"; \
           echo "==> $pkg"; \
-          if ! (cd "$dir" && dart test --fail-fast); then \
-            failures="$failures $pkg"; \
+          if [ "$pkg" = "stem_cli" ]; then \
+            if ! (cd "$dir" && STEM_CLI_RUN_MULTI=true dart test --fail-fast); then \
+              failures="$failures $pkg"; \
+            fi; \
+          else \
+            if ! (cd "$dir" && dart test --fail-fast); then \
+              failures="$failures $pkg"; \
+            fi; \
           fi; \
         fi; \
       done; \
