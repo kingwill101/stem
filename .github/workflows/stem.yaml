@@ -18,11 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 libsqlite3-dev
       - uses: ./.github/actions/setup-test-services
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
+      - name: Get Dart packages cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
       - name: Install dependencies
         run: dart pub get
       - name: Run stem package tests
-        run: dart test packages/stem --exclude-tags soak
+        working-directory: packages/stem
+        run: dart test --exclude-tags soak
