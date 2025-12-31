@@ -4,3 +4,6 @@ export 'stem_group_result.dart';
 export 'stem_queue_job.dart';
 export 'stem_task_result.dart';
 export 'stem_worker_heartbeat.dart';
+export 'stem_workflow_run.dart';
+export 'stem_workflow_step.dart';
+export 'stem_workflow_watcher.dart';

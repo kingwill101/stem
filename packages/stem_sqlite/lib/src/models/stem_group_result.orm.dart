@@ -14,6 +14,9 @@ const FieldDefinition _$StemGroupResultGroupIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultTaskIdField = FieldDefinition(
@@ -23,6 +26,9 @@ const FieldDefinition _$StemGroupResultTaskIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultStateField = FieldDefinition(
@@ -30,7 +36,11 @@ const FieldDefinition _$StemGroupResultStateField = FieldDefinition(
   columnName: 'state',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultPayloadField = FieldDefinition(
@@ -38,7 +48,11 @@ const FieldDefinition _$StemGroupResultPayloadField = FieldDefinition(
   columnName: 'payload',
   dartType: 'Object',
   resolvedType: 'Object?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -47,7 +61,11 @@ const FieldDefinition _$StemGroupResultErrorField = FieldDefinition(
   columnName: 'error',
   dartType: 'Object',
   resolvedType: 'Object?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -56,7 +74,11 @@ const FieldDefinition _$StemGroupResultAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultMetaField = FieldDefinition(
@@ -64,7 +86,11 @@ const FieldDefinition _$StemGroupResultMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -73,7 +99,11 @@ const FieldDefinition _$StemGroupResultCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultUpdatedAtField = FieldDefinition(
@@ -81,7 +111,11 @@ const FieldDefinition _$StemGroupResultUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const RelationDefinition _$StemGroupResultGroupRelation = RelationDefinition(
@@ -107,11 +141,11 @@ Map<String, Object?> _encodeStemGroupResultUntracked(
   };
 }
 
-const ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
+final ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
     ModelDefinition(
       modelName: 'StemGroupResult',
       tableName: 'stem_group_results',
-      fields: [
+      fields: const [
         _$StemGroupResultGroupIdField,
         _$StemGroupResultTaskIdField,
         _$StemGroupResultStateField,
@@ -122,14 +156,24 @@ const ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
         _$StemGroupResultCreatedAtField,
         _$StemGroupResultUpdatedAtField,
       ],
-      relations: [_$StemGroupResultGroupRelation],
+      relations: const [_$StemGroupResultGroupRelation],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'payload': FieldAttributeMetadata(cast: 'json'),
           'error': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemGroupResultUntracked,
       codec: _$StemGroupResultCodec(),
@@ -184,7 +228,7 @@ class StemGroupResults {
 
   static Query<$StemGroupResult> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemGroupResult>(
     column,
@@ -200,6 +244,18 @@ class StemGroupResults {
   /// {@macro ormed.repository}
   static Repository<$StemGroupResult> repo([String? connection]) =>
       Model.repository<$StemGroupResult>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemGroupResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupResultDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemGroupResult model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupResultDefinition.toMap(model, registry: registry);
 }
 
 class StemGroupResultModelFactory {
@@ -265,14 +321,16 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
         model.attempt,
       ),
       'meta': registry.encodeField(_$StemGroupResultMetaField, model.meta),
-      'created_at': registry.encodeField(
-        _$StemGroupResultCreatedAtField,
-        model.getAttribute<DateTime?>('created_at'),
-      ),
-      'updated_at': registry.encodeField(
-        _$StemGroupResultUpdatedAtField,
-        model.getAttribute<DateTime?>('updated_at'),
-      ),
+      if (model.hasAttribute('created_at'))
+        'created_at': registry.encodeField(
+          _$StemGroupResultCreatedAtField,
+          model.getAttribute<DateTime?>('created_at'),
+        ),
+      if (model.hasAttribute('updated_at'))
+        'updated_at': registry.encodeField(
+          _$StemGroupResultUpdatedAtField,
+          model.getAttribute<DateTime?>('updated_at'),
+        ),
     };
   }
 
@@ -281,60 +339,62 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemGroupResultGroupIdValue =
+    final String stemGroupResultGroupIdValue =
         registry.decodeField<String>(
           _$StemGroupResultGroupIdField,
           data['group_id'],
         ) ??
         (throw StateError('Field groupId on StemGroupResult cannot be null.'));
-    final stemGroupResultTaskIdValue =
+    final String stemGroupResultTaskIdValue =
         registry.decodeField<String>(
           _$StemGroupResultTaskIdField,
           data['task_id'],
         ) ??
         (throw StateError('Field taskId on StemGroupResult cannot be null.'));
-    final stemGroupResultStateValue =
+    final String stemGroupResultStateValue =
         registry.decodeField<String>(
           _$StemGroupResultStateField,
           data['state'],
         ) ??
         (throw StateError('Field state on StemGroupResult cannot be null.'));
-    final stemGroupResultPayloadValue = registry.decodeField<Object?>(
+    final Object? stemGroupResultPayloadValue = registry.decodeField<Object?>(
       _$StemGroupResultPayloadField,
       data['payload'],
     );
-    final stemGroupResultErrorValue = registry.decodeField<Object?>(
+    final Object? stemGroupResultErrorValue = registry.decodeField<Object?>(
       _$StemGroupResultErrorField,
       data['error'],
     );
-    final stemGroupResultAttemptValue =
+    final int stemGroupResultAttemptValue =
         registry.decodeField<int>(
           _$StemGroupResultAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemGroupResult cannot be null.'));
-    final stemGroupResultMetaValue =
+    final Map<String, Object?> stemGroupResultMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemGroupResultMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemGroupResult cannot be null.'));
-    final stemGroupResultCreatedAtValue = registry.decodeField<DateTime?>(
-      _$StemGroupResultCreatedAtField,
-      data['created_at'],
-    );
-    final stemGroupResultUpdatedAtValue = registry.decodeField<DateTime?>(
-      _$StemGroupResultUpdatedAtField,
-      data['updated_at'],
-    );
+    final DateTime? stemGroupResultCreatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemGroupResultCreatedAtField,
+          data['created_at'],
+        );
+    final DateTime? stemGroupResultUpdatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemGroupResultUpdatedAtField,
+          data['updated_at'],
+        );
     final model = $StemGroupResult(
       groupId: stemGroupResultGroupIdValue,
       taskId: stemGroupResultTaskIdValue,
       state: stemGroupResultStateValue,
-      payload: stemGroupResultPayloadValue,
-      error: stemGroupResultErrorValue,
       attempt: stemGroupResultAttemptValue,
       meta: stemGroupResultMetaValue,
+      payload: stemGroupResultPayloadValue,
+      error: stemGroupResultErrorValue,
     );
     model._attachOrmRuntimeMetadata({
       'group_id': stemGroupResultGroupIdValue,
@@ -344,8 +404,10 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
       'error': stemGroupResultErrorValue,
       'attempt': stemGroupResultAttemptValue,
       'meta': stemGroupResultMetaValue,
-      'created_at': stemGroupResultCreatedAtValue,
-      'updated_at': stemGroupResultUpdatedAtValue,
+      if (data.containsKey('created_at'))
+        'created_at': stemGroupResultCreatedAtValue,
+      if (data.containsKey('updated_at'))
+        'updated_at': stemGroupResultUpdatedAtValue,
     });
     return model;
   }
@@ -534,23 +596,23 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
   @override
   $StemGroupResult toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final groupIdValue = groupId;
+    final String? groupIdValue = groupId;
     if (groupIdValue == null) {
       throw StateError('Missing required field: groupId');
     }
-    final taskIdValue = taskId;
+    final String? taskIdValue = taskId;
     if (taskIdValue == null) {
       throw StateError('Missing required field: taskId');
     }
-    final stateValue = state;
+    final String? stateValue = state;
     if (stateValue == null) {
       throw StateError('Missing required field: state');
     }
-    final attemptValue = attempt;
+    final int? attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final metaValue = meta;
+    final Map<String, Object?>? metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
@@ -635,14 +697,14 @@ class $StemGroupResult extends StemGroupResult
     required Map<String, Object?> meta,
     Object? payload,
     Object? error,
-  }) : super.new(
+  }) : super(
          groupId: groupId,
          taskId: taskId,
          state: state,
-         payload: payload,
-         error: error,
          attempt: attempt,
          meta: meta,
+         payload: payload,
+         error: error,
        ) {
     _attachOrmRuntimeMetadata({
       'group_id': groupId,
@@ -687,6 +749,16 @@ class $StemGroupResult extends StemGroupResult
       meta: meta ?? this.meta,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemGroupResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupResultDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemGroupResultDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [groupId].
   @override
@@ -758,7 +830,55 @@ extension StemGroupResultRelationQueries on StemGroupResult {
   }
 }
 
+class _StemGroupResultCopyWithSentinel {
+  const _StemGroupResultCopyWithSentinel();
+}
+
 extension StemGroupResultOrmExtension on StemGroupResult {
+  static const _StemGroupResultCopyWithSentinel _copyWithSentinel =
+      _StemGroupResultCopyWithSentinel();
+  StemGroupResult copyWith({
+    Object? groupId = _copyWithSentinel,
+    Object? taskId = _copyWithSentinel,
+    Object? state = _copyWithSentinel,
+    Object? attempt = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+    Object? payload = _copyWithSentinel,
+    Object? error = _copyWithSentinel,
+    Object? group = _copyWithSentinel,
+  }) {
+    return StemGroupResult(
+      groupId: identical(groupId, _copyWithSentinel)
+          ? this.groupId
+          : groupId as String,
+      taskId: identical(taskId, _copyWithSentinel)
+          ? this.taskId
+          : taskId as String,
+      state: identical(state, _copyWithSentinel) ? this.state : state as String,
+      attempt: identical(attempt, _copyWithSentinel)
+          ? this.attempt
+          : attempt as int,
+      meta: identical(meta, _copyWithSentinel)
+          ? this.meta
+          : meta as Map<String, Object?>,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
+      group: identical(group, _copyWithSentinel)
+          ? this.group
+          : group as StemGroup?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemGroupResultDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemGroupResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupResultDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -770,6 +890,35 @@ extension StemGroupResultOrmExtension on StemGroupResult {
   $StemGroupResult toTracked() {
     return $StemGroupResult.fromModel(this);
   }
+}
+
+extension StemGroupResultPredicateFields on PredicateBuilder<StemGroupResult> {
+  PredicateField<StemGroupResult, String> get groupId =>
+      PredicateField<StemGroupResult, String>(this, 'groupId');
+  PredicateField<StemGroupResult, String> get taskId =>
+      PredicateField<StemGroupResult, String>(this, 'taskId');
+  PredicateField<StemGroupResult, String> get state =>
+      PredicateField<StemGroupResult, String>(this, 'state');
+  PredicateField<StemGroupResult, Object?> get payload =>
+      PredicateField<StemGroupResult, Object?>(this, 'payload');
+  PredicateField<StemGroupResult, Object?> get error =>
+      PredicateField<StemGroupResult, Object?>(this, 'error');
+  PredicateField<StemGroupResult, int> get attempt =>
+      PredicateField<StemGroupResult, int>(this, 'attempt');
+  PredicateField<StemGroupResult, Map<String, Object?>> get meta =>
+      PredicateField<StemGroupResult, Map<String, Object?>>(this, 'meta');
+}
+
+extension StemGroupResultTypedRelations on Query<StemGroupResult> {
+  Query<StemGroupResult> withGroup([
+    PredicateCallback<StemGroup>? constraint,
+  ]) => withRelationTyped('group', constraint);
+  Query<StemGroupResult> whereHasGroup([
+    PredicateCallback<StemGroup>? constraint,
+  ]) => whereHasTyped('group', constraint);
+  Query<StemGroupResult> orWhereHasGroup([
+    PredicateCallback<StemGroup>? constraint,
+  ]) => orWhereHasTyped('group', constraint);
 }
 
 void registerStemGroupResultEventHandlers(EventBus bus) {

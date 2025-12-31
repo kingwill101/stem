@@ -14,6 +14,9 @@ const FieldDefinition _$StemWorkerHeartbeatWorkerIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatNamespaceField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemWorkerHeartbeatNamespaceField = FieldDefinition(
   columnName: 'namespace',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatTimestampField = FieldDefinition(
@@ -29,7 +36,11 @@ const FieldDefinition _$StemWorkerHeartbeatTimestampField = FieldDefinition(
   columnName: 'timestamp',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatIsolateCountField = FieldDefinition(
@@ -37,7 +48,11 @@ const FieldDefinition _$StemWorkerHeartbeatIsolateCountField = FieldDefinition(
   columnName: 'isolate_count',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatInflightField = FieldDefinition(
@@ -45,7 +60,11 @@ const FieldDefinition _$StemWorkerHeartbeatInflightField = FieldDefinition(
   columnName: 'inflight',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatQueuesField = FieldDefinition(
@@ -53,7 +72,11 @@ const FieldDefinition _$StemWorkerHeartbeatQueuesField = FieldDefinition(
   columnName: 'queues',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -63,7 +86,11 @@ const FieldDefinition _$StemWorkerHeartbeatLastLeaseRenewalField =
       columnName: 'last_lease_renewal',
       dartType: 'DateTime',
       resolvedType: 'DateTime?',
+      isPrimaryKey: false,
       isNullable: true,
+      isUnique: false,
+      isIndexed: false,
+      autoIncrement: false,
     );
 
 const FieldDefinition _$StemWorkerHeartbeatVersionField = FieldDefinition(
@@ -71,7 +98,11 @@ const FieldDefinition _$StemWorkerHeartbeatVersionField = FieldDefinition(
   columnName: 'version',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatExtrasField = FieldDefinition(
@@ -79,7 +110,11 @@ const FieldDefinition _$StemWorkerHeartbeatExtrasField = FieldDefinition(
   columnName: 'extras',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -88,7 +123,11 @@ const FieldDefinition _$StemWorkerHeartbeatExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatDeletedAtField = FieldDefinition(
@@ -96,7 +135,11 @@ const FieldDefinition _$StemWorkerHeartbeatDeletedAtField = FieldDefinition(
   columnName: 'deleted_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatCreatedAtField = FieldDefinition(
@@ -104,7 +147,11 @@ const FieldDefinition _$StemWorkerHeartbeatCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkerHeartbeatUpdatedAtField = FieldDefinition(
@@ -112,7 +159,11 @@ const FieldDefinition _$StemWorkerHeartbeatUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemWorkerHeartbeatUntracked(
@@ -158,11 +209,11 @@ Map<String, Object?> _encodeStemWorkerHeartbeatUntracked(
   };
 }
 
-const ModelDefinition<$StemWorkerHeartbeat> _$StemWorkerHeartbeatDefinition =
+final ModelDefinition<$StemWorkerHeartbeat> _$StemWorkerHeartbeatDefinition =
     ModelDefinition(
       modelName: 'StemWorkerHeartbeat',
       tableName: 'stem_worker_heartbeats',
-      fields: [
+      fields: const [
         _$StemWorkerHeartbeatWorkerIdField,
         _$StemWorkerHeartbeatNamespaceField,
         _$StemWorkerHeartbeatTimestampField,
@@ -177,12 +228,23 @@ const ModelDefinition<$StemWorkerHeartbeat> _$StemWorkerHeartbeatDefinition =
         _$StemWorkerHeartbeatCreatedAtField,
         _$StemWorkerHeartbeatUpdatedAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'queues': FieldAttributeMetadata(cast: 'json'),
           'extras': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemWorkerHeartbeatUntracked,
       codec: _$StemWorkerHeartbeatCodec(),
@@ -243,7 +305,7 @@ class StemWorkerHeartbeats {
 
   static Query<$StemWorkerHeartbeat> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemWorkerHeartbeat>(
     column,
@@ -259,6 +321,18 @@ class StemWorkerHeartbeats {
   /// {@macro ormed.repository}
   static Repository<$StemWorkerHeartbeat> repo([String? connection]) =>
       Model.repository<$StemWorkerHeartbeat>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemWorkerHeartbeat fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkerHeartbeatDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemWorkerHeartbeat model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkerHeartbeatDefinition.toMap(model, registry: registry);
 }
 
 class StemWorkerHeartbeatModelFactory {
@@ -345,18 +419,21 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         _$StemWorkerHeartbeatExpiresAtField,
         model.expiresAt,
       ),
-      'deleted_at': registry.encodeField(
-        _$StemWorkerHeartbeatDeletedAtField,
-        model.getAttribute<DateTime?>('deleted_at'),
-      ),
-      'created_at': registry.encodeField(
-        _$StemWorkerHeartbeatCreatedAtField,
-        model.getAttribute<DateTime?>('created_at'),
-      ),
-      'updated_at': registry.encodeField(
-        _$StemWorkerHeartbeatUpdatedAtField,
-        model.getAttribute<DateTime?>('updated_at'),
-      ),
+      if (model.hasAttribute('deleted_at'))
+        'deleted_at': registry.encodeField(
+          _$StemWorkerHeartbeatDeletedAtField,
+          model.getAttribute<DateTime?>('deleted_at'),
+        ),
+      if (model.hasAttribute('created_at'))
+        'created_at': registry.encodeField(
+          _$StemWorkerHeartbeatCreatedAtField,
+          model.getAttribute<DateTime?>('created_at'),
+        ),
+      if (model.hasAttribute('updated_at'))
+        'updated_at': registry.encodeField(
+          _$StemWorkerHeartbeatUpdatedAtField,
+          model.getAttribute<DateTime?>('updated_at'),
+        ),
     };
   }
 
@@ -365,7 +442,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemWorkerHeartbeatWorkerIdValue =
+    final String stemWorkerHeartbeatWorkerIdValue =
         registry.decodeField<String>(
           _$StemWorkerHeartbeatWorkerIdField,
           data['worker_id'],
@@ -373,7 +450,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field workerId on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatNamespaceValue =
+    final String stemWorkerHeartbeatNamespaceValue =
         registry.decodeField<String>(
           _$StemWorkerHeartbeatNamespaceField,
           data['namespace'],
@@ -381,7 +458,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field namespace on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatTimestampValue =
+    final DateTime stemWorkerHeartbeatTimestampValue =
         registry.decodeField<DateTime>(
           _$StemWorkerHeartbeatTimestampField,
           data['timestamp'],
@@ -389,7 +466,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field timestamp on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatIsolateCountValue =
+    final int stemWorkerHeartbeatIsolateCountValue =
         registry.decodeField<int>(
           _$StemWorkerHeartbeatIsolateCountField,
           data['isolate_count'],
@@ -397,7 +474,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field isolateCount on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatInflightValue =
+    final int stemWorkerHeartbeatInflightValue =
         registry.decodeField<int>(
           _$StemWorkerHeartbeatInflightField,
           data['inflight'],
@@ -405,7 +482,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field inflight on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatQueuesValue =
+    final Map<String, Object?> stemWorkerHeartbeatQueuesValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemWorkerHeartbeatQueuesField,
           data['queues'],
@@ -413,12 +490,12 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field queues on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatLastLeaseRenewalValue = registry
+    final DateTime? stemWorkerHeartbeatLastLeaseRenewalValue = registry
         .decodeField<DateTime?>(
           _$StemWorkerHeartbeatLastLeaseRenewalField,
           data['last_lease_renewal'],
         );
-    final stemWorkerHeartbeatVersionValue =
+    final String stemWorkerHeartbeatVersionValue =
         registry.decodeField<String>(
           _$StemWorkerHeartbeatVersionField,
           data['version'],
@@ -426,7 +503,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field version on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatExtrasValue =
+    final Map<String, Object?> stemWorkerHeartbeatExtrasValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemWorkerHeartbeatExtrasField,
           data['extras'],
@@ -434,7 +511,7 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field extras on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatExpiresAtValue =
+    final DateTime stemWorkerHeartbeatExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemWorkerHeartbeatExpiresAtField,
           data['expires_at'],
@@ -442,18 +519,21 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
         (throw StateError(
           'Field expiresAt on StemWorkerHeartbeat cannot be null.',
         ));
-    final stemWorkerHeartbeatDeletedAtValue = registry.decodeField<DateTime?>(
-      _$StemWorkerHeartbeatDeletedAtField,
-      data['deleted_at'],
-    );
-    final stemWorkerHeartbeatCreatedAtValue = registry.decodeField<DateTime?>(
-      _$StemWorkerHeartbeatCreatedAtField,
-      data['created_at'],
-    );
-    final stemWorkerHeartbeatUpdatedAtValue = registry.decodeField<DateTime?>(
-      _$StemWorkerHeartbeatUpdatedAtField,
-      data['updated_at'],
-    );
+    final DateTime? stemWorkerHeartbeatDeletedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemWorkerHeartbeatDeletedAtField,
+          data['deleted_at'],
+        );
+    final DateTime? stemWorkerHeartbeatCreatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemWorkerHeartbeatCreatedAtField,
+          data['created_at'],
+        );
+    final DateTime? stemWorkerHeartbeatUpdatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemWorkerHeartbeatUpdatedAtField,
+          data['updated_at'],
+        );
     final model = $StemWorkerHeartbeat(
       workerId: stemWorkerHeartbeatWorkerIdValue,
       namespace: stemWorkerHeartbeatNamespaceValue,
@@ -461,10 +541,10 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
       isolateCount: stemWorkerHeartbeatIsolateCountValue,
       inflight: stemWorkerHeartbeatInflightValue,
       queues: stemWorkerHeartbeatQueuesValue,
-      lastLeaseRenewal: stemWorkerHeartbeatLastLeaseRenewalValue,
       version: stemWorkerHeartbeatVersionValue,
       extras: stemWorkerHeartbeatExtrasValue,
       expiresAt: stemWorkerHeartbeatExpiresAtValue,
+      lastLeaseRenewal: stemWorkerHeartbeatLastLeaseRenewalValue,
     );
     model._attachOrmRuntimeMetadata({
       'worker_id': stemWorkerHeartbeatWorkerIdValue,
@@ -477,9 +557,12 @@ class _$StemWorkerHeartbeatCodec extends ModelCodec<$StemWorkerHeartbeat> {
       'version': stemWorkerHeartbeatVersionValue,
       'extras': stemWorkerHeartbeatExtrasValue,
       'expires_at': stemWorkerHeartbeatExpiresAtValue,
-      'deleted_at': stemWorkerHeartbeatDeletedAtValue,
-      'created_at': stemWorkerHeartbeatCreatedAtValue,
-      'updated_at': stemWorkerHeartbeatUpdatedAtValue,
+      if (data.containsKey('deleted_at'))
+        'deleted_at': stemWorkerHeartbeatDeletedAtValue,
+      if (data.containsKey('created_at'))
+        'created_at': stemWorkerHeartbeatCreatedAtValue,
+      if (data.containsKey('updated_at'))
+        'updated_at': stemWorkerHeartbeatUpdatedAtValue,
     });
     return model;
   }
@@ -728,39 +811,39 @@ class StemWorkerHeartbeatPartial
   @override
   $StemWorkerHeartbeat toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final workerIdValue = workerId;
+    final String? workerIdValue = workerId;
     if (workerIdValue == null) {
       throw StateError('Missing required field: workerId');
     }
-    final namespaceValue = namespace;
+    final String? namespaceValue = namespace;
     if (namespaceValue == null) {
       throw StateError('Missing required field: namespace');
     }
-    final timestampValue = timestamp;
+    final DateTime? timestampValue = timestamp;
     if (timestampValue == null) {
       throw StateError('Missing required field: timestamp');
     }
-    final isolateCountValue = isolateCount;
+    final int? isolateCountValue = isolateCount;
     if (isolateCountValue == null) {
       throw StateError('Missing required field: isolateCount');
     }
-    final inflightValue = inflight;
+    final int? inflightValue = inflight;
     if (inflightValue == null) {
       throw StateError('Missing required field: inflight');
     }
-    final queuesValue = queues;
+    final Map<String, Object?>? queuesValue = queues;
     if (queuesValue == null) {
       throw StateError('Missing required field: queues');
     }
-    final versionValue = version;
+    final String? versionValue = version;
     if (versionValue == null) {
       throw StateError('Missing required field: version');
     }
-    final extrasValue = extras;
+    final Map<String, Object?>? extrasValue = extras;
     if (extrasValue == null) {
       throw StateError('Missing required field: extras');
     }
-    final expiresAtValue = expiresAt;
+    final DateTime? expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }
@@ -870,17 +953,17 @@ class $StemWorkerHeartbeat extends StemWorkerHeartbeat
     required Map<String, Object?> extras,
     required DateTime expiresAt,
     DateTime? lastLeaseRenewal,
-  }) : super.new(
+  }) : super(
          workerId: workerId,
          namespace: namespace,
          timestamp: timestamp,
          isolateCount: isolateCount,
          inflight: inflight,
          queues: queues,
-         lastLeaseRenewal: lastLeaseRenewal,
          version: version,
          extras: extras,
          expiresAt: expiresAt,
+         lastLeaseRenewal: lastLeaseRenewal,
        ) {
     _attachOrmRuntimeMetadata({
       'worker_id': workerId,
@@ -937,6 +1020,16 @@ class $StemWorkerHeartbeat extends StemWorkerHeartbeat
       expiresAt: expiresAt ?? this.expiresAt,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemWorkerHeartbeat fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkerHeartbeatDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemWorkerHeartbeatDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [workerId].
   @override
@@ -1021,7 +1114,69 @@ class $StemWorkerHeartbeat extends StemWorkerHeartbeat
   }
 }
 
+class _StemWorkerHeartbeatCopyWithSentinel {
+  const _StemWorkerHeartbeatCopyWithSentinel();
+}
+
 extension StemWorkerHeartbeatOrmExtension on StemWorkerHeartbeat {
+  static const _StemWorkerHeartbeatCopyWithSentinel _copyWithSentinel =
+      _StemWorkerHeartbeatCopyWithSentinel();
+  StemWorkerHeartbeat copyWith({
+    Object? workerId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? timestamp = _copyWithSentinel,
+    Object? isolateCount = _copyWithSentinel,
+    Object? inflight = _copyWithSentinel,
+    Object? queues = _copyWithSentinel,
+    Object? version = _copyWithSentinel,
+    Object? extras = _copyWithSentinel,
+    Object? expiresAt = _copyWithSentinel,
+    Object? lastLeaseRenewal = _copyWithSentinel,
+  }) {
+    return StemWorkerHeartbeat(
+      workerId: identical(workerId, _copyWithSentinel)
+          ? this.workerId
+          : workerId as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      timestamp: identical(timestamp, _copyWithSentinel)
+          ? this.timestamp
+          : timestamp as DateTime,
+      isolateCount: identical(isolateCount, _copyWithSentinel)
+          ? this.isolateCount
+          : isolateCount as int,
+      inflight: identical(inflight, _copyWithSentinel)
+          ? this.inflight
+          : inflight as int,
+      queues: identical(queues, _copyWithSentinel)
+          ? this.queues
+          : queues as Map<String, Object?>,
+      version: identical(version, _copyWithSentinel)
+          ? this.version
+          : version as String,
+      extras: identical(extras, _copyWithSentinel)
+          ? this.extras
+          : extras as Map<String, Object?>,
+      expiresAt: identical(expiresAt, _copyWithSentinel)
+          ? this.expiresAt
+          : expiresAt as DateTime,
+      lastLeaseRenewal: identical(lastLeaseRenewal, _copyWithSentinel)
+          ? this.lastLeaseRenewal
+          : lastLeaseRenewal as DateTime?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemWorkerHeartbeatDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemWorkerHeartbeat fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkerHeartbeatDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -1033,6 +1188,30 @@ extension StemWorkerHeartbeatOrmExtension on StemWorkerHeartbeat {
   $StemWorkerHeartbeat toTracked() {
     return $StemWorkerHeartbeat.fromModel(this);
   }
+}
+
+extension StemWorkerHeartbeatPredicateFields
+    on PredicateBuilder<StemWorkerHeartbeat> {
+  PredicateField<StemWorkerHeartbeat, String> get workerId =>
+      PredicateField<StemWorkerHeartbeat, String>(this, 'workerId');
+  PredicateField<StemWorkerHeartbeat, String> get namespace =>
+      PredicateField<StemWorkerHeartbeat, String>(this, 'namespace');
+  PredicateField<StemWorkerHeartbeat, DateTime> get timestamp =>
+      PredicateField<StemWorkerHeartbeat, DateTime>(this, 'timestamp');
+  PredicateField<StemWorkerHeartbeat, int> get isolateCount =>
+      PredicateField<StemWorkerHeartbeat, int>(this, 'isolateCount');
+  PredicateField<StemWorkerHeartbeat, int> get inflight =>
+      PredicateField<StemWorkerHeartbeat, int>(this, 'inflight');
+  PredicateField<StemWorkerHeartbeat, Map<String, Object?>> get queues =>
+      PredicateField<StemWorkerHeartbeat, Map<String, Object?>>(this, 'queues');
+  PredicateField<StemWorkerHeartbeat, DateTime?> get lastLeaseRenewal =>
+      PredicateField<StemWorkerHeartbeat, DateTime?>(this, 'lastLeaseRenewal');
+  PredicateField<StemWorkerHeartbeat, String> get version =>
+      PredicateField<StemWorkerHeartbeat, String>(this, 'version');
+  PredicateField<StemWorkerHeartbeat, Map<String, Object?>> get extras =>
+      PredicateField<StemWorkerHeartbeat, Map<String, Object?>>(this, 'extras');
+  PredicateField<StemWorkerHeartbeat, DateTime> get expiresAt =>
+      PredicateField<StemWorkerHeartbeat, DateTime>(this, 'expiresAt');
 }
 
 void registerStemWorkerHeartbeatEventHandlers(EventBus bus) {

@@ -14,6 +14,9 @@ const FieldDefinition _$StemQueueJobIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobQueueField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemQueueJobQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobEnvelopeField = FieldDefinition(
@@ -29,7 +36,11 @@ const FieldDefinition _$StemQueueJobEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +49,11 @@ const FieldDefinition _$StemQueueJobAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobMaxRetriesField = FieldDefinition(
@@ -46,7 +61,11 @@ const FieldDefinition _$StemQueueJobMaxRetriesField = FieldDefinition(
   columnName: 'max_retries',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobPriorityField = FieldDefinition(
@@ -54,7 +73,11 @@ const FieldDefinition _$StemQueueJobPriorityField = FieldDefinition(
   columnName: 'priority',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobNotBeforeField = FieldDefinition(
@@ -62,7 +85,11 @@ const FieldDefinition _$StemQueueJobNotBeforeField = FieldDefinition(
   columnName: 'not_before',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedAtField = FieldDefinition(
@@ -70,7 +97,11 @@ const FieldDefinition _$StemQueueJobLockedAtField = FieldDefinition(
   columnName: 'locked_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedUntilField = FieldDefinition(
@@ -78,7 +109,11 @@ const FieldDefinition _$StemQueueJobLockedUntilField = FieldDefinition(
   columnName: 'locked_until',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedByField = FieldDefinition(
@@ -86,7 +121,11 @@ const FieldDefinition _$StemQueueJobLockedByField = FieldDefinition(
   columnName: 'locked_by',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobCreatedAtField = FieldDefinition(
@@ -94,7 +133,11 @@ const FieldDefinition _$StemQueueJobCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobUpdatedAtField = FieldDefinition(
@@ -102,7 +145,11 @@ const FieldDefinition _$StemQueueJobUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemQueueJobUntracked(
@@ -133,10 +180,10 @@ Map<String, Object?> _encodeStemQueueJobUntracked(
   };
 }
 
-const ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
+final ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
   modelName: 'StemQueueJob',
   tableName: 'stem_queue_jobs',
-  fields: [
+  fields: const [
     _$StemQueueJobIdField,
     _$StemQueueJobQueueField,
     _$StemQueueJobEnvelopeField,
@@ -150,9 +197,20 @@ const ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
     _$StemQueueJobCreatedAtField,
     _$StemQueueJobUpdatedAtField,
   ],
+  relations: const [],
   softDeleteColumn: 'deleted_at',
   metadata: ModelAttributesMetadata(
-    fieldOverrides: {'envelope': FieldAttributeMetadata(cast: 'json')},
+    hidden: const <String>[],
+    visible: const <String>[],
+    fillable: const <String>[],
+    guarded: const <String>[],
+    casts: const <String, String>{},
+    appends: const <String>[],
+    touches: const <String>[],
+    timestamps: true,
+    fieldOverrides: const {'envelope': FieldAttributeMetadata(cast: 'json')},
+    softDeletes: false,
+    softDeleteColumn: 'deleted_at',
   ),
   untrackedToMap: _encodeStemQueueJobUntracked,
   codec: _$StemQueueJobCodec(),
@@ -207,7 +265,7 @@ class StemQueueJobs {
 
   static Query<$StemQueueJob> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemQueueJob>(
     column,
@@ -223,6 +281,18 @@ class StemQueueJobs {
   /// {@macro ormed.repository}
   static Repository<$StemQueueJob> repo([String? connection]) =>
       Model.repository<$StemQueueJob>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemQueueJob fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemQueueJobDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemQueueJob model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemQueueJobDefinition.toMap(model, registry: registry);
 }
 
 class StemQueueJobModelFactory {
@@ -303,73 +373,79 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
         _$StemQueueJobLockedByField,
         model.lockedBy,
       ),
-      'created_at': registry.encodeField(
-        _$StemQueueJobCreatedAtField,
-        model.getAttribute<DateTime?>('created_at'),
-      ),
-      'updated_at': registry.encodeField(
-        _$StemQueueJobUpdatedAtField,
-        model.getAttribute<DateTime?>('updated_at'),
-      ),
+      if (model.hasAttribute('created_at'))
+        'created_at': registry.encodeField(
+          _$StemQueueJobCreatedAtField,
+          model.getAttribute<DateTime?>('created_at'),
+        ),
+      if (model.hasAttribute('updated_at'))
+        'updated_at': registry.encodeField(
+          _$StemQueueJobUpdatedAtField,
+          model.getAttribute<DateTime?>('updated_at'),
+        ),
     };
   }
 
   @override
   $StemQueueJob decode(Map<String, Object?> data, ValueCodecRegistry registry) {
-    final stemQueueJobIdValue =
+    final String stemQueueJobIdValue =
         registry.decodeField<String>(_$StemQueueJobIdField, data['id']) ??
         (throw StateError('Field id on StemQueueJob cannot be null.'));
-    final stemQueueJobQueueValue =
+    final String stemQueueJobQueueValue =
         registry.decodeField<String>(_$StemQueueJobQueueField, data['queue']) ??
         (throw StateError('Field queue on StemQueueJob cannot be null.'));
-    final stemQueueJobEnvelopeValue =
+    final Map<String, Object?> stemQueueJobEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemQueueJobEnvelopeField,
           data['envelope'],
         ) ??
         (throw StateError('Field envelope on StemQueueJob cannot be null.'));
-    final stemQueueJobAttemptValue =
+    final int stemQueueJobAttemptValue =
         registry.decodeField<int>(
           _$StemQueueJobAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemQueueJob cannot be null.'));
-    final stemQueueJobMaxRetriesValue =
+    final int stemQueueJobMaxRetriesValue =
         registry.decodeField<int>(
           _$StemQueueJobMaxRetriesField,
           data['max_retries'],
         ) ??
         (throw StateError('Field maxRetries on StemQueueJob cannot be null.'));
-    final stemQueueJobPriorityValue =
+    final int stemQueueJobPriorityValue =
         registry.decodeField<int>(
           _$StemQueueJobPriorityField,
           data['priority'],
         ) ??
         (throw StateError('Field priority on StemQueueJob cannot be null.'));
-    final stemQueueJobNotBeforeValue = registry.decodeField<DateTime?>(
-      _$StemQueueJobNotBeforeField,
-      data['not_before'],
-    );
-    final stemQueueJobLockedAtValue = registry.decodeField<DateTime?>(
+    final DateTime? stemQueueJobNotBeforeValue = registry
+        .decodeField<DateTime?>(
+          _$StemQueueJobNotBeforeField,
+          data['not_before'],
+        );
+    final DateTime? stemQueueJobLockedAtValue = registry.decodeField<DateTime?>(
       _$StemQueueJobLockedAtField,
       data['locked_at'],
     );
-    final stemQueueJobLockedUntilValue = registry.decodeField<DateTime?>(
-      _$StemQueueJobLockedUntilField,
-      data['locked_until'],
-    );
-    final stemQueueJobLockedByValue = registry.decodeField<String?>(
+    final DateTime? stemQueueJobLockedUntilValue = registry
+        .decodeField<DateTime?>(
+          _$StemQueueJobLockedUntilField,
+          data['locked_until'],
+        );
+    final String? stemQueueJobLockedByValue = registry.decodeField<String?>(
       _$StemQueueJobLockedByField,
       data['locked_by'],
     );
-    final stemQueueJobCreatedAtValue = registry.decodeField<DateTime?>(
-      _$StemQueueJobCreatedAtField,
-      data['created_at'],
-    );
-    final stemQueueJobUpdatedAtValue = registry.decodeField<DateTime?>(
-      _$StemQueueJobUpdatedAtField,
-      data['updated_at'],
-    );
+    final DateTime? stemQueueJobCreatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemQueueJobCreatedAtField,
+          data['created_at'],
+        );
+    final DateTime? stemQueueJobUpdatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemQueueJobUpdatedAtField,
+          data['updated_at'],
+        );
     final model = $StemQueueJob(
       id: stemQueueJobIdValue,
       queue: stemQueueJobQueueValue,
@@ -393,8 +469,10 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
       'locked_at': stemQueueJobLockedAtValue,
       'locked_until': stemQueueJobLockedUntilValue,
       'locked_by': stemQueueJobLockedByValue,
-      'created_at': stemQueueJobCreatedAtValue,
-      'updated_at': stemQueueJobUpdatedAtValue,
+      if (data.containsKey('created_at'))
+        'created_at': stemQueueJobCreatedAtValue,
+      if (data.containsKey('updated_at'))
+        'updated_at': stemQueueJobUpdatedAtValue,
     });
     return model;
   }
@@ -638,27 +716,27 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   @override
   $StemQueueJob toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final queueValue = queue;
+    final String? queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final envelopeValue = envelope;
+    final Map<String, Object?>? envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final attemptValue = attempt;
+    final int? attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final maxRetriesValue = maxRetries;
+    final int? maxRetriesValue = maxRetries;
     if (maxRetriesValue == null) {
       throw StateError('Missing required field: maxRetries');
     }
-    final priorityValue = priority;
+    final int? priorityValue = priority;
     if (priorityValue == null) {
       throw StateError('Missing required field: priority');
     }
@@ -766,7 +844,7 @@ class $StemQueueJob extends StemQueueJob
     DateTime? lockedAt,
     DateTime? lockedUntil,
     String? lockedBy,
-  }) : super.new(
+  }) : super(
          id: id,
          queue: queue,
          envelope: envelope,
@@ -833,6 +911,16 @@ class $StemQueueJob extends StemQueueJob
       lockedBy: lockedBy ?? this.lockedBy,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemQueueJob fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemQueueJobDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemQueueJobDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [id].
   @override
@@ -914,7 +1002,65 @@ class $StemQueueJob extends StemQueueJob
   }
 }
 
+class _StemQueueJobCopyWithSentinel {
+  const _StemQueueJobCopyWithSentinel();
+}
+
 extension StemQueueJobOrmExtension on StemQueueJob {
+  static const _StemQueueJobCopyWithSentinel _copyWithSentinel =
+      _StemQueueJobCopyWithSentinel();
+  StemQueueJob copyWith({
+    Object? id = _copyWithSentinel,
+    Object? queue = _copyWithSentinel,
+    Object? envelope = _copyWithSentinel,
+    Object? attempt = _copyWithSentinel,
+    Object? maxRetries = _copyWithSentinel,
+    Object? priority = _copyWithSentinel,
+    Object? notBefore = _copyWithSentinel,
+    Object? lockedAt = _copyWithSentinel,
+    Object? lockedUntil = _copyWithSentinel,
+    Object? lockedBy = _copyWithSentinel,
+  }) {
+    return StemQueueJob(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      queue: identical(queue, _copyWithSentinel) ? this.queue : queue as String,
+      envelope: identical(envelope, _copyWithSentinel)
+          ? this.envelope
+          : envelope as Map<String, Object?>,
+      attempt: identical(attempt, _copyWithSentinel)
+          ? this.attempt
+          : attempt as int,
+      maxRetries: identical(maxRetries, _copyWithSentinel)
+          ? this.maxRetries
+          : maxRetries as int,
+      priority: identical(priority, _copyWithSentinel)
+          ? this.priority
+          : priority as int,
+      notBefore: identical(notBefore, _copyWithSentinel)
+          ? this.notBefore
+          : notBefore as DateTime?,
+      lockedAt: identical(lockedAt, _copyWithSentinel)
+          ? this.lockedAt
+          : lockedAt as DateTime?,
+      lockedUntil: identical(lockedUntil, _copyWithSentinel)
+          ? this.lockedUntil
+          : lockedUntil as DateTime?,
+      lockedBy: identical(lockedBy, _copyWithSentinel)
+          ? this.lockedBy
+          : lockedBy as String?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemQueueJobDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemQueueJob fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemQueueJobDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -926,6 +1072,29 @@ extension StemQueueJobOrmExtension on StemQueueJob {
   $StemQueueJob toTracked() {
     return $StemQueueJob.fromModel(this);
   }
+}
+
+extension StemQueueJobPredicateFields on PredicateBuilder<StemQueueJob> {
+  PredicateField<StemQueueJob, String> get id =>
+      PredicateField<StemQueueJob, String>(this, 'id');
+  PredicateField<StemQueueJob, String> get queue =>
+      PredicateField<StemQueueJob, String>(this, 'queue');
+  PredicateField<StemQueueJob, Map<String, Object?>> get envelope =>
+      PredicateField<StemQueueJob, Map<String, Object?>>(this, 'envelope');
+  PredicateField<StemQueueJob, int> get attempt =>
+      PredicateField<StemQueueJob, int>(this, 'attempt');
+  PredicateField<StemQueueJob, int> get maxRetries =>
+      PredicateField<StemQueueJob, int>(this, 'maxRetries');
+  PredicateField<StemQueueJob, int> get priority =>
+      PredicateField<StemQueueJob, int>(this, 'priority');
+  PredicateField<StemQueueJob, DateTime?> get notBefore =>
+      PredicateField<StemQueueJob, DateTime?>(this, 'notBefore');
+  PredicateField<StemQueueJob, DateTime?> get lockedAt =>
+      PredicateField<StemQueueJob, DateTime?>(this, 'lockedAt');
+  PredicateField<StemQueueJob, DateTime?> get lockedUntil =>
+      PredicateField<StemQueueJob, DateTime?>(this, 'lockedUntil');
+  PredicateField<StemQueueJob, String?> get lockedBy =>
+      PredicateField<StemQueueJob, String?>(this, 'lockedBy');
 }
 
 void registerStemQueueJobEventHandlers(EventBus bus) {

@@ -14,6 +14,9 @@ const FieldDefinition _$StemDeadLetterIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
@@ -29,7 +36,11 @@ const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +49,11 @@ const FieldDefinition _$StemDeadLetterReasonField = FieldDefinition(
   columnName: 'reason',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
@@ -46,7 +61,11 @@ const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -55,7 +74,11 @@ const FieldDefinition _$StemDeadLetterDeadAtField = FieldDefinition(
   columnName: 'dead_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemDeadLetterUntracked(
@@ -73,11 +96,11 @@ Map<String, Object?> _encodeStemDeadLetterUntracked(
   };
 }
 
-const ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
+final ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
     ModelDefinition(
       modelName: 'StemDeadLetter',
       tableName: 'stem_dead_letters',
-      fields: [
+      fields: const [
         _$StemDeadLetterIdField,
         _$StemDeadLetterQueueField,
         _$StemDeadLetterEnvelopeField,
@@ -85,12 +108,23 @@ const ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
         _$StemDeadLetterMetaField,
         _$StemDeadLetterDeadAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'envelope': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemDeadLetterUntracked,
       codec: _$StemDeadLetterCodec(),
@@ -145,7 +179,7 @@ class StemDeadLetters {
 
   static Query<$StemDeadLetter> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemDeadLetter>(
     column,
@@ -161,6 +195,18 @@ class StemDeadLetters {
   /// {@macro ormed.repository}
   static Repository<$StemDeadLetter> repo([String? connection]) =>
       Model.repository<$StemDeadLetter>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemDeadLetter model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.toMap(model, registry: registry);
 }
 
 class StemDeadLetterModelFactory {
@@ -227,30 +273,31 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemDeadLetterIdValue =
+    final String stemDeadLetterIdValue =
         registry.decodeField<String>(_$StemDeadLetterIdField, data['id']) ??
         (throw StateError('Field id on StemDeadLetter cannot be null.'));
-    final stemDeadLetterQueueValue =
+    final String stemDeadLetterQueueValue =
         registry.decodeField<String>(
           _$StemDeadLetterQueueField,
           data['queue'],
         ) ??
         (throw StateError('Field queue on StemDeadLetter cannot be null.'));
-    final stemDeadLetterEnvelopeValue =
+    final Map<String, Object?> stemDeadLetterEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemDeadLetterEnvelopeField,
           data['envelope'],
         ) ??
         (throw StateError('Field envelope on StemDeadLetter cannot be null.'));
-    final stemDeadLetterReasonValue = registry.decodeField<String?>(
+    final String? stemDeadLetterReasonValue = registry.decodeField<String?>(
       _$StemDeadLetterReasonField,
       data['reason'],
     );
-    final stemDeadLetterMetaValue = registry.decodeField<Map<String, Object?>?>(
-      _$StemDeadLetterMetaField,
-      data['meta'],
-    );
-    final stemDeadLetterDeadAtValue =
+    final Map<String, Object?>? stemDeadLetterMetaValue = registry
+        .decodeField<Map<String, Object?>?>(
+          _$StemDeadLetterMetaField,
+          data['meta'],
+        );
+    final DateTime stemDeadLetterDeadAtValue =
         registry.decodeField<DateTime>(
           _$StemDeadLetterDeadAtField,
           data['dead_at'],
@@ -260,9 +307,9 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
       id: stemDeadLetterIdValue,
       queue: stemDeadLetterQueueValue,
       envelope: stemDeadLetterEnvelopeValue,
+      deadAt: stemDeadLetterDeadAtValue,
       reason: stemDeadLetterReasonValue,
       meta: stemDeadLetterMetaValue,
-      deadAt: stemDeadLetterDeadAtValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemDeadLetterIdValue,
@@ -446,19 +493,19 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   @override
   $StemDeadLetter toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final queueValue = queue;
+    final String? queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final envelopeValue = envelope;
+    final Map<String, Object?>? envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final deadAtValue = deadAt;
+    final DateTime? deadAtValue = deadAt;
     if (deadAtValue == null) {
       throw StateError('Missing required field: deadAt');
     }
@@ -538,13 +585,13 @@ class $StemDeadLetter extends StemDeadLetter
     required DateTime deadAt,
     String? reason,
     Map<String, Object?>? meta,
-  }) : super.new(
+  }) : super(
          id: id,
          queue: queue,
          envelope: envelope,
+         deadAt: deadAt,
          reason: reason,
          meta: meta,
-         deadAt: deadAt,
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
@@ -585,6 +632,16 @@ class $StemDeadLetter extends StemDeadLetter
       deadAt: deadAt ?? this.deadAt,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemDeadLetterDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [id].
   @override
@@ -636,7 +693,49 @@ class $StemDeadLetter extends StemDeadLetter
   }
 }
 
+class _StemDeadLetterCopyWithSentinel {
+  const _StemDeadLetterCopyWithSentinel();
+}
+
 extension StemDeadLetterOrmExtension on StemDeadLetter {
+  static const _StemDeadLetterCopyWithSentinel _copyWithSentinel =
+      _StemDeadLetterCopyWithSentinel();
+  StemDeadLetter copyWith({
+    Object? id = _copyWithSentinel,
+    Object? queue = _copyWithSentinel,
+    Object? envelope = _copyWithSentinel,
+    Object? deadAt = _copyWithSentinel,
+    Object? reason = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+  }) {
+    return StemDeadLetter(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      queue: identical(queue, _copyWithSentinel) ? this.queue : queue as String,
+      envelope: identical(envelope, _copyWithSentinel)
+          ? this.envelope
+          : envelope as Map<String, Object?>,
+      deadAt: identical(deadAt, _copyWithSentinel)
+          ? this.deadAt
+          : deadAt as DateTime,
+      reason: identical(reason, _copyWithSentinel)
+          ? this.reason
+          : reason as String?,
+      meta: identical(meta, _copyWithSentinel)
+          ? this.meta
+          : meta as Map<String, Object?>?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemDeadLetterDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -648,6 +747,21 @@ extension StemDeadLetterOrmExtension on StemDeadLetter {
   $StemDeadLetter toTracked() {
     return $StemDeadLetter.fromModel(this);
   }
+}
+
+extension StemDeadLetterPredicateFields on PredicateBuilder<StemDeadLetter> {
+  PredicateField<StemDeadLetter, String> get id =>
+      PredicateField<StemDeadLetter, String>(this, 'id');
+  PredicateField<StemDeadLetter, String> get queue =>
+      PredicateField<StemDeadLetter, String>(this, 'queue');
+  PredicateField<StemDeadLetter, Map<String, Object?>> get envelope =>
+      PredicateField<StemDeadLetter, Map<String, Object?>>(this, 'envelope');
+  PredicateField<StemDeadLetter, String?> get reason =>
+      PredicateField<StemDeadLetter, String?>(this, 'reason');
+  PredicateField<StemDeadLetter, Map<String, Object?>?> get meta =>
+      PredicateField<StemDeadLetter, Map<String, Object?>?>(this, 'meta');
+  PredicateField<StemDeadLetter, DateTime> get deadAt =>
+      PredicateField<StemDeadLetter, DateTime>(this, 'deadAt');
 }
 
 void registerStemDeadLetterEventHandlers(EventBus bus) {

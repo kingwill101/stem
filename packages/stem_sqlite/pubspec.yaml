@@ -13,7 +13,6 @@ dependencies:
   ormed: ^0.1.0-dev+6
   ormed_sqlite: ^0.1.0-dev+6
   path: ^1.9.1
-  sqlite3: ^3.1.1
   stem: ^0.1.0-dev
 
 dev_dependencies:

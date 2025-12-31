@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:ormed/migrations.dart';
 
 import 'package:stem_sqlite/src/database/migrations/m_20251222070816_create_stem_tables.dart';
+import 'package:stem_sqlite/src/database/migrations/m_20251231120000_create_workflow_tables.dart';
 
 final List<MigrationEntry> _entries = [
   MigrationEntry(
@@ -12,6 +13,13 @@ final List<MigrationEntry> _entries = [
       'm_20251222070816_create_stem_tables',
     ),
     migration: const CreateStemTables(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2025, 12, 31, 12, 0, 0),
+      'm_20251231120000_create_workflow_tables',
+    ),
+    migration: const CreateWorkflowTables(),
   ),
 ];
 

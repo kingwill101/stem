@@ -14,6 +14,9 @@ const FieldDefinition _$StemTaskResultIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultStateField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemTaskResultStateField = FieldDefinition(
   columnName: 'state',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultPayloadField = FieldDefinition(
@@ -29,7 +36,11 @@ const FieldDefinition _$StemTaskResultPayloadField = FieldDefinition(
   columnName: 'payload',
   dartType: 'Object',
   resolvedType: 'Object?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +49,11 @@ const FieldDefinition _$StemTaskResultErrorField = FieldDefinition(
   columnName: 'error',
   dartType: 'Object',
   resolvedType: 'Object?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -47,7 +62,11 @@ const FieldDefinition _$StemTaskResultAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultMetaField = FieldDefinition(
@@ -55,7 +74,11 @@ const FieldDefinition _$StemTaskResultMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -64,7 +87,11 @@ const FieldDefinition _$StemTaskResultExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultCreatedAtField = FieldDefinition(
@@ -72,7 +99,11 @@ const FieldDefinition _$StemTaskResultCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultUpdatedAtField = FieldDefinition(
@@ -80,7 +111,11 @@ const FieldDefinition _$StemTaskResultUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemTaskResultUntracked(
@@ -102,11 +137,11 @@ Map<String, Object?> _encodeStemTaskResultUntracked(
   };
 }
 
-const ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
+final ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
     ModelDefinition(
       modelName: 'StemTaskResult',
       tableName: 'stem_task_results',
-      fields: [
+      fields: const [
         _$StemTaskResultIdField,
         _$StemTaskResultStateField,
         _$StemTaskResultPayloadField,
@@ -117,13 +152,24 @@ const ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
         _$StemTaskResultCreatedAtField,
         _$StemTaskResultUpdatedAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'payload': FieldAttributeMetadata(cast: 'json'),
           'error': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemTaskResultUntracked,
       codec: _$StemTaskResultCodec(),
@@ -178,7 +224,7 @@ class StemTaskResults {
 
   static Query<$StemTaskResult> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemTaskResult>(
     column,
@@ -194,6 +240,18 @@ class StemTaskResults {
   /// {@macro ormed.repository}
   static Repository<$StemTaskResult> repo([String? connection]) =>
       Model.repository<$StemTaskResult>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemTaskResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemTaskResultDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemTaskResult model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemTaskResultDefinition.toMap(model, registry: registry);
 }
 
 class StemTaskResultModelFactory {
@@ -256,14 +314,16 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
         _$StemTaskResultExpiresAtField,
         model.expiresAt,
       ),
-      'created_at': registry.encodeField(
-        _$StemTaskResultCreatedAtField,
-        model.getAttribute<DateTime?>('created_at'),
-      ),
-      'updated_at': registry.encodeField(
-        _$StemTaskResultUpdatedAtField,
-        model.getAttribute<DateTime?>('updated_at'),
-      ),
+      if (model.hasAttribute('created_at'))
+        'created_at': registry.encodeField(
+          _$StemTaskResultCreatedAtField,
+          model.getAttribute<DateTime?>('created_at'),
+        ),
+      if (model.hasAttribute('updated_at'))
+        'updated_at': registry.encodeField(
+          _$StemTaskResultUpdatedAtField,
+          model.getAttribute<DateTime?>('updated_at'),
+        ),
     };
   }
 
@@ -272,57 +332,59 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemTaskResultIdValue =
+    final String stemTaskResultIdValue =
         registry.decodeField<String>(_$StemTaskResultIdField, data['id']) ??
         (throw StateError('Field id on StemTaskResult cannot be null.'));
-    final stemTaskResultStateValue =
+    final String stemTaskResultStateValue =
         registry.decodeField<String>(
           _$StemTaskResultStateField,
           data['state'],
         ) ??
         (throw StateError('Field state on StemTaskResult cannot be null.'));
-    final stemTaskResultPayloadValue = registry.decodeField<Object?>(
+    final Object? stemTaskResultPayloadValue = registry.decodeField<Object?>(
       _$StemTaskResultPayloadField,
       data['payload'],
     );
-    final stemTaskResultErrorValue = registry.decodeField<Object?>(
+    final Object? stemTaskResultErrorValue = registry.decodeField<Object?>(
       _$StemTaskResultErrorField,
       data['error'],
     );
-    final stemTaskResultAttemptValue =
+    final int stemTaskResultAttemptValue =
         registry.decodeField<int>(
           _$StemTaskResultAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemTaskResult cannot be null.'));
-    final stemTaskResultMetaValue =
+    final Map<String, Object?> stemTaskResultMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemTaskResultMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemTaskResult cannot be null.'));
-    final stemTaskResultExpiresAtValue =
+    final DateTime stemTaskResultExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemTaskResultExpiresAtField,
           data['expires_at'],
         ) ??
         (throw StateError('Field expiresAt on StemTaskResult cannot be null.'));
-    final stemTaskResultCreatedAtValue = registry.decodeField<DateTime?>(
-      _$StemTaskResultCreatedAtField,
-      data['created_at'],
-    );
-    final stemTaskResultUpdatedAtValue = registry.decodeField<DateTime?>(
-      _$StemTaskResultUpdatedAtField,
-      data['updated_at'],
-    );
+    final DateTime? stemTaskResultCreatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemTaskResultCreatedAtField,
+          data['created_at'],
+        );
+    final DateTime? stemTaskResultUpdatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemTaskResultUpdatedAtField,
+          data['updated_at'],
+        );
     final model = $StemTaskResult(
       id: stemTaskResultIdValue,
       state: stemTaskResultStateValue,
-      payload: stemTaskResultPayloadValue,
-      error: stemTaskResultErrorValue,
       attempt: stemTaskResultAttemptValue,
       meta: stemTaskResultMetaValue,
       expiresAt: stemTaskResultExpiresAtValue,
+      payload: stemTaskResultPayloadValue,
+      error: stemTaskResultErrorValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemTaskResultIdValue,
@@ -332,8 +394,10 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
       'attempt': stemTaskResultAttemptValue,
       'meta': stemTaskResultMetaValue,
       'expires_at': stemTaskResultExpiresAtValue,
-      'created_at': stemTaskResultCreatedAtValue,
-      'updated_at': stemTaskResultUpdatedAtValue,
+      if (data.containsKey('created_at'))
+        'created_at': stemTaskResultCreatedAtValue,
+      if (data.containsKey('updated_at'))
+        'updated_at': stemTaskResultUpdatedAtValue,
     });
     return model;
   }
@@ -518,23 +582,23 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   @override
   $StemTaskResult toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final stateValue = state;
+    final String? stateValue = state;
     if (stateValue == null) {
       throw StateError('Missing required field: state');
     }
-    final attemptValue = attempt;
+    final int? attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final metaValue = meta;
+    final Map<String, Object?>? metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
-    final expiresAtValue = expiresAt;
+    final DateTime? expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }
@@ -617,14 +681,14 @@ class $StemTaskResult extends StemTaskResult
     required DateTime expiresAt,
     Object? payload,
     Object? error,
-  }) : super.new(
+  }) : super(
          id: id,
          state: state,
-         payload: payload,
-         error: error,
          attempt: attempt,
          meta: meta,
          expiresAt: expiresAt,
+         payload: payload,
+         error: error,
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
@@ -669,6 +733,16 @@ class $StemTaskResult extends StemTaskResult
       expiresAt: expiresAt ?? this.expiresAt,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemTaskResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemTaskResultDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemTaskResultDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [id].
   @override
@@ -727,7 +801,49 @@ class $StemTaskResult extends StemTaskResult
   }
 }
 
+class _StemTaskResultCopyWithSentinel {
+  const _StemTaskResultCopyWithSentinel();
+}
+
 extension StemTaskResultOrmExtension on StemTaskResult {
+  static const _StemTaskResultCopyWithSentinel _copyWithSentinel =
+      _StemTaskResultCopyWithSentinel();
+  StemTaskResult copyWith({
+    Object? id = _copyWithSentinel,
+    Object? state = _copyWithSentinel,
+    Object? attempt = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+    Object? expiresAt = _copyWithSentinel,
+    Object? payload = _copyWithSentinel,
+    Object? error = _copyWithSentinel,
+  }) {
+    return StemTaskResult(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      state: identical(state, _copyWithSentinel) ? this.state : state as String,
+      attempt: identical(attempt, _copyWithSentinel)
+          ? this.attempt
+          : attempt as int,
+      meta: identical(meta, _copyWithSentinel)
+          ? this.meta
+          : meta as Map<String, Object?>,
+      expiresAt: identical(expiresAt, _copyWithSentinel)
+          ? this.expiresAt
+          : expiresAt as DateTime,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemTaskResultDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemTaskResult fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemTaskResultDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -739,6 +855,23 @@ extension StemTaskResultOrmExtension on StemTaskResult {
   $StemTaskResult toTracked() {
     return $StemTaskResult.fromModel(this);
   }
+}
+
+extension StemTaskResultPredicateFields on PredicateBuilder<StemTaskResult> {
+  PredicateField<StemTaskResult, String> get id =>
+      PredicateField<StemTaskResult, String>(this, 'id');
+  PredicateField<StemTaskResult, String> get state =>
+      PredicateField<StemTaskResult, String>(this, 'state');
+  PredicateField<StemTaskResult, Object?> get payload =>
+      PredicateField<StemTaskResult, Object?>(this, 'payload');
+  PredicateField<StemTaskResult, Object?> get error =>
+      PredicateField<StemTaskResult, Object?>(this, 'error');
+  PredicateField<StemTaskResult, int> get attempt =>
+      PredicateField<StemTaskResult, int>(this, 'attempt');
+  PredicateField<StemTaskResult, Map<String, Object?>> get meta =>
+      PredicateField<StemTaskResult, Map<String, Object?>>(this, 'meta');
+  PredicateField<StemTaskResult, DateTime> get expiresAt =>
+      PredicateField<StemTaskResult, DateTime>(this, 'expiresAt');
 }
 
 void registerStemTaskResultEventHandlers(EventBus bus) {
