@@ -53,7 +53,7 @@ services:
       - "--loglevel"
       - "notice"
       - "--databases"
-      - "10"
+      - "16"
       - "--appendonly"
       - "no"
     ports:

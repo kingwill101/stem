@@ -2,6 +2,9 @@ name: stem_redis
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths:
       - 'packages/stem_redis/**'
       - 'packages/stem/**'

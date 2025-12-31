@@ -14,3 +14,6 @@ runs:
         echo "STEM_TEST_POSTGRES_TLS_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
         echo "STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/certs/postgres-root.crt" >> "$GITHUB_ENV"
         echo "STEM_CHAOS_REDIS_URL=redis://127.0.0.1:56379/15" >> "$GITHUB_ENV"
+        # Also set generic POSTGRES_URL and REDIS_URL for compatibility with different tests
+        echo "POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
+        echo "REDIS_URL=redis://127.0.0.1:56379/0" >> "$GITHUB_ENV"

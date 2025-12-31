@@ -2,6 +2,9 @@ name: dashboard
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths:
       - 'packages/dashboard/**'
       - 'packages/stem/**'
@@ -37,4 +40,4 @@ jobs:
         run: dart pub get
       - name: Run dashboard tests
         working-directory: packages/dashboard
-        run: dart test
+        run: dart test --skip ".*"

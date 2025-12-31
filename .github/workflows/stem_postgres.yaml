@@ -2,6 +2,9 @@ name: stem_postgres
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths:
       - 'packages/stem_postgres/**'
       - 'packages/stem/**'

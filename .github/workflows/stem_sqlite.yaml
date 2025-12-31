@@ -2,6 +2,9 @@ name: stem_sqlite
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths:
       - 'packages/stem_sqlite/**'
       - 'packages/stem/**'
