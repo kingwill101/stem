@@ -1,4 +1,5 @@
 name: Setup test services
+description: Start Redis and Postgres test containers and export environment variables
 
 runs:
   using: composite
@@ -6,6 +7,19 @@ runs:
     - name: Start Redis/Postgres containers
       shell: bash
       run: docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d
+    - name: Wait for services to be ready
+      shell: bash
+      run: |
+        # Wait for Postgres to be ready
+        for i in {1..30}; do
+          if pg_isready -h 127.0.0.1 -p 65432 -U postgres 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+        # Reset test database to clean state
+        PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65432 -d postgres -c "DROP DATABASE IF EXISTS stem_test;" 2>/dev/null || true
+        PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65432 -d postgres -c "CREATE DATABASE stem_test;" 2>/dev/null || true
     - name: Export STEM_TEST_* environment variables
       shell: bash
       run: |
