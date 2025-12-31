@@ -1,3 +1,8 @@
+## 0.1.0-dev
+
+- Expanded contract coverage for typed result encoders and payload encoders
+  (including TaskResultEncoder) used by adapters.
+
 ## 0.1.0-alpha.4
 
 - Hardened the contract suite around the new **Durable Workflows** API surface:

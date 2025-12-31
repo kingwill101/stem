@@ -1,6 +1,6 @@
 name: stem_adapter_tests
 description: Shared contract test suites for Stem broker and result backend adapters.
-version: 0.1.0-alpha.4
+version: 0.1.0-dev
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   test: ^1.26.3
-  stem: ^0.1.0-alpha.4
+  stem: ^0.1.0-dev
 
 dev_dependencies:
   lints: ^6.0.0

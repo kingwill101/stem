@@ -1,6 +1,6 @@
 name: stem_postgres
 description: Postgres broker, result backend, and scheduler utilities for Stem.
-version: 0.1.0-alpha.4
+version: 0.1.0-dev
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   # postgres: ^3.5.9
-  stem: ^0.1.0-alpha.4
+  stem: ^0.1.0-dev
   collection: ^1.18.0
   path: ^1.9.1
   uuid: ^4.5.1
@@ -19,7 +19,7 @@ dependencies:
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.26.3
-  stem_adapter_tests: ^0.1.0-alpha.4
-  stem_cli: ^0.1.0-alpha.4
+  stem_adapter_tests: ^0.1.0-dev
+  stem_cli: ^0.1.0-dev
   ormed_cli: ^0.1.0-dev+6
   build_runner: ^2.10.4

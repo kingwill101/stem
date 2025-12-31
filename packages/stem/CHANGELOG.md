@@ -1,7 +1,10 @@
 
-## unreleased
+## 0.1.0-dev
 
-- Typed workflow results with custom decoder option
+- Added typed workflow, task, and canvas result APIs with customizable encoders
+  (TaskResultEncoder and payload encoders).
+- Added new example suites (progress heartbeat, worker control lab, and the
+  feature-complete set) plus refreshed docs/Justfiles for running them.
 
 ## 0.1.0-alpha.4
 
