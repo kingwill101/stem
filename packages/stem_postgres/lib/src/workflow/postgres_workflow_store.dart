@@ -681,10 +681,11 @@ class PostgresWorkflowStore implements WorkflowStore {
         if (baseIndex < targetIndex) {
           keep.add(stepRows[i]);
         } else {
-          await ctx.driver.executeRaw(
-            'DELETE FROM stem_workflow_steps WHERE run_id = ? AND name = ?',
-            [runId, stepRows[i].name],
-          );
+          await ctx
+              .query<StemWorkflowStep>()
+              .whereEquals('runId', runId)
+              .whereEquals('name', stepRows[i].name)
+              .delete();
         }
       }
 
