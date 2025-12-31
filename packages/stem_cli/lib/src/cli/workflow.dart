@@ -462,7 +462,9 @@ class _WorkflowAgentHelpCommand extends Command<int> {
   @override
   Future<int> run() async {
     final parentCommand = parent;
-    final commands = parentCommand?.subcommands.values ?? const [];
+    final commands =
+        parentCommand?.subcommands.values.whereType<Command<int>>() ??
+        const <Command<int>>[];
     final markdown = buildWorkflowAgentHelpMarkdown(commands);
     dependencies.out.writeln(markdown);
     return 0;

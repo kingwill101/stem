@@ -1,8 +1,6 @@
 import 'package:artisanal/args.dart' as args;
 
-String buildWorkflowAgentHelpMarkdown(
-  Iterable<args.Command<dynamic>> commands,
-) {
+String buildWorkflowAgentHelpMarkdown(Iterable<args.Command<int>> commands) {
   final buffer = StringBuffer()
     ..writeln('# Stem Workflow Agent Help')
     ..writeln()
