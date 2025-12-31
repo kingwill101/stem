@@ -1,3 +1,2 @@
-analyzer:
-  exclude:
-    - "**/*.orm.dart"
+# include: package:lints/recommended.yaml
+include: package:very_good_analysis/analysis_options.10.0.0.yaml

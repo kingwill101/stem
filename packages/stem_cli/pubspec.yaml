@@ -7,7 +7,7 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  artisanal: ^0.1.0-dev+4
+  artisanal: ^0.1.0
   stem: ^0.1.0-dev
   stem_redis: ^0.1.0-dev
   stem_postgres: ^0.1.0-dev
@@ -22,6 +22,7 @@ dependencies:
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.26.3
+  very_good_analysis: ^10.0.0
 
 false_secrets:
   - docker/testing/postgres/certs/server.key
