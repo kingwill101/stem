@@ -2,10 +2,9 @@ import 'dart:convert';
 
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/workflow_models.dart';
 import 'package:uuid/uuid.dart';
-
-import '../connection.dart';
-import '../database/models/workflow_models.dart';
 
 /// PostgreSQL-backed [WorkflowStore] implementation using ormed ORM.
 class PostgresWorkflowStore implements WorkflowStore {
@@ -18,6 +17,8 @@ class PostgresWorkflowStore implements WorkflowStore {
        _clock = clock;
 
   final PostgresConnections _connections;
+
+  /// Namespace used to scope workflow resources.
   final String namespace;
   final Uuid _uuid;
   final WorkflowClock _clock;
@@ -63,6 +64,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     );
   }
 
+  /// Closes the workflow store and releases database resources.
   Future<void> close() async {
     await _connections.close();
   }
@@ -536,11 +538,12 @@ class PostgresWorkflowStore implements WorkflowStore {
         metadata['type'] = 'event';
         metadata['topic'] = topic;
         metadata['payload'] = payload;
-        metadata.putIfAbsent('step', () => watcher.stepName);
-        metadata.putIfAbsent(
-          'iterationStep',
-          () => metadata['step'] ?? watcher.stepName,
-        );
+        metadata
+          ..putIfAbsent('step', () => watcher.stepName)
+          ..putIfAbsent(
+            'iterationStep',
+            () => metadata['step'] ?? watcher.stepName,
+          );
         metadata['deliveredAt'] = now.toIso8601String();
 
         // Update run to mark as running with resolved metadata
@@ -695,8 +698,6 @@ class PostgresWorkflowStore implements WorkflowStore {
         await ctx.repository<StemWorkflowRun>().update(
           StemWorkflowRunUpdateDto(
             status: WorkflowStatus.suspended.name,
-            waitTopic: null,
-            resumeAt: null,
             suspensionData: jsonEncode({
               'step': stepName,
               'iteration': 0,
@@ -724,7 +725,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     } else if (_useWorkflowNamespace) {
       query = query.where(
         'workflow',
-        '${_workflowNamespacePrefix}%',
+        '$_workflowNamespacePrefix%',
         PredicateOperator.like,
       );
     }
@@ -796,7 +797,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         return decoded is Map
             ? decoded.map((key, value) => MapEntry(key as String, value))
             : const {};
-      } catch (_) {
+      } on Object {
         return const {};
       }
     }
@@ -811,7 +812,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     if (input is String) {
       try {
         return jsonDecode(input);
-      } catch (_) {
+      } on Object {
         return input;
       }
     }

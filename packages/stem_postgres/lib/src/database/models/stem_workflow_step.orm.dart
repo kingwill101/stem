@@ -14,9 +14,6 @@ const FieldDefinition _$StemWorkflowStepRunIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowStepNameField = FieldDefinition(
@@ -26,9 +23,6 @@ const FieldDefinition _$StemWorkflowStepNameField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowStepValueField = FieldDefinition(
@@ -36,11 +30,7 @@ const FieldDefinition _$StemWorkflowStepValueField = FieldDefinition(
   columnName: 'value',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemWorkflowStepUntracked(
@@ -55,29 +45,16 @@ Map<String, Object?> _encodeStemWorkflowStepUntracked(
   };
 }
 
-final ModelDefinition<$StemWorkflowStep> _$StemWorkflowStepDefinition =
+const ModelDefinition<$StemWorkflowStep> _$StemWorkflowStepDefinition =
     ModelDefinition(
       modelName: 'StemWorkflowStep',
       tableName: 'stem_workflow_steps',
-      fields: const [
+      fields: [
         _$StemWorkflowStepRunIdField,
         _$StemWorkflowStepNameField,
         _$StemWorkflowStepValueField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
-      metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
-      ),
       untrackedToMap: _encodeStemWorkflowStepUntracked,
       codec: _$StemWorkflowStepCodec(),
     );
@@ -134,7 +111,7 @@ class StemWorkflowSteps {
 
   static Query<$StemWorkflowStep> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemWorkflowStep>(
     column,
@@ -207,19 +184,19 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemWorkflowStepRunIdValue =
+    final stemWorkflowStepRunIdValue =
         registry.decodeField<String>(
           _$StemWorkflowStepRunIdField,
           data['run_id'],
         ) ??
         (throw StateError('Field runId on StemWorkflowStep cannot be null.'));
-    final String stemWorkflowStepNameValue =
+    final stemWorkflowStepNameValue =
         registry.decodeField<String>(
           _$StemWorkflowStepNameField,
           data['name'],
         ) ??
         (throw StateError('Field name on StemWorkflowStep cannot be null.'));
-    final String? stemWorkflowStepValueValue = registry.decodeField<String?>(
+    final stemWorkflowStepValueValue = registry.decodeField<String?>(
       _$StemWorkflowStepValueField,
       data['value'],
     );
@@ -344,11 +321,11 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
   @override
   $StemWorkflowStep toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? runIdValue = runId;
+    final runIdValue = runId;
     if (runIdValue == null) {
       throw StateError('Missing required field: runId');
     }
-    final String? nameValue = name;
+    final nameValue = name;
     if (nameValue == null) {
       throw StateError('Missing required field: name');
     }

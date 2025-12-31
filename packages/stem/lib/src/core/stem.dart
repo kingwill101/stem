@@ -2,24 +2,24 @@ import 'dart:async';
 
 import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
-
-import '../observability/logging.dart';
-import '../observability/metrics.dart';
-import '../observability/tracing.dart';
-import '../routing/routing_config.dart';
-import '../routing/routing_registry.dart';
-import '../security/signing.dart';
-import '../signals/emitter.dart';
-import 'contracts.dart';
-import 'encoder_keys.dart';
-import 'envelope.dart';
-import 'retry.dart';
-import 'task_payload_encoder.dart';
-import 'task_result.dart';
-import 'unique_task_coordinator.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/encoder_keys.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/retry.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
+import 'package:stem/src/core/unique_task_coordinator.dart';
+import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/observability/tracing.dart';
+import 'package:stem/src/routing/routing_config.dart';
+import 'package:stem/src/routing/routing_registry.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/signals/emitter.dart';
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem {
+  /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
     required this.registry,
@@ -40,25 +40,41 @@ class Stem {
          additionalEncoders: additionalEncoders,
        ),
        routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
-       retryStrategy =
-           retryStrategy ??
-           ExponentialJitterRetryStrategy(base: const Duration(seconds: 2)),
+       retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy(),
        middleware = List.unmodifiable(middleware);
 
+  /// Broker used to publish task envelopes.
   final Broker broker;
+
+  /// Task registry used to resolve handlers and metadata.
   final TaskRegistry registry;
+
+  /// Optional backend used for result tracking.
   final ResultBackend? backend;
+
+  /// Coordinator used for unique task enforcement.
   final UniqueTaskCoordinator? uniqueTaskCoordinator;
+
+  /// Retry strategy used for backoff computations.
   final RetryStrategy retryStrategy;
+
+  /// Middleware chain invoked around enqueue/consume/execute.
   final List<Middleware> middleware;
+
+  /// Optional payload signer used for envelope signing.
   final PayloadSigner? signer;
+
+  /// Routing registry used to resolve queue/broadcast targets.
   final RoutingRegistry routing;
+
+  /// Registry of payload encoders used for args/results.
   final TaskPayloadEncoderRegistry payloadEncoders;
   static const StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'stem',
   );
 
-  /// Enqueue a typed task using a [TaskCall] wrapper produced by a [TaskDefinition].
+  /// Enqueue a typed task using a [TaskCall] wrapper produced by a
+  /// [TaskDefinition].
   Future<String> enqueueCall<TArgs, TResult>(TaskCall<TArgs, TResult> call) {
     return enqueue(
       call.name,
@@ -119,7 +135,7 @@ class Stem {
         final encodedArgs = _encodeArgs(args, argsEncoder);
         final encodedMeta = _withArgsEncoderMeta(meta, argsEncoder);
 
-        Envelope envelope = Envelope(
+        var envelope = Envelope(
           name: name,
           args: encodedArgs,
           headers: encodedHeaders,
@@ -135,7 +151,8 @@ class Stem {
           final coordinator = uniqueTaskCoordinator;
           if (coordinator == null) {
             throw StateError(
-              'Task "$name" is configured as unique but no UniqueTaskCoordinator is set on Stem.',
+              'Task "$name" is configured as unique but no '
+              'UniqueTaskCoordinator is set on Stem.',
             );
           }
           final claim = await coordinator.acquire(
@@ -241,7 +258,7 @@ class Stem {
         'Stem.waitForTask requires a configured result backend.',
       );
     }
-    TaskStatus? lastStatus = await resultBackend.get(taskId);
+    var lastStatus = await resultBackend.get(taskId);
     if (lastStatus != null && lastStatus.state.isTerminal) {
       return TaskResult<T>(
         taskId: taskId,
@@ -257,10 +274,10 @@ class Stem {
     late final StreamSubscription<TaskStatus> subscription;
     Timer? timer;
 
-    void complete(TaskStatus? status, {required bool timedOut}) {
+    Future<void> complete(TaskStatus? status, {required bool timedOut}) async {
       if (completer.isCompleted) return;
       timer?.cancel();
-      subscription.cancel();
+      await subscription.cancel();
       if (status == null) {
         completer.complete(null);
         return;
@@ -281,13 +298,13 @@ class Stem {
     subscription = resultBackend
         .watch(taskId)
         .listen(
-          (status) {
+          (status) async {
             lastStatus = status;
             if (status.state.isTerminal) {
-              complete(status, timedOut: false);
+              await complete(status, timedOut: false);
             }
           },
-          onError: (error, stack) {
+          onError: (Object error, StackTrace stack) {
             if (!completer.isCompleted) {
               completer.completeError(error, stack);
             }
@@ -351,7 +368,7 @@ class Stem {
         attempt: status.attempt,
         meta: updatedMeta,
       );
-    } catch (error, stack) {
+    } on Exception catch (error, stack) {
       stemLogger.warning(
         'Failed recording unique task duplicate',
         Context({
@@ -364,13 +381,13 @@ class Stem {
     }
   }
 
-  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler handler) {
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
     final encoder = handler.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
-  TaskPayloadEncoder _resolveResultEncoder(TaskHandler handler) {
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
     final encoder = handler.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
@@ -405,7 +422,8 @@ class Stem {
       return result;
     }
     throw StateError(
-      'Task args encoder ${encoder.id} must return Map<String, Object?> values, got ${encoded.runtimeType}.',
+      'Task args encoder ${encoder.id} must return '
+      'Map<String, Object?> values, got ${encoded.runtimeType}.',
     );
   }
 
@@ -442,7 +460,9 @@ class Stem {
   }
 }
 
+/// Convenience helpers for enqueuing [TaskEnqueueBuilder] instances.
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
+  /// Builds the call and enqueues it with the provided [stem] instance.
   Future<String> enqueueWith(Stem stem) => stem.enqueueCall(build());
 }

@@ -1,15 +1,15 @@
-import '../core/contracts.dart';
-import '../core/stem.dart';
-import '../core/task_payload_encoder.dart';
-import '../core/unique_task_coordinator.dart';
-import '../security/signing.dart';
-import '../worker/worker.dart';
-import '../control/revoke_store.dart';
-import '../control/in_memory_revoke_store.dart';
-import '../routing/routing_registry.dart';
-import '../routing/routing_config.dart';
-import '../backend/encoding_result_backend.dart';
-import 'factories.dart';
+import 'package:stem/src/backend/encoding_result_backend.dart';
+import 'package:stem/src/bootstrap/factories.dart';
+import 'package:stem/src/control/in_memory_revoke_store.dart';
+import 'package:stem/src/control/revoke_store.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/stem.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/unique_task_coordinator.dart';
+import 'package:stem/src/routing/routing_config.dart';
+import 'package:stem/src/routing/routing_registry.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/worker/worker.dart';
 
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
 class StemApp {
@@ -42,7 +42,7 @@ class StemApp {
   bool _started = false;
 
   /// Registers an additional task handler with the underlying registry.
-  void register(TaskHandler handler) => registry.register(handler);
+  void register(TaskHandler<Object?> handler) => registry.register(handler);
 
   /// Starts the managed worker if it is not already running.
   Future<void> start() async {
@@ -61,7 +61,7 @@ class StemApp {
 
   /// Creates a new Stem application with the provided configuration.
   static Future<StemApp> create({
-    Iterable<TaskHandler> tasks = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     StemBrokerFactory? broker,
     StemBackendFactory? backend,
@@ -78,9 +78,7 @@ class StemApp {
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
     final taskRegistry = registry ?? SimpleTaskRegistry();
-    for (final handler in tasks) {
-      taskRegistry.register(handler);
-    }
+    tasks.forEach(taskRegistry.register);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
@@ -150,7 +148,7 @@ class StemApp {
 
   /// Creates an in-memory Stem application (broker + result backend).
   static Future<StemApp> inMemory({
-    Iterable<TaskHandler> tasks = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),

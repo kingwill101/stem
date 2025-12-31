@@ -1,13 +1,14 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import '../core/task_invocation.dart';
+import 'package:stem/src/core/task_invocation.dart';
 
 /// A request to run a task in an isolate.
 ///
 /// Contains the [entrypoint], [args], [headers], [meta], [attempt], and ports
 /// for communication.
 class TaskRunRequest {
+  /// Creates a request to execute a task in an isolate.
   TaskRunRequest({
     required this.entrypoint,
     required this.args,
@@ -42,11 +43,13 @@ class TaskRunRequest {
 
 /// The response from a task run.
 sealed class TaskRunResponse {
+  /// Base type for isolate task run responses.
   const TaskRunResponse();
 }
 
 /// A successful task run response containing the [result].
 class TaskRunSuccess extends TaskRunResponse {
+  /// Creates a successful task run response.
   const TaskRunSuccess(this.result, {this.memoryBytes});
 
   /// The result of the task execution.
@@ -58,6 +61,7 @@ class TaskRunSuccess extends TaskRunResponse {
 
 /// A failed task run response with [errorType], [message], and [stackTrace].
 class TaskRunFailure extends TaskRunResponse {
+  /// Creates a failed task run response.
   const TaskRunFailure(this.errorType, this.message, this.stackTrace);
 
   /// The type of the error that occurred.
@@ -71,7 +75,10 @@ class TaskRunFailure extends TaskRunResponse {
 }
 
 /// A message to shut down the task worker.
-class TaskWorkerShutdown {}
+class TaskWorkerShutdown {
+  /// Creates a shutdown signal for worker isolates.
+  const TaskWorkerShutdown();
+}
 
 /// Runs a task worker isolate that listens for [TaskRunRequest] and
 /// [TaskWorkerShutdown] messages.
@@ -103,9 +110,11 @@ void taskWorkerIsolate(SendPort handshakePort) {
         int? rssBytes;
         try {
           rssBytes = ProcessInfo.currentRss;
-        } catch (_) {}
+        } on Object {
+          // Ignore failures to read RSS in restricted runtimes.
+        }
         message.replyPort.send(TaskRunSuccess(result, memoryBytes: rssBytes));
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         message.replyPort.send(
           TaskRunFailure(
             error.runtimeType.toString(),

@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:contextual/contextual.dart';
 
-import '../observability/logging.dart';
+import 'package:stem/src/observability/logging.dart';
 
 /// TLS configuration for brokers, result backends, and schedule stores.
 ///
@@ -17,45 +17,13 @@ import '../observability/logging.dart';
 /// [logTlsHandshakeFailure], which logs the endpoint, TLS metadata, and hints
 /// about temporarily enabling insecure mode for debugging.
 class TlsConfig {
+  /// Creates a TLS configuration.
   const TlsConfig({
     this.caCertificateFile,
     this.clientCertificateFile,
     this.clientKeyFile,
     this.allowInsecure = false,
   });
-
-  const TlsConfig.disabled()
-    : caCertificateFile = null,
-      clientCertificateFile = null,
-      clientKeyFile = null,
-      allowInsecure = false;
-
-  final String? caCertificateFile;
-  final String? clientCertificateFile;
-  final String? clientKeyFile;
-  final bool allowInsecure;
-
-  bool get isEnabled =>
-      caCertificateFile != null ||
-      clientCertificateFile != null ||
-      clientKeyFile != null;
-
-  /// Builds a [SecurityContext] if certificate paths are provided.
-  SecurityContext? toSecurityContext() {
-    if (!isEnabled) return null;
-    final context = SecurityContext();
-    if (caCertificateFile != null && caCertificateFile!.isNotEmpty) {
-      context.setTrustedCertificates(caCertificateFile!);
-    }
-    if (clientCertificateFile != null &&
-        clientCertificateFile!.isNotEmpty &&
-        clientKeyFile != null &&
-        clientKeyFile!.isNotEmpty) {
-      context.useCertificateChain(clientCertificateFile!);
-      context.usePrivateKey(clientKeyFile!);
-    }
-    return context;
-  }
 
   /// Builds a [TlsConfig] from environment variables.
   factory TlsConfig.fromEnvironment(Map<String, String> env) {
@@ -85,12 +53,63 @@ class TlsConfig {
       allowInsecure: allowInsecure,
     );
   }
+
+  /// Disabled TLS configuration (no certificates, no insecure mode).
+  const TlsConfig.disabled()
+    : caCertificateFile = null,
+      clientCertificateFile = null,
+      clientKeyFile = null,
+      allowInsecure = false;
+
+  /// Path to the trusted CA bundle, if any.
+  final String? caCertificateFile;
+
+  /// Path to the client certificate chain, if any.
+  final String? clientCertificateFile;
+
+  /// Path to the client private key, if any.
+  final String? clientKeyFile;
+
+  /// Whether to allow insecure connections (skip verification).
+  final bool allowInsecure;
+
+  /// Whether any TLS configuration is enabled.
+  bool get isEnabled =>
+      caCertificateFile != null ||
+      clientCertificateFile != null ||
+      clientKeyFile != null;
+
+  /// Builds a [SecurityContext] if certificate paths are provided.
+  SecurityContext? toSecurityContext() {
+    if (!isEnabled) return null;
+    final context = SecurityContext();
+    if (caCertificateFile != null && caCertificateFile!.isNotEmpty) {
+      context.setTrustedCertificates(caCertificateFile!);
+    }
+    if (clientCertificateFile != null &&
+        clientCertificateFile!.isNotEmpty &&
+        clientKeyFile != null &&
+        clientKeyFile!.isNotEmpty) {
+      context
+        ..useCertificateChain(clientCertificateFile!)
+        ..usePrivateKey(clientKeyFile!);
+    }
+    return context;
+  }
 }
 
+/// Environment variable keys for TLS configuration.
 abstract class TlsEnvKeys {
+  /// Environment variable for CA certificate path.
   static const caCert = 'STEM_TLS_CA_CERT';
+
+  /// Environment variable for client certificate path.
   static const clientCert = 'STEM_TLS_CLIENT_CERT';
+
+  /// Environment variable for client private key path.
   static const clientKey = 'STEM_TLS_CLIENT_KEY';
+
+  /// Environment variable to allow insecure TLS.
   static const allowInsecure = 'STEM_TLS_ALLOW_INSECURE';
 }
 
@@ -111,15 +130,16 @@ void logTlsHandshakeFailure({
     'clientCertificate': config?.clientCertificateFile ?? 'not provided',
     'allowInsecure': config?.allowInsecure ?? false,
   });
-  stemLogger.warning(
-    'TLS handshake failed while connecting to $component.',
-    context,
-  );
-  stemLogger.warning(
-    'If this blocks startup, verify certificate paths or temporarily set '
-    'STEM_TLS_ALLOW_INSECURE=true to bypass verification during debugging.',
-    context,
-  );
-  stemLogger.debug('TLS error: $error', context);
-  stemLogger.debug(stack.toString(), context);
+  stemLogger
+    ..warning(
+      'TLS handshake failed while connecting to $component.',
+      context,
+    )
+    ..warning(
+      'If this blocks startup, verify certificate paths or temporarily set '
+      'STEM_TLS_ALLOW_INSECURE=true to bypass verification during debugging.',
+      context,
+    )
+    ..debug('TLS error: $error', context)
+    ..debug(stack.toString(), context);
 }

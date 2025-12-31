@@ -1,11 +1,15 @@
-import 'workflow_cancellation_policy.dart';
-import 'workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart' show WorkflowStore;
+import 'package:stem/src/workflow/workflow.dart' show WorkflowStore;
+import 'package:stem/stem.dart' show WorkflowStore;
 
 /// Snapshot of a workflow run persisted by a [WorkflowStore].
 ///
 /// Implementations are expected to treat instances as immutable and return new
 /// copies via [copyWith] when mutating fields.
 class RunState {
+  /// Creates an immutable snapshot of a workflow run.
   const RunState({
     required this.id,
     required this.workflow,
@@ -23,18 +27,37 @@ class RunState {
     this.cancellationData,
   });
 
+  /// Unique run identifier.
   final String id;
+
+  /// Workflow name for this run.
   final String workflow;
+
+  /// Current lifecycle status of the run.
   final WorkflowStatus status;
+
+  /// Cursor pointing to the next step to execute.
   final int cursor;
+
+  /// Parameters supplied at workflow start.
   final Map<String, Object?> params;
 
   /// Timestamp when the workflow run was created.
   final DateTime createdAt;
+
+  /// Final result payload when the run completes.
   final Object? result;
+
+  /// Topic that the run is currently waiting on, if any.
   final String? waitTopic;
+
+  /// Next scheduled resume timestamp, if any.
   final DateTime? resumeAt;
+
+  /// Last error payload recorded for the run.
   final Map<String, Object?>? lastError;
+
+  /// Suspension metadata stored for the waiting step.
   final Map<String, Object?>? suspensionData;
 
   /// Timestamp of the most recent state mutation / heartbeat, if any.
@@ -48,11 +71,13 @@ class RunState {
 
   static const _unset = Object();
 
+  /// Whether the run is in a terminal state.
   bool get isTerminal =>
       status == WorkflowStatus.completed ||
       status == WorkflowStatus.failed ||
       status == WorkflowStatus.cancelled;
 
+  /// Returns a copy of this run state with updated fields.
   RunState copyWith({
     WorkflowStatus? status,
     int? cursor,

@@ -3,11 +3,12 @@ import 'dart:math';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../database/models/workflow_models.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
+  /// Creates a lock store backed by PostgreSQL.
   PostgresLockStore._(this._connections);
 
   final PostgresConnections _connections;
@@ -28,13 +29,15 @@ class PostgresLockStore implements LockStore {
     return PostgresLockStore._(connections);
   }
 
+  /// Closes the lock store and releases any database resources.
   Future<void> close() async {
     await _connections.close();
   }
 
   String _owner(String? owner) =>
       owner ??
-      'owner-${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
+      'owner-${DateTime.now().microsecondsSinceEpoch}-'
+          '${_random.nextInt(1 << 32)}';
 
   @override
   Future<Lock?> acquire(
@@ -57,7 +60,7 @@ class PostgresLockStore implements LockStore {
         ),
       );
       return _PostgresLock(store: this, key: key, owner: ownerValue);
-    } catch (_) {
+    } on Object {
       // Lock exists, try to clean up expired and retry
       final now = DateTime.now().toUtc();
       final expired = await ctx
@@ -81,7 +84,7 @@ class PostgresLockStore implements LockStore {
           ),
         );
         return _PostgresLock(store: this, key: key, owner: ownerValue);
-      } catch (_) {
+      } on Object {
         return null;
       }
     }

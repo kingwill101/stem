@@ -16,7 +16,7 @@ void main() {
   });
 
   tearDown(() async {
-    if (await dbFile.exists()) {
+    if (dbFile.existsSync()) {
       await dbFile.delete();
     }
     await tempDir.delete(recursive: true);
@@ -41,9 +41,6 @@ void main() {
           (backend as SqliteResultBackend).runCleanup(),
     ),
     settings: const ResultBackendContractSettings(
-      statusTtl: Duration(seconds: 1),
-      groupTtl: Duration(seconds: 1),
-      heartbeatTtl: Duration(seconds: 1),
       settleDelay: Duration(milliseconds: 120),
     ),
   );

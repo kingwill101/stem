@@ -14,9 +14,6 @@ const FieldDefinition _$StemBroadcastAckMessageIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastAckWorkerIdField = FieldDefinition(
@@ -26,9 +23,6 @@ const FieldDefinition _$StemBroadcastAckWorkerIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastAckAcknowledgedAtField = FieldDefinition(
@@ -36,11 +30,7 @@ const FieldDefinition _$StemBroadcastAckAcknowledgedAtField = FieldDefinition(
   columnName: 'acknowledged_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastAckCreatedAtField = FieldDefinition(
@@ -48,11 +38,7 @@ const FieldDefinition _$StemBroadcastAckCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastAckUpdatedAtField = FieldDefinition(
@@ -60,11 +46,7 @@ const FieldDefinition _$StemBroadcastAckUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemBroadcastAckUntracked(
@@ -88,31 +70,18 @@ Map<String, Object?> _encodeStemBroadcastAckUntracked(
   };
 }
 
-final ModelDefinition<$StemBroadcastAck> _$StemBroadcastAckDefinition =
+const ModelDefinition<$StemBroadcastAck> _$StemBroadcastAckDefinition =
     ModelDefinition(
       modelName: 'StemBroadcastAck',
       tableName: 'stem_broadcast_ack',
-      fields: const [
+      fields: [
         _$StemBroadcastAckMessageIdField,
         _$StemBroadcastAckWorkerIdField,
         _$StemBroadcastAckAcknowledgedAtField,
         _$StemBroadcastAckCreatedAtField,
         _$StemBroadcastAckUpdatedAtField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
-      metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
-      ),
       untrackedToMap: _encodeStemBroadcastAckUntracked,
       codec: _$StemBroadcastAckCodec(),
     );
@@ -169,7 +138,7 @@ class StemBroadcastAcks {
 
   static Query<$StemBroadcastAck> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemBroadcastAck>(
     column,
@@ -261,7 +230,7 @@ class _$StemBroadcastAckCodec extends ModelCodec<$StemBroadcastAck> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemBroadcastAckMessageIdValue =
+    final stemBroadcastAckMessageIdValue =
         registry.decodeField<String>(
           _$StemBroadcastAckMessageIdField,
           data['message_id'],
@@ -269,7 +238,7 @@ class _$StemBroadcastAckCodec extends ModelCodec<$StemBroadcastAck> {
         (throw StateError(
           'Field messageId on StemBroadcastAck cannot be null.',
         ));
-    final String stemBroadcastAckWorkerIdValue =
+    final stemBroadcastAckWorkerIdValue =
         registry.decodeField<String>(
           _$StemBroadcastAckWorkerIdField,
           data['worker_id'],
@@ -277,21 +246,18 @@ class _$StemBroadcastAckCodec extends ModelCodec<$StemBroadcastAck> {
         (throw StateError(
           'Field workerId on StemBroadcastAck cannot be null.',
         ));
-    final DateTime? stemBroadcastAckAcknowledgedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemBroadcastAckAcknowledgedAtField,
-          data['acknowledged_at'],
-        );
-    final DateTime? stemBroadcastAckCreatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemBroadcastAckCreatedAtField,
-          data['created_at'],
-        );
-    final DateTime? stemBroadcastAckUpdatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemBroadcastAckUpdatedAtField,
-          data['updated_at'],
-        );
+    final stemBroadcastAckAcknowledgedAtValue = registry.decodeField<DateTime?>(
+      _$StemBroadcastAckAcknowledgedAtField,
+      data['acknowledged_at'],
+    );
+    final stemBroadcastAckCreatedAtValue = registry.decodeField<DateTime?>(
+      _$StemBroadcastAckCreatedAtField,
+      data['created_at'],
+    );
+    final stemBroadcastAckUpdatedAtValue = registry.decodeField<DateTime?>(
+      _$StemBroadcastAckUpdatedAtField,
+      data['updated_at'],
+    );
     final model = $StemBroadcastAck(
       messageId: stemBroadcastAckMessageIdValue,
       workerId: stemBroadcastAckWorkerIdValue,
@@ -433,11 +399,11 @@ class StemBroadcastAckPartial implements PartialEntity<$StemBroadcastAck> {
   @override
   $StemBroadcastAck toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? messageIdValue = messageId;
+    final messageIdValue = messageId;
     if (messageIdValue == null) {
       throw StateError('Missing required field: messageId');
     }
-    final String? workerIdValue = workerId;
+    final workerIdValue = workerId;
     if (workerIdValue == null) {
       throw StateError('Missing required field: workerId');
     }

@@ -4,34 +4,33 @@ import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
-
-import '../core/contracts.dart';
-import '../core/chord_metadata.dart';
-import '../core/encoder_keys.dart';
-import '../core/envelope.dart';
-import '../core/retry.dart';
-import '../control/control_messages.dart';
-import '../control/revoke_store.dart';
-import '../observability/logging.dart';
-import '../observability/metrics.dart';
-import '../observability/config.dart';
-import '../observability/heartbeat.dart';
-import '../observability/heartbeat_transport.dart';
-import '../observability/tracing.dart';
-import '../security/signing.dart';
-import '../core/task_invocation.dart';
-import '../core/task_payload_encoder.dart';
-import '../core/unique_task_coordinator.dart';
-import 'isolate_pool.dart';
-import 'worker_config.dart';
-import '../signals/emitter.dart';
-import '../signals/payloads.dart';
+import 'package:stem/src/control/control_messages.dart';
+import 'package:stem/src/control/revoke_store.dart';
+import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/encoder_keys.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/retry.dart';
+import 'package:stem/src/core/task_invocation.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/unique_task_coordinator.dart';
+import 'package:stem/src/observability/config.dart';
+import 'package:stem/src/observability/heartbeat.dart';
+import 'package:stem/src/observability/heartbeat_transport.dart';
+import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/observability/tracing.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/signals/emitter.dart';
+import 'package:stem/src/signals/payloads.dart';
+import 'package:stem/src/worker/isolate_pool.dart';
+import 'package:stem/src/worker/worker_config.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
 ///
-/// Manages task execution with features like concurrency control, rate limiting,
-/// retries, heartbeats, and observability. Supports running tasks in isolates
-/// for isolation and performance.
+/// Manages task execution with features like concurrency control, rate
+/// limiting, retries, heartbeats, and observability.
+/// Supports running tasks in isolates for isolation and performance.
 ///
 /// ```dart
 /// final worker = Worker(
@@ -41,28 +40,40 @@ import '../signals/payloads.dart';
 /// );
 /// await worker.start();
 /// ```
-enum WorkerShutdownMode { warm, soft, hard }
+/// Shutdown modes for workers.
+enum WorkerShutdownMode {
+  /// Allows in-flight tasks to complete without draining new work.
+  warm,
 
+  /// Drains the worker before shutting down.
+  soft,
+
+  /// Immediately stops and cancels active work.
+  hard,
+}
+
+/// Worker runtime that consumes tasks from a broker and executes handlers.
 class Worker {
   /// Creates a worker instance.
   ///
   /// The [broker] handles message consumption and publishing. The [registry]
   /// provides task handlers. The [backend] stores task results and state.
-  /// Optional [rateLimiter] enforces rate limits per task. [uniqueTaskCoordinator]
-  /// coordinates deduplicated tasks so locks are released when runs finish.
-  /// [middleware] allows
-  /// intercepting task lifecycle events. [retryStrategy] determines retry
-  /// delays on failure. [queue] specifies the queue to consume from, defaulting
-  /// to 'default'. [consumerName] identifies this worker instance. [concurrency]
-  /// sets the maximum concurrent tasks, defaulting to the number of processors.
+  /// Optional [rateLimiter] enforces rate limits per task.
+  /// [uniqueTaskCoordinator] coordinates deduplicated tasks so locks are
+  /// released when runs finish. [middleware] allows intercepting task
+  /// lifecycle events. [retryStrategy] determines retry delays on failure.
+  /// [queue] specifies the queue to consume from, defaulting to 'default'.
+  /// [consumerName] identifies this worker instance. [concurrency] sets the
+  /// maximum concurrent tasks, defaulting to the number of processors.
   /// [prefetchMultiplier] scales prefetch count relative to concurrency.
-  /// [prefetch] overrides the calculated prefetch count. [heartbeatInterval]
-  /// sets the interval for task heartbeats. [workerHeartbeatInterval] sets the
-  /// interval for worker-level heartbeats. [heartbeatTransport] handles
-  /// heartbeat publishing. [heartbeatNamespace] provides the namespace for
-  /// heartbeats. [observability] configures metrics and logging. The optional
-  /// [signer] verifies payload signatures (see [SigningConfig]); invalid
-  /// envelopes are dead-lettered with a `signature-invalid` reason.
+  /// [prefetch] overrides the calculated prefetch count.
+  /// [heartbeatInterval] sets the interval for task heartbeats.
+  /// [workerHeartbeatInterval] sets the interval for worker-level heartbeats.
+  /// [heartbeatTransport] handles heartbeat publishing.
+  /// [heartbeatNamespace] provides the namespace for heartbeats.
+  /// [observability] configures metrics and logging.
+  /// The optional [signer] verifies payload signatures (see [SigningConfig]);
+  /// invalid envelopes are dead-lettered with a `signature-invalid` reason.
   Worker({
     required this.broker,
     required this.registry,
@@ -167,30 +178,76 @@ class Worker {
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
   }
 
+  /// Broker used to consume and publish task envelopes.
   final Broker broker;
+
+  /// Task registry containing handlers and metadata.
   final TaskRegistry registry;
+
+  /// Result backend used to persist task status.
   final ResultBackend backend;
+
+  /// Optional rate limiter applied to task execution.
   final RateLimiter? rateLimiter;
+
+  /// Middleware chain invoked around task lifecycle hooks.
   final List<Middleware> middleware;
+
+  /// Retry strategy used to compute backoff delays.
   final RetryStrategy retryStrategy;
+
+  /// Default queue name when no subscription is provided.
   final String queue;
+
+  /// Optional consumer name used by the broker.
   final String? consumerName;
+
+  /// Coordinator used to enforce task uniqueness.
   final UniqueTaskCoordinator? uniqueTaskCoordinator;
+
+  /// Max concurrent tasks for this worker.
   final int concurrency;
+
+  /// Prefetch multiplier used to derive broker prefetch.
   final int prefetchMultiplier;
+
+  /// Prefetch count passed to the broker.
   final int prefetch;
+
+  /// Autoscaling configuration for worker isolates.
   final WorkerAutoscaleConfig autoscaleConfig;
+
+  /// Lifecycle configuration for shutdown and recycling.
   final WorkerLifecycleConfig lifecycleConfig;
+
+  /// Heartbeat interval for in-flight tasks.
   final Duration heartbeatInterval;
+
+  /// Heartbeat interval for the worker itself.
   final Duration workerHeartbeatInterval;
+
+  /// Transport used to publish heartbeat payloads.
   final HeartbeatTransport heartbeatTransport;
+
+  /// Namespace prefix for observability and control messages.
   final String namespace;
+
+  /// Optional payload signer used to verify envelopes.
   final PayloadSigner? signer;
+
+  /// Optional revoke store for task cancellation.
   final RevokeStore? revokeStore;
+
+  /// Registry of payload encoders used by the worker.
   final TaskPayloadEncoderRegistry payloadEncoders;
 
+  /// Resolved routing subscription for this worker.
   late final RoutingSubscription subscription;
+
+  /// Resolved queue subscriptions derived from [subscription].
   late final List<String> subscriptionQueues;
+
+  /// Resolved broadcast subscriptions derived from [subscription].
   late final List<String> subscriptionBroadcasts;
   late final StemSignalEmitter _signals;
 
@@ -199,6 +256,7 @@ class Worker {
 
   List<String> get _broadcastSubscriptions => subscriptionBroadcasts;
 
+  /// Primary queue name resolved from the subscription.
   String get primaryQueue =>
       _effectiveQueues.isNotEmpty ? _effectiveQueues.first : queue;
 
@@ -275,6 +333,8 @@ class Worker {
         prefetch: prefetch,
         consumerName: consumerName,
       );
+      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
+      // ignore: cancel_subscriptions
       final subscription = stream.listen(
         (delivery) {
           // Fire-and-forget; handler manages its own lifecycle.
@@ -310,11 +370,13 @@ class Worker {
     await _signals.workerReady(_workerInfoSnapshot);
   }
 
-  /// Stops the worker according to [mode], cancelling subscriptions and resources.
+  /// Stops the worker according to [mode], cancelling subscriptions and
+  /// resources.
   ///
-  /// Warm shutdown drains in-flight tasks before exiting. Soft shutdown requests
-  /// cooperative termination and escalates to hard shutdown if tasks ignore the
-  /// grace period. Hard shutdown immediately requeues in-flight deliveries.
+  /// Warm shutdown drains in-flight tasks before exiting. Soft shutdown
+  /// requests cooperative termination and escalates to hard shutdown if
+  /// tasks ignore the grace period. Hard shutdown immediately requeues
+  /// in-flight deliveries.
   Future<void> shutdown({
     WorkerShutdownMode mode = WorkerShutdownMode.hard,
   }) async {
@@ -343,7 +405,7 @@ class Worker {
     await _cancelAllSubscriptions();
     await _stopSignalWatchers();
 
-    bool drained = false;
+    var drained = false;
     if (mode == WorkerShutdownMode.hard) {
       await _forceStopActiveTasks();
     } else {
@@ -547,7 +609,7 @@ class Worker {
         _scheduleLeaseRenewal(delivery);
 
         dynamic result;
-        TaskState completionState = TaskState.running;
+        var completionState = TaskState.running;
 
         try {
           checkTermination();
@@ -565,7 +627,6 @@ class Worker {
                 decodedArgs,
               ),
             ),
-            spanKind: dotel.SpanKind.internal,
             attributes: spanAttributes,
           );
 
@@ -585,7 +646,6 @@ class Worker {
             id: envelope.id,
             state: TaskState.succeeded,
             payload: result,
-            error: null,
             attempt: envelope.attempt,
             meta: successMeta,
           );
@@ -639,7 +699,7 @@ class Worker {
             groupId: groupId,
           );
           completionState = TaskState.cancelled;
-        } catch (error, stack) {
+        } on Object catch (error, stack) {
           await _notifyErrorMiddleware(context, error, stack);
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
@@ -722,7 +782,7 @@ class Worker {
   }
 
   Future<dynamic> _executeWithHardLimit(
-    TaskHandler handler,
+    TaskHandler<Object?> handler,
     TaskContext context,
     Envelope envelope,
     Map<String, Object?> args,
@@ -830,14 +890,14 @@ class Worker {
           ),
         );
       }
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to release unique task lock',
         Context(
           _logContext({
             'task': envelope.name,
             'id': envelope.id,
-            'unique': uniqueKey.toString(),
+            'unique': uniqueKey,
             'error': error.toString(),
             'stack': stack.toString(),
           }),
@@ -873,7 +933,7 @@ class Worker {
     }
 
     try {
-      Envelope callbackEnvelope = Envelope.fromJson(
+      var callbackEnvelope = Envelope.fromJson(
         callbackData.cast<String, Object?>(),
       );
       callbackEnvelope = callbackEnvelope.copyWith(
@@ -929,7 +989,7 @@ class Worker {
           }),
         ),
       );
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       StemMetrics.instance.increment(
         'stem.chords.dispatch_failed',
         tags: {'chord': status.id},
@@ -966,7 +1026,7 @@ class Worker {
       reason: 'signature-invalid',
       meta: {
         'error': error.message,
-        if (error.keyId != null) 'keyId': error.keyId!,
+        if (error.keyId != null) 'keyId': error.keyId,
       },
     );
 
@@ -984,15 +1044,13 @@ class Worker {
     final failureStatus = TaskStatus(
       id: envelope.id,
       state: TaskState.failed,
-      payload: null,
       error: TaskError(
         type: error.runtimeType.toString(),
         message: error.toString(),
         stack: stack.toString(),
-        retryable: false,
         meta: {
           'reason': error.message,
-          if (error.keyId != null) 'keyId': error.keyId!,
+          if (error.keyId != null) 'keyId': error.keyId,
         },
       ),
       attempt: envelope.attempt,
@@ -1051,7 +1109,7 @@ class Worker {
   }
 
   Future<TaskState> _handleFailure(
-    TaskHandler handler,
+    TaskHandler<Object?> handler,
     Delivery delivery,
     Envelope envelope,
     TaskPayloadEncoder resultEncoder,
@@ -1120,12 +1178,10 @@ class Worker {
       final failureStatus = TaskStatus(
         id: envelope.id,
         state: TaskState.failed,
-        payload: null,
         error: TaskError(
           type: error.runtimeType.toString(),
           message: error.toString(),
           stack: stack.toString(),
-          retryable: false,
         ),
         attempt: envelope.attempt,
         meta: failureMeta,
@@ -1279,8 +1335,9 @@ class Worker {
           },
         );
       }
-    } catch (_) {
-      // Swallow errors to avoid impacting worker loops; rely on logging elsewhere.
+    } on Object {
+      // Swallow errors to avoid impacting worker loops; rely on logging
+      // elsewhere.
     }
   }
 
@@ -1302,7 +1359,7 @@ class Worker {
     for (final sub in subs) {
       try {
         await sub.cancel();
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         stemLogger.warning(
           'Failed to cancel subscription: $error',
           Context(_logContext({'stack': stack.toString()})),
@@ -1341,8 +1398,8 @@ class Worker {
       _heartbeatTimers.remove(active.envelope.id)?.cancel();
       _releaseDelivery(active.envelope);
       try {
-        await broker.nack(active.delivery, requeue: true);
-      } catch (error, stack) {
+        await broker.nack(active.delivery);
+      } on Object catch (error, stack) {
         stemLogger.warning(
           'Failed to requeue delivery during shutdown: $error',
           Context(
@@ -1414,7 +1471,7 @@ class Worker {
       _sigquitSub = null;
     }
     if (futures.isNotEmpty) {
-      await Future.wait(futures, eagerError: false);
+      await Future.wait(futures);
     }
   }
 
@@ -1532,7 +1589,7 @@ class Worker {
           _lastScaleDown = now;
         }
       }
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Autoscale evaluation failed: $error',
         Context(_logContext({'stack': stack.toString()})),
@@ -1594,14 +1651,11 @@ class Worker {
     switch (event.reason) {
       case IsolateRecycleReason.maxTasks:
         stemLogger.info('Recycled isolate after max task threshold', ctx);
-        break;
       case IsolateRecycleReason.memory:
         stemLogger.info('Recycled isolate after memory threshold', ctx);
-        break;
       case IsolateRecycleReason.scaleDown:
       case IsolateRecycleReason.shutdown:
         stemLogger.debug('Recycled isolate ({reason})', ctx);
-        break;
     }
   }
 
@@ -1619,7 +1673,7 @@ class Worker {
     });
     _sigquitSub ??= _safeWatch(ProcessSignal.sigquit, () {
       if (_running) {
-        unawaited(shutdown(mode: WorkerShutdownMode.hard));
+        unawaited(shutdown());
       }
     });
   }
@@ -1630,9 +1684,7 @@ class Worker {
   ) {
     try {
       return signal.watch().listen((_) => handler());
-    } on SignalException {
-      return null;
-    } on UnsupportedError {
+    } on Object {
       return null;
     }
   }
@@ -1676,7 +1728,7 @@ class Worker {
     await _signals.workerHeartbeat(_workerInfoSnapshot, heartbeat.timestamp);
     try {
       await heartbeatTransport.publish(heartbeat);
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Worker heartbeat publish failed: $error',
         Context({
@@ -1688,7 +1740,7 @@ class Worker {
     }
     try {
       await backend.setWorkerHeartbeat(heartbeat);
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to persist worker heartbeat to backend: $error',
         Context({'worker': _workerIdentifier, 'stack': stack.toString()}),
@@ -1769,7 +1821,7 @@ class Worker {
     if (revokeStore == null) return;
     try {
       await _syncRevocations();
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to initialize revoke cache: $error',
         Context(_logContext({'stack': stack.toString()})),
@@ -1788,7 +1840,7 @@ class Worker {
       }
       await store.pruneExpired(namespace, now);
       _pruneExpiredLocalRevocations(now);
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to synchronize revokes: $error',
         Context(_logContext({'stack': stack.toString()})),
@@ -1803,9 +1855,7 @@ class Worker {
         remove.add(key);
       }
     });
-    for (final key in remove) {
-      _revocations.remove(key);
-    }
+    remove.forEach(_revocations.remove);
   }
 
   RevokeEntry? _revocationFor(String taskId) {
@@ -1848,13 +1898,13 @@ class Worker {
     return _revocationFor(taskId) != null;
   }
 
-  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler? handler) {
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
-  TaskPayloadEncoder _resolveResultEncoder(TaskHandler? handler) {
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
@@ -1892,7 +1942,8 @@ class Worker {
       return result;
     }
     throw StateError(
-      'Task args encoder ${encoder.id} must decode to Map<String, Object?> values, got ${value.runtimeType}.',
+      'Task args encoder ${encoder.id} must decode to '
+      'Map<String, Object?> values, got ${value.runtimeType}.',
     );
   }
 
@@ -1936,8 +1987,6 @@ class Worker {
     final status = TaskStatus(
       id: envelope.id,
       state: TaskState.cancelled,
-      payload: null,
-      error: null,
       attempt: envelope.attempt,
       meta: meta,
     );
@@ -2071,7 +2120,7 @@ class Worker {
       try {
         await store.upsertAll(entries);
         await store.pruneExpired(namespace, now);
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         stemLogger.warning(
           'Failed to persist revocations: $error',
           Context(_logContext({'stack': stack.toString()})),
@@ -2126,12 +2175,13 @@ class Worker {
       }
       final stream = broker.consume(
         RoutingSubscription.singleQueue(queueName),
-        prefetch: 1,
         consumerName: '$_workerIdentifier-control',
       );
+      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
+      // ignore: cancel_subscriptions
       final subscription = stream.listen(
         (delivery) => unawaited(_processControlCommandDelivery(delivery)),
-        onError: (error, stack) {
+        onError: (Object error, StackTrace stack) {
           stemLogger.warning(
             'Control channel error: $error',
             Context(
@@ -2154,14 +2204,16 @@ class Worker {
       final command = controlCommandFromEnvelope(envelope);
       await _handleControlCommand(command);
       await broker.ack(delivery);
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to process control command: $error',
         Context(_logContext({'stack': stack.toString()})),
       );
       try {
         await broker.ack(delivery);
-      } catch (_) {}
+      } on Object {
+        // Ignore ack failures for control channel cleanup.
+      }
     }
   }
 
@@ -2183,7 +2235,6 @@ class Worker {
               'subscriptions': _subscriptionMetadata(),
             },
           );
-          break;
         case 'stats':
           reply = ControlReplyMessage(
             requestId: command.requestId,
@@ -2191,7 +2242,6 @@ class Worker {
             status: 'ok',
             payload: _buildStatsSnapshot(),
           );
-          break;
         case 'inspect':
           final includeRevoked = command.payload['includeRevoked'] != false;
           reply = ControlReplyMessage(
@@ -2200,7 +2250,6 @@ class Worker {
             status: 'ok',
             payload: _buildInspectSnapshot(includeRevoked: includeRevoked),
           );
-          break;
         case 'revoke':
           try {
             final result = await _processRevokeCommand(command);
@@ -2210,7 +2259,7 @@ class Worker {
               status: 'ok',
               payload: result,
             );
-          } catch (error, stack) {
+          } on Object catch (error, stack) {
             stemLogger.warning(
               'Failed to apply revocations: $error',
               Context(_logContext({'stack': stack.toString()})),
@@ -2225,7 +2274,6 @@ class Worker {
               },
             );
           }
-          break;
         case 'shutdown':
           final mode = _parseShutdownMode(command.payload['mode'] as String?);
           final summary = await _handleShutdownRequest(mode);
@@ -2235,7 +2283,6 @@ class Worker {
             status: 'ok',
             payload: summary,
           );
-          break;
         default:
           reply = ControlReplyMessage(
             requestId: command.requestId,
@@ -2244,7 +2291,7 @@ class Worker {
             error: {'message': 'Unknown control command ${command.type}'},
           );
       }
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Control command handler failed: $error',
         Context(_logContext({'stack': stack.toString()})),
@@ -2271,7 +2318,7 @@ class Worker {
     final queueName = ControlQueueNames.reply(namespace, reply.requestId);
     try {
       await broker.publish(reply.toEnvelope(queue: queueName));
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to publish control reply: $error',
         Context(_logContext({'queue': queueName, 'stack': stack.toString()})),
@@ -2348,7 +2395,7 @@ class Worker {
               .where((entry) => !entry.isExpired(now))
               .map((entry) => entry.toJson())
               .toList()
-        : const [];
+        : const <Map<String, Object?>>[];
 
     return {
       'timestamp': now.toIso8601String(),
@@ -2358,11 +2405,11 @@ class Worker {
     };
   }
 
-  bool _shouldUseIsolate(TaskHandler handler) =>
+  bool _shouldUseIsolate(TaskHandler<Object?> handler) =>
       handler.isolateEntrypoint != null;
 
   Future<Object?> _runInIsolate(
-    TaskHandler handler,
+    TaskHandler<Object?> handler,
     TaskContext context,
     Envelope envelope,
     Map<String, Object?> args, {
@@ -2423,32 +2470,32 @@ class Worker {
   }
 
   Future<TaskIsolatePool> _createPool() async {
-    final pool = TaskIsolatePool(
-      size: _currentConcurrency,
-      onRecycle: _handleIsolateRecycle,
-      onSpawned: (isolateId) {
-        unawaited(
-          _signals.workerChildLifecycle(
-            _workerInfoSnapshot,
-            isolateId,
-            initializing: true,
-          ),
+    final pool =
+        TaskIsolatePool(
+          size: _currentConcurrency,
+          onRecycle: _handleIsolateRecycle,
+          onSpawned: (isolateId) {
+            unawaited(
+              _signals.workerChildLifecycle(
+                _workerInfoSnapshot,
+                isolateId,
+                initializing: true,
+              ),
+            );
+          },
+          onDisposed: (isolateId) {
+            unawaited(
+              _signals.workerChildLifecycle(
+                _workerInfoSnapshot,
+                isolateId,
+                initializing: false,
+              ),
+            );
+          },
+        )..updateRecyclePolicy(
+          maxTasksPerIsolate: lifecycleConfig.maxTasksPerIsolate,
+          maxMemoryBytes: lifecycleConfig.maxMemoryPerIsolateBytes,
         );
-      },
-      onDisposed: (isolateId) {
-        unawaited(
-          _signals.workerChildLifecycle(
-            _workerInfoSnapshot,
-            isolateId,
-            initializing: false,
-          ),
-        );
-      },
-    );
-    pool.updateRecyclePolicy(
-      maxTasksPerIsolate: lifecycleConfig.maxTasksPerIsolate,
-      maxMemoryBytes: lifecycleConfig.maxMemoryPerIsolateBytes,
-    );
     await pool.start();
     _isolatePool = pool;
     return pool;
@@ -2574,11 +2621,18 @@ enum WorkerEventType {
   error,
 }
 
+/// Exception thrown when a task is revoked during execution.
 class TaskRevokedException implements Exception {
+  /// Creates a revoked-task exception.
   TaskRevokedException({required this.taskId, this.reason, this.requestedBy});
 
+  /// Identifier of the revoked task.
   final String taskId;
+
+  /// Optional reason for revocation.
   final String? reason;
+
+  /// Optional requester identifier.
   final String? requestedBy;
 
   @override

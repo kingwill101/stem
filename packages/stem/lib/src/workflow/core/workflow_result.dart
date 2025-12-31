@@ -1,5 +1,7 @@
-import 'workflow_status.dart';
-import 'run_state.dart';
+import 'package:stem/src/bootstrap/workflow_app.dart' show StemWorkflowApp;
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/stem.dart' show StemWorkflowApp;
 
 /// Typed result returned by [StemWorkflowApp.waitForCompletion].
 ///
@@ -7,6 +9,7 @@ import 'run_state.dart';
 /// [RunState] so callers can continue inspecting suspension metadata,
 /// timestamps, or errors.
 class WorkflowResult<T extends Object?> {
+  /// Creates a workflow result snapshot.
   const WorkflowResult({
     required this.runId,
     required this.status,
@@ -37,6 +40,9 @@ class WorkflowResult<T extends Object?> {
   /// before the run reached a terminal state.
   final bool timedOut;
 
+  /// Whether the workflow completed successfully.
   bool get isCompleted => status == WorkflowStatus.completed;
+
+  /// Whether the workflow failed.
   bool get isFailed => status == WorkflowStatus.failed;
 }

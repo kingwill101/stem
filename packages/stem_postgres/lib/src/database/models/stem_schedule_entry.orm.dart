@@ -14,9 +14,6 @@ const FieldDefinition _$StemScheduleEntryIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTaskNameField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemScheduleEntryTaskNameField = FieldDefinition(
   columnName: 'task_name',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryQueueField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemScheduleEntryQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntrySpecField = FieldDefinition(
@@ -48,11 +37,7 @@ const FieldDefinition _$StemScheduleEntrySpecField = FieldDefinition(
   columnName: 'spec',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryArgsField = FieldDefinition(
@@ -60,11 +45,7 @@ const FieldDefinition _$StemScheduleEntryArgsField = FieldDefinition(
   columnName: 'args',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryKwargsField = FieldDefinition(
@@ -72,11 +53,7 @@ const FieldDefinition _$StemScheduleEntryKwargsField = FieldDefinition(
   columnName: 'kwargs',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryEnabledField = FieldDefinition(
@@ -84,11 +61,7 @@ const FieldDefinition _$StemScheduleEntryEnabledField = FieldDefinition(
   columnName: 'enabled',
   dartType: 'bool',
   resolvedType: 'bool',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryJitterField = FieldDefinition(
@@ -96,11 +69,7 @@ const FieldDefinition _$StemScheduleEntryJitterField = FieldDefinition(
   columnName: 'jitter',
   dartType: 'int',
   resolvedType: 'int?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastRunAtField = FieldDefinition(
@@ -108,11 +77,7 @@ const FieldDefinition _$StemScheduleEntryLastRunAtField = FieldDefinition(
   columnName: 'last_run_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryNextRunAtField = FieldDefinition(
@@ -120,11 +85,7 @@ const FieldDefinition _$StemScheduleEntryNextRunAtField = FieldDefinition(
   columnName: 'next_run_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastJitterField = FieldDefinition(
@@ -132,11 +93,7 @@ const FieldDefinition _$StemScheduleEntryLastJitterField = FieldDefinition(
   columnName: 'last_jitter',
   dartType: 'int',
   resolvedType: 'int?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastErrorField = FieldDefinition(
@@ -144,11 +101,7 @@ const FieldDefinition _$StemScheduleEntryLastErrorField = FieldDefinition(
   columnName: 'last_error',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTimezoneField = FieldDefinition(
@@ -156,11 +109,7 @@ const FieldDefinition _$StemScheduleEntryTimezoneField = FieldDefinition(
   columnName: 'timezone',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTotalRunCountField = FieldDefinition(
@@ -168,11 +117,7 @@ const FieldDefinition _$StemScheduleEntryTotalRunCountField = FieldDefinition(
   columnName: 'total_run_count',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastSuccessAtField = FieldDefinition(
@@ -180,11 +125,7 @@ const FieldDefinition _$StemScheduleEntryLastSuccessAtField = FieldDefinition(
   columnName: 'last_success_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastErrorAtField = FieldDefinition(
@@ -192,11 +133,7 @@ const FieldDefinition _$StemScheduleEntryLastErrorAtField = FieldDefinition(
   columnName: 'last_error_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryDriftField = FieldDefinition(
@@ -204,11 +141,7 @@ const FieldDefinition _$StemScheduleEntryDriftField = FieldDefinition(
   columnName: 'drift',
   dartType: 'int',
   resolvedType: 'int?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryExpireAtField = FieldDefinition(
@@ -216,11 +149,7 @@ const FieldDefinition _$StemScheduleEntryExpireAtField = FieldDefinition(
   columnName: 'expire_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryMetaField = FieldDefinition(
@@ -228,11 +157,7 @@ const FieldDefinition _$StemScheduleEntryMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryCreatedAtField = FieldDefinition(
@@ -240,11 +165,7 @@ const FieldDefinition _$StemScheduleEntryCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryUpdatedAtField = FieldDefinition(
@@ -252,11 +173,7 @@ const FieldDefinition _$StemScheduleEntryUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryVersionField = FieldDefinition(
@@ -264,11 +181,7 @@ const FieldDefinition _$StemScheduleEntryVersionField = FieldDefinition(
   columnName: 'version',
   dartType: 'int',
   resolvedType: 'int?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemScheduleEntryUntracked(
@@ -338,11 +251,11 @@ Map<String, Object?> _encodeStemScheduleEntryUntracked(
   };
 }
 
-final ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
+const ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
     ModelDefinition(
       modelName: 'StemScheduleEntry',
       tableName: 'stem_schedules',
-      fields: const [
+      fields: [
         _$StemScheduleEntryIdField,
         _$StemScheduleEntryTaskNameField,
         _$StemScheduleEntryQueueField,
@@ -366,20 +279,7 @@ final ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
         _$StemScheduleEntryUpdatedAtField,
         _$StemScheduleEntryVersionField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
-      metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
-      ),
       untrackedToMap: _encodeStemScheduleEntryUntracked,
       codec: _$StemScheduleEntryCodec(),
     );
@@ -436,7 +336,7 @@ class StemScheduleEntries {
 
   static Query<$StemScheduleEntry> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemScheduleEntry>(
     column,
@@ -576,10 +476,10 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemScheduleEntryIdValue =
+    final stemScheduleEntryIdValue =
         registry.decodeField<String>(_$StemScheduleEntryIdField, data['id']) ??
         (throw StateError('Field id on StemScheduleEntry cannot be null.'));
-    final String stemScheduleEntryTaskNameValue =
+    final stemScheduleEntryTaskNameValue =
         registry.decodeField<String>(
           _$StemScheduleEntryTaskNameField,
           data['task_name'],
@@ -587,27 +487,27 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field taskName on StemScheduleEntry cannot be null.',
         ));
-    final String stemScheduleEntryQueueValue =
+    final stemScheduleEntryQueueValue =
         registry.decodeField<String>(
           _$StemScheduleEntryQueueField,
           data['queue'],
         ) ??
         (throw StateError('Field queue on StemScheduleEntry cannot be null.'));
-    final String stemScheduleEntrySpecValue =
+    final stemScheduleEntrySpecValue =
         registry.decodeField<String>(
           _$StemScheduleEntrySpecField,
           data['spec'],
         ) ??
         (throw StateError('Field spec on StemScheduleEntry cannot be null.'));
-    final String? stemScheduleEntryArgsValue = registry.decodeField<String?>(
+    final stemScheduleEntryArgsValue = registry.decodeField<String?>(
       _$StemScheduleEntryArgsField,
       data['args'],
     );
-    final String? stemScheduleEntryKwargsValue = registry.decodeField<String?>(
+    final stemScheduleEntryKwargsValue = registry.decodeField<String?>(
       _$StemScheduleEntryKwargsField,
       data['kwargs'],
     );
-    final bool stemScheduleEntryEnabledValue =
+    final stemScheduleEntryEnabledValue =
         registry.decodeField<bool>(
           _$StemScheduleEntryEnabledField,
           data['enabled'],
@@ -615,35 +515,31 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field enabled on StemScheduleEntry cannot be null.',
         ));
-    final int? stemScheduleEntryJitterValue = registry.decodeField<int?>(
+    final stemScheduleEntryJitterValue = registry.decodeField<int?>(
       _$StemScheduleEntryJitterField,
       data['jitter'],
     );
-    final DateTime? stemScheduleEntryLastRunAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemScheduleEntryLastRunAtField,
-          data['last_run_at'],
-        );
-    final DateTime? stemScheduleEntryNextRunAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemScheduleEntryNextRunAtField,
-          data['next_run_at'],
-        );
-    final int? stemScheduleEntryLastJitterValue = registry.decodeField<int?>(
+    final stemScheduleEntryLastRunAtValue = registry.decodeField<DateTime?>(
+      _$StemScheduleEntryLastRunAtField,
+      data['last_run_at'],
+    );
+    final stemScheduleEntryNextRunAtValue = registry.decodeField<DateTime?>(
+      _$StemScheduleEntryNextRunAtField,
+      data['next_run_at'],
+    );
+    final stemScheduleEntryLastJitterValue = registry.decodeField<int?>(
       _$StemScheduleEntryLastJitterField,
       data['last_jitter'],
     );
-    final String? stemScheduleEntryLastErrorValue = registry
-        .decodeField<String?>(
-          _$StemScheduleEntryLastErrorField,
-          data['last_error'],
-        );
-    final String? stemScheduleEntryTimezoneValue = registry
-        .decodeField<String?>(
-          _$StemScheduleEntryTimezoneField,
-          data['timezone'],
-        );
-    final int stemScheduleEntryTotalRunCountValue =
+    final stemScheduleEntryLastErrorValue = registry.decodeField<String?>(
+      _$StemScheduleEntryLastErrorField,
+      data['last_error'],
+    );
+    final stemScheduleEntryTimezoneValue = registry.decodeField<String?>(
+      _$StemScheduleEntryTimezoneField,
+      data['timezone'],
+    );
+    final stemScheduleEntryTotalRunCountValue =
         registry.decodeField<int>(
           _$StemScheduleEntryTotalRunCountField,
           data['total_run_count'],
@@ -651,30 +547,27 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field totalRunCount on StemScheduleEntry cannot be null.',
         ));
-    final DateTime? stemScheduleEntryLastSuccessAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemScheduleEntryLastSuccessAtField,
-          data['last_success_at'],
-        );
-    final DateTime? stemScheduleEntryLastErrorAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemScheduleEntryLastErrorAtField,
-          data['last_error_at'],
-        );
-    final int? stemScheduleEntryDriftValue = registry.decodeField<int?>(
+    final stemScheduleEntryLastSuccessAtValue = registry.decodeField<DateTime?>(
+      _$StemScheduleEntryLastSuccessAtField,
+      data['last_success_at'],
+    );
+    final stemScheduleEntryLastErrorAtValue = registry.decodeField<DateTime?>(
+      _$StemScheduleEntryLastErrorAtField,
+      data['last_error_at'],
+    );
+    final stemScheduleEntryDriftValue = registry.decodeField<int?>(
       _$StemScheduleEntryDriftField,
       data['drift'],
     );
-    final DateTime? stemScheduleEntryExpireAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemScheduleEntryExpireAtField,
-          data['expire_at'],
-        );
-    final String? stemScheduleEntryMetaValue = registry.decodeField<String?>(
+    final stemScheduleEntryExpireAtValue = registry.decodeField<DateTime?>(
+      _$StemScheduleEntryExpireAtField,
+      data['expire_at'],
+    );
+    final stemScheduleEntryMetaValue = registry.decodeField<String?>(
       _$StemScheduleEntryMetaField,
       data['meta'],
     );
-    final DateTime stemScheduleEntryCreatedAtValue =
+    final stemScheduleEntryCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemScheduleEntryCreatedAtField,
           data['created_at'],
@@ -682,7 +575,7 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field createdAt on StemScheduleEntry cannot be null.',
         ));
-    final DateTime stemScheduleEntryUpdatedAtValue =
+    final stemScheduleEntryUpdatedAtValue =
         registry.decodeField<DateTime>(
           _$StemScheduleEntryUpdatedAtField,
           data['updated_at'],
@@ -690,7 +583,7 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field updatedAt on StemScheduleEntry cannot be null.',
         ));
-    final int? stemScheduleEntryVersionValue = registry.decodeField<int?>(
+    final stemScheduleEntryVersionValue = registry.decodeField<int?>(
       _$StemScheduleEntryVersionField,
       data['version'],
     );
@@ -1172,35 +1065,35 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   @override
   $StemScheduleEntry toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? taskNameValue = taskName;
+    final taskNameValue = taskName;
     if (taskNameValue == null) {
       throw StateError('Missing required field: taskName');
     }
-    final String? queueValue = queue;
+    final queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final String? specValue = spec;
+    final specValue = spec;
     if (specValue == null) {
       throw StateError('Missing required field: spec');
     }
-    final bool? enabledValue = enabled;
+    final enabledValue = enabled;
     if (enabledValue == null) {
       throw StateError('Missing required field: enabled');
     }
-    final int? totalRunCountValue = totalRunCount;
+    final totalRunCountValue = totalRunCount;
     if (totalRunCountValue == null) {
       throw StateError('Missing required field: totalRunCount');
     }
-    final DateTime? createdAtValue = createdAt;
+    final createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }
-    final DateTime? updatedAtValue = updatedAt;
+    final updatedAtValue = updatedAt;
     if (updatedAtValue == null) {
       throw StateError('Missing required field: updatedAt');
     }
@@ -1366,23 +1259,23 @@ class $StemScheduleEntry extends StemScheduleEntry
     required String taskName,
     required String queue,
     required String spec,
+    required bool enabled,
+    required int totalRunCount,
+    required DateTime createdAt,
+    required DateTime updatedAt,
     String? args,
     String? kwargs,
-    required bool enabled,
     int? jitter,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
     int? lastJitter,
     String? lastError,
     String? timezone,
-    required int totalRunCount,
     DateTime? lastSuccessAt,
     DateTime? lastErrorAt,
     int? drift,
     DateTime? expireAt,
     String? meta,
-    required DateTime createdAt,
-    required DateTime updatedAt,
     int? version,
   }) : super.new(
          id: id,

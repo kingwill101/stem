@@ -2,20 +2,30 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 
-import 'contracts.dart' show LockStore, TaskOptions;
-import 'envelope.dart';
+import 'package:stem/src/core/contracts.dart' show LockStore, TaskOptions;
+import 'package:stem/src/core/envelope.dart';
 
-/// Internal metadata keys stored on envelopes / result backend to track unique tasks.
+/// Internal metadata keys stored on envelopes/result backend to track unique tasks.
 class UniqueTaskMetadata {
+  /// Metadata key storing the computed unique key.
   static const String key = 'stem.unique.key';
+
+  /// Metadata key storing the lock owner.
   static const String owner = 'stem.unique.owner';
+
+  /// Metadata key storing when the unique lock expires.
   static const String expiresAt = 'stem.unique.expiresAt';
+
+  /// Metadata key storing the duplicate count.
   static const String duplicates = 'stem.unique.duplicates';
+
+  /// Metadata key storing an explicit unique key override.
   static const String override = 'stem.unique.override';
 }
 
 /// Result of a uniqueness acquisition attempt.
 class UniqueTaskClaim {
+  /// Creates a claim result for a unique task acquisition attempt.
   UniqueTaskClaim._({
     required this.uniqueKey,
     required this.owner,
@@ -47,24 +57,36 @@ class UniqueTaskClaim {
 }
 
 /// Indicates whether uniqueness was acquired or a duplicate was detected.
-enum UniqueTaskClaimStatus { acquired, duplicate }
+enum UniqueTaskClaimStatus {
+  /// Lock was acquired for this task.
+  acquired,
 
+  /// A duplicate task already holds the lock.
+  duplicate,
+}
+
+/// Clock function used for deterministic testing.
 typedef Clock = DateTime Function();
 
 /// Coordinates unique task claims using a [LockStore].
 class UniqueTaskCoordinator {
+  /// Creates a coordinator that uses the provided [lockStore].
   UniqueTaskCoordinator({
     required this.lockStore,
     Duration defaultTtl = const Duration(minutes: 5),
     String namespace = 'stem:unique',
-    Clock? clock,
   }) : defaultTtl = defaultTtl <= Duration.zero
            ? const Duration(seconds: 30)
            : defaultTtl,
        namespace = namespace.isEmpty ? 'stem:unique' : namespace;
 
+  /// Lock store backing unique claims.
   final LockStore lockStore;
+
+  /// Default TTL used when no unique duration is provided.
   final Duration defaultTtl;
+
+  /// Namespace prefix for unique lock keys.
   final String namespace;
 
   /// Attempts to claim uniqueness for [envelope] using [options].

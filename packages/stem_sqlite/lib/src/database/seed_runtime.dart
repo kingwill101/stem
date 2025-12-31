@@ -6,6 +6,7 @@ import 'package:artisanal/args.dart';
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
+/// Runs the registered seeders using an existing ORM connection.
 Future<void> runSeedRegistryOnConnection(
   OrmConnection connection,
   List<SeederRegistration> seeds, {
@@ -24,7 +25,6 @@ Future<void> runSeedRegistryOnConnection(
     names: (names == null || names.isEmpty) ? null : names,
     pretend: pretend,
     beforeRun: beforeRun,
-    log: null,
     onPretendQueries: pretend
         ? (entries) {
             for (final entry in entries) {
@@ -35,6 +35,7 @@ Future<void> runSeedRegistryOnConnection(
   );
 }
 
+/// Runs the seeder CLI entrypoint for the provided arguments.
 Future<void> runSeedRegistryEntrypoint({
   required List<String> args,
   required List<SeederRegistration> seeds,
@@ -68,7 +69,6 @@ Future<void> runSeedRegistryEntrypoint({
     )
     ..addMultiOption(
       'run',
-      splitCommas: true,
       help: 'Seeder class names to run (comma-separated or repeated).',
     )
     ..addFlag(
@@ -81,8 +81,9 @@ Future<void> runSeedRegistryEntrypoint({
   final results = _parseArgs(parser, normalized.args, usage: 'seeds run');
   if (results == null) return;
   if (results['help'] == true) {
-    stdout.writeln('Usage: seeds run [options]');
-    stdout.writeln(parser.usage);
+    stdout
+      ..writeln('Usage: seeds run [options]')
+      ..writeln(parser.usage);
     return;
   }
 
@@ -152,8 +153,9 @@ void _printSeedInfo(List<SeederRegistration> seeds, List<String> args) {
   final results = _parseArgs(parser, args, usage: 'seeds info');
   if (results == null) return;
   if (results['help'] == true) {
-    stdout.writeln('Usage: seeds info [options]');
-    stdout.writeln(parser.usage);
+    stdout
+      ..writeln('Usage: seeds info [options]')
+      ..writeln(parser.usage);
     return;
   }
 
@@ -180,8 +182,9 @@ ArgResults? _parseArgs(
   try {
     return parser.parse(args);
   } on FormatException catch (error) {
-    stderr.writeln('Invalid arguments for $usage: ${error.message}');
-    stderr.writeln(parser.usage);
+    stderr
+      ..writeln('Invalid arguments for $usage: ${error.message}')
+      ..writeln(parser.usage);
     exitCode = 64;
     return null;
   }

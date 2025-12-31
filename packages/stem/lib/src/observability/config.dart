@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import '../signals/stem_signals.dart';
-import 'metrics.dart';
+import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/signals/stem_signals.dart';
 
 /// Aggregates configuration controlling observability integrations.
 class ObservabilityConfig {
@@ -20,21 +20,6 @@ class ObservabilityConfig {
        metricExporters = List.unmodifiable(metricExporters ?? const []),
        signalConfiguration =
            signalConfiguration ?? const StemSignalConfiguration();
-
-  /// Interval between worker heartbeats emitted for monitoring.
-  final Duration heartbeatInterval;
-
-  /// Namespace tag applied to worker observability signals.
-  final String namespace;
-
-  /// Immutable list of exporter specifications (e.g. `console`, `prometheus`).
-  final List<String> metricExporters;
-
-  /// Explicit endpoint override for OTLP-compatible exporters.
-  final Uri? otlpEndpoint;
-
-  /// Signal dispatch configuration describing enablement flags.
-  final StemSignalConfiguration signalConfiguration;
 
   /// Builds a configuration by reading relevant environment variables from
   /// [env] or the process environment.
@@ -68,6 +53,21 @@ class ObservabilityConfig {
       signalConfiguration: signalConfig,
     );
   }
+
+  /// Interval between worker heartbeats emitted for monitoring.
+  final Duration heartbeatInterval;
+
+  /// Namespace tag applied to worker observability signals.
+  final String namespace;
+
+  /// Immutable list of exporter specifications (e.g. `console`, `prometheus`).
+  final List<String> metricExporters;
+
+  /// Explicit endpoint override for OTLP-compatible exporters.
+  final Uri? otlpEndpoint;
+
+  /// Signal dispatch configuration describing enablement flags.
+  final StemSignalConfiguration signalConfiguration;
 
   /// Returns a copy of this configuration with values replaced by [other].
   ObservabilityConfig merge(ObservabilityConfig other) {

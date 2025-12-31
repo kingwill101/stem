@@ -11,7 +11,8 @@ void main() {
       'Postgres lock store contract requires STEM_TEST_POSTGRES_URL',
       () {},
       skip:
-          'Set STEM_TEST_POSTGRES_URL to run Postgres lock store contract tests.',
+          'Set STEM_TEST_POSTGRES_URL to run Postgres lock store contract '
+          'tests.',
     );
     return;
   }
@@ -22,7 +23,6 @@ void main() {
       create: () async => PostgresLockStore.connect(
         connectionString,
         namespace: 'stem_lock_contract',
-        schema: 'public',
         applicationName: 'stem-postgres-lock-contract',
       ),
       dispose: (store) => (store as PostgresLockStore).close(),

@@ -14,9 +14,6 @@ const FieldDefinition _$StemGroupIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupExpectedField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemGroupExpectedField = FieldDefinition(
   columnName: 'expected',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupMetaField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemGroupMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -49,11 +38,7 @@ const FieldDefinition _$StemGroupExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupCreatedAtField = FieldDefinition(
@@ -61,11 +46,7 @@ const FieldDefinition _$StemGroupCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupUpdatedAtField = FieldDefinition(
@@ -73,11 +54,7 @@ const FieldDefinition _$StemGroupUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemGroupUntracked(
@@ -93,10 +70,10 @@ Map<String, Object?> _encodeStemGroupUntracked(
   };
 }
 
-final ModelDefinition<$StemGroup> _$StemGroupDefinition = ModelDefinition(
+const ModelDefinition<$StemGroup> _$StemGroupDefinition = ModelDefinition(
   modelName: 'StemGroup',
   tableName: 'stem_groups',
-  fields: const [
+  fields: [
     _$StemGroupIdField,
     _$StemGroupExpectedField,
     _$StemGroupMetaField,
@@ -104,20 +81,9 @@ final ModelDefinition<$StemGroup> _$StemGroupDefinition = ModelDefinition(
     _$StemGroupCreatedAtField,
     _$StemGroupUpdatedAtField,
   ],
-  relations: const [],
   softDeleteColumn: 'deleted_at',
   metadata: ModelAttributesMetadata(
-    hidden: const <String>[],
-    visible: const <String>[],
-    fillable: const <String>[],
-    guarded: const <String>[],
-    casts: const <String, String>{},
-    appends: const <String>[],
-    touches: const <String>[],
-    timestamps: true,
-    fieldOverrides: const {'meta': FieldAttributeMetadata(cast: 'json')},
-    softDeletes: false,
-    softDeleteColumn: 'deleted_at',
+    fieldOverrides: {'meta': FieldAttributeMetadata(cast: 'json')},
   ),
   untrackedToMap: _encodeStemGroupUntracked,
   codec: _$StemGroupCodec(),
@@ -167,7 +133,7 @@ class StemGroups {
 
   static Query<$StemGroup> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemGroup>(
     column,
@@ -250,29 +216,29 @@ class _$StemGroupCodec extends ModelCodec<$StemGroup> {
 
   @override
   $StemGroup decode(Map<String, Object?> data, ValueCodecRegistry registry) {
-    final String stemGroupIdValue =
+    final stemGroupIdValue =
         registry.decodeField<String>(_$StemGroupIdField, data['id']) ??
         (throw StateError('Field id on StemGroup cannot be null.'));
-    final int stemGroupExpectedValue =
+    final stemGroupExpectedValue =
         registry.decodeField<int>(_$StemGroupExpectedField, data['expected']) ??
         (throw StateError('Field expected on StemGroup cannot be null.'));
-    final Map<String, Object?> stemGroupMetaValue =
+    final stemGroupMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemGroupMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemGroup cannot be null.'));
-    final DateTime stemGroupExpiresAtValue =
+    final stemGroupExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemGroupExpiresAtField,
           data['expires_at'],
         ) ??
         (throw StateError('Field expiresAt on StemGroup cannot be null.'));
-    final DateTime? stemGroupCreatedAtValue = registry.decodeField<DateTime?>(
+    final stemGroupCreatedAtValue = registry.decodeField<DateTime?>(
       _$StemGroupCreatedAtField,
       data['created_at'],
     );
-    final DateTime? stemGroupUpdatedAtValue = registry.decodeField<DateTime?>(
+    final stemGroupUpdatedAtValue = registry.decodeField<DateTime?>(
       _$StemGroupUpdatedAtField,
       data['updated_at'],
     );
@@ -415,19 +381,19 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
   @override
   $StemGroup toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final int? expectedValue = expected;
+    final expectedValue = expected;
     if (expectedValue == null) {
       throw StateError('Missing required field: expected');
     }
-    final Map<String, Object?>? metaValue = meta;
+    final metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
-    final DateTime? expiresAtValue = expiresAt;
+    final expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }

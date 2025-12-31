@@ -14,9 +14,6 @@ const FieldDefinition _$StemLockKeyField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemLockOwnerField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemLockOwnerField = FieldDefinition(
   columnName: 'owner',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemLockExpiresAtField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemLockExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemLockCreatedAtField = FieldDefinition(
@@ -48,11 +37,7 @@ const FieldDefinition _$StemLockCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemLockUntracked(
@@ -68,29 +53,16 @@ Map<String, Object?> _encodeStemLockUntracked(
   };
 }
 
-final ModelDefinition<$StemLock> _$StemLockDefinition = ModelDefinition(
+const ModelDefinition<$StemLock> _$StemLockDefinition = ModelDefinition(
   modelName: 'StemLock',
   tableName: 'stem_locks',
-  fields: const [
+  fields: [
     _$StemLockKeyField,
     _$StemLockOwnerField,
     _$StemLockExpiresAtField,
     _$StemLockCreatedAtField,
   ],
-  relations: const [],
   softDeleteColumn: 'deleted_at',
-  metadata: ModelAttributesMetadata(
-    hidden: const <String>[],
-    visible: const <String>[],
-    fillable: const <String>[],
-    guarded: const <String>[],
-    casts: const <String, String>{},
-    appends: const <String>[],
-    touches: const <String>[],
-    timestamps: true,
-    softDeletes: false,
-    softDeleteColumn: 'deleted_at',
-  ),
   untrackedToMap: _encodeStemLockUntracked,
   codec: _$StemLockCodec(),
 );
@@ -138,7 +110,7 @@ class StemLocks {
 
   static Query<$StemLock> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemLock>(
     column,
@@ -211,19 +183,19 @@ class _$StemLockCodec extends ModelCodec<$StemLock> {
 
   @override
   $StemLock decode(Map<String, Object?> data, ValueCodecRegistry registry) {
-    final String stemLockKeyValue =
+    final stemLockKeyValue =
         registry.decodeField<String>(_$StemLockKeyField, data['key']) ??
         (throw StateError('Field key on StemLock cannot be null.'));
-    final String stemLockOwnerValue =
+    final stemLockOwnerValue =
         registry.decodeField<String>(_$StemLockOwnerField, data['owner']) ??
         (throw StateError('Field owner on StemLock cannot be null.'));
-    final DateTime stemLockExpiresAtValue =
+    final stemLockExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemLockExpiresAtField,
           data['expires_at'],
         ) ??
         (throw StateError('Field expiresAt on StemLock cannot be null.'));
-    final DateTime stemLockCreatedAtValue =
+    final stemLockCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemLockCreatedAtField,
           data['created_at'],
@@ -376,19 +348,19 @@ class StemLockPartial implements PartialEntity<$StemLock> {
   @override
   $StemLock toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? keyValue = key;
+    final keyValue = key;
     if (keyValue == null) {
       throw StateError('Missing required field: key');
     }
-    final String? ownerValue = owner;
+    final ownerValue = owner;
     if (ownerValue == null) {
       throw StateError('Missing required field: owner');
     }
-    final DateTime? expiresAtValue = expiresAt;
+    final expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }
-    final DateTime? createdAtValue = createdAt;
+    final createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }

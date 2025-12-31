@@ -1,9 +1,10 @@
-import '../core/contracts.dart';
-import 'schedule_calculator.dart';
-import 'schedule_spec.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/scheduler/schedule_calculator.dart';
+import 'package:stem/src/scheduler/schedule_spec.dart';
 
 /// Simple in-memory schedule store implementation used in tests.
 class InMemoryScheduleStore implements ScheduleStore {
+  /// Creates an in-memory schedule store.
   InMemoryScheduleStore({ScheduleCalculator? calculator})
     : _calculator = calculator ?? ScheduleCalculator();
 
@@ -27,8 +28,9 @@ class InMemoryScheduleStore implements ScheduleStore {
 
     final selected = <ScheduleEntry>[];
     for (final state in due.take(limit)) {
-      state.locked = true;
-      state.entry = state.entry.copyWith(nextRunAt: state.nextRun);
+      state
+        ..locked = true
+        ..entry = state.entry.copyWith(nextRunAt: state.nextRun);
       selected.add(state.entry);
     }
     return selected;
@@ -37,7 +39,7 @@ class InMemoryScheduleStore implements ScheduleStore {
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now().toUtc();
-    DateTime? next = entry.nextRunAt;
+    var next = entry.nextRunAt;
     if (entry.enabled) {
       next ??= _calculator.nextRun(
         entry,
@@ -101,7 +103,7 @@ class InMemoryScheduleStore implements ScheduleStore {
       totalRunCount: state.entry.totalRunCount + 1,
       drift: drift ?? state.entry.drift,
     );
-    DateTime? next = nextRunAt;
+    var next = nextRunAt;
     var enabled = updatedEntry.enabled;
     if (next == null && enabled) {
       try {
@@ -110,7 +112,7 @@ class InMemoryScheduleStore implements ScheduleStore {
           executedAt,
           includeJitter: false,
         );
-      } catch (_) {
+      } on Exception {
         next = executedAt;
       }
     }
@@ -126,13 +128,14 @@ class InMemoryScheduleStore implements ScheduleStore {
     }
     next ??= executedAt;
     final nextVersion = state.entry.version + 1;
-    state.entry = updatedEntry.copyWith(
-      nextRunAt: next,
-      enabled: enabled,
-      version: nextVersion,
-    );
-    state.nextRun = next;
-    state.locked = false;
+    state
+      ..entry = updatedEntry.copyWith(
+        nextRunAt: next,
+        enabled: enabled,
+        version: nextVersion,
+      )
+      ..nextRun = next
+      ..locked = false;
   }
 }
 

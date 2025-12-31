@@ -12,3 +12,4 @@ packages/dashboard/storage/
 .vscode/
 *.iml
 .DS_Store
+.lh/

@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_sqlite/src/backend/sqlite_result_backend.dart';
+import 'package:stem_sqlite/src/broker/sqlite_broker.dart';
+import 'package:stem_sqlite/src/workflow/sqlite_workflow_store.dart';
 
-import '../broker/sqlite_broker.dart';
-import '../backend/sqlite_result_backend.dart';
-import 'sqlite_workflow_store.dart';
-
+/// Creates a [StemBrokerFactory] backed by SQLite.
 StemBrokerFactory sqliteBrokerFactory(
   File file, {
   Duration defaultVisibilityTimeout = const Duration(seconds: 30),
@@ -29,6 +29,7 @@ StemBrokerFactory sqliteBrokerFactory(
   );
 }
 
+/// Creates a [StemBackendFactory] backed by SQLite.
 StemBackendFactory sqliteResultBackendFactory(
   File file, {
   Duration defaultTtl = const Duration(days: 1),
@@ -50,6 +51,7 @@ StemBackendFactory sqliteResultBackendFactory(
   );
 }
 
+/// Creates a [WorkflowStoreFactory] backed by SQLite.
 WorkflowStoreFactory sqliteWorkflowStoreFactory(File file) {
   return WorkflowStoreFactory(
     create: () async => SqliteWorkflowStore.open(file),

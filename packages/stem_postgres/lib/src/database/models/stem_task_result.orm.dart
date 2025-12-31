@@ -14,9 +14,6 @@ const FieldDefinition _$StemTaskResultIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultStateField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemTaskResultStateField = FieldDefinition(
   columnName: 'state',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultPayloadField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemTaskResultPayloadField = FieldDefinition(
   columnName: 'payload',
   dartType: 'Object',
   resolvedType: 'Object?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -49,11 +38,7 @@ const FieldDefinition _$StemTaskResultErrorField = FieldDefinition(
   columnName: 'error',
   dartType: 'Object',
   resolvedType: 'Object?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -62,11 +47,7 @@ const FieldDefinition _$StemTaskResultAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultMetaField = FieldDefinition(
@@ -74,11 +55,7 @@ const FieldDefinition _$StemTaskResultMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -87,11 +64,7 @@ const FieldDefinition _$StemTaskResultExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultCreatedAtField = FieldDefinition(
@@ -99,11 +72,7 @@ const FieldDefinition _$StemTaskResultCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemTaskResultUpdatedAtField = FieldDefinition(
@@ -111,11 +80,7 @@ const FieldDefinition _$StemTaskResultUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemTaskResultUntracked(
@@ -137,11 +102,11 @@ Map<String, Object?> _encodeStemTaskResultUntracked(
   };
 }
 
-final ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
+const ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
     ModelDefinition(
       modelName: 'StemTaskResult',
       tableName: 'stem_task_results',
-      fields: const [
+      fields: [
         _$StemTaskResultIdField,
         _$StemTaskResultStateField,
         _$StemTaskResultPayloadField,
@@ -152,24 +117,13 @@ final ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
         _$StemTaskResultCreatedAtField,
         _$StemTaskResultUpdatedAtField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        fieldOverrides: const {
+        fieldOverrides: {
           'payload': FieldAttributeMetadata(cast: 'json'),
           'error': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemTaskResultUntracked,
       codec: _$StemTaskResultCodec(),
@@ -224,7 +178,7 @@ class StemTaskResults {
 
   static Query<$StemTaskResult> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemTaskResult>(
     column,
@@ -320,51 +274,49 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemTaskResultIdValue =
+    final stemTaskResultIdValue =
         registry.decodeField<String>(_$StemTaskResultIdField, data['id']) ??
         (throw StateError('Field id on StemTaskResult cannot be null.'));
-    final String stemTaskResultStateValue =
+    final stemTaskResultStateValue =
         registry.decodeField<String>(
           _$StemTaskResultStateField,
           data['state'],
         ) ??
         (throw StateError('Field state on StemTaskResult cannot be null.'));
-    final Object? stemTaskResultPayloadValue = registry.decodeField<Object?>(
+    final stemTaskResultPayloadValue = registry.decodeField<Object?>(
       _$StemTaskResultPayloadField,
       data['payload'],
     );
-    final Object? stemTaskResultErrorValue = registry.decodeField<Object?>(
+    final stemTaskResultErrorValue = registry.decodeField<Object?>(
       _$StemTaskResultErrorField,
       data['error'],
     );
-    final int stemTaskResultAttemptValue =
+    final stemTaskResultAttemptValue =
         registry.decodeField<int>(
           _$StemTaskResultAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemTaskResult cannot be null.'));
-    final Map<String, Object?> stemTaskResultMetaValue =
+    final stemTaskResultMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemTaskResultMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemTaskResult cannot be null.'));
-    final DateTime stemTaskResultExpiresAtValue =
+    final stemTaskResultExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemTaskResultExpiresAtField,
           data['expires_at'],
         ) ??
         (throw StateError('Field expiresAt on StemTaskResult cannot be null.'));
-    final DateTime? stemTaskResultCreatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemTaskResultCreatedAtField,
-          data['created_at'],
-        );
-    final DateTime? stemTaskResultUpdatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemTaskResultUpdatedAtField,
-          data['updated_at'],
-        );
+    final stemTaskResultCreatedAtValue = registry.decodeField<DateTime?>(
+      _$StemTaskResultCreatedAtField,
+      data['created_at'],
+    );
+    final stemTaskResultUpdatedAtValue = registry.decodeField<DateTime?>(
+      _$StemTaskResultUpdatedAtField,
+      data['updated_at'],
+    );
     final model = $StemTaskResult(
       id: stemTaskResultIdValue,
       state: stemTaskResultStateValue,
@@ -441,12 +393,8 @@ class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -514,12 +462,8 @@ class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -559,8 +503,8 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
     return StemTaskResultPartial(
       id: row['id'] as String?,
       state: row['state'] as String?,
-      payload: row['payload'] as Object?,
-      error: row['error'] as Object?,
+      payload: row['payload'],
+      error: row['error'],
       attempt: row['attempt'] as int?,
       meta: row['meta'] as Map<String, Object?>?,
       expiresAt: row['expires_at'] as DateTime?,
@@ -578,23 +522,23 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   @override
   $StemTaskResult toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? stateValue = state;
+    final stateValue = state;
     if (stateValue == null) {
       throw StateError('Missing required field: state');
     }
-    final int? attemptValue = attempt;
+    final attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final Map<String, Object?>? metaValue = meta;
+    final metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
-    final DateTime? expiresAtValue = expiresAt;
+    final expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }
@@ -638,12 +582,8 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -676,11 +616,11 @@ class $StemTaskResult extends StemTaskResult
   $StemTaskResult({
     required String id,
     required String state,
-    Object? payload,
-    Object? error,
     required int attempt,
     required Map<String, Object?> meta,
     required DateTime expiresAt,
+    Object? payload,
+    Object? error,
   }) : super.new(
          id: id,
          state: state,

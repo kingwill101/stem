@@ -57,9 +57,10 @@ void main() {
         expect(status, isNotNull);
         final meta = status!.meta;
         expect(meta[UniqueTaskMetadata.key], isA<String>());
-        final duplicates = meta[UniqueTaskMetadata.duplicates];
-        expect(duplicates, isA<List>());
-        expect((duplicates as List).length, equals(1));
+        final duplicates =
+            meta[UniqueTaskMetadata.duplicates] as List<Object?>?;
+        expect(duplicates, isA<List<Object?>>());
+        expect(duplicates!.length, equals(1));
 
         broker.dispose();
       },

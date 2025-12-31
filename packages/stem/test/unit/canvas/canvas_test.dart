@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Canvas', () {
@@ -142,11 +142,8 @@ class _SumTask implements TaskHandler<int> {
       );
     }
     final previous = context.meta['chainPrevResult'];
-    var total = 0;
-    if (previous is num) {
-      total += previous.toInt();
-    }
-    total += (args['add'] as num?)?.toInt() ?? 0;
-    return total;
+    final previousValue = previous is num ? previous.toInt() : 0;
+    final addValue = (args['add'] as num?)?.toInt() ?? 0;
+    return previousValue + addValue;
   }
 }

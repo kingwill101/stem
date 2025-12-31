@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'contracts.dart';
-import 'task_invocation.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/task_invocation.dart';
 
 /// Convenience task handler that delegates execution to a top-level function
 /// suitable for isolate execution.
 class FunctionTaskHandler<R> implements TaskHandler<R> {
+  /// Creates a task handler that delegates to a top-level [entrypoint].
   FunctionTaskHandler({
     required this.name,
     required TaskEntrypoint entrypoint,

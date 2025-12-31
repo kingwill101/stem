@@ -3,16 +3,19 @@ import 'dart:async';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../database/models/workflow_models.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [RevokeStore].
 class PostgresRevokeStore implements RevokeStore {
   PostgresRevokeStore._(this._connections, {required this.namespace});
 
   final PostgresConnections _connections;
+
+  /// Namespace used to scope revoke entries.
   final String namespace;
 
+  /// Connects to PostgreSQL and returns a revoke store instance.
   static Future<PostgresRevokeStore> connect(
     String uri, {
     String schema = 'public',
@@ -64,7 +67,7 @@ class PostgresRevokeStore implements RevokeStore {
           .where('expiresAt', clock, PredicateOperator.lessThanOrEqual)
           .get();
 
-      int count = 0;
+      var count = 0;
       for (final entry in expired) {
         await ctx.repository<$StemRevokeEntry>().delete(entry);
         count++;

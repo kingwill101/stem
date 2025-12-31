@@ -2,7 +2,13 @@ import 'dart:convert';
 import 'dart:math';
 
 /// Target classification for routing operations.
-enum RoutingTargetType { queue, broadcast }
+enum RoutingTargetType {
+  /// Route to a named queue.
+  queue,
+
+  /// Route to a broadcast channel.
+  broadcast,
+}
 
 /// Routing metadata that accompanies published envelopes.
 ///
@@ -21,6 +27,7 @@ class RoutingInfo {
     Map<String, Object?>? meta,
   }) : meta = Map.unmodifiable(meta ?? const {});
 
+  /// Creates a queue-based routing descriptor.
   factory RoutingInfo.queue({
     required String queue,
     String? exchange,
@@ -42,6 +49,7 @@ class RoutingInfo {
     );
   }
 
+  /// Creates a broadcast routing descriptor.
   factory RoutingInfo.broadcast({
     required String channel,
     String delivery = 'at-least-once',
@@ -63,15 +71,31 @@ class RoutingInfo {
     );
   }
 
+  /// The routing target type (queue or broadcast).
   final RoutingTargetType type;
+
+  /// Queue name for queue routing.
   final String? queue;
+
+  /// Optional exchange name for queue routing.
   final String? exchange;
+
+  /// Optional routing key used by the broker.
   final String? routingKey;
+
+  /// Optional priority override for the published envelope.
   final int? priority;
+
+  /// Broadcast channel identifier.
   final String? broadcastChannel;
+
+  /// Delivery policy hint for broadcast routing.
   final String? delivery;
+
+  /// Additional routing metadata.
   final Map<String, Object?> meta;
 
+  /// Whether this routing info targets a broadcast channel.
   bool get isBroadcast => type == RoutingTargetType.broadcast;
 }
 
@@ -85,10 +109,11 @@ String generateEnvelopeId() {
 /// Task payload persisted inside a broker.
 /// Since: 0.1.0
 class Envelope {
+  /// Creates an envelope for a task invocation.
   Envelope({
-    String? id,
     required this.name,
     required this.args,
+    String? id,
     Map<String, String>? headers,
     DateTime? enqueuedAt,
     this.notBefore,
@@ -102,6 +127,30 @@ class Envelope {
        headers = Map.unmodifiable(headers ?? const {}),
        enqueuedAt = enqueuedAt ?? DateTime.now(),
        meta = Map.unmodifiable(meta ?? const {});
+
+  /// Builds an envelope from persisted JSON.
+  factory Envelope.fromJson(Map<String, Object?> json) {
+    return Envelope(
+      id: json['id'] as String?,
+      name: json['name']! as String,
+      args: (json['args']! as Map).cast<String, Object?>(),
+      headers: (json['headers'] as Map?)?.cast<String, String>(),
+      enqueuedAt: json['enqueuedAt'] != null
+          ? DateTime.parse(json['enqueuedAt']! as String)
+          : null,
+      notBefore: json['notBefore'] != null
+          ? DateTime.parse(json['notBefore']! as String)
+          : null,
+      priority: (json['priority'] as num?)?.toInt() ?? 0,
+      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
+      maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
+      visibilityTimeout: json['visibilityTimeout'] != null
+          ? Duration(milliseconds: (json['visibilityTimeout']! as num).toInt())
+          : null,
+      queue: json['queue'] as String? ?? 'default',
+      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+    );
+  }
 
   /// Unique identifier for the logical task.
   final String id;
@@ -139,6 +188,7 @@ class Envelope {
   /// Additional metadata persisted with the message.
   final Map<String, Object?> meta;
 
+  /// Returns a copy of this envelope with updated fields.
   Envelope copyWith({
     String? id,
     Map<String, Object?>? args,
@@ -168,6 +218,7 @@ class Envelope {
     );
   }
 
+  /// Serializes this envelope to JSON.
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
@@ -183,35 +234,13 @@ class Envelope {
     'meta': meta,
   };
 
-  static Envelope fromJson(Map<String, Object?> json) {
-    return Envelope(
-      id: json['id'] as String?,
-      name: json['name'] as String,
-      args: (json['args'] as Map).cast<String, Object?>(),
-      headers: (json['headers'] as Map?)?.cast<String, String>(),
-      enqueuedAt: json['enqueuedAt'] != null
-          ? DateTime.parse(json['enqueuedAt'] as String)
-          : null,
-      notBefore: json['notBefore'] != null
-          ? DateTime.parse(json['notBefore'] as String)
-          : null,
-      priority: (json['priority'] as num?)?.toInt() ?? 0,
-      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
-      maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
-      visibilityTimeout: json['visibilityTimeout'] != null
-          ? Duration(milliseconds: (json['visibilityTimeout'] as num).toInt())
-          : null,
-      queue: json['queue'] as String? ?? 'default',
-      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
-    );
-  }
-
   @override
   String toString() => jsonEncode(toJson());
 }
 
 /// Runtime wrapper containing the envelope plus broker-specific receipt info.
 class Delivery {
+  /// Creates a delivery wrapper for a broker receipt.
   Delivery({
     required this.envelope,
     required this.receipt,
@@ -224,6 +253,7 @@ class Delivery {
              priority: envelope.priority,
            );
 
+  /// The underlying envelope that was delivered.
   final Envelope envelope;
 
   /// Broker specific handle used for ack/nack/extend operations.

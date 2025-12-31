@@ -40,7 +40,7 @@ void main() {
     await service.close();
     await broker.close();
     await backend.close();
-    if (await dbFile.exists()) {
+    if (dbFile.existsSync()) {
       await dbFile.delete();
     }
     await tempDir.delete(recursive: true);
@@ -94,7 +94,6 @@ void main() {
     await backend.setWorkerHeartbeat(
       WorkerHeartbeat(
         workerId: 'worker-sqlite',
-        namespace: 'stem',
         timestamp: DateTime.now(),
         isolateCount: 1,
         inflight: 0,

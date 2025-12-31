@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
+import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -11,7 +11,8 @@ void main() {
       'Postgres result backend integration requires STEM_TEST_POSTGRES_URL',
       () {},
       skip:
-          'Set STEM_TEST_POSTGRES_URL to run Postgres result backend integration tests.',
+          'Set STEM_TEST_POSTGRES_URL to run Postgres result backend '
+          'integration tests.',
     );
     return;
   }
@@ -28,9 +29,6 @@ void main() {
       dispose: (backend) => (backend as PostgresResultBackend).close(),
     ),
     settings: const ResultBackendContractSettings(
-      statusTtl: Duration(seconds: 1),
-      groupTtl: Duration(seconds: 1),
-      heartbeatTtl: Duration(seconds: 1),
       settleDelay: Duration(milliseconds: 250),
     ),
   );

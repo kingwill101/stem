@@ -27,11 +27,11 @@ Future<void> main() async {
   );
 
   final status = await backend.get(envelope.id);
-  print('Stored ${status?.id} with state ${status?.state}');
+  stdout.writeln('Stored ${status?.id} with state ${status?.state}');
 
   await backend.close();
   await broker.close();
-  if (await databaseFile.exists()) {
-    await databaseFile.delete();
+  if (databaseFile.existsSync()) {
+    databaseFile.deleteSync();
   }
 }

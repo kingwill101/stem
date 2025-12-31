@@ -14,9 +14,6 @@ const FieldDefinition _$StemGroupResultGroupIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultTaskIdField = FieldDefinition(
@@ -26,9 +23,6 @@ const FieldDefinition _$StemGroupResultTaskIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultStateField = FieldDefinition(
@@ -36,11 +30,7 @@ const FieldDefinition _$StemGroupResultStateField = FieldDefinition(
   columnName: 'state',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultPayloadField = FieldDefinition(
@@ -48,11 +38,7 @@ const FieldDefinition _$StemGroupResultPayloadField = FieldDefinition(
   columnName: 'payload',
   dartType: 'Object',
   resolvedType: 'Object?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -61,11 +47,7 @@ const FieldDefinition _$StemGroupResultErrorField = FieldDefinition(
   columnName: 'error',
   dartType: 'Object',
   resolvedType: 'Object?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -74,11 +56,7 @@ const FieldDefinition _$StemGroupResultAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultMetaField = FieldDefinition(
@@ -86,11 +64,7 @@ const FieldDefinition _$StemGroupResultMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -99,11 +73,7 @@ const FieldDefinition _$StemGroupResultCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupResultUpdatedAtField = FieldDefinition(
@@ -111,11 +81,7 @@ const FieldDefinition _$StemGroupResultUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const RelationDefinition _$StemGroupResultGroupRelation = RelationDefinition(
@@ -141,11 +107,11 @@ Map<String, Object?> _encodeStemGroupResultUntracked(
   };
 }
 
-final ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
+const ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
     ModelDefinition(
       modelName: 'StemGroupResult',
       tableName: 'stem_group_results',
-      fields: const [
+      fields: [
         _$StemGroupResultGroupIdField,
         _$StemGroupResultTaskIdField,
         _$StemGroupResultStateField,
@@ -156,24 +122,14 @@ final ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
         _$StemGroupResultCreatedAtField,
         _$StemGroupResultUpdatedAtField,
       ],
-      relations: const [_$StemGroupResultGroupRelation],
+      relations: [_$StemGroupResultGroupRelation],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        fieldOverrides: const {
+        fieldOverrides: {
           'payload': FieldAttributeMetadata(cast: 'json'),
           'error': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemGroupResultUntracked,
       codec: _$StemGroupResultCodec(),
@@ -228,7 +184,7 @@ class StemGroupResults {
 
   static Query<$StemGroupResult> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemGroupResult>(
     column,
@@ -325,54 +281,52 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemGroupResultGroupIdValue =
+    final stemGroupResultGroupIdValue =
         registry.decodeField<String>(
           _$StemGroupResultGroupIdField,
           data['group_id'],
         ) ??
         (throw StateError('Field groupId on StemGroupResult cannot be null.'));
-    final String stemGroupResultTaskIdValue =
+    final stemGroupResultTaskIdValue =
         registry.decodeField<String>(
           _$StemGroupResultTaskIdField,
           data['task_id'],
         ) ??
         (throw StateError('Field taskId on StemGroupResult cannot be null.'));
-    final String stemGroupResultStateValue =
+    final stemGroupResultStateValue =
         registry.decodeField<String>(
           _$StemGroupResultStateField,
           data['state'],
         ) ??
         (throw StateError('Field state on StemGroupResult cannot be null.'));
-    final Object? stemGroupResultPayloadValue = registry.decodeField<Object?>(
+    final stemGroupResultPayloadValue = registry.decodeField<Object?>(
       _$StemGroupResultPayloadField,
       data['payload'],
     );
-    final Object? stemGroupResultErrorValue = registry.decodeField<Object?>(
+    final stemGroupResultErrorValue = registry.decodeField<Object?>(
       _$StemGroupResultErrorField,
       data['error'],
     );
-    final int stemGroupResultAttemptValue =
+    final stemGroupResultAttemptValue =
         registry.decodeField<int>(
           _$StemGroupResultAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemGroupResult cannot be null.'));
-    final Map<String, Object?> stemGroupResultMetaValue =
+    final stemGroupResultMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemGroupResultMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemGroupResult cannot be null.'));
-    final DateTime? stemGroupResultCreatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemGroupResultCreatedAtField,
-          data['created_at'],
-        );
-    final DateTime? stemGroupResultUpdatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemGroupResultUpdatedAtField,
-          data['updated_at'],
-        );
+    final stemGroupResultCreatedAtValue = registry.decodeField<DateTime?>(
+      _$StemGroupResultCreatedAtField,
+      data['created_at'],
+    );
+    final stemGroupResultUpdatedAtValue = registry.decodeField<DateTime?>(
+      _$StemGroupResultUpdatedAtField,
+      data['updated_at'],
+    );
     final model = $StemGroupResult(
       groupId: stemGroupResultGroupIdValue,
       taskId: stemGroupResultTaskIdValue,
@@ -452,12 +406,8 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -527,12 +477,8 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -570,8 +516,8 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
       groupId: row['group_id'] as String?,
       taskId: row['task_id'] as String?,
       state: row['state'] as String?,
-      payload: row['payload'] as Object?,
-      error: row['error'] as Object?,
+      payload: row['payload'],
+      error: row['error'],
       attempt: row['attempt'] as int?,
       meta: row['meta'] as Map<String, Object?>?,
     );
@@ -588,23 +534,23 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
   @override
   $StemGroupResult toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? groupIdValue = groupId;
+    final groupIdValue = groupId;
     if (groupIdValue == null) {
       throw StateError('Missing required field: groupId');
     }
-    final String? taskIdValue = taskId;
+    final taskIdValue = taskId;
     if (taskIdValue == null) {
       throw StateError('Missing required field: taskId');
     }
-    final String? stateValue = state;
+    final stateValue = state;
     if (stateValue == null) {
       throw StateError('Missing required field: state');
     }
-    final int? attemptValue = attempt;
+    final attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final Map<String, Object?>? metaValue = meta;
+    final metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
@@ -653,12 +599,8 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
-      payload: identical(payload, _copyWithSentinel)
-          ? this.payload
-          : payload as Object?,
-      error: identical(error, _copyWithSentinel)
-          ? this.error
-          : error as Object?,
+      payload: identical(payload, _copyWithSentinel) ? this.payload : payload,
+      error: identical(error, _copyWithSentinel) ? this.error : error,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
           : attempt as int?,
@@ -689,10 +631,10 @@ class $StemGroupResult extends StemGroupResult
     required String groupId,
     required String taskId,
     required String state,
-    Object? payload,
-    Object? error,
     required int attempt,
     required Map<String, Object?> meta,
+    Object? payload,
+    Object? error,
   }) : super.new(
          groupId: groupId,
          taskId: taskId,

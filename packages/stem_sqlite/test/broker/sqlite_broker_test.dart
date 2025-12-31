@@ -14,7 +14,7 @@ void main() {
   });
 
   tearDown(() async {
-    if (await dbFile.exists()) {
+    if (dbFile.existsSync()) {
       await dbFile.delete();
     }
     await tempDir.delete(recursive: true);

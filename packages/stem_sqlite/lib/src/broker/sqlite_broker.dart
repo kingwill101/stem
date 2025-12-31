@@ -5,9 +5,10 @@ import 'package:meta/meta.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../models/models.dart';
+import 'package:stem_sqlite/src/connection.dart';
+import 'package:stem_sqlite/src/models/models.dart';
 
+/// SQLite-backed implementation of [Broker].
 class SqliteBroker implements Broker {
   SqliteBroker._(
     this._connections, {
@@ -19,6 +20,7 @@ class SqliteBroker implements Broker {
     _startSweeper();
   }
 
+  /// Opens a broker backed by the provided SQLite [file].
   static Future<SqliteBroker> open(
     File file, {
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
@@ -38,9 +40,17 @@ class SqliteBroker implements Broker {
 
   final SqliteConnections _connections;
   final QueryContext _context;
+
+  /// Default visibility timeout applied to deliveries.
   final Duration defaultVisibilityTimeout;
+
+  /// Poll interval used while waiting for jobs.
   final Duration pollInterval;
+
+  /// Interval used to sweep for expired locks.
   final Duration sweeperInterval;
+
+  /// Retention window for dead letter records.
   final Duration deadLetterRetention;
 
   final Set<_Consumer> _consumers = {};
@@ -53,6 +63,7 @@ class SqliteBroker implements Broker {
   @override
   bool get supportsPriority => true;
 
+  /// Closes the broker and releases any database resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -65,6 +76,7 @@ class SqliteBroker implements Broker {
     await _connections.close();
   }
 
+  /// Runs a maintenance sweep for tests.
   @visibleForTesting
   Future<void> runMaintenance() => _runSweeperCycle();
 
@@ -116,7 +128,8 @@ class SqliteBroker implements Broker {
     final queue = subscription.queues.single;
     final id =
         consumerName ??
-        'sqlite-consumer-${DateTime.now().microsecondsSinceEpoch}-${_consumers.length}';
+        'sqlite-consumer-${DateTime.now().microsecondsSinceEpoch}-'
+            '${_consumers.length}';
     final controller = StreamController<Delivery>.broadcast();
     final consumer = _Consumer(
       broker: this,
@@ -208,12 +221,12 @@ class SqliteBroker implements Broker {
     return _context
         .query<StemQueueJob>()
         .whereEquals('queue', queue)
-        .where((query) {
+        .where((PredicateBuilder<StemQueueJob> query) {
           query
             ..whereNull('notBefore')
             ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
         })
-        .where((query) {
+        .where((PredicateBuilder<StemQueueJob> query) {
           query
             ..whereNull('lockedUntil')
             ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
@@ -348,12 +361,12 @@ class SqliteBroker implements Broker {
       final candidate = await txn
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('notBefore')
               ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
           })
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('lockedUntil')
               ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
@@ -367,12 +380,12 @@ class SqliteBroker implements Broker {
       final updated = await txn
           .query<StemQueueJob>()
           .whereEquals('id', candidate.id)
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('lockedUntil')
               ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
           })
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('notBefore')
               ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
@@ -434,9 +447,6 @@ class SqliteBroker implements Broker {
       maxRetries: envelope.maxRetries,
       priority: priority,
       notBefore: notBefore,
-      lockedAt: null,
-      lockedUntil: null,
-      lockedBy: null,
     ).toTracked();
     await db.repository<StemQueueJob>().upsert(model, uniqueBy: ['id']);
   }
@@ -506,7 +516,7 @@ class _Consumer {
           if (!_running || controller.isClosed) break;
           controller.add(job.toDelivery(leaseExpiresAt: leaseExpiresAt));
         }
-      } catch (_) {
+      } on Object {
         if (!_running || controller.isClosed) break;
         await Future<void>.delayed(broker.pollInterval);
       }
@@ -518,10 +528,6 @@ class _Consumer {
 class _QueuedJob {
   _QueuedJob({required this.id, required this.queue, required this.envelope});
 
-  final String id;
-  final String queue;
-  final Envelope envelope;
-
   factory _QueuedJob.fromModel(StemQueueJob row) {
     return _QueuedJob(
       id: row.id,
@@ -529,6 +535,10 @@ class _QueuedJob {
       envelope: Envelope.fromJson(row.envelope),
     );
   }
+
+  final String id;
+  final String queue;
+  final Envelope envelope;
 
   Delivery toDelivery({required DateTime leaseExpiresAt}) {
     return Delivery(

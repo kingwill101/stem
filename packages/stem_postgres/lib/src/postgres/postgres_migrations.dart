@@ -1,10 +1,13 @@
-import 'postgres_client.dart';
+import 'package:stem_postgres/src/postgres/postgres_client.dart';
 
+/// Ensures legacy Postgres tables exist for older adapters.
 class PostgresMigrations {
+  /// Creates a migrations helper backed by a [PostgresClient].
   PostgresMigrations(this._client);
 
   final PostgresClient _client;
 
+  /// Ensures broker queue tables exist.
   Future<void> ensureQueueTables() async {
     await _client.run((conn) async {
       await conn.execute('''
@@ -22,13 +25,16 @@ CREATE TABLE IF NOT EXISTS stem_jobs (
 )
 ''');
       await conn.execute(
-        'ALTER TABLE stem_jobs ADD COLUMN IF NOT EXISTS priority INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE stem_jobs ADD COLUMN IF NOT EXISTS priority INTEGER '
+        'NOT NULL DEFAULT 0',
       );
       await conn.execute(
-        'CREATE INDEX IF NOT EXISTS stem_jobs_queue_idx ON stem_jobs (queue, not_before)',
+        'CREATE INDEX IF NOT EXISTS stem_jobs_queue_idx ON stem_jobs '
+        '(queue, not_before)',
       );
       await conn.execute(
-        'CREATE INDEX IF NOT EXISTS stem_jobs_priority_idx ON stem_jobs (queue, priority DESC, created_at)',
+        'CREATE INDEX IF NOT EXISTS stem_jobs_priority_idx ON stem_jobs '
+        '(queue, priority DESC, created_at)',
       );
       await conn.execute('''
 CREATE TABLE IF NOT EXISTS stem_broadcast_messages (
@@ -41,7 +47,8 @@ CREATE TABLE IF NOT EXISTS stem_broadcast_messages (
 ''');
       await conn.execute('''
 CREATE TABLE IF NOT EXISTS stem_broadcast_ack (
-  message_id TEXT NOT NULL REFERENCES stem_broadcast_messages(id) ON DELETE CASCADE,
+  message_id TEXT NOT NULL REFERENCES stem_broadcast_messages(id)
+    ON DELETE CASCADE,
   worker_id TEXT NOT NULL,
   acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (message_id, worker_id)
@@ -58,11 +65,13 @@ CREATE TABLE IF NOT EXISTS stem_jobs_dead (
 )
 ''');
       await conn.execute(
-        'CREATE INDEX IF NOT EXISTS stem_jobs_dead_queue_idx ON stem_jobs_dead (queue, dead_lettered_at DESC)',
+        'CREATE INDEX IF NOT EXISTS stem_jobs_dead_queue_idx ON stem_jobs_dead '
+        '(queue, dead_lettered_at DESC)',
       );
     });
   }
 
+  /// Ensures result backend tables exist.
   Future<void> ensureResultTables() async {
     await _client.run((conn) async {
       await conn.execute('''

@@ -13,29 +13,23 @@ dependencies:
   routed_hotwire: ^0.1.0
   stem: ^0.1.0-dev
   stem_cli: ^0.1.0-dev
-  stem_redis: ^0.1.0-dev
   stem_postgres: ^0.1.0-dev
+  stem_redis: ^0.1.0-dev
   stem_sqlite: ^0.1.0-dev
 
 dev_dependencies:
   lints: ^6.0.0
-  very_good_analysis: ^10.0.0
-  test: ^1.26.3
   property_testing: ^0.2.1
   routed_testing: ^0.2.1+1
   server_testing: ^0.2.0
+  test: ^1.26.3
+  very_good_analysis: ^10.0.0
 
 dependency_overrides:
-  stem:
-    path: ../stem
-  stem_cli:
-    path: ../stem_cli
-  stem_postgres:
-    path: ../stem_postgres
-  stem_sqlite:
-    path: ../stem_sqlite
-  stem_redis:
-    path: ../stem_redis
+  contextual: ^2.0.0
+  property_testing:
+    path: ../../../routed_ecosystem/packages/property_testing
+  redis: ^4.0.0
   routed:
     path: ../../../routed_ecosystem/packages/routed
   routed_hotwire:
@@ -44,7 +38,13 @@ dependency_overrides:
     path: ../../../routed_ecosystem/packages/server_testing/routed_testing
   server_testing:
     path: ../../../routed_ecosystem/packages/server_testing/server_testing
-  property_testing:
-    path: ../../../routed_ecosystem/packages/property_testing
-  redis: ^4.0.0
-  contextual: ^2.0.0
+  stem:
+    path: ../stem
+  stem_cli:
+    path: ../stem_cli
+  stem_postgres:
+    path: ../stem_postgres
+  stem_redis:
+    path: ../stem_redis
+  stem_sqlite:
+    path: ../stem_sqlite

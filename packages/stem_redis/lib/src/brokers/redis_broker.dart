@@ -6,7 +6,37 @@ import 'package:redis/redis.dart';
 
 import 'package:stem/stem.dart';
 
+/// Redis streams-backed implementation of [Broker].
 class RedisStreamsBroker implements Broker {
+  /// Creates a broker instance using injected [connection] and [command].
+  ///
+  /// This is intended for unit tests that need to stub Redis behaviour without
+  /// establishing a real network connection.
+  factory RedisStreamsBroker.test({
+    required RedisConnection connection,
+    required Command command,
+    Uri? uri,
+    TlsConfig? tls,
+    String namespace = 'stem',
+    Duration blockTime = const Duration(seconds: 5),
+    int delayedDrainBatch = 128,
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration claimInterval = const Duration(seconds: 30),
+    bool useSharedConnectionForConsumers = true,
+  }) {
+    return RedisStreamsBroker._(
+      uri ?? Uri.parse('redis://localhost:6379/0'),
+      tls,
+      connection,
+      command,
+      namespace: namespace,
+      blockTime: blockTime,
+      delayedDrainBatch: delayedDrainBatch,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      claimInterval: claimInterval,
+      useSharedConnectionForConsumers: useSharedConnectionForConsumers,
+    );
+  }
   RedisStreamsBroker._(
     this._uri,
     this._tls,
@@ -20,10 +50,19 @@ class RedisStreamsBroker implements Broker {
     bool useSharedConnectionForConsumers = false,
   }) : _useSharedConnectionForConsumers = useSharedConnectionForConsumers;
 
+  /// Namespace used to scope Redis keys.
   final String namespace;
+
+  /// Blocking timeout for stream reads.
   final Duration blockTime;
+
+  /// Batch size used when draining delayed items.
   final int delayedDrainBatch;
+
+  /// Default visibility timeout for claimed messages.
   final Duration defaultVisibilityTimeout;
+
+  /// Interval used to claim stalled deliveries.
   final Duration claimInterval;
   final bool _useSharedConnectionForConsumers;
 
@@ -38,10 +77,12 @@ class RedisStreamsBroker implements Broker {
   Future<void>? _reconnectFuture;
   Future<void> _commandQueue = Future.value();
 
+  /// Number of active claim timers.
   int get activeClaimTimerCount => _claimTimers.length;
 
   bool _closed = false;
 
+  /// Connects to Redis and returns a broker instance.
   static Future<RedisStreamsBroker> connect(
     String uri, {
     String namespace = 'stem',
@@ -83,7 +124,7 @@ class RedisStreamsBroker implements Broker {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
         );
         command = await connection.connectWithSocket(socket);
       } on HandshakeException catch (error, stack) {
@@ -117,36 +158,7 @@ class RedisStreamsBroker implements Broker {
     return command;
   }
 
-  /// Creates a broker instance using injected [connection] and [command].
-  ///
-  /// This is intended for unit tests that need to stub Redis behaviour without
-  /// establishing a real network connection.
-  static RedisStreamsBroker test({
-    required RedisConnection connection,
-    required Command command,
-    Uri? uri,
-    TlsConfig? tls,
-    String namespace = 'stem',
-    Duration blockTime = const Duration(seconds: 5),
-    int delayedDrainBatch = 128,
-    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
-    Duration claimInterval = const Duration(seconds: 30),
-    bool useSharedConnectionForConsumers = true,
-  }) {
-    return RedisStreamsBroker._(
-      uri ?? Uri.parse('redis://localhost:6379/0'),
-      tls,
-      connection,
-      command,
-      namespace: namespace,
-      blockTime: blockTime,
-      delayedDrainBatch: delayedDrainBatch,
-      defaultVisibilityTimeout: defaultVisibilityTimeout,
-      claimInterval: claimInterval,
-      useSharedConnectionForConsumers: useSharedConnectionForConsumers,
-    );
-  }
-
+  /// Closes the broker and releases Redis resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -212,7 +224,7 @@ class RedisStreamsBroker implements Broker {
         if (!completer.isCompleted) {
           completer.complete(result);
         }
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         if (!completer.isCompleted) {
           completer.completeError(error, stack);
         }
@@ -227,7 +239,7 @@ class RedisStreamsBroker implements Broker {
   }) async {
     try {
       return await _command.send_object(command);
-    } catch (error) {
+    } on Object catch (error) {
       if (await _recoverFromConnectionError(error) && attempt < 3) {
         return _sendWithRetry(command, attempt: attempt + 1);
       }
@@ -270,7 +282,7 @@ class RedisStreamsBroker implements Broker {
     try {
       try {
         await _connection.close();
-      } catch (_) {
+      } on Object catch (_) {
         // ignore close errors during reconnect
       }
       final newConnection = RedisConnection();
@@ -278,7 +290,7 @@ class RedisStreamsBroker implements Broker {
       _connection = newConnection;
       _command = newCommand;
       completer.complete();
-    } catch (error, stack) {
+    } on Object catch (error, stack) {
       completer.completeError(error, stack);
       rethrow;
     } finally {
@@ -304,7 +316,7 @@ class RedisStreamsBroker implements Broker {
         '0', // use special ID to avoid delivering old entries
         'MKSTREAM',
       ]);
-    } catch (e) {
+    } on Object catch (e) {
       if ('$e'.contains('BUSYGROUP')) {
         // already created
       } else {
@@ -321,7 +333,7 @@ class RedisStreamsBroker implements Broker {
     if (_groupsCreated.contains(key)) return;
     try {
       await _send(['XGROUP', 'CREATE', stream, group, '0', 'MKSTREAM']);
-    } catch (e) {
+    } on Object catch (e) {
       if ('$e'.contains('BUSYGROUP')) {
         // already created
       } else {
@@ -427,7 +439,7 @@ class RedisStreamsBroker implements Broker {
         '0',
         delayedDrainBatch.toString(),
       ]);
-    } catch (error) {
+    } on Object catch (error) {
       if (_shouldSuppressClosedError(error)) {
         return;
       }
@@ -441,7 +453,7 @@ class RedisStreamsBroker implements Broker {
         dynamic removed;
         try {
           removed = await _send(['ZREM', _delayedKey(queue), entry]);
-        } catch (error) {
+        } on Object catch (error) {
           if (_shouldSuppressClosedError(error)) {
             return;
           }
@@ -452,7 +464,7 @@ class RedisStreamsBroker implements Broker {
         }
         if (_asInt(removed) > 0) {
           final map = jsonDecode(entry) as Map<String, Object?>;
-          final env = Envelope.fromJson(map).copyWith(notBefore: null);
+          final env = Envelope.fromJson(map).copyWith();
           await _enqueue(queue, env);
         }
       }
@@ -473,7 +485,8 @@ class RedisStreamsBroker implements Broker {
     }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
-        'RedisStreamsBroker currently supports consuming a single queue per subscription.',
+        'RedisStreamsBroker currently supports consuming a single queue '
+        'per subscription.',
       );
     }
     final queue = subscription.queues.first;
@@ -497,7 +510,9 @@ class RedisStreamsBroker implements Broker {
             !identical(consumerConnection, _connection)) {
           try {
             unawaited(consumerConnection!.close());
-          } catch (_) {}
+          } on Object {
+            // Ignore connection close failures during cleanup.
+          }
           consumerConnection = null;
           consumerCommand = null;
         }
@@ -530,7 +545,7 @@ class RedisStreamsBroker implements Broker {
         }
         final cmd = await ensureConsumerCommand();
         return await cmd.send_object(command);
-      } catch (error) {
+      } on Object catch (error) {
         if (_shouldSuppressClosedError(error) || _closed) {
           return null;
         }
@@ -538,7 +553,7 @@ class RedisStreamsBroker implements Broker {
           if (!_useSharedConnectionForConsumers) {
             try {
               await consumerConnection?.close();
-            } catch (_) {}
+            } on Object catch (_) {}
             consumerConnection = null;
             consumerCommand = null;
           }
@@ -569,7 +584,7 @@ class RedisStreamsBroker implements Broker {
             ...streamKeys,
             ...List.filled(streamKeys.length, '>'),
           ]);
-        } catch (error) {
+        } on Object catch (error) {
           if (_shouldSuppressClosedError(error)) {
             return;
           }
@@ -595,7 +610,7 @@ class RedisStreamsBroker implements Broker {
       }
     }
 
-    loop();
+    unawaited(loop());
     for (final stream in streamKeys) {
       final key = _scheduleClaim(stream, group, consumer, controller);
       claimTimerKeys.add(key);
@@ -620,100 +635,102 @@ class RedisStreamsBroker implements Broker {
     int prefetch,
     StreamController<Delivery> controller,
   ) {
-    Future<void>(() async {
-      final streamKey = _broadcastStreamKey(channel);
-      final group = _broadcastGroupKey(channel, consumer);
-      RedisConnection? broadcastConnection;
-      Command? broadcastCommand;
+    unawaited(
+      Future<void>(() async {
+        final streamKey = _broadcastStreamKey(channel);
+        final group = _broadcastGroupKey(channel, consumer);
+        RedisConnection? broadcastConnection;
+        Command? broadcastCommand;
 
-      Future<Command> ensureBroadcastCommand() async {
-        if (_useSharedConnectionForConsumers) {
-          return _command;
-        }
-        if (broadcastCommand != null) return broadcastCommand!;
-        final connection = RedisConnection();
-        final command = await _openCommand(_uri, _tls, connection);
-        broadcastConnection = connection;
-        broadcastCommand = command;
-        return command;
-      }
-
-      Future<dynamic> sendBroadcastCommand(
-        List<Object> command, {
-        int attempt = 0,
-      }) async {
-        try {
+        Future<Command> ensureBroadcastCommand() async {
           if (_useSharedConnectionForConsumers) {
-            return await _sendWithRetry(command, attempt: attempt);
+            return _command;
           }
-          final cmd = await ensureBroadcastCommand();
-          return await cmd.send_object(command);
-        } catch (error) {
-          if (_shouldSuppressClosedError(error) || _closed) {
-            return null;
-          }
-          if (attempt == 0) {
-            if (!_useSharedConnectionForConsumers) {
-              try {
-                await broadcastConnection?.close();
-              } catch (_) {}
-              broadcastConnection = null;
-              broadcastCommand = null;
-            }
-            return sendBroadcastCommand(command, attempt: attempt + 1);
-          }
-          rethrow;
+          if (broadcastCommand != null) return broadcastCommand!;
+          final connection = RedisConnection();
+          final command = await _openCommand(_uri, _tls, connection);
+          broadcastConnection = connection;
+          broadcastCommand = command;
+          return command;
         }
-      }
 
-      while (!controller.isClosed && !_closed) {
-        await _ensureBroadcastGroup(channel, consumer);
-        dynamic result;
-        try {
-          result = await sendBroadcastCommand([
-            'XREADGROUP',
-            'GROUP',
-            group,
-            consumer,
-            'BLOCK',
-            blockTime.inMilliseconds.toString(),
-            'COUNT',
-            prefetch.toString(),
-            'STREAMS',
-            streamKey,
-            '>',
-          ]);
-        } catch (error) {
-          if (_shouldSuppressClosedError(error)) {
-            return;
+        Future<dynamic> sendBroadcastCommand(
+          List<Object> command, {
+          int attempt = 0,
+        }) async {
+          try {
+            if (_useSharedConnectionForConsumers) {
+              return await _sendWithRetry(command, attempt: attempt);
+            }
+            final cmd = await ensureBroadcastCommand();
+            return await cmd.send_object(command);
+          } on Object catch (error) {
+            if (_shouldSuppressClosedError(error) || _closed) {
+              return null;
+            }
+            if (attempt == 0) {
+              if (!_useSharedConnectionForConsumers) {
+                try {
+                  await broadcastConnection?.close();
+                } on Object catch (_) {}
+                broadcastConnection = null;
+                broadcastCommand = null;
+              }
+              return sendBroadcastCommand(command, attempt: attempt + 1);
+            }
+            rethrow;
           }
-          if ('$error'.contains('NOGROUP')) {
-            _groupsCreated.remove('$streamKey|$group');
-            await _ensureBroadcastGroup(channel, consumer);
+        }
+
+        while (!controller.isClosed && !_closed) {
+          await _ensureBroadcastGroup(channel, consumer);
+          dynamic result;
+          try {
+            result = await sendBroadcastCommand([
+              'XREADGROUP',
+              'GROUP',
+              group,
+              consumer,
+              'BLOCK',
+              blockTime.inMilliseconds.toString(),
+              'COUNT',
+              prefetch.toString(),
+              'STREAMS',
+              streamKey,
+              '>',
+            ]);
+          } on Object catch (error) {
+            if (_shouldSuppressClosedError(error)) {
+              return;
+            }
+            if ('$error'.contains('NOGROUP')) {
+              _groupsCreated.remove('$streamKey|$group');
+              await _ensureBroadcastGroup(channel, consumer);
+              continue;
+            }
+            rethrow;
+          }
+          if (result == null) {
             continue;
           }
-          rethrow;
-        }
-        if (result == null) {
-          continue;
-        }
-        final deliveries = _parseDeliveries(channel, group, consumer, result);
-        for (final delivery in deliveries) {
-          if (controller.isClosed) {
-            break;
+          final deliveries = _parseDeliveries(channel, group, consumer, result);
+          for (final delivery in deliveries) {
+            if (controller.isClosed) {
+              break;
+            }
+            controller.add(delivery);
           }
-          controller.add(delivery);
         }
-      }
-      if (broadcastConnection != null &&
-          !identical(broadcastConnection, _connection)) {
-        try {
-          await broadcastConnection!.close();
-        } catch (_) {}
-        broadcastConnection = null;
-        broadcastCommand = null;
-      }
-    });
+        if (broadcastConnection != null &&
+            !identical(broadcastConnection, _connection)) {
+          try {
+            await broadcastConnection!.close();
+          } on Object catch (_) {}
+          broadcastConnection = null;
+          broadcastCommand = null;
+        }
+      }),
+    );
   }
 
   List<Delivery> _parseDeliveries(
@@ -869,7 +886,7 @@ class RedisStreamsBroker implements Broker {
           'COUNT',
           delayedDrainBatch.toString(),
         ]);
-      } catch (error) {
+      } on Object catch (error) {
         if (_shouldSuppressClosedError(error)) {
           return;
         }
@@ -973,11 +990,12 @@ class RedisStreamsBroker implements Broker {
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
     final stored = await _fetchDeadLetters(queue);
-    try {
-      return stored.firstWhere((entry) => entry.entry.envelope.id == id).entry;
-    } on StateError {
-      return null;
+    for (final entry in stored) {
+      if (entry.entry.envelope.id == id) {
+        return entry.entry;
+      }
     }
+    return null;
   }
 
   @override
@@ -1080,7 +1098,7 @@ class RedisStreamsBroker implements Broker {
       await _send(['DEL', stream]);
       try {
         await _send(['XGROUP', 'DESTROY', stream, _groupKey(queue)]);
-      } catch (_) {
+      } on Object catch (_) {
         // Group may not exist; ignore.
       }
       _groupsCreated.remove('$stream|${_groupKey(queue)}');
@@ -1097,7 +1115,7 @@ class RedisStreamsBroker implements Broker {
       try {
         final lag = await _groupLag(stream, _groupKey(queue));
         total += lag;
-      } catch (error) {
+      } on Object catch (error) {
         if ('$error'.contains('NOGROUP')) {
           _groupsCreated.remove('$stream|${_groupKey(queue)}');
           await _ensureGroupForStream(queue, stream);
@@ -1119,7 +1137,7 @@ class RedisStreamsBroker implements Broker {
         if (result is List && result.isNotEmpty) {
           total += _asInt(result.first);
         }
-      } catch (error) {
+      } on Object catch (error) {
         if ('$error'.contains('NOGROUP')) {
           _groupsCreated.remove('$stream|${_groupKey(queue)}');
           await _ensureGroupForStream(queue, stream);
@@ -1166,13 +1184,13 @@ class RedisStreamsBroker implements Broker {
       final obj = jsonDecode(raw) as Map<String, Object?>;
       return DeadLetterEntry(
         envelope: Envelope.fromJson(
-          (obj['envelope'] as Map).cast<String, Object?>(),
+          (obj['envelope']! as Map).cast<String, Object?>(),
         ),
         reason: obj['reason'] as String?,
         meta: (obj['meta'] as Map?)?.cast<String, Object?>(),
-        deadAt: DateTime.parse(obj['deadAt'] as String),
+        deadAt: DateTime.parse(obj['deadAt']! as String),
       );
-    } catch (_) {
+    } on Object catch (_) {
       return null;
     }
   }
@@ -1214,7 +1232,9 @@ class RedisStreamsBroker implements Broker {
   }
 }
 
+/// Parsed receipt information for Redis stream deliveries.
 class ReceiptInfo {
+  /// Creates a receipt info container.
   ReceiptInfo({
     required this.stream,
     required this.group,
@@ -1222,9 +1242,16 @@ class ReceiptInfo {
     required this.id,
   });
 
+  /// Stream key for the delivery.
   final String stream;
+
+  /// Consumer group name.
   final String group;
+
+  /// Consumer name.
   final String consumer;
+
+  /// Stream entry identifier.
   final String id;
 }
 

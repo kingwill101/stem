@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+/// Settings that tune the lock store contract test suite.
 class LockStoreContractSettings {
+  /// Creates lock store contract settings.
   const LockStoreContractSettings({
     this.initialTtl = const Duration(milliseconds: 200),
     this.expiryBackoff = const Duration(milliseconds: 200),
@@ -16,7 +18,9 @@ class LockStoreContractSettings {
   final Duration expiryBackoff;
 }
 
+/// Factory hooks used by the lock store contract test suite.
 class LockStoreContractFactory {
+  /// Creates a lock store contract factory.
   const LockStoreContractFactory({required this.create, this.dispose});
 
   /// Creates a fresh lock store instance for each test case.

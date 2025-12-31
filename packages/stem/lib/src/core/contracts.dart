@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'envelope.dart';
-import 'task_invocation.dart';
-import '../observability/heartbeat.dart';
-import '../scheduler/schedule_spec.dart';
-import 'task_payload_encoder.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/task_invocation.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/observability/heartbeat.dart';
+import 'package:stem/src/scheduler/schedule_spec.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
 class RoutingSubscription {
+  /// Creates a new [RoutingSubscription] instance.
   RoutingSubscription({
     required List<String> queues,
     List<String>? broadcastChannels,
@@ -23,11 +24,13 @@ class RoutingSubscription {
        ) {
     if (this.queues.isEmpty && this.broadcastChannels.isEmpty) {
       throw ArgumentError(
-        'RoutingSubscription must include at least one queue or broadcast channel.',
+        'RoutingSubscription must include at least one queue '
+        'or broadcast channel.',
       );
     }
   }
 
+  /// Creates a [RoutingSubscription] for a single queue.
   factory RoutingSubscription.singleQueue(String queue) {
     final trimmed = queue.trim();
     if (trimmed.isEmpty) {
@@ -56,13 +59,15 @@ class RoutingSubscription {
 abstract class Broker {
   /// Publishes the given [envelope] using [routing] metadata when provided.
   ///
-  /// When [routing] is omitted, brokers MUST fall back to [Envelope.queue] and existing semantics.
+  /// When [routing] is omitted, brokers MUST fall back to [Envelope.queue] and
+  /// existing semantics.
   Future<void> publish(Envelope envelope, {RoutingInfo? routing});
 
   /// Returns a stream of deliveries based on the supplied [subscription].
   ///
   /// The [prefetch] parameter specifies the number of messages to prefetch.
-  /// [consumerGroup] and [consumerName] can be used for consumer identification.
+  /// [consumerGroup] and [consumerName] can be used for consumer
+  /// identification.
   Stream<Delivery> consume(
     RoutingSubscription subscription, {
     int prefetch = 1,
@@ -80,7 +85,8 @@ abstract class Broker {
 
   /// Sends the [delivery] to the dead letter queue.
   ///
-  /// [reason] provides the reason for dead lettering, and [meta] additional data.
+  /// [reason] provides the reason for dead lettering, and [meta] additional
+  /// data.
   Future<void> deadLetter(
     Delivery delivery, {
     String? reason,
@@ -142,9 +148,29 @@ abstract class Broker {
 }
 
 /// Logical task status across enqueue, running, success, failure states.
-enum TaskState { queued, running, succeeded, failed, retried, cancelled }
+enum TaskState {
+  /// Task is queued and awaiting execution.
+  queued,
 
+  /// Task is currently executing.
+  running,
+
+  /// Task completed successfully.
+  succeeded,
+
+  /// Task failed during execution.
+  failed,
+
+  /// Task was retried and is pending another attempt.
+  retried,
+
+  /// Task was cancelled before completion.
+  cancelled,
+}
+
+/// Helpers for reasoning about task lifecycle states.
 extension TaskStateX on TaskState {
+  /// Whether this state is terminal (no further transitions expected).
   bool get isTerminal =>
       this == TaskState.succeeded ||
       this == TaskState.failed ||
@@ -153,14 +179,32 @@ extension TaskStateX on TaskState {
 
 /// Canonical task record stored in the result backend.
 class TaskStatus {
+  /// Creates a task status snapshot.
   TaskStatus({
     required this.id,
     required this.state,
+    required this.attempt,
     this.payload,
     this.error,
     Map<String, Object?>? meta,
-    required this.attempt,
   }) : meta = Map.unmodifiable(meta ?? const {});
+
+  /// Builds a status snapshot from persisted JSON.
+  factory TaskStatus.fromJson(Map<String, Object?> json) {
+    return TaskStatus(
+      id: json['id']! as String,
+      state: TaskState.values.firstWhere(
+        (value) => value.name == json['state'],
+        orElse: () => TaskState.queued,
+      ),
+      payload: json['payload'],
+      error: json['error'] != null
+          ? TaskError.fromJson((json['error']! as Map).cast<String, Object?>())
+          : null,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
+    );
+  }
 
   /// The unique identifier for this task status.
   final String id;
@@ -180,6 +224,7 @@ class TaskStatus {
   /// The attempt number for this task execution.
   final int attempt;
 
+  /// Serializes this status to JSON.
   Map<String, Object?> toJson() => {
     'id': id,
     'state': state.name,
@@ -188,26 +233,11 @@ class TaskStatus {
     'meta': meta,
     'attempt': attempt,
   };
-
-  factory TaskStatus.fromJson(Map<String, Object?> json) {
-    return TaskStatus(
-      id: json['id'] as String,
-      state: TaskState.values.firstWhere(
-        (value) => value.name == json['state'],
-        orElse: () => TaskState.queued,
-      ),
-      payload: json['payload'],
-      error: json['error'] != null
-          ? TaskError.fromJson((json['error'] as Map).cast<String, Object?>())
-          : null,
-      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
-      attempt: (json['attempt'] as num?)?.toInt() ?? 0,
-    );
-  }
 }
 
 /// Error metadata captured for failures.
 class TaskError {
+  /// Creates an error metadata record.
   const TaskError({
     required this.type,
     required this.message,
@@ -215,6 +245,17 @@ class TaskError {
     this.retryable = false,
     this.meta = const {},
   });
+
+  /// Builds error metadata from persisted JSON.
+  factory TaskError.fromJson(Map<String, Object?> json) {
+    return TaskError(
+      type: json['type'] as String? ?? 'Unknown',
+      message: json['message'] as String? ?? '',
+      stack: json['stack'] as String?,
+      retryable: json['retryable'] as bool? ?? false,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+    );
+  }
 
   /// The type of the error.
   final String type;
@@ -231,6 +272,7 @@ class TaskError {
   /// Additional metadata for this error.
   final Map<String, Object?> meta;
 
+  /// Serializes the error metadata to JSON.
   Map<String, Object?> toJson() => {
     'type': type,
     'message': message,
@@ -238,26 +280,29 @@ class TaskError {
     'retryable': retryable,
     'meta': meta,
   };
-
-  factory TaskError.fromJson(Map<String, Object?> json) {
-    return TaskError(
-      type: json['type'] as String? ?? 'Unknown',
-      message: json['message'] as String? ?? '',
-      stack: json['stack'] as String?,
-      retryable: json['retryable'] as bool? ?? false,
-      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
-    );
-  }
 }
 
 /// Dead letter queue entry containing the failed [envelope] and metadata.
 class DeadLetterEntry {
+  /// Creates a dead letter entry record.
   DeadLetterEntry({
     required this.envelope,
+    required this.deadAt,
     this.reason,
     Map<String, Object?>? meta,
-    required this.deadAt,
   }) : meta = Map.unmodifiable(meta ?? const {});
+
+  /// Builds a dead letter entry from persisted JSON.
+  factory DeadLetterEntry.fromJson(Map<String, Object?> json) {
+    return DeadLetterEntry(
+      envelope: Envelope.fromJson(
+        (json['envelope']! as Map).cast<String, Object?>(),
+      ),
+      reason: json['reason'] as String?,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+      deadAt: DateTime.parse(json['deadAt']! as String),
+    );
+  }
 
   /// Envelope that failed processing.
   final Envelope envelope;
@@ -271,27 +316,18 @@ class DeadLetterEntry {
   /// Timestamp when the task was dead-lettered.
   final DateTime deadAt;
 
+  /// Serializes this entry to JSON.
   Map<String, Object?> toJson() => {
     'envelope': envelope.toJson(),
     'reason': reason,
     'meta': meta,
     'deadAt': deadAt.toIso8601String(),
   };
-
-  factory DeadLetterEntry.fromJson(Map<String, Object?> json) {
-    return DeadLetterEntry(
-      envelope: Envelope.fromJson(
-        (json['envelope'] as Map).cast<String, Object?>(),
-      ),
-      reason: json['reason'] as String?,
-      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
-      deadAt: DateTime.parse(json['deadAt'] as String),
-    );
-  }
 }
 
 /// Page of dead letter results with optional continuation offset.
 class DeadLetterPage {
+  /// Creates a page of dead letter entries.
   const DeadLetterPage({required this.entries, this.nextOffset});
 
   /// Entries included in this page.
@@ -306,6 +342,7 @@ class DeadLetterPage {
 
 /// Result describing entries considered for replay.
 class DeadLetterReplayResult {
+  /// Creates a replay result wrapper.
   const DeadLetterReplayResult({required this.entries, required this.dryRun});
 
   /// Entries that matched the replay filters.
@@ -323,7 +360,8 @@ class DeadLetterReplayResult {
 abstract class ResultBackend {
   /// Sets the status for the task with the given [taskId].
   ///
-  /// Updates the [state], [payload], [error], [attempt], [meta], and sets a [ttl] if provided.
+  /// Updates the [state], [payload], [error], [attempt], and [meta], and sets a
+  /// [ttl] if provided.
   Future<void> set(
     String taskId,
     TaskState state, {
@@ -334,27 +372,33 @@ abstract class ResultBackend {
     Duration? ttl,
   });
 
-  /// Retrieves the [TaskStatus] for the task with the given [taskId], or null if not found.
+  /// Retrieves the [TaskStatus] for the task with the given [taskId], or null
+  /// if not found.
   Future<TaskStatus?> get(String taskId);
 
-  /// Returns a stream of [TaskStatus] updates for the task with the given [taskId].
+  /// Returns a stream of [TaskStatus] updates for the task with the given
+  /// [taskId].
   Stream<TaskStatus> watch(String taskId);
 
   /// Persist the latest [heartbeat] snapshot for a worker.
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
 
-  /// Retrieve the last persisted heartbeat snapshot for [workerId], or null if
+  /// Retrieves the last persisted heartbeat snapshot for [workerId], or null if
   /// no heartbeat has been recorded within the retention window.
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId);
+
+  /// Lists all worker heartbeat snapshots.
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats();
 
   /// Initializes a group with the given [descriptor].
   Future<void> initGroup(GroupDescriptor descriptor);
 
-  /// Adds the [status] to the group with the given [groupId] and returns the updated [GroupStatus].
+  /// Adds the [status] to the group with the given [groupId] and returns the
+  /// updated [GroupStatus].
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status);
 
-  /// Retrieves the [GroupStatus] for the group with the given [groupId], or null if not found.
+  /// Retrieves the [GroupStatus] for the group with the given [groupId], or
+  /// null if not found.
   Future<GroupStatus?> getGroup(String groupId);
 
   /// Updates the expiration for the given [taskId].
@@ -374,6 +418,7 @@ abstract class ResultBackend {
 
 /// Schedule entry persisted by a Beat-like scheduler.
 class ScheduleEntry {
+  /// Creates a schedule entry for a recurring task.
   ScheduleEntry({
     required this.id,
     required this.taskName,
@@ -400,6 +445,41 @@ class ScheduleEntry {
   }) : args = Map.unmodifiable(args ?? const {}),
        kwargs = Map.unmodifiable(kwargs ?? const {}),
        meta = Map.unmodifiable(meta ?? const {});
+
+  /// Builds a schedule entry from persisted JSON.
+  factory ScheduleEntry.fromJson(Map<String, Object?> json) {
+    final spec = ScheduleSpec.fromPersisted(json['spec']);
+    return ScheduleEntry(
+      id: json['id']! as String,
+      taskName: json['taskName']! as String,
+      queue: json['queue']! as String,
+      spec: spec,
+      args: (json['args'] as Map?)?.cast<String, Object?>(),
+      kwargs: (json['kwargs'] as Map?)?.cast<String, Object?>(),
+      enabled: json['enabled'] as bool? ?? true,
+      jitter: json['jitterMs'] != null
+          ? Duration(milliseconds: (json['jitterMs']! as num).toInt())
+          : null,
+      lastRunAt: _parseOptionalDate(json['lastRunAt']),
+      nextRunAt: _parseOptionalDate(json['nextRunAt']),
+      lastJitter: json['lastJitterMs'] != null
+          ? Duration(milliseconds: (json['lastJitterMs']! as num).toInt())
+          : null,
+      lastError: json['lastError'] as String?,
+      timezone: json['timezone'] as String?,
+      totalRunCount: (json['totalRunCount'] as num?)?.toInt() ?? 0,
+      lastSuccessAt: _parseOptionalDate(json['lastSuccessAt']),
+      lastErrorAt: _parseOptionalDate(json['lastErrorAt']),
+      drift: json['driftMs'] != null
+          ? Duration(milliseconds: (json['driftMs']! as num).toInt())
+          : null,
+      expireAt: _parseOptionalDate(json['expireAt']),
+      createdAt: _parseOptionalDate(json['createdAt']),
+      updatedAt: _parseOptionalDate(json['updatedAt']),
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
+    );
+  }
 
   /// The unique identifier for this schedule entry.
   final String id;
@@ -469,6 +549,7 @@ class ScheduleEntry {
 
   static const Object _sentinel = Object();
 
+  /// Returns a copy of this entry with the provided overrides.
   ScheduleEntry copyWith({
     String? id,
     String? taskName,
@@ -531,6 +612,7 @@ class ScheduleEntry {
     );
   }
 
+  /// Serializes this entry to JSON.
   Map<String, Object?> toJson() => {
     'id': id,
     'taskName': taskName,
@@ -555,40 +637,6 @@ class ScheduleEntry {
     'version': version,
     'meta': meta,
   };
-
-  factory ScheduleEntry.fromJson(Map<String, Object?> json) {
-    final spec = ScheduleSpec.fromPersisted(json['spec']);
-    return ScheduleEntry(
-      id: json['id'] as String,
-      taskName: json['taskName'] as String,
-      queue: json['queue'] as String,
-      spec: spec,
-      args: (json['args'] as Map?)?.cast<String, Object?>(),
-      kwargs: (json['kwargs'] as Map?)?.cast<String, Object?>(),
-      enabled: json['enabled'] as bool? ?? true,
-      jitter: json['jitterMs'] != null
-          ? Duration(milliseconds: (json['jitterMs'] as num).toInt())
-          : null,
-      lastRunAt: _parseOptionalDate(json['lastRunAt']),
-      nextRunAt: _parseOptionalDate(json['nextRunAt']),
-      lastJitter: json['lastJitterMs'] != null
-          ? Duration(milliseconds: (json['lastJitterMs'] as num).toInt())
-          : null,
-      lastError: json['lastError'] as String?,
-      timezone: json['timezone'] as String?,
-      totalRunCount: (json['totalRunCount'] as num?)?.toInt() ?? 0,
-      lastSuccessAt: _parseOptionalDate(json['lastSuccessAt']),
-      lastErrorAt: _parseOptionalDate(json['lastErrorAt']),
-      drift: json['driftMs'] != null
-          ? Duration(milliseconds: (json['driftMs'] as num).toInt())
-          : null,
-      expireAt: _parseOptionalDate(json['expireAt']),
-      createdAt: _parseOptionalDate(json['createdAt']),
-      updatedAt: _parseOptionalDate(json['updatedAt']),
-      version: (json['version'] as num?)?.toInt() ?? 0,
-      meta: (json['meta'] as Map?)?.cast<String, Object?>() ?? const {},
-    );
-  }
 }
 
 DateTime? _parseOptionalDate(Object? value) {
@@ -603,7 +651,8 @@ DateTime? _parseOptionalDate(Object? value) {
 /// Storage abstraction used by the scheduler to fetch due entries.
 /// Since: 0.1.0
 abstract class ScheduleStore {
-  /// Returns a list of [ScheduleEntry] instances that are due at the given [now] time, limited to [limit].
+  /// Returns a list of [ScheduleEntry] instances due at [now], limited to
+  /// [limit].
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100});
 
   /// Inserts or updates the [entry] in the store.
@@ -634,6 +683,7 @@ abstract class ScheduleStore {
 
 /// Thrown when a schedule mutation conflicts with a newer store version.
 class ScheduleConflictException implements Exception {
+  /// Creates a conflict error for the given entry [id].
   ScheduleConflictException(
     this.id, {
     required this.expectedVersion,
@@ -651,11 +701,13 @@ class ScheduleConflictException implements Exception {
 
   @override
   String toString() =>
-      'ScheduleConflictException(id: $id, expected: $expectedVersion, actual: $actualVersion)';
+      'ScheduleConflictException(id: $id, expected: $expectedVersion, '
+      'actual: $actualVersion)';
 }
 
 /// Configuration options attached to task handlers.
 class TaskOptions {
+  /// Creates task options used during enqueue and execution.
   const TaskOptions({
     this.queue = 'default',
     this.maxRetries = 0,
@@ -729,6 +781,7 @@ class TaskOptions {
 
 /// Context passed to handler implementations during execution.
 class TaskContext {
+  /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
     required this.attempt,
@@ -788,13 +841,13 @@ abstract class TaskHandler<R> {
 /// Registry mapping task names to handler implementations.
 abstract class TaskRegistry {
   /// Registers the [handler] with this registry.
-  void register(TaskHandler handler, {bool overrideExisting = false});
+  void register(TaskHandler<Object?> handler, {bool overrideExisting = false});
 
   /// Resolves the handler for the given [name], or null if not found.
-  TaskHandler? resolve(String name);
+  TaskHandler<Object?>? resolve(String name);
 
   /// All handlers currently registered.
-  Iterable<TaskHandler> get handlers;
+  Iterable<TaskHandler<Object?>> get handlers;
 
   /// Stream of registration events for observers.
   Stream<TaskRegistrationEvent> get onRegister;
@@ -802,13 +855,13 @@ abstract class TaskRegistry {
 
 /// Default in-memory registry implementation.
 class SimpleTaskRegistry implements TaskRegistry {
-  final Map<String, TaskHandler> _handlers = {};
+  final Map<String, TaskHandler<Object?>> _handlers = {};
   final StreamController<TaskRegistrationEvent> _registerController =
       StreamController<TaskRegistrationEvent>.broadcast();
 
-  @override
   /// Registers the [handler] in this registry.
-  void register(TaskHandler handler, {bool overrideExisting = false}) {
+  @override
+  void register(TaskHandler<Object?> handler, {bool overrideExisting = false}) {
     final existing = _handlers[handler.name];
     if (existing != null && !overrideExisting) {
       throw ArgumentError(
@@ -825,12 +878,13 @@ class SimpleTaskRegistry implements TaskRegistry {
     );
   }
 
-  @override
   /// Resolves the handler for the given [name], or returns null if not found.
-  TaskHandler? resolve(String name) => _handlers[name];
+  @override
+  TaskHandler<Object?>? resolve(String name) => _handlers[name];
 
   @override
-  Iterable<TaskHandler> get handlers => UnmodifiableListView(_handlers.values);
+  Iterable<TaskHandler<Object?>> get handlers =>
+      UnmodifiableListView(_handlers.values);
 
   @override
   Stream<TaskRegistrationEvent> get onRegister => _registerController.stream;
@@ -838,6 +892,7 @@ class SimpleTaskRegistry implements TaskRegistry {
 
 /// Optional task metadata for documentation and tooling.
 class TaskMetadata {
+  /// Creates task metadata for documentation and tooling.
   const TaskMetadata({
     this.description,
     this.tags = const [],
@@ -868,12 +923,18 @@ class TaskMetadata {
   final TaskPayloadEncoder? argsEncoder;
 }
 
+/// Encodes strongly typed task arguments into a JSON-ready map.
 typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
+
+/// Builds metadata for a task invocation using its arguments.
 typedef TaskMetaBuilder<TArgs> = Map<String, Object?> Function(TArgs args);
+
+/// Decodes a persisted task result payload into a typed value.
 typedef TaskResultDecoder<TResult> = TResult Function(Object? payload);
 
 /// Event emitted when a task handler registers with a registry.
 class TaskRegistrationEvent {
+  /// Creates a registration event snapshot.
   const TaskRegistrationEvent({
     required this.name,
     required this.handler,
@@ -884,7 +945,7 @@ class TaskRegistrationEvent {
   final String name;
 
   /// Handler implementation that was registered.
-  final TaskHandler handler;
+  final TaskHandler<Object?> handler;
 
   /// Whether this registration replaced a previous handler.
   final bool overridden;
@@ -892,6 +953,7 @@ class TaskRegistrationEvent {
 
 /// Declarative task definition to build typed enqueue calls.
 class TaskDefinition<TArgs, TResult> {
+  /// Creates a typed task definition with encoding/decoding hooks.
   const TaskDefinition({
     required this.name,
     required TaskArgsEncoder<TArgs> encodeArgs,
@@ -910,6 +972,8 @@ class TaskDefinition<TArgs, TResult> {
 
   /// Metadata associated with this task for documentation/tooling.
   final TaskMetadata metadata;
+
+  /// Optional decoder for converting persisted payloads into a typed result.
   final TaskResultDecoder<TResult>? decodeResult;
 
   final TaskArgsEncoder<TArgs> _encodeArgs;
@@ -936,13 +1000,16 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Encodes arguments into a JSON-ready map.
   Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
 
+  /// Builds metadata for the given arguments.
   Map<String, Object?> encodeMeta(TArgs args) {
     final metaBuilder = _encodeMeta;
     return metaBuilder != null ? metaBuilder(args) : const {};
   }
 
+  /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) {
     if (payload == null) return null;
     final decoder = decodeResult;
@@ -964,11 +1031,22 @@ class TaskCall<TArgs, TResult> {
     this.notBefore,
   });
 
+  /// The task definition this call was derived from.
   final TaskDefinition<TArgs, TResult> definition;
+
+  /// Typed arguments for the task invocation.
   final TArgs args;
+
+  /// Headers attached to the outbound envelope.
   final Map<String, String> headers;
+
+  /// Optional task options override for this call.
   final TaskOptions? options;
+
+  /// Optional schedule time for delayed execution.
   final DateTime? notBefore;
+
+  /// Metadata associated with this invocation.
   final Map<String, Object?> meta;
 
   /// Task name resolved from the definition.
@@ -980,6 +1058,7 @@ class TaskCall<TArgs, TResult> {
   /// Resolve final options combining call overrides with defaults.
   TaskOptions resolveOptions() => options ?? definition.defaultOptions;
 
+  /// Returns a copy of this call with updated properties.
   TaskCall<TArgs, TResult> copyWith({
     Map<String, String>? headers,
     TaskOptions? options,
@@ -999,9 +1078,13 @@ class TaskCall<TArgs, TResult> {
 
 /// Fluent builder used to construct rich enqueue requests.
 class TaskEnqueueBuilder<TArgs, TResult> {
+  /// Creates a fluent builder for enqueue calls.
   TaskEnqueueBuilder({required this.definition, required this.args});
 
+  /// Task definition used to construct the call.
   final TaskDefinition<TArgs, TResult> definition;
+
+  /// Typed arguments for the task invocation.
   final TArgs args;
 
   Map<String, String>? _headers;
@@ -1091,15 +1174,20 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 
 /// Retry strategy used to compute the next backoff delay.
 /// Since: 0.1.0
+// Intentionally an interface for DI and test doubles.
+// ignore: one_member_abstracts
 abstract class RetryStrategy {
-  /// Computes the next delay duration for the given [attempt], [error], and [stackTrace].
+  /// Computes the next delay duration for [attempt], [error], and [stackTrace].
   Duration nextDelay(int attempt, Object error, StackTrace stackTrace);
 }
 
 /// Optional rate limiter interface shared across workers.
 /// Since: 0.1.0
+// Intentionally an interface for DI and test doubles.
+// ignore: one_member_abstracts
 abstract class RateLimiter {
-  /// Attempts to acquire [tokens] for the given [key], with optional [interval] and [meta].
+  /// Attempts to acquire [tokens] for [key], with optional [interval] and
+  /// [meta].
   Future<RateLimitDecision> acquire(
     String key, {
     int tokens = 1,
@@ -1110,6 +1198,7 @@ abstract class RateLimiter {
 
 /// Result of attempting to acquire tokens from the rate limiter.
 class RateLimitDecision {
+  /// Creates a rate limit decision outcome.
   const RateLimitDecision({
     required this.allowed,
     this.retryAfter,
@@ -1129,14 +1218,15 @@ class RateLimitDecision {
 /// Lock store used for unique jobs or scheduling coordination.
 /// Since: 0.1.0
 abstract class LockStore {
-  /// Attempts to acquire a lock for the given [key], with [ttl] and optional [owner].
+  /// Attempts to acquire a lock for [key], with [ttl] and optional [owner].
   Future<Lock?> acquire(
     String key, {
     Duration ttl = const Duration(seconds: 30),
     String? owner,
   });
 
-  /// Returns the owner currently holding the lock for [key], or null if unlocked.
+  /// Returns the owner currently holding the lock for [key], or null if
+  /// unlocked.
   Future<String?> ownerOf(String key);
 
   /// Releases the lock identified by [key] if held by [owner].
@@ -1146,6 +1236,7 @@ abstract class LockStore {
   Future<bool> release(String key, String owner);
 }
 
+/// Handle to a lock acquired from a [LockStore].
 abstract class Lock {
   /// The key of this lock.
   String get key;
@@ -1179,6 +1270,7 @@ abstract class Middleware {
 
 /// Descriptor for group (e.g., chord) aggregation.
 class GroupDescriptor {
+  /// Creates a group descriptor for chord aggregation.
   GroupDescriptor({
     required this.id,
     required this.expected,
@@ -1201,6 +1293,7 @@ class GroupDescriptor {
 
 /// Aggregated status for a group/chord.
 class GroupStatus {
+  /// Creates a group status snapshot.
   GroupStatus({
     required this.id,
     required this.expected,

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:redis/redis.dart';
 import 'package:stem/stem.dart';
 
+/// Redis-backed implementation of [WorkflowStore].
 class RedisWorkflowStore implements WorkflowStore {
   RedisWorkflowStore._(
     this._connection,
@@ -13,10 +14,13 @@ class RedisWorkflowStore implements WorkflowStore {
 
   final RedisConnection _connection;
   final Command _command;
+
+  /// Namespace used to scope workflow keys.
   final String namespace;
   final WorkflowClock _clock;
   int _idCounter = 0;
 
+  /// Connects to Redis and returns a workflow store instance.
   static Future<RedisWorkflowStore> connect(
     String uri, {
     String namespace = 'stem',
@@ -80,7 +84,7 @@ class RedisWorkflowStore implements WorkflowStore {
     return result;
   }
 
-  static const _luaRegisterWatcher = r'''
+  static const _luaRegisterWatcher = '''
 local runKey = KEYS[1]
 local watchersHash = KEYS[2]
 local topicSetKey = KEYS[3]
@@ -127,7 +131,7 @@ end
 return 1
 ''';
 
-  static const _luaResolveWatchers = r'''
+  static const _luaResolveWatchers = '''
 local watchersHash = KEYS[1]
 local dueKey = KEYS[2]
 local watchersTopicKey = KEYS[3]
@@ -182,7 +186,7 @@ end
 return results
 ''';
 
-  static const _luaRemoveWatcher = r'''
+  static const _luaRemoveWatcher = '''
 local watchersHash = KEYS[1]
 local dueKey = KEYS[2]
 
@@ -805,6 +809,7 @@ return 1
     return entries;
   }
 
+  /// Closes the workflow store and releases Redis resources.
   Future<void> close() async {
     await _connection.close();
   }

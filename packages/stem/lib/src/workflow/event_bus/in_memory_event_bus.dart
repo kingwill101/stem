@@ -1,13 +1,15 @@
-import '../core/event_bus.dart';
-import '../core/workflow_store.dart';
+import 'package:stem/src/workflow/core/event_bus.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
 
 /// No-op [EventBus] suitable for single-process tests.
 ///
 /// Notifications are short-circuited through the [WorkflowStore] since the
 /// runtime already knows which runs are awaiting a topic.
 class InMemoryEventBus implements EventBus {
+  /// Creates an in-memory event bus bound to a [store].
   InMemoryEventBus(this.store);
 
+  /// Workflow store used to resolve waiting runs.
   final WorkflowStore store;
 
   /// Simply drops the event because the runtime fetches waiting runs directly

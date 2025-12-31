@@ -9,15 +9,16 @@ environment:
 # Add regular dependencies here.
 dependencies:
   collection: ^1.18.0
-  dartastic_opentelemetry: ^0.9.3
-  dartastic_opentelemetry_api: ^0.8.8
   contextual: ^2.0.0
-  yaml: ^3.1.3
   crypto: ^3.0.3
   cryptography: ^2.7.0
+  dartastic_opentelemetry: ^0.9.3
+  dartastic_opentelemetry_api: ^0.8.8
   glob: ^2.1.3
-  timezone: ^0.10.1
+  meta: ^1.17.0
   sqlite3: ^3.1.1
+  timezone: ^0.10.1
+  yaml: ^3.1.3
 
 keywords:
   - background-jobs
@@ -32,18 +33,18 @@ topics:
   - observability
 
 dev_dependencies:
-  lints: ^6.0.0
-  test: ^1.26.3
+  async: ^2.13.0
   coverage: ^1.15.0
   gha: ^0.0.2
   gha_cli: ^1.0.1
-  async: ^2.13.0
+  lints: ^6.0.0
+  path: ^1.9.1
   stem_adapter_tests: ^0.1.0-dev
   stem_cli: ^0.1.0-dev
-  stem_redis: ^0.1.0-dev
   stem_postgres: ^0.1.0-dev
+  stem_redis: ^0.1.0-dev
   stem_sqlite: ^0.1.0-dev
-  path: ^1.9.1
+  test: ^1.26.3
 
 false_secrets:
   - /example/microservice/certs/*

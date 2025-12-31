@@ -12,6 +12,7 @@
 /// print(decoded); // {'key': 'value'}
 /// ```
 abstract class TaskPayloadEncoder {
+  /// Creates a payload encoder instance.
   const TaskPayloadEncoder();
 
   /// Globally unique identifier so other processes can resolve the encoder
@@ -59,6 +60,7 @@ abstract class TaskPayloadEncoder {
 /// print(decoded); // {'key': 'value'}
 /// ```
 class JsonTaskPayloadEncoder extends TaskPayloadEncoder {
+  /// Creates a JSON pass-through payload encoder.
   const JsonTaskPayloadEncoder();
 
   @override
@@ -74,7 +76,7 @@ class JsonTaskPayloadEncoder extends TaskPayloadEncoder {
 /// Registry for managing and resolving [TaskPayloadEncoder] instances.
 ///
 /// This class allows you to register encoders and resolve them by their unique
-/// [id]. It also provides default encoders for handling task results and
+/// `id`. It also provides default encoders for handling task results and
 /// arguments.
 ///
 /// Example usage:
@@ -90,6 +92,7 @@ class JsonTaskPayloadEncoder extends TaskPayloadEncoder {
 /// print(encoder.id); // 'json'
 /// ```
 class TaskPayloadEncoderRegistry {
+  /// Creates a registry with the provided default encoders.
   TaskPayloadEncoderRegistry({
     required this.defaultResultEncoder,
     required this.defaultArgsEncoder,
@@ -99,9 +102,7 @@ class TaskPayloadEncoderRegistry {
     if (defaultArgsEncoder.id != defaultResultEncoder.id) {
       _register(defaultArgsEncoder);
     }
-    for (final encoder in additionalEncoders) {
-      _register(encoder);
-    }
+    additionalEncoders.forEach(_register);
   }
 
   /// The default encoder for task results.
@@ -114,7 +115,7 @@ class TaskPayloadEncoderRegistry {
 
   /// Registers a new [TaskPayloadEncoder] in the registry.
   ///
-  /// If an encoder with the same [id] already exists, it will be replaced.
+  /// If an encoder with the same `id` already exists, it will be replaced.
   ///
   /// Example:
   /// ```dart
@@ -194,9 +195,7 @@ TaskPayloadEncoderRegistry ensureTaskPayloadEncoderRegistry(
         additionalEncoders: additionalEncoders,
       );
   if (registry != null) {
-    for (final encoder in additionalEncoders) {
-      resolved.register(encoder);
-    }
+    additionalEncoders.forEach(resolved.register);
   }
   return resolved;
 }

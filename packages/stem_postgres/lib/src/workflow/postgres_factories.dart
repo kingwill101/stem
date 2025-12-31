@@ -1,9 +1,9 @@
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/src/backend/postgres_backend.dart';
+import 'package:stem_postgres/src/brokers/postgres_broker.dart';
+import 'package:stem_postgres/src/workflow/postgres_workflow_store.dart';
 
-import '../brokers/postgres_broker.dart';
-import '../backend/postgres_backend.dart';
-import 'postgres_workflow_store.dart';
-
+/// Creates a [StemBrokerFactory] backed by PostgreSQL.
 StemBrokerFactory postgresBrokerFactory(
   String uri, {
   String? applicationName,
@@ -20,6 +20,7 @@ StemBrokerFactory postgresBrokerFactory(
   );
 }
 
+/// Creates a [StemBackendFactory] backed by PostgreSQL.
 StemBackendFactory postgresResultBackendFactory({
   Duration defaultTtl = const Duration(days: 1),
   Duration groupDefaultTtl = const Duration(days: 1),
@@ -39,6 +40,7 @@ StemBackendFactory postgresResultBackendFactory({
   );
 }
 
+/// Creates a [WorkflowStoreFactory] backed by PostgreSQL.
 WorkflowStoreFactory postgresWorkflowStoreFactory(
   String uri, {
   String schema = 'public',

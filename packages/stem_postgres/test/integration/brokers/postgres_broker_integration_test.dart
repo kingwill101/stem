@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
+import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -11,7 +11,8 @@ void main() {
       'Postgres broker integration requires STEM_TEST_POSTGRES_URL',
       () {},
       skip:
-          'Set STEM_TEST_POSTGRES_URL to run Postgres broker integration tests.',
+          'Set STEM_TEST_POSTGRES_URL to run Postgres broker integration '
+          'tests.',
     );
     return;
   }
@@ -36,7 +37,6 @@ void main() {
       ),
     ),
     settings: const BrokerContractSettings(
-      visibilityTimeout: Duration(seconds: 1),
       leaseExtension: Duration(seconds: 1),
       queueSettleDelay: Duration(milliseconds: 250),
       replayDelay: Duration(milliseconds: 250),

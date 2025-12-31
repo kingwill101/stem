@@ -15,7 +15,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final call = definition(_Args(42));
+      final call = definition(const _Args(42));
       final id = await fake.enqueueCall(call);
 
       expect(id, isNotEmpty);

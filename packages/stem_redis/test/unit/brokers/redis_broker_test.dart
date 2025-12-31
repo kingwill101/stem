@@ -24,9 +24,9 @@ void main() {
             (command) =>
                 command.length >= 2 &&
                 command.first == 'DEL' &&
-                (command[1] as String).startsWith('unit:stream:emails'),
+                (command[1]! as String).startsWith('unit:stream:emails'),
           )
-          .map((command) => command[1] as String)
+          .map((command) => command[1]! as String)
           .toSet();
 
       expect(
@@ -52,13 +52,13 @@ void main() {
         destroyedGroups,
         equals({
           for (var priority = 0; priority <= 9; priority++)
-            '${priority == 0 ? 'unit:stream:emails' : 'unit:stream:emails:p$priority'}|unit:group:emails',
+            _expectedGroupKey(priority),
         }),
       );
 
       final delTargets = command.sent
           .where((command) => command.length >= 2 && command.first == 'DEL')
-          .map((command) => command[1] as String)
+          .map((command) => command[1]! as String)
           .toSet();
 
       expect(delTargets.contains('unit:delayed:emails'), isTrue);
@@ -77,7 +77,6 @@ void main() {
 
       final stream = broker.consume(
         RoutingSubscription.singleQueue('default'),
-        prefetch: 1,
         consumerName: 'consumer-unit',
       );
       final subscription = stream.listen((_) {});
@@ -93,4 +92,11 @@ void main() {
       expect(connection.closed, isTrue);
     });
   });
+}
+
+String _expectedGroupKey(int priority) {
+  final stream = priority == 0
+      ? 'unit:stream:emails'
+      : 'unit:stream:emails:p$priority';
+  return '$stream|unit:group:emails';
 }

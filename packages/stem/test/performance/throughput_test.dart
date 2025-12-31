@@ -30,7 +30,7 @@ void main() {
         InlineTaskHandler<void>(
           name: 'perf.echo',
           onCall: (context, args) {
-            completed.add(args['index'] as int);
+            completed.add(args['index']! as int);
           },
         ),
       );

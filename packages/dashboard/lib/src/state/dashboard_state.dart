@@ -3,20 +3,29 @@ import 'dart:async';
 import 'package:meta/meta.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 
-import '../services/models.dart';
-import '../services/stem_service.dart';
-import '../ui/event_templates.dart';
+import 'package:stem_dashboard/src/services/models.dart';
+import 'package:stem_dashboard/src/services/stem_service.dart';
+import 'package:stem_dashboard/src/ui/event_templates.dart';
 
+/// Manages polling, state, and event streaming for the dashboard.
 class DashboardState {
+  /// Creates a dashboard state controller.
   DashboardState({
     required this.service,
     this.pollInterval = const Duration(seconds: 5),
     this.eventLimit = 200,
   }) : hub = TurboStreamHub();
 
+  /// Data source used to fetch queues and workers.
   final DashboardDataSource service;
+
+  /// Turbo stream hub used to broadcast events.
   final TurboStreamHub hub;
+
+  /// Polling interval used to refresh state.
   final Duration pollInterval;
+
+  /// Maximum number of events retained in memory.
   final int eventLimit;
 
   Timer? _timer;
@@ -31,25 +40,30 @@ class DashboardState {
     enqueued: 0,
   );
 
+  /// Snapshot of the event feed in reverse chronological order.
   List<DashboardEvent> get events => List.unmodifiable(_events);
+
+  /// Most recent throughput calculation.
   DashboardThroughput get throughput => _throughput;
 
+  /// Starts the polling loop and emits initial state.
   Future<void> start() async {
     await _runPoll();
     _timer = Timer.periodic(pollInterval, (_) => _runPoll());
   }
 
+  /// Stops polling and waits for in-flight work to complete.
   Future<void> dispose() async {
     _timer?.cancel();
     await _polling;
   }
 
   Future<void> _runPoll() {
-    _polling = _polling.then((_) => _poll()).catchError((_) {});
-    return _polling;
+    return _polling = _polling.then((_) => _poll()).catchError((_) {});
   }
 
   @visibleForTesting
+  /// Runs a single polling cycle for tests.
   Future<void> runOnce() => _poll();
 
   Future<void> _poll() async {
@@ -112,7 +126,8 @@ class DashboardState {
             title: 'Queue ${summary.queue} discovered',
             timestamp: now,
             summary:
-                'Initial counts — pending ${summary.pending}, inflight ${summary.inflight}.',
+                'Initial counts — pending ${summary.pending}, '
+                'inflight ${summary.inflight}.',
           ),
         );
         continue;
@@ -141,7 +156,8 @@ class DashboardState {
                 'Queue ${summary.queue} inflight ${_deltaLabel(inflightDelta)}',
             timestamp: now,
             summary:
-                'Inflight changed from ${prev.inflight} to ${summary.inflight}.',
+                'Inflight changed from ${prev.inflight} '
+                'to ${summary.inflight}.',
           ),
         );
       }
@@ -153,7 +169,8 @@ class DashboardState {
                 'Queue ${summary.queue} dead letters ${_deltaLabel(deadDelta)}',
             timestamp: now,
             summary:
-                'Dead letters changed from ${prev.deadLetters} to ${summary.deadLetters}.',
+                'Dead letters changed from ${prev.deadLetters} '
+                'to ${summary.deadLetters}.',
           ),
         );
       }
@@ -185,7 +202,8 @@ class DashboardState {
             title: 'Worker ${worker.workerId} online',
             timestamp: now,
             summary:
-                'Heartbeat received with ${worker.queues.length} queue assignments.',
+                'Heartbeat received with ${worker.queues.length} '
+                'queue assignments.',
           ),
         );
         continue;
@@ -196,7 +214,8 @@ class DashboardState {
         _recordEvent(
           DashboardEvent(
             title:
-                'Worker ${worker.workerId} inflight ${_deltaLabel(inflightDelta)}',
+                'Worker ${worker.workerId} inflight '
+                '${_deltaLabel(inflightDelta)}',
             timestamp: now,
             summary:
                 'Inflight changed from ${prev.inflight} to ${worker.inflight}.',

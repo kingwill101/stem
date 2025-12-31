@@ -26,9 +26,12 @@ class _FakeDashboardService implements DashboardDataSource {
     dryRun: false,
   );
 
+  List<QueueSummary> get queues => _queues;
   set queues(List<QueueSummary> values) {
     _queues = List.unmodifiable(values);
   }
+
+  List<WorkerStatus> get workers => _workers;
 
   set workers(List<WorkerStatus> values) {
     _workers = List.unmodifiable(values);
@@ -110,13 +113,11 @@ Future<void> main() async {
 
   final engine = buildDashboardEngine(service: service, state: state);
   final handler = RoutedRequestHandler(engine, true);
-  final port = await handler.startServer(port: 0);
+  final port = await handler.startServer();
 
   try {
     await testBootstrap(
       BrowserConfig(
-        browserName: 'chromium',
-        headless: true,
         baseUrl: 'http://127.0.0.1:$port',
       ),
     );
@@ -139,7 +140,7 @@ Future<void> main() async {
     await service.close();
   });
 
-  browserTest('overview renders metrics from backend', (browser) async {
+  await browserTest('overview renders metrics from backend', (browser) async {
     await browser.visit('/');
     await browser.waiter.waitFor('.cards');
     await browser.assertSee('Overview');
@@ -148,7 +149,7 @@ Future<void> main() async {
     await browser.assertSee('critical');
   });
 
-  browserTest('tasks form enqueues payload', (browser) async {
+  await browserTest('tasks form enqueues payload', (browser) async {
     service.reset();
 
     await browser.visit('/tasks');
@@ -180,7 +181,7 @@ return fetch('/tasks/enqueue', {
     expect(service.lastEnqueue!.args, {'userId': 123});
   });
 
-  browserTest('workers control endpoint posts commands', (browser) async {
+  await browserTest('workers control endpoint posts commands', (browser) async {
     service.reset();
 
     await browser.visit('/workers');
@@ -201,7 +202,7 @@ return fetch('/workers/control', {
     expect(command.payload['mode'], 'soft');
   });
 
-  browserTest('queue replay form replays dead letters', (browser) async {
+  await browserTest('queue replay form replays dead letters', (browser) async {
     service.reset();
 
     await browser.visit('/workers');

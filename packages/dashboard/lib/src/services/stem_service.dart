@@ -3,25 +3,38 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/stem_cli.dart';
 
-import '../config/config.dart';
-import 'models.dart';
+import 'package:stem_dashboard/src/config/config.dart';
+import 'package:stem_dashboard/src/services/models.dart';
 
+/// Contract for dashboard services that load queue and worker data.
 abstract class DashboardDataSource {
+  /// Fetches summaries for all known queues.
   Future<List<QueueSummary>> fetchQueueSummaries();
+
+  /// Fetches current worker status snapshots.
   Future<List<WorkerStatus>> fetchWorkerStatuses();
+
+  /// Enqueues a task request through the backing broker.
   Future<void> enqueueTask(EnqueueRequest request);
+
+  /// Replays dead letters for [queue].
   Future<DeadLetterReplayResult> replayDeadLetters(
     String queue, {
     int limit = 50,
     bool dryRun = false,
   });
+
+  /// Sends a control command and returns any replies collected.
   Future<List<ControlReplyMessage>> sendControlCommand(
     ControlCommandMessage command, {
     Duration timeout,
   });
+
+  /// Releases any resources held by the data source.
   Future<void> close();
 }
 
+/// Dashboard data source backed by Stem broker and result backend APIs.
 class StemDashboardService implements DashboardDataSource {
   StemDashboardService._({
     required DashboardConfig config,
@@ -37,8 +50,9 @@ class StemDashboardService implements DashboardDataSource {
   final Broker _broker;
   final ResultBackend? _backend;
 
-  /// Creates a dashboard service by connecting via the provided config.
-  /// Uses createDefaultContext to set up broker and backend from environment.
+  /// Creates a dashboard service using [config].
+  ///
+  /// Uses [createDefaultContext] to set up broker and backend from environment.
   static Future<StemDashboardService> connect(DashboardConfig config) async {
     final ctx = await createDefaultContext(
       environment: Map<String, String>.from(config.environment),
@@ -52,7 +66,9 @@ class StemDashboardService implements DashboardDataSource {
   }
 
   /// Creates a dashboard service with explicit broker and backend instances.
-  /// This is useful for testing or when you already have broker/backend instances.
+  ///
+  /// This is useful for testing or when you already have broker/backend
+  /// instances.
   static Future<StemDashboardService> fromInstances({
     required DashboardConfig config,
     required Broker broker,
@@ -98,7 +114,7 @@ class StemDashboardService implements DashboardDataSource {
       final heartbeats = await backend.listWorkerHeartbeats();
       return heartbeats.map(WorkerStatus.fromHeartbeat).toList(growable: false)
         ..sort((a, b) => a.workerId.compareTo(b.workerId));
-    } catch (_) {
+    } on Object {
       return const [];
     }
   }
@@ -123,7 +139,7 @@ class StemDashboardService implements DashboardDataSource {
     int limit = 50,
     bool dryRun = false,
   }) async {
-    final bounded = limit.clamp(1, 500).toInt();
+    final bounded = limit.clamp(1, 500);
     return _broker.replayDeadLetters(queue, limit: bounded, dryRun: dryRun);
   }
 
@@ -191,7 +207,7 @@ class StemDashboardService implements DashboardDataSource {
           final reply = controlReplyFromEnvelope(delivery.envelope);
           replies.add(reply);
           await _broker.ack(delivery);
-        } catch (_) {
+        } on Object {
           await _broker.nack(delivery, requeue: false);
         }
 
@@ -210,13 +226,14 @@ class StemDashboardService implements DashboardDataSource {
   @override
   Future<void> close() async {
     // Note: The broker and backend will be closed when the context is disposed.
-    // Since we got them from createDefaultContext, we don't own their lifecycle.
+    // Since we got them from createDefaultContext, we don't own their
+    // lifecycle.
   }
 
   Future<Set<String>> _discoverQueues() async {
-    final names = <String>{_config.stem.defaultQueue};
-    names.addAll(_config.stem.workerQueues);
-    names.addAll(_config.routing.config.queues.keys);
+    final names = <String>{_config.stem.defaultQueue}
+      ..addAll(_config.stem.workerQueues)
+      ..addAll(_config.routing.config.queues.keys);
 
     final backend = _backend;
     if (backend != null) {
@@ -239,7 +256,7 @@ class StemDashboardService implements DashboardDataSource {
             }
           }
         }
-      } catch (_) {
+      } on Object {
         // Ignore discovery errors from backend.
       }
     }
@@ -274,7 +291,7 @@ class StemDashboardService implements DashboardDataSource {
   Future<void> _purgeQueue(String queue) async {
     try {
       await _broker.purge(queue);
-    } catch (_) {
+    } on Object {
       // Some brokers may not support purge; ignore failures.
     }
   }

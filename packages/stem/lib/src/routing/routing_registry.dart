@@ -1,7 +1,8 @@
-import 'routing_config.dart';
+import 'package:stem/src/routing/routing_config.dart';
 
 /// Describes the routing decision for an enqueue request.
 class RouteDecision {
+  /// Creates a queue routing decision.
   RouteDecision.queue({
     required QueueDefinition this.queue,
     String? selectedAlias,
@@ -14,6 +15,7 @@ class RouteDecision {
        fallbackQueues = List.unmodifiable(fallbackQueues),
        broadcastChannel = null;
 
+  /// Creates a broadcast routing decision.
   RouteDecision.broadcast({
     required BroadcastDefinition this.broadcast,
     this.route,
@@ -42,7 +44,8 @@ class RouteDecision {
   /// Alias used to select the resolved queue (defaults to queue name).
   final String? selectedQueueAlias;
 
-  /// Additional fallback queues for the selection (primarily for default queue aliasing).
+  /// Additional fallback queues for the selection (primarily for default queue
+  /// aliasing).
   final List<QueueDefinition> fallbackQueues;
 
   /// Broadcast channel name when targeting a broadcast.
@@ -63,10 +66,17 @@ class RouteDecision {
 }
 
 /// Distinguishes queue vs broadcast routing decisions.
-enum RouteDecisionType { queue, broadcast }
+enum RouteDecisionType {
+  /// Route to a queue target.
+  queue,
+
+  /// Route to a broadcast target.
+  broadcast,
+}
 
 /// Immutable request used when resolving routing decisions.
 class RouteRequest {
+  /// Creates a route request snapshot.
   RouteRequest({
     required this.task,
     Map<String, String>? headers,
@@ -74,7 +84,7 @@ class RouteRequest {
   }) : headers = Map.unmodifiable(
          headers == null ? const {} : Map<String, String>.from(headers),
        ),
-       queue = queue?.trim().isNotEmpty == true ? queue!.trim() : null;
+       queue = queue?.trim().isNotEmpty ?? false ? queue!.trim() : null;
 
   /// Task name being enqueued.
   final String task;
@@ -88,6 +98,7 @@ class RouteRequest {
 
 /// Registry that resolves routing configuration into queue/broadcast decisions.
 class RoutingRegistry {
+  /// Creates a registry from the provided [config].
   RoutingRegistry(this.config) : _queueAliases = _buildAliasIndex(config) {
     _defaultQueue = _getQueue(config.defaultQueue.queue);
     _defaultFallbackQueues = List.unmodifiable(
@@ -115,7 +126,7 @@ class RoutingRegistry {
 
   /// Resolve a routing decision for the provided [request].
   RouteDecision resolve(RouteRequest request) {
-    String? requestedAlias = request.queue;
+    final requestedAlias = request.queue;
     String? resolvedRequestedQueue;
     if (requestedAlias != null) {
       resolvedRequestedQueue = _resolveQueueName(
@@ -147,8 +158,6 @@ class RoutingRegistry {
     return RouteDecision.queue(
       queue: queue,
       selectedAlias: alias,
-      route: null,
-      priorityOverride: null,
       fallbackQueues: fallbacks,
     );
   }
@@ -214,7 +223,6 @@ class RoutingRegistry {
       selectedAlias: route.target.name,
       route: route,
       priorityOverride: route.priorityOverride,
-      fallbackQueues: const [],
     );
   }
 
@@ -240,7 +248,8 @@ class RoutingRegistry {
         final broadcast = config.broadcasts[route.target.name];
         if (broadcast == null) {
           throw FormatException(
-            'Route target references undefined broadcast "${route.target.name}".',
+            'Route target references undefined broadcast '
+            '"${route.target.name}".',
           );
         }
         _routeBroadcastTargets[route] = broadcast;

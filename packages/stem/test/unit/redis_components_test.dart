@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('InMemoryBroker', () {
@@ -16,7 +16,7 @@ void main() {
       await broker.publish(envelope);
 
       final delivery = await broker
-          .consume(RoutingSubscription.singleQueue('default'), prefetch: 1)
+          .consume(RoutingSubscription.singleQueue('default'))
           .first
           .timeout(const Duration(seconds: 1));
 
@@ -116,7 +116,6 @@ void main() {
       await backend.set(
         'signed-task',
         TaskState.succeeded,
-        attempt: 0,
         meta: signatureMeta,
       );
 
@@ -162,7 +161,7 @@ void main() {
           .consume(RoutingSubscription.singleQueue('default'))
           .first;
 
-      await backend.set(taskId, TaskState.succeeded, attempt: 0);
+      await backend.set(taskId, TaskState.succeeded);
       await broker.ack(delivery);
 
       final status = await backend.get(taskId);
@@ -191,7 +190,6 @@ void main() {
         error: const TaskError(
           type: 'Failure',
           message: 'boom',
-          retryable: false,
         ),
         attempt: 1,
       );

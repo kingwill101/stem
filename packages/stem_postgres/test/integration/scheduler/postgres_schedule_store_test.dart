@@ -1,7 +1,5 @@
 import 'dart:io';
 
-// ignore: unused_import
-import 'package:postgres/postgres.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
@@ -61,7 +59,7 @@ void main() {
       );
     });
     expect(rows, isNotEmpty, reason: 'entry should be persisted');
-    final storedNextRun = rows.first[1] as DateTime;
+    final storedNextRun = rows.first[1]! as DateTime;
     expect(
       storedNextRun.isBefore(
         DateTime.now().toUtc().add(const Duration(seconds: 1)),
@@ -74,7 +72,8 @@ void main() {
 
     final manualDueRows = await adminClient.run((conn) async {
       return conn.execute(
-        'SELECT id FROM public.stem_schedules WHERE enabled = true AND next_run_at <= NOW()',
+        'SELECT id FROM public.stem_schedules WHERE enabled = true AND '
+        'next_run_at <= NOW()',
       );
     });
     expect(

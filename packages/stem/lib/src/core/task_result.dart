@@ -1,8 +1,11 @@
-import 'contracts.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/stem.dart' show Stem;
+import 'package:stem/stem.dart' show Stem;
 
 /// Typed view over a [TaskStatus] returned by helpers such as
 /// [Stem.waitForTask] or canvas typed operations.
 class TaskResult<T extends Object?> {
+  /// Creates a typed task result snapshot.
   const TaskResult({
     required this.taskId,
     required this.status,
@@ -27,7 +30,12 @@ class TaskResult<T extends Object?> {
   /// reached a terminal state.
   final bool timedOut;
 
+  /// Whether the task completed successfully.
   bool get isSucceeded => status.state == TaskState.succeeded;
+
+  /// Whether the task failed.
   bool get isFailed => status.state == TaskState.failed;
+
+  /// Whether the task was cancelled.
   bool get isCancelled => status.state == TaskState.cancelled;
 }

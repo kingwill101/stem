@@ -1,6 +1,6 @@
 import 'package:ormed/ormed.dart';
-import 'package:stem_postgres/orm_registry.g.dart';
 import 'package:ormed_postgres/ormed_postgres.dart';
+import 'package:stem_postgres/orm_registry.g.dart';
 
 /// Creates a new DataSource instance using the project configuration.
 DataSource createDataSource({String? connectionString}) {

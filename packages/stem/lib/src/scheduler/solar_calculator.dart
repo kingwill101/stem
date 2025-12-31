@@ -1,15 +1,17 @@
 import 'dart:math';
 
+import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:timezone/timezone.dart' as tz;
 
-import 'schedule_spec.dart';
-
-/// Computes solar events (sunrise, sunset, solar noon) using NOAA SPA approximations.
+/// Computes solar events (sunrise, sunset, solar noon) using NOAA SPA
+/// approximations.
 class SolarCalculator {
+  /// Creates a solar calculator instance.
   const SolarCalculator();
 
   static const double _zenith = 90.8333; // degrees
 
+  /// Computes the next solar event for the given [spec].
   DateTime nextEvent(
     SolarScheduleSpec spec,
     DateTime fromUtc,
@@ -39,13 +41,10 @@ class SolarCalculator {
       switch (spec.event) {
         case 'sunrise':
           candidate = sunrise;
-          break;
         case 'sunset':
           candidate = sunset;
-          break;
         case 'noon':
           candidate = solarNoon;
-          break;
       }
       if (candidate != null && !candidate.isBefore(fromUtc)) {
         return location != null
@@ -126,7 +125,7 @@ class SolarCalculator {
   }
 
   int _dayOfYear(DateTime date) {
-    final start = DateTime.utc(date.year, 1, 1);
+    final start = DateTime.utc(date.year);
     return date.difference(start).inDays + 1;
   }
 
@@ -141,4 +140,14 @@ class SolarCalculator {
   }
 }
 
-enum SolarEvent { sunrise, sunset, noon }
+/// Supported solar events.
+enum SolarEvent {
+  /// Sunrise event.
+  sunrise,
+
+  /// Sunset event.
+  sunset,
+
+  /// Solar noon event.
+  noon,
+}

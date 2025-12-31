@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Beat', () {
@@ -16,7 +16,8 @@ void main() {
         broker: broker,
         lockStore: InMemoryLockStore(),
         tickInterval: const Duration(milliseconds: 10),
-      )..start();
+      );
+      await beat.start();
 
       await store.upsert(
         ScheduleEntry(
@@ -67,7 +68,8 @@ void main() {
         lockStore: InMemoryLockStore(),
         tickInterval: const Duration(milliseconds: 10),
         signer: PayloadSigner(signingConfig),
-      )..start();
+      );
+      await beat.start();
 
       await store.upsert(
         ScheduleEntry(
@@ -125,7 +127,7 @@ void main() {
           id: 'once',
           taskName: 'noop',
           queue: 'default',
-          spec: ClockedScheduleSpec(runAt: runAt, runOnce: true),
+          spec: ClockedScheduleSpec(runAt: runAt),
         ),
       );
 

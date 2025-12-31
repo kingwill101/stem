@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   test('worker heartbeat serializes and parses correctly', () {
@@ -11,7 +11,7 @@ void main() {
       timestamp: DateTime.utc(2024, 1, 2, 3, 4, 5),
       isolateCount: 4,
       inflight: 2,
-      lastLeaseRenewal: DateTime.utc(2024, 1, 2, 3, 4, 0),
+      lastLeaseRenewal: DateTime.utc(2024, 1, 2, 3, 4),
       queues: [QueueHeartbeat(name: 'default', inflight: 2)],
       extras: const {'host': 'app-01'},
     );

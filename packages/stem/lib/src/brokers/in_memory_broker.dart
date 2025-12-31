@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:collection/collection.dart';
-import '../core/contracts.dart';
-import '../core/envelope.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
 
+/// In-memory broker for testing and local development.
 class InMemoryBroker implements Broker {
+  /// Creates an in-memory broker with configurable timing defaults.
   InMemoryBroker({
     this.namespace = 'stem',
     this.delayedInterval = const Duration(milliseconds: 200),
@@ -22,9 +24,16 @@ class InMemoryBroker implements Broker {
     );
   }
 
+  /// Namespace prefix applied to generated queue names.
   final String namespace;
+
+  /// Interval used to drain delayed messages.
   final Duration delayedInterval;
+
+  /// Interval used to reclaim expired leases.
   final Duration claimInterval;
+
+  /// Default visibility timeout for claimed deliveries.
   final Duration defaultVisibilityTimeout;
 
   final Map<String, _QueueState> _queues = {};
@@ -42,6 +51,7 @@ class InMemoryBroker implements Broker {
   @override
   bool get supportsPriority => false;
 
+  /// Releases timers and in-memory queue state.
   void dispose() {
     if (_disposed) return;
     _disposed = true;
@@ -132,7 +142,7 @@ class InMemoryBroker implements Broker {
       },
       onCancel: () {
         state.cancelWaiters(consumer);
-        controller.close();
+        unawaited(controller.close());
       },
     );
     return controller.stream;
@@ -140,8 +150,7 @@ class InMemoryBroker implements Broker {
 
   @override
   Future<void> ack(Delivery delivery) async {
-    final state = _state(delivery.envelope.queue);
-    state.ack(delivery.receipt);
+    _state(delivery.envelope.queue).ack(delivery.receipt);
   }
 
   @override
@@ -159,14 +168,14 @@ class InMemoryBroker implements Broker {
     String? reason,
     Map<String, Object?>? meta,
   }) async {
-    final state = _state(delivery.envelope.queue);
-    state.deadLetter(delivery.receipt, reason: reason, meta: meta);
+    _state(
+      delivery.envelope.queue,
+    ).deadLetter(delivery.receipt, reason: reason, meta: meta);
   }
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
-    final state = _state(delivery.envelope.queue);
-    state.extendLease(delivery.receipt, by);
+    _state(delivery.envelope.queue).extendLease(delivery.receipt, by);
   }
 
   @override
@@ -246,19 +255,17 @@ class InMemoryBroker implements Broker {
       if (since == null) return true;
       return !entry.deadAt.isBefore(since);
     }).toList()..sort((a, b) => b.deadAt.compareTo(a.deadAt));
-    final toRemove = limit != null && limit >= 0
-        ? candidates.take(limit).toList()
-        : candidates;
-    for (final entry in toRemove) {
-      state.deadLetters.remove(entry);
-    }
+    final toRemove =
+        limit != null && limit >= 0
+              ? candidates.take(limit).toList()
+              : candidates
+          ..forEach(state.deadLetters.remove);
     return toRemove.length;
   }
 
   @override
   Future<void> purge(String queue) async {
-    final state = _state(queue);
-    state.purge();
+    _state(queue).purge();
   }
 
   @override
@@ -322,7 +329,7 @@ class _QueueState {
         break;
       }
       _delayed.removeFirst();
-      _ready.add(entry.envelope.copyWith(notBefore: null));
+      _ready.add(entry.envelope.copyWith());
       moved = true;
     }
     if (moved) {

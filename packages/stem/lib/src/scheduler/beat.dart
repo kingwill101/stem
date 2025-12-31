@@ -3,14 +3,16 @@ import 'dart:math';
 
 import 'package:contextual/contextual.dart';
 
-import '../core/contracts.dart';
-import '../core/envelope.dart';
-import '../observability/logging.dart';
-import '../observability/metrics.dart';
-import '../security/signing.dart';
-import '../signals/emitter.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/metrics.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/signals/emitter.dart';
 
+/// Scheduler loop that dispatches due [ScheduleEntry] records.
 class Beat {
+  /// Creates a scheduler instance with the provided dependencies.
   Beat({
     required this.store,
     required this.broker,
@@ -21,11 +23,22 @@ class Beat {
     Random? random,
   }) : _random = random ?? Random();
 
+  /// Schedule store used to fetch due entries.
   final ScheduleStore store;
+
+  /// Broker used to publish scheduled tasks.
   final Broker broker;
+
+  /// Optional lock store for distributed scheduling.
   final LockStore? lockStore;
+
+  /// Interval between polling ticks.
   final Duration tickInterval;
+
+  /// TTL used for schedule locks.
   final Duration lockTtl;
+
+  /// Optional envelope signer for scheduled tasks.
   final PayloadSigner? signer;
 
   final Random _random;
@@ -36,18 +49,21 @@ class Beat {
   Timer? _timer;
   bool _running = false;
 
+  /// Starts the periodic scheduling loop.
   Future<void> start() async {
     if (_running) return;
     _running = true;
     _timer = Timer.periodic(tickInterval, (_) => _tick());
   }
 
+  /// Stops the periodic scheduling loop.
   Future<void> stop() async {
     _running = false;
     _timer?.cancel();
     _timer = null;
   }
 
+  /// Runs a single scheduling tick.
   Future<void> runOnce() => _tick();
 
   Future<void> _tick() async {
@@ -148,7 +164,7 @@ class Beat {
         await Future<void>.delayed(jitterDelay);
       }
 
-      Envelope envelope = Envelope(
+      var envelope = Envelope(
         name: entry.taskName,
         args: entry.args,
         queue: entry.queue,
@@ -174,8 +190,6 @@ class Beat {
         scheduledFor: scheduledFor,
         executedAt: executedAt,
         jitter: jitterDelay == Duration.zero ? null : jitterDelay,
-        lastError: null,
-        success: true,
         runDuration: duration,
         drift: executedAt.difference(scheduledFor),
       );
@@ -204,7 +218,7 @@ class Beat {
         executedAt: executedAt,
         drift: drift,
       );
-    } catch (error, stack) {
+    } on Exception catch (error, stack) {
       stemLogger.warning(
         'Beat dispatch failed for {schedule}: {error}',
         Context({
@@ -228,7 +242,7 @@ class Beat {
           'stem.scheduler.dispatch.failed',
           tags: {'schedule': entry.id},
         );
-      } catch (storeError, storeStack) {
+      } on Exception catch (storeError, storeStack) {
         stemLogger.warning(
           'Failed to update schedule metadata for {schedule}',
           Context({

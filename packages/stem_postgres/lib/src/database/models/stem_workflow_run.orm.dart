@@ -14,9 +14,6 @@ const FieldDefinition _$StemWorkflowRunIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunWorkflowField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemWorkflowRunWorkflowField = FieldDefinition(
   columnName: 'workflow',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunStatusField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemWorkflowRunStatusField = FieldDefinition(
   columnName: 'status',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunParamsField = FieldDefinition(
@@ -48,11 +37,7 @@ const FieldDefinition _$StemWorkflowRunParamsField = FieldDefinition(
   columnName: 'params',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunResultField = FieldDefinition(
@@ -60,11 +45,7 @@ const FieldDefinition _$StemWorkflowRunResultField = FieldDefinition(
   columnName: 'result',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunWaitTopicField = FieldDefinition(
@@ -72,11 +53,7 @@ const FieldDefinition _$StemWorkflowRunWaitTopicField = FieldDefinition(
   columnName: 'wait_topic',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunResumeAtField = FieldDefinition(
@@ -84,11 +61,7 @@ const FieldDefinition _$StemWorkflowRunResumeAtField = FieldDefinition(
   columnName: 'resume_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunLastErrorField = FieldDefinition(
@@ -96,11 +69,7 @@ const FieldDefinition _$StemWorkflowRunLastErrorField = FieldDefinition(
   columnName: 'last_error',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunSuspensionDataField = FieldDefinition(
@@ -108,11 +77,7 @@ const FieldDefinition _$StemWorkflowRunSuspensionDataField = FieldDefinition(
   columnName: 'suspension_data',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunCancellationPolicyField =
@@ -121,11 +86,7 @@ const FieldDefinition _$StemWorkflowRunCancellationPolicyField =
       columnName: 'cancellation_policy',
       dartType: 'String',
       resolvedType: 'String?',
-      isPrimaryKey: false,
       isNullable: true,
-      isUnique: false,
-      isIndexed: false,
-      autoIncrement: false,
     );
 
 const FieldDefinition _$StemWorkflowRunCancellationDataField = FieldDefinition(
@@ -133,11 +94,7 @@ const FieldDefinition _$StemWorkflowRunCancellationDataField = FieldDefinition(
   columnName: 'cancellation_data',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunCreatedAtField = FieldDefinition(
@@ -145,11 +102,7 @@ const FieldDefinition _$StemWorkflowRunCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowRunUpdatedAtField = FieldDefinition(
@@ -157,11 +110,7 @@ const FieldDefinition _$StemWorkflowRunUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemWorkflowRunUntracked(
@@ -213,11 +162,11 @@ Map<String, Object?> _encodeStemWorkflowRunUntracked(
   };
 }
 
-final ModelDefinition<$StemWorkflowRun> _$StemWorkflowRunDefinition =
+const ModelDefinition<$StemWorkflowRun> _$StemWorkflowRunDefinition =
     ModelDefinition(
       modelName: 'StemWorkflowRun',
       tableName: 'stem_workflow_runs',
-      fields: const [
+      fields: [
         _$StemWorkflowRunIdField,
         _$StemWorkflowRunWorkflowField,
         _$StemWorkflowRunStatusField,
@@ -232,20 +181,7 @@ final ModelDefinition<$StemWorkflowRun> _$StemWorkflowRunDefinition =
         _$StemWorkflowRunCreatedAtField,
         _$StemWorkflowRunUpdatedAtField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
-      metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
-      ),
       untrackedToMap: _encodeStemWorkflowRunUntracked,
       codec: _$StemWorkflowRunCodec(),
     );
@@ -299,7 +235,7 @@ class StemWorkflowRuns {
 
   static Query<$StemWorkflowRun> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemWorkflowRun>(
     column,
@@ -418,60 +354,57 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemWorkflowRunIdValue =
+    final stemWorkflowRunIdValue =
         registry.decodeField<String>(_$StemWorkflowRunIdField, data['id']) ??
         (throw StateError('Field id on StemWorkflowRun cannot be null.'));
-    final String stemWorkflowRunWorkflowValue =
+    final stemWorkflowRunWorkflowValue =
         registry.decodeField<String>(
           _$StemWorkflowRunWorkflowField,
           data['workflow'],
         ) ??
         (throw StateError('Field workflow on StemWorkflowRun cannot be null.'));
-    final String stemWorkflowRunStatusValue =
+    final stemWorkflowRunStatusValue =
         registry.decodeField<String>(
           _$StemWorkflowRunStatusField,
           data['status'],
         ) ??
         (throw StateError('Field status on StemWorkflowRun cannot be null.'));
-    final String stemWorkflowRunParamsValue =
+    final stemWorkflowRunParamsValue =
         registry.decodeField<String>(
           _$StemWorkflowRunParamsField,
           data['params'],
         ) ??
         (throw StateError('Field params on StemWorkflowRun cannot be null.'));
-    final String? stemWorkflowRunResultValue = registry.decodeField<String?>(
+    final stemWorkflowRunResultValue = registry.decodeField<String?>(
       _$StemWorkflowRunResultField,
       data['result'],
     );
-    final String? stemWorkflowRunWaitTopicValue = registry.decodeField<String?>(
+    final stemWorkflowRunWaitTopicValue = registry.decodeField<String?>(
       _$StemWorkflowRunWaitTopicField,
       data['wait_topic'],
     );
-    final DateTime? stemWorkflowRunResumeAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemWorkflowRunResumeAtField,
-          data['resume_at'],
-        );
-    final String? stemWorkflowRunLastErrorValue = registry.decodeField<String?>(
+    final stemWorkflowRunResumeAtValue = registry.decodeField<DateTime?>(
+      _$StemWorkflowRunResumeAtField,
+      data['resume_at'],
+    );
+    final stemWorkflowRunLastErrorValue = registry.decodeField<String?>(
       _$StemWorkflowRunLastErrorField,
       data['last_error'],
     );
-    final String? stemWorkflowRunSuspensionDataValue = registry
-        .decodeField<String?>(
-          _$StemWorkflowRunSuspensionDataField,
-          data['suspension_data'],
-        );
-    final String? stemWorkflowRunCancellationPolicyValue = registry
+    final stemWorkflowRunSuspensionDataValue = registry.decodeField<String?>(
+      _$StemWorkflowRunSuspensionDataField,
+      data['suspension_data'],
+    );
+    final stemWorkflowRunCancellationPolicyValue = registry
         .decodeField<String?>(
           _$StemWorkflowRunCancellationPolicyField,
           data['cancellation_policy'],
         );
-    final String? stemWorkflowRunCancellationDataValue = registry
-        .decodeField<String?>(
-          _$StemWorkflowRunCancellationDataField,
-          data['cancellation_data'],
-        );
-    final DateTime stemWorkflowRunCreatedAtValue =
+    final stemWorkflowRunCancellationDataValue = registry.decodeField<String?>(
+      _$StemWorkflowRunCancellationDataField,
+      data['cancellation_data'],
+    );
+    final stemWorkflowRunCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemWorkflowRunCreatedAtField,
           data['created_at'],
@@ -479,7 +412,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
         (throw StateError(
           'Field createdAt on StemWorkflowRun cannot be null.',
         ));
-    final DateTime stemWorkflowRunUpdatedAtValue =
+    final stemWorkflowRunUpdatedAtValue =
         registry.decodeField<DateTime>(
           _$StemWorkflowRunUpdatedAtField,
           data['updated_at'],
@@ -810,27 +743,27 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   @override
   $StemWorkflowRun toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? workflowValue = workflow;
+    final workflowValue = workflow;
     if (workflowValue == null) {
       throw StateError('Missing required field: workflow');
     }
-    final String? statusValue = status;
+    final statusValue = status;
     if (statusValue == null) {
       throw StateError('Missing required field: status');
     }
-    final String? paramsValue = params;
+    final paramsValue = params;
     if (paramsValue == null) {
       throw StateError('Missing required field: params');
     }
-    final DateTime? createdAtValue = createdAt;
+    final createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }
-    final DateTime? updatedAtValue = updatedAt;
+    final updatedAtValue = updatedAt;
     if (updatedAtValue == null) {
       throw StateError('Missing required field: updatedAt');
     }
@@ -950,6 +883,8 @@ class $StemWorkflowRun extends StemWorkflowRun
     required String workflow,
     required String status,
     required String params,
+    required DateTime createdAt,
+    required DateTime updatedAt,
     String? result,
     String? waitTopic,
     DateTime? resumeAt,
@@ -957,8 +892,6 @@ class $StemWorkflowRun extends StemWorkflowRun
     String? suspensionData,
     String? cancellationPolicy,
     String? cancellationData,
-    required DateTime createdAt,
-    required DateTime updatedAt,
   }) : super.new(
          id: id,
          workflow: workflow,

@@ -12,7 +12,7 @@ void main() {
   final caOverride = Platform.environment['STEM_TEST_POSTGRES_TLS_CA_CERT']
       ?.trim();
   final defaultCa = File('docker/testing/certs/postgres-root.crt');
-  final caPath = caOverride?.isNotEmpty == true
+  final caPath = caOverride?.isNotEmpty ?? false
       ? caOverride
       : (defaultCa.existsSync() ? defaultCa.path : null);
 
@@ -21,10 +21,13 @@ void main() {
       caPath == null ||
       caPath.isEmpty) {
     test(
-      'Postgres TLS backend integration requires STEM_TEST_POSTGRES_TLS_URL and CA path',
+      'Postgres TLS backend integration requires '
+      'STEM_TEST_POSTGRES_TLS_URL and CA path',
       () {},
       skip:
-          'Set STEM_TEST_POSTGRES_TLS_URL (or STEM_TEST_POSTGRES_URL) and STEM_TEST_POSTGRES_TLS_CA_CERT to run Postgres TLS integration tests.',
+          'Set STEM_TEST_POSTGRES_TLS_URL (or STEM_TEST_POSTGRES_URL) and '
+          'STEM_TEST_POSTGRES_TLS_CA_CERT to run Postgres TLS integration '
+          'tests.',
     );
     return;
   }
@@ -104,8 +107,6 @@ void main() {
       await insecureBackend.set(
         'insecure-id',
         TaskState.queued,
-        meta: const {},
-        attempt: 0,
       );
       final status = await insecureBackend.get('insecure-id');
       expect(status, isNotNull);

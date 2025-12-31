@@ -1,17 +1,15 @@
 import 'dart:math';
 
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
-import 'package:stem/stem.dart';
 
 void main() {
   group('ScheduleCalculator', () {
-    final now = DateTime.utc(2025, 1, 1, 12, 0);
+    final now = DateTime.utc(2025, 1, 1, 12);
 
-    setUpAll(() {
-      tzdata.initializeTimeZones();
-    });
+    setUpAll(tzdata.initializeTimeZones);
 
     ScheduleEntry buildEntry({
       ScheduleSpec? spec,
@@ -132,7 +130,7 @@ void main() {
       final calculator = ScheduleCalculator();
       final runAt = now.add(const Duration(hours: 2));
       final entry = buildEntry(
-        spec: ClockedScheduleSpec(runAt: runAt, runOnce: true),
+        spec: ClockedScheduleSpec(runAt: runAt),
         lastRun: now,
       );
 
@@ -142,7 +140,7 @@ void main() {
     });
 
     test('applies timezone offsets for cron schedules', () {
-      final resolver = ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final resolver = ScheduleTimezoneResolver(tz.getLocation);
       final calculator = ScheduleCalculator(timezoneResolver: resolver);
       final entry = buildEntry(
         spec: CronScheduleSpec(expression: '0 9 * * *'),
@@ -159,7 +157,7 @@ void main() {
     });
 
     test('computes solar events after reference time', () {
-      final resolver = ScheduleTimezoneResolver((name) => tz.getLocation(name));
+      final resolver = ScheduleTimezoneResolver(tz.getLocation);
       final calculator = ScheduleCalculator(timezoneResolver: resolver);
       final entry = buildEntry(
         spec: SolarScheduleSpec(

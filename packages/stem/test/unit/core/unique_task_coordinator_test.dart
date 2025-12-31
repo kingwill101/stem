@@ -27,7 +27,7 @@ void main() {
         namespace: 'test:unique',
       );
       final first = Envelope(name: 'demo.task', args: const {'value': 1});
-      final options = const TaskOptions(unique: true);
+      const options = TaskOptions(unique: true);
       final claim1 = await coordinator.acquire(
         envelope: first,
         options: options,

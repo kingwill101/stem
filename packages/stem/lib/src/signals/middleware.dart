@@ -1,20 +1,22 @@
-import '../core/contracts.dart';
-import '../core/envelope.dart';
-import 'emitter.dart';
-import 'payloads.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/signals/emitter.dart';
+import 'package:stem/src/signals/payloads.dart';
 
 /// Middleware adapter that forwards enqueue and execution lifecycle events to
 /// the Stem signal dispatcher. Useful for incremental migrations where
 /// existing middleware chains should emit signals without rewriting core
 /// coordinator or worker logic.
 class SignalMiddleware extends Middleware {
+  /// Creates middleware for producer/coordinator contexts.
   SignalMiddleware.coordinator({StemSignalEmitter? emitter})
     : _emitter = emitter ?? const StemSignalEmitter(defaultSender: 'stem'),
       _workerInfoProvider = null;
 
+  /// Creates middleware for worker contexts with a [workerInfo] provider.
   SignalMiddleware.worker({
-    StemSignalEmitter? emitter,
     required WorkerInfo Function() workerInfo,
+    StemSignalEmitter? emitter,
   }) : _emitter = emitter ?? const StemSignalEmitter(),
        _workerInfoProvider = workerInfo;
 

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:collection/collection.dart';
 
-import 'revoke_store.dart';
+import 'package:stem/src/control/revoke_store.dart';
 
 /// File-based [RevokeStore] using newline-delimited JSON entries.
 class FileRevokeStore implements RevokeStore {
@@ -19,8 +19,8 @@ class FileRevokeStore implements RevokeStore {
     final file = File(path);
     final entries = <String, Map<String, RevokeEntry>>{};
 
-    if (await file.exists()) {
-      final lines = await file.readAsLines();
+    if (file.existsSync()) {
+      final lines = file.readAsLinesSync();
       for (final line in lines) {
         if (line.trim().isEmpty) continue;
         final decoded = RevokeEntry.fromJson(
@@ -33,10 +33,10 @@ class FileRevokeStore implements RevokeStore {
       }
     } else {
       final parent = file.parent;
-      if (!await parent.exists()) {
-        await parent.create(recursive: true);
+      if (!parent.existsSync()) {
+        parent.createSync(recursive: true);
       }
-      await file.create();
+      file.createSync();
     }
 
     return FileRevokeStore._(file, entries);
@@ -58,13 +58,12 @@ class FileRevokeStore implements RevokeStore {
     return _synchronized(() async {
       final records = _entries[namespace];
       if (records == null || records.isEmpty) return 0;
-      final toRemove = records.entries
-          .where((entry) => entry.value.isExpired(clock))
-          .map((entry) => entry.key)
-          .toList();
-      for (final key in toRemove) {
-        records.remove(key);
-      }
+      final toRemove =
+          records.entries
+              .where((entry) => entry.value.isExpired(clock))
+              .map((entry) => entry.key)
+              .toList()
+            ..forEach(records.remove);
       if (records.isEmpty) {
         _entries.remove(namespace);
       }

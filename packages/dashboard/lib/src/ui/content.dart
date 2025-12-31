@@ -1,12 +1,17 @@
 import 'package:intl/intl.dart';
 
-import '../services/models.dart';
-import 'event_templates.dart';
-import 'layout.dart';
+// HTML template strings are kept on single lines for readability.
+// ignore_for_file: lines_longer_than_80_chars
+
+import 'package:stem_dashboard/src/services/models.dart';
+import 'package:stem_dashboard/src/ui/event_templates.dart';
+import 'package:stem_dashboard/src/ui/layout.dart';
 
 final _numberFormat = NumberFormat.decimalPattern();
 
+/// View options used by the tasks page renderer.
 class TasksPageOptions {
+  /// Creates task page options with optional overrides.
   const TasksPageOptions({
     this.sortKey = 'queue',
     this.descending = false,
@@ -15,27 +20,50 @@ class TasksPageOptions {
     this.errorKey,
   });
 
+  /// Sort key used for queue ordering.
   final String sortKey;
+
+  /// Whether sorting should be descending.
   final bool descending;
+
+  /// Optional queue filter text.
   final String? filter;
+
+  /// Optional flash message key for UI alerts.
   final String? flashKey;
+
+  /// Optional error message key for UI alerts.
   final String? errorKey;
 
+  /// Whether a non-empty filter value is set.
   bool get hasFilter => filter != null && filter!.isNotEmpty;
 }
 
+/// View options used by the workers page renderer.
 class WorkersPageOptions {
+  /// Creates worker page options with optional overrides.
   const WorkersPageOptions({this.flashMessage, this.errorMessage, this.scope});
 
+  /// Optional flash message for the UI.
   final String? flashMessage;
+
+  /// Optional error message for the UI.
   final String? errorMessage;
+
+  /// Optional worker scope filter.
   final String? scope;
 
+  /// Whether a non-empty flash message is set.
   bool get hasFlash => flashMessage != null && flashMessage!.isNotEmpty;
+
+  /// Whether a non-empty error message is set.
   bool get hasError => errorMessage != null && errorMessage!.isNotEmpty;
+
+  /// Whether a non-empty scope value is set.
   bool get hasScope => scope != null && scope!.isNotEmpty;
 }
 
+/// Builds the HTML for the specified dashboard [page].
 String buildPageContent({
   required DashboardPage page,
   required List<QueueSummary> queues,
@@ -122,17 +150,17 @@ String _overviewContent(
 }
 
 String _tasksContent(List<QueueSummary> queues, TasksPageOptions options) {
-  var filtered = options.hasFilter
-      ? queues
-            .where(
-              (summary) => summary.queue.toLowerCase().contains(
-                options.filter!.toLowerCase(),
-              ),
-            )
-            .toList()
-      : List<QueueSummary>.of(queues);
-
-  filtered.sort((a, b) => _compareQueues(a, b, options));
+  var filtered =
+      options.hasFilter
+            ? queues
+                  .where(
+                    (summary) => summary.queue.toLowerCase().contains(
+                      options.filter!.toLowerCase(),
+                    ),
+                  )
+                  .toList()
+            : List<QueueSummary>.of(queues)
+        ..sort((a, b) => _compareQueues(a, b, options));
   if (options.descending) {
     filtered = filtered.reversed.toList();
   }
@@ -407,7 +435,7 @@ String _queueRecoverySection(Map<String, QueueSummary> queues) {
 String _queueRecoveryRow(QueueSummary summary) {
   final limitDefault = summary.deadLetters <= 0
       ? 50
-      : summary.deadLetters.clamp(1, 50).toInt();
+      : summary.deadLetters.clamp(1, 50);
   final action = summary.deadLetters == 0
       ? '<span class="muted">No dead letters</span>'
       : '''
@@ -447,26 +475,22 @@ String _emptyQueuesRow(String message) {
 
 String _renderTasksAlert(TasksPageOptions options) {
   String? message;
-  String type = 'success';
+  var type = 'success';
   switch (options.flashKey) {
     case 'queued':
       message = 'Task enqueued successfully.';
-      break;
   }
   switch (options.errorKey) {
     case 'missing-fields':
       message = 'Queue and task name are required.';
       type = 'error';
-      break;
     case 'invalid-payload':
       message = 'Payload must be valid JSON describing an object.';
       type = 'error';
-      break;
     case 'enqueue-failed':
       message =
           'Failed to enqueue the task. Check the dashboard logs for details.';
       type = 'error';
-      break;
   }
 
   if (message == null) return '';

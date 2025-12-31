@@ -11,7 +11,7 @@ Future<bool> _canConnect(String uri) async {
     final broker = await RedisStreamsBroker.connect(uri);
     await broker.close();
     return true;
-  } catch (_) {
+  } on Object {
     return false;
   }
 }
@@ -97,7 +97,6 @@ void main() async {
     await backend.set(
       taskId,
       TaskState.running,
-      attempt: 0,
       meta: const {
         'integration': true,
         'stem-signature': 'redis-sig',

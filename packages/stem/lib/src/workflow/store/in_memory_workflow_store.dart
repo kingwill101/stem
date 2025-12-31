@@ -1,17 +1,18 @@
 import 'dart:collection';
 
-import '../core/run_state.dart';
-import '../core/workflow_cancellation_policy.dart';
-import '../core/workflow_status.dart';
-import '../core/workflow_store.dart';
-import '../core/workflow_step_entry.dart';
-import '../core/workflow_watcher.dart';
-import '../core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_step_entry.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/core/workflow_watcher.dart';
 
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
 /// Not safe for production as state is lost on process exit.
 class InMemoryWorkflowStore implements WorkflowStore {
+  /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
 
@@ -204,7 +205,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       deadline: deadline,
       data: metadata,
     );
-    final topicMap = _watchersByTopic.putIfAbsent(topic, () => LinkedHashMap());
+    final topicMap = _watchersByTopic.putIfAbsent(topic, LinkedHashMap.new);
     topicMap[runId] = record;
     _watchersByRun[runId] = record;
   }
@@ -276,9 +277,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
         emptyTopics.add(topic);
       }
     });
-    for (final topic in emptyTopics) {
-      _suspendedTopics.remove(topic);
-    }
+    emptyTopics.forEach(_suspendedTopics.remove);
   }
 
   @override
@@ -297,9 +296,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
       }
       if (ids.length >= limit) break;
     }
-    for (final key in toRemove) {
-      _due.remove(key);
-    }
+    toRemove.forEach(_due.remove);
     return ids;
   }
 
@@ -342,11 +339,12 @@ class InMemoryWorkflowStore implements WorkflowStore {
       metadata['type'] = 'event';
       metadata['topic'] = topic;
       metadata['payload'] = payload;
-      metadata.putIfAbsent('step', () => record.stepName);
-      metadata.putIfAbsent(
-        'iterationStep',
-        () => metadata['step'] ?? record.stepName,
-      );
+      metadata
+        ..putIfAbsent('step', () => record.stepName)
+        ..putIfAbsent(
+          'iterationStep',
+          () => metadata['step'] ?? record.stepName,
+        );
       metadata['deliveredAt'] = now.toIso8601String();
       _runs[runId] = state.copyWith(
         status: WorkflowStatus.running,
@@ -420,9 +418,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
         emptyTopics.add(topic);
       }
     });
-    for (final topic in emptyTopics) {
-      _suspendedTopics.remove(topic);
-    }
+    emptyTopics.forEach(_suspendedTopics.remove);
   }
 
   @override
@@ -451,7 +447,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       if (baseIndex < targetIndex) {
         retained.add(entries[i]);
       } else if (baseIndex == targetIndex) {
-        // Drop all iterations for the target step so the runtime restarts from iteration 0.
+        // Drop all iterations for the target step so the runtime restarts from
+        // iteration 0.
         continue;
       } else {
         break;

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Envelope', () {
@@ -187,7 +187,7 @@ class _RecordingBackend implements ResultBackend {
   Stream<TaskStatus> watch(String taskId) {
     final controller = _controllers.putIfAbsent(
       taskId,
-      () => StreamController<TaskStatus>.broadcast(),
+      StreamController<TaskStatus>.broadcast,
     );
     return controller.stream;
   }

@@ -14,9 +14,6 @@ const FieldDefinition _$StemWorkflowWatcherRunIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherStepNameField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemWorkflowWatcherStepNameField = FieldDefinition(
   columnName: 'step_name',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherTopicField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemWorkflowWatcherTopicField = FieldDefinition(
   columnName: 'topic',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherDataField = FieldDefinition(
@@ -48,11 +37,7 @@ const FieldDefinition _$StemWorkflowWatcherDataField = FieldDefinition(
   columnName: 'data',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherCreatedAtField = FieldDefinition(
@@ -60,11 +45,7 @@ const FieldDefinition _$StemWorkflowWatcherCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherDeadlineField = FieldDefinition(
@@ -72,11 +53,7 @@ const FieldDefinition _$StemWorkflowWatcherDeadlineField = FieldDefinition(
   columnName: 'deadline',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemWorkflowWatcherUntracked(
@@ -103,11 +80,11 @@ Map<String, Object?> _encodeStemWorkflowWatcherUntracked(
   };
 }
 
-final ModelDefinition<$StemWorkflowWatcher> _$StemWorkflowWatcherDefinition =
+const ModelDefinition<$StemWorkflowWatcher> _$StemWorkflowWatcherDefinition =
     ModelDefinition(
       modelName: 'StemWorkflowWatcher',
       tableName: 'stem_workflow_watchers',
-      fields: const [
+      fields: [
         _$StemWorkflowWatcherRunIdField,
         _$StemWorkflowWatcherStepNameField,
         _$StemWorkflowWatcherTopicField,
@@ -115,20 +92,7 @@ final ModelDefinition<$StemWorkflowWatcher> _$StemWorkflowWatcherDefinition =
         _$StemWorkflowWatcherCreatedAtField,
         _$StemWorkflowWatcherDeadlineField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
-      metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
-      ),
       untrackedToMap: _encodeStemWorkflowWatcherUntracked,
       codec: _$StemWorkflowWatcherCodec(),
     );
@@ -188,7 +152,7 @@ class StemWorkflowWatchers {
 
   static Query<$StemWorkflowWatcher> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemWorkflowWatcher>(
     column,
@@ -279,7 +243,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemWorkflowWatcherRunIdValue =
+    final stemWorkflowWatcherRunIdValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherRunIdField,
           data['run_id'],
@@ -287,7 +251,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field runId on StemWorkflowWatcher cannot be null.',
         ));
-    final String stemWorkflowWatcherStepNameValue =
+    final stemWorkflowWatcherStepNameValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherStepNameField,
           data['step_name'],
@@ -295,7 +259,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field stepName on StemWorkflowWatcher cannot be null.',
         ));
-    final String stemWorkflowWatcherTopicValue =
+    final stemWorkflowWatcherTopicValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherTopicField,
           data['topic'],
@@ -303,11 +267,11 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field topic on StemWorkflowWatcher cannot be null.',
         ));
-    final String? stemWorkflowWatcherDataValue = registry.decodeField<String?>(
+    final stemWorkflowWatcherDataValue = registry.decodeField<String?>(
       _$StemWorkflowWatcherDataField,
       data['data'],
     );
-    final DateTime stemWorkflowWatcherCreatedAtValue =
+    final stemWorkflowWatcherCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemWorkflowWatcherCreatedAtField,
           data['created_at'],
@@ -315,11 +279,10 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field createdAt on StemWorkflowWatcher cannot be null.',
         ));
-    final DateTime? stemWorkflowWatcherDeadlineValue = registry
-        .decodeField<DateTime?>(
-          _$StemWorkflowWatcherDeadlineField,
-          data['deadline'],
-        );
+    final stemWorkflowWatcherDeadlineValue = registry.decodeField<DateTime?>(
+      _$StemWorkflowWatcherDeadlineField,
+      data['deadline'],
+    );
     final model = $StemWorkflowWatcher(
       runId: stemWorkflowWatcherRunIdValue,
       stepName: stemWorkflowWatcherStepNameValue,
@@ -511,19 +474,19 @@ class StemWorkflowWatcherPartial
   @override
   $StemWorkflowWatcher toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? runIdValue = runId;
+    final runIdValue = runId;
     if (runIdValue == null) {
       throw StateError('Missing required field: runId');
     }
-    final String? stepNameValue = stepName;
+    final stepNameValue = stepName;
     if (stepNameValue == null) {
       throw StateError('Missing required field: stepName');
     }
-    final String? topicValue = topic;
+    final topicValue = topic;
     if (topicValue == null) {
       throw StateError('Missing required field: topic');
     }
-    final DateTime? createdAtValue = createdAt;
+    final createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }
@@ -600,8 +563,8 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
     required String runId,
     required String stepName,
     required String topic,
-    String? data,
     required DateTime createdAt,
+    String? data,
     DateTime? deadline,
   }) : super.new(
          runId: runId,

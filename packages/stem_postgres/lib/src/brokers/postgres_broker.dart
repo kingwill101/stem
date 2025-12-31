@@ -5,9 +5,10 @@ import 'dart:math';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../database/models/models.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/models.dart';
 
+/// PostgreSQL-backed implementation of [Broker].
 class PostgresBroker implements Broker {
   PostgresBroker._(
     this._connections, {
@@ -20,6 +21,7 @@ class PostgresBroker implements Broker {
     _startSweeper();
   }
 
+  /// Connects to PostgreSQL and returns a broker instance.
   static Future<PostgresBroker> connect(
     String connectionString, {
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
@@ -43,9 +45,17 @@ class PostgresBroker implements Broker {
 
   final PostgresConnections _connections;
   final QueryContext _context;
+
+  /// Default visibility timeout applied to deliveries.
   final Duration defaultVisibilityTimeout;
+
+  /// Poll interval used while waiting for jobs.
   final Duration pollInterval;
+
+  /// Interval used to sweep for expired locks.
   final Duration sweeperInterval;
+
+  /// Retention window for dead letter records.
   final Duration deadLetterRetention;
 
   /// Simple async mutex to serialize DB access because the Postgres driver
@@ -59,6 +69,7 @@ class PostgresBroker implements Broker {
   Timer? _sweeperTimer;
   bool _closed = false;
 
+  /// Closes the broker and releases any database resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -69,7 +80,7 @@ class PostgresBroker implements Broker {
       await runner.controller.close();
     }
     _consumers.clear();
-    await _dbLock.catchError((_, __) {});
+    await _dbLock.catchError((_, _) {});
     await _connections.close();
   }
 
@@ -82,7 +93,7 @@ class PostgresBroker implements Broker {
   Future<T> _withDb<T>(Future<T> Function() action) {
     final run = _dbLock.then((_) => action());
     // Swallow errors on the lock chain so it continues for later callers.
-    _dbLock = run.then<void>((_) {}).catchError((_, __) {});
+    _dbLock = run.then<void>((_) {}).catchError((_, _) {});
     return run;
   }
 
@@ -146,7 +157,8 @@ class PostgresBroker implements Broker {
     }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
-        'PostgresBroker currently supports consuming a single queue per subscription.',
+        'PostgresBroker currently supports consuming a single queue per '
+        'subscription.',
       );
     }
 
@@ -154,7 +166,8 @@ class PostgresBroker implements Broker {
     final group = consumerGroup ?? 'default';
     final consumer =
         consumerName ??
-        'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 16)}';
+        'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-'
+            '${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
 
@@ -290,12 +303,12 @@ class PostgresBroker implements Broker {
       return _context
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('notBefore')
               ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
           })
-          .where((q) {
+          .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('lockedUntil')
               ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
@@ -450,12 +463,12 @@ class PostgresBroker implements Broker {
         final candidate = await txn
             .query<StemQueueJob>()
             .whereEquals('queue', queue)
-            .where((q) {
+            .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('notBefore')
                 ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
             })
-            .where((q) {
+            .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('lockedUntil')
                 ..orWhere(
@@ -473,7 +486,7 @@ class PostgresBroker implements Broker {
         final updated = await txn
             .query<StemQueueJob>()
             .whereEquals('id', candidate.id)
-            .where((q) {
+            .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('lockedUntil')
                 ..orWhere(
@@ -482,7 +495,7 @@ class PostgresBroker implements Broker {
                   PredicateOperator.lessThanOrEqual,
                 );
             })
-            .where((q) {
+            .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('notBefore')
                 ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
@@ -607,9 +620,6 @@ class PostgresBroker implements Broker {
       maxRetries: envelope.maxRetries,
       priority: priority,
       notBefore: notBefore,
-      lockedAt: null,
-      lockedUntil: null,
-      lockedBy: null,
     ).toTracked();
     await db.repository<StemQueueJob>().upsert(model, uniqueBy: ['id']);
   }
@@ -626,7 +636,8 @@ class PostgresBroker implements Broker {
 
   String _encodeLocker(String queue, String group, String consumer) {
     final salt = _random.nextInt(1 << 32);
-    return '$queue::$group::$consumer::$salt::${DateTime.now().microsecondsSinceEpoch}';
+    return '$queue::$group::$consumer::$salt::'
+        '${DateTime.now().microsecondsSinceEpoch}';
   }
 }
 
@@ -655,7 +666,7 @@ class _ConsumerRunner {
   void start() {
     if (_started) return;
     _started = true;
-    _loop();
+    unawaited(_loop());
   }
 
   void stop() {
@@ -679,7 +690,7 @@ class _ConsumerRunner {
                 prefetch,
               );
         if (jobs.isEmpty && broadcasts.isEmpty) {
-          await Future.delayed(broker.pollInterval);
+          await Future<void>.delayed(broker.pollInterval);
           continue;
         }
         final leaseExpiresAt = DateTime.now().toUtc().add(
@@ -694,10 +705,10 @@ class _ConsumerRunner {
           }
           controller.add(delivery);
         }
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         if (controller.isClosed) return;
         controller.addError(error, stack);
-        await Future.delayed(broker.pollInterval);
+        await Future<void>.delayed(broker.pollInterval);
       }
     }
   }
@@ -706,10 +717,6 @@ class _ConsumerRunner {
 class _QueuedJob {
   _QueuedJob({required this.id, required this.queue, required this.envelope});
 
-  final String id;
-  final String queue;
-  final Envelope envelope;
-
   factory _QueuedJob.fromModel(StemQueueJob row) {
     return _QueuedJob(
       id: row.id,
@@ -717,6 +724,10 @@ class _QueuedJob {
       envelope: Envelope.fromJson(row.envelope),
     );
   }
+
+  final String id;
+  final String queue;
+  final Envelope envelope;
 
   Delivery toDelivery({required DateTime leaseExpiresAt}) {
     return Delivery(

@@ -151,7 +151,7 @@ class _DemoPayload {
   const _DemoPayload(this.foo);
 
   factory _DemoPayload.fromJson(Map<String, Object?> json) =>
-      _DemoPayload(json['foo'] as String);
+      _DemoPayload(json['foo']! as String);
 
   final String foo;
 }

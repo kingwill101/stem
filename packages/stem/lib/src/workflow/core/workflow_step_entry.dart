@@ -1,5 +1,6 @@
 /// Persisted step checkpoint metadata for a workflow run.
 class WorkflowStepEntry {
+  /// Creates a workflow step entry snapshot.
   const WorkflowStepEntry({
     required this.name,
     required this.value,

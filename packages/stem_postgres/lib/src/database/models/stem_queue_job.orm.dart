@@ -14,9 +14,6 @@ const FieldDefinition _$StemQueueJobIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobQueueField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemQueueJobQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobEnvelopeField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemQueueJobEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -49,11 +38,7 @@ const FieldDefinition _$StemQueueJobAttemptField = FieldDefinition(
   columnName: 'attempt',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobMaxRetriesField = FieldDefinition(
@@ -61,11 +46,7 @@ const FieldDefinition _$StemQueueJobMaxRetriesField = FieldDefinition(
   columnName: 'max_retries',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobPriorityField = FieldDefinition(
@@ -73,11 +54,7 @@ const FieldDefinition _$StemQueueJobPriorityField = FieldDefinition(
   columnName: 'priority',
   dartType: 'int',
   resolvedType: 'int',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobNotBeforeField = FieldDefinition(
@@ -85,11 +62,7 @@ const FieldDefinition _$StemQueueJobNotBeforeField = FieldDefinition(
   columnName: 'not_before',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedAtField = FieldDefinition(
@@ -97,11 +70,7 @@ const FieldDefinition _$StemQueueJobLockedAtField = FieldDefinition(
   columnName: 'locked_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedUntilField = FieldDefinition(
@@ -109,11 +78,7 @@ const FieldDefinition _$StemQueueJobLockedUntilField = FieldDefinition(
   columnName: 'locked_until',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobLockedByField = FieldDefinition(
@@ -121,11 +86,7 @@ const FieldDefinition _$StemQueueJobLockedByField = FieldDefinition(
   columnName: 'locked_by',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobCreatedAtField = FieldDefinition(
@@ -133,11 +94,7 @@ const FieldDefinition _$StemQueueJobCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemQueueJobUpdatedAtField = FieldDefinition(
@@ -145,11 +102,7 @@ const FieldDefinition _$StemQueueJobUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemQueueJobUntracked(
@@ -180,10 +133,10 @@ Map<String, Object?> _encodeStemQueueJobUntracked(
   };
 }
 
-final ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
+const ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
   modelName: 'StemQueueJob',
   tableName: 'stem_queue_jobs',
-  fields: const [
+  fields: [
     _$StemQueueJobIdField,
     _$StemQueueJobQueueField,
     _$StemQueueJobEnvelopeField,
@@ -197,20 +150,9 @@ final ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
     _$StemQueueJobCreatedAtField,
     _$StemQueueJobUpdatedAtField,
   ],
-  relations: const [],
   softDeleteColumn: 'deleted_at',
   metadata: ModelAttributesMetadata(
-    hidden: const <String>[],
-    visible: const <String>[],
-    fillable: const <String>[],
-    guarded: const <String>[],
-    casts: const <String, String>{},
-    appends: const <String>[],
-    touches: const <String>[],
-    timestamps: true,
-    fieldOverrides: const {'envelope': FieldAttributeMetadata(cast: 'json')},
-    softDeletes: false,
-    softDeleteColumn: 'deleted_at',
+    fieldOverrides: {'envelope': FieldAttributeMetadata(cast: 'json')},
   ),
   untrackedToMap: _encodeStemQueueJobUntracked,
   codec: _$StemQueueJobCodec(),
@@ -265,7 +207,7 @@ class StemQueueJobs {
 
   static Query<$StemQueueJob> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemQueueJob>(
     column,
@@ -376,64 +318,60 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
 
   @override
   $StemQueueJob decode(Map<String, Object?> data, ValueCodecRegistry registry) {
-    final String stemQueueJobIdValue =
+    final stemQueueJobIdValue =
         registry.decodeField<String>(_$StemQueueJobIdField, data['id']) ??
         (throw StateError('Field id on StemQueueJob cannot be null.'));
-    final String stemQueueJobQueueValue =
+    final stemQueueJobQueueValue =
         registry.decodeField<String>(_$StemQueueJobQueueField, data['queue']) ??
         (throw StateError('Field queue on StemQueueJob cannot be null.'));
-    final Map<String, Object?> stemQueueJobEnvelopeValue =
+    final stemQueueJobEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemQueueJobEnvelopeField,
           data['envelope'],
         ) ??
         (throw StateError('Field envelope on StemQueueJob cannot be null.'));
-    final int stemQueueJobAttemptValue =
+    final stemQueueJobAttemptValue =
         registry.decodeField<int>(
           _$StemQueueJobAttemptField,
           data['attempt'],
         ) ??
         (throw StateError('Field attempt on StemQueueJob cannot be null.'));
-    final int stemQueueJobMaxRetriesValue =
+    final stemQueueJobMaxRetriesValue =
         registry.decodeField<int>(
           _$StemQueueJobMaxRetriesField,
           data['max_retries'],
         ) ??
         (throw StateError('Field maxRetries on StemQueueJob cannot be null.'));
-    final int stemQueueJobPriorityValue =
+    final stemQueueJobPriorityValue =
         registry.decodeField<int>(
           _$StemQueueJobPriorityField,
           data['priority'],
         ) ??
         (throw StateError('Field priority on StemQueueJob cannot be null.'));
-    final DateTime? stemQueueJobNotBeforeValue = registry
-        .decodeField<DateTime?>(
-          _$StemQueueJobNotBeforeField,
-          data['not_before'],
-        );
-    final DateTime? stemQueueJobLockedAtValue = registry.decodeField<DateTime?>(
+    final stemQueueJobNotBeforeValue = registry.decodeField<DateTime?>(
+      _$StemQueueJobNotBeforeField,
+      data['not_before'],
+    );
+    final stemQueueJobLockedAtValue = registry.decodeField<DateTime?>(
       _$StemQueueJobLockedAtField,
       data['locked_at'],
     );
-    final DateTime? stemQueueJobLockedUntilValue = registry
-        .decodeField<DateTime?>(
-          _$StemQueueJobLockedUntilField,
-          data['locked_until'],
-        );
-    final String? stemQueueJobLockedByValue = registry.decodeField<String?>(
+    final stemQueueJobLockedUntilValue = registry.decodeField<DateTime?>(
+      _$StemQueueJobLockedUntilField,
+      data['locked_until'],
+    );
+    final stemQueueJobLockedByValue = registry.decodeField<String?>(
       _$StemQueueJobLockedByField,
       data['locked_by'],
     );
-    final DateTime? stemQueueJobCreatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemQueueJobCreatedAtField,
-          data['created_at'],
-        );
-    final DateTime? stemQueueJobUpdatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemQueueJobUpdatedAtField,
-          data['updated_at'],
-        );
+    final stemQueueJobCreatedAtValue = registry.decodeField<DateTime?>(
+      _$StemQueueJobCreatedAtField,
+      data['created_at'],
+    );
+    final stemQueueJobUpdatedAtValue = registry.decodeField<DateTime?>(
+      _$StemQueueJobUpdatedAtField,
+      data['updated_at'],
+    );
     final model = $StemQueueJob(
       id: stemQueueJobIdValue,
       queue: stemQueueJobQueueValue,
@@ -704,27 +642,27 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   @override
   $StemQueueJob toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? queueValue = queue;
+    final queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final Map<String, Object?>? envelopeValue = envelope;
+    final envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final int? attemptValue = attempt;
+    final attemptValue = attempt;
     if (attemptValue == null) {
       throw StateError('Missing required field: attempt');
     }
-    final int? maxRetriesValue = maxRetries;
+    final maxRetriesValue = maxRetries;
     if (maxRetriesValue == null) {
       throw StateError('Missing required field: maxRetries');
     }
-    final int? priorityValue = priority;
+    final priorityValue = priority;
     if (priorityValue == null) {
       throw StateError('Missing required field: priority');
     }

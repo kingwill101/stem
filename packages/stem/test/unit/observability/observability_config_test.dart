@@ -1,12 +1,12 @@
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('ObservabilityConfig', () {
     setUp(() {
       StemMetrics.instance
         ..reset()
-        ..configure(exporters: const []);
+        ..configure();
     });
 
     test('parseDuration handles supported units', () {
@@ -81,7 +81,7 @@ void main() {
     });
 
     test('applyMetricExporters wires exporters for known specs', () async {
-      final config = ObservabilityConfig(
+      ObservabilityConfig(
         namespace: 'prod',
         metricExporters: const [
           'prometheus',
@@ -89,9 +89,7 @@ void main() {
           'otlp', // uses fallback endpoint
         ],
         otlpEndpoint: Uri.parse('http://fallback:4318/v1/metrics'),
-      );
-
-      config.applyMetricExporters();
+      ).applyMetricExporters();
 
       // Emitting metrics exercises the configured exporters without requiring
       // external systems.
@@ -103,7 +101,7 @@ void main() {
       StemMetrics.instance.setGauge('stem.test.gauge', 42);
 
       final snapshot = StemMetrics.instance.snapshot();
-      final counters = snapshot['counters'] as List<dynamic>;
+      final counters = snapshot['counters']! as List<dynamic>;
       expect(counters, isNotEmpty);
 
       await StemMetrics.instance.flush();
@@ -114,7 +112,7 @@ void main() {
       () {
         final config = ObservabilityConfig(metricExporters: const ['console']);
 
-        expect(() => config.applyMetricExporters(), returnsNormally);
+        expect(config.applyMetricExporters, returnsNormally);
       },
     );
 
@@ -123,11 +121,9 @@ void main() {
         StemSignals.configure(configuration: const StemSignalConfiguration());
       });
 
-      final config = ObservabilityConfig(
+      ObservabilityConfig(
         signalConfiguration: const StemSignalConfiguration(enabled: false),
-      );
-
-      config.applySignalConfiguration();
+      ).applySignalConfiguration();
 
       var invoked = false;
       StemSignals.beforeTaskPublish.connect((payload, _) {

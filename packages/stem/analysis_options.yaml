@@ -20,8 +20,12 @@ include: package:very_good_analysis/analysis_options.10.0.0.yaml
 #     - camel_case_types
 
 analyzer:
+  errors:
+    avoid_returning_this: ignore
   exclude:
     - example/**
+    - "**/*.g.dart"
+    - "**/*.orm.dart"
 
 # For more information about the core and recommended set of lints, see
 # https://dart.dev/go/core-lints

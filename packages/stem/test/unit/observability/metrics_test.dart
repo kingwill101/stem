@@ -1,21 +1,23 @@
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   setUp(() {
     StemMetrics.instance
       ..reset()
-      ..configure(exporters: const []);
+      ..configure();
   });
 
   test('metrics counter aggregates by name and tags', () {
-    final metrics = StemMetrics.instance;
-    metrics.increment('stem.tasks.succeeded', tags: {'task': 'foo'});
-    metrics.increment('stem.tasks.succeeded', tags: {'task': 'foo'});
-    metrics.increment('stem.tasks.failed', tags: {'task': 'foo'});
+    final metrics = StemMetrics.instance
+      ..increment('stem.tasks.succeeded', tags: {'task': 'foo'})
+      ..increment('stem.tasks.succeeded', tags: {'task': 'foo'})
+      ..increment('stem.tasks.failed', tags: {'task': 'foo'});
 
     final snapshot = metrics.snapshot();
-    final counters = snapshot['counters'] as List<dynamic>;
+    final counters = (snapshot['counters'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .toList();
     final succeeded = counters.firstWhere(
       (c) => c['name'] == 'stem.tasks.succeeded',
     );
@@ -23,20 +25,22 @@ void main() {
   });
 
   test('histogram aggregates duration statistics', () {
-    final metrics = StemMetrics.instance;
-    metrics.recordDuration(
-      'stem.task.duration',
-      const Duration(milliseconds: 100),
-      tags: const {'task': 'foo'},
-    );
-    metrics.recordDuration(
-      'stem.task.duration',
-      const Duration(milliseconds: 250),
-      tags: const {'task': 'foo'},
-    );
+    final metrics = StemMetrics.instance
+      ..recordDuration(
+        'stem.task.duration',
+        const Duration(milliseconds: 100),
+        tags: const {'task': 'foo'},
+      )
+      ..recordDuration(
+        'stem.task.duration',
+        const Duration(milliseconds: 250),
+        tags: const {'task': 'foo'},
+      );
 
     final snapshot = metrics.snapshot();
-    final histograms = snapshot['histograms'] as List<dynamic>;
+    final histograms = (snapshot['histograms'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .toList();
     final entry = histograms.firstWhere(
       (c) => c['name'] == 'stem.task.duration',
     );
@@ -48,17 +52,20 @@ void main() {
   });
 
   test('gauge tracks latest value and timestamp', () async {
-    final metrics = StemMetrics.instance;
-    metrics.setGauge('stem.queue.depth', 15);
+    final metrics = StemMetrics.instance..setGauge('stem.queue.depth', 15);
     await Future<void>.delayed(const Duration(milliseconds: 5));
     metrics.setGauge('stem.queue.depth', 42);
 
     final snapshot = metrics.snapshot();
-    final gauges = snapshot['gauges'] as List<dynamic>;
+    final gauges = (snapshot['gauges'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, Object?>>()
+        .toList();
     final gauge = gauges.singleWhere((g) => g['name'] == 'stem.queue.depth');
 
     expect(gauge['value'], equals(42));
-    expect(DateTime.parse(gauge['updatedAt']), isA<DateTime>());
+    final updatedAt = gauge['updatedAt'] as String?;
+    expect(updatedAt, isNotNull);
+    expect(DateTime.parse(updatedAt!), isA<DateTime>());
   });
 
   test('ConsoleMetricsExporter writes JSON lines to provided sink', () {
@@ -77,31 +84,31 @@ void main() {
   });
 
   test('PrometheusMetricsExporter renders aggregated samples', () {
-    final exporter = PrometheusMetricsExporter();
-    exporter.record(
-      MetricEvent(
-        type: MetricType.counter,
-        name: 'stem_tasks_started_total',
-        value: 1,
-        tags: const {'queue': 'default'},
-      ),
-    );
-    exporter.record(
-      MetricEvent(
-        type: MetricType.histogram,
-        name: 'stem_task_duration_seconds',
-        value: 250,
-        tags: const {'task': 'foo'},
-      ),
-    );
-    exporter.record(
-      MetricEvent(
-        type: MetricType.gauge,
-        name: 'stem_worker_inflight',
-        value: 3,
-        tags: const {'worker': 'w1'},
-      ),
-    );
+    final exporter = PrometheusMetricsExporter()
+      ..record(
+        MetricEvent(
+          type: MetricType.counter,
+          name: 'stem_tasks_started_total',
+          value: 1,
+          tags: const {'queue': 'default'},
+        ),
+      )
+      ..record(
+        MetricEvent(
+          type: MetricType.histogram,
+          name: 'stem_task_duration_seconds',
+          value: 250,
+          tags: const {'task': 'foo'},
+        ),
+      )
+      ..record(
+        MetricEvent(
+          type: MetricType.gauge,
+          name: 'stem_worker_inflight',
+          value: 3,
+          tags: const {'worker': 'w1'},
+        ),
+      );
 
     final rendered = exporter.render();
     expect(rendered, contains('stem_tasks_started_total'));

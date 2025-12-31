@@ -14,9 +14,6 @@ const FieldDefinition _$StemBroadcastMessageIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageChannelField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemBroadcastMessageChannelField = FieldDefinition(
   columnName: 'channel',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageEnvelopeField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemBroadcastMessageEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -49,11 +38,7 @@ const FieldDefinition _$StemBroadcastMessageDeliveryField = FieldDefinition(
   columnName: 'delivery',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageCreatedAtField = FieldDefinition(
@@ -61,11 +46,7 @@ const FieldDefinition _$StemBroadcastMessageCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageUpdatedAtField = FieldDefinition(
@@ -73,11 +54,7 @@ const FieldDefinition _$StemBroadcastMessageUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemBroadcastMessageUntracked(
@@ -102,11 +79,11 @@ Map<String, Object?> _encodeStemBroadcastMessageUntracked(
   };
 }
 
-final ModelDefinition<$StemBroadcastMessage> _$StemBroadcastMessageDefinition =
+const ModelDefinition<$StemBroadcastMessage> _$StemBroadcastMessageDefinition =
     ModelDefinition(
       modelName: 'StemBroadcastMessage',
       tableName: 'stem_broadcast_messages',
-      fields: const [
+      fields: [
         _$StemBroadcastMessageIdField,
         _$StemBroadcastMessageChannelField,
         _$StemBroadcastMessageEnvelopeField,
@@ -114,22 +91,11 @@ final ModelDefinition<$StemBroadcastMessage> _$StemBroadcastMessageDefinition =
         _$StemBroadcastMessageCreatedAtField,
         _$StemBroadcastMessageUpdatedAtField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        fieldOverrides: const {
+        fieldOverrides: {
           'envelope': FieldAttributeMetadata(cast: 'json'),
         },
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemBroadcastMessageUntracked,
       codec: _$StemBroadcastMessageCodec(),
@@ -190,7 +156,7 @@ class StemBroadcastMessages {
 
   static Query<$StemBroadcastMessage> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemBroadcastMessage>(
     column,
@@ -283,13 +249,13 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemBroadcastMessageIdValue =
+    final stemBroadcastMessageIdValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageIdField,
           data['id'],
         ) ??
         (throw StateError('Field id on StemBroadcastMessage cannot be null.'));
-    final String stemBroadcastMessageChannelValue =
+    final stemBroadcastMessageChannelValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageChannelField,
           data['channel'],
@@ -297,7 +263,7 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field channel on StemBroadcastMessage cannot be null.',
         ));
-    final Map<String, Object?> stemBroadcastMessageEnvelopeValue =
+    final stemBroadcastMessageEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemBroadcastMessageEnvelopeField,
           data['envelope'],
@@ -305,7 +271,7 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field envelope on StemBroadcastMessage cannot be null.',
         ));
-    final String stemBroadcastMessageDeliveryValue =
+    final stemBroadcastMessageDeliveryValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageDeliveryField,
           data['delivery'],
@@ -313,16 +279,14 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field delivery on StemBroadcastMessage cannot be null.',
         ));
-    final DateTime? stemBroadcastMessageCreatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemBroadcastMessageCreatedAtField,
-          data['created_at'],
-        );
-    final DateTime? stemBroadcastMessageUpdatedAtValue = registry
-        .decodeField<DateTime?>(
-          _$StemBroadcastMessageUpdatedAtField,
-          data['updated_at'],
-        );
+    final stemBroadcastMessageCreatedAtValue = registry.decodeField<DateTime?>(
+      _$StemBroadcastMessageCreatedAtField,
+      data['created_at'],
+    );
+    final stemBroadcastMessageUpdatedAtValue = registry.decodeField<DateTime?>(
+      _$StemBroadcastMessageUpdatedAtField,
+      data['updated_at'],
+    );
     final model = $StemBroadcastMessage(
       id: stemBroadcastMessageIdValue,
       channel: stemBroadcastMessageChannelValue,
@@ -482,19 +446,19 @@ class StemBroadcastMessagePartial
   @override
   $StemBroadcastMessage toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? channelValue = channel;
+    final channelValue = channel;
     if (channelValue == null) {
       throw StateError('Missing required field: channel');
     }
-    final Map<String, Object?>? envelopeValue = envelope;
+    final envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final String? deliveryValue = delivery;
+    final deliveryValue = delivery;
     if (deliveryValue == null) {
       throw StateError('Missing required field: delivery');
     }

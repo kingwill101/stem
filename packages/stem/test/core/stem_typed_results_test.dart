@@ -44,7 +44,7 @@ void main() {
           taskId,
           decode: (payload) {
             decodeInvocations += 1;
-            return payload as String;
+            return payload! as String;
           },
         );
         expect(result, isNotNull);
@@ -115,7 +115,7 @@ void main() {
           FunctionTaskHandler<String>(
             name: 'typed.args',
             entrypoint: (context, args) async {
-              return args['secret'] as String;
+              return args['secret']! as String;
             },
           ),
         ],
@@ -140,7 +140,7 @@ void main() {
           FunctionTaskHandler<String>(
             name: 'typed.override',
             entrypoint: (context, args) async {
-              return args['secret'] as String;
+              return args['secret']! as String;
             },
             metadata: const TaskMetadata(
               argsEncoder: _JsonArgsTaskPayloadEncoder(),

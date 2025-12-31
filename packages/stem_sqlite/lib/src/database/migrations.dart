@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:ormed/migrations.dart';
 
-import 'migrations/m_20251222070816_create_stem_tables.dart';
+import 'package:stem_sqlite/src/database/migrations/m_20251222070816_create_stem_tables.dart';
 
 final List<MigrationEntry> _entries = [
   MigrationEntry(
@@ -10,7 +11,7 @@ final List<MigrationEntry> _entries = [
       DateTime(2025, 12, 22, 7, 8, 16),
       'm_20251222070816_create_stem_tables',
     ),
-    migration: CreateStemTables(),
+    migration: const CreateStemTables(),
   ),
 ];
 
@@ -28,7 +29,7 @@ MigrationEntry? _findEntry(String rawId) {
 void main(List<String> args) {
   if (args.contains('--dump-json')) {
     final payload = buildMigrations().map((m) => m.toJson()).toList();
-    print(jsonEncode(payload));
+    stdout.writeln(jsonEncode(payload));
     return;
   }
 
@@ -49,6 +50,6 @@ void main(List<String> args) {
       snapshot = SchemaSnapshot.fromJson(payload);
     }
     final plan = entry.migration.plan(direction, snapshot: snapshot);
-    print(jsonEncode(plan.toJson()));
+    stdout.writeln(jsonEncode(plan.toJson()));
   }
 }

@@ -13,6 +13,11 @@
 
 # include: package:lints/recommended.yaml
 include: package:very_good_analysis/analysis_options.10.0.0.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.orm.dart"
 # Uncomment the following section to specify additional rules.
 
 # linter:

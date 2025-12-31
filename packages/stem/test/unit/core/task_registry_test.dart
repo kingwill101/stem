@@ -121,8 +121,9 @@ void main() {
       final first = _TestHandler('sample.task');
       final second = _TestHandler('sample.task');
 
-      registry.register(first);
-      registry.register(second, overrideExisting: true);
+      registry
+        ..register(first)
+        ..register(second, overrideExisting: true);
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
       await sub.cancel();
@@ -134,8 +135,8 @@ void main() {
       expect(events.last.handler, same(second));
     });
     test('throws when registering duplicate handler without override', () {
-      final registry = SimpleTaskRegistry();
-      registry.register(_DuplicateHandler('sample.task'));
+      final registry = SimpleTaskRegistry()
+        ..register(_DuplicateHandler('sample.task'));
 
       expect(
         () => registry.register(_DuplicateHandler('sample.task')),
@@ -154,15 +155,15 @@ void main() {
       final original = _TestHandler('sample.task');
       final replacement = _TestHandler('sample.task');
 
-      registry.register(original);
-      registry.register(replacement, overrideExisting: true);
+      registry
+        ..register(original)
+        ..register(replacement, overrideExisting: true);
 
       expect(registry.resolve('sample.task'), same(replacement));
     });
 
     test('exposes registered handlers as read-only list', () {
-      final registry = SimpleTaskRegistry();
-      registry
+      final registry = SimpleTaskRegistry()
         ..register(_TestHandler('first'))
         ..register(_TestHandler('second'));
 

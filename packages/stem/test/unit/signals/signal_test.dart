@@ -1,15 +1,16 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Signal', () {
     test('invokes handlers respecting priority', () async {
       final signal = Signal<String>(name: 'test');
       final calls = <String>[];
-      signal.connect((payload, _) => calls.add('low:$payload'));
-      signal.connect((payload, _) => calls.add('high:$payload'), priority: 10);
+      signal
+        ..connect((payload, _) => calls.add('low:$payload'))
+        ..connect((payload, _) => calls.add('high:$payload'), priority: 10);
 
       await signal.emit('payload');
 
@@ -55,9 +56,7 @@ void main() {
             capturedStack = stack;
           },
         ),
-      );
-
-      signal.connect((_, _) => throw StateError('boom'));
+      )..connect((_, _) => throw StateError('boom'));
 
       await signal.emit(null);
 
@@ -121,7 +120,7 @@ void main() {
       });
 
       final envelope = Envelope(name: 'tasks.disabled', args: const {});
-      final worker = const WorkerInfo(
+      const worker = WorkerInfo(
         id: 'worker',
         queues: ['default'],
         broadcasts: [],
@@ -227,7 +226,9 @@ void main() {
         await middleware.onExecute(context, () async {
           throw StateError('boom');
         });
-      } catch (_) {}
+      } on Object {
+        // Swallow error; middleware onError is asserted separately.
+      }
       await middleware.onError(context, StateError('boom'), StackTrace.current);
 
       expect(received.isCompleted, isTrue);

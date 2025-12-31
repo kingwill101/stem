@@ -34,7 +34,7 @@ void main() {
     final heartbeat = WorkerHeartbeat(
       workerId: 'worker-a',
       namespace: 'ops',
-      timestamp: DateTime.utc(2024, 1, 1),
+      timestamp: DateTime.utc(2024),
       isolateCount: 1,
       inflight: 0,
       queues: const [],

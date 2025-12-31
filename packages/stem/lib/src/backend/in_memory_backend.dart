@@ -1,19 +1,25 @@
 import 'dart:async';
 
-import '../core/contracts.dart';
-import '../core/chord_metadata.dart';
-import '../observability/heartbeat.dart';
+import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/observability/heartbeat.dart';
 
 /// Simple in-memory result backend used for tests and local development.
 class InMemoryResultBackend implements ResultBackend {
+  /// Creates an in-memory backend with configurable TTLs.
   InMemoryResultBackend({
     this.defaultTtl = const Duration(days: 1),
     this.groupDefaultTtl = const Duration(days: 1),
     this.heartbeatTtl = const Duration(seconds: 60),
   });
 
+  /// Default expiration applied to task statuses.
   final Duration defaultTtl;
+
+  /// Default expiration applied to group/chord metadata.
   final Duration groupDefaultTtl;
+
+  /// Time-to-live applied to worker heartbeat entries.
   final Duration heartbeatTtl;
 
   final Map<String, _Entry> _entries = {};
@@ -72,7 +78,10 @@ class InMemoryResultBackend implements ResultBackend {
       () => StreamController<TaskStatus>.broadcast(
         onCancel: () {
           if (!(_watchers[taskId]?.hasListener ?? false)) {
-            _watchers.remove(taskId)?.close();
+            final controller = _watchers.remove(taskId);
+            if (controller != null) {
+              unawaited(controller.close());
+            }
           }
         },
       ),
@@ -187,7 +196,10 @@ class InMemoryResultBackend implements ResultBackend {
   void _remove(String key) {
     _expiryTimers.remove(key)?.cancel();
     _entries.remove(key);
-    _watchers.remove(key)?.close();
+    final controller = _watchers.remove(key);
+    if (controller != null) {
+      unawaited(controller.close());
+    }
   }
 
   void _scheduleGroupExpiry(String key, Duration ttl) {
@@ -238,13 +250,11 @@ class InMemoryResultBackend implements ResultBackend {
 
   void _pruneExpiredHeartbeats() {
     final now = DateTime.now();
-    final stale = _heartbeats.entries
+    _heartbeats.entries
         .where((entry) => entry.value.expiresAt.isBefore(now))
         .map((entry) => entry.key)
-        .toList(growable: false);
-    for (final key in stale) {
-      _removeHeartbeat(key);
-    }
+        .toList(growable: false)
+        .forEach(_removeHeartbeat);
   }
 }
 

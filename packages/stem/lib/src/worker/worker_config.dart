@@ -1,5 +1,6 @@
 /// Autoscaling configuration for worker concurrency.
 class WorkerAutoscaleConfig {
+  /// Creates an autoscaling configuration.
   const WorkerAutoscaleConfig({
     this.enabled = false,
     int? minConcurrency,
@@ -59,6 +60,7 @@ class WorkerAutoscaleConfig {
   /// Cooldown period between scale-down actions.
   final Duration scaleDownCooldown;
 
+  /// Returns a copy of this config with the provided overrides.
   WorkerAutoscaleConfig copyWith({
     bool? enabled,
     int? minConcurrency,
@@ -88,6 +90,7 @@ class WorkerAutoscaleConfig {
 
 /// Lifecycle guard configuration for worker isolates and shutdown semantics.
 class WorkerLifecycleConfig {
+  /// Creates lifecycle guard configuration for worker shutdown.
   const WorkerLifecycleConfig({
     this.installSignalHandlers = true,
     this.softGracePeriod = const Duration(seconds: 30),
@@ -111,6 +114,7 @@ class WorkerLifecycleConfig {
   /// Memory threshold in bytes before recycling an isolate; `null` disables.
   final int? maxMemoryPerIsolateBytes;
 
+  /// Returns a copy of this config with the provided overrides.
   WorkerLifecycleConfig copyWith({
     bool? installSignalHandlers,
     Duration? softGracePeriod,

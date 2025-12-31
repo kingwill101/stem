@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:ormed/migrations.dart';
 
 // <ORM-MIGRATION-IMPORTS>
-import 'migrations/m_20251227071920_stem.dart'; // </ORM-MIGRATION-IMPORTS>
+import 'package:stem_postgres/src/database/migrations/m_20251227071920_stem.dart'; // </ORM-MIGRATION-IMPORTS>
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
@@ -27,7 +28,7 @@ MigrationEntry? _findEntry(String rawId) {
 void main(List<String> args) {
   if (args.contains('--dump-json')) {
     final payload = buildMigrations().map((m) => m.toJson()).toList();
-    print(jsonEncode(payload));
+    stdout.writeln(jsonEncode(payload));
     return;
   }
 
@@ -36,7 +37,7 @@ void main(List<String> args) {
     final id = args[planIndex + 1];
     final entry = _findEntry(id);
     if (entry == null) {
-      throw StateError('Unknown migration id ' + id + '.');
+      throw StateError('Unknown migration id $id.');
     }
     final directionName = args[args.indexOf('--direction') + 1];
     final direction = MigrationDirection.values.byName(directionName);
@@ -48,7 +49,7 @@ void main(List<String> args) {
       snapshot = SchemaSnapshot.fromJson(payload);
     }
     final plan = entry.migration.plan(direction, snapshot: snapshot);
-    print(jsonEncode(plan.toJson()));
+    stdout.writeln(jsonEncode(plan.toJson()));
     return;
   }
 }

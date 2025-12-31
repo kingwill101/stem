@@ -1,9 +1,9 @@
 import 'package:property_testing/property_testing.dart';
 import 'package:stem/stem.dart' show DeadLetterEntry, DeadLetterReplayResult;
-import 'package:stem_dashboard/src/stem/control_messages.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
 import 'package:stem_dashboard/src/state/dashboard_state.dart';
+import 'package:stem_dashboard/src/stem/control_messages.dart';
 import 'package:test/test.dart';
 
 class _QueueDeltaCase {
@@ -103,7 +103,7 @@ void main() {
   ) {
     return Gen.containerOf<List<int>, int>(
       Gen.integer(min: 0, max: 500),
-      (values) => List<int>.from(values),
+      List<int>.from,
       minLength: 6,
       maxLength: 6,
     ).map(

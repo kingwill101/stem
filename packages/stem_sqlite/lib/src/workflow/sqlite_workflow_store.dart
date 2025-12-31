@@ -18,21 +18,17 @@ void _ensureColumn(
   }
 }
 
+/// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore implements WorkflowStore {
-  SqliteWorkflowStore._(this._db, this._clock);
-
-  final Database _db;
-  final WorkflowClock _clock;
-  int _idCounter = 0;
-
+  /// Opens a SQLite-backed workflow store using [file].
   factory SqliteWorkflowStore.open(
     File file, {
     WorkflowClock clock = const SystemWorkflowClock(),
   }) {
-    final db = sqlite3.open(file.path);
-    db.execute('PRAGMA journal_mode = WAL;');
-    db.execute('PRAGMA synchronous = NORMAL;');
-    db.execute('''
+    final db = sqlite3.open(file.path)
+      ..execute('PRAGMA journal_mode = WAL;')
+      ..execute('PRAGMA synchronous = NORMAL;')
+      ..execute('''
       CREATE TABLE IF NOT EXISTS wf_runs (
         id TEXT PRIMARY KEY,
         workflow TEXT NOT NULL,
@@ -48,22 +44,22 @@ class SqliteWorkflowStore implements WorkflowStore {
         created_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER)),
         updated_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER))
       )
-    ''');
-    db.execute('''
+    ''')
+      ..execute('''
       CREATE TABLE IF NOT EXISTS wf_steps (
         run_id TEXT NOT NULL,
         name TEXT NOT NULL,
         value TEXT,
         PRIMARY KEY (run_id, name)
       )
-    ''');
-    db.execute('''
+    ''')
+      ..execute('''
       CREATE INDEX IF NOT EXISTS wf_runs_resume_idx ON wf_runs(resume_at)
-    ''');
-    db.execute(
-      'CREATE INDEX IF NOT EXISTS wf_runs_topic_idx ON wf_runs(wait_topic)',
-    );
-    db.execute('''
+    ''')
+      ..execute(
+        'CREATE INDEX IF NOT EXISTS wf_runs_topic_idx ON wf_runs(wait_topic)',
+      )
+      ..execute('''
       CREATE TABLE IF NOT EXISTS wf_watchers (
         run_id TEXT PRIMARY KEY REFERENCES wf_runs(id) ON DELETE CASCADE,
         step_name TEXT NOT NULL,
@@ -72,10 +68,11 @@ class SqliteWorkflowStore implements WorkflowStore {
         created_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER)),
         deadline INTEGER
       )
-    ''');
-    db.execute(
-      'CREATE INDEX IF NOT EXISTS wf_watchers_topic_idx ON wf_watchers(topic, created_at)',
-    );
+    ''')
+      ..execute(
+        'CREATE INDEX IF NOT EXISTS wf_watchers_topic_idx '
+        'ON wf_watchers(topic, created_at)',
+      );
     _ensureColumn(db, 'wf_runs', 'cancellation_policy', 'TEXT');
     _ensureColumn(db, 'wf_runs', 'cancellation_data', 'TEXT');
     _ensureColumn(
@@ -92,6 +89,11 @@ class SqliteWorkflowStore implements WorkflowStore {
     );
     return SqliteWorkflowStore._(db, clock);
   }
+  SqliteWorkflowStore._(this._db, this._clock);
+
+  final Database _db;
+  final WorkflowClock _clock;
+  int _idCounter = 0;
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -130,7 +132,8 @@ class SqliteWorkflowStore implements WorkflowStore {
         ? null
         : jsonEncode(cancellationPolicy.toJson());
     _db.execute(
-      'INSERT INTO wf_runs(id, workflow, status, params, created_at, updated_at, cancellation_policy) '
+      'INSERT INTO wf_runs(id, workflow, status, params, created_at, '
+      'updated_at, cancellation_policy) '
       'VALUES(?, ?, ?, ?, ?, ?, ?)',
       [
         id,
@@ -221,15 +224,19 @@ class SqliteWorkflowStore implements WorkflowStore {
     final nowMillis = _clock.now().millisecondsSinceEpoch;
     _db.execute('BEGIN IMMEDIATE');
     try {
-      _db.execute(
-        'INSERT OR REPLACE INTO wf_steps(run_id, name, value) VALUES(?, ?, ?)',
-        [runId, stepName, jsonEncode(value)],
-      );
-      _db.execute('UPDATE wf_runs SET updated_at = ? WHERE id = ?', [
-        nowMillis,
-        runId,
-      ]);
-      _db.execute('COMMIT');
+      _db
+        ..execute(
+          '''
+INSERT OR REPLACE INTO wf_steps(run_id, name, value)
+VALUES(?, ?, ?)
+''',
+          [runId, stepName, jsonEncode(value)],
+        )
+        ..execute('UPDATE wf_runs SET updated_at = ? WHERE id = ?', [
+          nowMillis,
+          runId,
+        ])
+        ..execute('COMMIT');
     } catch (error) {
       _db.execute('ROLLBACK');
       rethrow;
@@ -306,30 +313,32 @@ class SqliteWorkflowStore implements WorkflowStore {
     final deadlineMillis = deadline?.millisecondsSinceEpoch;
     _db.execute('BEGIN IMMEDIATE');
     try {
-      _db.execute(
-        'INSERT INTO wf_watchers(run_id, step_name, topic, data, created_at, deadline) '
-        'VALUES(?, ?, ?, ?, ?, ?) '
-        'ON CONFLICT(run_id) DO UPDATE SET '
-        'step_name = excluded.step_name, '
-        'topic = excluded.topic, '
-        'data = excluded.data, '
-        'created_at = excluded.created_at, '
-        'deadline = excluded.deadline',
-        [runId, stepName, topic, payload, nowMillis, deadlineMillis],
-      );
-      _db.execute(
-        'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
-        'suspension_data = ?, updated_at = ? WHERE id = ?',
-        [
-          WorkflowStatus.suspended.name,
-          topic,
-          deadlineMillis,
-          payload,
-          nowMillis,
-          runId,
-        ],
-      );
-      _db.execute('COMMIT');
+      _db
+        ..execute(
+          'INSERT INTO wf_watchers(run_id, step_name, topic, data, created_at, '
+          'deadline) '
+          'VALUES(?, ?, ?, ?, ?, ?) '
+          'ON CONFLICT(run_id) DO UPDATE SET '
+          'step_name = excluded.step_name, '
+          'topic = excluded.topic, '
+          'data = excluded.data, '
+          'created_at = excluded.created_at, '
+          'deadline = excluded.deadline',
+          [runId, stepName, topic, payload, nowMillis, deadlineMillis],
+        )
+        ..execute(
+          'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
+          'suspension_data = ?, updated_at = ? WHERE id = ?',
+          [
+            WorkflowStatus.suspended.name,
+            topic,
+            deadlineMillis,
+            payload,
+            nowMillis,
+            runId,
+          ],
+        )
+        ..execute('COMMIT');
     } catch (error) {
       _db.execute('ROLLBACK');
       rethrow;
@@ -370,7 +379,8 @@ class SqliteWorkflowStore implements WorkflowStore {
       _deleteWatcher(runId);
     }
     _db.execute(
-      'UPDATE wf_runs SET status = ?, last_error = ?, updated_at = ? WHERE id = ?',
+      'UPDATE wf_runs SET status = ?, last_error = ?, updated_at = ? '
+      'WHERE id = ?',
       [
         (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
         jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
@@ -457,20 +467,22 @@ class SqliteWorkflowStore implements WorkflowStore {
         metadata['type'] = 'event';
         metadata['topic'] = topic;
         metadata['payload'] = payload;
-        metadata.putIfAbsent('step', () => stepName);
-        metadata.putIfAbsent(
-          'iterationStep',
-          () => metadata['step'] ?? stepName,
-        );
+        metadata
+          ..putIfAbsent('step', () => stepName)
+          ..putIfAbsent(
+            'iterationStep',
+            () => metadata['step'] ?? stepName,
+          );
         metadata['deliveredAt'] = nowIso;
 
-        _db.execute(
-          'UPDATE wf_runs SET status = ?, wait_topic = NULL, resume_at = NULL, '
-          'suspension_data = ?, updated_at = ? WHERE id = ?',
-          [WorkflowStatus.running.name, jsonEncode(metadata), nowMs, runId],
-        );
-
-        _db.execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
+        _db
+          ..execute(
+            'UPDATE wf_runs SET status = ?, wait_topic = NULL, '
+            'resume_at = NULL, suspension_data = ?, updated_at = ? '
+            'WHERE id = ?',
+            [WorkflowStatus.running.name, jsonEncode(metadata), nowMs, runId],
+          )
+          ..execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
 
         resolutions.add(
           WorkflowWatcherResolution(
@@ -528,8 +540,9 @@ class SqliteWorkflowStore implements WorkflowStore {
     });
     _deleteWatcher(runId);
     _db.execute(
-      'UPDATE wf_runs SET status = ?, suspension_data = NULL, wait_topic = NULL, '
-      'resume_at = NULL, cancellation_data = ?, updated_at = ? WHERE id = ?',
+      'UPDATE wf_runs SET status = ?, suspension_data = NULL, '
+      'wait_topic = NULL, resume_at = NULL, cancellation_data = ?, '
+      'updated_at = ? WHERE id = ?',
       [WorkflowStatus.cancelled.name, cancellation, now, runId],
     );
   }
@@ -642,6 +655,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     return entries;
   }
 
+  /// Closes the workflow store and releases database resources.
   Future<void> close() async {
     _db.close();
   }

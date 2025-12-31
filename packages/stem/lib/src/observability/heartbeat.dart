@@ -15,6 +15,28 @@ class WorkerHeartbeat {
     Map<String, Object?>? extras,
   }) : extras = Map.unmodifiable(extras ?? const {});
 
+  /// Rehydrates a [WorkerHeartbeat] from the JSON [json] map.
+  factory WorkerHeartbeat.fromJson(Map<String, Object?> json) {
+    return WorkerHeartbeat(
+      workerId: json['workerId']! as String,
+      namespace: (json['namespace'] as String?) ?? 'stem',
+      timestamp: DateTime.parse(json['timestamp']! as String),
+      isolateCount: (json['isolateCount']! as num).toInt(),
+      inflight: (json['inflight']! as num).toInt(),
+      lastLeaseRenewal: json['lastLeaseRenewal'] != null
+          ? DateTime.parse(json['lastLeaseRenewal']! as String)
+          : null,
+      version: json['version'] as String? ?? currentVersion,
+      queues: (json['queues'] as List<dynamic>? ?? const [])
+          .map(
+            (queue) =>
+                QueueHeartbeat.fromJson((queue as Map).cast<String, Object?>()),
+          )
+          .toList(),
+      extras: (json['extras'] as Map?)?.cast<String, Object?>() ?? const {},
+    );
+  }
+
   /// Static version identifier for the heartbeat schema.
   static const currentVersion = '1';
 
@@ -59,28 +81,6 @@ class WorkerHeartbeat {
     'extras': extras,
   };
 
-  /// Rehydrates a [WorkerHeartbeat] from the JSON [json] map.
-  factory WorkerHeartbeat.fromJson(Map<String, Object?> json) {
-    return WorkerHeartbeat(
-      workerId: json['workerId'] as String,
-      namespace: (json['namespace'] as String?) ?? 'stem',
-      timestamp: DateTime.parse(json['timestamp'] as String),
-      isolateCount: (json['isolateCount'] as num).toInt(),
-      inflight: (json['inflight'] as num).toInt(),
-      lastLeaseRenewal: json['lastLeaseRenewal'] != null
-          ? DateTime.parse(json['lastLeaseRenewal'] as String)
-          : null,
-      version: json['version'] as String? ?? currentVersion,
-      queues: (json['queues'] as List<dynamic>? ?? const [])
-          .map(
-            (queue) =>
-                QueueHeartbeat.fromJson((queue as Map).cast<String, Object?>()),
-          )
-          .toList(),
-      extras: (json['extras'] as Map?)?.cast<String, Object?>() ?? const {},
-    );
-  }
-
   /// Encode the heartbeat as a JSON string for transport.
   String encode() => jsonEncode(toJson());
 
@@ -93,6 +93,14 @@ class QueueHeartbeat {
   /// Describes the current in-flight delivery count for [name].
   QueueHeartbeat({required this.name, required this.inflight});
 
+  /// Recreates a [QueueHeartbeat] from a JSON [json] map.
+  factory QueueHeartbeat.fromJson(Map<String, Object?> json) {
+    return QueueHeartbeat(
+      name: json['name']! as String,
+      inflight: (json['inflight']! as num).toInt(),
+    );
+  }
+
   /// Queue identifier used in downstream monitoring.
   final String name;
 
@@ -101,12 +109,4 @@ class QueueHeartbeat {
 
   /// Serializes this queue heartbeat into a JSON-ready map.
   Map<String, Object?> toJson() => {'name': name, 'inflight': inflight};
-
-  /// Recreates a [QueueHeartbeat] from a JSON [json] map.
-  factory QueueHeartbeat.fromJson(Map<String, Object?> json) {
-    return QueueHeartbeat(
-      name: json['name'] as String,
-      inflight: (json['inflight'] as num).toInt(),
-    );
-  }
 }

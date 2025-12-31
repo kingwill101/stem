@@ -9,6 +9,7 @@ import 'package:yaml/yaml.dart';
 /// Provides strongly typed access to queue, route, and broadcast definitions
 /// while preserving default alias semantics for backwards compatibility.
 class RoutingConfig {
+  /// Creates a routing configuration from parsed definitions.
   RoutingConfig({
     required this.defaultQueue,
     required Map<String, QueueDefinition> queues,
@@ -18,18 +19,6 @@ class RoutingConfig {
        routes = List.unmodifiable(routes ?? const []),
        broadcasts = Map.unmodifiable(broadcasts ?? const {});
 
-  /// Default queue alias configuration.
-  final DefaultQueueConfig defaultQueue;
-
-  /// Registered queue definitions keyed by canonical queue name.
-  final Map<String, QueueDefinition> queues;
-
-  /// Declarative routing rules evaluated in order of appearance.
-  final List<RouteDefinition> routes;
-
-  /// Broadcast channel definitions keyed by logical channel name.
-  final Map<String, BroadcastDefinition> broadcasts;
-
   /// Construct a configuration that mirrors the legacy single queue behaviour.
   factory RoutingConfig.legacy() {
     final defaultQueue = QueueDefinition(name: 'default');
@@ -37,7 +26,6 @@ class RoutingConfig {
       defaultQueue: DefaultQueueConfig(
         alias: 'default',
         queue: defaultQueue.name,
-        fallbacks: const [],
       ),
       queues: {defaultQueue.name: defaultQueue},
     );
@@ -101,6 +89,19 @@ class RoutingConfig {
     );
   }
 
+  /// Default queue alias configuration.
+  final DefaultQueueConfig defaultQueue;
+
+  /// Registered queue definitions keyed by canonical queue name.
+  final Map<String, QueueDefinition> queues;
+
+  /// Declarative routing rules evaluated in order of appearance.
+  final List<RouteDefinition> routes;
+
+  /// Broadcast channel definitions keyed by logical channel name.
+  final Map<String, BroadcastDefinition> broadcasts;
+
+  /// Serializes this configuration to JSON.
   Map<String, Object?> toJson() => {
     'defaultQueue': defaultQueue.toJson(),
     'queues': queues.map((key, value) => MapEntry(key, value.toJson())),
@@ -115,21 +116,14 @@ class RoutingConfig {
 
 /// Default queue alias configuration tying `alias` to a canonical queue name.
 class DefaultQueueConfig {
+  /// Creates a default queue alias configuration.
   const DefaultQueueConfig({
     required this.alias,
     required this.queue,
     this.fallbacks = const [],
   });
 
-  /// Alias used by legacy code when referencing the default queue.
-  final String alias;
-
-  /// Canonical queue name resolved by the alias.
-  final String queue;
-
-  /// Additional queue aliases consulted when the primary queue is unavailable.
-  final List<String> fallbacks;
-
+  /// Parses a default queue config from a JSON-like structure.
   factory DefaultQueueConfig.fromJson(
     Object? value, {
     required Iterable<String> queueLookup,
@@ -148,12 +142,12 @@ class DefaultQueueConfig {
     final map = _requireMap(
       value,
       context: 'default_queue',
-    ).map((key, val) => MapEntry(key.toString(), val));
-    final alias = (map['alias'] as String?)?.trim().isNotEmpty == true
-        ? (map['alias'] as String).trim()
+    ).map(MapEntry.new);
+    final alias = (map['alias'] as String?)?.trim().isNotEmpty ?? false
+        ? (map['alias']! as String).trim()
         : 'default';
-    final queueValue = (map['queue'] as String?)?.trim().isNotEmpty == true
-        ? map['queue'] as String
+    final queueValue = (map['queue'] as String?)?.trim().isNotEmpty ?? false
+        ? map['queue']! as String
         : alias;
     final queue = _resolveQueueOrFallback(queueValue, queueLookup);
     final fallbackValues =
@@ -165,6 +159,16 @@ class DefaultQueueConfig {
     return DefaultQueueConfig(alias: alias, queue: queue, fallbacks: fallbacks);
   }
 
+  /// Alias used by legacy code when referencing the default queue.
+  final String alias;
+
+  /// Canonical queue name resolved by the alias.
+  final String queue;
+
+  /// Additional queue aliases consulted when the primary queue is unavailable.
+  final List<String> fallbacks;
+
+  /// Serializes this configuration to JSON.
   Map<String, Object?> toJson() => {
     'alias': alias,
     'queue': queue,
@@ -174,6 +178,7 @@ class DefaultQueueConfig {
 
 /// Detailed queue definition with optional routing metadata.
 class QueueDefinition {
+  /// Creates a queue definition.
   QueueDefinition({
     required this.name,
     this.exchange,
@@ -185,13 +190,7 @@ class QueueDefinition {
        bindings = List.unmodifiable(bindings ?? const []),
        metadata = Map.unmodifiable(metadata ?? const {});
 
-  final String name;
-  final String? exchange;
-  final String? routingKey;
-  final QueuePriorityRange priorityRange;
-  final List<QueueBinding> bindings;
-  final Map<String, Object?> metadata;
-
+  /// Parses a queue definition from JSON.
   factory QueueDefinition.fromJson(String name, Map<String, Object?> json) {
     final exchange = (json['exchange'] as String?)?.trim();
     final routingKey = (json['routing_key'] ?? json['routingKey']) as String?;
@@ -209,8 +208,8 @@ class QueueDefinition {
     final metadata = _readMap(json, 'meta');
     return QueueDefinition(
       name: name,
-      exchange: exchange?.isEmpty == true ? null : exchange,
-      routingKey: routingKey?.toString().trim().isEmpty == true
+      exchange: exchange?.isEmpty ?? false ? null : exchange,
+      routingKey: routingKey?.toString().trim().isEmpty ?? false
           ? null
           : routingKey,
       priorityRange: priorityRange,
@@ -219,6 +218,25 @@ class QueueDefinition {
     );
   }
 
+  /// Canonical queue name.
+  final String name;
+
+  /// Optional exchange name for broker routing.
+  final String? exchange;
+
+  /// Optional routing key used by the broker.
+  final String? routingKey;
+
+  /// Allowed priority range for this queue.
+  final QueuePriorityRange priorityRange;
+
+  /// Declarative bindings for routing keys and headers.
+  final List<QueueBinding> bindings;
+
+  /// Additional metadata attached to the queue.
+  final Map<String, Object?> metadata;
+
+  /// Serializes this queue definition to JSON.
   Map<String, Object?> toJson() => {
     if (exchange != null) 'exchange': exchange,
     if (routingKey != null) 'routingKey': routingKey,
@@ -231,14 +249,11 @@ class QueueDefinition {
 
 /// Priority range constraint applied to a queue definition.
 class QueuePriorityRange {
+  /// Creates a priority range constraint.
   const QueuePriorityRange({required this.min, required this.max})
     : assert(min <= max, 'min priority must be <= max priority');
 
-  static const QueuePriorityRange standard = QueuePriorityRange(min: 0, max: 9);
-
-  final int min;
-  final int max;
-
+  /// Parses a priority range from JSON.
   factory QueuePriorityRange.fromJson(Object? value) {
     if (value is List && value.length == 2) {
       final min = _parseInt(value[0], context: 'priority_range[0]');
@@ -266,8 +281,19 @@ class QueuePriorityRange {
     );
   }
 
+  /// Default priority range used when none is specified.
+  static const QueuePriorityRange standard = QueuePriorityRange(min: 0, max: 9);
+
+  /// Minimum allowed priority.
+  final int min;
+
+  /// Maximum allowed priority.
+  final int max;
+
+  /// Serializes the priority range to JSON.
   Map<String, int> toJson() => {'min': min, 'max': max};
 
+  /// Clamps [value] to the allowed priority range.
   int clamp(int value) {
     if (value < min) return min;
     if (value > max) return max;
@@ -277,16 +303,14 @@ class QueuePriorityRange {
 
 /// Binding between a routing key (and optional headers) and a queue.
 class QueueBinding {
+  /// Creates a binding for a routing key and optional headers.
   QueueBinding({
     required this.routingKey,
     Map<String, String>? headers,
     this.weight,
   }) : headers = Map.unmodifiable(headers ?? const {});
 
-  final String routingKey;
-  final Map<String, String> headers;
-  final int? weight;
-
+  /// Parses a queue binding from JSON.
   factory QueueBinding.fromJson(Map<String, Object?> json) {
     final routingKey = (json['routing_key'] ?? json['routingKey']) as String?;
     if (routingKey == null || routingKey.trim().isEmpty) {
@@ -301,6 +325,16 @@ class QueueBinding {
     );
   }
 
+  /// Routing key for the binding.
+  final String routingKey;
+
+  /// Optional header constraints for the binding.
+  final Map<String, String> headers;
+
+  /// Optional weight for weighted routing.
+  final int? weight;
+
+  /// Serializes this binding to JSON.
   Map<String, Object?> toJson() => {
     'routingKey': routingKey,
     if (headers.isNotEmpty) 'headers': headers,
@@ -310,6 +344,7 @@ class QueueBinding {
 
 /// Broadcast channel declaration.
 class BroadcastDefinition {
+  /// Creates a broadcast channel definition.
   BroadcastDefinition({
     required this.name,
     this.durability,
@@ -318,23 +353,32 @@ class BroadcastDefinition {
   }) : delivery = delivery ?? 'at-least-once',
        metadata = Map.unmodifiable(metadata ?? const {});
 
-  final String name;
-  final String? durability;
-  final String delivery;
-  final Map<String, Object?> metadata;
-
+  /// Parses a broadcast definition from JSON.
   factory BroadcastDefinition.fromJson(String name, Map<String, Object?> json) {
     final durability = (json['durability'] as String?)?.trim();
     final delivery = (json['delivery'] as String?)?.trim();
     final metadata = _readMap(json, 'meta');
     return BroadcastDefinition(
       name: name,
-      durability: durability?.isEmpty == true ? null : durability,
-      delivery: delivery?.isEmpty == true ? null : delivery,
+      durability: durability?.isEmpty ?? false ? null : durability,
+      delivery: delivery?.isEmpty ?? false ? null : delivery,
       metadata: metadata,
     );
   }
 
+  /// Logical broadcast channel name.
+  final String name;
+
+  /// Optional durability hint for the underlying broker.
+  final String? durability;
+
+  /// Delivery guarantee (e.g. at-least-once).
+  final String delivery;
+
+  /// Additional broadcast metadata.
+  final Map<String, Object?> metadata;
+
+  /// Serializes this broadcast definition to JSON.
   Map<String, Object?> toJson() => {
     if (durability != null) 'durability': durability,
     'delivery': delivery,
@@ -344,6 +388,7 @@ class BroadcastDefinition {
 
 /// Declarative routing rule mapping match criteria to targets.
 class RouteDefinition {
+  /// Creates a routing rule definition.
   RouteDefinition({
     required this.match,
     required this.target,
@@ -351,11 +396,7 @@ class RouteDefinition {
     Map<String, Object?>? options,
   }) : options = Map.unmodifiable(options ?? const {});
 
-  final RouteMatch match;
-  final RouteTarget target;
-  final int? priorityOverride;
-  final Map<String, Object?> options;
-
+  /// Parses a route definition from JSON.
   factory RouteDefinition.fromJson(Map<String, Object?> json) {
     final match = RouteMatch.fromJson(
       _requireMap(json['match'], context: 'route.match'),
@@ -373,6 +414,19 @@ class RouteDefinition {
     );
   }
 
+  /// Match criteria evaluated for the route.
+  final RouteMatch match;
+
+  /// Target to route matching tasks to.
+  final RouteTarget target;
+
+  /// Optional priority override applied to the target.
+  final int? priorityOverride;
+
+  /// Additional route options.
+  final Map<String, Object?> options;
+
+  /// Serializes this route definition to JSON.
   Map<String, Object?> toJson() => {
     'match': match.toJson(),
     'target': target.toJson(),
@@ -383,6 +437,7 @@ class RouteDefinition {
 
 /// Routing match criteria with optional task glob, headers, or queue override.
 class RouteMatch {
+  /// Creates routing match criteria.
   RouteMatch({
     List<Glob>? taskGlobs,
     Map<String, String>? headers,
@@ -390,10 +445,7 @@ class RouteMatch {
   }) : taskGlobs = taskGlobs == null ? null : List.unmodifiable(taskGlobs),
        headers = Map.unmodifiable(headers ?? const {});
 
-  final List<Glob>? taskGlobs;
-  final Map<String, String> headers;
-  final String? queueOverride;
-
+  /// Parses routing match criteria from JSON.
   factory RouteMatch.fromJson(Map<String, Object?> json) {
     final tasks = _normalizeTaskPatterns(json['task']);
     final headers = _readStringMap(json['headers']);
@@ -402,12 +454,22 @@ class RouteMatch {
     return RouteMatch(
       taskGlobs: tasks,
       headers: headers ?? const {},
-      queueOverride: queueOverride?.trim().isEmpty == true
+      queueOverride: queueOverride?.trim().isEmpty ?? false
           ? null
           : queueOverride?.trim(),
     );
   }
 
+  /// Optional task glob patterns to match.
+  final List<Glob>? taskGlobs;
+
+  /// Required header matches for the route.
+  final Map<String, String> headers;
+
+  /// Optional queue override for matching tasks.
+  final String? queueOverride;
+
+  /// Serializes match criteria to JSON.
   Map<String, Object?> toJson() {
     Object? serializedTask;
     if (taskGlobs != null) {
@@ -417,8 +479,11 @@ class RouteMatch {
         serializedTask = taskGlobs!.map((glob) => glob.pattern).toList();
       }
     }
+    final serializedTaskEntry = serializedTask == null
+        ? null
+        : <String, Object?>{'task': serializedTask};
     return {
-      if (serializedTask != null) 'task': serializedTask,
+      ...?serializedTaskEntry,
       if (headers.isNotEmpty) 'headers': headers,
       if (queueOverride != null) 'queueOverride': queueOverride,
     };
@@ -427,11 +492,10 @@ class RouteMatch {
 
 /// Route target describing queue or broadcast destination.
 class RouteTarget {
+  /// Creates a route target descriptor.
   RouteTarget({required this.type, required this.name});
 
-  final String type;
-  final String name;
-
+  /// Parses a route target from JSON.
   factory RouteTarget.fromJson(Map<String, Object?> json) {
     final type = (json['type'] as String?)?.trim() ?? 'queue';
     final name = (json['name'] as String?)?.trim();
@@ -441,6 +505,13 @@ class RouteTarget {
     return RouteTarget(type: type.isEmpty ? 'queue' : type, name: name);
   }
 
+  /// Target type (e.g. queue or broadcast).
+  final String type;
+
+  /// Target name (queue or broadcast channel).
+  final String name;
+
+  /// Serializes this target to JSON.
   Map<String, Object?> toJson() => {'type': type, 'name': name};
 }
 
@@ -472,7 +543,7 @@ List<Glob>? _normalizeTaskPatterns(Object? value) {
   } else {
     throw const FormatException('route match task must be string or list.');
   }
-  return patterns.map((pattern) => Glob(pattern)).toList();
+  return patterns.map(Glob.new).toList();
 }
 
 String _resolveQueueOrFallback(String candidate, Iterable<String> knownQueues) {

@@ -1,4 +1,4 @@
-import 'workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_definition.dart';
 
 /// Convenience wrapper that builds a [WorkflowDefinition] using the declarative
 /// [FlowBuilder] DSL.
@@ -8,10 +8,12 @@ import 'workflow_definition.dart';
 /// produced by the workflow; it defaults to [Object] for backwards
 /// compatibility.
 class Flow<T extends Object?> {
+  /// Creates a flow definition using the [FlowBuilder] DSL.
   Flow({
     required String name,
     required void Function(FlowBuilder builder) build,
   }) : definition = WorkflowDefinition<T>.flow(name: name, build: build);
 
+  /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
 }

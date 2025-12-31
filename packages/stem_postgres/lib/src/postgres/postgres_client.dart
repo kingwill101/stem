@@ -11,6 +11,7 @@ import 'package:stem/stem.dart';
 class PostgresResult extends IterableBase<PostgresRow> {
   PostgresResult._(this._rows, this.affectedRows);
 
+  /// Creates a result wrapper from a postgres [Result].
   factory PostgresResult.fromResult(Result result) {
     final rows = result
         .map((row) => PostgresRow(List<Object?>.from(row), row.toColumnMap()))
@@ -19,37 +20,52 @@ class PostgresResult extends IterableBase<PostgresRow> {
   }
 
   final List<PostgresRow> _rows;
+
+  /// Number of rows affected by the query.
   final int affectedRows;
 
   @override
   Iterator<PostgresRow> get iterator => _rows.iterator;
 
+  @override
   int get length => _rows.length;
+  @override
   bool get isEmpty => _rows.isEmpty;
+  @override
   bool get isNotEmpty => _rows.isNotEmpty;
+  @override
   PostgresRow get first => _rows.first;
 
+  /// Returns the row at [index].
   PostgresRow operator [](int index) => _rows[index];
 }
 
+/// Row wrapper that exposes data by index or column name.
 class PostgresRow {
+  /// Creates a row wrapper from values and column mapping.
   PostgresRow(this._values, this._columnMap);
 
   final List<Object?> _values;
   final Map<String, Object?> _columnMap;
 
+  /// Returns the value at [index].
   Object? operator [](int index) => _values[index];
 
+  /// Returns the first column value.
   Object? get first => _values.first;
 
+  /// Returns a map of column names to values.
   Map<String, Object?> toColumnMap() => _columnMap;
 }
 
+/// Postgres session wrapper used for executing queries.
 class PostgresSession {
+  /// Creates a session bound to a database connection.
   PostgresSession(this._connection);
 
   final Connection _connection;
 
+  /// Executes [sql] with optional named [parameters].
   Future<PostgresResult> execute(
     String sql, {
     Map<String, Object?>? parameters,
@@ -62,7 +78,9 @@ class PostgresSession {
   }
 }
 
+/// Serialized client for executing Postgres operations.
 class PostgresClient {
+  /// Creates a Postgres client with optional TLS settings.
   PostgresClient(
     String connectionString, {
     String? applicationName,
@@ -78,6 +96,7 @@ class PostgresClient {
   Future<void>? _opening;
   Future<void> _operationChain = Future<void>.value();
 
+  /// Runs [action] against a serialized session.
   Future<T> run<T>(Future<T> Function(PostgresSession session) action) {
     final completer = Completer<T>();
     _operationChain = _operationChain.then((_) async {
@@ -92,6 +111,7 @@ class PostgresClient {
     return completer.future;
   }
 
+  /// Closes the underlying connection after pending work completes.
   Future<void> close() async {
     _operationChain = _operationChain.then((_) async {
       final conn = _connection;

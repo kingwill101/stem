@@ -5,16 +5,20 @@ import 'package:redis/redis.dart';
 
 import 'package:stem/stem.dart';
 
+/// Redis-backed implementation of [LockStore].
 class RedisLockStore implements LockStore {
   RedisLockStore._(this._connection, this._command, {this.namespace = 'stem'})
     : _random = Random();
 
   final RedisConnection _connection;
   final Command _command;
+
+  /// Namespace used to scope lock keys.
   final String namespace;
   final Random _random;
   bool _closed = false;
 
+  /// Connects to Redis and returns a lock store instance.
   static Future<RedisLockStore> connect(
     String uri, {
     String namespace = 'stem',
@@ -33,7 +37,7 @@ class RedisLockStore implements LockStore {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
         );
         command = await connection.connectWithSocket(socket);
       } on HandshakeException catch (error, stack) {
@@ -68,6 +72,7 @@ class RedisLockStore implements LockStore {
     return RedisLockStore._(connection, command, namespace: namespace);
   }
 
+  /// Closes the lock store and releases Redis resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -77,7 +82,8 @@ class RedisLockStore implements LockStore {
   String _key(String key) => '$namespace:lock:$key';
   String _owner(String? owner) =>
       owner ??
-      'owner-${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
+      'owner-${DateTime.now().microsecondsSinceEpoch}-'
+          '${_random.nextInt(1 << 32)}';
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 

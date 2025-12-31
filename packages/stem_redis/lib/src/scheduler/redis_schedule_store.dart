@@ -7,6 +7,7 @@ import 'package:stem/stem.dart';
 
 /// Redis-backed implementation of [ScheduleStore].
 class RedisScheduleStore implements ScheduleStore {
+  /// Creates a schedule store backed by Redis.
   RedisScheduleStore._(
     this._connection,
     this._command, {
@@ -17,12 +18,17 @@ class RedisScheduleStore implements ScheduleStore {
 
   final RedisConnection _connection;
   final Command _command;
+
+  /// Namespace used to scope schedule keys.
   final String namespace;
+
+  /// TTL used for schedule locks.
   final Duration lockTtl;
   final ScheduleCalculator _calculator;
 
   bool _closed = false;
 
+  /// Connects to Redis and returns a schedule store instance.
   static Future<RedisScheduleStore> connect(
     String uri, {
     String namespace = 'stem',
@@ -43,7 +49,7 @@ class RedisScheduleStore implements ScheduleStore {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
         );
         command = await connection.connectWithSocket(socket);
       } on HandshakeException catch (error, stack) {
@@ -84,6 +90,7 @@ class RedisScheduleStore implements ScheduleStore {
     );
   }
 
+  /// Closes the schedule store and releases Redis resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -113,7 +120,7 @@ class RedisScheduleStore implements ScheduleStore {
       Object? decoded;
       try {
         decoded = jsonDecode(specRaw);
-      } catch (_) {
+      } on Object {
         decoded = specRaw;
       }
       spec = ScheduleSpec.fromPersisted(decoded);
@@ -139,15 +146,15 @@ class RedisScheduleStore implements ScheduleStore {
       spec: spec,
       args: decodeJson(data['args']),
       kwargs: decodeJson(data['kwargs']),
-      enabled: data['enabled'] != null ? data['enabled'] == 'true' : true,
+      enabled: !(data['enabled'] != null) || data['enabled'] == 'true',
       jitter: parseDuration(data['jitterMs']),
       lastRunAt: parseDate(data['lastRunAt']),
       nextRunAt: parseDate(data['nextRunAt']),
       lastJitter: parseDuration(data['lastJitterMs']),
-      lastError: data['lastError']?.isNotEmpty == true
+      lastError: data['lastError']?.isNotEmpty ?? false
           ? data['lastError']
           : null,
-      timezone: data['timezone']?.isNotEmpty == true ? data['timezone'] : null,
+      timezone: data['timezone']?.isNotEmpty ?? false ? data['timezone'] : null,
       totalRunCount: data['totalRunCount'] != null
           ? int.tryParse(data['totalRunCount']!) ?? 0
           : 0,
@@ -212,7 +219,7 @@ class RedisScheduleStore implements ScheduleStore {
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now().toUtc();
-    DateTime? nextRun = entry.nextRunAt;
+    var nextRun = entry.nextRunAt;
     if (entry.enabled) {
       nextRun ??= _calculator.nextRun(
         entry,
@@ -262,7 +269,7 @@ class RedisScheduleStore implements ScheduleStore {
         'kwargs',
         encodedKwargs,
         'enabled',
-        entry.enabled ? 'true' : 'false',
+        if (entry.enabled) 'true' else 'false',
         'jitterMs',
         entry.jitter?.inMilliseconds.toString() ?? '',
         'lastRunAt',
@@ -378,12 +385,12 @@ class RedisScheduleStore implements ScheduleStore {
         totalRunCount: entry.totalRunCount + 1,
         drift: drift ?? entry.drift,
       );
-      DateTime? next = nextRunAt;
+      var next = nextRunAt;
       var enabled = updated.enabled;
       if (next == null && enabled) {
         try {
           next = _calculator.nextRun(updated, executedAt, includeJitter: false);
-        } catch (_) {
+        } on Object {
           next = executedAt;
         }
       }
@@ -412,7 +419,7 @@ class RedisScheduleStore implements ScheduleStore {
         'lastError',
         lastError ?? '',
         'enabled',
-        enabled ? 'true' : 'false',
+        if (enabled) 'true' else 'false',
         'totalRunCount',
         updated.totalRunCount.toString(),
         'lastSuccessAt',
@@ -473,7 +480,7 @@ class RedisScheduleStore implements ScheduleStore {
       'executedAt',
       executedAt.toIso8601String(),
       'success',
-      success ? 'true' : 'false',
+      if (success) 'true' else 'false',
       'durationMs',
       runDuration?.inMilliseconds.toString() ?? '',
       'error',

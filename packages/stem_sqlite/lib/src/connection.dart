@@ -3,17 +3,24 @@ import 'dart:io';
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
-import '../orm_registry.g.dart';
-import 'database/migrations.dart';
+import 'package:stem_sqlite/orm_registry.g.dart';
+import 'package:stem_sqlite/src/database/migrations.dart';
 
+/// Holds an active SQLite data source and query helpers.
 class SqliteConnections {
+  /// Creates a connection wrapper for an initialized data source.
   SqliteConnections._(this.dataSource);
 
+  /// Underlying data source instance.
   final DataSource dataSource;
 
+  /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => dataSource.connection;
+
+  /// Convenience accessor for the query context.
   QueryContext get context => dataSource.context;
 
+  /// Opens a data source for the provided SQLite [file].
   static Future<SqliteConnections> open(
     File file, {
     bool readOnly = false,
@@ -25,10 +32,12 @@ class SqliteConnections {
     return SqliteConnections._(dataSource);
   }
 
+  /// Runs [action] inside a database transaction.
   Future<T> runInTransaction<T>(
     Future<T> Function(QueryContext context) action,
   ) => connection.transaction(() => action(context));
 
+  /// Closes the data source.
   Future<void> close() => dataSource.dispose();
 }
 

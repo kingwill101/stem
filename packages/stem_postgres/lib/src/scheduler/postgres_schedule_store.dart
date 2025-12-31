@@ -3,11 +3,12 @@ import 'dart:convert';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../database/models/workflow_models.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [ScheduleStore] using ormed ORM.
 class PostgresScheduleStore implements ScheduleStore {
+  /// Creates a schedule store backed by PostgreSQL.
   PostgresScheduleStore._(this._connections);
 
   final PostgresConnections _connections;
@@ -24,6 +25,7 @@ class PostgresScheduleStore implements ScheduleStore {
     return PostgresScheduleStore._(connections);
   }
 
+  /// Closes the schedule store and releases database resources.
   Future<void> close() async {
     await _connections.close();
   }
@@ -35,7 +37,7 @@ class PostgresScheduleStore implements ScheduleStore {
     // to avoid immediate reacquisition.
     final dueEntries = await ctx
         .query<$StemScheduleEntry>()
-        .where((q) {
+        .where((PredicateBuilder<$StemScheduleEntry> q) {
           q
             ..where('enabled', true, PredicateOperator.equals)
             ..where('nextRunAt', now, PredicateOperator.lessThanOrEqual);
@@ -46,7 +48,7 @@ class PostgresScheduleStore implements ScheduleStore {
 
     if (dueEntries.isEmpty) return const [];
 
-    final bump = const Duration(milliseconds: 300);
+    const bump = Duration(milliseconds: 300);
     final nextWindow = now.add(bump);
 
     // Minimal lock semantics: advance next_run_at slightly.
@@ -217,7 +219,7 @@ class PostgresScheduleStore implements ScheduleStore {
     try {
       // Try parsing cron from spec string
       spec = _parseScheduleSpec(model.spec);
-    } catch (_) {
+    } on Object {
       // Fallback to default cron spec
       spec = CronScheduleSpec(expression: '0 0 * * *');
     }
@@ -265,7 +267,7 @@ class PostgresScheduleStore implements ScheduleStore {
         return decoded is Map
             ? decoded.map((key, value) => MapEntry(key as String, value))
             : const {};
-      } catch (_) {
+      } on Object {
         return const {};
       }
     }

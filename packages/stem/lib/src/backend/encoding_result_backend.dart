@@ -1,10 +1,11 @@
 import 'dart:async';
 
-import '../core/contracts.dart';
-import '../core/encoder_keys.dart';
-import '../core/task_payload_encoder.dart';
-import '../observability/heartbeat.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/encoder_keys.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/observability/heartbeat.dart';
 
+/// Wraps a [ResultBackend] to encode/decode payloads via [registry].
 ResultBackend withTaskPayloadEncoder(
   ResultBackend backend,
   TaskPayloadEncoderRegistry registry,
@@ -17,11 +18,15 @@ ResultBackend withTaskPayloadEncoder(
 
 /// Result backend decorator that applies [TaskPayloadEncoder] semantics.
 class EncodingResultBackend implements ResultBackend {
+  /// Creates an encoding wrapper around the provided backend.
   EncodingResultBackend(this._inner, this.registry);
 
   final ResultBackend _inner;
+
+  /// Encoder registry used to decode/encode stored payloads.
   final TaskPayloadEncoderRegistry registry;
 
+  /// The wrapped backend used for persistence.
   ResultBackend get inner => _inner;
 
   @override

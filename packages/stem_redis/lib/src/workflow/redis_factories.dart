@@ -1,9 +1,9 @@
 import 'package:stem/stem.dart';
+import 'package:stem_redis/src/backend/redis_backend.dart';
+import 'package:stem_redis/src/brokers/redis_broker.dart';
+import 'package:stem_redis/src/workflow/redis_workflow_store.dart';
 
-import '../brokers/redis_broker.dart';
-import '../backend/redis_backend.dart';
-import 'redis_workflow_store.dart';
-
+/// Creates a [StemBrokerFactory] backed by Redis streams.
 StemBrokerFactory redisBrokerFactory(
   String uri, {
   String namespace = 'stem',
@@ -31,6 +31,7 @@ StemBrokerFactory redisBrokerFactory(
   );
 }
 
+/// Creates a [StemBackendFactory] backed by Redis.
 StemBackendFactory redisResultBackendFactory(
   String uri, {
   String namespace = 'stem',
@@ -56,6 +57,7 @@ StemBackendFactory redisResultBackendFactory(
   );
 }
 
+/// Creates a [WorkflowStoreFactory] backed by Redis.
 WorkflowStoreFactory redisWorkflowStoreFactory(
   String uri, {
   String namespace = 'stem',

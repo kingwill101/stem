@@ -14,9 +14,6 @@ const FieldDefinition _$StemDeadLetterIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
@@ -24,11 +21,7 @@ const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
@@ -36,11 +29,7 @@ const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -49,11 +38,7 @@ const FieldDefinition _$StemDeadLetterReasonField = FieldDefinition(
   columnName: 'reason',
   dartType: 'String',
   resolvedType: 'String?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
@@ -61,11 +46,7 @@ const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>?',
-  isPrimaryKey: false,
   isNullable: true,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -74,11 +55,7 @@ const FieldDefinition _$StemDeadLetterDeadAtField = FieldDefinition(
   columnName: 'dead_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
-  isPrimaryKey: false,
   isNullable: false,
-  isUnique: false,
-  isIndexed: false,
-  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemDeadLetterUntracked(
@@ -96,11 +73,11 @@ Map<String, Object?> _encodeStemDeadLetterUntracked(
   };
 }
 
-final ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
+const ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
     ModelDefinition(
       modelName: 'StemDeadLetter',
       tableName: 'stem_dead_letters',
-      fields: const [
+      fields: [
         _$StemDeadLetterIdField,
         _$StemDeadLetterQueueField,
         _$StemDeadLetterEnvelopeField,
@@ -108,23 +85,12 @@ final ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
         _$StemDeadLetterMetaField,
         _$StemDeadLetterDeadAtField,
       ],
-      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        hidden: const <String>[],
-        visible: const <String>[],
-        fillable: const <String>[],
-        guarded: const <String>[],
-        casts: const <String, String>{},
-        appends: const <String>[],
-        touches: const <String>[],
-        timestamps: true,
-        fieldOverrides: const {
+        fieldOverrides: {
           'envelope': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
-        softDeletes: false,
-        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemDeadLetterUntracked,
       codec: _$StemDeadLetterCodec(),
@@ -179,7 +145,7 @@ class StemDeadLetters {
 
   static Query<$StemDeadLetter> orderBy(
     String column, {
-    String direction = "asc",
+    String direction = 'asc',
     String? connection,
   }) => Model.orderBy<$StemDeadLetter>(
     column,
@@ -261,31 +227,30 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final String stemDeadLetterIdValue =
+    final stemDeadLetterIdValue =
         registry.decodeField<String>(_$StemDeadLetterIdField, data['id']) ??
         (throw StateError('Field id on StemDeadLetter cannot be null.'));
-    final String stemDeadLetterQueueValue =
+    final stemDeadLetterQueueValue =
         registry.decodeField<String>(
           _$StemDeadLetterQueueField,
           data['queue'],
         ) ??
         (throw StateError('Field queue on StemDeadLetter cannot be null.'));
-    final Map<String, Object?> stemDeadLetterEnvelopeValue =
+    final stemDeadLetterEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemDeadLetterEnvelopeField,
           data['envelope'],
         ) ??
         (throw StateError('Field envelope on StemDeadLetter cannot be null.'));
-    final String? stemDeadLetterReasonValue = registry.decodeField<String?>(
+    final stemDeadLetterReasonValue = registry.decodeField<String?>(
       _$StemDeadLetterReasonField,
       data['reason'],
     );
-    final Map<String, Object?>? stemDeadLetterMetaValue = registry
-        .decodeField<Map<String, Object?>?>(
-          _$StemDeadLetterMetaField,
-          data['meta'],
-        );
-    final DateTime stemDeadLetterDeadAtValue =
+    final stemDeadLetterMetaValue = registry.decodeField<Map<String, Object?>?>(
+      _$StemDeadLetterMetaField,
+      data['meta'],
+    );
+    final stemDeadLetterDeadAtValue =
         registry.decodeField<DateTime>(
           _$StemDeadLetterDeadAtField,
           data['dead_at'],
@@ -481,19 +446,19 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   @override
   $StemDeadLetter toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final String? idValue = id;
+    final idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final String? queueValue = queue;
+    final queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final Map<String, Object?>? envelopeValue = envelope;
+    final envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final DateTime? deadAtValue = deadAt;
+    final deadAtValue = deadAt;
     if (deadAtValue == null) {
       throw StateError('Missing required field: deadAt');
     }
@@ -570,9 +535,9 @@ class $StemDeadLetter extends StemDeadLetter
     required String id,
     required String queue,
     required Map<String, Object?> envelope,
+    required DateTime deadAt,
     String? reason,
     Map<String, Object?>? meta,
-    required DateTime deadAt,
   }) : super.new(
          id: id,
          queue: queue,

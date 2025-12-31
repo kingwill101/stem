@@ -1,16 +1,23 @@
 import 'dart:async';
 import 'dart:math';
 
-import '../backend/encoding_result_backend.dart';
-import '../core/chord_metadata.dart';
-import '../core/contracts.dart';
-import '../core/encoder_keys.dart';
-import '../core/envelope.dart';
-import '../core/task_result.dart';
-import '../core/task_payload_encoder.dart';
+import 'package:stem/src/backend/encoding_result_backend.dart';
+import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/encoder_keys.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
+  /// Creates a signature from a custom envelope builder.
+  factory TaskSignature.custom(
+    String name,
+    Envelope Function() builder, {
+    T Function(Object? payload)? decode,
+  }) => TaskSignature._(name: name, builder: builder, decode: decode);
+
   const TaskSignature._({
     required this.name,
     required Envelope Function() builder,
@@ -37,19 +44,13 @@ class TaskSignature<T extends Object?> {
     }
     return payload as T?;
   }
-
-  /// Creates a signature from a custom envelope builder.
-  factory TaskSignature.custom(
-    String name,
-    Envelope Function() builder, {
-    T Function(Object? payload)? decode,
-  }) => TaskSignature._(name: name, builder: builder, decode: decode);
 }
 
 /// Returns a [TaskSignature] that creates an [Envelope] for a task.
 ///
 /// The envelope is configured with [name], [args], [headers], and [options].
-/// Values from [options] populate queueing behavior such as [TaskOptions.queue],
+/// Values from [options] populate queueing behavior such as
+/// [TaskOptions.queue],
 /// [TaskOptions.priority], [TaskOptions.maxRetries], and
 /// [TaskOptions.visibilityTimeout].
 TaskSignature<T> task<T extends Object?>(
@@ -78,6 +79,7 @@ TaskSignature<T> task<T extends Object?>(
 
 /// Result returned by [Canvas.chain].
 class TaskChainResult<T extends Object?> {
+  /// Creates a chain completion snapshot.
   const TaskChainResult({
     required this.chainId,
     required this.finalTaskId,
@@ -85,16 +87,25 @@ class TaskChainResult<T extends Object?> {
     this.value,
   });
 
+  /// Identifier that links all tasks in the chain.
   final String chainId;
+
+  /// Identifier of the final task in the chain.
   final String finalTaskId;
+
+  /// Final status recorded for the chain.
   final TaskStatus? finalStatus;
+
+  /// Typed result value of the final task, if available.
   final T? value;
 
+  /// Whether the final task completed successfully.
   bool get isCompleted => finalStatus?.state == TaskState.succeeded;
 }
 
 /// Handle returned by [Canvas.group] providing a stream of typed results.
 class GroupDispatch<T extends Object?> {
+  /// Creates a group dispatch handle.
   GroupDispatch({
     required this.groupId,
     required this.taskIds,
@@ -102,11 +113,17 @@ class GroupDispatch<T extends Object?> {
     Future<void> Function()? onDispose,
   }) : _onDispose = onDispose;
 
+  /// Identifier for the group/chord body.
   final String groupId;
+
+  /// Task identifiers included in the group.
   final List<String> taskIds;
+
+  /// Stream of task results as they complete.
   final Stream<TaskResult<T>> results;
   final Future<void> Function()? _onDispose;
 
+  /// Releases any resources held by the dispatch stream.
   Future<void> dispose() async {
     final onDispose = _onDispose;
     if (onDispose != null) {
@@ -117,14 +134,20 @@ class GroupDispatch<T extends Object?> {
 
 /// Result returned by [Canvas.chord].
 class ChordResult<T extends Object?> {
+  /// Creates a chord completion snapshot.
   const ChordResult({
     required this.chordId,
     required this.callbackTaskId,
     required this.values,
   });
 
+  /// Identifier for the chord group.
   final String chordId;
+
+  /// Identifier of the callback task.
   final String callbackTaskId;
+
+  /// Results from the chord body tasks.
   final List<T?> values;
 }
 
@@ -162,6 +185,7 @@ class Canvas {
   /// The message broker used to publish task envelopes.
   final Broker broker;
 
+  /// Registry of payload encoders used by the canvas.
   final TaskPayloadEncoderRegistry payloadEncoders;
 
   /// The result backend used to record task states and group progress.
@@ -234,7 +258,7 @@ class Canvas {
 
     final controller = StreamController<TaskResult<T>>.broadcast();
     if (taskIds.isEmpty) {
-      scheduleMicrotask(() => controller.close());
+      scheduleMicrotask(controller.close);
       return GroupDispatch(
         groupId: id,
         taskIds: taskIds,
@@ -326,7 +350,7 @@ class Canvas {
         'chainId': chainId,
         'chainIndex': index,
         'queue': raw.queue,
-        if (previousResult != null) 'chainPrevResult': previousResult,
+        'chainPrevResult': ?previousResult,
       };
       final headers = {
         ...raw.headers,
@@ -367,7 +391,7 @@ class Canvas {
                 }
               }
             },
-            onError: (error, stack) {
+            onError: (Object error, StackTrace stack) {
               if (!completer.isCompleted) {
                 completer.completeError(error, stack);
               }
@@ -455,7 +479,8 @@ class Canvas {
 
   /// Generates a unique id using [prefix], current time, and randomness.
   String _generateId(String prefix) =>
-      '$prefix-${DateTime.now().microsecondsSinceEpoch}-${_random.nextInt(1 << 32)}';
+      '$prefix-${DateTime.now().microsecondsSinceEpoch}-'
+      '${_random.nextInt(1 << 32)}';
 
   Future<_ChordHandle> _startChord<T extends Object?>({
     required List<TaskSignature<T>> body,
@@ -481,8 +506,8 @@ class Canvas {
     final completer = Completer<String>();
     unawaited(
       _monitorChord(chordId, callbackEnvelope.id, completer).catchError((
-        error,
-        stack,
+        Object error,
+        StackTrace stack,
       ) {
         if (!completer.isCompleted) {
           completer.completeError(error, stack);
@@ -551,13 +576,13 @@ class Canvas {
     return (encodedEnvelope, resultEncoder);
   }
 
-  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler? handler) {
+  TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
-  TaskPayloadEncoder _resolveResultEncoder(TaskHandler? handler) {
+  TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
@@ -592,7 +617,8 @@ class Canvas {
       return result;
     }
     throw StateError(
-      'Task args encoder ${encoder.id} must return Map<String, Object?> values, got ${encoded.runtimeType}.',
+      'Task args encoder ${encoder.id} must return '
+      'Map<String, Object?> values, got ${encoded.runtimeType}.',
     );
   }
 
@@ -630,8 +656,10 @@ class _ChordHandle {
   final Future<String> callbackFuture;
 }
 
+/// Convenience helpers for turning [TaskDefinition]s into signatures.
 extension TaskDefinitionCanvasX<TArgs, TResult extends Object?>
     on TaskDefinition<TArgs, TResult> {
+  /// Builds a [TaskSignature] using the provided arguments and overrides.
   TaskSignature<TResult> toSignature(
     TArgs args, {
     Map<String, String> headers = const {},

@@ -4,8 +4,8 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -32,11 +32,8 @@ void main() {
       dispose: (broker) => _safeCloseRedisBroker(broker as RedisStreamsBroker),
     ),
     settings: const BrokerContractSettings(
-      visibilityTimeout: Duration(seconds: 1),
       leaseExtension: Duration(seconds: 1),
       queueSettleDelay: Duration(milliseconds: 200),
-      replayDelay: Duration(milliseconds: 200),
-      verifyBroadcastFanout: false,
       requeueTimeout: Duration(seconds: 10),
     ),
   );
@@ -92,7 +89,6 @@ void main() {
       final iterator = StreamIterator(
         broker.consume(
           RoutingSubscription.singleQueue(queue),
-          prefetch: 1,
           consumerName: 'purge-check-$queue',
         ),
       );
@@ -115,7 +111,7 @@ void main() {
     try {
       final queue = _uniqueQueue();
       final subscription = broker
-          .consume(RoutingSubscription.singleQueue(queue), prefetch: 1)
+          .consume(RoutingSubscription.singleQueue(queue))
           .listen((_) {});
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -145,14 +141,12 @@ void main() {
       queueA = StreamQueue(
         broker.consume(
           RoutingSubscription.singleQueue(queueAName),
-          prefetch: 1,
           consumerName: 'consumer-a-$queueAName',
         ),
       );
       queueB = StreamQueue(
         broker.consume(
           RoutingSubscription.singleQueue(queueBName),
-          prefetch: 1,
           consumerName: 'consumer-b-$queueBName',
         ),
       );
@@ -213,7 +207,6 @@ void main() {
       final workerOne = StreamQueue(
         workerOneBroker.consume(
           subscription,
-          prefetch: 1,
           consumerGroup: 'group-$queue',
           consumerName: 'worker-one-$queue',
         ),
@@ -221,7 +214,6 @@ void main() {
       final workerTwo = StreamQueue(
         workerTwoBroker.consume(
           subscription,
-          prefetch: 1,
           consumerGroup: 'group-$queue',
           consumerName: 'worker-two-$queue',
         ),
@@ -289,6 +281,8 @@ String _uniqueNamespace() {
 
 Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
   try {
-    await runZonedGuarded(() => broker.close(), (Object _, StackTrace __) {});
-  } catch (_) {}
+    await runZonedGuarded(() => broker.close(), (Object _, StackTrace _) {});
+  } on Object {
+    // Ignore broker shutdown errors in cleanup.
+  }
 }

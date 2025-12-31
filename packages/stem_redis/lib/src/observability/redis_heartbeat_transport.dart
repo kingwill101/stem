@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:redis/redis.dart';
 import 'package:stem/stem.dart';
 
+/// Factory for creating Redis connections used by the heartbeat transport.
 typedef RedisHeartbeatCommandFactory =
     Future<({RedisConnection connection, Command command})> Function(
       Uri uri,
@@ -64,7 +65,7 @@ class RedisHeartbeatTransport extends HeartbeatTransport {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
           timeout: const Duration(seconds: 5),
         );
         command = await connection.connectWithSocket(socket);

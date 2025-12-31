@@ -5,7 +5,9 @@ import 'dart:typed_data';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+/// Settings that tune the result backend contract test suite.
 class ResultBackendContractSettings {
+  /// Creates result backend contract settings.
   const ResultBackendContractSettings({
     this.statusTtl = const Duration(seconds: 1),
     this.groupTtl = const Duration(seconds: 1),
@@ -30,7 +32,9 @@ class ResultBackendContractSettings {
   final List<TaskPayloadEncoder> encoders;
 }
 
+/// Factory hooks used by the result backend contract test suite.
 class ResultBackendContractFactory {
+  /// Creates a result backend contract factory.
   const ResultBackendContractFactory({
     required this.create,
     this.dispose,
@@ -39,14 +43,24 @@ class ResultBackendContractFactory {
     this.beforeHeartbeatExpiryCheck,
   });
 
+  /// Creates a fresh result backend instance for each test case.
   final Future<ResultBackend> Function() create;
+
+  /// Optional disposer invoked after each test.
   final FutureOr<void> Function(ResultBackend backend)? dispose;
+
+  /// Hook invoked before asserting status expiration.
   final FutureOr<void> Function(ResultBackend backend)? beforeStatusExpiryCheck;
+
+  /// Hook invoked before asserting group expiration.
   final FutureOr<void> Function(ResultBackend backend)? beforeGroupExpiryCheck;
+
+  /// Hook invoked before asserting heartbeat expiration.
   final FutureOr<void> Function(ResultBackend backend)?
   beforeHeartbeatExpiryCheck;
 }
 
+/// Runs contract tests covering the required ResultBackend semantics.
 void runResultBackendContractTests({
   required String adapterName,
   required ResultBackendContractFactory factory,
@@ -87,11 +101,11 @@ void runResultBackendContractTests({
         const taskId = 'contract-task';
         final updates = currentBackend.watch(taskId).first;
 
-        final error = TaskError(
+        const error = TaskError(
           type: 'ContractError',
           message: 'boom',
           retryable: true,
-          meta: const {'code': 42},
+          meta: {'code': 42},
         );
 
         final statusMeta = _metaWithEncoder(encoder, const {
@@ -154,10 +168,9 @@ void runResultBackendContractTests({
       test('set overwrites existing status and clears error state', () async {
         final currentBackend = backend!;
         const taskId = 'contract-task-overwrite';
-        final error = TaskError(
+        const error = TaskError(
           type: 'OverwriteError',
           message: 'oops',
-          retryable: false,
         );
 
         await currentBackend.set(

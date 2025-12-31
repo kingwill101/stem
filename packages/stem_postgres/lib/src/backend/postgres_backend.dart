@@ -1,11 +1,11 @@
 import 'dart:async';
+
+import 'package:ormed/ormed.dart';
 // No JSON helpers needed; Ormed models handle serialization
 
 import 'package:stem/stem.dart';
-import 'package:ormed/ormed.dart';
-
-import '../connection.dart';
-import '../database/models/models.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/models.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
 class PostgresResultBackend implements ResultBackend {
@@ -18,8 +18,14 @@ class PostgresResultBackend implements ResultBackend {
 
   final PostgresConnections _connections;
   final QueryContext _context;
+
+  /// Default TTL applied to task results.
   final Duration defaultTtl;
+
+  /// Default TTL applied to group metadata.
   final Duration groupDefaultTtl;
+
+  /// TTL applied to worker heartbeat records.
   final Duration heartbeatTtl;
 
   final Map<String, StreamController<TaskStatus>> _watchers = {};
@@ -31,7 +37,8 @@ class PostgresResultBackend implements ResultBackend {
   /// The [connectionString] should be in the format:
   /// `postgresql://username:password@host:port/database`
   ///
-  /// If [connectionString] is not provided, the connection string will be read from ormed.yaml.
+  /// If [connectionString] is not provided, the connection string will be read
+  /// from ormed.yaml.
   ///
   /// Example:
   /// ```dart
@@ -53,15 +60,14 @@ class PostgresResultBackend implements ResultBackend {
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,
-    );
-    backend._startCleanupTimer();
+    ).._startCleanupTimer();
     return backend;
   }
 
   void _startCleanupTimer() {
     // Run cleanup every minute to remove expired records
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      _cleanup();
+      unawaited(_cleanup());
     });
   }
 
@@ -83,14 +89,12 @@ class PostgresResultBackend implements ResultBackend {
             .where('expiresAt', now, PredicateOperator.lessThan)
             .delete();
       });
-    } catch (_) {
+    } on Object {
       // Ignore cleanup errors
     }
   }
 
-  // ignore: unused_element
-  String _tableName(String table) => table;
-
+  /// Closes the backend and releases any database resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -151,8 +155,10 @@ class PostgresResultBackend implements ResultBackend {
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     if (row == null) return null;
-    final error = row.error is Map
-        ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+    final error = row.error is Map<Object?, Object?>
+        ? TaskError.fromJson(
+            (row.error! as Map<Object?, Object?>).cast<String, Object?>(),
+          )
         : null;
     return TaskStatus(
       id: row.id,
@@ -171,7 +177,10 @@ class PostgresResultBackend implements ResultBackend {
       () => StreamController<TaskStatus>.broadcast(
         onCancel: () {
           if (!(_watchers[taskId]?.hasListener ?? false)) {
-            _watchers.remove(taskId)?.close();
+            final controller = _watchers.remove(taskId);
+            if (controller != null) {
+              unawaited(controller.close());
+            }
           }
         },
       ),
@@ -357,7 +366,7 @@ class PostgresResultBackend implements ResultBackend {
     final results = <String, TaskStatus>{};
     for (final row in resultRows) {
       final error = row.error is Map
-          ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+          ? TaskError.fromJson((row.error! as Map).cast<String, Object?>())
           : null;
       results[row.taskId] = TaskStatus(
         id: row.taskId,
@@ -380,10 +389,10 @@ class PostgresResultBackend implements ResultBackend {
   WorkerHeartbeat _heartbeatFromRow(StemWorkerHeartbeat row) {
     final raw = row.queues; // Map<String, Object?> by schema
     final mapped = raw['items'];
-    final List<dynamic> items = mapped is List ? mapped : const [];
+    final items = mapped is List ? mapped.cast<Object?>() : const <Object?>[];
     final queues = items
-        .whereType<Map>()
-        .map((e) => QueueHeartbeat.fromJson(e.cast<String, Object?>()))
+        .whereType<Map<Object?, Object?>>()
+        .map((entry) => QueueHeartbeat.fromJson(entry.cast<String, Object?>()))
         .toList(growable: false);
     return WorkerHeartbeat(
       workerId: row.workerId,

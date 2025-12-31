@@ -1,16 +1,16 @@
-import '../workflow/core/flow.dart';
-import '../workflow/core/workflow_definition.dart';
-import '../workflow/core/workflow_script.dart';
-import '../workflow/core/workflow_cancellation_policy.dart';
-import '../workflow/core/run_state.dart';
-import '../workflow/core/workflow_result.dart';
-import '../workflow/core/workflow_status.dart';
-import '../workflow/core/workflow_store.dart';
-import '../workflow/core/event_bus.dart';
-import '../workflow/runtime/workflow_runtime.dart';
-import '../core/task_payload_encoder.dart';
-import 'factories.dart';
-import 'stem_app.dart';
+import 'package:stem/src/bootstrap/factories.dart';
+import 'package:stem/src/bootstrap/stem_app.dart';
+import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/workflow/core/event_bus.dart';
+import 'package:stem/src/workflow/core/flow.dart';
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_script.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
 ///
@@ -28,9 +28,16 @@ class StemWorkflowApp {
   }) : _disposeStore = disposeStore,
        _disposeBus = disposeBus;
 
+  /// Underlying Stem app used for broker/worker coordination.
   final StemApp app;
+
+  /// Workflow runtime responsible for executing workflow runs.
   final WorkflowRuntime runtime;
+
+  /// Store backing workflow run persistence.
   final WorkflowStore store;
+
+  /// Event bus used to deliver workflow events.
   final EventBus eventBus;
 
   final Future<void> Function() _disposeStore;
@@ -63,7 +70,10 @@ class StemWorkflowApp {
   /// Example:
   /// ```dart
   /// final app = await StemWorkflowApp.inMemory();
-  /// final runId = await app.startWorkflow('exampleWorkflow', params: {'key': 'value'});
+  /// final runId = await app.startWorkflow(
+  ///   'exampleWorkflow',
+  ///   params: {'key': 'value'},
+  /// );
   /// print('Workflow started with ID: $runId');
   /// ```
   Future<String> startWorkflow(
@@ -224,7 +234,6 @@ class StemWorkflowApp {
     final appInstance =
         stemApp ??
         await StemApp.create(
-          tasks: const [],
           broker: broker ?? StemBrokerFactory.inMemory(),
           backend: backend ?? StemBackendFactory.inMemory(),
           workerConfig: workerConfig,
@@ -251,9 +260,7 @@ class StemWorkflowApp {
 
     appInstance.register(runtime.workflowRunnerHandler());
 
-    for (final workflow in workflows) {
-      runtime.registerWorkflow(workflow);
-    }
+    workflows.forEach(runtime.registerWorkflow);
     for (final flow in flows) {
       runtime.registerWorkflow(flow.definition);
     }

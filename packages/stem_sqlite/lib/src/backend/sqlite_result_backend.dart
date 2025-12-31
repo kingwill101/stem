@@ -5,9 +5,10 @@ import 'package:meta/meta.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../connection.dart';
-import '../models/models.dart';
+import 'package:stem_sqlite/src/connection.dart';
+import 'package:stem_sqlite/src/models/models.dart';
 
+/// SQLite-backed implementation of [ResultBackend].
 class SqliteResultBackend implements ResultBackend {
   SqliteResultBackend._(
     this._connections, {
@@ -19,6 +20,7 @@ class SqliteResultBackend implements ResultBackend {
     _startCleanupTimer();
   }
 
+  /// Opens a SQLite backend from an existing database file.
   static Future<SqliteResultBackend> open(
     File file, {
     Duration defaultTtl = const Duration(days: 1),
@@ -89,15 +91,24 @@ class SqliteResultBackend implements ResultBackend {
 
   final SqliteConnections _connections;
   final QueryContext _context;
+
+  /// Default TTL applied to task results.
   final Duration defaultTtl;
+
+  /// Default TTL applied to group metadata.
   final Duration groupDefaultTtl;
+
+  /// TTL applied to worker heartbeat records.
   final Duration heartbeatTtl;
+
+  /// Interval between cleanup passes.
   final Duration cleanupInterval;
 
   final Map<String, StreamController<TaskStatus>> _watchers = {};
   Timer? _cleanupTimer;
   bool _closed = false;
 
+  /// Closes the backend and releases any database resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -109,6 +120,7 @@ class SqliteResultBackend implements ResultBackend {
     await _connections.close();
   }
 
+  /// Runs a cleanup cycle for tests.
   @visibleForTesting
   Future<void> runCleanup() => _runCleanupCycle();
 
@@ -168,7 +180,10 @@ class SqliteResultBackend implements ResultBackend {
         onCancel: () {
           final current = _watchers[taskId];
           if (current != null && !current.hasListener) {
-            _watchers.remove(taskId)?.close();
+            final controller = _watchers.remove(taskId);
+            if (controller != null) {
+              unawaited(controller.close());
+            }
           }
         },
       ),
@@ -286,7 +301,7 @@ class SqliteResultBackend implements ResultBackend {
     final results = <String, TaskStatus>{};
     for (final row in resultRows) {
       final error = row.error is Map
-          ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+          ? TaskError.fromJson((row.error! as Map).cast<String, Object?>())
           : null;
       results[row.taskId] = TaskStatus(
         id: row.taskId,
@@ -397,7 +412,7 @@ class SqliteResultBackend implements ResultBackend {
 
   TaskStatus _taskStatusFromRow(StemTaskResult row) {
     final error = row.error is Map
-        ? TaskError.fromJson((row.error as Map).cast<String, Object?>())
+        ? TaskError.fromJson((row.error! as Map).cast<String, Object?>())
         : null;
     return TaskStatus(
       id: row.id,
@@ -441,23 +456,23 @@ class SqliteResultBackend implements ResultBackend {
   List<QueueHeartbeat> _decodeHeartbeatQueues(Object? raw) {
     if (raw == null) return const [];
 
-    final List<dynamic> items;
-    if (raw is Map) {
+    final List<Object?> items;
+    if (raw is Map<Object?, Object?>) {
       final mapped = raw['items'];
       if (mapped is List) {
-        items = mapped;
+        items = mapped.cast<Object?>();
       } else {
-        return const [];
+        return const <QueueHeartbeat>[];
       }
     } else if (raw is List) {
-      items = raw;
+      items = raw.cast<Object?>();
     } else {
-      return const [];
+      return const <QueueHeartbeat>[];
     }
 
-    if (items.isEmpty) return const [];
+    if (items.isEmpty) return const <QueueHeartbeat>[];
     return items
-        .whereType<Map>()
+        .whereType<Map<Object?, Object?>>()
         .map((entry) => QueueHeartbeat.fromJson(entry.cast<String, Object?>()))
         .toList(growable: false);
   }

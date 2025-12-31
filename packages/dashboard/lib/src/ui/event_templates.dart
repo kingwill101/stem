@@ -1,9 +1,10 @@
 import 'package:intl/intl.dart';
 
-import '../services/models.dart';
+import 'package:stem_dashboard/src/services/models.dart';
 
 final _eventTimeFormat = DateFormat('HH:mm:ss');
 
+/// Renders a dashboard event as an HTML list item.
 String renderEventItem(DashboardEvent event) {
   final timestamp = _eventTimeFormat.format(event.timestamp.toLocal());
   final metadataItems = event.metadata.entries

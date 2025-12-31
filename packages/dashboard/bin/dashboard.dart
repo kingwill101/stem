@@ -18,7 +18,6 @@ Future<void> main(List<String> args) async {
       port: resolvedPort,
       echoRoutes: echoRoutes,
     ),
-    service: null, // Will use config from environment
   );
 }
 

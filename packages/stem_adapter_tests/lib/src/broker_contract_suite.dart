@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+/// Settings that tune the broker contract test suite.
 class BrokerContractSettings {
+  /// Creates broker contract settings with optional overrides.
   const BrokerContractSettings({
     this.visibilityTimeout = const Duration(seconds: 1),
     this.leaseExtension = const Duration(milliseconds: 750),
@@ -25,7 +27,8 @@ class BrokerContractSettings {
   /// Additional wait time after queue mutations to allow eventual consistency.
   final Duration queueSettleDelay;
 
-  /// Wait time after dead-letter replay to allow the job to become visible again.
+  /// Wait time after dead-letter replay to allow the job to become visible
+  /// again.
   final Duration replayDelay;
 
   /// Whether to verify priority ordering when the adapter reports support.
@@ -38,14 +41,17 @@ class BrokerContractSettings {
   /// Maximum time to wait for a requeued delivery to appear.
   final Duration requeueTimeout;
 
-  /// Maximum time allowed for publish to complete while other consumers are active.
+  /// Maximum time allowed for publish to complete while other consumers are
+  /// active.
   final Duration concurrentPublishTimeout;
 
   /// Maximum time to wait for a delivery in concurrent consumer scenarios.
   final Duration concurrentDeliveryTimeout;
 }
 
+/// Factory hooks used by the broker contract test suite.
 class BrokerContractFactory {
+  /// Creates a broker contract factory.
   const BrokerContractFactory({
     required this.create,
     this.dispose,
@@ -56,7 +62,7 @@ class BrokerContractFactory {
   final Future<Broker> Function() create;
 
   /// Optional disposer invoked after each test. When omitted the broker is
-  /// closed via [Broker.close].
+  /// closed via the adapter's close method.
   final FutureOr<void> Function(Broker broker)? dispose;
 
   /// Optional factory for creating additional broker instances used by
@@ -102,7 +108,6 @@ void runBrokerContractTests({
       final firstDelivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(firstDelivery, isNotNull);
       expect(firstDelivery!.envelope.id, envelope.id);
@@ -140,7 +145,6 @@ void runBrokerContractTests({
       final delivery = await _expectDelivery(
         broker: currentBroker,
         queue: queueB,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
       if (delivery != null) {
@@ -256,7 +260,7 @@ void runBrokerContractTests({
             timeout: const Duration(seconds: 5),
           );
           expect(delivery, isNotNull);
-          await currentBroker.nack(delivery!, requeue: true);
+          await currentBroker.nack(delivery!);
 
           final redelivery = await _nextIteratorDelivery(
             iterator: iterator,
@@ -286,7 +290,6 @@ void runBrokerContractTests({
       final delivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
       await currentBroker.nack(delivery!, requeue: false);
@@ -319,7 +322,6 @@ void runBrokerContractTests({
       final delivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
       await currentBroker.deadLetter(delivery!, reason: 'contract-test');
@@ -354,7 +356,6 @@ void runBrokerContractTests({
       final delivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
       await currentBroker.deadLetter(
@@ -452,7 +453,6 @@ void runBrokerContractTests({
       final delivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(delivery, isNotNull);
       await currentBroker.deadLetter(delivery!, reason: 'contract-delay');
@@ -634,7 +634,6 @@ void runBrokerContractTests({
       final firstDelivery = await _expectDelivery(
         broker: currentBroker,
         queue: queue,
-        pollTimeout: const Duration(seconds: 5),
       );
       expect(firstDelivery, isNotNull);
 
@@ -814,7 +813,7 @@ Future<void> _purgeAll(Broker broker, String queue) async {
   await broker.purge(queue);
   try {
     await broker.purgeDeadLetters(queue);
-  } catch (_) {
+  } on Object {
     // Some adapters may not support dead letter purging or may throw due to
     // driver return types. Ignore cleanup failures in contract tests.
   }
