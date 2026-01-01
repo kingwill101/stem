@@ -38,14 +38,12 @@ result backend. Use the CLI to view them live:
 ```bash
 # Snapshot the latest heartbeat for every worker.
 stem worker status \
-  --broker "$STEM_BROKER_URL" \
-  --result-backend "$STEM_RESULT_BACKEND_URL"
+  --backend "$STEM_RESULT_BACKEND_URL"
 
 # Stream live updates (press Ctrl+C to stop).
 stem worker status \
   --broker "$STEM_BROKER_URL" \
-  --result-backend "$STEM_RESULT_BACKEND_URL" \
-  --stream
+  --follow
 ```
 
 From Dart you can pull the same data:
@@ -61,20 +59,19 @@ SSH or custom wiring.
 
 ```bash
 # Discover workers and latency.
-stem worker ping --broker "$STEM_BROKER_URL"
+stem worker ping
 
 # Collect stats (queues, concurrency, runtimes) as JSON.
-stem worker stats --json --broker "$STEM_BROKER_URL"
+stem worker stats --json
 
 # Revoke a problematic task globally (optionally terminate in-flight).
-stem worker revoke 1f23c6a1-... \
+stem worker revoke \
+  --task 1f23c6a1-... \
   --terminate \
-  --broker "$STEM_BROKER_URL"
 
 # Issue a warm shutdown to drain work gracefully.
 stem worker shutdown \
-  --worker default@host-a \
-  --broker "$STEM_BROKER_URL"
+  --worker default@host-a
 ```
 
 Need to manage multiple instances on one host? Ship the bundled daemonization
@@ -97,21 +94,17 @@ The CLI exposes queues, retries, and dead letters so operators can recover
 quickly.
 
 ```bash
-# List in-flight tasks with attempts, ETA, and priority.
-stem observe tasks list \
-  --broker "$STEM_BROKER_URL" \
-  --queue default
+# Inspect queue depth and inflight counts.
+stem observe queues
 
-# Drill into a single task's status (including canvas/group metadata).
-stem observe tasks show \
-  --result-backend "$STEM_RESULT_BACKEND_URL" \
-  --id "$TASK_ID"
+# Inspect worker snapshots from the result backend.
+stem observe workers
 
 # Inspect the dead-letter queue with pagination.
-stem dlq list default --page-size 20
+stem dlq list --queue default --limit 20
 
 # Replay failed tasks back onto their original queues.
-stem dlq replay default --limit 10 --confirm
+stem dlq replay --queue default --limit 10 --confirm
 ```
 
 Behind the scenes the CLI talks to the same Redis data structures used by
@@ -123,10 +116,9 @@ Beat records run history, drift, and errors. Keep an eye on it with:
 
 ```bash
 stem observe schedules \
-  --store "$STEM_SCHEDULE_STORE_URL" \
-  --summary
+  --file config/schedules.yaml
 
-stem schedule dry-run cleanup-weekly --count 5
+stem schedule dry-run --spec "every:5m" --count 5
 ```
 
 These commands surface the same drift metrics your Grafana dashboards chart and

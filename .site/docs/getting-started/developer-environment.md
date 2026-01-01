@@ -50,29 +50,20 @@ storage, and queue configuration—all backed by Redis.
 With the environment configured, run Stem components from separate terminals:
 
 ```bash
-# Terminal 1 — worker with multi-queue subscription and autoscaling.
-stem worker start \
-  --registry lib/main.dart \
-  --broker "$STEM_BROKER_URL" \
-  --queues default,reports,emails \
-  --autoscale 2:16
+# Terminal 1 — run a worker process (set STEM_WORKER_COMMAND or pass --command).
+export STEM_WORKER_COMMAND="dart run bin/worker.dart"
+stem worker multi start alpha --queue default --queue reports --queue emails
 
-# Terminal 2 — Beat scheduler reading JSON specs from disk.
-stem schedule apply config/schedules.json --store "$STEM_SCHEDULE_STORE_URL"
-stem schedule list --store "$STEM_SCHEDULE_STORE_URL"
-stem beat start --store "$STEM_SCHEDULE_STORE_URL"
+# Terminal 2 — apply schedules and run Beat (Dart entrypoint).
+stem schedule apply --file config/schedules.json --yes
+stem schedule list
+dart run packages/stem/example/scheduler_observability/bin/beat.dart
+```
 
-# Terminal 3 — enqueue tasks with priority overrides and broadcast routes.
-stem enqueue reports.generate \
-  --args '{"customerId":42}' \
-  --not-before 5m \
-  --priority 8 \
-  --registry lib/main.dart
+Use a producer entrypoint to enqueue work:
 
-stem enqueue broadcast://maintenance \
-  --args '{"action":"restart"}' \
-  --routing-config config/routing.yaml \
-  --registry lib/main.dart
+```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-redis
+
 ```
 
 Routing configuration supports default queue aliases, glob-based routing

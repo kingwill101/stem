@@ -126,7 +126,8 @@ Combine with programmatic signals for richer telemetry (see
 
 ```bash
 stem schedule apply \
-  --file config/schedules.yaml
+  --file config/schedules.yaml \
+  --yes
 
 stem schedule list
 stem schedule dry-run --spec "every:5m"

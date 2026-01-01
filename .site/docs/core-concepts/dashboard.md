@@ -116,8 +116,8 @@ stem health \
   --broker "$STEM_BROKER_URL" \
   --backend "$STEM_RESULT_BACKEND_URL"
 
-stem worker stats --broker "$STEM_BROKER_URL" --json
-stem observe tasks list --broker "$STEM_BROKER_URL"
+stem worker stats --json
+stem observe queues
 ```
 
 ## Notes
