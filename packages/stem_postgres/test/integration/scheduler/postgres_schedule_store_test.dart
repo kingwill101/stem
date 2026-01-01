@@ -40,7 +40,10 @@ void main() {
     tearDown(() async {
       // Clean up schedule entries created during the test
       try {
-        await adminConnections.context.query<$StemScheduleEntry>().delete();
+        await adminConnections.context
+            .query<$StemScheduleEntry>()
+            .whereEquals('namespace', testNamespace)
+            .delete();
       } catch (_) {
         // Ignore cleanup errors
       }
@@ -66,6 +69,7 @@ void main() {
 
       final rows = await adminConnections.context
           .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
           .get();
       expect(rows, isNotEmpty, reason: 'entry should be persisted');
       final storedNextRun = rows.first.nextRunAt!;
@@ -81,6 +85,7 @@ void main() {
 
       final manualDueRows = await adminConnections.context
           .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
           .where((PredicateBuilder<$StemScheduleEntry> q) {
             q
               ..where('enabled', true, PredicateOperator.equals)
@@ -95,6 +100,7 @@ void main() {
 
       final manualDueNoLocks = await adminConnections.context
           .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
           .where((PredicateBuilder<$StemScheduleEntry> q) {
             q
               ..where('enabled', true, PredicateOperator.equals)
@@ -169,6 +175,40 @@ void main() {
         DateTime.now().toUtc().add(const Duration(minutes: 1)),
       );
       expect(remaining, isEmpty);
+    });
+
+    test('namespace isolates schedule entries', () async {
+      final otherNamespace = '${testNamespace}_other';
+      final otherStore = await PostgresScheduleStore.connect(
+        connectionString,
+        namespace: otherNamespace,
+        applicationName: 'stem-postgres-schedule-test-other',
+      );
+      addTearDown(() async {
+        try {
+          await adminConnections.context
+              .query<$StemScheduleEntry>()
+              .whereEquals('namespace', otherNamespace)
+              .delete();
+        } catch (_) {}
+        await otherStore.close();
+      });
+
+      final entry = ScheduleEntry(
+        id: 'sched-namespace',
+        taskName: 'task.namespace',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: DateTime.now().toUtc().add(const Duration(seconds: 1)),
+      );
+
+      await store.upsert(entry);
+
+      final fromOther = await otherStore.get(entry.id);
+      expect(fromOther, isNull);
+
+      final otherList = await otherStore.list();
+      expect(otherList.any((item) => item.id == entry.id), isFalse);
     });
   });
 }

@@ -23,8 +23,13 @@ class PostgresRevokeStore implements RevokeStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
-    return PostgresRevokeStore._(connections, namespace: namespace);
+    return PostgresRevokeStore._(
+      connections,
+      namespace: resolvedNamespace,
+    );
   }
 
   @override
@@ -88,6 +93,7 @@ class PostgresRevokeStore implements RevokeStore {
         final existing = await ctx
             .query<$StemRevokeEntry>()
             .whereEquals('taskId', entry.taskId)
+            .whereEquals('namespace', entry.namespace)
             .first();
 
         final shouldUpdate =

@@ -10,6 +10,7 @@ class StemWorkflowWatcher extends Model<StemWorkflowWatcher> {
     required this.runId,
     required this.stepName,
     required this.topic,
+    required this.namespace,
     required this.createdAt,
     this.data,
     this.deadline,
@@ -26,6 +27,10 @@ class StemWorkflowWatcher extends Model<StemWorkflowWatcher> {
   /// Event topic to subscribe to.
   @OrmField(columnName: 'topic')
   final String topic;
+
+  /// Namespace that owns the workflow watcher.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Optional serialized payload data.
   @OrmField(columnName: 'data')

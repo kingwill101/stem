@@ -128,6 +128,29 @@ void main() async {
     expect(expired, isNull);
   });
 
+  test('RedisResultBackend namespaces isolate data', () async {
+    const taskId = 'integration-namespace-task';
+    final other = await RedisResultBackend.connect(
+      uri,
+      namespace: 'stem-test-other',
+    );
+    try {
+      await backend.set(
+        taskId,
+        TaskState.succeeded,
+        payload: {'value': 2},
+      );
+
+      final fromPrimary = await backend.get(taskId);
+      final fromOther = await other.get(taskId);
+
+      expect(fromPrimary, isNotNull);
+      expect(fromOther, isNull);
+    } finally {
+      await other.close();
+    }
+  });
+
   test('RedisScheduleStore returns due entries once', () async {
     final entry = ScheduleEntry(
       id: 'integration-schedule',

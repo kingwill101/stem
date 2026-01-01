@@ -11,6 +11,7 @@ class StemGroupResult extends Model<StemGroupResult> with TimestampsTZ {
   const StemGroupResult({
     required this.groupId,
     required this.taskId,
+    required this.namespace,
     required this.state,
     required this.attempt,
     required this.meta,
@@ -26,6 +27,10 @@ class StemGroupResult extends Model<StemGroupResult> with TimestampsTZ {
   /// Task identifier for the result.
   @OrmField(columnName: 'task_id')
   final String taskId;
+
+  /// Namespace that owns the group result.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Task state name.
   final String state;

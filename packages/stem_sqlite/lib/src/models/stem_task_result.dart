@@ -8,6 +8,7 @@ class StemTaskResult extends Model<StemTaskResult> with Timestamps {
   /// Creates a task result record.
   const StemTaskResult({
     required this.id,
+    required this.namespace,
     required this.state,
     required this.attempt,
     required this.meta,
@@ -19,6 +20,10 @@ class StemTaskResult extends Model<StemTaskResult> with Timestamps {
   /// Task identifier.
   @OrmField(isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the task result.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Task state name.
   final String state;

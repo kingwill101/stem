@@ -14,6 +14,9 @@ const FieldDefinition _$StemWorkflowWatcherRunIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherStepNameField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemWorkflowWatcherStepNameField = FieldDefinition(
   columnName: 'step_name',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherTopicField = FieldDefinition(
@@ -29,7 +36,23 @@ const FieldDefinition _$StemWorkflowWatcherTopicField = FieldDefinition(
   columnName: 'topic',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
+const FieldDefinition _$StemWorkflowWatcherNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherDataField = FieldDefinition(
@@ -37,7 +60,11 @@ const FieldDefinition _$StemWorkflowWatcherDataField = FieldDefinition(
   columnName: 'data',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherCreatedAtField = FieldDefinition(
@@ -45,7 +72,11 @@ const FieldDefinition _$StemWorkflowWatcherCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemWorkflowWatcherDeadlineField = FieldDefinition(
@@ -53,7 +84,11 @@ const FieldDefinition _$StemWorkflowWatcherDeadlineField = FieldDefinition(
   columnName: 'deadline',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemWorkflowWatcherUntracked(
@@ -68,6 +103,10 @@ Map<String, Object?> _encodeStemWorkflowWatcherUntracked(
       m.stepName,
     ),
     'topic': registry.encodeField(_$StemWorkflowWatcherTopicField, m.topic),
+    'namespace': registry.encodeField(
+      _$StemWorkflowWatcherNamespaceField,
+      m.namespace,
+    ),
     'data': registry.encodeField(_$StemWorkflowWatcherDataField, m.data),
     'created_at': registry.encodeField(
       _$StemWorkflowWatcherCreatedAtField,
@@ -80,19 +119,33 @@ Map<String, Object?> _encodeStemWorkflowWatcherUntracked(
   };
 }
 
-const ModelDefinition<$StemWorkflowWatcher> _$StemWorkflowWatcherDefinition =
+final ModelDefinition<$StemWorkflowWatcher> _$StemWorkflowWatcherDefinition =
     ModelDefinition(
       modelName: 'StemWorkflowWatcher',
       tableName: 'stem_workflow_watchers',
-      fields: [
+      fields: const [
         _$StemWorkflowWatcherRunIdField,
         _$StemWorkflowWatcherStepNameField,
         _$StemWorkflowWatcherTopicField,
+        _$StemWorkflowWatcherNamespaceField,
         _$StemWorkflowWatcherDataField,
         _$StemWorkflowWatcherCreatedAtField,
         _$StemWorkflowWatcherDeadlineField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
+      metadata: ModelAttributesMetadata(
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
+      ),
       untrackedToMap: _encodeStemWorkflowWatcherUntracked,
       codec: _$StemWorkflowWatcherCodec(),
     );
@@ -152,7 +205,7 @@ class StemWorkflowWatchers {
 
   static Query<$StemWorkflowWatcher> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemWorkflowWatcher>(
     column,
@@ -168,6 +221,18 @@ class StemWorkflowWatchers {
   /// {@macro ormed.repository}
   static Repository<$StemWorkflowWatcher> repo([String? connection]) =>
       Model.repository<$StemWorkflowWatcher>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemWorkflowWatcher fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkflowWatcherDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemWorkflowWatcher model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkflowWatcherDefinition.toMap(model, registry: registry);
 }
 
 class StemWorkflowWatcherModelFactory {
@@ -226,6 +291,10 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         _$StemWorkflowWatcherTopicField,
         model.topic,
       ),
+      'namespace': registry.encodeField(
+        _$StemWorkflowWatcherNamespaceField,
+        model.namespace,
+      ),
       'data': registry.encodeField(_$StemWorkflowWatcherDataField, model.data),
       'created_at': registry.encodeField(
         _$StemWorkflowWatcherCreatedAtField,
@@ -243,7 +312,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemWorkflowWatcherRunIdValue =
+    final String stemWorkflowWatcherRunIdValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherRunIdField,
           data['run_id'],
@@ -251,7 +320,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field runId on StemWorkflowWatcher cannot be null.',
         ));
-    final stemWorkflowWatcherStepNameValue =
+    final String stemWorkflowWatcherStepNameValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherStepNameField,
           data['step_name'],
@@ -259,7 +328,7 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field stepName on StemWorkflowWatcher cannot be null.',
         ));
-    final stemWorkflowWatcherTopicValue =
+    final String stemWorkflowWatcherTopicValue =
         registry.decodeField<String>(
           _$StemWorkflowWatcherTopicField,
           data['topic'],
@@ -267,11 +336,19 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field topic on StemWorkflowWatcher cannot be null.',
         ));
-    final stemWorkflowWatcherDataValue = registry.decodeField<String?>(
+    final String stemWorkflowWatcherNamespaceValue =
+        registry.decodeField<String>(
+          _$StemWorkflowWatcherNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemWorkflowWatcher cannot be null.',
+        ));
+    final String? stemWorkflowWatcherDataValue = registry.decodeField<String?>(
       _$StemWorkflowWatcherDataField,
       data['data'],
     );
-    final stemWorkflowWatcherCreatedAtValue =
+    final DateTime stemWorkflowWatcherCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemWorkflowWatcherCreatedAtField,
           data['created_at'],
@@ -279,22 +356,25 @@ class _$StemWorkflowWatcherCodec extends ModelCodec<$StemWorkflowWatcher> {
         (throw StateError(
           'Field createdAt on StemWorkflowWatcher cannot be null.',
         ));
-    final stemWorkflowWatcherDeadlineValue = registry.decodeField<DateTime?>(
-      _$StemWorkflowWatcherDeadlineField,
-      data['deadline'],
-    );
+    final DateTime? stemWorkflowWatcherDeadlineValue = registry
+        .decodeField<DateTime?>(
+          _$StemWorkflowWatcherDeadlineField,
+          data['deadline'],
+        );
     final model = $StemWorkflowWatcher(
       runId: stemWorkflowWatcherRunIdValue,
       stepName: stemWorkflowWatcherStepNameValue,
       topic: stemWorkflowWatcherTopicValue,
-      data: stemWorkflowWatcherDataValue,
+      namespace: stemWorkflowWatcherNamespaceValue,
       createdAt: stemWorkflowWatcherCreatedAtValue,
+      data: stemWorkflowWatcherDataValue,
       deadline: stemWorkflowWatcherDeadlineValue,
     );
     model._attachOrmRuntimeMetadata({
       'run_id': stemWorkflowWatcherRunIdValue,
       'step_name': stemWorkflowWatcherStepNameValue,
       'topic': stemWorkflowWatcherTopicValue,
+      'namespace': stemWorkflowWatcherNamespaceValue,
       'data': stemWorkflowWatcherDataValue,
       'created_at': stemWorkflowWatcherCreatedAtValue,
       'deadline': stemWorkflowWatcherDeadlineValue,
@@ -311,6 +391,7 @@ class StemWorkflowWatcherInsertDto implements InsertDto<$StemWorkflowWatcher> {
     this.runId,
     this.stepName,
     this.topic,
+    this.namespace,
     this.data,
     this.createdAt,
     this.deadline,
@@ -318,6 +399,7 @@ class StemWorkflowWatcherInsertDto implements InsertDto<$StemWorkflowWatcher> {
   final String? runId;
   final String? stepName;
   final String? topic;
+  final String? namespace;
   final String? data;
   final DateTime? createdAt;
   final DateTime? deadline;
@@ -328,6 +410,7 @@ class StemWorkflowWatcherInsertDto implements InsertDto<$StemWorkflowWatcher> {
       if (runId != null) 'run_id': runId,
       if (stepName != null) 'step_name': stepName,
       if (topic != null) 'topic': topic,
+      if (namespace != null) 'namespace': namespace,
       if (data != null) 'data': data,
       if (createdAt != null) 'created_at': createdAt,
       if (deadline != null) 'deadline': deadline,
@@ -340,6 +423,7 @@ class StemWorkflowWatcherInsertDto implements InsertDto<$StemWorkflowWatcher> {
     Object? runId = _copyWithSentinel,
     Object? stepName = _copyWithSentinel,
     Object? topic = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? data = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
     Object? deadline = _copyWithSentinel,
@@ -354,6 +438,9 @@ class StemWorkflowWatcherInsertDto implements InsertDto<$StemWorkflowWatcher> {
       topic: identical(topic, _copyWithSentinel)
           ? this.topic
           : topic as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       data: identical(data, _copyWithSentinel) ? this.data : data as String?,
       createdAt: identical(createdAt, _copyWithSentinel)
           ? this.createdAt
@@ -377,6 +464,7 @@ class StemWorkflowWatcherUpdateDto implements UpdateDto<$StemWorkflowWatcher> {
     this.runId,
     this.stepName,
     this.topic,
+    this.namespace,
     this.data,
     this.createdAt,
     this.deadline,
@@ -384,6 +472,7 @@ class StemWorkflowWatcherUpdateDto implements UpdateDto<$StemWorkflowWatcher> {
   final String? runId;
   final String? stepName;
   final String? topic;
+  final String? namespace;
   final String? data;
   final DateTime? createdAt;
   final DateTime? deadline;
@@ -394,6 +483,7 @@ class StemWorkflowWatcherUpdateDto implements UpdateDto<$StemWorkflowWatcher> {
       if (runId != null) 'run_id': runId,
       if (stepName != null) 'step_name': stepName,
       if (topic != null) 'topic': topic,
+      if (namespace != null) 'namespace': namespace,
       if (data != null) 'data': data,
       if (createdAt != null) 'created_at': createdAt,
       if (deadline != null) 'deadline': deadline,
@@ -406,6 +496,7 @@ class StemWorkflowWatcherUpdateDto implements UpdateDto<$StemWorkflowWatcher> {
     Object? runId = _copyWithSentinel,
     Object? stepName = _copyWithSentinel,
     Object? topic = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? data = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
     Object? deadline = _copyWithSentinel,
@@ -420,6 +511,9 @@ class StemWorkflowWatcherUpdateDto implements UpdateDto<$StemWorkflowWatcher> {
       topic: identical(topic, _copyWithSentinel)
           ? this.topic
           : topic as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       data: identical(data, _copyWithSentinel) ? this.data : data as String?,
       createdAt: identical(createdAt, _copyWithSentinel)
           ? this.createdAt
@@ -444,6 +538,7 @@ class StemWorkflowWatcherPartial
     this.runId,
     this.stepName,
     this.topic,
+    this.namespace,
     this.data,
     this.createdAt,
     this.deadline,
@@ -458,6 +553,7 @@ class StemWorkflowWatcherPartial
       runId: row['run_id'] as String?,
       stepName: row['step_name'] as String?,
       topic: row['topic'] as String?,
+      namespace: row['namespace'] as String?,
       data: row['data'] as String?,
       createdAt: row['created_at'] as DateTime?,
       deadline: row['deadline'] as DateTime?,
@@ -467,6 +563,7 @@ class StemWorkflowWatcherPartial
   final String? runId;
   final String? stepName;
   final String? topic;
+  final String? namespace;
   final String? data;
   final DateTime? createdAt;
   final DateTime? deadline;
@@ -474,19 +571,23 @@ class StemWorkflowWatcherPartial
   @override
   $StemWorkflowWatcher toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final runIdValue = runId;
+    final String? runIdValue = runId;
     if (runIdValue == null) {
       throw StateError('Missing required field: runId');
     }
-    final stepNameValue = stepName;
+    final String? stepNameValue = stepName;
     if (stepNameValue == null) {
       throw StateError('Missing required field: stepName');
     }
-    final topicValue = topic;
+    final String? topicValue = topic;
     if (topicValue == null) {
       throw StateError('Missing required field: topic');
     }
-    final createdAtValue = createdAt;
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    final DateTime? createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }
@@ -494,6 +595,7 @@ class StemWorkflowWatcherPartial
       runId: runIdValue,
       stepName: stepNameValue,
       topic: topicValue,
+      namespace: namespaceValue,
       data: data,
       createdAt: createdAtValue,
       deadline: deadline,
@@ -506,6 +608,7 @@ class StemWorkflowWatcherPartial
       if (runId != null) 'run_id': runId,
       if (stepName != null) 'step_name': stepName,
       if (topic != null) 'topic': topic,
+      if (namespace != null) 'namespace': namespace,
       if (data != null) 'data': data,
       if (createdAt != null) 'created_at': createdAt,
       if (deadline != null) 'deadline': deadline,
@@ -518,6 +621,7 @@ class StemWorkflowWatcherPartial
     Object? runId = _copyWithSentinel,
     Object? stepName = _copyWithSentinel,
     Object? topic = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? data = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
     Object? deadline = _copyWithSentinel,
@@ -532,6 +636,9 @@ class StemWorkflowWatcherPartial
       topic: identical(topic, _copyWithSentinel)
           ? this.topic
           : topic as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       data: identical(data, _copyWithSentinel) ? this.data : data as String?,
       createdAt: identical(createdAt, _copyWithSentinel)
           ? this.createdAt
@@ -563,21 +670,24 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
     required String runId,
     required String stepName,
     required String topic,
+    required String namespace,
     required DateTime createdAt,
     String? data,
     DateTime? deadline,
-  }) : super.new(
+  }) : super(
          runId: runId,
          stepName: stepName,
          topic: topic,
-         data: data,
+         namespace: namespace,
          createdAt: createdAt,
+         data: data,
          deadline: deadline,
        ) {
     _attachOrmRuntimeMetadata({
       'run_id': runId,
       'step_name': stepName,
       'topic': topic,
+      'namespace': namespace,
       'data': data,
       'created_at': createdAt,
       'deadline': deadline,
@@ -590,6 +700,7 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
       runId: model.runId,
       stepName: model.stepName,
       topic: model.topic,
+      namespace: model.namespace,
       data: model.data,
       createdAt: model.createdAt,
       deadline: model.deadline,
@@ -600,6 +711,7 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
     String? runId,
     String? stepName,
     String? topic,
+    String? namespace,
     String? data,
     DateTime? createdAt,
     DateTime? deadline,
@@ -608,11 +720,22 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
       runId: runId ?? this.runId,
       stepName: stepName ?? this.stepName,
       topic: topic ?? this.topic,
+      namespace: namespace ?? this.namespace,
       data: data ?? this.data,
       createdAt: createdAt ?? this.createdAt,
       deadline: deadline ?? this.deadline,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemWorkflowWatcher fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkflowWatcherDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemWorkflowWatcherDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [runId].
   @override
@@ -634,6 +757,13 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
 
   /// Tracked setter for [topic].
   set topic(String value) => setAttribute('topic', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [data].
   @override
@@ -664,7 +794,51 @@ class $StemWorkflowWatcher extends StemWorkflowWatcher
   }
 }
 
+class _StemWorkflowWatcherCopyWithSentinel {
+  const _StemWorkflowWatcherCopyWithSentinel();
+}
+
 extension StemWorkflowWatcherOrmExtension on StemWorkflowWatcher {
+  static const _StemWorkflowWatcherCopyWithSentinel _copyWithSentinel =
+      _StemWorkflowWatcherCopyWithSentinel();
+  StemWorkflowWatcher copyWith({
+    Object? runId = _copyWithSentinel,
+    Object? stepName = _copyWithSentinel,
+    Object? topic = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? createdAt = _copyWithSentinel,
+    Object? data = _copyWithSentinel,
+    Object? deadline = _copyWithSentinel,
+  }) {
+    return StemWorkflowWatcher(
+      runId: identical(runId, _copyWithSentinel) ? this.runId : runId as String,
+      stepName: identical(stepName, _copyWithSentinel)
+          ? this.stepName
+          : stepName as String,
+      topic: identical(topic, _copyWithSentinel) ? this.topic : topic as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      createdAt: identical(createdAt, _copyWithSentinel)
+          ? this.createdAt
+          : createdAt as DateTime,
+      data: identical(data, _copyWithSentinel) ? this.data : data as String?,
+      deadline: identical(deadline, _copyWithSentinel)
+          ? this.deadline
+          : deadline as DateTime?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemWorkflowWatcherDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemWorkflowWatcher fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemWorkflowWatcherDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -676,6 +850,24 @@ extension StemWorkflowWatcherOrmExtension on StemWorkflowWatcher {
   $StemWorkflowWatcher toTracked() {
     return $StemWorkflowWatcher.fromModel(this);
   }
+}
+
+extension StemWorkflowWatcherPredicateFields
+    on PredicateBuilder<StemWorkflowWatcher> {
+  PredicateField<StemWorkflowWatcher, String> get runId =>
+      PredicateField<StemWorkflowWatcher, String>(this, 'runId');
+  PredicateField<StemWorkflowWatcher, String> get stepName =>
+      PredicateField<StemWorkflowWatcher, String>(this, 'stepName');
+  PredicateField<StemWorkflowWatcher, String> get topic =>
+      PredicateField<StemWorkflowWatcher, String>(this, 'topic');
+  PredicateField<StemWorkflowWatcher, String> get namespace =>
+      PredicateField<StemWorkflowWatcher, String>(this, 'namespace');
+  PredicateField<StemWorkflowWatcher, String?> get data =>
+      PredicateField<StemWorkflowWatcher, String?>(this, 'data');
+  PredicateField<StemWorkflowWatcher, DateTime> get createdAt =>
+      PredicateField<StemWorkflowWatcher, DateTime>(this, 'createdAt');
+  PredicateField<StemWorkflowWatcher, DateTime?> get deadline =>
+      PredicateField<StemWorkflowWatcher, DateTime?>(this, 'deadline');
 }
 
 void registerStemWorkflowWatcherEventHandlers(EventBus bus) {

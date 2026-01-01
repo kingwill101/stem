@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
@@ -43,6 +44,46 @@ void main() {
       verifyBroadcastFanout: true,
     ),
   );
+
+  test('namespace isolates queue data', () async {
+    final namespaceA =
+        'broker-ns-a-${DateTime.now().microsecondsSinceEpoch}';
+    final namespaceB =
+        'broker-ns-b-${DateTime.now().microsecondsSinceEpoch}';
+    final brokerA = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespaceA,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      pollInterval: const Duration(milliseconds: 50),
+      sweeperInterval: const Duration(milliseconds: 200),
+    );
+    final brokerB = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespaceB,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      pollInterval: const Duration(milliseconds: 50),
+      sweeperInterval: const Duration(milliseconds: 200),
+    );
+
+    try {
+      final queue = 'queue-${DateTime.now().microsecondsSinceEpoch}';
+      final envelope = Envelope(
+        name: 'integration.namespace',
+        args: const {'value': 1},
+        queue: queue,
+      );
+      await brokerA.publish(envelope);
+
+      final pendingA = await brokerA.pendingCount(queue);
+      final pendingB = await brokerB.pendingCount(queue);
+
+      expect(pendingA, 1);
+      expect(pendingB, 0);
+    } finally {
+      await brokerA.close();
+      await brokerB.close();
+    }
+  });
 
   // CLI health check test removed due to dependency signature changes.
 }

@@ -6,12 +6,17 @@ import 'package:stem_postgres/src/workflow/postgres_workflow_store.dart';
 /// Creates a [StemBrokerFactory] backed by PostgreSQL.
 StemBrokerFactory postgresBrokerFactory(
   String uri, {
+  String namespace = 'stem',
   String? applicationName,
   TlsConfig? tls,
 }) {
   return StemBrokerFactory(
-    create: () async =>
-        PostgresBroker.connect(uri, applicationName: applicationName, tls: tls),
+    create: () async => PostgresBroker.connect(
+      uri,
+      namespace: namespace,
+      applicationName: applicationName,
+      tls: tls,
+    ),
     dispose: (broker) async {
       if (broker is PostgresBroker) {
         await broker.close();
@@ -22,12 +27,14 @@ StemBrokerFactory postgresBrokerFactory(
 
 /// Creates a [StemBackendFactory] backed by PostgreSQL.
 StemBackendFactory postgresResultBackendFactory({
+  String namespace = 'stem',
   Duration defaultTtl = const Duration(days: 1),
   Duration groupDefaultTtl = const Duration(days: 1),
   Duration heartbeatTtl = const Duration(minutes: 1),
 }) {
   return StemBackendFactory(
     create: () async => PostgresResultBackend.connect(
+      namespace: namespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,

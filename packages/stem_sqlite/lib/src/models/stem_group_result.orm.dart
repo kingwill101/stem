@@ -31,6 +31,18 @@ const FieldDefinition _$StemGroupResultTaskIdField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemGroupResultNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemGroupResultStateField = FieldDefinition(
   name: 'state',
   columnName: 'state',
@@ -133,6 +145,10 @@ Map<String, Object?> _encodeStemGroupResultUntracked(
   return <String, Object?>{
     'group_id': registry.encodeField(_$StemGroupResultGroupIdField, m.groupId),
     'task_id': registry.encodeField(_$StemGroupResultTaskIdField, m.taskId),
+    'namespace': registry.encodeField(
+      _$StemGroupResultNamespaceField,
+      m.namespace,
+    ),
     'state': registry.encodeField(_$StemGroupResultStateField, m.state),
     'payload': registry.encodeField(_$StemGroupResultPayloadField, m.payload),
     'error': registry.encodeField(_$StemGroupResultErrorField, m.error),
@@ -148,6 +164,7 @@ final ModelDefinition<$StemGroupResult> _$StemGroupResultDefinition =
       fields: const [
         _$StemGroupResultGroupIdField,
         _$StemGroupResultTaskIdField,
+        _$StemGroupResultNamespaceField,
         _$StemGroupResultStateField,
         _$StemGroupResultPayloadField,
         _$StemGroupResultErrorField,
@@ -310,6 +327,10 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
         _$StemGroupResultTaskIdField,
         model.taskId,
       ),
+      'namespace': registry.encodeField(
+        _$StemGroupResultNamespaceField,
+        model.namespace,
+      ),
       'state': registry.encodeField(_$StemGroupResultStateField, model.state),
       'payload': registry.encodeField(
         _$StemGroupResultPayloadField,
@@ -351,6 +372,14 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
           data['task_id'],
         ) ??
         (throw StateError('Field taskId on StemGroupResult cannot be null.'));
+    final String stemGroupResultNamespaceValue =
+        registry.decodeField<String>(
+          _$StemGroupResultNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemGroupResult cannot be null.',
+        ));
     final String stemGroupResultStateValue =
         registry.decodeField<String>(
           _$StemGroupResultStateField,
@@ -390,6 +419,7 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
     final model = $StemGroupResult(
       groupId: stemGroupResultGroupIdValue,
       taskId: stemGroupResultTaskIdValue,
+      namespace: stemGroupResultNamespaceValue,
       state: stemGroupResultStateValue,
       attempt: stemGroupResultAttemptValue,
       meta: stemGroupResultMetaValue,
@@ -399,6 +429,7 @@ class _$StemGroupResultCodec extends ModelCodec<$StemGroupResult> {
     model._attachOrmRuntimeMetadata({
       'group_id': stemGroupResultGroupIdValue,
       'task_id': stemGroupResultTaskIdValue,
+      'namespace': stemGroupResultNamespaceValue,
       'state': stemGroupResultStateValue,
       'payload': stemGroupResultPayloadValue,
       'error': stemGroupResultErrorValue,
@@ -420,6 +451,7 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
   const StemGroupResultInsertDto({
     this.groupId,
     this.taskId,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -428,6 +460,7 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
   });
   final String? groupId;
   final String? taskId;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -439,6 +472,7 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
     return <String, Object?>{
       if (groupId != null) 'group_id': groupId,
       if (taskId != null) 'task_id': taskId,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -452,6 +486,7 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
   StemGroupResultInsertDto copyWith({
     Object? groupId = _copyWithSentinel,
     Object? taskId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -465,6 +500,9 @@ class StemGroupResultInsertDto implements InsertDto<$StemGroupResult> {
       taskId: identical(taskId, _copyWithSentinel)
           ? this.taskId
           : taskId as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -491,6 +529,7 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
   const StemGroupResultUpdateDto({
     this.groupId,
     this.taskId,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -499,6 +538,7 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
   });
   final String? groupId;
   final String? taskId;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -510,6 +550,7 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
     return <String, Object?>{
       if (groupId != null) 'group_id': groupId,
       if (taskId != null) 'task_id': taskId,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -523,6 +564,7 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
   StemGroupResultUpdateDto copyWith({
     Object? groupId = _copyWithSentinel,
     Object? taskId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -536,6 +578,9 @@ class StemGroupResultUpdateDto implements UpdateDto<$StemGroupResult> {
       taskId: identical(taskId, _copyWithSentinel)
           ? this.taskId
           : taskId as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -562,6 +607,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
   const StemGroupResultPartial({
     this.groupId,
     this.taskId,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -577,6 +623,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
     return StemGroupResultPartial(
       groupId: row['group_id'] as String?,
       taskId: row['task_id'] as String?,
+      namespace: row['namespace'] as String?,
       state: row['state'] as String?,
       payload: row['payload'],
       error: row['error'],
@@ -587,6 +634,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
 
   final String? groupId;
   final String? taskId;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -604,6 +652,10 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
     if (taskIdValue == null) {
       throw StateError('Missing required field: taskId');
     }
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
     final String? stateValue = state;
     if (stateValue == null) {
       throw StateError('Missing required field: state');
@@ -619,6 +671,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
     return $StemGroupResult(
       groupId: groupIdValue,
       taskId: taskIdValue,
+      namespace: namespaceValue,
       state: stateValue,
       payload: payload,
       error: error,
@@ -632,6 +685,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
     return {
       if (groupId != null) 'group_id': groupId,
       if (taskId != null) 'task_id': taskId,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -645,6 +699,7 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
   StemGroupResultPartial copyWith({
     Object? groupId = _copyWithSentinel,
     Object? taskId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -658,6 +713,9 @@ class StemGroupResultPartial implements PartialEntity<$StemGroupResult> {
       taskId: identical(taskId, _copyWithSentinel)
           ? this.taskId
           : taskId as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -692,6 +750,7 @@ class $StemGroupResult extends StemGroupResult
   $StemGroupResult({
     required String groupId,
     required String taskId,
+    required String namespace,
     required String state,
     required int attempt,
     required Map<String, Object?> meta,
@@ -700,6 +759,7 @@ class $StemGroupResult extends StemGroupResult
   }) : super(
          groupId: groupId,
          taskId: taskId,
+         namespace: namespace,
          state: state,
          attempt: attempt,
          meta: meta,
@@ -709,6 +769,7 @@ class $StemGroupResult extends StemGroupResult
     _attachOrmRuntimeMetadata({
       'group_id': groupId,
       'task_id': taskId,
+      'namespace': namespace,
       'state': state,
       'payload': payload,
       'error': error,
@@ -722,6 +783,7 @@ class $StemGroupResult extends StemGroupResult
     return $StemGroupResult(
       groupId: model.groupId,
       taskId: model.taskId,
+      namespace: model.namespace,
       state: model.state,
       payload: model.payload,
       error: model.error,
@@ -733,6 +795,7 @@ class $StemGroupResult extends StemGroupResult
   $StemGroupResult copyWith({
     String? groupId,
     String? taskId,
+    String? namespace,
     String? state,
     Object? payload,
     Object? error,
@@ -742,6 +805,7 @@ class $StemGroupResult extends StemGroupResult
     return $StemGroupResult(
       groupId: groupId ?? this.groupId,
       taskId: taskId ?? this.taskId,
+      namespace: namespace ?? this.namespace,
       state: state ?? this.state,
       payload: payload ?? this.payload,
       error: error ?? this.error,
@@ -773,6 +837,13 @@ class $StemGroupResult extends StemGroupResult
 
   /// Tracked setter for [taskId].
   set taskId(String value) => setAttribute('task_id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [state].
   @override
@@ -840,6 +911,7 @@ extension StemGroupResultOrmExtension on StemGroupResult {
   StemGroupResult copyWith({
     Object? groupId = _copyWithSentinel,
     Object? taskId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
     Object? meta = _copyWithSentinel,
@@ -854,6 +926,9 @@ extension StemGroupResultOrmExtension on StemGroupResult {
       taskId: identical(taskId, _copyWithSentinel)
           ? this.taskId
           : taskId as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
       state: identical(state, _copyWithSentinel) ? this.state : state as String,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
@@ -897,6 +972,8 @@ extension StemGroupResultPredicateFields on PredicateBuilder<StemGroupResult> {
       PredicateField<StemGroupResult, String>(this, 'groupId');
   PredicateField<StemGroupResult, String> get taskId =>
       PredicateField<StemGroupResult, String>(this, 'taskId');
+  PredicateField<StemGroupResult, String> get namespace =>
+      PredicateField<StemGroupResult, String>(this, 'namespace');
   PredicateField<StemGroupResult, String> get state =>
       PredicateField<StemGroupResult, String>(this, 'state');
   PredicateField<StemGroupResult, Object?> get payload =>

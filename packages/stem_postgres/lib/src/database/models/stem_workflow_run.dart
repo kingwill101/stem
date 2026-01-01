@@ -8,6 +8,7 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
   /// Creates a workflow run record.
   StemWorkflowRun({
     required this.id,
+    required this.namespace,
     required this.workflow,
     required this.status,
     required this.params,
@@ -25,6 +26,10 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
   /// Run identifier.
   @OrmField(columnName: 'id', isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the workflow run.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Workflow name.
   @OrmField(columnName: 'workflow')

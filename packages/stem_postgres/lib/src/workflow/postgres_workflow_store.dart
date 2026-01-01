@@ -55,10 +55,12 @@ class PostgresWorkflowStore implements WorkflowStore {
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresWorkflowStore._(
       connections,
-      namespace: namespace,
+      namespace: resolvedNamespace,
       clock: clock,
       uuid: uuid,
     );
@@ -79,11 +81,12 @@ class PostgresWorkflowStore implements WorkflowStore {
   }) async {
     final id = _uuid.v7();
     final now = _clock.now().toUtc();
-    final workflowName = _encodeWorkflowName(workflow);
+    final workflowName = workflow;
 
     await _connections.runInTransaction((ctx) async {
       final run = $StemWorkflowRun(
         id: id,
+        namespace: namespace,
         workflow: workflowName,
         status: WorkflowStatus.running.name,
         params: jsonEncode(params),
@@ -109,6 +112,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final run = await ctx
         .query<$StemWorkflowRun>()
         .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (run == null) return null;
@@ -117,6 +121,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final steps = await ctx
         .query<$StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .get();
 
     final baseSteps = <String>{};
@@ -126,7 +131,7 @@ class PostgresWorkflowStore implements WorkflowStore {
 
     return RunState(
       id: run.id,
-      workflow: _decodeWorkflowName(run.workflow),
+      workflow: run.workflow,
       status: WorkflowStatus.values.firstWhere(
         (v) => v.name == run.status,
         orElse: () => WorkflowStatus.running,
@@ -134,7 +139,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       cursor: baseSteps.length,
       params: _decodeMap(run.params),
       result: _decodeValue(run.result),
-      waitTopic: run.waitTopic == null ? null : _decodeTopic(run.waitTopic!),
+      waitTopic: run.waitTopic,
       resumeAt: run.resumeAt,
       lastError: _decodeMap(run.lastError),
       suspensionData: _decodeMap(run.suspensionData),
@@ -156,6 +161,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
         .whereEquals('name', stepName)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (step == null) return null;
@@ -171,18 +177,24 @@ class PostgresWorkflowStore implements WorkflowStore {
           .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
           .whereEquals('name', stepName)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (existing != null) {
         await ctx.repository<StemWorkflowStep>().update(
           StemWorkflowStepUpdateDto(value: jsonEncode(value)),
-          where: StemWorkflowStepPartial(runId: runId, name: stepName),
+          where: StemWorkflowStepPartial(
+            runId: runId,
+            name: stepName,
+            namespace: namespace,
+          ),
         );
       } else {
         await ctx.repository<StemWorkflowStep>().insert(
           StemWorkflowStepInsertDto(
             runId: runId,
             name: stepName,
+            namespace: namespace,
             value: jsonEncode(value),
           ),
         );
@@ -192,12 +204,13 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
         await ctx.repository<StemWorkflowRun>().update(
           StemWorkflowRunUpdateDto(updatedAt: now),
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -217,6 +230,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -229,7 +243,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['wait_topic'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -244,7 +258,6 @@ class PostgresWorkflowStore implements WorkflowStore {
     Map<String, Object?>? data,
   }) async {
     final now = _clock.now().toUtc();
-    final encodedTopic = _encodeTopic(topic);
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -256,12 +269,13 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
         final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.suspended.name,
-          waitTopic: encodedTopic,
+          waitTopic: topic,
           resumeAt: deadline,
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
@@ -269,7 +283,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['resume_at'] = deadline;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -283,7 +297,6 @@ class PostgresWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final encodedTopic = _encodeTopic(topic);
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -297,12 +310,14 @@ class PostgresWorkflowStore implements WorkflowStore {
       final existing = await ctx
           .query<$StemWorkflowWatcher>()
           .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       final watcher = $StemWorkflowWatcher(
         runId: runId,
         stepName: stepName,
-        topic: encodedTopic,
+        topic: topic,
+        namespace: namespace,
         data: jsonEncode(metadata),
         deadline: deadline,
         createdAt: now,
@@ -318,12 +333,13 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
         final updates = StemWorkflowRunUpdateDto(
           status: WorkflowStatus.suspended.name,
-          waitTopic: encodedTopic,
+          waitTopic: topic,
           resumeAt: deadline,
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
@@ -331,7 +347,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['resume_at'] = deadline;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -347,6 +363,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -358,7 +375,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['wait_topic'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -374,6 +391,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -385,7 +403,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -408,6 +426,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -421,7 +440,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         ).toMap();
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -437,6 +456,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -449,7 +469,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = data != null ? jsonEncode(data) : null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -461,6 +481,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       // SELECT runs where resume_at has passed
       final dueRuns = await ctx
           .query<StemWorkflowRun>()
+          .whereEquals('namespace', namespace)
           .whereNotNull('resumeAt')
           .where('resumeAt', now, PredicateOperator.lessThanOrEqual)
           .whereEquals('status', WorkflowStatus.suspended.name)
@@ -477,7 +498,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         await ctx.repository<StemWorkflowRun>().update({
           'resume_at': null,
           'updated_at': nowUtc,
-        }, where: StemWorkflowRunPartial(id: run.id));
+        }, where: StemWorkflowRunPartial(id: run.id, namespace: namespace));
       }
 
       return dueRuns.map((r) => r.id).toList(growable: false);
@@ -487,11 +508,11 @@ class PostgresWorkflowStore implements WorkflowStore {
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
     final ctx = _connections.context;
-    final encodedTopic = _encodeTopic(topic);
     // Check watchers first
     final watcherRows = await ctx
         .query<$StemWorkflowWatcher>()
-        .whereEquals('topic', encodedTopic)
+        .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
         .limit(limit)
         .get();
 
@@ -502,7 +523,8 @@ class PostgresWorkflowStore implements WorkflowStore {
     // Fallback to runs with wait_topic
     final fallbackRows = await ctx
         .query<StemWorkflowRun>()
-        .whereEquals('waitTopic', encodedTopic)
+        .whereEquals('waitTopic', topic)
+        .whereEquals('namespace', namespace)
         .limit(limit)
         .get();
 
@@ -516,10 +538,10 @@ class PostgresWorkflowStore implements WorkflowStore {
     int limit = 256,
   }) async {
     return _connections.runInTransaction((ctx) async {
-      final encodedTopic = _encodeTopic(topic);
       final watchers = await ctx
           .query<$StemWorkflowWatcher>()
-          .whereEquals('topic', encodedTopic)
+          .whereEquals('topic', topic)
+          .whereEquals('namespace', namespace)
           .limit(limit)
           .get();
 
@@ -550,6 +572,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         final run = await ctx
             .query<StemWorkflowRun>()
             .whereEquals('id', watcher.runId)
+            .whereEquals('namespace', namespace)
             .first();
 
         if (run != null) {
@@ -562,7 +585,10 @@ class PostgresWorkflowStore implements WorkflowStore {
           updates['resume_at'] = null;
           await ctx.repository<StemWorkflowRun>().update(
             updates,
-            where: StemWorkflowRunPartial(id: watcher.runId),
+            where: StemWorkflowRunPartial(
+              id: watcher.runId,
+              namespace: namespace,
+            ),
           );
         }
 
@@ -589,10 +615,10 @@ class PostgresWorkflowStore implements WorkflowStore {
     int limit = 256,
   }) async {
     final ctx = _connections.context;
-    final encodedTopic = _encodeTopic(topic);
     final rows = await ctx
         .query<$StemWorkflowWatcher>()
-        .whereEquals('topic', encodedTopic)
+        .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
         .limit(limit)
         .get();
 
@@ -605,7 +631,7 @@ class PostgresWorkflowStore implements WorkflowStore {
           (row) => WorkflowWatcher(
             runId: row.runId,
             stepName: row.stepName,
-            topic: _decodeTopic(row.topic),
+            topic: row.topic,
             createdAt: row.createdAt,
             deadline: row.deadline,
             data: _decodeMap(row.data),
@@ -629,6 +655,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -642,7 +669,7 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['resume_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -656,6 +683,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final stepRows = await ctx
           .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
           .orderBy('name')
           .get();
 
@@ -693,6 +721,7 @@ class PostgresWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -706,7 +735,7 @@ class PostgresWorkflowStore implements WorkflowStore {
             }),
             updatedAt: _clock.now().toUtc(),
           ),
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -720,15 +749,10 @@ class PostgresWorkflowStore implements WorkflowStore {
   }) async {
     final ctx = _connections.context;
     var query = ctx.query<StemWorkflowRun>();
+    query = query.whereEquals('namespace', namespace);
 
     if (workflow != null) {
-      query = query.whereEquals('workflow', _encodeWorkflowName(workflow));
-    } else if (_useWorkflowNamespace) {
-      query = query.where(
-        'workflow',
-        '$_workflowNamespacePrefix%',
-        PredicateOperator.like,
-      );
+      query = query.whereEquals('workflow', workflow);
     }
 
     if (status != null) {
@@ -759,6 +783,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final rows = await ctx
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .orderBy('name')
         .get();
 
@@ -783,6 +808,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final watcher = await ctx
         .query<$StemWorkflowWatcher>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (watcher != null) {
@@ -818,34 +844,6 @@ class PostgresWorkflowStore implements WorkflowStore {
       }
     }
     return input;
-  }
-
-  bool get _useWorkflowNamespace => namespace.isNotEmpty && namespace != 'stem';
-
-  String get _workflowNamespacePrefix => '$namespace::';
-
-  String _encodeWorkflowName(String workflow) {
-    if (!_useWorkflowNamespace) return workflow;
-    return '$_workflowNamespacePrefix$workflow';
-  }
-
-  String _decodeWorkflowName(String workflow) {
-    if (!_useWorkflowNamespace) return workflow;
-    final prefix = _workflowNamespacePrefix;
-    return workflow.startsWith(prefix)
-        ? workflow.substring(prefix.length)
-        : workflow;
-  }
-
-  String _encodeTopic(String topic) {
-    if (!_useWorkflowNamespace) return topic;
-    return '$_workflowNamespacePrefix$topic';
-  }
-
-  String _decodeTopic(String topic) {
-    if (!_useWorkflowNamespace) return topic;
-    final prefix = _workflowNamespacePrefix;
-    return topic.startsWith(prefix) ? topic.substring(prefix.length) : topic;
   }
 
   String _baseStepName(String name) {

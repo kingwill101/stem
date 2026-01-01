@@ -48,7 +48,8 @@ ModelRegistry buildOrmRegistry() => ModelRegistry()
   ..registerTypeAlias<StemWorkerHeartbeat>(_$ormModelDefinitions[10])
   ..registerTypeAlias<StemWorkflowRun>(_$ormModelDefinitions[11])
   ..registerTypeAlias<StemWorkflowStep>(_$ormModelDefinitions[12])
-  ..registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[13]);
+  ..registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[13])
+  ;
 
 List<ModelDefinition<OrmEntity>> get generatedOrmModelDefinitions =>
     List.unmodifiable(_$ormModelDefinitions);
@@ -76,7 +77,8 @@ extension GeneratedOrmModels on ModelRegistry {
 
 /// Registers factory definitions for all models that have factory support.
 /// Call this before using [Model.factory<T>()] to ensure definitions are available.
-void registerOrmFactories() {}
+void registerOrmFactories() {
+}
 
 /// Combined setup: registers both model registry and factories.
 /// Returns a ModelRegistry with all generated models registered.
@@ -96,14 +98,7 @@ void registerModelScopes({ScopeRegistry? scopeRegistry}) {
 }
 
 /// Bootstraps generated ORM pieces: registry, factories, event handlers, and scopes.
-ModelRegistry bootstrapOrm({
-  ModelRegistry? registry,
-  EventBus? bus,
-  ScopeRegistry? scopes,
-  bool registerFactories = true,
-  bool registerEventHandlers = true,
-  bool registerScopes = true,
-}) {
+ModelRegistry bootstrapOrm({ModelRegistry? registry, EventBus? bus, ScopeRegistry? scopes, bool registerFactories = true, bool registerEventHandlers = true, bool registerScopes = true}) {
   final reg = registry ?? buildOrmRegistry();
   if (registry != null) {
     reg.registerGeneratedModels();

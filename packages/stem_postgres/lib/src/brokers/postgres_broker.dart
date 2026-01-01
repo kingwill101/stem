@@ -12,6 +12,7 @@ import 'package:stem_postgres/src/database/models/models.dart';
 class PostgresBroker implements Broker {
   PostgresBroker._(
     this._connections, {
+    required this.namespace,
     required this.defaultVisibilityTimeout,
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
@@ -24,6 +25,7 @@ class PostgresBroker implements Broker {
   /// Connects to PostgreSQL and returns a broker instance.
   static Future<PostgresBroker> connect(
     String connectionString, {
+    String namespace = 'stem',
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration sweeperInterval = const Duration(seconds: 10),
@@ -31,11 +33,14 @@ class PostgresBroker implements Broker {
     String? applicationName,
     TlsConfig? tls,
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
     );
     return PostgresBroker._(
       connections,
+      namespace: resolvedNamespace,
       defaultVisibilityTimeout: defaultVisibilityTimeout,
       pollInterval: pollInterval,
       sweeperInterval: sweeperInterval,
@@ -45,6 +50,9 @@ class PostgresBroker implements Broker {
 
   final PostgresConnections _connections;
   final QueryContext _context;
+
+  /// Namespace used to scope broker data.
+  final String namespace;
 
   /// Default visibility timeout applied to deliveries.
   final Duration defaultVisibilityTimeout;
@@ -108,6 +116,7 @@ class PostgresBroker implements Broker {
       final message = envelope.copyWith(queue: channel);
       final model = StemBroadcastMessage(
         id: message.id,
+        namespace: namespace,
         channel: channel,
         envelope: message.toJson(),
         delivery: resolvedRoute.delivery ?? 'at-least-once',
@@ -205,7 +214,11 @@ class PostgresBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     await _withDb(() {
-      return _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .delete();
     });
   }
 
@@ -222,14 +235,18 @@ class PostgresBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now().toUtc();
     await _withDb(() {
-      return _context.query<StemQueueJob>().whereEquals('id', jobId).update({
-        'lockedAt': null,
-        'lockedUntil': null,
-        'lockedBy': null,
-        'attempt': delivery.envelope.attempt + 1,
-        'notBefore': null,
-        'updatedAt': now,
-      });
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .update({
+            'lockedAt': null,
+            'lockedUntil': null,
+            'lockedBy': null,
+            'attempt': delivery.envelope.attempt + 1,
+            'notBefore': null,
+            'updatedAt': now,
+          });
     });
   }
 
@@ -254,12 +271,18 @@ class PostgresBroker implements Broker {
         final row = await txn
             .query<StemQueueJob>()
             .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
             .firstOrNull();
-        await txn.query<StemQueueJob>().whereEquals('id', jobId).delete();
+        await txn
+            .query<StemQueueJob>()
+            .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
+            .delete();
         if (row != null) {
           await txn.repository<StemDeadLetter>().upsert(
             StemDeadLetter(
               id: row.id,
+              namespace: namespace,
               queue: row.queue,
               envelope: row.envelope,
               reason: entryReason,
@@ -279,6 +302,7 @@ class PostgresBroker implements Broker {
       return _context
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .delete();
     });
   }
@@ -291,7 +315,7 @@ class PostgresBroker implements Broker {
     await _withDb(() {
       return _context.repository<StemQueueJob>().update(
         StemQueueJobUpdateDto(lockedUntil: leaseUntil),
-        where: StemQueueJobPartial(id: jobId),
+        where: StemQueueJobPartial(id: jobId, namespace: namespace),
       );
     });
   }
@@ -303,6 +327,7 @@ class PostgresBroker implements Broker {
       return _context
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('notBefore')
@@ -324,6 +349,7 @@ class PostgresBroker implements Broker {
       return _context
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .whereNotNull('lockedUntil')
           .where('lockedUntil', now, PredicateOperator.greaterThan)
           .count();
@@ -344,6 +370,7 @@ class PostgresBroker implements Broker {
       final rows = await _context
           .query<StemDeadLetter>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .orderBy('deadAt', descending: true)
           .limit(limit)
           .offset(normalizedOffset)
@@ -363,6 +390,7 @@ class PostgresBroker implements Broker {
           .query<StemDeadLetter>()
           .whereEquals('queue', queue)
           .whereEquals('id', id)
+          .whereEquals('namespace', namespace)
           .firstOrNull();
     });
     return row == null ? null : _deadLetterFromRow(row);
@@ -377,7 +405,10 @@ class PostgresBroker implements Broker {
     bool dryRun = false,
   }) async {
     final bounded = limit.clamp(1, 500);
-    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
     if (since != null) {
       query = query.where(
         'deadAt',
@@ -413,6 +444,7 @@ class PostgresBroker implements Broker {
           await txn
               .query<StemDeadLetter>()
               .whereEquals('id', entry.envelope.id)
+              .whereEquals('namespace', namespace)
               .delete();
         }
       });
@@ -432,18 +464,26 @@ class PostgresBroker implements Broker {
         return _context
             .query<StemDeadLetter>()
             .whereEquals('queue', queue)
+            .whereEquals('namespace', namespace)
             .orderBy('deadAt', descending: true)
             .limit(limit)
             .pluck<String>('id');
       });
       if (ids.isEmpty) return 0;
       await _withDb(() {
-        return _context.query<StemDeadLetter>().whereIn('id', ids).delete();
+        return _context
+            .query<StemDeadLetter>()
+            .whereIn('id', ids)
+            .whereEquals('namespace', namespace)
+            .delete();
       });
       return ids.length;
     }
 
-    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
     if (since != null) {
       query = query.where(
         'deadAt',
@@ -463,6 +503,7 @@ class PostgresBroker implements Broker {
         final candidate = await txn
             .query<StemQueueJob>()
             .whereEquals('queue', queue)
+            .whereEquals('namespace', namespace)
             .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('notBefore')
@@ -486,6 +527,7 @@ class PostgresBroker implements Broker {
         final updated = await txn
             .query<StemQueueJob>()
             .whereEquals('id', candidate.id)
+            .whereEquals('namespace', namespace)
             .where((PredicateBuilder<StemQueueJob> q) {
               q
                 ..whereNull('lockedUntil')
@@ -521,6 +563,7 @@ class PostgresBroker implements Broker {
     final messages = await _withDb(() {
       return _context
           .query<StemBroadcastMessage>()
+          .whereEquals('namespace', namespace)
           .whereIn('channel', channels)
           .orderBy('createdAt')
           .limit(limit < 1 ? 1 : limit)
@@ -534,6 +577,7 @@ class PostgresBroker implements Broker {
             .query<StemBroadcastAck>()
             .whereEquals('messageId', message.id)
             .whereEquals('workerId', workerId)
+            .whereEquals('namespace', namespace)
             .exists();
       });
       if (alreadyAcked) continue;
@@ -562,6 +606,7 @@ class PostgresBroker implements Broker {
     final ack = StemBroadcastAck(
       messageId: messageId,
       workerId: workerId,
+      namespace: namespace,
       acknowledgedAt: DateTime.now().toUtc(),
     ).toTracked();
     await _withDb(() {
@@ -586,6 +631,7 @@ class PostgresBroker implements Broker {
       await _connections.runInTransaction((txn) async {
         await txn
             .query<StemQueueJob>()
+            .whereEquals('namespace', namespace)
             .whereNotNull('lockedUntil')
             .where('lockedUntil', now, PredicateOperator.lessThanOrEqual)
             .update({'lockedAt': null, 'lockedUntil': null, 'lockedBy': null});
@@ -595,6 +641,7 @@ class PostgresBroker implements Broker {
           final cutoff = now.subtract(deadLetterRetention);
           await txn
               .query<StemDeadLetter>()
+              .whereEquals('namespace', namespace)
               .where('deadAt', cutoff, PredicateOperator.lessThanOrEqual)
               .delete();
         }
@@ -614,6 +661,7 @@ class PostgresBroker implements Broker {
   }) async {
     final model = StemQueueJob(
       id: envelope.id,
+      namespace: namespace,
       queue: queue,
       envelope: envelope.toJson(),
       attempt: attempt,

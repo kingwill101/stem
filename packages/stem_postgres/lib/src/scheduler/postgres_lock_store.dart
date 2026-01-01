@@ -9,9 +9,10 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
   /// Creates a lock store backed by PostgreSQL.
-  PostgresLockStore._(this._connections);
+  PostgresLockStore._(this._connections, {required this.namespace});
 
   final PostgresConnections _connections;
+  final String namespace;
   final Random _random = Random();
 
   /// Connects to a PostgreSQL database and initializes the locks table.
@@ -25,8 +26,13 @@ class PostgresLockStore implements LockStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
-    return PostgresLockStore._(connections);
+    return PostgresLockStore._(
+      connections,
+      namespace: resolvedNamespace,
+    );
   }
 
   /// Closes the lock store and releases any database resources.
@@ -54,6 +60,7 @@ class PostgresLockStore implements LockStore {
       await ctx.repository<$StemLock>().insert(
         $StemLock(
           key: key,
+          namespace: namespace,
           owner: ownerValue,
           expiresAt: expiresAt,
           createdAt: now,
@@ -66,6 +73,7 @@ class PostgresLockStore implements LockStore {
       final expired = await ctx
           .query<$StemLock>()
           .whereEquals('key', key)
+          .whereEquals('namespace', namespace)
           .where('expiresAt', now, PredicateOperator.lessThan)
           .get();
 
@@ -78,6 +86,7 @@ class PostgresLockStore implements LockStore {
         await ctx.repository<$StemLock>().insert(
           $StemLock(
             key: key,
+            namespace: namespace,
             owner: ownerValue,
             expiresAt: expiresAt,
             createdAt: now,
@@ -99,6 +108,7 @@ class PostgresLockStore implements LockStore {
         .query<$StemLock>()
         .whereEquals('key', key)
         .whereEquals('owner', owner)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .get();
 
@@ -118,6 +128,7 @@ class PostgresLockStore implements LockStore {
         .query<$StemLock>()
         .whereEquals('key', key)
         .whereEquals('owner', owner)
+        .whereEquals('namespace', namespace)
         .get();
 
     if (locks.isEmpty) return false;
@@ -135,6 +146,7 @@ class PostgresLockStore implements LockStore {
     final locks = await ctx
         .query<$StemLock>()
         .whereEquals('key', key)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .get();
 

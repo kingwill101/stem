@@ -12,6 +12,7 @@ import 'package:stem_sqlite/src/models/models.dart';
 class SqliteResultBackend implements ResultBackend {
   SqliteResultBackend._(
     this._connections, {
+    required this.namespace,
     required this.defaultTtl,
     required this.groupDefaultTtl,
     required this.heartbeatTtl,
@@ -23,14 +24,18 @@ class SqliteResultBackend implements ResultBackend {
   /// Opens a SQLite backend from an existing database file.
   static Future<SqliteResultBackend> open(
     File file, {
+    String namespace = 'stem',
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
     Duration cleanupInterval = const Duration(minutes: 1),
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await SqliteConnections.open(file);
     return SqliteResultBackend._(
       connections,
+      namespace: resolvedNamespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,
@@ -53,6 +58,7 @@ class SqliteResultBackend implements ResultBackend {
   /// ```
   static Future<SqliteResultBackend> connect({
     String? connectionString,
+    String namespace = 'stem',
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
@@ -82,6 +88,7 @@ class SqliteResultBackend implements ResultBackend {
 
     return open(
       file,
+      namespace: namespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,
@@ -91,6 +98,9 @@ class SqliteResultBackend implements ResultBackend {
 
   final SqliteConnections _connections;
   final QueryContext _context;
+
+  /// Namespace used to scope backend data.
+  final String namespace;
 
   /// Default TTL applied to task results.
   final Duration defaultTtl;
@@ -148,6 +158,7 @@ class SqliteResultBackend implements ResultBackend {
     await _connections.runInTransaction((txn) async {
       final model = $StemTaskResult(
         id: taskId,
+        namespace: namespace,
         state: state.name,
         payload: _wrapScalarJson(payload),
         error: error?.toJson(),
@@ -167,6 +178,7 @@ class SqliteResultBackend implements ResultBackend {
     final row = await _context
         .query<StemTaskResult>()
         .whereEquals('id', taskId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     return row == null ? null : _taskStatusFromRow(row);
@@ -198,7 +210,7 @@ class SqliteResultBackend implements ResultBackend {
     await _connections.runInTransaction((txn) async {
       final model = StemWorkerHeartbeat(
         workerId: heartbeat.workerId,
-        namespace: heartbeat.namespace,
+        namespace: namespace,
         timestamp: heartbeat.timestamp,
         isolateCount: heartbeat.isolateCount,
         inflight: heartbeat.inflight,
@@ -223,6 +235,7 @@ class SqliteResultBackend implements ResultBackend {
     final row = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('workerId', workerId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     return row == null ? null : _heartbeatFromRow(row);
@@ -233,6 +246,7 @@ class SqliteResultBackend implements ResultBackend {
     final now = DateTime.now();
     final rows = await _context
         .query<StemWorkerHeartbeat>()
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .orderBy('workerId')
         .get();
@@ -247,6 +261,7 @@ class SqliteResultBackend implements ResultBackend {
       await txn.repository<StemGroup>().upsert(
         StemGroupInsertDto(
           id: descriptor.id,
+          namespace: namespace,
           expected: descriptor.expected,
           meta: descriptor.meta,
           expiresAt: expiresAt,
@@ -256,6 +271,7 @@ class SqliteResultBackend implements ResultBackend {
       await txn
           .query<StemGroupResult>()
           .whereEquals('groupId', descriptor.id)
+          .whereEquals('namespace', namespace)
           .delete();
     });
   }
@@ -269,6 +285,7 @@ class SqliteResultBackend implements ResultBackend {
       final model = StemGroupResult(
         groupId: groupId,
         taskId: status.id,
+        namespace: namespace,
         state: status.state.name,
         payload: _wrapScalarJson(status.payload),
         error: status.error?.toJson(),
@@ -290,6 +307,7 @@ class SqliteResultBackend implements ResultBackend {
     final groupRow = await _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     if (groupRow == null) return null;
@@ -297,6 +315,7 @@ class SqliteResultBackend implements ResultBackend {
     final resultRows = await _context
         .query<StemGroupResult>()
         .whereEquals('groupId', groupId)
+        .whereEquals('namespace', namespace)
         .get();
     final results = <String, TaskStatus>{};
     for (final row in resultRows) {
@@ -326,7 +345,7 @@ class SqliteResultBackend implements ResultBackend {
     final expiresAt = DateTime.now().add(ttl);
     await _context.repository<StemTaskResult>().update(
       StemTaskResultUpdateDto(expiresAt: expiresAt),
-      where: StemTaskResultPartial(id: taskId),
+      where: StemTaskResultPartial(id: taskId, namespace: namespace),
     );
   }
 
@@ -340,6 +359,7 @@ class SqliteResultBackend implements ResultBackend {
       final row = await txn
           .query<StemGroup>()
           .whereEquals('id', groupId)
+          .whereEquals('namespace', namespace)
           .firstOrNull();
       if (row == null) {
         return false;
@@ -359,7 +379,7 @@ class SqliteResultBackend implements ResultBackend {
 
       await txn.repository<StemGroup>().update(
         StemGroupUpdateDto(meta: meta),
-        where: StemGroupPartial(id: groupId),
+        where: StemGroupPartial(id: groupId, namespace: namespace),
       );
 
       return true;
@@ -379,23 +399,31 @@ class SqliteResultBackend implements ResultBackend {
     await _connections.runInTransaction((txn) async {
       await txn
           .query<StemTaskResult>()
+          .whereEquals('namespace', namespace)
           .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
           .delete();
 
       final expiredIds = await txn
           .query<StemGroup>()
+          .whereEquals('namespace', namespace)
           .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
           .pluck<String>('id');
       if (expiredIds.isNotEmpty) {
-        await txn.query<StemGroup>().whereIn('id', expiredIds).delete();
+        await txn
+            .query<StemGroup>()
+            .whereIn('id', expiredIds)
+            .whereEquals('namespace', namespace)
+            .delete();
         await txn
             .query<StemGroupResult>()
             .whereIn('groupId', expiredIds)
+            .whereEquals('namespace', namespace)
             .delete();
       }
 
       await txn
           .query<StemWorkerHeartbeat>()
+          .whereEquals('namespace', namespace)
           .where('expiresAt', now, PredicateOperator.lessThanOrEqual)
           .delete();
     });
@@ -406,6 +434,7 @@ class SqliteResultBackend implements ResultBackend {
     return _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .exists();
   }

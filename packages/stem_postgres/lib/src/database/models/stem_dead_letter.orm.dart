@@ -14,6 +14,21 @@ const FieldDefinition _$StemDeadLetterIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
+const FieldDefinition _$StemDeadLetterNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
@@ -21,7 +36,11 @@ const FieldDefinition _$StemDeadLetterQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
@@ -29,7 +48,11 @@ const FieldDefinition _$StemDeadLetterEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +61,11 @@ const FieldDefinition _$StemDeadLetterReasonField = FieldDefinition(
   columnName: 'reason',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
@@ -46,7 +73,11 @@ const FieldDefinition _$StemDeadLetterMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -55,7 +86,11 @@ const FieldDefinition _$StemDeadLetterDeadAtField = FieldDefinition(
   columnName: 'dead_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemDeadLetterUntracked(
@@ -65,6 +100,10 @@ Map<String, Object?> _encodeStemDeadLetterUntracked(
   final m = model as StemDeadLetter;
   return <String, Object?>{
     'id': registry.encodeField(_$StemDeadLetterIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemDeadLetterNamespaceField,
+      m.namespace,
+    ),
     'queue': registry.encodeField(_$StemDeadLetterQueueField, m.queue),
     'envelope': registry.encodeField(_$StemDeadLetterEnvelopeField, m.envelope),
     'reason': registry.encodeField(_$StemDeadLetterReasonField, m.reason),
@@ -73,24 +112,36 @@ Map<String, Object?> _encodeStemDeadLetterUntracked(
   };
 }
 
-const ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
+final ModelDefinition<$StemDeadLetter> _$StemDeadLetterDefinition =
     ModelDefinition(
       modelName: 'StemDeadLetter',
       tableName: 'stem_dead_letters',
-      fields: [
+      fields: const [
         _$StemDeadLetterIdField,
+        _$StemDeadLetterNamespaceField,
         _$StemDeadLetterQueueField,
         _$StemDeadLetterEnvelopeField,
         _$StemDeadLetterReasonField,
         _$StemDeadLetterMetaField,
         _$StemDeadLetterDeadAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'envelope': FieldAttributeMetadata(cast: 'json'),
           'meta': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemDeadLetterUntracked,
       codec: _$StemDeadLetterCodec(),
@@ -145,7 +196,7 @@ class StemDeadLetters {
 
   static Query<$StemDeadLetter> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemDeadLetter>(
     column,
@@ -161,6 +212,18 @@ class StemDeadLetters {
   /// {@macro ormed.repository}
   static Repository<$StemDeadLetter> repo([String? connection]) =>
       Model.repository<$StemDeadLetter>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemDeadLetter model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.toMap(model, registry: registry);
 }
 
 class StemDeadLetterModelFactory {
@@ -208,6 +271,10 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemDeadLetterIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemDeadLetterNamespaceField,
+        model.namespace,
+      ),
       'queue': registry.encodeField(_$StemDeadLetterQueueField, model.queue),
       'envelope': registry.encodeField(
         _$StemDeadLetterEnvelopeField,
@@ -227,30 +294,37 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemDeadLetterIdValue =
+    final String stemDeadLetterIdValue =
         registry.decodeField<String>(_$StemDeadLetterIdField, data['id']) ??
         (throw StateError('Field id on StemDeadLetter cannot be null.'));
-    final stemDeadLetterQueueValue =
+    final String stemDeadLetterNamespaceValue =
+        registry.decodeField<String>(
+          _$StemDeadLetterNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError('Field namespace on StemDeadLetter cannot be null.'));
+    final String stemDeadLetterQueueValue =
         registry.decodeField<String>(
           _$StemDeadLetterQueueField,
           data['queue'],
         ) ??
         (throw StateError('Field queue on StemDeadLetter cannot be null.'));
-    final stemDeadLetterEnvelopeValue =
+    final Map<String, Object?> stemDeadLetterEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemDeadLetterEnvelopeField,
           data['envelope'],
         ) ??
         (throw StateError('Field envelope on StemDeadLetter cannot be null.'));
-    final stemDeadLetterReasonValue = registry.decodeField<String?>(
+    final String? stemDeadLetterReasonValue = registry.decodeField<String?>(
       _$StemDeadLetterReasonField,
       data['reason'],
     );
-    final stemDeadLetterMetaValue = registry.decodeField<Map<String, Object?>?>(
-      _$StemDeadLetterMetaField,
-      data['meta'],
-    );
-    final stemDeadLetterDeadAtValue =
+    final Map<String, Object?>? stemDeadLetterMetaValue = registry
+        .decodeField<Map<String, Object?>?>(
+          _$StemDeadLetterMetaField,
+          data['meta'],
+        );
+    final DateTime stemDeadLetterDeadAtValue =
         registry.decodeField<DateTime>(
           _$StemDeadLetterDeadAtField,
           data['dead_at'],
@@ -258,14 +332,16 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
         (throw StateError('Field deadAt on StemDeadLetter cannot be null.'));
     final model = $StemDeadLetter(
       id: stemDeadLetterIdValue,
+      namespace: stemDeadLetterNamespaceValue,
       queue: stemDeadLetterQueueValue,
       envelope: stemDeadLetterEnvelopeValue,
+      deadAt: stemDeadLetterDeadAtValue,
       reason: stemDeadLetterReasonValue,
       meta: stemDeadLetterMetaValue,
-      deadAt: stemDeadLetterDeadAtValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemDeadLetterIdValue,
+      'namespace': stemDeadLetterNamespaceValue,
       'queue': stemDeadLetterQueueValue,
       'envelope': stemDeadLetterEnvelopeValue,
       'reason': stemDeadLetterReasonValue,
@@ -282,6 +358,7 @@ class _$StemDeadLetterCodec extends ModelCodec<$StemDeadLetter> {
 class StemDeadLetterInsertDto implements InsertDto<$StemDeadLetter> {
   const StemDeadLetterInsertDto({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.reason,
@@ -289,6 +366,7 @@ class StemDeadLetterInsertDto implements InsertDto<$StemDeadLetter> {
     this.deadAt,
   });
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final String? reason;
@@ -299,6 +377,7 @@ class StemDeadLetterInsertDto implements InsertDto<$StemDeadLetter> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (reason != null) 'reason': reason,
@@ -311,6 +390,7 @@ class StemDeadLetterInsertDto implements InsertDto<$StemDeadLetter> {
       _StemDeadLetterInsertDtoCopyWithSentinel();
   StemDeadLetterInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? reason = _copyWithSentinel,
@@ -319,6 +399,9 @@ class StemDeadLetterInsertDto implements InsertDto<$StemDeadLetter> {
   }) {
     return StemDeadLetterInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -348,6 +431,7 @@ class _StemDeadLetterInsertDtoCopyWithSentinel {
 class StemDeadLetterUpdateDto implements UpdateDto<$StemDeadLetter> {
   const StemDeadLetterUpdateDto({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.reason,
@@ -355,6 +439,7 @@ class StemDeadLetterUpdateDto implements UpdateDto<$StemDeadLetter> {
     this.deadAt,
   });
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final String? reason;
@@ -365,6 +450,7 @@ class StemDeadLetterUpdateDto implements UpdateDto<$StemDeadLetter> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (reason != null) 'reason': reason,
@@ -377,6 +463,7 @@ class StemDeadLetterUpdateDto implements UpdateDto<$StemDeadLetter> {
       _StemDeadLetterUpdateDtoCopyWithSentinel();
   StemDeadLetterUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? reason = _copyWithSentinel,
@@ -385,6 +472,9 @@ class StemDeadLetterUpdateDto implements UpdateDto<$StemDeadLetter> {
   }) {
     return StemDeadLetterUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -414,6 +504,7 @@ class _StemDeadLetterUpdateDtoCopyWithSentinel {
 class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   const StemDeadLetterPartial({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.reason,
@@ -428,6 +519,7 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   factory StemDeadLetterPartial.fromRow(Map<String, Object?> row) {
     return StemDeadLetterPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       queue: row['queue'] as String?,
       envelope: row['envelope'] as Map<String, Object?>?,
       reason: row['reason'] as String?,
@@ -437,6 +529,7 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   }
 
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final String? reason;
@@ -446,24 +539,29 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   @override
   $StemDeadLetter toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final queueValue = queue;
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    final String? queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final envelopeValue = envelope;
+    final Map<String, Object?>? envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final deadAtValue = deadAt;
+    final DateTime? deadAtValue = deadAt;
     if (deadAtValue == null) {
       throw StateError('Missing required field: deadAt');
     }
     return $StemDeadLetter(
       id: idValue,
+      namespace: namespaceValue,
       queue: queueValue,
       envelope: envelopeValue,
       reason: reason,
@@ -476,6 +574,7 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (reason != null) 'reason': reason,
@@ -488,6 +587,7 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
       _StemDeadLetterPartialCopyWithSentinel();
   StemDeadLetterPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? reason = _copyWithSentinel,
@@ -496,6 +596,9 @@ class StemDeadLetterPartial implements PartialEntity<$StemDeadLetter> {
   }) {
     return StemDeadLetterPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -533,21 +636,24 @@ class $StemDeadLetter extends StemDeadLetter
   /// Internal constructor for [$StemDeadLetter].
   $StemDeadLetter({
     required String id,
+    required String namespace,
     required String queue,
     required Map<String, Object?> envelope,
     required DateTime deadAt,
     String? reason,
     Map<String, Object?>? meta,
-  }) : super.new(
+  }) : super(
          id: id,
+         namespace: namespace,
          queue: queue,
          envelope: envelope,
+         deadAt: deadAt,
          reason: reason,
          meta: meta,
-         deadAt: deadAt,
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'queue': queue,
       'envelope': envelope,
       'reason': reason,
@@ -560,6 +666,7 @@ class $StemDeadLetter extends StemDeadLetter
   factory $StemDeadLetter.fromModel(StemDeadLetter model) {
     return $StemDeadLetter(
       id: model.id,
+      namespace: model.namespace,
       queue: model.queue,
       envelope: model.envelope,
       reason: model.reason,
@@ -570,6 +677,7 @@ class $StemDeadLetter extends StemDeadLetter
 
   $StemDeadLetter copyWith({
     String? id,
+    String? namespace,
     String? queue,
     Map<String, Object?>? envelope,
     String? reason,
@@ -578,6 +686,7 @@ class $StemDeadLetter extends StemDeadLetter
   }) {
     return $StemDeadLetter(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       queue: queue ?? this.queue,
       envelope: envelope ?? this.envelope,
       reason: reason ?? this.reason,
@@ -586,12 +695,29 @@ class $StemDeadLetter extends StemDeadLetter
     );
   }
 
+  /// Builds a tracked model from a column/value map.
+  static $StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemDeadLetterDefinition.toMap(this, registry: registry);
+
   /// Tracked getter for [id].
   @override
   String get id => getAttribute<String>('id') ?? super.id;
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [queue].
   @override
@@ -636,7 +762,53 @@ class $StemDeadLetter extends StemDeadLetter
   }
 }
 
+class _StemDeadLetterCopyWithSentinel {
+  const _StemDeadLetterCopyWithSentinel();
+}
+
 extension StemDeadLetterOrmExtension on StemDeadLetter {
+  static const _StemDeadLetterCopyWithSentinel _copyWithSentinel =
+      _StemDeadLetterCopyWithSentinel();
+  StemDeadLetter copyWith({
+    Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? queue = _copyWithSentinel,
+    Object? envelope = _copyWithSentinel,
+    Object? deadAt = _copyWithSentinel,
+    Object? reason = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+  }) {
+    return StemDeadLetter(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      queue: identical(queue, _copyWithSentinel) ? this.queue : queue as String,
+      envelope: identical(envelope, _copyWithSentinel)
+          ? this.envelope
+          : envelope as Map<String, Object?>,
+      deadAt: identical(deadAt, _copyWithSentinel)
+          ? this.deadAt
+          : deadAt as DateTime,
+      reason: identical(reason, _copyWithSentinel)
+          ? this.reason
+          : reason as String?,
+      meta: identical(meta, _copyWithSentinel)
+          ? this.meta
+          : meta as Map<String, Object?>?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemDeadLetterDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemDeadLetter fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemDeadLetterDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -648,6 +820,23 @@ extension StemDeadLetterOrmExtension on StemDeadLetter {
   $StemDeadLetter toTracked() {
     return $StemDeadLetter.fromModel(this);
   }
+}
+
+extension StemDeadLetterPredicateFields on PredicateBuilder<StemDeadLetter> {
+  PredicateField<StemDeadLetter, String> get id =>
+      PredicateField<StemDeadLetter, String>(this, 'id');
+  PredicateField<StemDeadLetter, String> get namespace =>
+      PredicateField<StemDeadLetter, String>(this, 'namespace');
+  PredicateField<StemDeadLetter, String> get queue =>
+      PredicateField<StemDeadLetter, String>(this, 'queue');
+  PredicateField<StemDeadLetter, Map<String, Object?>> get envelope =>
+      PredicateField<StemDeadLetter, Map<String, Object?>>(this, 'envelope');
+  PredicateField<StemDeadLetter, String?> get reason =>
+      PredicateField<StemDeadLetter, String?>(this, 'reason');
+  PredicateField<StemDeadLetter, Map<String, Object?>?> get meta =>
+      PredicateField<StemDeadLetter, Map<String, Object?>?>(this, 'meta');
+  PredicateField<StemDeadLetter, DateTime> get deadAt =>
+      PredicateField<StemDeadLetter, DateTime>(this, 'deadAt');
 }
 
 void registerStemDeadLetterEventHandlers(EventBus bus) {

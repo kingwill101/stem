@@ -19,6 +19,18 @@ const FieldDefinition _$StemQueueJobIdField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemQueueJobNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemQueueJobQueueField = FieldDefinition(
   name: 'queue',
   columnName: 'queue',
@@ -159,6 +171,10 @@ Map<String, Object?> _encodeStemQueueJobUntracked(
   final m = model as StemQueueJob;
   return <String, Object?>{
     'id': registry.encodeField(_$StemQueueJobIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemQueueJobNamespaceField,
+      m.namespace,
+    ),
     'queue': registry.encodeField(_$StemQueueJobQueueField, m.queue),
     'envelope': registry.encodeField(_$StemQueueJobEnvelopeField, m.envelope),
     'attempt': registry.encodeField(_$StemQueueJobAttemptField, m.attempt),
@@ -185,6 +201,7 @@ final ModelDefinition<$StemQueueJob> _$StemQueueJobDefinition = ModelDefinition(
   tableName: 'stem_queue_jobs',
   fields: const [
     _$StemQueueJobIdField,
+    _$StemQueueJobNamespaceField,
     _$StemQueueJobQueueField,
     _$StemQueueJobEnvelopeField,
     _$StemQueueJobAttemptField,
@@ -340,6 +357,10 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemQueueJobIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemQueueJobNamespaceField,
+        model.namespace,
+      ),
       'queue': registry.encodeField(_$StemQueueJobQueueField, model.queue),
       'envelope': registry.encodeField(
         _$StemQueueJobEnvelopeField,
@@ -391,6 +412,12 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
     final String stemQueueJobIdValue =
         registry.decodeField<String>(_$StemQueueJobIdField, data['id']) ??
         (throw StateError('Field id on StemQueueJob cannot be null.'));
+    final String stemQueueJobNamespaceValue =
+        registry.decodeField<String>(
+          _$StemQueueJobNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError('Field namespace on StemQueueJob cannot be null.'));
     final String stemQueueJobQueueValue =
         registry.decodeField<String>(_$StemQueueJobQueueField, data['queue']) ??
         (throw StateError('Field queue on StemQueueJob cannot be null.'));
@@ -448,6 +475,7 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
         );
     final model = $StemQueueJob(
       id: stemQueueJobIdValue,
+      namespace: stemQueueJobNamespaceValue,
       queue: stemQueueJobQueueValue,
       envelope: stemQueueJobEnvelopeValue,
       attempt: stemQueueJobAttemptValue,
@@ -460,6 +488,7 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
     );
     model._attachOrmRuntimeMetadata({
       'id': stemQueueJobIdValue,
+      'namespace': stemQueueJobNamespaceValue,
       'queue': stemQueueJobQueueValue,
       'envelope': stemQueueJobEnvelopeValue,
       'attempt': stemQueueJobAttemptValue,
@@ -484,6 +513,7 @@ class _$StemQueueJobCodec extends ModelCodec<$StemQueueJob> {
 class StemQueueJobInsertDto implements InsertDto<$StemQueueJob> {
   const StemQueueJobInsertDto({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.attempt,
@@ -495,6 +525,7 @@ class StemQueueJobInsertDto implements InsertDto<$StemQueueJob> {
     this.lockedBy,
   });
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final int? attempt;
@@ -509,6 +540,7 @@ class StemQueueJobInsertDto implements InsertDto<$StemQueueJob> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (attempt != null) 'attempt': attempt,
@@ -525,6 +557,7 @@ class StemQueueJobInsertDto implements InsertDto<$StemQueueJob> {
       _StemQueueJobInsertDtoCopyWithSentinel();
   StemQueueJobInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
@@ -537,6 +570,9 @@ class StemQueueJobInsertDto implements InsertDto<$StemQueueJob> {
   }) {
     return StemQueueJobInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -578,6 +614,7 @@ class _StemQueueJobInsertDtoCopyWithSentinel {
 class StemQueueJobUpdateDto implements UpdateDto<$StemQueueJob> {
   const StemQueueJobUpdateDto({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.attempt,
@@ -589,6 +626,7 @@ class StemQueueJobUpdateDto implements UpdateDto<$StemQueueJob> {
     this.lockedBy,
   });
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final int? attempt;
@@ -603,6 +641,7 @@ class StemQueueJobUpdateDto implements UpdateDto<$StemQueueJob> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (attempt != null) 'attempt': attempt,
@@ -619,6 +658,7 @@ class StemQueueJobUpdateDto implements UpdateDto<$StemQueueJob> {
       _StemQueueJobUpdateDtoCopyWithSentinel();
   StemQueueJobUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
@@ -631,6 +671,9 @@ class StemQueueJobUpdateDto implements UpdateDto<$StemQueueJob> {
   }) {
     return StemQueueJobUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -672,6 +715,7 @@ class _StemQueueJobUpdateDtoCopyWithSentinel {
 class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   const StemQueueJobPartial({
     this.id,
+    this.namespace,
     this.queue,
     this.envelope,
     this.attempt,
@@ -690,6 +734,7 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   factory StemQueueJobPartial.fromRow(Map<String, Object?> row) {
     return StemQueueJobPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       queue: row['queue'] as String?,
       envelope: row['envelope'] as Map<String, Object?>?,
       attempt: row['attempt'] as int?,
@@ -703,6 +748,7 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   }
 
   final String? id;
+  final String? namespace;
   final String? queue;
   final Map<String, Object?>? envelope;
   final int? attempt;
@@ -719,6 +765,10 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
     final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
+    }
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
     }
     final String? queueValue = queue;
     if (queueValue == null) {
@@ -742,6 +792,7 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
     }
     return $StemQueueJob(
       id: idValue,
+      namespace: namespaceValue,
       queue: queueValue,
       envelope: envelopeValue,
       attempt: attemptValue,
@@ -758,6 +809,7 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (queue != null) 'queue': queue,
       if (envelope != null) 'envelope': envelope,
       if (attempt != null) 'attempt': attempt,
@@ -774,6 +826,7 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
       _StemQueueJobPartialCopyWithSentinel();
   StemQueueJobPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
@@ -786,6 +839,9 @@ class StemQueueJobPartial implements PartialEntity<$StemQueueJob> {
   }) {
     return StemQueueJobPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       queue: identical(queue, _copyWithSentinel)
           ? this.queue
           : queue as String?,
@@ -835,6 +891,7 @@ class $StemQueueJob extends StemQueueJob
   /// Internal constructor for [$StemQueueJob].
   $StemQueueJob({
     required String id,
+    required String namespace,
     required String queue,
     required Map<String, Object?> envelope,
     required int attempt,
@@ -846,6 +903,7 @@ class $StemQueueJob extends StemQueueJob
     String? lockedBy,
   }) : super(
          id: id,
+         namespace: namespace,
          queue: queue,
          envelope: envelope,
          attempt: attempt,
@@ -858,6 +916,7 @@ class $StemQueueJob extends StemQueueJob
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'queue': queue,
       'envelope': envelope,
       'attempt': attempt,
@@ -874,6 +933,7 @@ class $StemQueueJob extends StemQueueJob
   factory $StemQueueJob.fromModel(StemQueueJob model) {
     return $StemQueueJob(
       id: model.id,
+      namespace: model.namespace,
       queue: model.queue,
       envelope: model.envelope,
       attempt: model.attempt,
@@ -888,6 +948,7 @@ class $StemQueueJob extends StemQueueJob
 
   $StemQueueJob copyWith({
     String? id,
+    String? namespace,
     String? queue,
     Map<String, Object?>? envelope,
     int? attempt,
@@ -900,6 +961,7 @@ class $StemQueueJob extends StemQueueJob
   }) {
     return $StemQueueJob(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       queue: queue ?? this.queue,
       envelope: envelope ?? this.envelope,
       attempt: attempt ?? this.attempt,
@@ -928,6 +990,13 @@ class $StemQueueJob extends StemQueueJob
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [queue].
   @override
@@ -1011,6 +1080,7 @@ extension StemQueueJobOrmExtension on StemQueueJob {
       _StemQueueJobCopyWithSentinel();
   StemQueueJob copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
@@ -1023,6 +1093,9 @@ extension StemQueueJobOrmExtension on StemQueueJob {
   }) {
     return StemQueueJob(
       id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
       queue: identical(queue, _copyWithSentinel) ? this.queue : queue as String,
       envelope: identical(envelope, _copyWithSentinel)
           ? this.envelope
@@ -1077,6 +1150,8 @@ extension StemQueueJobOrmExtension on StemQueueJob {
 extension StemQueueJobPredicateFields on PredicateBuilder<StemQueueJob> {
   PredicateField<StemQueueJob, String> get id =>
       PredicateField<StemQueueJob, String>(this, 'id');
+  PredicateField<StemQueueJob, String> get namespace =>
+      PredicateField<StemQueueJob, String>(this, 'namespace');
   PredicateField<StemQueueJob, String> get queue =>
       PredicateField<StemQueueJob, String>(this, 'queue');
   PredicateField<StemQueueJob, Map<String, Object?>> get envelope =>

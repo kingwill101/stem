@@ -10,6 +10,7 @@ class StemGroup extends Model<StemGroup> with TimestampsTZ {
   /// Creates a task group record.
   const StemGroup({
     required this.id,
+    required this.namespace,
     required this.expected,
     required this.meta,
     required this.expiresAt,
@@ -19,6 +20,10 @@ class StemGroup extends Model<StemGroup> with TimestampsTZ {
   /// Group identifier.
   @OrmField(isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the group.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Expected number of tasks in the group.
   final int expected;

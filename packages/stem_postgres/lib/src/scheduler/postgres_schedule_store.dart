@@ -9,9 +9,10 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 /// PostgreSQL-backed implementation of [ScheduleStore] using ormed ORM.
 class PostgresScheduleStore implements ScheduleStore {
   /// Creates a schedule store backed by PostgreSQL.
-  PostgresScheduleStore._(this._connections);
+  PostgresScheduleStore._(this._connections, {required this.namespace});
 
   final PostgresConnections _connections;
+  final String namespace;
 
   /// Connects to a PostgreSQL database and ensures schedule tables exist.
   static Future<PostgresScheduleStore> connect(
@@ -21,8 +22,13 @@ class PostgresScheduleStore implements ScheduleStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
-    return PostgresScheduleStore._(connections);
+    return PostgresScheduleStore._(
+      connections,
+      namespace: resolvedNamespace,
+    );
   }
 
   /// Closes the schedule store and releases database resources.
@@ -37,6 +43,7 @@ class PostgresScheduleStore implements ScheduleStore {
     // to avoid immediate reacquisition.
     final dueEntries = await ctx
         .query<$StemScheduleEntry>()
+        .whereEquals('namespace', namespace)
         .where((PredicateBuilder<$StemScheduleEntry> q) {
           q
             ..where('enabled', true, PredicateOperator.equals)
@@ -57,6 +64,7 @@ class PostgresScheduleStore implements ScheduleStore {
         await tx.repository<$StemScheduleEntry>().update(
           $StemScheduleEntry(
             id: entry.id,
+            namespace: entry.namespace,
             taskName: entry.taskName,
             queue: entry.queue,
             spec: entry.spec,
@@ -94,10 +102,12 @@ class PostgresScheduleStore implements ScheduleStore {
     final existing = await ctx
         .query<$StemScheduleEntry>()
         .whereEquals('id', entry.id)
+        .whereEquals('namespace', namespace)
         .first();
 
     final model = $StemScheduleEntry(
       id: entry.id,
+      namespace: namespace,
       taskName: entry.taskName,
       queue: entry.queue,
       spec: entry.spec.toString(),
@@ -134,6 +144,7 @@ class PostgresScheduleStore implements ScheduleStore {
     final entry = await ctx
         .query<$StemScheduleEntry>()
         .whereEquals('id', id)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (entry != null) {
@@ -145,6 +156,7 @@ class PostgresScheduleStore implements ScheduleStore {
   Future<List<ScheduleEntry>> list({int? limit}) async {
     final ctx = _connections.context;
     var query = ctx.query<$StemScheduleEntry>();
+    query = query.whereEquals('namespace', namespace);
 
     if (limit != null) {
       query = query.limit(limit);
@@ -160,6 +172,7 @@ class PostgresScheduleStore implements ScheduleStore {
     final entry = await ctx
         .query<$StemScheduleEntry>()
         .whereEquals('id', id)
+        .whereEquals('namespace', namespace)
         .first();
 
     return entry == null ? null : _toDomain(entry);
@@ -181,12 +194,14 @@ class PostgresScheduleStore implements ScheduleStore {
       final entry = await ctx
           .query<$StemScheduleEntry>()
           .whereEquals('id', id)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (entry != null) {
         await ctx.repository<$StemScheduleEntry>().update(
           $StemScheduleEntry(
             id: entry.id,
+            namespace: entry.namespace,
             taskName: entry.taskName,
             queue: entry.queue,
             spec: entry.spec,

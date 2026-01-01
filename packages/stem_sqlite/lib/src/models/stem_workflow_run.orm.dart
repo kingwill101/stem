@@ -19,6 +19,18 @@ const FieldDefinition _$StemWorkflowRunIdField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemWorkflowRunNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemWorkflowRunWorkflowField = FieldDefinition(
   name: 'workflow',
   columnName: 'workflow',
@@ -171,6 +183,10 @@ Map<String, Object?> _encodeStemWorkflowRunUntracked(
   final m = model as StemWorkflowRun;
   return <String, Object?>{
     'id': registry.encodeField(_$StemWorkflowRunIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemWorkflowRunNamespaceField,
+      m.namespace,
+    ),
     'workflow': registry.encodeField(
       _$StemWorkflowRunWorkflowField,
       m.workflow,
@@ -219,6 +235,7 @@ final ModelDefinition<$StemWorkflowRun> _$StemWorkflowRunDefinition =
       tableName: 'wf_runs',
       fields: const [
         _$StemWorkflowRunIdField,
+        _$StemWorkflowRunNamespaceField,
         _$StemWorkflowRunWorkflowField,
         _$StemWorkflowRunStatusField,
         _$StemWorkflowRunParamsField,
@@ -374,6 +391,10 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemWorkflowRunIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemWorkflowRunNamespaceField,
+        model.namespace,
+      ),
       'workflow': registry.encodeField(
         _$StemWorkflowRunWorkflowField,
         model.workflow,
@@ -433,6 +454,14 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
     final String stemWorkflowRunIdValue =
         registry.decodeField<String>(_$StemWorkflowRunIdField, data['id']) ??
         (throw StateError('Field id on StemWorkflowRun cannot be null.'));
+    final String stemWorkflowRunNamespaceValue =
+        registry.decodeField<String>(
+          _$StemWorkflowRunNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemWorkflowRun cannot be null.',
+        ));
     final String stemWorkflowRunWorkflowValue =
         registry.decodeField<String>(
           _$StemWorkflowRunWorkflowField,
@@ -501,6 +530,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
         ));
     final model = $StemWorkflowRun(
       id: stemWorkflowRunIdValue,
+      namespace: stemWorkflowRunNamespaceValue,
       workflow: stemWorkflowRunWorkflowValue,
       status: stemWorkflowRunStatusValue,
       params: stemWorkflowRunParamsValue,
@@ -516,6 +546,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
     );
     model._attachOrmRuntimeMetadata({
       'id': stemWorkflowRunIdValue,
+      'namespace': stemWorkflowRunNamespaceValue,
       'workflow': stemWorkflowRunWorkflowValue,
       'status': stemWorkflowRunStatusValue,
       'params': stemWorkflowRunParamsValue,
@@ -539,6 +570,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
 class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
   const StemWorkflowRunInsertDto({
     this.id,
+    this.namespace,
     this.workflow,
     this.status,
     this.params,
@@ -553,6 +585,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
     this.updatedAt,
   });
   final String? id;
+  final String? namespace;
   final String? workflow;
   final String? status;
   final String? params;
@@ -570,6 +603,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (workflow != null) 'workflow': workflow,
       if (status != null) 'status': status,
       if (params != null) 'params': params,
@@ -589,6 +623,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
       _StemWorkflowRunInsertDtoCopyWithSentinel();
   StemWorkflowRunInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? workflow = _copyWithSentinel,
     Object? status = _copyWithSentinel,
     Object? params = _copyWithSentinel,
@@ -604,6 +639,9 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
   }) {
     return StemWorkflowRunInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       workflow: identical(workflow, _copyWithSentinel)
           ? this.workflow
           : workflow as String?,
@@ -654,6 +692,7 @@ class _StemWorkflowRunInsertDtoCopyWithSentinel {
 class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
   const StemWorkflowRunUpdateDto({
     this.id,
+    this.namespace,
     this.workflow,
     this.status,
     this.params,
@@ -668,6 +707,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
     this.updatedAt,
   });
   final String? id;
+  final String? namespace;
   final String? workflow;
   final String? status;
   final String? params;
@@ -685,6 +725,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (workflow != null) 'workflow': workflow,
       if (status != null) 'status': status,
       if (params != null) 'params': params,
@@ -704,6 +745,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
       _StemWorkflowRunUpdateDtoCopyWithSentinel();
   StemWorkflowRunUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? workflow = _copyWithSentinel,
     Object? status = _copyWithSentinel,
     Object? params = _copyWithSentinel,
@@ -719,6 +761,9 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
   }) {
     return StemWorkflowRunUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       workflow: identical(workflow, _copyWithSentinel)
           ? this.workflow
           : workflow as String?,
@@ -769,6 +814,7 @@ class _StemWorkflowRunUpdateDtoCopyWithSentinel {
 class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   const StemWorkflowRunPartial({
     this.id,
+    this.namespace,
     this.workflow,
     this.status,
     this.params,
@@ -790,6 +836,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   factory StemWorkflowRunPartial.fromRow(Map<String, Object?> row) {
     return StemWorkflowRunPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       workflow: row['workflow'] as String?,
       status: row['status'] as String?,
       params: row['params'] as String?,
@@ -806,6 +853,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   }
 
   final String? id;
+  final String? namespace;
   final String? workflow;
   final String? status;
   final String? params;
@@ -825,6 +873,10 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
     final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
+    }
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
     }
     final String? workflowValue = workflow;
     if (workflowValue == null) {
@@ -848,6 +900,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
     }
     return $StemWorkflowRun(
       id: idValue,
+      namespace: namespaceValue,
       workflow: workflowValue,
       status: statusValue,
       params: paramsValue,
@@ -867,6 +920,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (workflow != null) 'workflow': workflow,
       if (status != null) 'status': status,
       if (params != null) 'params': params,
@@ -886,6 +940,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
       _StemWorkflowRunPartialCopyWithSentinel();
   StemWorkflowRunPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? workflow = _copyWithSentinel,
     Object? status = _copyWithSentinel,
     Object? params = _copyWithSentinel,
@@ -901,6 +956,9 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   }) {
     return StemWorkflowRunPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       workflow: identical(workflow, _copyWithSentinel)
           ? this.workflow
           : workflow as String?,
@@ -959,6 +1017,7 @@ class $StemWorkflowRun extends StemWorkflowRun
   /// Internal constructor for [$StemWorkflowRun].
   $StemWorkflowRun({
     required String id,
+    required String namespace,
     required String workflow,
     required String status,
     required String params,
@@ -973,6 +1032,7 @@ class $StemWorkflowRun extends StemWorkflowRun
     String? cancellationData,
   }) : super(
          id: id,
+         namespace: namespace,
          workflow: workflow,
          status: status,
          params: params,
@@ -988,6 +1048,7 @@ class $StemWorkflowRun extends StemWorkflowRun
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'workflow': workflow,
       'status': status,
       'params': params,
@@ -1007,6 +1068,7 @@ class $StemWorkflowRun extends StemWorkflowRun
   factory $StemWorkflowRun.fromModel(StemWorkflowRun model) {
     return $StemWorkflowRun(
       id: model.id,
+      namespace: model.namespace,
       workflow: model.workflow,
       status: model.status,
       params: model.params,
@@ -1024,6 +1086,7 @@ class $StemWorkflowRun extends StemWorkflowRun
 
   $StemWorkflowRun copyWith({
     String? id,
+    String? namespace,
     String? workflow,
     String? status,
     String? params,
@@ -1039,6 +1102,7 @@ class $StemWorkflowRun extends StemWorkflowRun
   }) {
     return $StemWorkflowRun(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       workflow: workflow ?? this.workflow,
       status: status ?? this.status,
       params: params ?? this.params,
@@ -1070,6 +1134,13 @@ class $StemWorkflowRun extends StemWorkflowRun
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [workflow].
   @override
@@ -1180,6 +1251,7 @@ extension StemWorkflowRunOrmExtension on StemWorkflowRun {
       _StemWorkflowRunCopyWithSentinel();
   StemWorkflowRun copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? workflow = _copyWithSentinel,
     Object? status = _copyWithSentinel,
     Object? params = _copyWithSentinel,
@@ -1195,6 +1267,9 @@ extension StemWorkflowRunOrmExtension on StemWorkflowRun {
   }) {
     return StemWorkflowRun(
       id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
       workflow: identical(workflow, _copyWithSentinel)
           ? this.workflow
           : workflow as String,
@@ -1260,6 +1335,8 @@ extension StemWorkflowRunOrmExtension on StemWorkflowRun {
 extension StemWorkflowRunPredicateFields on PredicateBuilder<StemWorkflowRun> {
   PredicateField<StemWorkflowRun, String> get id =>
       PredicateField<StemWorkflowRun, String>(this, 'id');
+  PredicateField<StemWorkflowRun, String> get namespace =>
+      PredicateField<StemWorkflowRun, String>(this, 'namespace');
   PredicateField<StemWorkflowRun, String> get workflow =>
       PredicateField<StemWorkflowRun, String>(this, 'workflow');
   PredicateField<StemWorkflowRun, String> get status =>

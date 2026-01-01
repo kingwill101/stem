@@ -14,6 +14,21 @@ const FieldDefinition _$StemBroadcastMessageIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
+const FieldDefinition _$StemBroadcastMessageNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageChannelField = FieldDefinition(
@@ -21,7 +36,11 @@ const FieldDefinition _$StemBroadcastMessageChannelField = FieldDefinition(
   columnName: 'channel',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageEnvelopeField = FieldDefinition(
@@ -29,7 +48,11 @@ const FieldDefinition _$StemBroadcastMessageEnvelopeField = FieldDefinition(
   columnName: 'envelope',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +61,11 @@ const FieldDefinition _$StemBroadcastMessageDeliveryField = FieldDefinition(
   columnName: 'delivery',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageCreatedAtField = FieldDefinition(
@@ -46,7 +73,11 @@ const FieldDefinition _$StemBroadcastMessageCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemBroadcastMessageUpdatedAtField = FieldDefinition(
@@ -54,7 +85,11 @@ const FieldDefinition _$StemBroadcastMessageUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemBroadcastMessageUntracked(
@@ -64,6 +99,10 @@ Map<String, Object?> _encodeStemBroadcastMessageUntracked(
   final m = model as StemBroadcastMessage;
   return <String, Object?>{
     'id': registry.encodeField(_$StemBroadcastMessageIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemBroadcastMessageNamespaceField,
+      m.namespace,
+    ),
     'channel': registry.encodeField(
       _$StemBroadcastMessageChannelField,
       m.channel,
@@ -79,23 +118,35 @@ Map<String, Object?> _encodeStemBroadcastMessageUntracked(
   };
 }
 
-const ModelDefinition<$StemBroadcastMessage> _$StemBroadcastMessageDefinition =
+final ModelDefinition<$StemBroadcastMessage> _$StemBroadcastMessageDefinition =
     ModelDefinition(
       modelName: 'StemBroadcastMessage',
       tableName: 'stem_broadcast_messages',
-      fields: [
+      fields: const [
         _$StemBroadcastMessageIdField,
+        _$StemBroadcastMessageNamespaceField,
         _$StemBroadcastMessageChannelField,
         _$StemBroadcastMessageEnvelopeField,
         _$StemBroadcastMessageDeliveryField,
         _$StemBroadcastMessageCreatedAtField,
         _$StemBroadcastMessageUpdatedAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
       metadata: ModelAttributesMetadata(
-        fieldOverrides: {
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        fieldOverrides: const {
           'envelope': FieldAttributeMetadata(cast: 'json'),
         },
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
       ),
       untrackedToMap: _encodeStemBroadcastMessageUntracked,
       codec: _$StemBroadcastMessageCodec(),
@@ -156,7 +207,7 @@ class StemBroadcastMessages {
 
   static Query<$StemBroadcastMessage> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemBroadcastMessage>(
     column,
@@ -172,6 +223,18 @@ class StemBroadcastMessages {
   /// {@macro ormed.repository}
   static Repository<$StemBroadcastMessage> repo([String? connection]) =>
       Model.repository<$StemBroadcastMessage>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemBroadcastMessage fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemBroadcastMessageDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemBroadcastMessage model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemBroadcastMessageDefinition.toMap(model, registry: registry);
 }
 
 class StemBroadcastMessageModelFactory {
@@ -219,6 +282,10 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemBroadcastMessageIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemBroadcastMessageNamespaceField,
+        model.namespace,
+      ),
       'channel': registry.encodeField(
         _$StemBroadcastMessageChannelField,
         model.channel,
@@ -249,13 +316,21 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemBroadcastMessageIdValue =
+    final String stemBroadcastMessageIdValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageIdField,
           data['id'],
         ) ??
         (throw StateError('Field id on StemBroadcastMessage cannot be null.'));
-    final stemBroadcastMessageChannelValue =
+    final String stemBroadcastMessageNamespaceValue =
+        registry.decodeField<String>(
+          _$StemBroadcastMessageNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemBroadcastMessage cannot be null.',
+        ));
+    final String stemBroadcastMessageChannelValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageChannelField,
           data['channel'],
@@ -263,7 +338,7 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field channel on StemBroadcastMessage cannot be null.',
         ));
-    final stemBroadcastMessageEnvelopeValue =
+    final Map<String, Object?> stemBroadcastMessageEnvelopeValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemBroadcastMessageEnvelopeField,
           data['envelope'],
@@ -271,7 +346,7 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field envelope on StemBroadcastMessage cannot be null.',
         ));
-    final stemBroadcastMessageDeliveryValue =
+    final String stemBroadcastMessageDeliveryValue =
         registry.decodeField<String>(
           _$StemBroadcastMessageDeliveryField,
           data['delivery'],
@@ -279,22 +354,26 @@ class _$StemBroadcastMessageCodec extends ModelCodec<$StemBroadcastMessage> {
         (throw StateError(
           'Field delivery on StemBroadcastMessage cannot be null.',
         ));
-    final stemBroadcastMessageCreatedAtValue = registry.decodeField<DateTime?>(
-      _$StemBroadcastMessageCreatedAtField,
-      data['created_at'],
-    );
-    final stemBroadcastMessageUpdatedAtValue = registry.decodeField<DateTime?>(
-      _$StemBroadcastMessageUpdatedAtField,
-      data['updated_at'],
-    );
+    final DateTime? stemBroadcastMessageCreatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemBroadcastMessageCreatedAtField,
+          data['created_at'],
+        );
+    final DateTime? stemBroadcastMessageUpdatedAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemBroadcastMessageUpdatedAtField,
+          data['updated_at'],
+        );
     final model = $StemBroadcastMessage(
       id: stemBroadcastMessageIdValue,
+      namespace: stemBroadcastMessageNamespaceValue,
       channel: stemBroadcastMessageChannelValue,
       envelope: stemBroadcastMessageEnvelopeValue,
       delivery: stemBroadcastMessageDeliveryValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemBroadcastMessageIdValue,
+      'namespace': stemBroadcastMessageNamespaceValue,
       'channel': stemBroadcastMessageChannelValue,
       'envelope': stemBroadcastMessageEnvelopeValue,
       'delivery': stemBroadcastMessageDeliveryValue,
@@ -314,11 +393,13 @@ class StemBroadcastMessageInsertDto
     implements InsertDto<$StemBroadcastMessage> {
   const StemBroadcastMessageInsertDto({
     this.id,
+    this.namespace,
     this.channel,
     this.envelope,
     this.delivery,
   });
   final String? id;
+  final String? namespace;
   final String? channel;
   final Map<String, Object?>? envelope;
   final String? delivery;
@@ -327,6 +408,7 @@ class StemBroadcastMessageInsertDto
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (channel != null) 'channel': channel,
       if (envelope != null) 'envelope': envelope,
       if (delivery != null) 'delivery': delivery,
@@ -337,12 +419,16 @@ class StemBroadcastMessageInsertDto
   _copyWithSentinel = _StemBroadcastMessageInsertDtoCopyWithSentinel();
   StemBroadcastMessageInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? channel = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? delivery = _copyWithSentinel,
   }) {
     return StemBroadcastMessageInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       channel: identical(channel, _copyWithSentinel)
           ? this.channel
           : channel as String?,
@@ -367,11 +453,13 @@ class StemBroadcastMessageUpdateDto
     implements UpdateDto<$StemBroadcastMessage> {
   const StemBroadcastMessageUpdateDto({
     this.id,
+    this.namespace,
     this.channel,
     this.envelope,
     this.delivery,
   });
   final String? id;
+  final String? namespace;
   final String? channel;
   final Map<String, Object?>? envelope;
   final String? delivery;
@@ -380,6 +468,7 @@ class StemBroadcastMessageUpdateDto
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (channel != null) 'channel': channel,
       if (envelope != null) 'envelope': envelope,
       if (delivery != null) 'delivery': delivery,
@@ -390,12 +479,16 @@ class StemBroadcastMessageUpdateDto
   _copyWithSentinel = _StemBroadcastMessageUpdateDtoCopyWithSentinel();
   StemBroadcastMessageUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? channel = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? delivery = _copyWithSentinel,
   }) {
     return StemBroadcastMessageUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       channel: identical(channel, _copyWithSentinel)
           ? this.channel
           : channel as String?,
@@ -420,6 +513,7 @@ class StemBroadcastMessagePartial
     implements PartialEntity<$StemBroadcastMessage> {
   const StemBroadcastMessagePartial({
     this.id,
+    this.namespace,
     this.channel,
     this.envelope,
     this.delivery,
@@ -432,6 +526,7 @@ class StemBroadcastMessagePartial
   factory StemBroadcastMessagePartial.fromRow(Map<String, Object?> row) {
     return StemBroadcastMessagePartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       channel: row['channel'] as String?,
       envelope: row['envelope'] as Map<String, Object?>?,
       delivery: row['delivery'] as String?,
@@ -439,6 +534,7 @@ class StemBroadcastMessagePartial
   }
 
   final String? id;
+  final String? namespace;
   final String? channel;
   final Map<String, Object?>? envelope;
   final String? delivery;
@@ -446,24 +542,29 @@ class StemBroadcastMessagePartial
   @override
   $StemBroadcastMessage toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final channelValue = channel;
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    final String? channelValue = channel;
     if (channelValue == null) {
       throw StateError('Missing required field: channel');
     }
-    final envelopeValue = envelope;
+    final Map<String, Object?>? envelopeValue = envelope;
     if (envelopeValue == null) {
       throw StateError('Missing required field: envelope');
     }
-    final deliveryValue = delivery;
+    final String? deliveryValue = delivery;
     if (deliveryValue == null) {
       throw StateError('Missing required field: delivery');
     }
     return $StemBroadcastMessage(
       id: idValue,
+      namespace: namespaceValue,
       channel: channelValue,
       envelope: envelopeValue,
       delivery: deliveryValue,
@@ -474,6 +575,7 @@ class StemBroadcastMessagePartial
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (channel != null) 'channel': channel,
       if (envelope != null) 'envelope': envelope,
       if (delivery != null) 'delivery': delivery,
@@ -484,12 +586,16 @@ class StemBroadcastMessagePartial
       _StemBroadcastMessagePartialCopyWithSentinel();
   StemBroadcastMessagePartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? channel = _copyWithSentinel,
     Object? envelope = _copyWithSentinel,
     Object? delivery = _copyWithSentinel,
   }) {
     return StemBroadcastMessagePartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       channel: identical(channel, _copyWithSentinel)
           ? this.channel
           : channel as String?,
@@ -521,17 +627,20 @@ class $StemBroadcastMessage extends StemBroadcastMessage
   /// Internal constructor for [$StemBroadcastMessage].
   $StemBroadcastMessage({
     required String id,
+    required String namespace,
     required String channel,
     required Map<String, Object?> envelope,
     required String delivery,
-  }) : super.new(
+  }) : super(
          id: id,
+         namespace: namespace,
          channel: channel,
          envelope: envelope,
          delivery: delivery,
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'channel': channel,
       'envelope': envelope,
       'delivery': delivery,
@@ -542,6 +651,7 @@ class $StemBroadcastMessage extends StemBroadcastMessage
   factory $StemBroadcastMessage.fromModel(StemBroadcastMessage model) {
     return $StemBroadcastMessage(
       id: model.id,
+      namespace: model.namespace,
       channel: model.channel,
       envelope: model.envelope,
       delivery: model.delivery,
@@ -550,17 +660,29 @@ class $StemBroadcastMessage extends StemBroadcastMessage
 
   $StemBroadcastMessage copyWith({
     String? id,
+    String? namespace,
     String? channel,
     Map<String, Object?>? envelope,
     String? delivery,
   }) {
     return $StemBroadcastMessage(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       channel: channel ?? this.channel,
       envelope: envelope ?? this.envelope,
       delivery: delivery ?? this.delivery,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemBroadcastMessage fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemBroadcastMessageDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemBroadcastMessageDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [id].
   @override
@@ -568,6 +690,13 @@ class $StemBroadcastMessage extends StemBroadcastMessage
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [channel].
   @override
@@ -597,7 +726,47 @@ class $StemBroadcastMessage extends StemBroadcastMessage
   }
 }
 
+class _StemBroadcastMessageCopyWithSentinel {
+  const _StemBroadcastMessageCopyWithSentinel();
+}
+
 extension StemBroadcastMessageOrmExtension on StemBroadcastMessage {
+  static const _StemBroadcastMessageCopyWithSentinel _copyWithSentinel =
+      _StemBroadcastMessageCopyWithSentinel();
+  StemBroadcastMessage copyWith({
+    Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? channel = _copyWithSentinel,
+    Object? envelope = _copyWithSentinel,
+    Object? delivery = _copyWithSentinel,
+  }) {
+    return StemBroadcastMessage(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      channel: identical(channel, _copyWithSentinel)
+          ? this.channel
+          : channel as String,
+      envelope: identical(envelope, _copyWithSentinel)
+          ? this.envelope
+          : envelope as Map<String, Object?>,
+      delivery: identical(delivery, _copyWithSentinel)
+          ? this.delivery
+          : delivery as String,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemBroadcastMessageDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemBroadcastMessage fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemBroadcastMessageDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -609,6 +778,23 @@ extension StemBroadcastMessageOrmExtension on StemBroadcastMessage {
   $StemBroadcastMessage toTracked() {
     return $StemBroadcastMessage.fromModel(this);
   }
+}
+
+extension StemBroadcastMessagePredicateFields
+    on PredicateBuilder<StemBroadcastMessage> {
+  PredicateField<StemBroadcastMessage, String> get id =>
+      PredicateField<StemBroadcastMessage, String>(this, 'id');
+  PredicateField<StemBroadcastMessage, String> get namespace =>
+      PredicateField<StemBroadcastMessage, String>(this, 'namespace');
+  PredicateField<StemBroadcastMessage, String> get channel =>
+      PredicateField<StemBroadcastMessage, String>(this, 'channel');
+  PredicateField<StemBroadcastMessage, Map<String, Object?>> get envelope =>
+      PredicateField<StemBroadcastMessage, Map<String, Object?>>(
+        this,
+        'envelope',
+      );
+  PredicateField<StemBroadcastMessage, String> get delivery =>
+      PredicateField<StemBroadcastMessage, String>(this, 'delivery');
 }
 
 void registerStemBroadcastMessageEventHandlers(EventBus bus) {

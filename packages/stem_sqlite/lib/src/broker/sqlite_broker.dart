@@ -12,6 +12,7 @@ import 'package:stem_sqlite/src/models/models.dart';
 class SqliteBroker implements Broker {
   SqliteBroker._(
     this._connections, {
+    required this.namespace,
     required this.defaultVisibilityTimeout,
     required this.pollInterval,
     required this.sweeperInterval,
@@ -23,14 +24,18 @@ class SqliteBroker implements Broker {
   /// Opens a broker backed by the provided SQLite [file].
   static Future<SqliteBroker> open(
     File file, {
+    String namespace = 'stem',
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration pollInterval = const Duration(milliseconds: 250),
     Duration sweeperInterval = const Duration(seconds: 10),
     Duration deadLetterRetention = const Duration(days: 7),
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await SqliteConnections.open(file);
     return SqliteBroker._(
       connections,
+      namespace: resolvedNamespace,
       defaultVisibilityTimeout: defaultVisibilityTimeout,
       pollInterval: pollInterval,
       sweeperInterval: sweeperInterval,
@@ -40,6 +45,9 @@ class SqliteBroker implements Broker {
 
   final SqliteConnections _connections;
   final QueryContext _context;
+
+  /// Namespace used to scope broker data.
+  final String namespace;
 
   /// Default visibility timeout applied to deliveries.
   final Duration defaultVisibilityTimeout;
@@ -151,7 +159,11 @@ class SqliteBroker implements Broker {
   @override
   Future<void> ack(Delivery delivery) async {
     final jobId = _parseReceipt(delivery.receipt);
-    await _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .whereEquals('namespace', namespace)
+        .delete();
   }
 
   @override
@@ -162,14 +174,18 @@ class SqliteBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
-    await _context.query<StemQueueJob>().whereEquals('id', jobId).update({
-      'lockedAt': null,
-      'lockedUntil': null,
-      'lockedBy': null,
-      'attempt': delivery.envelope.attempt + 1,
-      'notBefore': null,
-      'updatedAt': now,
-    });
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .whereEquals('namespace', namespace)
+        .update({
+          'lockedAt': null,
+          'lockedUntil': null,
+          'lockedBy': null,
+          'attempt': delivery.envelope.attempt + 1,
+          'notBefore': null,
+          'updatedAt': now,
+        });
   }
 
   @override
@@ -184,12 +200,18 @@ class SqliteBroker implements Broker {
     final row = await _context
         .query<StemQueueJob>()
         .whereEquals('id', jobId)
+        .whereEquals('namespace', namespace)
         .firstOrNull();
-    await _context.query<StemQueueJob>().whereEquals('id', jobId).delete();
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('id', jobId)
+        .whereEquals('namespace', namespace)
+        .delete();
     if (row != null) {
       await _context.repository<StemDeadLetter>().insert(
         StemDeadLetterInsertDto(
           id: row.id,
+          namespace: namespace,
           queue: row.queue,
           envelope: row.envelope,
           reason: reason,
@@ -206,13 +228,17 @@ class SqliteBroker implements Broker {
     final now = DateTime.now();
     await _context.repository<StemQueueJob>().update(
       StemQueueJobUpdateDto(lockedUntil: now.add(by)),
-      where: StemQueueJobPartial(id: jobId),
+      where: StemQueueJobPartial(id: jobId, namespace: namespace),
     );
   }
 
   @override
   Future<void> purge(String queue) async {
-    await _context.query<StemQueueJob>().whereEquals('queue', queue).delete();
+    await _context
+        .query<StemQueueJob>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace)
+        .delete();
   }
 
   @override
@@ -221,6 +247,7 @@ class SqliteBroker implements Broker {
     return _context
         .query<StemQueueJob>()
         .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace)
         .where((PredicateBuilder<StemQueueJob> query) {
           query
             ..whereNull('notBefore')
@@ -240,6 +267,7 @@ class SqliteBroker implements Broker {
     return _context
         .query<StemQueueJob>()
         .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace)
         .whereNotNull('lockedUntil')
         .where('lockedUntil', now, PredicateOperator.greaterThan)
         .count();
@@ -255,6 +283,7 @@ class SqliteBroker implements Broker {
     final entries = await _context
         .query<StemDeadLetter>()
         .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace)
         .orderBy('deadAt', descending: true)
         .limit(limit)
         .offset(offset)
@@ -270,6 +299,7 @@ class SqliteBroker implements Broker {
         .query<StemDeadLetter>()
         .whereEquals('queue', queue)
         .whereEquals('id', id)
+        .whereEquals('namespace', namespace)
         .firstOrNull();
     return row == null ? null : _deadLetterFromRow(row);
   }
@@ -283,7 +313,10 @@ class SqliteBroker implements Broker {
     bool dryRun = false,
   }) async {
     final bounded = limit.clamp(1, 500);
-    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
     if (since != null) {
       query = query.where(
         'deadAt',
@@ -317,6 +350,7 @@ class SqliteBroker implements Broker {
         await txn
             .query<StemDeadLetter>()
             .whereEquals('id', entry.envelope.id)
+            .whereEquals('namespace', namespace)
             .delete();
       }
     });
@@ -334,15 +368,23 @@ class SqliteBroker implements Broker {
       final ids = await _context
           .query<StemDeadLetter>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .orderBy('deadAt', descending: true)
           .limit(limit)
           .pluck<String>('id');
       if (ids.isEmpty) return 0;
-      await _context.query<StemDeadLetter>().whereIn('id', ids).delete();
+      await _context
+          .query<StemDeadLetter>()
+          .whereIn('id', ids)
+          .whereEquals('namespace', namespace)
+          .delete();
       return ids.length;
     }
 
-    var query = _context.query<StemDeadLetter>().whereEquals('queue', queue);
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
     if (since != null) {
       query = query.where(
         'deadAt',
@@ -361,6 +403,7 @@ class SqliteBroker implements Broker {
       final candidate = await txn
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
           .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('notBefore')
@@ -380,6 +423,7 @@ class SqliteBroker implements Broker {
       final updated = await txn
           .query<StemQueueJob>()
           .whereEquals('id', candidate.id)
+          .whereEquals('namespace', namespace)
           .where((PredicateBuilder<StemQueueJob> q) {
             q
               ..whereNull('lockedUntil')
@@ -414,6 +458,7 @@ class SqliteBroker implements Broker {
     await _connections.runInTransaction((txn) async {
       await txn
           .query<StemQueueJob>()
+          .whereEquals('namespace', namespace)
           .whereNotNull('lockedUntil')
           .where('lockedUntil', now, PredicateOperator.lessThanOrEqual)
           .update({'lockedAt': null, 'lockedUntil': null, 'lockedBy': null});
@@ -423,6 +468,7 @@ class SqliteBroker implements Broker {
         final cutoff = now.subtract(deadLetterRetention);
         await txn
             .query<StemDeadLetter>()
+            .whereEquals('namespace', namespace)
             .where('deadAt', cutoff, PredicateOperator.lessThanOrEqual)
             .delete();
       }
@@ -441,6 +487,7 @@ class SqliteBroker implements Broker {
   }) async {
     final model = StemQueueJob(
       id: envelope.id,
+      namespace: namespace,
       queue: queue,
       envelope: envelope.toJson(),
       attempt: attempt,

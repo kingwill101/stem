@@ -19,6 +19,18 @@ const FieldDefinition _$StemTaskResultIdField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemTaskResultNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemTaskResultStateField = FieldDefinition(
   name: 'state',
   columnName: 'state',
@@ -125,6 +137,10 @@ Map<String, Object?> _encodeStemTaskResultUntracked(
   final m = model as StemTaskResult;
   return <String, Object?>{
     'id': registry.encodeField(_$StemTaskResultIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemTaskResultNamespaceField,
+      m.namespace,
+    ),
     'state': registry.encodeField(_$StemTaskResultStateField, m.state),
     'payload': registry.encodeField(_$StemTaskResultPayloadField, m.payload),
     'error': registry.encodeField(_$StemTaskResultErrorField, m.error),
@@ -143,6 +159,7 @@ final ModelDefinition<$StemTaskResult> _$StemTaskResultDefinition =
       tableName: 'stem_task_results',
       fields: const [
         _$StemTaskResultIdField,
+        _$StemTaskResultNamespaceField,
         _$StemTaskResultStateField,
         _$StemTaskResultPayloadField,
         _$StemTaskResultErrorField,
@@ -299,6 +316,10 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemTaskResultIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemTaskResultNamespaceField,
+        model.namespace,
+      ),
       'state': registry.encodeField(_$StemTaskResultStateField, model.state),
       'payload': registry.encodeField(
         _$StemTaskResultPayloadField,
@@ -335,6 +356,12 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
     final String stemTaskResultIdValue =
         registry.decodeField<String>(_$StemTaskResultIdField, data['id']) ??
         (throw StateError('Field id on StemTaskResult cannot be null.'));
+    final String stemTaskResultNamespaceValue =
+        registry.decodeField<String>(
+          _$StemTaskResultNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError('Field namespace on StemTaskResult cannot be null.'));
     final String stemTaskResultStateValue =
         registry.decodeField<String>(
           _$StemTaskResultStateField,
@@ -379,6 +406,7 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
         );
     final model = $StemTaskResult(
       id: stemTaskResultIdValue,
+      namespace: stemTaskResultNamespaceValue,
       state: stemTaskResultStateValue,
       attempt: stemTaskResultAttemptValue,
       meta: stemTaskResultMetaValue,
@@ -388,6 +416,7 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
     );
     model._attachOrmRuntimeMetadata({
       'id': stemTaskResultIdValue,
+      'namespace': stemTaskResultNamespaceValue,
       'state': stemTaskResultStateValue,
       'payload': stemTaskResultPayloadValue,
       'error': stemTaskResultErrorValue,
@@ -409,6 +438,7 @@ class _$StemTaskResultCodec extends ModelCodec<$StemTaskResult> {
 class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
   const StemTaskResultInsertDto({
     this.id,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -417,6 +447,7 @@ class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
     this.expiresAt,
   });
   final String? id;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -428,6 +459,7 @@ class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -441,6 +473,7 @@ class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
       _StemTaskResultInsertDtoCopyWithSentinel();
   StemTaskResultInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -450,6 +483,9 @@ class StemTaskResultInsertDto implements InsertDto<$StemTaskResult> {
   }) {
     return StemTaskResultInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -478,6 +514,7 @@ class _StemTaskResultInsertDtoCopyWithSentinel {
 class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
   const StemTaskResultUpdateDto({
     this.id,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -486,6 +523,7 @@ class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
     this.expiresAt,
   });
   final String? id;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -497,6 +535,7 @@ class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -510,6 +549,7 @@ class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
       _StemTaskResultUpdateDtoCopyWithSentinel();
   StemTaskResultUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -519,6 +559,9 @@ class StemTaskResultUpdateDto implements UpdateDto<$StemTaskResult> {
   }) {
     return StemTaskResultUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -547,6 +590,7 @@ class _StemTaskResultUpdateDtoCopyWithSentinel {
 class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   const StemTaskResultPartial({
     this.id,
+    this.namespace,
     this.state,
     this.payload,
     this.error,
@@ -562,6 +606,7 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   factory StemTaskResultPartial.fromRow(Map<String, Object?> row) {
     return StemTaskResultPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       state: row['state'] as String?,
       payload: row['payload'],
       error: row['error'],
@@ -572,6 +617,7 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   }
 
   final String? id;
+  final String? namespace;
   final String? state;
   final Object? payload;
   final Object? error;
@@ -585,6 +631,10 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
     final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
+    }
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
     }
     final String? stateValue = state;
     if (stateValue == null) {
@@ -604,6 +654,7 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
     }
     return $StemTaskResult(
       id: idValue,
+      namespace: namespaceValue,
       state: stateValue,
       payload: payload,
       error: error,
@@ -617,6 +668,7 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (state != null) 'state': state,
       if (payload != null) 'payload': payload,
       if (error != null) 'error': error,
@@ -630,6 +682,7 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
       _StemTaskResultPartialCopyWithSentinel();
   StemTaskResultPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? payload = _copyWithSentinel,
     Object? error = _copyWithSentinel,
@@ -639,6 +692,9 @@ class StemTaskResultPartial implements PartialEntity<$StemTaskResult> {
   }) {
     return StemTaskResultPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       state: identical(state, _copyWithSentinel)
           ? this.state
           : state as String?,
@@ -675,6 +731,7 @@ class $StemTaskResult extends StemTaskResult
   /// Internal constructor for [$StemTaskResult].
   $StemTaskResult({
     required String id,
+    required String namespace,
     required String state,
     required int attempt,
     required Map<String, Object?> meta,
@@ -683,6 +740,7 @@ class $StemTaskResult extends StemTaskResult
     Object? error,
   }) : super(
          id: id,
+         namespace: namespace,
          state: state,
          attempt: attempt,
          meta: meta,
@@ -692,6 +750,7 @@ class $StemTaskResult extends StemTaskResult
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'state': state,
       'payload': payload,
       'error': error,
@@ -705,6 +764,7 @@ class $StemTaskResult extends StemTaskResult
   factory $StemTaskResult.fromModel(StemTaskResult model) {
     return $StemTaskResult(
       id: model.id,
+      namespace: model.namespace,
       state: model.state,
       payload: model.payload,
       error: model.error,
@@ -716,6 +776,7 @@ class $StemTaskResult extends StemTaskResult
 
   $StemTaskResult copyWith({
     String? id,
+    String? namespace,
     String? state,
     Object? payload,
     Object? error,
@@ -725,6 +786,7 @@ class $StemTaskResult extends StemTaskResult
   }) {
     return $StemTaskResult(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       state: state ?? this.state,
       payload: payload ?? this.payload,
       error: error ?? this.error,
@@ -750,6 +812,13 @@ class $StemTaskResult extends StemTaskResult
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [state].
   @override
@@ -810,6 +879,7 @@ extension StemTaskResultOrmExtension on StemTaskResult {
       _StemTaskResultCopyWithSentinel();
   StemTaskResult copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? state = _copyWithSentinel,
     Object? attempt = _copyWithSentinel,
     Object? meta = _copyWithSentinel,
@@ -819,6 +889,9 @@ extension StemTaskResultOrmExtension on StemTaskResult {
   }) {
     return StemTaskResult(
       id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
       state: identical(state, _copyWithSentinel) ? this.state : state as String,
       attempt: identical(attempt, _copyWithSentinel)
           ? this.attempt
@@ -860,6 +933,8 @@ extension StemTaskResultOrmExtension on StemTaskResult {
 extension StemTaskResultPredicateFields on PredicateBuilder<StemTaskResult> {
   PredicateField<StemTaskResult, String> get id =>
       PredicateField<StemTaskResult, String>(this, 'id');
+  PredicateField<StemTaskResult, String> get namespace =>
+      PredicateField<StemTaskResult, String>(this, 'namespace');
   PredicateField<StemTaskResult, String> get state =>
       PredicateField<StemTaskResult, String>(this, 'state');
   PredicateField<StemTaskResult, Object?> get payload =>

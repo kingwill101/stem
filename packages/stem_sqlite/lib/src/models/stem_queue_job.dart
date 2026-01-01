@@ -8,6 +8,7 @@ class StemQueueJob extends Model<StemQueueJob> with Timestamps {
   /// Creates a queue job record.
   const StemQueueJob({
     required this.id,
+    required this.namespace,
     required this.queue,
     required this.envelope,
     required this.attempt,
@@ -22,6 +23,10 @@ class StemQueueJob extends Model<StemQueueJob> with Timestamps {
   /// Job identifier.
   @OrmField(isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the job.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Queue name.
   final String queue;

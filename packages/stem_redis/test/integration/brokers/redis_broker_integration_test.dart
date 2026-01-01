@@ -38,6 +38,41 @@ void main() {
     ),
   );
 
+  test('namespace isolates queue data', () async {
+    final namespaceA = _uniqueNamespace();
+    final namespaceB = _uniqueNamespace();
+    final brokerA = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespaceA,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      blockTime: const Duration(milliseconds: 100),
+    );
+    final brokerB = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespaceB,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      blockTime: const Duration(milliseconds: 100),
+    );
+    try {
+      final queue = _uniqueQueue();
+      final envelope = Envelope(
+        name: 'integration.redis.namespace',
+        args: const {'value': 1},
+        queue: queue,
+      );
+      await brokerA.publish(envelope);
+
+      final pendingA = await brokerA.pendingCount(queue);
+      final pendingB = await brokerB.pendingCount(queue);
+
+      expect(pendingA, 1);
+      expect(pendingB, 0);
+    } finally {
+      await _safeCloseRedisBroker(brokerA);
+      await _safeCloseRedisBroker(brokerB);
+    }
+  });
+
   test('purge clears priority stream data', () async {
     final namespace = _uniqueNamespace();
     final broker = await RedisStreamsBroker.connect(

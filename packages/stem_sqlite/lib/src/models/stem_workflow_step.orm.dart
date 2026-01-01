@@ -31,6 +31,18 @@ const FieldDefinition _$StemWorkflowStepNameField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemWorkflowStepNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemWorkflowStepValueField = FieldDefinition(
   name: 'value',
   columnName: 'value',
@@ -51,6 +63,10 @@ Map<String, Object?> _encodeStemWorkflowStepUntracked(
   return <String, Object?>{
     'run_id': registry.encodeField(_$StemWorkflowStepRunIdField, m.runId),
     'name': registry.encodeField(_$StemWorkflowStepNameField, m.name),
+    'namespace': registry.encodeField(
+      _$StemWorkflowStepNamespaceField,
+      m.namespace,
+    ),
     'value': registry.encodeField(_$StemWorkflowStepValueField, m.value),
   };
 }
@@ -62,6 +78,7 @@ final ModelDefinition<$StemWorkflowStep> _$StemWorkflowStepDefinition =
       fields: const [
         _$StemWorkflowStepRunIdField,
         _$StemWorkflowStepNameField,
+        _$StemWorkflowStepNamespaceField,
         _$StemWorkflowStepValueField,
       ],
       relations: const [],
@@ -210,6 +227,10 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
     return <String, Object?>{
       'run_id': registry.encodeField(_$StemWorkflowStepRunIdField, model.runId),
       'name': registry.encodeField(_$StemWorkflowStepNameField, model.name),
+      'namespace': registry.encodeField(
+        _$StemWorkflowStepNamespaceField,
+        model.namespace,
+      ),
       'value': registry.encodeField(_$StemWorkflowStepValueField, model.value),
     };
   }
@@ -231,6 +252,14 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
           data['name'],
         ) ??
         (throw StateError('Field name on StemWorkflowStep cannot be null.'));
+    final String stemWorkflowStepNamespaceValue =
+        registry.decodeField<String>(
+          _$StemWorkflowStepNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemWorkflowStep cannot be null.',
+        ));
     final String? stemWorkflowStepValueValue = registry.decodeField<String?>(
       _$StemWorkflowStepValueField,
       data['value'],
@@ -238,11 +267,13 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
     final model = $StemWorkflowStep(
       runId: stemWorkflowStepRunIdValue,
       name: stemWorkflowStepNameValue,
+      namespace: stemWorkflowStepNamespaceValue,
       value: stemWorkflowStepValueValue,
     );
     model._attachOrmRuntimeMetadata({
       'run_id': stemWorkflowStepRunIdValue,
       'name': stemWorkflowStepNameValue,
+      'namespace': stemWorkflowStepNamespaceValue,
       'value': stemWorkflowStepValueValue,
     });
     return model;
@@ -253,9 +284,15 @@ class _$StemWorkflowStepCodec extends ModelCodec<$StemWorkflowStep> {
 ///
 /// Auto-increment/DB-generated fields are omitted by default.
 class StemWorkflowStepInsertDto implements InsertDto<$StemWorkflowStep> {
-  const StemWorkflowStepInsertDto({this.runId, this.name, this.value});
+  const StemWorkflowStepInsertDto({
+    this.runId,
+    this.name,
+    this.namespace,
+    this.value,
+  });
   final String? runId;
   final String? name;
+  final String? namespace;
   final String? value;
 
   @override
@@ -263,6 +300,7 @@ class StemWorkflowStepInsertDto implements InsertDto<$StemWorkflowStep> {
     return <String, Object?>{
       if (runId != null) 'run_id': runId,
       if (name != null) 'name': name,
+      if (namespace != null) 'namespace': namespace,
       if (value != null) 'value': value,
     };
   }
@@ -272,6 +310,7 @@ class StemWorkflowStepInsertDto implements InsertDto<$StemWorkflowStep> {
   StemWorkflowStepInsertDto copyWith({
     Object? runId = _copyWithSentinel,
     Object? name = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? value = _copyWithSentinel,
   }) {
     return StemWorkflowStepInsertDto(
@@ -279,6 +318,9 @@ class StemWorkflowStepInsertDto implements InsertDto<$StemWorkflowStep> {
           ? this.runId
           : runId as String?,
       name: identical(name, _copyWithSentinel) ? this.name : name as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       value: identical(value, _copyWithSentinel)
           ? this.value
           : value as String?,
@@ -294,9 +336,15 @@ class _StemWorkflowStepInsertDtoCopyWithSentinel {
 ///
 /// All fields are optional; only provided entries are used in SET clauses.
 class StemWorkflowStepUpdateDto implements UpdateDto<$StemWorkflowStep> {
-  const StemWorkflowStepUpdateDto({this.runId, this.name, this.value});
+  const StemWorkflowStepUpdateDto({
+    this.runId,
+    this.name,
+    this.namespace,
+    this.value,
+  });
   final String? runId;
   final String? name;
+  final String? namespace;
   final String? value;
 
   @override
@@ -304,6 +352,7 @@ class StemWorkflowStepUpdateDto implements UpdateDto<$StemWorkflowStep> {
     return <String, Object?>{
       if (runId != null) 'run_id': runId,
       if (name != null) 'name': name,
+      if (namespace != null) 'namespace': namespace,
       if (value != null) 'value': value,
     };
   }
@@ -313,6 +362,7 @@ class StemWorkflowStepUpdateDto implements UpdateDto<$StemWorkflowStep> {
   StemWorkflowStepUpdateDto copyWith({
     Object? runId = _copyWithSentinel,
     Object? name = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? value = _copyWithSentinel,
   }) {
     return StemWorkflowStepUpdateDto(
@@ -320,6 +370,9 @@ class StemWorkflowStepUpdateDto implements UpdateDto<$StemWorkflowStep> {
           ? this.runId
           : runId as String?,
       name: identical(name, _copyWithSentinel) ? this.name : name as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       value: identical(value, _copyWithSentinel)
           ? this.value
           : value as String?,
@@ -335,7 +388,12 @@ class _StemWorkflowStepUpdateDtoCopyWithSentinel {
 ///
 /// All fields are nullable; intended for subset SELECTs.
 class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
-  const StemWorkflowStepPartial({this.runId, this.name, this.value});
+  const StemWorkflowStepPartial({
+    this.runId,
+    this.name,
+    this.namespace,
+    this.value,
+  });
 
   /// Creates a partial from a database row map.
   ///
@@ -345,12 +403,14 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
     return StemWorkflowStepPartial(
       runId: row['run_id'] as String?,
       name: row['name'] as String?,
+      namespace: row['namespace'] as String?,
       value: row['value'] as String?,
     );
   }
 
   final String? runId;
   final String? name;
+  final String? namespace;
   final String? value;
 
   @override
@@ -364,7 +424,16 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
     if (nameValue == null) {
       throw StateError('Missing required field: name');
     }
-    return $StemWorkflowStep(runId: runIdValue, name: nameValue, value: value);
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    return $StemWorkflowStep(
+      runId: runIdValue,
+      name: nameValue,
+      namespace: namespaceValue,
+      value: value,
+    );
   }
 
   @override
@@ -372,6 +441,7 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
     return {
       if (runId != null) 'run_id': runId,
       if (name != null) 'name': name,
+      if (namespace != null) 'namespace': namespace,
       if (value != null) 'value': value,
     };
   }
@@ -381,6 +451,7 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
   StemWorkflowStepPartial copyWith({
     Object? runId = _copyWithSentinel,
     Object? name = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? value = _copyWithSentinel,
   }) {
     return StemWorkflowStepPartial(
@@ -388,6 +459,9 @@ class StemWorkflowStepPartial implements PartialEntity<$StemWorkflowStep> {
           ? this.runId
           : runId as String?,
       name: identical(name, _copyWithSentinel) ? this.name : name as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       value: identical(value, _copyWithSentinel)
           ? this.value
           : value as String?,
@@ -414,9 +488,15 @@ class $StemWorkflowStep extends StemWorkflowStep
   $StemWorkflowStep({
     required String runId,
     required String name,
+    required String namespace,
     String? value,
-  }) : super(runId: runId, name: name, value: value) {
-    _attachOrmRuntimeMetadata({'run_id': runId, 'name': name, 'value': value});
+  }) : super(runId: runId, name: name, namespace: namespace, value: value) {
+    _attachOrmRuntimeMetadata({
+      'run_id': runId,
+      'name': name,
+      'namespace': namespace,
+      'value': value,
+    });
   }
 
   /// Creates a tracked model instance from a user-defined model instance.
@@ -424,14 +504,21 @@ class $StemWorkflowStep extends StemWorkflowStep
     return $StemWorkflowStep(
       runId: model.runId,
       name: model.name,
+      namespace: model.namespace,
       value: model.value,
     );
   }
 
-  $StemWorkflowStep copyWith({String? runId, String? name, String? value}) {
+  $StemWorkflowStep copyWith({
+    String? runId,
+    String? name,
+    String? namespace,
+    String? value,
+  }) {
     return $StemWorkflowStep(
       runId: runId ?? this.runId,
       name: name ?? this.name,
+      namespace: namespace ?? this.namespace,
       value: value ?? this.value,
     );
   }
@@ -460,6 +547,13 @@ class $StemWorkflowStep extends StemWorkflowStep
   /// Tracked setter for [name].
   set name(String value) => setAttribute('name', value);
 
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
+
   /// Tracked getter for [value].
   @override
   String? get value => getAttribute<String?>('value') ?? super.value;
@@ -483,11 +577,15 @@ extension StemWorkflowStepOrmExtension on StemWorkflowStep {
   StemWorkflowStep copyWith({
     Object? runId = _copyWithSentinel,
     Object? name = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? value = _copyWithSentinel,
   }) {
     return StemWorkflowStep(
       runId: identical(runId, _copyWithSentinel) ? this.runId : runId as String,
       name: identical(name, _copyWithSentinel) ? this.name : name as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
       value: identical(value, _copyWithSentinel)
           ? this.value
           : value as String?,
@@ -523,6 +621,8 @@ extension StemWorkflowStepPredicateFields
       PredicateField<StemWorkflowStep, String>(this, 'runId');
   PredicateField<StemWorkflowStep, String> get name =>
       PredicateField<StemWorkflowStep, String>(this, 'name');
+  PredicateField<StemWorkflowStep, String> get namespace =>
+      PredicateField<StemWorkflowStep, String>(this, 'namespace');
   PredicateField<StemWorkflowStep, String?> get value =>
       PredicateField<StemWorkflowStep, String?>(this, 'value');
 }

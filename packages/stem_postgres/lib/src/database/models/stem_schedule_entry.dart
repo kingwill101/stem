@@ -8,6 +8,7 @@ class StemScheduleEntry extends Model<StemScheduleEntry> {
   /// Creates a schedule entry record.
   StemScheduleEntry({
     required this.id,
+    required this.namespace,
     required this.taskName,
     required this.queue,
     required this.spec,
@@ -34,6 +35,10 @@ class StemScheduleEntry extends Model<StemScheduleEntry> {
   /// Schedule identifier.
   @OrmField(columnName: 'id', isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the schedule entry.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Task name to execute.
   @OrmField(columnName: 'task_name')

@@ -14,6 +14,21 @@ const FieldDefinition _$StemGroupIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
+const FieldDefinition _$StemGroupNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupExpectedField = FieldDefinition(
@@ -21,7 +36,11 @@ const FieldDefinition _$StemGroupExpectedField = FieldDefinition(
   columnName: 'expected',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupMetaField = FieldDefinition(
@@ -29,7 +48,11 @@ const FieldDefinition _$StemGroupMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'Map<String, Object?>',
   resolvedType: 'Map<String, Object?>',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
   codecType: 'json',
 );
 
@@ -38,7 +61,11 @@ const FieldDefinition _$StemGroupExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupCreatedAtField = FieldDefinition(
@@ -46,7 +73,11 @@ const FieldDefinition _$StemGroupCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemGroupUpdatedAtField = FieldDefinition(
@@ -54,7 +85,11 @@ const FieldDefinition _$StemGroupUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemGroupUntracked(
@@ -64,26 +99,39 @@ Map<String, Object?> _encodeStemGroupUntracked(
   final m = model as StemGroup;
   return <String, Object?>{
     'id': registry.encodeField(_$StemGroupIdField, m.id),
+    'namespace': registry.encodeField(_$StemGroupNamespaceField, m.namespace),
     'expected': registry.encodeField(_$StemGroupExpectedField, m.expected),
     'meta': registry.encodeField(_$StemGroupMetaField, m.meta),
     'expires_at': registry.encodeField(_$StemGroupExpiresAtField, m.expiresAt),
   };
 }
 
-const ModelDefinition<$StemGroup> _$StemGroupDefinition = ModelDefinition(
+final ModelDefinition<$StemGroup> _$StemGroupDefinition = ModelDefinition(
   modelName: 'StemGroup',
   tableName: 'stem_groups',
-  fields: [
+  fields: const [
     _$StemGroupIdField,
+    _$StemGroupNamespaceField,
     _$StemGroupExpectedField,
     _$StemGroupMetaField,
     _$StemGroupExpiresAtField,
     _$StemGroupCreatedAtField,
     _$StemGroupUpdatedAtField,
   ],
+  relations: const [],
   softDeleteColumn: 'deleted_at',
   metadata: ModelAttributesMetadata(
-    fieldOverrides: {'meta': FieldAttributeMetadata(cast: 'json')},
+    hidden: const <String>[],
+    visible: const <String>[],
+    fillable: const <String>[],
+    guarded: const <String>[],
+    casts: const <String, String>{},
+    appends: const <String>[],
+    touches: const <String>[],
+    timestamps: true,
+    fieldOverrides: const {'meta': FieldAttributeMetadata(cast: 'json')},
+    softDeletes: false,
+    softDeleteColumn: 'deleted_at',
   ),
   untrackedToMap: _encodeStemGroupUntracked,
   codec: _$StemGroupCodec(),
@@ -133,7 +181,7 @@ class StemGroups {
 
   static Query<$StemGroup> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemGroup>(
     column,
@@ -149,6 +197,18 @@ class StemGroups {
   /// {@macro ormed.repository}
   static Repository<$StemGroup> repo([String? connection]) =>
       Model.repository<$StemGroup>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemGroup fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemGroup model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupDefinition.toMap(model, registry: registry);
 }
 
 class StemGroupModelFactory {
@@ -192,6 +252,10 @@ class _$StemGroupCodec extends ModelCodec<$StemGroup> {
   Map<String, Object?> encode($StemGroup model, ValueCodecRegistry registry) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemGroupIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemGroupNamespaceField,
+        model.namespace,
+      ),
       'expected': registry.encodeField(
         _$StemGroupExpectedField,
         model.expected,
@@ -216,40 +280,48 @@ class _$StemGroupCodec extends ModelCodec<$StemGroup> {
 
   @override
   $StemGroup decode(Map<String, Object?> data, ValueCodecRegistry registry) {
-    final stemGroupIdValue =
+    final String stemGroupIdValue =
         registry.decodeField<String>(_$StemGroupIdField, data['id']) ??
         (throw StateError('Field id on StemGroup cannot be null.'));
-    final stemGroupExpectedValue =
+    final String stemGroupNamespaceValue =
+        registry.decodeField<String>(
+          _$StemGroupNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError('Field namespace on StemGroup cannot be null.'));
+    final int stemGroupExpectedValue =
         registry.decodeField<int>(_$StemGroupExpectedField, data['expected']) ??
         (throw StateError('Field expected on StemGroup cannot be null.'));
-    final stemGroupMetaValue =
+    final Map<String, Object?> stemGroupMetaValue =
         registry.decodeField<Map<String, Object?>>(
           _$StemGroupMetaField,
           data['meta'],
         ) ??
         (throw StateError('Field meta on StemGroup cannot be null.'));
-    final stemGroupExpiresAtValue =
+    final DateTime stemGroupExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemGroupExpiresAtField,
           data['expires_at'],
         ) ??
         (throw StateError('Field expiresAt on StemGroup cannot be null.'));
-    final stemGroupCreatedAtValue = registry.decodeField<DateTime?>(
+    final DateTime? stemGroupCreatedAtValue = registry.decodeField<DateTime?>(
       _$StemGroupCreatedAtField,
       data['created_at'],
     );
-    final stemGroupUpdatedAtValue = registry.decodeField<DateTime?>(
+    final DateTime? stemGroupUpdatedAtValue = registry.decodeField<DateTime?>(
       _$StemGroupUpdatedAtField,
       data['updated_at'],
     );
     final model = $StemGroup(
       id: stemGroupIdValue,
+      namespace: stemGroupNamespaceValue,
       expected: stemGroupExpectedValue,
       meta: stemGroupMetaValue,
       expiresAt: stemGroupExpiresAtValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemGroupIdValue,
+      'namespace': stemGroupNamespaceValue,
       'expected': stemGroupExpectedValue,
       'meta': stemGroupMetaValue,
       'expires_at': stemGroupExpiresAtValue,
@@ -264,8 +336,15 @@ class _$StemGroupCodec extends ModelCodec<$StemGroup> {
 ///
 /// Auto-increment/DB-generated fields are omitted by default.
 class StemGroupInsertDto implements InsertDto<$StemGroup> {
-  const StemGroupInsertDto({this.id, this.expected, this.meta, this.expiresAt});
+  const StemGroupInsertDto({
+    this.id,
+    this.namespace,
+    this.expected,
+    this.meta,
+    this.expiresAt,
+  });
   final String? id;
+  final String? namespace;
   final int? expected;
   final Map<String, Object?>? meta;
   final DateTime? expiresAt;
@@ -274,6 +353,7 @@ class StemGroupInsertDto implements InsertDto<$StemGroup> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (expected != null) 'expected': expected,
       if (meta != null) 'meta': meta,
       if (expiresAt != null) 'expires_at': expiresAt,
@@ -284,12 +364,16 @@ class StemGroupInsertDto implements InsertDto<$StemGroup> {
       _StemGroupInsertDtoCopyWithSentinel();
   StemGroupInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? expected = _copyWithSentinel,
     Object? meta = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
   }) {
     return StemGroupInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       expected: identical(expected, _copyWithSentinel)
           ? this.expected
           : expected as int?,
@@ -311,8 +395,15 @@ class _StemGroupInsertDtoCopyWithSentinel {
 ///
 /// All fields are optional; only provided entries are used in SET clauses.
 class StemGroupUpdateDto implements UpdateDto<$StemGroup> {
-  const StemGroupUpdateDto({this.id, this.expected, this.meta, this.expiresAt});
+  const StemGroupUpdateDto({
+    this.id,
+    this.namespace,
+    this.expected,
+    this.meta,
+    this.expiresAt,
+  });
   final String? id;
+  final String? namespace;
   final int? expected;
   final Map<String, Object?>? meta;
   final DateTime? expiresAt;
@@ -321,6 +412,7 @@ class StemGroupUpdateDto implements UpdateDto<$StemGroup> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (expected != null) 'expected': expected,
       if (meta != null) 'meta': meta,
       if (expiresAt != null) 'expires_at': expiresAt,
@@ -331,12 +423,16 @@ class StemGroupUpdateDto implements UpdateDto<$StemGroup> {
       _StemGroupUpdateDtoCopyWithSentinel();
   StemGroupUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? expected = _copyWithSentinel,
     Object? meta = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
   }) {
     return StemGroupUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       expected: identical(expected, _copyWithSentinel)
           ? this.expected
           : expected as int?,
@@ -358,7 +454,13 @@ class _StemGroupUpdateDtoCopyWithSentinel {
 ///
 /// All fields are nullable; intended for subset SELECTs.
 class StemGroupPartial implements PartialEntity<$StemGroup> {
-  const StemGroupPartial({this.id, this.expected, this.meta, this.expiresAt});
+  const StemGroupPartial({
+    this.id,
+    this.namespace,
+    this.expected,
+    this.meta,
+    this.expiresAt,
+  });
 
   /// Creates a partial from a database row map.
   ///
@@ -367,6 +469,7 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
   factory StemGroupPartial.fromRow(Map<String, Object?> row) {
     return StemGroupPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       expected: row['expected'] as int?,
       meta: row['meta'] as Map<String, Object?>?,
       expiresAt: row['expires_at'] as DateTime?,
@@ -374,6 +477,7 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
   }
 
   final String? id;
+  final String? namespace;
   final int? expected;
   final Map<String, Object?>? meta;
   final DateTime? expiresAt;
@@ -381,24 +485,29 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
   @override
   $StemGroup toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final expectedValue = expected;
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    final int? expectedValue = expected;
     if (expectedValue == null) {
       throw StateError('Missing required field: expected');
     }
-    final metaValue = meta;
+    final Map<String, Object?>? metaValue = meta;
     if (metaValue == null) {
       throw StateError('Missing required field: meta');
     }
-    final expiresAtValue = expiresAt;
+    final DateTime? expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
     }
     return $StemGroup(
       id: idValue,
+      namespace: namespaceValue,
       expected: expectedValue,
       meta: metaValue,
       expiresAt: expiresAtValue,
@@ -409,6 +518,7 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (expected != null) 'expected': expected,
       if (meta != null) 'meta': meta,
       if (expiresAt != null) 'expires_at': expiresAt,
@@ -419,12 +529,16 @@ class StemGroupPartial implements PartialEntity<$StemGroup> {
       _StemGroupPartialCopyWithSentinel();
   StemGroupPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? expected = _copyWithSentinel,
     Object? meta = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
   }) {
     return StemGroupPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       expected: identical(expected, _copyWithSentinel)
           ? this.expected
           : expected as int?,
@@ -456,12 +570,20 @@ class $StemGroup extends StemGroup
   /// Internal constructor for [$StemGroup].
   $StemGroup({
     required String id,
+    required String namespace,
     required int expected,
     required Map<String, Object?> meta,
     required DateTime expiresAt,
-  }) : super.new(id: id, expected: expected, meta: meta, expiresAt: expiresAt) {
+  }) : super(
+         id: id,
+         namespace: namespace,
+         expected: expected,
+         meta: meta,
+         expiresAt: expiresAt,
+       ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'expected': expected,
       'meta': meta,
       'expires_at': expiresAt,
@@ -472,6 +594,7 @@ class $StemGroup extends StemGroup
   factory $StemGroup.fromModel(StemGroup model) {
     return $StemGroup(
       id: model.id,
+      namespace: model.namespace,
       expected: model.expected,
       meta: model.meta,
       expiresAt: model.expiresAt,
@@ -480,17 +603,29 @@ class $StemGroup extends StemGroup
 
   $StemGroup copyWith({
     String? id,
+    String? namespace,
     int? expected,
     Map<String, Object?>? meta,
     DateTime? expiresAt,
   }) {
     return $StemGroup(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       expected: expected ?? this.expected,
       meta: meta ?? this.meta,
       expiresAt: expiresAt ?? this.expiresAt,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemGroup fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemGroupDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [id].
   @override
@@ -498,6 +633,13 @@ class $StemGroup extends StemGroup
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [expected].
   @override
@@ -528,7 +670,47 @@ class $StemGroup extends StemGroup
   }
 }
 
+class _StemGroupCopyWithSentinel {
+  const _StemGroupCopyWithSentinel();
+}
+
 extension StemGroupOrmExtension on StemGroup {
+  static const _StemGroupCopyWithSentinel _copyWithSentinel =
+      _StemGroupCopyWithSentinel();
+  StemGroup copyWith({
+    Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? expected = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+    Object? expiresAt = _copyWithSentinel,
+  }) {
+    return StemGroup(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      expected: identical(expected, _copyWithSentinel)
+          ? this.expected
+          : expected as int,
+      meta: identical(meta, _copyWithSentinel)
+          ? this.meta
+          : meta as Map<String, Object?>,
+      expiresAt: identical(expiresAt, _copyWithSentinel)
+          ? this.expiresAt
+          : expiresAt as DateTime,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemGroupDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemGroup fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemGroupDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -540,6 +722,19 @@ extension StemGroupOrmExtension on StemGroup {
   $StemGroup toTracked() {
     return $StemGroup.fromModel(this);
   }
+}
+
+extension StemGroupPredicateFields on PredicateBuilder<StemGroup> {
+  PredicateField<StemGroup, String> get id =>
+      PredicateField<StemGroup, String>(this, 'id');
+  PredicateField<StemGroup, String> get namespace =>
+      PredicateField<StemGroup, String>(this, 'namespace');
+  PredicateField<StemGroup, int> get expected =>
+      PredicateField<StemGroup, int>(this, 'expected');
+  PredicateField<StemGroup, Map<String, Object?>> get meta =>
+      PredicateField<StemGroup, Map<String, Object?>>(this, 'meta');
+  PredicateField<StemGroup, DateTime> get expiresAt =>
+      PredicateField<StemGroup, DateTime>(this, 'expiresAt');
 }
 
 void registerStemGroupEventHandlers(EventBus bus) {

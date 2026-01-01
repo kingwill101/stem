@@ -14,6 +14,21 @@ const FieldDefinition _$StemScheduleEntryIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
+const FieldDefinition _$StemScheduleEntryNamespaceField = FieldDefinition(
+  name: 'namespace',
+  columnName: 'namespace',
+  dartType: 'String',
+  resolvedType: 'String',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTaskNameField = FieldDefinition(
@@ -21,7 +36,11 @@ const FieldDefinition _$StemScheduleEntryTaskNameField = FieldDefinition(
   columnName: 'task_name',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryQueueField = FieldDefinition(
@@ -29,7 +48,11 @@ const FieldDefinition _$StemScheduleEntryQueueField = FieldDefinition(
   columnName: 'queue',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntrySpecField = FieldDefinition(
@@ -37,7 +60,11 @@ const FieldDefinition _$StemScheduleEntrySpecField = FieldDefinition(
   columnName: 'spec',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryArgsField = FieldDefinition(
@@ -45,7 +72,11 @@ const FieldDefinition _$StemScheduleEntryArgsField = FieldDefinition(
   columnName: 'args',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryKwargsField = FieldDefinition(
@@ -53,7 +84,11 @@ const FieldDefinition _$StemScheduleEntryKwargsField = FieldDefinition(
   columnName: 'kwargs',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryEnabledField = FieldDefinition(
@@ -61,7 +96,11 @@ const FieldDefinition _$StemScheduleEntryEnabledField = FieldDefinition(
   columnName: 'enabled',
   dartType: 'bool',
   resolvedType: 'bool',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryJitterField = FieldDefinition(
@@ -69,7 +108,11 @@ const FieldDefinition _$StemScheduleEntryJitterField = FieldDefinition(
   columnName: 'jitter',
   dartType: 'int',
   resolvedType: 'int?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastRunAtField = FieldDefinition(
@@ -77,7 +120,11 @@ const FieldDefinition _$StemScheduleEntryLastRunAtField = FieldDefinition(
   columnName: 'last_run_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryNextRunAtField = FieldDefinition(
@@ -85,7 +132,11 @@ const FieldDefinition _$StemScheduleEntryNextRunAtField = FieldDefinition(
   columnName: 'next_run_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastJitterField = FieldDefinition(
@@ -93,7 +144,11 @@ const FieldDefinition _$StemScheduleEntryLastJitterField = FieldDefinition(
   columnName: 'last_jitter',
   dartType: 'int',
   resolvedType: 'int?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastErrorField = FieldDefinition(
@@ -101,7 +156,11 @@ const FieldDefinition _$StemScheduleEntryLastErrorField = FieldDefinition(
   columnName: 'last_error',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTimezoneField = FieldDefinition(
@@ -109,7 +168,11 @@ const FieldDefinition _$StemScheduleEntryTimezoneField = FieldDefinition(
   columnName: 'timezone',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryTotalRunCountField = FieldDefinition(
@@ -117,7 +180,11 @@ const FieldDefinition _$StemScheduleEntryTotalRunCountField = FieldDefinition(
   columnName: 'total_run_count',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastSuccessAtField = FieldDefinition(
@@ -125,7 +192,11 @@ const FieldDefinition _$StemScheduleEntryLastSuccessAtField = FieldDefinition(
   columnName: 'last_success_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryLastErrorAtField = FieldDefinition(
@@ -133,7 +204,11 @@ const FieldDefinition _$StemScheduleEntryLastErrorAtField = FieldDefinition(
   columnName: 'last_error_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryDriftField = FieldDefinition(
@@ -141,7 +216,11 @@ const FieldDefinition _$StemScheduleEntryDriftField = FieldDefinition(
   columnName: 'drift',
   dartType: 'int',
   resolvedType: 'int?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryExpireAtField = FieldDefinition(
@@ -149,7 +228,11 @@ const FieldDefinition _$StemScheduleEntryExpireAtField = FieldDefinition(
   columnName: 'expire_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryMetaField = FieldDefinition(
@@ -157,7 +240,11 @@ const FieldDefinition _$StemScheduleEntryMetaField = FieldDefinition(
   columnName: 'meta',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryCreatedAtField = FieldDefinition(
@@ -165,7 +252,11 @@ const FieldDefinition _$StemScheduleEntryCreatedAtField = FieldDefinition(
   columnName: 'created_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryUpdatedAtField = FieldDefinition(
@@ -173,7 +264,11 @@ const FieldDefinition _$StemScheduleEntryUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemScheduleEntryVersionField = FieldDefinition(
@@ -181,7 +276,11 @@ const FieldDefinition _$StemScheduleEntryVersionField = FieldDefinition(
   columnName: 'version',
   dartType: 'int',
   resolvedType: 'int?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemScheduleEntryUntracked(
@@ -191,6 +290,10 @@ Map<String, Object?> _encodeStemScheduleEntryUntracked(
   final m = model as StemScheduleEntry;
   return <String, Object?>{
     'id': registry.encodeField(_$StemScheduleEntryIdField, m.id),
+    'namespace': registry.encodeField(
+      _$StemScheduleEntryNamespaceField,
+      m.namespace,
+    ),
     'task_name': registry.encodeField(
       _$StemScheduleEntryTaskNameField,
       m.taskName,
@@ -251,12 +354,13 @@ Map<String, Object?> _encodeStemScheduleEntryUntracked(
   };
 }
 
-const ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
+final ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
     ModelDefinition(
       modelName: 'StemScheduleEntry',
       tableName: 'stem_schedules',
-      fields: [
+      fields: const [
         _$StemScheduleEntryIdField,
+        _$StemScheduleEntryNamespaceField,
         _$StemScheduleEntryTaskNameField,
         _$StemScheduleEntryQueueField,
         _$StemScheduleEntrySpecField,
@@ -279,7 +383,20 @@ const ModelDefinition<$StemScheduleEntry> _$StemScheduleEntryDefinition =
         _$StemScheduleEntryUpdatedAtField,
         _$StemScheduleEntryVersionField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
+      metadata: ModelAttributesMetadata(
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
+      ),
       untrackedToMap: _encodeStemScheduleEntryUntracked,
       codec: _$StemScheduleEntryCodec(),
     );
@@ -336,7 +453,7 @@ class StemScheduleEntries {
 
   static Query<$StemScheduleEntry> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemScheduleEntry>(
     column,
@@ -352,6 +469,18 @@ class StemScheduleEntries {
   /// {@macro ormed.repository}
   static Repository<$StemScheduleEntry> repo([String? connection]) =>
       Model.repository<$StemScheduleEntry>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemScheduleEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemScheduleEntryDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemScheduleEntry model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemScheduleEntryDefinition.toMap(model, registry: registry);
 }
 
 class StemScheduleEntryModelFactory {
@@ -399,6 +528,10 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
   ) {
     return <String, Object?>{
       'id': registry.encodeField(_$StemScheduleEntryIdField, model.id),
+      'namespace': registry.encodeField(
+        _$StemScheduleEntryNamespaceField,
+        model.namespace,
+      ),
       'task_name': registry.encodeField(
         _$StemScheduleEntryTaskNameField,
         model.taskName,
@@ -476,10 +609,18 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemScheduleEntryIdValue =
+    final String stemScheduleEntryIdValue =
         registry.decodeField<String>(_$StemScheduleEntryIdField, data['id']) ??
         (throw StateError('Field id on StemScheduleEntry cannot be null.'));
-    final stemScheduleEntryTaskNameValue =
+    final String stemScheduleEntryNamespaceValue =
+        registry.decodeField<String>(
+          _$StemScheduleEntryNamespaceField,
+          data['namespace'],
+        ) ??
+        (throw StateError(
+          'Field namespace on StemScheduleEntry cannot be null.',
+        ));
+    final String stemScheduleEntryTaskNameValue =
         registry.decodeField<String>(
           _$StemScheduleEntryTaskNameField,
           data['task_name'],
@@ -487,27 +628,27 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field taskName on StemScheduleEntry cannot be null.',
         ));
-    final stemScheduleEntryQueueValue =
+    final String stemScheduleEntryQueueValue =
         registry.decodeField<String>(
           _$StemScheduleEntryQueueField,
           data['queue'],
         ) ??
         (throw StateError('Field queue on StemScheduleEntry cannot be null.'));
-    final stemScheduleEntrySpecValue =
+    final String stemScheduleEntrySpecValue =
         registry.decodeField<String>(
           _$StemScheduleEntrySpecField,
           data['spec'],
         ) ??
         (throw StateError('Field spec on StemScheduleEntry cannot be null.'));
-    final stemScheduleEntryArgsValue = registry.decodeField<String?>(
+    final String? stemScheduleEntryArgsValue = registry.decodeField<String?>(
       _$StemScheduleEntryArgsField,
       data['args'],
     );
-    final stemScheduleEntryKwargsValue = registry.decodeField<String?>(
+    final String? stemScheduleEntryKwargsValue = registry.decodeField<String?>(
       _$StemScheduleEntryKwargsField,
       data['kwargs'],
     );
-    final stemScheduleEntryEnabledValue =
+    final bool stemScheduleEntryEnabledValue =
         registry.decodeField<bool>(
           _$StemScheduleEntryEnabledField,
           data['enabled'],
@@ -515,31 +656,35 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field enabled on StemScheduleEntry cannot be null.',
         ));
-    final stemScheduleEntryJitterValue = registry.decodeField<int?>(
+    final int? stemScheduleEntryJitterValue = registry.decodeField<int?>(
       _$StemScheduleEntryJitterField,
       data['jitter'],
     );
-    final stemScheduleEntryLastRunAtValue = registry.decodeField<DateTime?>(
-      _$StemScheduleEntryLastRunAtField,
-      data['last_run_at'],
-    );
-    final stemScheduleEntryNextRunAtValue = registry.decodeField<DateTime?>(
-      _$StemScheduleEntryNextRunAtField,
-      data['next_run_at'],
-    );
-    final stemScheduleEntryLastJitterValue = registry.decodeField<int?>(
+    final DateTime? stemScheduleEntryLastRunAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemScheduleEntryLastRunAtField,
+          data['last_run_at'],
+        );
+    final DateTime? stemScheduleEntryNextRunAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemScheduleEntryNextRunAtField,
+          data['next_run_at'],
+        );
+    final int? stemScheduleEntryLastJitterValue = registry.decodeField<int?>(
       _$StemScheduleEntryLastJitterField,
       data['last_jitter'],
     );
-    final stemScheduleEntryLastErrorValue = registry.decodeField<String?>(
-      _$StemScheduleEntryLastErrorField,
-      data['last_error'],
-    );
-    final stemScheduleEntryTimezoneValue = registry.decodeField<String?>(
-      _$StemScheduleEntryTimezoneField,
-      data['timezone'],
-    );
-    final stemScheduleEntryTotalRunCountValue =
+    final String? stemScheduleEntryLastErrorValue = registry
+        .decodeField<String?>(
+          _$StemScheduleEntryLastErrorField,
+          data['last_error'],
+        );
+    final String? stemScheduleEntryTimezoneValue = registry
+        .decodeField<String?>(
+          _$StemScheduleEntryTimezoneField,
+          data['timezone'],
+        );
+    final int stemScheduleEntryTotalRunCountValue =
         registry.decodeField<int>(
           _$StemScheduleEntryTotalRunCountField,
           data['total_run_count'],
@@ -547,27 +692,30 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field totalRunCount on StemScheduleEntry cannot be null.',
         ));
-    final stemScheduleEntryLastSuccessAtValue = registry.decodeField<DateTime?>(
-      _$StemScheduleEntryLastSuccessAtField,
-      data['last_success_at'],
-    );
-    final stemScheduleEntryLastErrorAtValue = registry.decodeField<DateTime?>(
-      _$StemScheduleEntryLastErrorAtField,
-      data['last_error_at'],
-    );
-    final stemScheduleEntryDriftValue = registry.decodeField<int?>(
+    final DateTime? stemScheduleEntryLastSuccessAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemScheduleEntryLastSuccessAtField,
+          data['last_success_at'],
+        );
+    final DateTime? stemScheduleEntryLastErrorAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemScheduleEntryLastErrorAtField,
+          data['last_error_at'],
+        );
+    final int? stemScheduleEntryDriftValue = registry.decodeField<int?>(
       _$StemScheduleEntryDriftField,
       data['drift'],
     );
-    final stemScheduleEntryExpireAtValue = registry.decodeField<DateTime?>(
-      _$StemScheduleEntryExpireAtField,
-      data['expire_at'],
-    );
-    final stemScheduleEntryMetaValue = registry.decodeField<String?>(
+    final DateTime? stemScheduleEntryExpireAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemScheduleEntryExpireAtField,
+          data['expire_at'],
+        );
+    final String? stemScheduleEntryMetaValue = registry.decodeField<String?>(
       _$StemScheduleEntryMetaField,
       data['meta'],
     );
-    final stemScheduleEntryCreatedAtValue =
+    final DateTime stemScheduleEntryCreatedAtValue =
         registry.decodeField<DateTime>(
           _$StemScheduleEntryCreatedAtField,
           data['created_at'],
@@ -575,7 +723,7 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field createdAt on StemScheduleEntry cannot be null.',
         ));
-    final stemScheduleEntryUpdatedAtValue =
+    final DateTime stemScheduleEntryUpdatedAtValue =
         registry.decodeField<DateTime>(
           _$StemScheduleEntryUpdatedAtField,
           data['updated_at'],
@@ -583,15 +731,18 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
         (throw StateError(
           'Field updatedAt on StemScheduleEntry cannot be null.',
         ));
-    final stemScheduleEntryVersionValue = registry.decodeField<int?>(
+    final int? stemScheduleEntryVersionValue = registry.decodeField<int?>(
       _$StemScheduleEntryVersionField,
       data['version'],
     );
     final model = $StemScheduleEntry(
       id: stemScheduleEntryIdValue,
+      namespace: stemScheduleEntryNamespaceValue,
       taskName: stemScheduleEntryTaskNameValue,
       queue: stemScheduleEntryQueueValue,
       spec: stemScheduleEntrySpecValue,
+      createdAt: stemScheduleEntryCreatedAtValue,
+      updatedAt: stemScheduleEntryUpdatedAtValue,
       args: stemScheduleEntryArgsValue,
       kwargs: stemScheduleEntryKwargsValue,
       enabled: stemScheduleEntryEnabledValue,
@@ -607,12 +758,11 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
       drift: stemScheduleEntryDriftValue,
       expireAt: stemScheduleEntryExpireAtValue,
       meta: stemScheduleEntryMetaValue,
-      createdAt: stemScheduleEntryCreatedAtValue,
-      updatedAt: stemScheduleEntryUpdatedAtValue,
       version: stemScheduleEntryVersionValue,
     );
     model._attachOrmRuntimeMetadata({
       'id': stemScheduleEntryIdValue,
+      'namespace': stemScheduleEntryNamespaceValue,
       'task_name': stemScheduleEntryTaskNameValue,
       'queue': stemScheduleEntryQueueValue,
       'spec': stemScheduleEntrySpecValue,
@@ -645,6 +795,7 @@ class _$StemScheduleEntryCodec extends ModelCodec<$StemScheduleEntry> {
 class StemScheduleEntryInsertDto implements InsertDto<$StemScheduleEntry> {
   const StemScheduleEntryInsertDto({
     this.id,
+    this.namespace,
     this.taskName,
     this.queue,
     this.spec,
@@ -668,6 +819,7 @@ class StemScheduleEntryInsertDto implements InsertDto<$StemScheduleEntry> {
     this.version,
   });
   final String? id;
+  final String? namespace;
   final String? taskName;
   final String? queue;
   final String? spec;
@@ -694,6 +846,7 @@ class StemScheduleEntryInsertDto implements InsertDto<$StemScheduleEntry> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (taskName != null) 'task_name': taskName,
       if (queue != null) 'queue': queue,
       if (spec != null) 'spec': spec,
@@ -722,6 +875,7 @@ class StemScheduleEntryInsertDto implements InsertDto<$StemScheduleEntry> {
       _StemScheduleEntryInsertDtoCopyWithSentinel();
   StemScheduleEntryInsertDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? taskName = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? spec = _copyWithSentinel,
@@ -746,6 +900,9 @@ class StemScheduleEntryInsertDto implements InsertDto<$StemScheduleEntry> {
   }) {
     return StemScheduleEntryInsertDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       taskName: identical(taskName, _copyWithSentinel)
           ? this.taskName
           : taskName as String?,
@@ -815,6 +972,7 @@ class _StemScheduleEntryInsertDtoCopyWithSentinel {
 class StemScheduleEntryUpdateDto implements UpdateDto<$StemScheduleEntry> {
   const StemScheduleEntryUpdateDto({
     this.id,
+    this.namespace,
     this.taskName,
     this.queue,
     this.spec,
@@ -838,6 +996,7 @@ class StemScheduleEntryUpdateDto implements UpdateDto<$StemScheduleEntry> {
     this.version,
   });
   final String? id;
+  final String? namespace;
   final String? taskName;
   final String? queue;
   final String? spec;
@@ -864,6 +1023,7 @@ class StemScheduleEntryUpdateDto implements UpdateDto<$StemScheduleEntry> {
   Map<String, Object?> toMap() {
     return <String, Object?>{
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (taskName != null) 'task_name': taskName,
       if (queue != null) 'queue': queue,
       if (spec != null) 'spec': spec,
@@ -892,6 +1052,7 @@ class StemScheduleEntryUpdateDto implements UpdateDto<$StemScheduleEntry> {
       _StemScheduleEntryUpdateDtoCopyWithSentinel();
   StemScheduleEntryUpdateDto copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? taskName = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? spec = _copyWithSentinel,
@@ -916,6 +1077,9 @@ class StemScheduleEntryUpdateDto implements UpdateDto<$StemScheduleEntry> {
   }) {
     return StemScheduleEntryUpdateDto(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       taskName: identical(taskName, _copyWithSentinel)
           ? this.taskName
           : taskName as String?,
@@ -985,6 +1149,7 @@ class _StemScheduleEntryUpdateDtoCopyWithSentinel {
 class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   const StemScheduleEntryPartial({
     this.id,
+    this.namespace,
     this.taskName,
     this.queue,
     this.spec,
@@ -1015,6 +1180,7 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   factory StemScheduleEntryPartial.fromRow(Map<String, Object?> row) {
     return StemScheduleEntryPartial(
       id: row['id'] as String?,
+      namespace: row['namespace'] as String?,
       taskName: row['task_name'] as String?,
       queue: row['queue'] as String?,
       spec: row['spec'] as String?,
@@ -1040,6 +1206,7 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   }
 
   final String? id;
+  final String? namespace;
   final String? taskName;
   final String? queue;
   final String? spec;
@@ -1065,40 +1232,45 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   @override
   $StemScheduleEntry toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final idValue = id;
+    final String? idValue = id;
     if (idValue == null) {
       throw StateError('Missing required field: id');
     }
-    final taskNameValue = taskName;
+    final String? namespaceValue = namespace;
+    if (namespaceValue == null) {
+      throw StateError('Missing required field: namespace');
+    }
+    final String? taskNameValue = taskName;
     if (taskNameValue == null) {
       throw StateError('Missing required field: taskName');
     }
-    final queueValue = queue;
+    final String? queueValue = queue;
     if (queueValue == null) {
       throw StateError('Missing required field: queue');
     }
-    final specValue = spec;
+    final String? specValue = spec;
     if (specValue == null) {
       throw StateError('Missing required field: spec');
     }
-    final enabledValue = enabled;
+    final bool? enabledValue = enabled;
     if (enabledValue == null) {
       throw StateError('Missing required field: enabled');
     }
-    final totalRunCountValue = totalRunCount;
+    final int? totalRunCountValue = totalRunCount;
     if (totalRunCountValue == null) {
       throw StateError('Missing required field: totalRunCount');
     }
-    final createdAtValue = createdAt;
+    final DateTime? createdAtValue = createdAt;
     if (createdAtValue == null) {
       throw StateError('Missing required field: createdAt');
     }
-    final updatedAtValue = updatedAt;
+    final DateTime? updatedAtValue = updatedAt;
     if (updatedAtValue == null) {
       throw StateError('Missing required field: updatedAt');
     }
     return $StemScheduleEntry(
       id: idValue,
+      namespace: namespaceValue,
       taskName: taskNameValue,
       queue: queueValue,
       spec: specValue,
@@ -1127,6 +1299,7 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   Map<String, Object?> toMap() {
     return {
       if (id != null) 'id': id,
+      if (namespace != null) 'namespace': namespace,
       if (taskName != null) 'task_name': taskName,
       if (queue != null) 'queue': queue,
       if (spec != null) 'spec': spec,
@@ -1155,6 +1328,7 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
       _StemScheduleEntryPartialCopyWithSentinel();
   StemScheduleEntryPartial copyWith({
     Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
     Object? taskName = _copyWithSentinel,
     Object? queue = _copyWithSentinel,
     Object? spec = _copyWithSentinel,
@@ -1179,6 +1353,9 @@ class StemScheduleEntryPartial implements PartialEntity<$StemScheduleEntry> {
   }) {
     return StemScheduleEntryPartial(
       id: identical(id, _copyWithSentinel) ? this.id : id as String?,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String?,
       taskName: identical(taskName, _copyWithSentinel)
           ? this.taskName
           : taskName as String?,
@@ -1256,32 +1433,36 @@ class $StemScheduleEntry extends StemScheduleEntry
   /// Internal constructor for [$StemScheduleEntry].
   $StemScheduleEntry({
     required String id,
+    required String namespace,
     required String taskName,
     required String queue,
     required String spec,
-    required bool enabled,
-    required int totalRunCount,
     required DateTime createdAt,
     required DateTime updatedAt,
     String? args,
     String? kwargs,
+    required bool enabled,
     int? jitter,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
     int? lastJitter,
     String? lastError,
     String? timezone,
+    required int totalRunCount,
     DateTime? lastSuccessAt,
     DateTime? lastErrorAt,
     int? drift,
     DateTime? expireAt,
     String? meta,
     int? version,
-  }) : super.new(
+  }) : super(
          id: id,
+         namespace: namespace,
          taskName: taskName,
          queue: queue,
          spec: spec,
+         createdAt: createdAt,
+         updatedAt: updatedAt,
          args: args,
          kwargs: kwargs,
          enabled: enabled,
@@ -1297,12 +1478,11 @@ class $StemScheduleEntry extends StemScheduleEntry
          drift: drift,
          expireAt: expireAt,
          meta: meta,
-         createdAt: createdAt,
-         updatedAt: updatedAt,
          version: version,
        ) {
     _attachOrmRuntimeMetadata({
       'id': id,
+      'namespace': namespace,
       'task_name': taskName,
       'queue': queue,
       'spec': spec,
@@ -1331,6 +1511,7 @@ class $StemScheduleEntry extends StemScheduleEntry
   factory $StemScheduleEntry.fromModel(StemScheduleEntry model) {
     return $StemScheduleEntry(
       id: model.id,
+      namespace: model.namespace,
       taskName: model.taskName,
       queue: model.queue,
       spec: model.spec,
@@ -1357,6 +1538,7 @@ class $StemScheduleEntry extends StemScheduleEntry
 
   $StemScheduleEntry copyWith({
     String? id,
+    String? namespace,
     String? taskName,
     String? queue,
     String? spec,
@@ -1381,6 +1563,7 @@ class $StemScheduleEntry extends StemScheduleEntry
   }) {
     return $StemScheduleEntry(
       id: id ?? this.id,
+      namespace: namespace ?? this.namespace,
       taskName: taskName ?? this.taskName,
       queue: queue ?? this.queue,
       spec: spec ?? this.spec,
@@ -1405,12 +1588,29 @@ class $StemScheduleEntry extends StemScheduleEntry
     );
   }
 
+  /// Builds a tracked model from a column/value map.
+  static $StemScheduleEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemScheduleEntryDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemScheduleEntryDefinition.toMap(this, registry: registry);
+
   /// Tracked getter for [id].
   @override
   String get id => getAttribute<String>('id') ?? super.id;
 
   /// Tracked setter for [id].
   set id(String value) => setAttribute('id', value);
+
+  /// Tracked getter for [namespace].
+  @override
+  String get namespace => getAttribute<String>('namespace') ?? super.namespace;
+
+  /// Tracked setter for [namespace].
+  set namespace(String value) => setAttribute('namespace', value);
 
   /// Tracked getter for [taskName].
   @override
@@ -1574,7 +1774,109 @@ class $StemScheduleEntry extends StemScheduleEntry
   }
 }
 
+class _StemScheduleEntryCopyWithSentinel {
+  const _StemScheduleEntryCopyWithSentinel();
+}
+
 extension StemScheduleEntryOrmExtension on StemScheduleEntry {
+  static const _StemScheduleEntryCopyWithSentinel _copyWithSentinel =
+      _StemScheduleEntryCopyWithSentinel();
+  StemScheduleEntry copyWith({
+    Object? id = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? taskName = _copyWithSentinel,
+    Object? queue = _copyWithSentinel,
+    Object? spec = _copyWithSentinel,
+    Object? createdAt = _copyWithSentinel,
+    Object? updatedAt = _copyWithSentinel,
+    Object? args = _copyWithSentinel,
+    Object? kwargs = _copyWithSentinel,
+    Object? enabled = _copyWithSentinel,
+    Object? jitter = _copyWithSentinel,
+    Object? lastRunAt = _copyWithSentinel,
+    Object? nextRunAt = _copyWithSentinel,
+    Object? lastJitter = _copyWithSentinel,
+    Object? lastError = _copyWithSentinel,
+    Object? timezone = _copyWithSentinel,
+    Object? totalRunCount = _copyWithSentinel,
+    Object? lastSuccessAt = _copyWithSentinel,
+    Object? lastErrorAt = _copyWithSentinel,
+    Object? drift = _copyWithSentinel,
+    Object? expireAt = _copyWithSentinel,
+    Object? meta = _copyWithSentinel,
+    Object? version = _copyWithSentinel,
+  }) {
+    return StemScheduleEntry(
+      id: identical(id, _copyWithSentinel) ? this.id : id as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      taskName: identical(taskName, _copyWithSentinel)
+          ? this.taskName
+          : taskName as String,
+      queue: identical(queue, _copyWithSentinel) ? this.queue : queue as String,
+      spec: identical(spec, _copyWithSentinel) ? this.spec : spec as String,
+      createdAt: identical(createdAt, _copyWithSentinel)
+          ? this.createdAt
+          : createdAt as DateTime,
+      updatedAt: identical(updatedAt, _copyWithSentinel)
+          ? this.updatedAt
+          : updatedAt as DateTime,
+      args: identical(args, _copyWithSentinel) ? this.args : args as String?,
+      kwargs: identical(kwargs, _copyWithSentinel)
+          ? this.kwargs
+          : kwargs as String?,
+      enabled: identical(enabled, _copyWithSentinel)
+          ? this.enabled
+          : enabled as bool,
+      jitter: identical(jitter, _copyWithSentinel)
+          ? this.jitter
+          : jitter as int?,
+      lastRunAt: identical(lastRunAt, _copyWithSentinel)
+          ? this.lastRunAt
+          : lastRunAt as DateTime?,
+      nextRunAt: identical(nextRunAt, _copyWithSentinel)
+          ? this.nextRunAt
+          : nextRunAt as DateTime?,
+      lastJitter: identical(lastJitter, _copyWithSentinel)
+          ? this.lastJitter
+          : lastJitter as int?,
+      lastError: identical(lastError, _copyWithSentinel)
+          ? this.lastError
+          : lastError as String?,
+      timezone: identical(timezone, _copyWithSentinel)
+          ? this.timezone
+          : timezone as String?,
+      totalRunCount: identical(totalRunCount, _copyWithSentinel)
+          ? this.totalRunCount
+          : totalRunCount as int,
+      lastSuccessAt: identical(lastSuccessAt, _copyWithSentinel)
+          ? this.lastSuccessAt
+          : lastSuccessAt as DateTime?,
+      lastErrorAt: identical(lastErrorAt, _copyWithSentinel)
+          ? this.lastErrorAt
+          : lastErrorAt as DateTime?,
+      drift: identical(drift, _copyWithSentinel) ? this.drift : drift as int?,
+      expireAt: identical(expireAt, _copyWithSentinel)
+          ? this.expireAt
+          : expireAt as DateTime?,
+      meta: identical(meta, _copyWithSentinel) ? this.meta : meta as String?,
+      version: identical(version, _copyWithSentinel)
+          ? this.version
+          : version as int?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemScheduleEntryDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemScheduleEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemScheduleEntryDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -1586,6 +1888,56 @@ extension StemScheduleEntryOrmExtension on StemScheduleEntry {
   $StemScheduleEntry toTracked() {
     return $StemScheduleEntry.fromModel(this);
   }
+}
+
+extension StemScheduleEntryPredicateFields
+    on PredicateBuilder<StemScheduleEntry> {
+  PredicateField<StemScheduleEntry, String> get id =>
+      PredicateField<StemScheduleEntry, String>(this, 'id');
+  PredicateField<StemScheduleEntry, String> get namespace =>
+      PredicateField<StemScheduleEntry, String>(this, 'namespace');
+  PredicateField<StemScheduleEntry, String> get taskName =>
+      PredicateField<StemScheduleEntry, String>(this, 'taskName');
+  PredicateField<StemScheduleEntry, String> get queue =>
+      PredicateField<StemScheduleEntry, String>(this, 'queue');
+  PredicateField<StemScheduleEntry, String> get spec =>
+      PredicateField<StemScheduleEntry, String>(this, 'spec');
+  PredicateField<StemScheduleEntry, String?> get args =>
+      PredicateField<StemScheduleEntry, String?>(this, 'args');
+  PredicateField<StemScheduleEntry, String?> get kwargs =>
+      PredicateField<StemScheduleEntry, String?>(this, 'kwargs');
+  PredicateField<StemScheduleEntry, bool> get enabled =>
+      PredicateField<StemScheduleEntry, bool>(this, 'enabled');
+  PredicateField<StemScheduleEntry, int?> get jitter =>
+      PredicateField<StemScheduleEntry, int?>(this, 'jitter');
+  PredicateField<StemScheduleEntry, DateTime?> get lastRunAt =>
+      PredicateField<StemScheduleEntry, DateTime?>(this, 'lastRunAt');
+  PredicateField<StemScheduleEntry, DateTime?> get nextRunAt =>
+      PredicateField<StemScheduleEntry, DateTime?>(this, 'nextRunAt');
+  PredicateField<StemScheduleEntry, int?> get lastJitter =>
+      PredicateField<StemScheduleEntry, int?>(this, 'lastJitter');
+  PredicateField<StemScheduleEntry, String?> get lastError =>
+      PredicateField<StemScheduleEntry, String?>(this, 'lastError');
+  PredicateField<StemScheduleEntry, String?> get timezone =>
+      PredicateField<StemScheduleEntry, String?>(this, 'timezone');
+  PredicateField<StemScheduleEntry, int> get totalRunCount =>
+      PredicateField<StemScheduleEntry, int>(this, 'totalRunCount');
+  PredicateField<StemScheduleEntry, DateTime?> get lastSuccessAt =>
+      PredicateField<StemScheduleEntry, DateTime?>(this, 'lastSuccessAt');
+  PredicateField<StemScheduleEntry, DateTime?> get lastErrorAt =>
+      PredicateField<StemScheduleEntry, DateTime?>(this, 'lastErrorAt');
+  PredicateField<StemScheduleEntry, int?> get drift =>
+      PredicateField<StemScheduleEntry, int?>(this, 'drift');
+  PredicateField<StemScheduleEntry, DateTime?> get expireAt =>
+      PredicateField<StemScheduleEntry, DateTime?>(this, 'expireAt');
+  PredicateField<StemScheduleEntry, String?> get meta =>
+      PredicateField<StemScheduleEntry, String?>(this, 'meta');
+  PredicateField<StemScheduleEntry, DateTime> get createdAt =>
+      PredicateField<StemScheduleEntry, DateTime>(this, 'createdAt');
+  PredicateField<StemScheduleEntry, DateTime> get updatedAt =>
+      PredicateField<StemScheduleEntry, DateTime>(this, 'updatedAt');
+  PredicateField<StemScheduleEntry, int?> get version =>
+      PredicateField<StemScheduleEntry, int?>(this, 'version');
 }
 
 void registerStemScheduleEntryEventHandlers(EventBus bus) {

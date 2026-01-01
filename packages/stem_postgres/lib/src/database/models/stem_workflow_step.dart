@@ -6,7 +6,12 @@ part 'stem_workflow_step.orm.dart';
 @OrmModel(table: 'stem_workflow_steps', primaryKey: ['runId', 'name'])
 class StemWorkflowStep extends Model<StemWorkflowStep> {
   /// Creates a workflow step checkpoint record.
-  StemWorkflowStep({required this.runId, required this.name, this.value});
+  StemWorkflowStep({
+    required this.runId,
+    required this.name,
+    required this.namespace,
+    this.value,
+  });
 
   /// Workflow run identifier.
   @OrmField(columnName: 'run_id')
@@ -15,6 +20,10 @@ class StemWorkflowStep extends Model<StemWorkflowStep> {
   /// Step name.
   @OrmField(columnName: 'name')
   final String name;
+
+  /// Namespace that owns the workflow step.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Serialized step value.
   @OrmField(columnName: 'value')

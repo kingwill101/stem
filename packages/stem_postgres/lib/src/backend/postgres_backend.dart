@@ -9,6 +9,7 @@ import 'package:stem_postgres/src/database/models/models.dart';
 class PostgresResultBackend implements ResultBackend {
   PostgresResultBackend._(
     this._connections, {
+    required this.namespace,
     this.defaultTtl = const Duration(days: 1),
     this.groupDefaultTtl = const Duration(days: 1),
     this.heartbeatTtl = const Duration(seconds: 60),
@@ -16,6 +17,9 @@ class PostgresResultBackend implements ResultBackend {
 
   final PostgresConnections _connections;
   final QueryContext _context;
+
+  /// Namespace used to scope backend data.
+  final String namespace;
 
   /// Default TTL applied to task results.
   final Duration defaultTtl;
@@ -46,15 +50,19 @@ class PostgresResultBackend implements ResultBackend {
   /// ```
   static Future<PostgresResultBackend> connect({
     String? connectionString,
+    String namespace = 'stem',
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
     );
     final backend = PostgresResultBackend._(
       connections,
+      namespace: resolvedNamespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,
@@ -76,14 +84,17 @@ class PostgresResultBackend implements ResultBackend {
       await _connections.runInTransaction((txn) async {
         await txn
             .query<StemTaskResult>()
+            .whereEquals('namespace', namespace)
             .where('expiresAt', now, PredicateOperator.lessThan)
             .delete();
         await txn
             .query<StemGroup>()
+            .whereEquals('namespace', namespace)
             .where('expiresAt', now, PredicateOperator.lessThan)
             .delete();
         await txn
             .query<StemWorkerHeartbeat>()
+            .whereEquals('namespace', namespace)
             .where('expiresAt', now, PredicateOperator.lessThan)
             .delete();
       });
@@ -131,6 +142,7 @@ class PostgresResultBackend implements ResultBackend {
     await _connections.runInTransaction((txn) async {
       final model = $StemTaskResult(
         id: taskId,
+        namespace: namespace,
         state: state.name,
         payload: payload,
         error: error?.toJson(),
@@ -150,6 +162,7 @@ class PostgresResultBackend implements ResultBackend {
     final row = await _context
         .query<StemTaskResult>()
         .whereEquals('id', taskId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     if (row == null) return null;
@@ -195,6 +208,7 @@ class PostgresResultBackend implements ResultBackend {
       final existing = await txn
           .query<StemGroup>()
           .whereEquals('id', descriptor.id)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (existing == null) {
@@ -202,6 +216,7 @@ class PostgresResultBackend implements ResultBackend {
         await txn.repository<StemGroup>().insert(
           StemGroupInsertDto(
             id: descriptor.id,
+            namespace: namespace,
             expected: descriptor.expected,
             meta: descriptor.meta,
             expiresAt: expiresAt,
@@ -215,13 +230,14 @@ class PostgresResultBackend implements ResultBackend {
             meta: descriptor.meta,
             expiresAt: expiresAt,
           ),
-          where: StemGroupPartial(id: descriptor.id),
+          where: StemGroupPartial(id: descriptor.id, namespace: namespace),
         );
       }
 
       await txn
           .query<StemGroupResult>()
           .whereEquals('groupId', descriptor.id)
+          .whereEquals('namespace', namespace)
           .delete();
     });
   }
@@ -235,6 +251,7 @@ class PostgresResultBackend implements ResultBackend {
         StemGroupResultInsertDto(
           groupId: groupId,
           taskId: status.id,
+          namespace: namespace,
           state: status.state.name,
           payload: status.payload,
           error: status.error?.toJson(),
@@ -258,7 +275,7 @@ class PostgresResultBackend implements ResultBackend {
 
     await _context.repository<StemTaskResult>().update(
       StemTaskResultUpdateDto(expiresAt: expiresAt),
-      where: StemTaskResultPartial(id: taskId),
+      where: StemTaskResultPartial(id: taskId, namespace: namespace),
     );
   }
 
@@ -268,7 +285,7 @@ class PostgresResultBackend implements ResultBackend {
     await _connections.runInTransaction((txn) async {
       final model = StemWorkerHeartbeat(
         workerId: heartbeat.workerId,
-        namespace: heartbeat.namespace,
+        namespace: namespace,
         timestamp: heartbeat.timestamp,
         isolateCount: heartbeat.isolateCount,
         inflight: heartbeat.inflight,
@@ -291,6 +308,7 @@ class PostgresResultBackend implements ResultBackend {
     final row = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('workerId', workerId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     if (row == null) return null;
@@ -302,6 +320,7 @@ class PostgresResultBackend implements ResultBackend {
     final now = DateTime.now();
     final rows = await _context
         .query<StemWorkerHeartbeat>()
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .orderBy('timestamp', descending: true)
         .get();
@@ -318,6 +337,7 @@ class PostgresResultBackend implements ResultBackend {
       final row = await txn
           .query<StemGroup>()
           .whereEquals('id', groupId)
+          .whereEquals('namespace', namespace)
           .firstOrNull();
       if (row == null) return false;
       final meta = Map<String, Object?>.from(row.meta);
@@ -331,7 +351,7 @@ class PostgresResultBackend implements ResultBackend {
       }
       await txn.repository<StemGroup>().update(
         StemGroupUpdateDto(meta: meta),
-        where: StemGroupPartial(id: groupId),
+        where: StemGroupPartial(id: groupId, namespace: namespace),
       );
       return true;
     });
@@ -344,6 +364,7 @@ class PostgresResultBackend implements ResultBackend {
     return _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .exists();
   }
@@ -353,6 +374,7 @@ class PostgresResultBackend implements ResultBackend {
     final groupRow = await _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
+        .whereEquals('namespace', namespace)
         .where('expiresAt', now, PredicateOperator.greaterThan)
         .firstOrNull();
     if (groupRow == null) return null;
@@ -360,6 +382,7 @@ class PostgresResultBackend implements ResultBackend {
     final resultRows = await _context
         .query<StemGroupResult>()
         .whereEquals('groupId', groupId)
+        .whereEquals('namespace', namespace)
         .get();
     final results = <String, TaskStatus>{};
     for (final row in resultRows) {

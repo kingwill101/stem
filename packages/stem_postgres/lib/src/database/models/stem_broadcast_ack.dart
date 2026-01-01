@@ -9,6 +9,7 @@ class StemBroadcastAck extends Model<StemBroadcastAck> with TimestampsTZ {
   const StemBroadcastAck({
     required this.messageId,
     required this.workerId,
+    required this.namespace,
     this.acknowledgedAt,
   });
 
@@ -19,6 +20,10 @@ class StemBroadcastAck extends Model<StemBroadcastAck> with TimestampsTZ {
   /// Worker identifier that acknowledged the message.
   @OrmField(isPrimaryKey: true, columnName: 'worker_id')
   final String workerId;
+
+  /// Namespace that owns the acknowledgement.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Timestamp when the acknowledgement was recorded.
   @OrmField(columnName: 'acknowledged_at')

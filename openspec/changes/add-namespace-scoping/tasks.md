@@ -1,0 +1,11 @@
+## 1. Implementation
+- [x] 1.1 Add namespace columns + indexes to Postgres migrations (all adapter tables)
+- [x] 1.2 Add namespace columns + indexes to SQLite migrations (all adapter tables)
+- [x] 1.3 Update Postgres models to include namespace fields
+- [x] 1.4 Update SQLite models to include namespace fields
+- [x] 1.5 Update Postgres adapters (broker/backend/workflow/schedule/lock/revoke/heartbeat) to write + filter by namespace
+- [x] 1.6 Update SQLite adapters (broker/backend/workflow/schedule/lock/revoke/heartbeat) to write + filter by namespace
+- [x] 1.7 Verify Redis adapters consistently prefix keys with namespace
+- [x] 1.8 Update workflow namespace behavior (remove prefixing if redundant, or document dual behavior)
+- [x] 1.9 Add namespace isolation tests for Postgres/SQLite/Redis adapters
+- [x] 1.10 Run relevant test suites

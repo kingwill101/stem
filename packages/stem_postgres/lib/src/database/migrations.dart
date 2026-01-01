@@ -4,7 +4,8 @@ import 'dart:io';
 import 'package:ormed/migrations.dart';
 
 // <ORM-MIGRATION-IMPORTS>
-import 'package:stem_postgres/src/database/migrations/m_20251227071920_stem.dart'; // </ORM-MIGRATION-IMPORTS>
+import 'package:stem_postgres/src/database/migrations/m_20251227071920_stem.dart';
+import 'package:stem_postgres/src/database/migrations/m_20251231160000_add_namespace_scoping.dart'; // </ORM-MIGRATION-IMPORTS>
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
@@ -12,6 +13,13 @@ final List<MigrationEntry> _entries = [
     id: MigrationId(DateTime(2025, 12, 27, 7, 19, 20), 'm_20251227071920_stem'),
     migration: const Stem(),
   ), // </ORM-MIGRATION-REGISTRY>
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2025, 12, 31, 16, 0, 0),
+      'm_20251231160000_add_namespace_scoping',
+    ),
+    migration: const AddNamespaceScoping(),
+  ),
 ];
 
 /// Build migration descriptors sorted by timestamp.

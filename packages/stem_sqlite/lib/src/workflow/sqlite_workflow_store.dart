@@ -11,18 +11,30 @@ class SqliteWorkflowStore implements WorkflowStore {
   /// Opens a SQLite-backed workflow store using [file].
   static Future<SqliteWorkflowStore> open(
     File file, {
+    String namespace = 'stem',
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
     final connections = await SqliteConnections.open(file);
-    return SqliteWorkflowStore._(connections, clock);
+    return SqliteWorkflowStore._(
+      connections,
+      clock,
+      namespace: resolvedNamespace,
+    );
   }
 
-  SqliteWorkflowStore._(this._connections, this._clock)
+  SqliteWorkflowStore._(
+    this._connections,
+    this._clock, {
+    required this.namespace,
+  })
     : _context = _connections.context;
 
   final SqliteConnections _connections;
   final QueryContext _context;
   final WorkflowClock _clock;
+  final String namespace;
   int _idCounter = 0;
 
   Map<String, Object?> _prepareSuspensionData(
@@ -65,6 +77,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       await ctx.repository<StemWorkflowRun>().insert(
         StemWorkflowRunInsertDto(
           id: id,
+          namespace: namespace,
           workflow: workflow,
           status: WorkflowStatus.running.name,
           params: jsonEncode(params),
@@ -87,6 +100,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final run = await ctx
         .query<StemWorkflowRun>()
         .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (run == null) return null;
@@ -94,6 +108,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final steps = await ctx
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .get();
 
     final baseSteps = <String>{};
@@ -133,6 +148,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
         .whereEquals('name', stepName)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (step == null) return null;
@@ -148,18 +164,24 @@ class SqliteWorkflowStore implements WorkflowStore {
           .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
           .whereEquals('name', stepName)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (existing != null) {
         await ctx.repository<StemWorkflowStep>().update(
           StemWorkflowStepUpdateDto(value: jsonEncode(value)),
-          where: StemWorkflowStepPartial(runId: runId, name: stepName),
+          where: StemWorkflowStepPartial(
+            runId: runId,
+            name: stepName,
+            namespace: namespace,
+          ),
         );
       } else {
         await ctx.repository<StemWorkflowStep>().insert(
           StemWorkflowStepInsertDto(
             runId: runId,
             name: stepName,
+            namespace: namespace,
             value: jsonEncode(value),
           ),
         );
@@ -167,7 +189,7 @@ class SqliteWorkflowStore implements WorkflowStore {
 
       await ctx.repository<StemWorkflowRun>().update(
         StemWorkflowRunUpdateDto(updatedAt: now),
-        where: StemWorkflowRunPartial(id: runId),
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
       );
     });
   }
@@ -186,6 +208,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -198,7 +221,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['wait_topic'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -224,6 +247,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -236,7 +260,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         ).toMap();
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -263,6 +287,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final existing = await ctx
           .query<StemWorkflowWatcher>()
           .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (existing != null) {
@@ -274,7 +299,10 @@ class SqliteWorkflowStore implements WorkflowStore {
             createdAt: now,
             deadline: deadline,
           ),
-          where: StemWorkflowWatcherPartial(runId: runId),
+          where: StemWorkflowWatcherPartial(
+            runId: runId,
+            namespace: namespace,
+          ),
         );
       } else {
         await ctx.repository<StemWorkflowWatcher>().insert(
@@ -282,6 +310,7 @@ class SqliteWorkflowStore implements WorkflowStore {
             runId: runId,
             stepName: stepName,
             topic: topic,
+            namespace: namespace,
             data: payload,
             createdAt: now,
             deadline: deadline,
@@ -292,6 +321,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -304,7 +334,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         ).toMap();
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -320,6 +350,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -331,7 +362,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['wait_topic'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -347,6 +378,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -361,7 +393,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -384,6 +416,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -397,7 +430,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         ).toMap();
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -413,6 +446,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -428,7 +462,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         }
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -439,6 +473,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     return _connections.runInTransaction((ctx) async {
       final dueRuns = await ctx
           .query<StemWorkflowRun>()
+          .whereEquals('namespace', namespace)
           .whereNotNull('resumeAt')
           .where('resumeAt', now, PredicateOperator.lessThanOrEqual)
           .whereEquals('status', WorkflowStatus.suspended.name)
@@ -455,7 +490,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['resume_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: run.id),
+          where: StemWorkflowRunPartial(id: run.id, namespace: namespace),
         );
       }
 
@@ -468,6 +503,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final watcherRows = await _context
         .query<StemWorkflowWatcher>()
         .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
         .orderBy('createdAt')
         .limit(limit)
         .get();
@@ -479,6 +515,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final fallbackRows = await _context
         .query<StemWorkflowRun>()
         .whereEquals('waitTopic', topic)
+        .whereEquals('namespace', namespace)
         .limit(limit)
         .get();
 
@@ -495,6 +532,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final watchers = await ctx
           .query<StemWorkflowWatcher>()
           .whereEquals('topic', topic)
+          .whereEquals('namespace', namespace)
           .orderBy('createdAt')
           .limit(limit)
           .get();
@@ -524,6 +562,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         final run = await ctx
             .query<StemWorkflowRun>()
             .whereEquals('id', watcher.runId)
+            .whereEquals('namespace', namespace)
             .first();
 
         if (run != null) {
@@ -536,7 +575,10 @@ class SqliteWorkflowStore implements WorkflowStore {
           updates['resume_at'] = null;
           await ctx.repository<StemWorkflowRun>().update(
             updates,
-            where: StemWorkflowRunPartial(id: watcher.runId),
+            where: StemWorkflowRunPartial(
+              id: watcher.runId,
+              namespace: namespace,
+            ),
           );
         }
 
@@ -564,6 +606,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final rows = await _context
         .query<StemWorkflowWatcher>()
         .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
         .orderBy('createdAt')
         .limit(limit)
         .get();
@@ -601,6 +644,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
           .first();
 
       if (run != null) {
@@ -614,7 +658,7 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['resume_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
-          where: StemWorkflowRunPartial(id: runId),
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
     });
@@ -628,6 +672,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       final stepRows = await ctx
           .query<StemWorkflowStep>()
           .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
           .orderBy('name')
           .get();
 
@@ -654,6 +699,7 @@ class SqliteWorkflowStore implements WorkflowStore {
             StemWorkflowStepInsertDto(
               runId: runId,
               name: step.name,
+              namespace: namespace,
               value: step.value,
             ),
           );
@@ -662,7 +708,11 @@ class SqliteWorkflowStore implements WorkflowStore {
         }
       }
 
-      await ctx.query<StemWorkflowStep>().whereEquals('runId', runId).delete();
+      await ctx
+          .query<StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
+          .delete();
 
       if (keep.isNotEmpty) {
         await ctx.repository<StemWorkflowStep>().insertMany(keep);
@@ -681,7 +731,7 @@ class SqliteWorkflowStore implements WorkflowStore {
       updates['resume_at'] = null;
       await ctx.repository<StemWorkflowRun>().update(
         updates,
-        where: StemWorkflowRunPartial(id: runId),
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
       );
     });
   }
@@ -693,6 +743,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     int limit = 50,
   }) async {
     var query = _context.query<StemWorkflowRun>();
+    query = query.whereEquals('namespace', namespace);
 
     if (workflow != null) {
       query = query.whereEquals('workflow', workflow);
@@ -725,6 +776,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final rows = await _context
         .query<StemWorkflowStep>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .orderBy('name')
         .get();
 
@@ -752,6 +804,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final watcher = await ctx
         .query<StemWorkflowWatcher>()
         .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
         .first();
 
     if (watcher != null) {

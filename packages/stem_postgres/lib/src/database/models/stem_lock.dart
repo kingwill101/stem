@@ -8,6 +8,7 @@ class StemLock extends Model<StemLock> {
   /// Creates a lock record.
   StemLock({
     required this.key,
+    required this.namespace,
     required this.owner,
     required this.expiresAt,
     required this.createdAt,
@@ -16,6 +17,10 @@ class StemLock extends Model<StemLock> {
   /// Lock key.
   @OrmField(columnName: 'key', isPrimaryKey: true)
   final String key;
+
+  /// Namespace that owns the lock.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Owner identifier for the lock.
   @OrmField(columnName: 'owner')

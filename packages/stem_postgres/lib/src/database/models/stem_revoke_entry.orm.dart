@@ -14,6 +14,9 @@ const FieldDefinition _$StemRevokeEntryTaskIdField = FieldDefinition(
   resolvedType: 'String',
   isPrimaryKey: true,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryNamespaceField = FieldDefinition(
@@ -21,7 +24,11 @@ const FieldDefinition _$StemRevokeEntryNamespaceField = FieldDefinition(
   columnName: 'namespace',
   dartType: 'String',
   resolvedType: 'String',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryTerminateField = FieldDefinition(
@@ -29,7 +36,11 @@ const FieldDefinition _$StemRevokeEntryTerminateField = FieldDefinition(
   columnName: 'terminate',
   dartType: 'bool',
   resolvedType: 'bool',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryReasonField = FieldDefinition(
@@ -37,7 +48,11 @@ const FieldDefinition _$StemRevokeEntryReasonField = FieldDefinition(
   columnName: 'reason',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryRequestedByField = FieldDefinition(
@@ -45,7 +60,11 @@ const FieldDefinition _$StemRevokeEntryRequestedByField = FieldDefinition(
   columnName: 'requested_by',
   dartType: 'String',
   resolvedType: 'String?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryIssuedAtField = FieldDefinition(
@@ -53,7 +72,11 @@ const FieldDefinition _$StemRevokeEntryIssuedAtField = FieldDefinition(
   columnName: 'issued_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryExpiresAtField = FieldDefinition(
@@ -61,7 +84,11 @@ const FieldDefinition _$StemRevokeEntryExpiresAtField = FieldDefinition(
   columnName: 'expires_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime?',
+  isPrimaryKey: false,
   isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryVersionField = FieldDefinition(
@@ -69,7 +96,11 @@ const FieldDefinition _$StemRevokeEntryVersionField = FieldDefinition(
   columnName: 'version',
   dartType: 'int',
   resolvedType: 'int',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 const FieldDefinition _$StemRevokeEntryUpdatedAtField = FieldDefinition(
@@ -77,7 +108,11 @@ const FieldDefinition _$StemRevokeEntryUpdatedAtField = FieldDefinition(
   columnName: 'updated_at',
   dartType: 'DateTime',
   resolvedType: 'DateTime',
+  isPrimaryKey: false,
   isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
 );
 
 Map<String, Object?> _encodeStemRevokeEntryUntracked(
@@ -116,11 +151,11 @@ Map<String, Object?> _encodeStemRevokeEntryUntracked(
   };
 }
 
-const ModelDefinition<$StemRevokeEntry> _$StemRevokeEntryDefinition =
+final ModelDefinition<$StemRevokeEntry> _$StemRevokeEntryDefinition =
     ModelDefinition(
       modelName: 'StemRevokeEntry',
       tableName: 'stem_revokes',
-      fields: [
+      fields: const [
         _$StemRevokeEntryTaskIdField,
         _$StemRevokeEntryNamespaceField,
         _$StemRevokeEntryTerminateField,
@@ -131,7 +166,20 @@ const ModelDefinition<$StemRevokeEntry> _$StemRevokeEntryDefinition =
         _$StemRevokeEntryVersionField,
         _$StemRevokeEntryUpdatedAtField,
       ],
+      relations: const [],
       softDeleteColumn: 'deleted_at',
+      metadata: ModelAttributesMetadata(
+        hidden: const <String>[],
+        visible: const <String>[],
+        fillable: const <String>[],
+        guarded: const <String>[],
+        casts: const <String, String>{},
+        appends: const <String>[],
+        touches: const <String>[],
+        timestamps: true,
+        softDeletes: false,
+        softDeleteColumn: 'deleted_at',
+      ),
       untrackedToMap: _encodeStemRevokeEntryUntracked,
       codec: _$StemRevokeEntryCodec(),
     );
@@ -185,7 +233,7 @@ class StemRevokeEntries {
 
   static Query<$StemRevokeEntry> orderBy(
     String column, {
-    String direction = 'asc',
+    String direction = "asc",
     String? connection,
   }) => Model.orderBy<$StemRevokeEntry>(
     column,
@@ -201,6 +249,18 @@ class StemRevokeEntries {
   /// {@macro ormed.repository}
   static Repository<$StemRevokeEntry> repo([String? connection]) =>
       Model.repository<$StemRevokeEntry>(connection: connection);
+
+  /// Builds a tracked model from a column/value map.
+  static $StemRevokeEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemRevokeEntryDefinition.fromMap(data, registry: registry);
+
+  /// Converts a tracked model to a column/value map.
+  static Map<String, Object?> toMap(
+    $StemRevokeEntry model, {
+    ValueCodecRegistry? registry,
+  }) => _$StemRevokeEntryDefinition.toMap(model, registry: registry);
 }
 
 class StemRevokeEntryModelFactory {
@@ -291,13 +351,13 @@ class _$StemRevokeEntryCodec extends ModelCodec<$StemRevokeEntry> {
     Map<String, Object?> data,
     ValueCodecRegistry registry,
   ) {
-    final stemRevokeEntryTaskIdValue =
+    final String stemRevokeEntryTaskIdValue =
         registry.decodeField<String>(
           _$StemRevokeEntryTaskIdField,
           data['task_id'],
         ) ??
         (throw StateError('Field taskId on StemRevokeEntry cannot be null.'));
-    final stemRevokeEntryNamespaceValue =
+    final String stemRevokeEntryNamespaceValue =
         registry.decodeField<String>(
           _$StemRevokeEntryNamespaceField,
           data['namespace'],
@@ -305,7 +365,7 @@ class _$StemRevokeEntryCodec extends ModelCodec<$StemRevokeEntry> {
         (throw StateError(
           'Field namespace on StemRevokeEntry cannot be null.',
         ));
-    final stemRevokeEntryTerminateValue =
+    final bool stemRevokeEntryTerminateValue =
         registry.decodeField<bool>(
           _$StemRevokeEntryTerminateField,
           data['terminate'],
@@ -313,31 +373,33 @@ class _$StemRevokeEntryCodec extends ModelCodec<$StemRevokeEntry> {
         (throw StateError(
           'Field terminate on StemRevokeEntry cannot be null.',
         ));
-    final stemRevokeEntryReasonValue = registry.decodeField<String?>(
+    final String? stemRevokeEntryReasonValue = registry.decodeField<String?>(
       _$StemRevokeEntryReasonField,
       data['reason'],
     );
-    final stemRevokeEntryRequestedByValue = registry.decodeField<String?>(
-      _$StemRevokeEntryRequestedByField,
-      data['requested_by'],
-    );
-    final stemRevokeEntryIssuedAtValue =
+    final String? stemRevokeEntryRequestedByValue = registry
+        .decodeField<String?>(
+          _$StemRevokeEntryRequestedByField,
+          data['requested_by'],
+        );
+    final DateTime stemRevokeEntryIssuedAtValue =
         registry.decodeField<DateTime>(
           _$StemRevokeEntryIssuedAtField,
           data['issued_at'],
         ) ??
         (throw StateError('Field issuedAt on StemRevokeEntry cannot be null.'));
-    final stemRevokeEntryExpiresAtValue = registry.decodeField<DateTime?>(
-      _$StemRevokeEntryExpiresAtField,
-      data['expires_at'],
-    );
-    final stemRevokeEntryVersionValue =
+    final DateTime? stemRevokeEntryExpiresAtValue = registry
+        .decodeField<DateTime?>(
+          _$StemRevokeEntryExpiresAtField,
+          data['expires_at'],
+        );
+    final int stemRevokeEntryVersionValue =
         registry.decodeField<int>(
           _$StemRevokeEntryVersionField,
           data['version'],
         ) ??
         (throw StateError('Field version on StemRevokeEntry cannot be null.'));
-    final stemRevokeEntryUpdatedAtValue =
+    final DateTime stemRevokeEntryUpdatedAtValue =
         registry.decodeField<DateTime>(
           _$StemRevokeEntryUpdatedAtField,
           data['updated_at'],
@@ -349,12 +411,12 @@ class _$StemRevokeEntryCodec extends ModelCodec<$StemRevokeEntry> {
       taskId: stemRevokeEntryTaskIdValue,
       namespace: stemRevokeEntryNamespaceValue,
       terminate: stemRevokeEntryTerminateValue,
-      reason: stemRevokeEntryReasonValue,
-      requestedBy: stemRevokeEntryRequestedByValue,
       issuedAt: stemRevokeEntryIssuedAtValue,
-      expiresAt: stemRevokeEntryExpiresAtValue,
       version: stemRevokeEntryVersionValue,
       updatedAt: stemRevokeEntryUpdatedAtValue,
+      reason: stemRevokeEntryReasonValue,
+      requestedBy: stemRevokeEntryRequestedByValue,
+      expiresAt: stemRevokeEntryExpiresAtValue,
     );
     model._attachOrmRuntimeMetadata({
       'task_id': stemRevokeEntryTaskIdValue,
@@ -596,27 +658,27 @@ class StemRevokeEntryPartial implements PartialEntity<$StemRevokeEntry> {
   @override
   $StemRevokeEntry toEntity() {
     // Basic required-field check: non-nullable fields must be present.
-    final taskIdValue = taskId;
+    final String? taskIdValue = taskId;
     if (taskIdValue == null) {
       throw StateError('Missing required field: taskId');
     }
-    final namespaceValue = namespace;
+    final String? namespaceValue = namespace;
     if (namespaceValue == null) {
       throw StateError('Missing required field: namespace');
     }
-    final terminateValue = terminate;
+    final bool? terminateValue = terminate;
     if (terminateValue == null) {
       throw StateError('Missing required field: terminate');
     }
-    final issuedAtValue = issuedAt;
+    final DateTime? issuedAtValue = issuedAt;
     if (issuedAtValue == null) {
       throw StateError('Missing required field: issuedAt');
     }
-    final versionValue = version;
+    final int? versionValue = version;
     if (versionValue == null) {
       throw StateError('Missing required field: version');
     }
-    final updatedAtValue = updatedAt;
+    final DateTime? updatedAtValue = updatedAt;
     if (updatedAtValue == null) {
       throw StateError('Missing required field: updatedAt');
     }
@@ -719,16 +781,16 @@ class $StemRevokeEntry extends StemRevokeEntry
     String? reason,
     String? requestedBy,
     DateTime? expiresAt,
-  }) : super.new(
+  }) : super(
          taskId: taskId,
          namespace: namespace,
          terminate: terminate,
-         reason: reason,
-         requestedBy: requestedBy,
          issuedAt: issuedAt,
-         expiresAt: expiresAt,
          version: version,
          updatedAt: updatedAt,
+         reason: reason,
+         requestedBy: requestedBy,
+         expiresAt: expiresAt,
        ) {
     _attachOrmRuntimeMetadata({
       'task_id': taskId,
@@ -781,6 +843,16 @@ class $StemRevokeEntry extends StemRevokeEntry
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  /// Builds a tracked model from a column/value map.
+  static $StemRevokeEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemRevokeEntryDefinition.fromMap(data, registry: registry);
+
+  /// Converts this tracked model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemRevokeEntryDefinition.toMap(this, registry: registry);
 
   /// Tracked getter for [taskId].
   @override
@@ -855,7 +927,65 @@ class $StemRevokeEntry extends StemRevokeEntry
   }
 }
 
+class _StemRevokeEntryCopyWithSentinel {
+  const _StemRevokeEntryCopyWithSentinel();
+}
+
 extension StemRevokeEntryOrmExtension on StemRevokeEntry {
+  static const _StemRevokeEntryCopyWithSentinel _copyWithSentinel =
+      _StemRevokeEntryCopyWithSentinel();
+  StemRevokeEntry copyWith({
+    Object? taskId = _copyWithSentinel,
+    Object? namespace = _copyWithSentinel,
+    Object? terminate = _copyWithSentinel,
+    Object? issuedAt = _copyWithSentinel,
+    Object? version = _copyWithSentinel,
+    Object? updatedAt = _copyWithSentinel,
+    Object? reason = _copyWithSentinel,
+    Object? requestedBy = _copyWithSentinel,
+    Object? expiresAt = _copyWithSentinel,
+  }) {
+    return StemRevokeEntry(
+      taskId: identical(taskId, _copyWithSentinel)
+          ? this.taskId
+          : taskId as String,
+      namespace: identical(namespace, _copyWithSentinel)
+          ? this.namespace
+          : namespace as String,
+      terminate: identical(terminate, _copyWithSentinel)
+          ? this.terminate
+          : terminate as bool,
+      issuedAt: identical(issuedAt, _copyWithSentinel)
+          ? this.issuedAt
+          : issuedAt as DateTime,
+      version: identical(version, _copyWithSentinel)
+          ? this.version
+          : version as int,
+      updatedAt: identical(updatedAt, _copyWithSentinel)
+          ? this.updatedAt
+          : updatedAt as DateTime,
+      reason: identical(reason, _copyWithSentinel)
+          ? this.reason
+          : reason as String?,
+      requestedBy: identical(requestedBy, _copyWithSentinel)
+          ? this.requestedBy
+          : requestedBy as String?,
+      expiresAt: identical(expiresAt, _copyWithSentinel)
+          ? this.expiresAt
+          : expiresAt as DateTime?,
+    );
+  }
+
+  /// Converts this model to a column/value map.
+  Map<String, Object?> toMap({ValueCodecRegistry? registry}) =>
+      _$StemRevokeEntryDefinition.toMap(this, registry: registry);
+
+  /// Builds a model from a column/value map.
+  static StemRevokeEntry fromMap(
+    Map<String, Object?> data, {
+    ValueCodecRegistry? registry,
+  }) => _$StemRevokeEntryDefinition.fromMap(data, registry: registry);
+
   /// The Type of the generated ORM-managed model class.
   /// Use this when you need to specify the tracked model type explicitly,
   /// for example in generic type parameters.
@@ -867,6 +997,27 @@ extension StemRevokeEntryOrmExtension on StemRevokeEntry {
   $StemRevokeEntry toTracked() {
     return $StemRevokeEntry.fromModel(this);
   }
+}
+
+extension StemRevokeEntryPredicateFields on PredicateBuilder<StemRevokeEntry> {
+  PredicateField<StemRevokeEntry, String> get taskId =>
+      PredicateField<StemRevokeEntry, String>(this, 'taskId');
+  PredicateField<StemRevokeEntry, String> get namespace =>
+      PredicateField<StemRevokeEntry, String>(this, 'namespace');
+  PredicateField<StemRevokeEntry, bool> get terminate =>
+      PredicateField<StemRevokeEntry, bool>(this, 'terminate');
+  PredicateField<StemRevokeEntry, String?> get reason =>
+      PredicateField<StemRevokeEntry, String?>(this, 'reason');
+  PredicateField<StemRevokeEntry, String?> get requestedBy =>
+      PredicateField<StemRevokeEntry, String?>(this, 'requestedBy');
+  PredicateField<StemRevokeEntry, DateTime> get issuedAt =>
+      PredicateField<StemRevokeEntry, DateTime>(this, 'issuedAt');
+  PredicateField<StemRevokeEntry, DateTime?> get expiresAt =>
+      PredicateField<StemRevokeEntry, DateTime?>(this, 'expiresAt');
+  PredicateField<StemRevokeEntry, int> get version =>
+      PredicateField<StemRevokeEntry, int>(this, 'version');
+  PredicateField<StemRevokeEntry, DateTime> get updatedAt =>
+      PredicateField<StemRevokeEntry, DateTime>(this, 'updatedAt');
 }
 
 void registerStemRevokeEntryEventHandlers(EventBus bus) {

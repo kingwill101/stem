@@ -8,6 +8,7 @@ class StemDeadLetter extends Model<StemDeadLetter> {
   /// Creates a dead letter record.
   const StemDeadLetter({
     required this.id,
+    required this.namespace,
     required this.queue,
     required this.envelope,
     required this.deadAt,
@@ -18,6 +19,10 @@ class StemDeadLetter extends Model<StemDeadLetter> {
   /// Dead letter identifier.
   @OrmField(isPrimaryKey: true)
   final String id;
+
+  /// Namespace that owns the dead letter entry.
+  @OrmField(columnName: 'namespace')
+  final String namespace;
 
   /// Queue name associated with the dead letter.
   final String queue;
