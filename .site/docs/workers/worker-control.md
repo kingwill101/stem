@@ -9,6 +9,14 @@ Stem exposes a broker-backed control plane so operators can inspect, revoke, and
 coordinate workers without restarts. This guide walks through the CLI surface,
 revocation durability, and termination semantics for inline vs isolate handlers.
 
+## Remote control primer
+
+- **Inspect** commands read worker state (`stem worker stats`, `stem worker inspect`).
+- **Control** commands mutate state (`stem worker revoke`, `stem worker shutdown`).
+- Commands broadcast to all workers unless you pass `--worker` to target
+  specific IDs.
+- Use `--namespace` to match the control namespace used by your workers.
+
 ## CLI Overview
 
 | Command | Purpose |

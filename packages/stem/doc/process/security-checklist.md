@@ -8,7 +8,15 @@
 - [ ] Rotate credentials quarterly; update docs when rotation occurs.
 
 ## Payload & Data Protection
-- [ ] Provide optional payload signing (HMAC) guidance; stub helper in backlog.
+- [ ] Document HMAC payload signing setup:
+  - [ ] Generate a 32-byte secret: `openssl rand -base64 32`.
+  - [ ] Set `STEM_SIGNING_KEYS=primary:<secret>` + `STEM_SIGNING_ACTIVE_KEY=primary`
+        on producers, workers, and beat.
+  - [ ] Wire `PayloadSigner.maybe(config.signing)` into producers and workers.
+  - [ ] Reference security examples (`doc/process/security-examples.md`).
+- [ ] Document signing key rotation with overlap and monitoring:
+  - [ ] Follow `doc/process/security-runbook.md` rotation steps.
+  - [ ] Monitor `stem.tasks.signature_invalid` for spikes; inspect DLQ for `signature-invalid`.
 - [ ] Recommend encrypting sensitive args before enqueue; document pattern.
 - [ ] Ensure result backend TTLs comply with data retention policies.
 

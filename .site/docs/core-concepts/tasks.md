@@ -92,7 +92,10 @@ Set soft/hard timeouts to guard against runaway tasks:
 - Make task inputs explicit (`args`, `headers`, `meta`).
 - Guard external calls with idempotency keys.
 - Store state transitions atomically (e.g. using Postgres or Redis transactions).
-- Set `TaskOptions.unique`/`uniqueFor` for naturally unique jobs.
+- Set `TaskOptions.unique`/`uniqueFor` for naturally unique jobs (see
+  [Uniqueness](./uniqueness.md)).
+- Use `TaskOptions.rateLimit` with a worker `RateLimiter` to throttle hot tasks
+  (see [Rate Limiting](./rate-limiting.md)).
 
 With these practices in place, tasks can be retried safely and composed via
 chains, groups, and chords (see [Canvas Patterns](./canvas.md)).

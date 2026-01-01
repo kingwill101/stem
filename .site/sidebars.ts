@@ -26,6 +26,11 @@ const sidebars: SidebarsConfig = {
         "getting-started/observability-and-ops",
         "getting-started/production-checklist",
         "getting-started/troubleshooting",
+        "getting-started/next-steps",
+        "getting-started/best-practices",
+        "getting-started/reliability",
+        "getting-started/monitoring",
+        "getting-started/retry-backoff",
       ],
     },
     {
@@ -36,6 +41,9 @@ const sidebars: SidebarsConfig = {
         "core-concepts/tasks",
         "core-concepts/producer",
         "core-concepts/signing",
+        "core-concepts/rate-limiting",
+        "core-concepts/uniqueness",
+        "core-concepts/namespaces",
         "core-concepts/routing",
         "core-concepts/signals",
         "core-concepts/canvas",
@@ -64,7 +72,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Brokers & Backends",
-      items: ["brokers/overview"],
+      items: ["brokers/overview", "brokers/caveats"],
     },
   ],
 };

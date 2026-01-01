@@ -8,8 +8,11 @@ slug: /core-concepts/routing
 Stem workers and publishers resolve queue and broadcast targets from the routing
 file referenced by `STEM_ROUTING_CONFIG`. The file is parsed into a typed
 `RoutingConfig`, validated by the `RoutingRegistry`, and used by helpers such as
-`buildWorkerSubscription`. When no file is supplied Stem falls back to a legacy
-single-queue configuration.
+`buildWorkerSubscription`. The loader helpers (`RoutingConfigLoader`,
+`WorkerSubscriptionBuilder`, `buildWorkerSubscription`) live in the `stem_cli`
+package and are used by the CLI to produce friendly diagnostics. In application
+code you can use the core `stem` types directly (see “Loading subscriptions”).
+When no file is supplied Stem falls back to a legacy single-queue configuration.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -87,15 +90,14 @@ routes:
 
 ## Loading subscriptions
 
-- `RoutingConfigLoader` wraps filesystem loading with clearer error messages
-  and is used by the CLI to show friendly diagnostics when a routing file is
-  missing or malformed.
-- `WorkerSubscriptionBuilder` validates queue aliases and broadcast channels
-  against the loaded registry and de-duplicates selections. When no explicit
-  queues are provided the builder falls back to the registry's default queue.
-- The helper `buildWorkerSubscription` combines `StemConfig` defaults with
-  optional overrides and is used by `stem worker multi` to honour `--queue`
-  and `--broadcast`.
+- `RoutingConfigLoader`, `WorkerSubscriptionBuilder`, and
+  `buildWorkerSubscription` live in the `stem_cli` package. The CLI uses them
+  to provide friendly diagnostics and to honor `--queue`/`--broadcast` when
+  building worker subscriptions.
+- In application code you can either import `package:stem_cli/stem_cli.dart`
+  (see `packages/stem/example/email_service`) or build the registry directly:
+  load YAML with `RoutingConfig.fromYaml`, then construct a `RoutingRegistry`
+  and `RoutingSubscription` yourself.
 
 ## Using the config in Dart
 

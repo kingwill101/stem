@@ -127,3 +127,6 @@ final broker = await RedisStreamsBroker.connect(
 
 For result storage, see the [Persistence](../core-concepts/persistence.md)
 guide.
+
+Need adapter limitations and behavior details? See
+[Broker Caveats](./caveats.md).

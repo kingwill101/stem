@@ -55,8 +55,7 @@ one-off-reconcile:
 
 ## Load schedules
 
-Call `startFromYamlFile` (or its JSON/programmatic counterparts) before
-`beat.start()`:
+Apply schedule files to the schedule store before calling `beat.start()`:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-load
 
@@ -96,7 +95,14 @@ To build schedules imperatively, call `store.upsert` with the spec classes
 Prefer configuration over code? Use the CLI with the same schedule file:
 
 ```bash
-stem scheduler start   --broker "$STEM_BROKER_URL"   --schedule config/schedules.yaml   --registry lib/main.dart
+stem schedule apply \
+  --file config/schedules.yaml \
+  --store "$STEM_SCHEDULE_STORE_URL"
+
+stem beat start \
+  --store "$STEM_SCHEDULE_STORE_URL" \
+  --broker "$STEM_BROKER_URL" \
+  --registry lib/main.dart
 ```
 
 ## Programmatic spec helpers
@@ -111,6 +117,15 @@ stem scheduler start   --broker "$STEM_BROKER_URL"   --schedule config/schedules
 | `Cron`        | Classic 5/6-field cron with optional timezone per entry. |
 | `Solar`       | Sunrise, sunset, or solar noon with lat/long and optional offsets. |
 | `Clocked`     | One-shot timestamp; set `runOnce` to prevent rescheduling. |
+
+## Timezone handling
+
+- Schedule entries accept an optional IANA timezone identifier.
+- If your schedule store uses the default calculator, schedules evaluate in UTC.
+- To honor per-entry timezones, construct the schedule store with a
+  `ScheduleCalculator` configured with a timezone data provider.
+- You must load timezone data in your process (for example,
+  `timezone/data/latest.dart`) before using a timezone-aware calculator.
 
 ## Observe Beat activity
 
@@ -133,8 +148,8 @@ You can also query the schedule store directly:
 - Call `Beat.stop()` on shutdown to flush outstanding timers and release locks.
 - Combine Beat with `stem worker start --bundle` to ship the same registry to
   both components.
-- Store schedules in source control and reload via `beat.startFromYamlFile`
-  after deployments.
+- Store schedules in source control and re-apply them with
+  `stem schedule apply` after deployments.
 
 Next, hook Beat into your deployment automation and monitor the scheduler
 signals alongside worker metrics.

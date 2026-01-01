@@ -8,6 +8,7 @@ class SendDigestTask implements TaskHandler<void> {
   @override
   String get name => 'email.sendDigest';
 
+  // #region unique-task-options
   @override
   TaskOptions get options => const TaskOptions(
     queue: 'email',
@@ -15,6 +16,7 @@ class SendDigestTask implements TaskHandler<void> {
     uniqueFor: Duration(minutes: 15),
     maxRetries: 2,
   );
+  // #endregion unique-task-options
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
@@ -35,6 +37,7 @@ class SendDigestTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
+  // #region unique-task-coordinator
   final dbFile = File('unique_tasks.sqlite');
   if (!dbFile.existsSync()) {
     dbFile.createSync(recursive: true);
@@ -51,9 +54,11 @@ Future<void> main() async {
     lockStore: lockStore,
     defaultTtl: const Duration(minutes: 5),
   );
+  // #endregion unique-task-coordinator
 
   final registry = SimpleTaskRegistry()..register(SendDigestTask());
 
+  // #region unique-task-stem-worker
   final stem = Stem(
     broker: broker,
     registry: registry,
@@ -68,9 +73,11 @@ Future<void> main() async {
     queue: 'email',
     consumerName: 'unique-worker',
   );
+  // #endregion unique-task-stem-worker
 
   unawaited(worker.start());
 
+  // #region unique-task-enqueue
   final firstId = await stem.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
@@ -80,6 +87,7 @@ Future<void> main() async {
       uniqueFor: Duration(minutes: 15),
     ),
   );
+  // #endregion unique-task-enqueue
   final secondId = await stem.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},

@@ -18,8 +18,111 @@ Checklist:
 Helpful commands:
 
 ```bash
-stem worker status --broker "$STEM_BROKER_URL" --result-backend "$STEM_RESULT_BACKEND_URL"
-stem worker inspect --broker "$STEM_BROKER_URL"
+stem worker stats --json
+stem worker inspect
+stem observe queues
+```
+
+## Routing file fails to parse
+
+Checklist:
+
+- Validate the routing file path and format (YAML/JSON).
+- Confirm `STEM_ROUTING_CONFIG` points at the file you expect.
+- Confirm the registry matches the task names referenced in the file.
+- If you use queue priorities, ensure the broker supports them.
+
+Helpful commands:
+
+```bash
+stem routing dump
+stem routing dump --json
+stem routing dump --sample
+```
+
+## Missing or misconfigured result backend
+
+Symptoms: `stem observe` fails or task results never appear.
+
+Checklist:
+
+- Set `STEM_RESULT_BACKEND_URL` for any workflow that needs stored results.
+- Ensure the backend URL uses the correct scheme (`redis://`, `postgres://`).
+- Confirm the worker is configured with the same result backend.
+
+Helpful commands:
+
+```bash
+stem health --backend "$STEM_RESULT_BACKEND_URL"
+stem observe workers
+stem observe queues
+```
+
+## TLS or signing failures
+
+Symptoms: health checks fail or tasks land in the DLQ with signature errors.
+
+Checklist:
+
+- Verify `STEM_TLS_*` variables are set on every component that connects.
+- Confirm `STEM_SIGNING_KEYS`/`STEM_SIGNING_PUBLIC_KEYS` match across producers and workers.
+- Ensure `STEM_SIGNING_ACTIVE_KEY` is set and present in the key list.
+- Check DLQ entries for `signature-invalid` reasons.
+
+Helpful commands:
+
+```bash
+stem health \
+  --broker "$STEM_BROKER_URL" \
+  --backend "$STEM_RESULT_BACKEND_URL"
+
+stem dlq list --queue <queue>
+stem dlq show --queue <queue> --id <task-id>
+```
+
+## Namespace mismatch
+
+Symptoms: CLI sees no data or control commands return empty responses.
+
+Checklist:
+
+- Ensure all processes (producer, worker, CLI) use the same namespace string.
+- For workers, confirm `STEM_WORKER_NAMESPACE` matches your CLI `--namespace`.
+
+Helpful commands:
+
+```bash
+stem worker stats --namespace "stem"
+stem worker ping --namespace "stem"
+```
+
+## Migrations or schema errors
+
+Checklist:
+
+- Run the migration commands shipped with the adapter (Redis/Postgres).
+- Ensure your store URLs point to the migrated database/schema.
+- Set `STEM_SCHEDULE_STORE_URL` before running schedule commands.
+
+Helpful commands:
+
+```bash
+stem schedule list
+```
+
+## DLQ stalls or poison-pill tasks
+
+Checklist:
+
+- Inspect DLQ entries and replay only after fixing the root cause.
+- For repeat failures, consider lowering retries or adding task-level guards.
+
+Helpful commands:
+
+```bash
+stem dlq list --queue <queue>
+stem dlq show --queue <queue> --id <task-id>
+stem dlq replay --queue <queue> --id <task-id>
 ```
 
 ## Control commands return no replies
@@ -31,6 +134,13 @@ Checklist:
 - Ensure the worker is running and connected to the same broker.
 - If you use a custom namespace, pass `--namespace` to CLI commands.
 - Verify that the broker supports broadcast/control channels.
+
+Helpful commands:
+
+```bash
+stem worker stats --json
+stem observe workers
+```
 
 ## Task retries instantly or too quickly
 
@@ -47,6 +157,14 @@ Checklist:
 - Verify Redis/Postgres is running and reachable.
 - Confirm the URL scheme (`redis://`, `postgres://`).
 - Ensure Docker ports are mapped (`-p 6379:6379`, `-p 5432:5432`).
+
+Helpful commands:
+
+```bash
+stem health \
+  --broker "$STEM_BROKER_URL" \
+  --backend "$STEM_RESULT_BACKEND_URL" \
+```
 
 ## Still stuck?
 
