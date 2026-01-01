@@ -7,8 +7,7 @@ textwrap/
 examples/microservice/certs/
 examples/security/*/certs/
 packages/dashboard/storage/
-!.beads/
-!.beads/issues.jsonl
+.beads/
 mcp_agent_mail/
 task.md
 # IDE / OS
