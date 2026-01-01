@@ -5,6 +5,9 @@ sidebar_position: 12
 slug: /getting-started/retry-backoff
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Retries keep transient failures from becoming outages. Use backoff to prevent
 retry storms.
 
@@ -43,22 +46,49 @@ Retries are scheduled by publishing a new envelope with `notBefore` set to the
 next retry time. Each retry increments the attempt counter until
 `TaskOptions.maxRetries` is exhausted.
 
+## Task options
+
+Use `maxRetries` on task handlers to cap retries:
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-task-options
+
+```
+
 ## Custom strategies
 
 Provide a custom `RetryStrategy` to the worker when you need fixed delays,
 linear backoff, or bespoke logic:
 
-```dart
-final worker = Worker(
-  broker: broker,
-  backend: backend,
-  registry: registry,
-  retryStrategy: ExponentialJitterRetryStrategy(
-    base: Duration(milliseconds: 200),
-    max: Duration(seconds: 5),
-  ),
-);
+<Tabs>
+<TabItem value="strategy" label="Strategy config">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-strategy
+
 ```
+
+</TabItem>
+<TabItem value="worker" label="Worker wiring">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-worker
+
+```
+
+</TabItem>
+<TabItem value="custom" label="Custom strategy">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-custom-strategy
+
+```
+
+</TabItem>
+<TabItem value="fixed-delay" label="Fixed-delay worker">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-custom-worker
+
+```
+
+</TabItem>
+</Tabs>
 
 You can also implement your own strategy by conforming to the `RetryStrategy`
 interface and returning the desired delay for each attempt.
@@ -70,6 +100,10 @@ Watch these signals and metrics to verify retry behavior:
 - `StemSignals.taskRetry` includes the next retry timestamp.
 - `stem.tasks.retried` and `stem.tasks.failed` counters highlight spikes.
 - DLQ volume indicates retries are exhausting or errors are permanent.
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-signals
+
+```
 
 ## Operational checklist
 
