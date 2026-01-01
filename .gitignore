@@ -7,6 +7,7 @@ textwrap/
 examples/microservice/certs/
 examples/security/*/certs/
 packages/dashboard/storage/
+.beads/
 # IDE / OS
 .idea/
 .vscode/
