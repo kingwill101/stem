@@ -16,73 +16,22 @@ import TabItem from '@theme/TabItem';
 <Tabs>
 <TabItem value="in-memory" label="In-memory (bin/producer.dart)">
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-in-memory
 
-Future<void> main() async {
-  final registry = SimpleTaskRegistry();
-  final stem = Stem(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-  );
-
-  final taskId = await stem.enqueue(
-    'hello.print',
-    args: {'name': 'Stem'},
-  );
-
-  print('Enqueued $taskId');
-}
 ```
 
 </TabItem>
 <TabItem value="redis" label="Redis + Result Backend (bin/producer_redis.dart)">
 
-```dart
-import 'dart:io';
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-redis
 
-Future<void> main() async {
-  final brokerUrl =
-      Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
-
-  final stem = Stem(
-    broker: await RedisStreamsBroker.connect(brokerUrl),
-    registry: SimpleTaskRegistry(),
-    backend: await RedisResultBackend.connect('$brokerUrl/1'),
-  );
-
-  await stem.enqueue(
-    'reports.generate',
-    args: {'reportId': 'monthly-2025-10'},
-    options: const TaskOptions(queue: 'reports', maxRetries: 3),
-    meta: {'requestedBy': 'finance'},
-  );
-}
 ```
 
 </TabItem>
 <TabItem value="signed" label="Signed Payloads (bin/producer_signed.dart)">
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-signed
 
-Future<void> main() async {
-  final config = StemConfig.fromEnvironment();
-  final stem = Stem(
-    broker: await RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
-    registry: SimpleTaskRegistry(),
-    backend: InMemoryResultBackend(),
-    signer: PayloadSigner.maybe(config.signing),
-  );
-
-  await stem.enqueue(
-    'billing.charge',
-    args: {'customerId': 'cust_123', 'amount': 4200},
-    notBefore: DateTime.now().add(const Duration(minutes: 5)),
-  );
-}
 ```
 
 </TabItem>
@@ -95,47 +44,8 @@ your handler in a `TaskDefinition`. The definition knows how to encode args and
 decode results, and exposes a fluent builder for overrides (headers, meta,
 options, scheduling):
 
-```dart title="bin/producer_typed.dart"
-class ReportPayload {
-  const ReportPayload({required this.reportId});
-  final String reportId;
-}
+```dart title="bin/producer_typed.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-typed
 
-class GenerateReportTask implements TaskHandler<String> {
-  static final definition = TaskDefinition<ReportPayload, String>(
-    name: 'reports.generate',
-    encodeArgs: (payload) => {'reportId': payload.reportId},
-    metadata: const TaskMetadata(description: 'Generate PDF reports'),
-  );
-
-  @override
-  String get name => definition.name;
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: 'reports');
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final id = args['reportId'] as String;
-    return await generateReport(id);
-  }
-}
-
-final registry = SimpleTaskRegistry()..register(GenerateReportTask());
-final stem = Stem(
-  broker: InMemoryBroker(),
-  registry: registry,
-  backend: InMemoryResultBackend(),
-);
-
-final call = GenerateReportTask.definition.call(
-  const ReportPayload(reportId: 'monthly-2025-10'),
-  options: const TaskOptions(priority: 5),
-  headers: const {'x-requested-by': 'analytics'},
-);
-
-final taskId = await stem.enqueueCall(call);
-final result = await stem.waitForTask<String>(taskId);
 ```
 
 Typed helpers are also available on `Canvas` (`definition.toSignature`) so
@@ -160,21 +70,8 @@ Encoders run exactly once in each direction: producers encode arguments, workers
 decode them before invoking handlers, and handler return values are encoded
 before hitting the result backend. Example:
 
-```dart title="lib/bootstrap_typed_encoders.dart"
-class AesPayloadEncoder extends TaskPayloadEncoder {
-  const AesPayloadEncoder();
-  @override
-  Object? encode(Object? value) => encrypt(value);
-  @override
-  Object? decode(Object? stored) => decrypt(stored);
-}
+```dart title="lib/bootstrap_typed_encoders.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-encoders
 
-final app = await StemApp.inMemory(
-  tasks: [...],
-  argsEncoder: const AesPayloadEncoder(),
-  resultEncoder: const JsonTaskPayloadEncoder(),
-  additionalEncoders: const [CustomBinaryEncoder()],
-);
 ```
 
 Handlers needing different encoders can override `TaskMetadata.argsEncoder` and

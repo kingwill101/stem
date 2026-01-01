@@ -17,76 +17,22 @@ import TabItem from '@theme/TabItem';
 <Tabs>
 <TabItem value="minimal" label="Minimal">
 
-```dart title="lib/producer.dart"
-import 'package:stem/stem.dart';
+```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-producer-minimal
 
-Future<void> main() async {
-  final registry = SimpleTaskRegistry();
-
-  final stem = Stem(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-  );
-
-  final taskId = await stem.enqueue(
-    'email.send',
-    args: {'to': 'hello@example.com', 'subject': 'Welcome'},
-  );
-
-  print('Enqueued $taskId');
-}
 ```
 
 </TabItem>
 <TabItem value="redis" label="Redis Broker">
 
-```dart title="lib/producer_redis.dart"
-import 'dart:io';
-import 'package:stem/stem.dart';
+```dart title="lib/producer_redis.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-producer-redis
 
-Future<void> main() async {
-  final brokerUrl =
-      Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-
-  final stem = Stem(
-    broker: broker,
-    registry: SimpleTaskRegistry(),
-    backend: await RedisResultBackend.connect('$brokerUrl/1'),
-  );
-
-  await stem.enqueue(
-    'report.generate',
-    args: {'reportId': 'monthly-2025-10'},
-    options: const TaskOptions(queue: 'reports'),
-  );
-}
 ```
 
 </TabItem>
 <TabItem value="signing" label="Payload Signing">
 
-```dart title="lib/producer_signed.dart"
-import 'dart:io';
-import 'package:stem/stem.dart';
+```dart title="lib/producer_signed.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-producer-signed
 
-Future<void> main() async {
-  final config = StemConfig.fromEnvironment();
-  final signer = PayloadSigner.maybe(config.signing);
-
-  final stem = Stem(
-    broker: await RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
-    registry: SimpleTaskRegistry(),
-    backend: InMemoryResultBackend(),
-    signer: signer,
-  );
-
-  await stem.enqueue(
-    'billing.charge',
-    args: {'customerId': 'cust_123', 'amount': 42_00},
-  );
-}
 ```
 
 </TabItem>
@@ -104,124 +50,22 @@ Future<void> main() async {
 <Tabs>
 <TabItem value="minimal" label="Minimal">
 
-```dart title="bin/worker.dart"
-import 'dart:async';
-import 'package:stem/stem.dart';
+```dart title="bin/worker.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-minimal
 
-class EmailTask implements TaskHandler<void> {
-  @override
-  String get name => 'email.send';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 2);
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final to = args['to'] as String;
-    print('Sending to $to (attempt ${context.attempt})');
-  }
-}
-
-Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(EmailTask());
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    queue: 'default',
-  );
-
-  await worker.start();
-}
 ```
 
 </TabItem>
 <TabItem value="redis" label="Redis Broker">
 
-```dart title="bin/worker_redis.dart"
-import 'dart:async';
-import 'dart:io';
+```dart title="bin/worker_redis.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-redis
 
-import 'package:stem/stem.dart';
-
-Future<void> main() async {
-  final brokerUrl =
-      Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
-  final registry = SimpleTaskRegistry()..register(EmailTask());
-
-  final worker = Worker(
-    broker: await RedisStreamsBroker.connect(brokerUrl),
-    registry: registry,
-    backend: await RedisResultBackend.connect('$brokerUrl/1'),
-    queue: 'default',
-    concurrency: Platform.numberOfProcessors,
-  );
-
-  await worker.start();
-}
-
-class EmailTask implements TaskHandler<void> {
-  @override
-  String get name => 'email.send';
-
-  @override
-  TaskOptions get options => const TaskOptions(
-        queue: 'default',
-        maxRetries: 3,
-        visibilityTimeout: Duration(seconds: 30),
-      );
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    // call your email provider here
-  }
-}
 ```
 
 </TabItem>
 <TabItem value="advanced" label="Retries & Signals">
 
-```dart title="bin/worker_retry.dart"
-import 'dart:async';
-import 'package:stem/stem.dart';
+```dart title="bin/worker_retry.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-retry
 
-class FlakyTask implements TaskHandler<void> {
-  @override
-  String get name => 'demo.flaky';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 2);
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    if (context.attempt < 2) {
-      throw StateError('Simulated failure');
-    }
-    print('Succeeded on attempt ${context.attempt}');
-  }
-}
-
-Future<void> main() async {
-  StemSignals.onTaskRetry((payload, _) {
-    print('[retry] next run at: ${payload.nextRetryAt}');
-  });
-
-  final registry = SimpleTaskRegistry()..register(FlakyTask());
-  final worker = Worker(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-    retryStrategy: ExponentialJitterRetryStrategy(
-      base: const Duration(milliseconds: 200),
-      max: const Duration(seconds: 1),
-    ),
-  );
-
-  await worker.start();
-}
 ```
 
 </TabItem>
@@ -241,35 +85,8 @@ Future<void> main() async {
 A lightweight service wires the producer and worker into your application
 startup:
 
-```dart title="lib/bootstrap.dart"
-import 'package:stem/stem.dart';
+```dart title="lib/bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-bootstrap
 
-class StemRuntime {
-  StemRuntime({required this.registry, required this.brokerUrl});
-
-  final TaskRegistry registry;
-  final String brokerUrl;
-
-  late final Stem stem = Stem(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-  );
-
-  late final Worker worker = Worker(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-  );
-
-  Future<void> start() async {
-    await worker.start();
-  }
-
-  Future<void> stop() async {
-    await worker.shutdown();
-  }
-}
 ```
 
 Swap the in-memory adapters for Redis/Postgres when you deploy, keeping the API

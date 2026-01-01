@@ -50,25 +50,8 @@ routes:
 </TabItem>
 <TabItem value="dart" label="lib/routing.dart">
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-load
 
-Future<RoutingRegistry> loadRouting() async {
-  final config = await RoutingConfigLoader().loadFromYamlFile(
-    'config/routing.yaml',
-  );
-  return RoutingRegistry(config);
-}
-
-final registry = RoutingRegistry(
-  RoutingConfig(
-    defaultQueue: DefaultQueue(alias: 'default', queue: 'primary'),
-    queues: {'primary': QueueSpec()},
-    routes: [
-      RouteSpec(match: RouteMatch(task: 'reports.*'), target: QueueTarget('primary')),
-    ],
-  ),
-);
 ```
 
 </TabItem>
@@ -119,49 +102,14 @@ final registry = RoutingRegistry(
 Load the routing file once during service start-up and reuse the registry across
 producers and workers:
 
-```dart title="lib/routing.dart"
-import 'package:stem/stem.dart';
+```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-bootstrap
 
-Future<(Stem, Worker)> bootstrapStem() async {
-  final routing = await RoutingConfigLoader().loadFromYamlFile(
-    'config/routing.yaml',
-  );
-  final registry = SimpleTaskRegistry()..register(EmailTask());
-
-  final stem = Stem(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-    routing: RoutingRegistry(routing),
-  );
-
-  final worker = Worker(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-    routing: RoutingRegistry(routing),
-    subscription: buildWorkerSubscription(
-      config: StemConfig.fromEnvironment(),
-      registry: RoutingRegistry(routing),
-    ),
-  );
-
-  return (stem, worker);
-}
 ```
 
 For lightweight services or tests, you can construct the registry inline:
 
-```dart
-final registry = RoutingRegistry(
-  RoutingConfig(
-    defaultQueue: DefaultQueue(alias: 'default', queue: 'primary'),
-    queues: {'primary': QueueSpec()},
-    routes: [
-      RouteSpec(match: RouteMatch(task: 'reports.*'), target: QueueTarget('primary')),
-    ],
-  ),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
+
 ```
 
 Both approaches keep routing logic declarative while letting you evolve queue

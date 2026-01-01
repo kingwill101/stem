@@ -12,6 +12,27 @@ capabilities without leaving the Dart ecosystem. This onboarding path assumes
 you have never touched Stem before and walks you from “what is this?” to “I can
 ship a production deployment.”
 
+## What is a task queue?
+
+A task queue lets you push work to background workers instead of blocking your
+web or API process. The core pipeline looks like:
+
+```
+Producer → Broker → Worker → Result Backend
+```
+
+- **Architecture at a glance**
+
+![Task queue pipeline](/img/task-queue-pipeline.svg)
+
+- **Producer** enqueues a task (e.g. send email).
+- **Broker** stores and delivers tasks to workers.
+- **Worker** executes tasks and reports status.
+- **Result backend** keeps history and outputs.
+
+In Stem, you can mix and match brokers and backends (for example, Redis for
+fast delivery and Postgres for durable results).
+
 ## What You’ll Unlock
 
 - **Core pipeline** – Enqueue tasks with delays, priorities, retries, rate
@@ -38,12 +59,14 @@ ship a production deployment.”
 
 1. **[Quick Start](./quick-start.md)** – Build and run your first Stem worker
    entirely in memory while you learn the task pipeline primitives.
-2. **[Connect to Infrastructure](./developer-environment.md)** – Point Stem at
+2. **[First Steps](./first-steps.md)** – Use Redis to run producers and workers
+   in separate processes, then fetch results.
+3. **[Connect to Infrastructure](./developer-environment.md)** – Point Stem at
    Redis/Postgres, run workers/Beat across processes, and try routing/canvas
    patterns.
-3. **[Observe & Operate](./observability-and-ops.md)** – Enable telemetry,
+4. **[Observe & Operate](./observability-and-ops.md)** – Enable telemetry,
    inspect heartbeats, replay DLQ entries, and wire control commands.
-4. **[Prepare for Production](./production-checklist.md)** – Enable signing,
+5. **[Prepare for Production](./production-checklist.md)** – Enable signing,
    TLS, daemonization, and automated quality gates before launch.
 
 Each step includes copy-pasteable code or CLI examples and ends with pointers

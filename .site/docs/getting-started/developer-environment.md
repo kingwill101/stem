@@ -38,62 +38,8 @@ export STEM_CONTROL_NAMESPACE=stem
 Use `StemConfig.fromEnvironment()` to hydrate adapters from the environment and
 share them across your app:
 
-```dart title="lib/stem_bootstrap.dart"
-import 'dart:io';
+```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-bootstrap
 
-import 'package:stem/stem.dart';
-
-Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
-  final config = StemConfig.fromEnvironment(Platform.environment);
-
-  final broker = await RedisStreamsBroker.connect(config.brokerUrl);
-  final backend = await RedisResultBackend.connect(config.resultBackendUrl);
-  final rateLimiter = await RedisRateLimiter.connect(config.rateLimiterUrl);
-  final revokeStore = await RedisRevokeStore.connect(config.revokeStoreUrl);
-
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    routing: RoutingRegistry(config.routing),
-  );
-
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    revokeStore: revokeStore,
-    rateLimiter: rateLimiter,
-    queue: 'default',
-    concurrency: 8,
-    autoscaler: Autoscaler(
-      minimum: 2,
-      maximum: 16,
-      scaleUpLagThreshold: const Duration(seconds: 10),
-    ),
-  );
-
-  return Bootstrap(
-    stem: stem,
-    worker: worker,
-    config: config,
-    rateLimiter: rateLimiter,
-  );
-}
-
-class Bootstrap {
-  Bootstrap({
-    required this.stem,
-    required this.worker,
-    required this.config,
-    required this.rateLimiter,
-  });
-
-  final Stem stem;
-  final Worker worker;
-  final StemConfig config;
-  final RateLimiter rateLimiter;
-}
 ```
 
 This single bootstrap gives you access to routing, rate limiting, revoke
@@ -153,44 +99,14 @@ all subscribed workers exactly once per acknowledgement window.
 Now that Redis backs the result store, you can orchestrate more complex
 pipelines and query progress from any process:
 
-```dart
-final canvas = Canvas(
-  broker: bootstrap.stem.broker,
-  backend: await RedisResultBackend.connect(
-    bootstrap.config.resultBackendUrl,
-  ),
-  registry: registry,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-canvas
 
-final ids = await canvas.group([
-  task('media.resize', args: {'file': 'hero.png'}),
-  task('media.resize', args: {'file': 'thumb.png'}),
-], groupId: 'image-assets');
-
-final chordId = await canvas.chord(
-  body: [
-    task('reports.render', args: {'week': '2024-W28'}),
-    task('reports.render', args: {'week': '2024-W29'}),
-  ],
-  callback: task(
-    'billing.email-receipt',
-    args: {'to': 'finance@example.com'},
-    options: const TaskOptions(queue: 'emails'),
-  ),
-);
-
-print('Group dispatched: $ids');
-print('Chord callback task id: $chordId');
 ```
 
 Later, you can monitor status from any machine:
 
-```dart
-final backend = await RedisResultBackend.connect(
-  Platform.environment['STEM_RESULT_BACKEND_URL']!,
-);
-final status = await backend.get(chordId);
-print('Chord completion state: ${status?.state}');
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-status
+
 ```
 
 ## 5. Listen to Signals for Cross-Cutting Integrations
@@ -198,21 +114,8 @@ print('Chord completion state: ${status?.state}');
 Signals surface lifecycle milestones that you can pipe into analytics or
 incident tooling:
 
-```dart title="lib/signals.dart"
-import 'package:stem/stem.dart';
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-signals
 
-void installSignalHandlers() {
-  StemSignals.taskSucceeded.connect((payload) {
-    if (payload.sender == 'reports.render') {
-      print('Report ${payload.envelope.id} succeeded in '
-          '${payload.duration.inMilliseconds}ms');
-    }
-  });
-
-  StemSignals.workerReady.connect((payload) {
-    print('Worker ${payload.workerId} ready on ${payload.hostname}');
-  });
-}
 ```
 
 Call `installSignalHandlers()` during bootstrap before workers or producers

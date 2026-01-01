@@ -31,6 +31,7 @@ export 'src/observability/heartbeat.dart';
 export 'src/observability/heartbeat_transport.dart';
 export 'src/observability/logging.dart';
 export 'src/observability/metrics.dart';
+export 'src/observability/tracing.dart';
 export 'src/observability/snapshots.dart';
 export 'src/routing/routing_config.dart';
 export 'src/routing/routing_registry.dart';

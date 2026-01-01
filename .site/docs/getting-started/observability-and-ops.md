@@ -50,14 +50,8 @@ stem worker status \
 
 From Dart you can pull the same data:
 
-```dart
-final backend = await RedisResultBackend.connect(
-  Platform.environment['STEM_RESULT_BACKEND_URL']!,
-);
-final heartbeats = await backend.listWorkerHeartbeats();
-for (final hb in heartbeats) {
-  print('${hb.workerId} -> queues=${hb.queues} inflight=${hb.inflight}');
-}
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-heartbeats
+
 ```
 
 ## 3. Operate Workers via the Control Channel
@@ -143,24 +137,8 @@ help confirm schedule definitions before they go live.
 Signals fire for task, worker, and scheduler lifecycle events. Wire them into
 chat, incident tooling, or analytics:
 
-```dart title="lib/analytics.dart"
-import 'package:stem/stem.dart';
+```dart title="lib/analytics.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-analytics
 
-void installAnalytics() {
-  StemSignals.taskRetry.connect((payload) {
-    print('Task ${payload.envelope.name} retry ${payload.attempt}');
-  });
-
-  StemSignals.workerHeartbeat.connect((payload) {
-    if (payload.worker.inflight > 100) {
-      // Send to your alerting system.
-    }
-  });
-
-  StemSignals.scheduleEntryFailed.connect((payload) {
-    print('Scheduler entry ${payload.entryId} failed: ${payload.error}');
-  });
-}
 ```
 
 Combine signal handlers with telemetry to build rich observability without

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="180" viewBox="0 0 900 180">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#1f2937" />
+    </marker>
+  </defs>
+  <rect x="50" y="60" width="170" height="60" rx="8" fill="#f3f4f6" stroke="#1f2937" />
+  <rect x="260" y="60" width="170" height="60" rx="8" fill="#f3f4f6" stroke="#1f2937" />
+  <rect x="470" y="60" width="170" height="60" rx="8" fill="#f3f4f6" stroke="#1f2937" />
+  <rect x="680" y="60" width="170" height="60" rx="8" fill="#f3f4f6" stroke="#1f2937" />
+
+  <line x1="220" y1="90" x2="260" y2="90" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="430" y1="90" x2="470" y2="90" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="640" y1="90" x2="680" y2="90" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)" />
+
+  <text x="135" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827">
+    Producer
+  </text>
+  <text x="345" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827">
+    Broker
+  </text>
+  <text x="555" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827">
+    Worker
+  </text>
+  <text x="765" y="95" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111827">
+    Result Backend
+  </text>
+</svg>

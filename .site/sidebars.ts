@@ -21,7 +21,11 @@ const sidebars: SidebarsConfig = {
       items: [
         "getting-started/intro",
         "getting-started/quick-start",
+        "getting-started/first-steps",
         "getting-started/developer-environment",
+        "getting-started/observability-and-ops",
+        "getting-started/production-checklist",
+        "getting-started/troubleshooting",
       ],
     },
     {

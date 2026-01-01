@@ -8,3 +8,4 @@ workspace:
   - packages/stem_redis
   - packages/stem_postgres
   - packages/stem_cli
+  - packages/stem/example/docs_snippets

@@ -45,13 +45,8 @@ callbacks are awaited so ordering remains deterministic.
 Use `StemSignals.configure` or supply environment variables consumed by
 `ObservabilityConfig.fromEnvironment`:
 
-```dart
-StemSignals.configure(
-  configuration: const StemSignalConfiguration(
-    enabled: true,
-    enabledSignals: {'worker-heartbeat': false},
-  ),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-configure
+
 ```
 
 Environment knobs:

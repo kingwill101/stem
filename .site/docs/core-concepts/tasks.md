@@ -17,52 +17,15 @@ a handler registered in a `TaskRegistry`. Handlers expose metadata through
 <Tabs>
 <TabItem value="in-memory" label="In-memory (tasks/email_task.dart)">
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-register-in-memory
 
-class EmailTask implements TaskHandler<void> {
-  @override
-  String get name => 'email.send';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 2);
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final to = args['to'] as String? ?? 'anonymous';
-    print('Emailing $to (attempt ${context.attempt})');
-  }
-}
-
-final registry = SimpleTaskRegistry()..register(EmailTask());
 ```
 
 </TabItem>
 <TabItem value="redis" label="Redis (tasks/email_task.dart)">
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-register-redis
 
-class EmailTask implements TaskHandler<void> {
-  @override
-  String get name => 'email.send';
-
-  @override
-  TaskOptions get options => const TaskOptions(
-        queue: 'email',
-        maxRetries: 4,
-        visibilityTimeout: Duration(seconds: 30),
-        unique: true,
-        uniqueFor: Duration(minutes: 5),
-      );
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await sendEmailRemote(args);
-  }
-}
-
-final registry = SimpleTaskRegistry()..register(EmailTask());
 ```
 
 </TabItem>
@@ -76,48 +39,8 @@ name, argument encoder, optional metadata, and default `TaskOptions`. Build a
 call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
 or `Canvas` helpers:
 
-```dart
-import 'package:stem/stem.dart';
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-typed-definition
 
-class InvoicePayload {
-  const InvoicePayload({required this.invoiceId});
-  final String invoiceId;
-}
-
-class PublishInvoiceTask implements TaskHandler<void> {
-  static final definition = TaskDefinition<InvoicePayload, bool>(
-    name: 'invoice.publish',
-    encodeArgs: (payload) => {'invoiceId': payload.invoiceId},
-    metadata: const TaskMetadata(description: 'Publishes invoices downstream'),
-    defaultOptions: const TaskOptions(queue: 'billing'),
-  );
-
-  @override
-  String get name => definition.name;
-
-  @override
-  TaskOptions get options => definition.defaultOptions;
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final invoiceId = args['invoiceId'] as String;
-    await publishInvoice(invoiceId);
-  }
-}
-
-final stem = Stem(
-  broker: InMemoryBroker(),
-  registry: SimpleTaskRegistry()..register(PublishInvoiceTask()),
-  backend: InMemoryResultBackend(),
-);
-
-final taskId = await stem.enqueueCall(
-  PublishInvoiceTask.definition(const InvoicePayload(invoiceId: 'inv_42')),
-);
-final result = await stem.waitForTask<bool>(taskId);
-if (result?.isSucceeded == true) {
-  print('Invoice published');
-}
 ```
 
 Typed results flow through `TaskResult<TResult>` when you call
@@ -155,13 +78,8 @@ store audit details in `context.meta`.
 
 Set soft/hard timeouts to guard against runaway tasks:
 
-```dart
-const TaskOptions(
-  softTimeLimit: Duration(seconds: 15),
-  hardTimeLimit: Duration(seconds: 30),
-  acksLate: true,
-  isolateEntrypoint: sendEmailIsolate,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-timeouts
+
 ```
 
 - **Soft timeouts** trigger `WorkerEventType.timeout` so you can log or notify.
@@ -185,28 +103,8 @@ Handlers often need to encrypt, compress, or otherwise transform arguments and
 results before they leave the process. Stem exposes `TaskPayloadEncoder` so you
 can swap out the default JSON pass-through behavior:
 
-```dart title="Encoders/global.dart"
-import 'dart:convert';
-import 'package:stem/stem.dart';
+```dart title="Encoders/global.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-encoders-global
 
-class Base64PayloadEncoder extends TaskPayloadEncoder {
-  const Base64PayloadEncoder();
-
-  @override
-  Object? encode(Object? value) =>
-      value is String ? base64Encode(utf8.encode(value)) : value;
-
-  @override
-  Object? decode(Object? stored) =>
-      stored is String ? utf8.decode(base64Decode(stored)) : stored;
-}
-
-final app = await StemApp.inMemory(
-  tasks: [...],
-  argsEncoder: const Base64PayloadEncoder(),
-  resultEncoder: const Base64PayloadEncoder(),
-  additionalEncoders: const [MyOtherEncoder()],
-);
 ```
 
 Workers automatically decode arguments once (`stem-args-encoder` header /
@@ -214,12 +112,8 @@ Workers automatically decode arguments once (`stem-args-encoder` header /
 before writing to the backend. When you need task-specific behavior, set the
 metadata overrides:
 
-```dart
-@override
-TaskMetadata get metadata => const TaskMetadata(
-      argsEncoder: Base64PayloadEncoder(),
-      resultEncoder: Base64PayloadEncoder(),
-    );
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-encoders-metadata
+
 ```
 
 Because encoders are centrally registered inside the

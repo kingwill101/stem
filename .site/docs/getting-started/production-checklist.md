@@ -21,24 +21,8 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 
 In code, wire the signer into both producers and workers:
 
-```dart title="lib/bootstrap_signing.dart"
-final config = StemConfig.fromEnvironment();
-final signer = PayloadSigner.maybe(config.signing);
+```dart title="lib/bootstrap_signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing
 
-final stem = Stem(
-  broker: broker,
-  backend: backend,
-  registry: registry,
-  signer: signer,
-);
-
-final worker = Worker(
-  broker: broker,
-  backend: backend,
-  registry: registry,
-  signer: signer,
-  // ... other dependencies ...
-);
 ```
 
 When you rotate keys, set `STEM_SIGNING_KEYS` to include both the old and new

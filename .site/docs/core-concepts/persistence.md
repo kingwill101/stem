@@ -17,40 +17,22 @@ import TabItem from '@theme/TabItem';
 <Tabs>
 <TabItem value="in-memory" label="In-memory (lib/bootstrap.dart)">
 
-```dart
-final backend = InMemoryResultBackend();
-final stem = Stem(
-  broker: InMemoryBroker(),
-  registry: registry,
-  backend: backend,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-in-memory
+
 ```
 
 </TabItem>
 <TabItem value="redis" label="Redis (lib/bootstrap.dart)">
 
-```dart
-final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-final stem = Stem(
-  broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-  registry: registry,
-  backend: backend,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-redis
+
 ```
 
 </TabItem>
 <TabItem value="postgres" label="Postgres (lib/bootstrap.dart)">
 
-```dart
-final backend = await PostgresResultBackend.connect(
-  'postgres://postgres:postgres@localhost:5432/stem',
-  applicationName: 'stem-app',
-);
-final stem = Stem(
-  broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-  registry: registry,
-  backend: backend,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-postgres
+
 ```
 
 </TabItem>
@@ -67,26 +49,8 @@ decode payloads without guessing formats.
 Configure defaults when bootstrapping `Stem`, `StemApp`, `Canvas`, or workflow
 apps:
 
-```dart title="lib/bootstrap_encoders.dart"
-import 'dart:convert';
-import 'package:stem/stem.dart';
+```dart title="lib/bootstrap_encoders.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-encoders
 
-class Base64PayloadEncoder extends TaskPayloadEncoder {
-  const Base64PayloadEncoder();
-  @override
-  Object? encode(Object? value) =>
-      value is String ? base64Encode(utf8.encode(value)) : value;
-  @override
-  Object? decode(Object? stored) =>
-      stored is String ? utf8.decode(base64Decode(stored)) : stored;
-}
-
-final app = await StemApp.inMemory(
-  tasks: [...],
-  argsEncoder: const JsonTaskPayloadEncoder(),
-  resultEncoder: const Base64PayloadEncoder(),
-  additionalEncoders: const [GzipPayloadEncoder()],
-);
 ```
 
 Handlers needing bespoke treatment can override `TaskMetadata.argsEncoder` and
@@ -95,16 +59,8 @@ encoder while the rest fall back to the global defaults.
 
 ## Schedule & lock stores
 
-```dart title="lib/beat_bootstrap.dart"
-final scheduleStore = await RedisScheduleStore.connect('redis://localhost:6379/2');
-final lockStore = await RedisLockStore.connect('redis://localhost:6379/3');
+```dart title="lib/beat_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-beat-stores
 
-final beat = Beat(
-  broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-  registry: registry,
-  store: scheduleStore,
-  lockStore: lockStore,
-);
 ```
 
 Switch to Postgres with `PostgresScheduleStore.connect` / `PostgresLockStore.connect`.
@@ -117,15 +73,8 @@ Store revocations in Redis or Postgres so workers can honour `stem worker revoke
 export STEM_REVOKE_STORE_URL=postgres://postgres:postgres@localhost:5432/stem
 ```
 
-```dart
-final worker = Worker(
-  broker: broker,
-  registry: registry,
-  backend: backend,
-  revokeStore: await PostgresRevokeStore.connect(
-    'postgres://postgres:postgres@localhost:5432/stem',
-  ),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-revoke-store
+
 ```
 
 ## Tips

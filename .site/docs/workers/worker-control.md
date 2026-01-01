@@ -49,23 +49,8 @@ Workers can autoscale their isolate pools between configured minimum and
 maximum bounds. Enable the evaluator by passing `WorkerAutoscaleConfig` to the
 worker constructor:
 
-```dart
-final worker = Worker(
-  broker: broker,
-  registry: registry,
-  backend: backend,
-  queue: 'critical',
-  concurrency: 12, // maximum upper bound
-  autoscale: const WorkerAutoscaleConfig(
-    enabled: true,
-    minConcurrency: 2,
-    maxConcurrency: 12,
-    scaleUpStep: 2,
-    scaleDownStep: 1,
-    idlePeriod: Duration(seconds: 45),
-    tick: Duration(milliseconds: 250),
-  ),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-autoscale
+
 ```
 
 The autoscaler samples broker queue depth alongside inflight counts to decide
@@ -159,59 +144,14 @@ Isolate handlers communicate with the worker only when they emit control signals
 
 ### Inline handler example
 
-```dart title="tasks/inline_report_task.dart"
-class InlineReportTask implements TaskHandler<void> {
-  @override
-  String get name => 'tasks.inline-report';
+```dart title="tasks/inline_report_task.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-inline
 
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 0);
-
-  // Runs inside the worker isolate. Heartbeats/progress immediately respect
-  // terminate revokes because they execute in the same isolate.
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    for (final chunk in args['chunks'] as List<String>) {
-      await processChunk(chunk);
-      context.heartbeat();
-    }
-  }
-}
 ```
 
 ### Isolate handler example
 
-```dart title="tasks/image_render_task.dart"
-class ImageRenderTask implements TaskHandler<void> {
-  @override
-  String get name => 'tasks.render-image';
+```dart title="tasks/image_render_task.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-isolate
 
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 0);
-
-  // Non-null isolateEntrypoint => worker uses the TaskIsolatePool.
-  @override
-  TaskEntrypoint? get isolateEntrypoint => renderImageEntrypoint;
-
-  // Inline pre/post work (validation, logging) still runs in the worker isolate.
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {}
-}
-
-Future<void> renderImageEntrypoint(
-  TaskInvocationContext ctx,
-  Map<String, Object?> args,
-) async {
-  final tiles = args['tiles'] as List<ImageTile>;
-  for (var i = 0; i < tiles.length; i++) {
-    await renderTile(tiles[i]);
-
-    if (i % 5 == 0) {
-      ctx.heartbeat();
-      ctx.progress(i / tiles.length);
-    }
-  }
-}
 ```
 
 `stem worker revoke --terminate` throws `TaskRevokedException` the next time an
@@ -226,18 +166,8 @@ Make sure isolate entrypoints call one of the cooperative helpers inside any
 long-running loop. Each helper throws `TaskRevokedException` when a terminate
 revoke is pending, which lets the handler fail fast.
 
-```dart title="tasks/crunch.dart"
-Future<void> crunch(TaskInvocationContext ctx, Map<String, Object?> args) async {
-  final items = args['items'] as List<Object?>;
-  for (var i = 0; i < items.length; i++) {
-    await process(items[i]);
+```dart title="tasks/crunch.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-crunch
 
-    if (i % 10 == 0) {
-      ctx.heartbeat();             // Throws if revoked with --terminate
-      ctx.progress(i / items.length);
-    }
-  }
-}
 ```
 
 For CPU-bound workloads, batch work or insert `await Future<void>.delayed(...)`
@@ -264,14 +194,8 @@ inside a larger host that already owns signal routing.
 
 Lifecycle guards can also recycle isolates automatically:
 
-```dart
-final worker = Worker(
-  /* ... */
-  lifecycle: const WorkerLifecycleConfig(
-    maxTasksPerIsolate: 500,
-    maxMemoryPerIsolateBytes: 512 * 1024 * 1024,
-  ),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-lifecycle
+
 ```
 
 Recycling occurs after the active task finishes; the worker logs the recycle

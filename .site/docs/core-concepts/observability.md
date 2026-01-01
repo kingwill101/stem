@@ -18,10 +18,8 @@ export STEM_METRIC_EXPORTERS=otlp:http://localhost:4318/v1/metrics
 export STEM_OTLP_ENDPOINT=http://localhost:4318
 ```
 
-```dart
-void main() {
-  StemMetrics.instance.configure(exporters: [ConsoleMetricsExporter()]);
-}
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
+
 ```
 
 Common metric names:
@@ -43,13 +41,8 @@ Wrap enqueue and task handlers with traces by enabling the built-in tracer.
 export STEM_TRACE_EXPORTER=otlp:http://localhost:4318/v1/traces
 ```
 
-```dart
-final stem = Stem(
-  broker: broker,
-  registry: registry,
-  backend: backend,
-  tracer: StemTracer.instance,
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-tracing
+
 ```
 
 Traces include spans for `stem.enqueue`, `stem.consume`, and task execution.
@@ -61,25 +54,16 @@ your tracing backend.
 `StemSignals` fire lifecycle hooks for tasks, workers, scheduler events, and
 control-plane commands.
 
-```dart
-StemSignals.onTaskRetry((payload, _) {
-  metrics.recordRetry(delay: payload.nextRetryAt.difference(DateTime.now()));
-});
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-signals
 
-StemSignals.onWorkerHeartbeat((payload, _) {
-  heartbeatGauge.set(1, tags: {'worker': payload.worker.id});
-});
 ```
 
 ## Logging
 
 Use `stemLogger` (Contextual logger) for structured logs.
 
-```dart
-stemLogger.info(
-  'Task started',
-  Context({'task': envelope.name, 'id': envelope.id}),
-);
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-logging
+
 ```
 
 Workers automatically include attempt, queue, and worker id in log contexts when

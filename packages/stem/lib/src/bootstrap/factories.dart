@@ -113,7 +113,7 @@ class StemWorkerConfig {
   /// Creates a worker configuration snapshot for bootstrap helpers.
   const StemWorkerConfig({
     this.queue = 'default',
-    this.consumerName,
+    this.consumerName = 'default-worker',
     this.concurrency,
     this.prefetchMultiplier = 2,
     this.prefetch,

@@ -1,6 +1,7 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import remarkCodeRegion from './plugins/remark-code-region.mjs';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -43,6 +44,7 @@ const config: Config = {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/stem/stem/tree/main/.site/docs/',
+          remarkPlugins: [[remarkCodeRegion, { rootDir: __dirname }]],
         },
         blog: {
           showReadingTime: true,
