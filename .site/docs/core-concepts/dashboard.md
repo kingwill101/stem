@@ -52,6 +52,14 @@ Supported schemes include `redis://`, `rediss://`, `postgres://`,
 
 ```
 
+```dart title="lib/dashboard.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/dashboard.dart#dashboard-overrides
+
+```
+
+```dart title="lib/dashboard.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/dashboard.dart#dashboard-tls
+
+```
+
 ## Deployment & auth guidance
 
 The dashboard does not ship with its own auth layer yet. For anything beyond
