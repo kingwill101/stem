@@ -48,6 +48,10 @@ as workers and the CLI:
 Supported schemes include `redis://`, `rediss://`, `postgres://`,
 `postgresql://`, and `memory://`.
 
+```dart title="lib/dashboard.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/dashboard.dart#dashboard-config
+
+```
+
 ## Deployment & auth guidance
 
 The dashboard does not ship with its own auth layer yet. For anything beyond
