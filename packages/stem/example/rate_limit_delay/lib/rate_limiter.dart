@@ -9,6 +9,7 @@ import 'package:stem/stem.dart';
 /// This is intentionally lightweight for demo purposes. Production deployments
 /// should use a more robust implementation with Lua scripts cached server-side
 /// and better error handling.
+// #region rate-limit-redis-limiter
 class RedisFixedWindowRateLimiter implements RateLimiter {
   RedisFixedWindowRateLimiter._(
     this._connection,
@@ -143,3 +144,4 @@ return {0, ttl}
     await _connection.close();
   }
 }
+// #endregion rate-limit-redis-limiter

@@ -29,6 +29,13 @@ import TabItem from '@theme/TabItem';
 ```
 
 </TabItem>
+<TabItem value="producer-enqueue" label="Producer Enqueue">
+
+```dart title="bin/producer.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/bin/producer.dart#rate-limit-producer-enqueue
+
+```
+
+</TabItem>
 </Tabs>
 
 Run the `rate_limit_delay` example for a full demo:
@@ -90,6 +97,10 @@ enqueuing tasks to enforce per-tenant limits.
 The `rate_limit_delay` example reads `STEM_RATE_LIMIT_URL` to point the limiter
 at Redis. Use a dedicated Redis DB or key prefix to keep limiter state isolated
 from your broker/result backend.
+
+```dart title="lib/shared.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/lib/shared.dart#rate-limit-redis-connector
+
+```
 
 ## Tips
 

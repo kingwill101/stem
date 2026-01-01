@@ -20,6 +20,7 @@ Future<void> main() async {
   final registry = buildRegistry();
   final subscriptions = attachSignalLogging();
 
+  // #region rate-limit-worker
   final worker = Worker(
     broker: broker,
     registry: registry,
@@ -31,6 +32,7 @@ Future<void> main() async {
     subscription: RoutingSubscription.singleQueue('throttled'),
     concurrency: 2,
   );
+  // #endregion rate-limit-worker
 
   Future<void> shutdown(ProcessSignal signal) async {
     stdout.writeln('[worker] received $signal, shutting down...');

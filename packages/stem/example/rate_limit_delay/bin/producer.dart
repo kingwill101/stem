@@ -29,6 +29,7 @@ Future<void> main() async {
     '[producer] enqueueing $totalJobs jobs with bursts, delays, and priorities...',
   );
 
+  // #region rate-limit-producer-enqueue
   for (var i = 0; i < totalJobs; i++) {
     final delaySeconds = i >= totalJobs / 2 ? 4 : 0;
     final notBefore = delaySeconds > 0
@@ -69,6 +70,7 @@ Future<void> main() async {
       'applied=$appliedPriority delay=${delaySeconds}s id=$id',
     );
   }
+  // #endregion rate-limit-producer-enqueue
 
   stdout.writeln('[producer] all jobs queued. Waiting 5s before shutdown...');
   await Future<void>.delayed(const Duration(seconds: 5));

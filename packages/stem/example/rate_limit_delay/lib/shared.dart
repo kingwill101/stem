@@ -10,6 +10,7 @@ import 'rate_limiter.dart';
 const _taskName = 'demo.throttled.render';
 
 SimpleTaskRegistry buildRegistry() {
+  // #region rate-limit-task-options
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<void>(
@@ -23,6 +24,7 @@ SimpleTaskRegistry buildRegistry() {
         entrypoint: _renderEntrypoint,
       ),
     );
+  // #endregion rate-limit-task-options
   return registry;
 }
 
@@ -58,8 +60,10 @@ Future<RedisStreamsBroker> connectBroker(String uri) =>
 Future<RedisResultBackend> connectBackend(String uri) =>
     RedisResultBackend.connect(uri);
 
+// #region rate-limit-redis-connector
 Future<RedisFixedWindowRateLimiter> connectRateLimiter(String uri) =>
     RedisFixedWindowRateLimiter.connect(uri);
+// #endregion rate-limit-redis-connector
 
 List<SignalSubscription> attachSignalLogging() {
   final subscriptions = <SignalSubscription>[];
