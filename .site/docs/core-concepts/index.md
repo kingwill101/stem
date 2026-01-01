@@ -19,6 +19,24 @@ behavior before touching production.
 - Declarative routing across queues and broadcast channels.
 - Result backends and progress reporting via `TaskContext`.
 
+### Core Concept Snippets
+
+```dart title="lib/tasks.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-register-in-memory
+
+```
+
+```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
+
+```
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-configure
+
+```
+
+```dart title="lib/canvas_chain.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chain.dart#canvas-chain
+
+```
+
 - **[Tasks & Retries](./tasks.md)** – Task handlers, options, retries, and idempotency guidelines.
 - **[Producer API](./producer.md)** – Enqueue tasks with args, metadata, signing, and delays.
 - **[Payload Signing](./signing.md)** – Sign envelopes, rotate keys, and verify signatures.
