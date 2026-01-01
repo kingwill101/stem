@@ -55,6 +55,18 @@ stem worker ping
 stem worker stats --worker worker-a
 ```
 
+```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe
+
+```
+
+```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker
+
+```
+
+```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-schedule
+
+```
+
 ## Registry resolution
 
 Many CLI commands that reference task names need a registry. The default CLI

@@ -51,6 +51,16 @@ Common scheduler CLI commands:
 - `stem schedule dry-run` — preview due times before rollout.
 - `stem observe schedules` — inspect schedule drift and dispatch status.
 
+## Scheduler snippets
+
+```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-specs
+
+```
+
+```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-signals
+
+```
+
 Beat itself runs as a Dart process; see the Beat guide for entrypoints.
 
 - **[Beat Scheduler Guide](./beat-guide.md)** – Configure Beat, load schedules, and run it with in-memory, Redis, or Postgres stores.
