@@ -9,7 +9,9 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
+  // #region signing-producer-config
   final config = StemConfig.fromEnvironment();
+  // #endregion signing-producer-config
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
@@ -24,7 +26,9 @@ Future<void> main(List<String> args) async {
     backendUrl,
     tls: config.tls,
   );
+  // #region signing-producer-signer
   final signer = PayloadSigner.maybe(config.signing);
+  // #endregion signing-producer-signer
   final httpContext = _buildHttpSecurityContext();
 
   final registry = SimpleTaskRegistry()
@@ -36,12 +40,14 @@ Future<void> main(List<String> args) async {
       ),
     );
 
+  // #region signing-producer-stem
   final stem = Stem(
     broker: broker,
     registry: registry,
     backend: backend,
     signer: signer,
   );
+  // #endregion signing-producer-stem
   final canvas = Canvas(
     broker: broker,
     backend: backend,

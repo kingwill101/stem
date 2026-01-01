@@ -9,7 +9,9 @@ import 'package:yaml/yaml.dart';
 const _deepEquals = DeepCollectionEquality();
 
 Future<void> main(List<String> args) async {
+  // #region signing-beat-config
   final config = StemConfig.fromEnvironment();
+  // #endregion signing-beat-config
 
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
@@ -22,8 +24,11 @@ Future<void> main(List<String> args) async {
     tls: config.tls,
   );
   final lockStore = await RedisLockStore.connect(scheduleUrl, tls: config.tls);
+  // #region signing-beat-signer
   final signer = PayloadSigner.maybe(config.signing);
+  // #endregion signing-beat-signer
 
+  // #region signing-beat-wire
   final beat = Beat(
     store: scheduleStore,
     broker: broker,
@@ -31,6 +36,7 @@ Future<void> main(List<String> args) async {
     tickInterval: const Duration(seconds: 1),
     signer: signer,
   );
+  // #endregion signing-beat-wire
 
   final seedPath = Platform.environment['STEM_SCHEDULE_FILE']?.trim();
   if (seedPath != null && seedPath.isNotEmpty) {

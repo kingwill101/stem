@@ -4,21 +4,28 @@ import 'package:stem/stem.dart';
 import 'package:stem_signing_key_rotation/shared.dart';
 
 Future<void> main() async {
+  // #region signing-rotation-producer-config
   final config = StemConfig.fromEnvironment();
+  // #endregion signing-rotation-producer-config
   final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
   final backend = await connectBackend(backendUrl, tls: config.tls);
+  // #region signing-rotation-producer-signer
   final signer = PayloadSigner.maybe(config.signing);
+  // #endregion signing-rotation-producer-signer
 
   final registry = buildRegistry();
+  // #region signing-rotation-producer-stem
   final stem = Stem(
     broker: broker,
     registry: registry,
     backend: backend,
     signer: signer,
   );
+  // #endregion signing-rotation-producer-stem
 
   final taskCount = _parseInt('TASKS', fallback: 5, min: 1);
+  // #region signing-rotation-producer-active-key
   final keyId = config.signing.activeKeyId ??
       Platform.environment['STEM_SIGNING_ACTIVE_KEY'] ??
       'unknown';
@@ -27,7 +34,9 @@ Future<void> main() async {
     'signing=${config.signing.isEnabled ? 'on' : 'off'} '
     'activeKey=$keyId tasks=$taskCount',
   );
+  // #endregion signing-rotation-producer-active-key
 
+  // #region signing-rotation-producer-enqueue
   const options = TaskOptions(queue: rotationQueue);
   for (var i = 0; i < taskCount; i += 1) {
     final label = 'rotation-${i + 1}';
@@ -38,6 +47,7 @@ Future<void> main() async {
     );
     stdout.writeln('[producer] enqueued $label id=$id');
   }
+  // #endregion signing-rotation-producer-enqueue
 
   await broker.close();
   await backend.close();

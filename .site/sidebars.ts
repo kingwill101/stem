@@ -35,6 +35,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "core-concepts/tasks",
         "core-concepts/producer",
+        "core-concepts/signing",
         "core-concepts/routing",
         "core-concepts/signals",
         "core-concepts/canvas",

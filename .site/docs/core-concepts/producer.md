@@ -61,6 +61,7 @@ Need to tweak headers/meta/queue at call sites? Wrap the definition in a
 - `meta` is stored with result backend entries—great for audit trails.
 - `headers` travel with the envelope and can carry tracing information.
 - To schedule tasks in the future, set `notBefore`.
+- For signing configuration, see [Payload Signing](./signing.md).
 
 ## Configuring Payload Encoders
 

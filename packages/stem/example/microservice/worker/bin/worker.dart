@@ -5,7 +5,9 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
+  // #region signing-worker-config
   final config = StemConfig.fromEnvironment();
+  // #endregion signing-worker-config
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
@@ -16,7 +18,9 @@ Future<void> main(List<String> args) async {
           tls: config.tls,
         )
       : InMemoryResultBackend();
+  // #region signing-worker-signer
   final signer = PayloadSigner.maybe(config.signing);
+  // #endregion signing-worker-signer
 
   final registry = SimpleTaskRegistry()
     ..register(
@@ -34,6 +38,7 @@ Future<void> main(List<String> args) async {
 
   final observability = ObservabilityConfig.fromEnvironment();
 
+  // #region signing-worker-wire
   final worker = Worker(
     broker: broker,
     registry: registry,
@@ -45,6 +50,7 @@ Future<void> main(List<String> args) async {
     signer: signer,
     observability: observability,
   );
+  // #endregion signing-worker-wire
 
   await worker.start();
   stdout.writeln('Worker listening for greetings...');

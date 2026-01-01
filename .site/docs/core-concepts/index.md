@@ -21,6 +21,7 @@ behavior before touching production.
 
 - **[Tasks & Retries](./tasks.md)** – Task handlers, options, retries, and idempotency guidelines.
 - **[Producer API](./producer.md)** – Enqueue tasks with args, metadata, signing, and delays.
+- **[Payload Signing](./signing.md)** – Sign envelopes, rotate keys, and verify signatures.
 - **[Routing](./routing.md)** – Queue aliases, priorities, and broadcast channels.
 - **[Signals](./signals.md)** – Lifecycle hooks for instrumentation and integrations.
 - **[Canvas Patterns](./canvas.md)** – Chains, groups, and chords for composing work.

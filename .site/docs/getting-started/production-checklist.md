@@ -30,6 +30,9 @@ entries, update `STEM_SIGNING_ACTIVE_KEY` with the new identifier, then deploy
 workers. Stem will accept signatures from any configured key until you remove
 retired entries.
 
+See [Payload Signing](../core-concepts/signing.md) for a full reference and
+Ed25519 guidance.
+
 ## 2. Secure Connections with TLS
 
 Use the repo’s helper script to generate local certificates or plug in the ones
