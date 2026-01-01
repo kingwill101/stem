@@ -62,6 +62,14 @@ retry cadence by:
 See the `examples/retry_task` Compose demo for a runnable setup that prints
 every retry signal and shows how the strategy interacts with broker timings.
 
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-strategy
+
+```
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-worker
+
+```
+
 ## Task Context
 
 `TaskContext` provides metadata and control helpers:

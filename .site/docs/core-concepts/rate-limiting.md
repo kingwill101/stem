@@ -38,6 +38,20 @@ import TabItem from '@theme/TabItem';
 </TabItem>
 </Tabs>
 
+### Docs snippet (in-memory demo)
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-task-options
+
+```
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-worker
+
+```
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-producer
+
+```
+
 Run the `rate_limit_delay` example for a full demo:
 
 - `packages/stem/example/rate_limit_delay`

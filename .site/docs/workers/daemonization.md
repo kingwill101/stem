@@ -5,6 +5,9 @@ sidebar_position: 2
 slug: /workers/daemonization
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Stem now ships opinionated service templates and CLI helpers so you can manage
 workers like you would with Celery’s `celery multi`. This guide mirrors
 `docs/process/daemonization.md` and walks through real examples.
@@ -22,9 +25,29 @@ workers like you would with Celery’s `celery multi`. This guide mirrors
 The daemonization templates expect a worker launcher that runs until signaled.
 This is the stub worker used by the daemonized worker example:
 
-```dart title="worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-main
+<Tabs>
+<TabItem value="entrypoint" label="Worker entrypoint">
+
+```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-entrypoint
 
 ```
+
+</TabItem>
+<TabItem value="signals" label="Signal handling">
+
+```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-signal-handlers
+
+```
+
+</TabItem>
+<TabItem value="loop" label="Heartbeat loop">
+
+```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-loop
+
+```
+
+</TabItem>
+</Tabs>
 
 ## Systemd Example
 

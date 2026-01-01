@@ -5,10 +5,13 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 
-// #region production-signing
+// #region production-signing-config
 Future<void> configureSigning() async {
   final config = StemConfig.fromEnvironment();
   final signer = PayloadSigner.maybe(config.signing);
+  // #endregion production-signing-config
+
+  // #region production-signing-runtime
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()
@@ -35,11 +38,13 @@ Future<void> configureSigning() async {
     registry: registry,
     signer: signer,
   );
+  // #endregion production-signing-runtime
 
+  // #region production-signing-enqueue
   await stem.enqueue('audit.log', args: {'message': 'hello'});
   await worker.shutdown();
+  // #endregion production-signing-enqueue
 }
-// #endregion production-signing
 
 Future<void> main() async {
   if (!Platform.environment.containsKey('STEM_BROKER_URL')) {

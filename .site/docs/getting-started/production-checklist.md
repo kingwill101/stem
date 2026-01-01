@@ -5,6 +5,9 @@ sidebar_position: 5
 slug: /getting-started/production-checklist
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 You have Stem running with observability and operations tooling. This final
 step hardens the deployment: signing, TLS, daemon supervision, and automated
 quality gates so every rollout is repeatable.
@@ -21,9 +24,29 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 
 In code, wire the signer into both producers and workers:
 
-```dart title="lib/bootstrap_signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing
+<Tabs>
+<TabItem value="config" label="Signing config">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-config
 
 ```
+
+</TabItem>
+<TabItem value="runtime" label="Stem + worker setup">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-runtime
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Signed enqueue">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-enqueue
+
+```
+
+</TabItem>
+</Tabs>
 
 When you rotate keys, set `STEM_SIGNING_KEYS` to include both the old and new
 entries, update `STEM_SIGNING_ACTIVE_KEY` with the new identifier, then deploy
