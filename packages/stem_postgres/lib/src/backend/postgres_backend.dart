@@ -70,6 +70,29 @@ class PostgresResultBackend implements ResultBackend {
     return backend;
   }
 
+  /// Creates a backend using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static PostgresResultBackend fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultTtl = const Duration(days: 1),
+    Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
+  }) {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final connections = PostgresConnections.fromDataSource(dataSource);
+    final backend = PostgresResultBackend._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultTtl: defaultTtl,
+      groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
+    ).._startCleanupTimer();
+    return backend;
+  }
+
   void _startCleanupTimer() {
     // Run cleanup every minute to remove expired records
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -204,27 +227,20 @@ class PostgresResultBackend implements ResultBackend {
     final now = DateTime.now();
     final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
     await _connections.runInTransaction((txn) async {
-      // Try to find existing group first
-      final existing = await txn
-          .query<StemGroup>()
-          .whereEquals('id', descriptor.id)
-          .whereEquals('namespace', namespace)
-          .first();
+      final repository = txn.repository<StemGroup>();
+      final inserted = await repository.insertOrIgnore(
+        StemGroupInsertDto(
+          id: descriptor.id,
+          namespace: namespace,
+          expected: descriptor.expected,
+          meta: descriptor.meta,
+          expiresAt: expiresAt,
+        ),
+      );
 
-      if (existing == null) {
-        // Insert new group - timestamps will use DEFAULT
-        await txn.repository<StemGroup>().insert(
-          StemGroupInsertDto(
-            id: descriptor.id,
-            namespace: namespace,
-            expected: descriptor.expected,
-            meta: descriptor.meta,
-            expiresAt: expiresAt,
-          ),
-        );
-      } else {
-        // Update existing group - only update business fields
-        await txn.repository<StemGroup>().update(
+      if (inserted == 0) {
+        // Update existing group - only update business fields.
+        await repository.update(
           StemGroupUpdateDto(
             expected: descriptor.expected,
             meta: descriptor.meta,

@@ -2,12 +2,13 @@ import 'dart:io';
 
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/stem_schedule_entry.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
-void main() {
+import '../../support/postgres_test_harness.dart';
+
+Future<void> main() async {
   final connectionString = Platform.environment['STEM_TEST_POSTGRES_URL'];
   if (connectionString == null || connectionString.isEmpty) {
     test(
@@ -18,29 +19,28 @@ void main() {
     return;
   }
 
-  group('postgres schedule store', () {
+  final harness = await createStemPostgresTestHarness(
+    connectionString: connectionString,
+  );
+  tearDownAll(harness.dispose);
+
+  ormedGroup('postgres schedule store', (dataSource) {
     late PostgresScheduleStore store;
-    late PostgresConnections adminConnections;
     late String testNamespace;
 
     setUp(() async {
       // Create a unique namespace for this test to avoid conflicts
       testNamespace = 'test_sched_${DateTime.now().microsecondsSinceEpoch}';
-      
-      adminConnections = await PostgresConnections.open(
-        connectionString: connectionString,
-      );
-      store = await PostgresScheduleStore.connect(
-        connectionString,
+      store = PostgresScheduleStore.fromDataSource(
+        dataSource,
         namespace: testNamespace,
-        applicationName: 'stem-postgres-schedule-test',
       );
     });
 
     tearDown(() async {
       // Clean up schedule entries created during the test
       try {
-        await adminConnections.context
+        await dataSource.context
             .query<$StemScheduleEntry>()
             .whereEquals('namespace', testNamespace)
             .delete();
@@ -49,7 +49,6 @@ void main() {
       }
       try {
         await store.close();
-        await adminConnections.close();
       } catch (_) {
         // Ignore connection close errors
       }
@@ -67,7 +66,7 @@ void main() {
 
       await store.upsert(entry);
 
-      final rows = await adminConnections.context
+      final rows = await dataSource.context
           .query<$StemScheduleEntry>()
           .whereEquals('namespace', testNamespace)
           .get();
@@ -83,7 +82,7 @@ void main() {
 
       final dueNow = DateTime.now().toUtc();
 
-      final manualDueRows = await adminConnections.context
+      final manualDueRows = await dataSource.context
           .query<$StemScheduleEntry>()
           .whereEquals('namespace', testNamespace)
           .where((PredicateBuilder<$StemScheduleEntry> q) {
@@ -98,7 +97,7 @@ void main() {
         reason: 'manual due query should find entry',
       );
 
-      final manualDueNoLocks = await adminConnections.context
+      final manualDueNoLocks = await dataSource.context
           .query<$StemScheduleEntry>()
           .whereEquals('namespace', testNamespace)
           .where((PredicateBuilder<$StemScheduleEntry> q) {
@@ -179,14 +178,13 @@ void main() {
 
     test('namespace isolates schedule entries', () async {
       final otherNamespace = '${testNamespace}_other';
-      final otherStore = await PostgresScheduleStore.connect(
-        connectionString,
+      final otherStore = PostgresScheduleStore.fromDataSource(
+        dataSource,
         namespace: otherNamespace,
-        applicationName: 'stem-postgres-schedule-test-other',
       );
       addTearDown(() async {
         try {
-          await adminConnections.context
+          await dataSource.context
               .query<$StemScheduleEntry>()
               .whereEquals('namespace', otherNamespace)
               .delete();

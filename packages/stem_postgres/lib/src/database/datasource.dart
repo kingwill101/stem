@@ -3,7 +3,10 @@ import 'package:ormed_postgres/ormed_postgres.dart';
 import 'package:stem_postgres/orm_registry.g.dart';
 
 /// Creates a new DataSource instance using the project configuration.
-DataSource createDataSource({String? connectionString}) {
+DataSource createDataSource({
+  String? connectionString,
+  bool logging = false,
+}) {
   ensurePostgresDriverRegistration();
 
   final config = (connectionString != null && connectionString.isNotEmpty)
@@ -13,7 +16,10 @@ DataSource createDataSource({String? connectionString}) {
               name: 'default',
               driver: DriverConfig(
                 type: 'postgres',
-                options: {'url': connectionString},
+                options: {
+                  'url': connectionString,
+                  if (logging) 'logging': true,
+                },
               ),
               migrations: MigrationSection(
                 directory: 'lib/src/database/migrations',

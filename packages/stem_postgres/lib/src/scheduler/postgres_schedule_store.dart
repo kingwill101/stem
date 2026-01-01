@@ -31,6 +31,22 @@ class PostgresScheduleStore implements ScheduleStore {
     );
   }
 
+  /// Creates a schedule store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static PostgresScheduleStore fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+  }) {
+    final resolvedNamespace =
+        namespace.trim().isNotEmpty ? namespace.trim() : 'stem';
+    final connections = PostgresConnections.fromDataSource(dataSource);
+    return PostgresScheduleStore._(
+      connections,
+      namespace: resolvedNamespace,
+    );
+  }
+
   /// Closes the schedule store and releases database resources.
   Future<void> close() async {
     await _connections.close();

@@ -35,6 +35,19 @@ class PostgresLockStore implements LockStore {
     );
   }
 
+  /// Creates a lock store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static PostgresLockStore fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+  }) {
+    final resolvedNamespace =
+        namespace.trim().isNotEmpty ? namespace.trim() : 'stem';
+    final connections = PostgresConnections.fromDataSource(dataSource);
+    return PostgresLockStore._(connections, namespace: resolvedNamespace);
+  }
+
   /// Closes the lock store and releases any database resources.
   Future<void> close() async {
     await _connections.close();
@@ -55,48 +68,46 @@ class PostgresLockStore implements LockStore {
     final now = DateTime.now().toUtc();
     final expiresAt = now.add(ttl);
     final ctx = _connections.context;
+    final repository = ctx.repository<$StemLock>();
 
-    try {
-      await ctx.repository<$StemLock>().insert(
-        $StemLock(
-          key: key,
-          namespace: namespace,
-          owner: ownerValue,
-          expiresAt: expiresAt,
-          createdAt: now,
-        ),
-      );
+    final inserted = await repository.insertOrIgnore(
+      $StemLock(
+        key: key,
+        namespace: namespace,
+        owner: ownerValue,
+        expiresAt: expiresAt,
+        createdAt: now,
+      ),
+    );
+    if (inserted > 0) {
       return _PostgresLock(store: this, key: key, owner: ownerValue);
-    } on Object {
-      // Lock exists, try to clean up expired and retry
-      final now = DateTime.now().toUtc();
-      final expired = await ctx
-          .query<$StemLock>()
-          .whereEquals('key', key)
-          .whereEquals('namespace', namespace)
-          .where('expiresAt', now, PredicateOperator.lessThan)
-          .get();
-
-      for (final lock in expired) {
-        await ctx.repository<$StemLock>().delete(lock);
-      }
-
-      // Try inserting again
-      try {
-        await ctx.repository<$StemLock>().insert(
-          $StemLock(
-            key: key,
-            namespace: namespace,
-            owner: ownerValue,
-            expiresAt: expiresAt,
-            createdAt: now,
-          ),
-        );
-        return _PostgresLock(store: this, key: key, owner: ownerValue);
-      } on Object {
-        return null;
-      }
     }
+
+    // Lock exists, try to clean up expired and retry.
+    final expired = await ctx
+        .query<$StemLock>()
+        .whereEquals('key', key)
+        .whereEquals('namespace', namespace)
+        .where('expiresAt', now, PredicateOperator.lessThan)
+        .get();
+
+    for (final lock in expired) {
+      await repository.delete(lock);
+    }
+
+    final retryInserted = await repository.insertOrIgnore(
+      $StemLock(
+        key: key,
+        namespace: namespace,
+        owner: ownerValue,
+        expiresAt: expiresAt,
+        createdAt: now,
+      ),
+    );
+    if (retryInserted > 0) {
+      return _PostgresLock(store: this, key: key, owner: ownerValue);
+    }
+    return null;
   }
 
   Future<bool> _renew(String key, String owner, Duration ttl) async {

@@ -7,10 +7,12 @@ import 'package:stem_postgres/src/database/migrations.dart';
 /// Holds an active Postgres data source and query helpers.
 class PostgresConnections {
   /// Creates a connection wrapper for an initialized data source.
-  PostgresConnections._(this.dataSource);
+  PostgresConnections._(this.dataSource, {required bool ownsDataSource})
+    : _ownsDataSource = ownsDataSource;
 
   /// Underlying data source instance.
   final DataSource dataSource;
+  final bool _ownsDataSource;
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => dataSource.connection;
@@ -22,8 +24,14 @@ class PostgresConnections {
   static Future<PostgresConnections> open({String? connectionString}) async {
     await _runMigrations(connectionString);
     final dataSource = await _openDataSource(connectionString);
-    return PostgresConnections._(dataSource);
+    return PostgresConnections._(dataSource, ownsDataSource: true);
   }
+
+  /// Wraps an existing data source without running migrations.
+  ///
+  /// The caller remains responsible for disposing [dataSource].
+  static PostgresConnections fromDataSource(DataSource dataSource) =>
+      PostgresConnections._(dataSource, ownsDataSource: false);
 
   /// Runs [action] inside a database transaction.
   Future<T> runInTransaction<T>(
@@ -31,7 +39,11 @@ class PostgresConnections {
   ) => connection.transaction(() => action(context));
 
   /// Closes the data source.
-  Future<void> close() => dataSource.dispose();
+  Future<void> close() async {
+    if (_ownsDataSource) {
+      await dataSource.dispose();
+    }
+  }
 }
 
 Future<DataSource> _openDataSource(String? connectionString) async {
