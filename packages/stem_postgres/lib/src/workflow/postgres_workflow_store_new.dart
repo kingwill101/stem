@@ -725,19 +725,32 @@ class PostgresWorkflowStore implements WorkflowStore {
       final targetIndex = baseIndexMap[stepName];
       if (targetIndex == null) return;
 
-      // Delete steps after target and re-insert kept ones
-      final keep = <StemWorkflowStep>[];
+      final keep = <StemWorkflowStepInsertDto>[];
       for (var i = 0; i < stepRows.length; i++) {
         final baseIndex = entryIndexes[i];
         if (baseIndex < targetIndex) {
-          keep.add(stepRows[i]);
+          final step = stepRows[i];
+          keep.add(
+            StemWorkflowStepInsertDto(
+              runId: runId,
+              name: step.name,
+              namespace: namespace,
+              value: step.value,
+            ),
+          );
         } else {
-          await ctx
-              .query<StemWorkflowStep>()
-              .whereEquals('runId', runId)
-              .whereEquals('name', stepRows[i].name)
-              .delete();
+          break;
         }
+      }
+
+      await ctx
+          .query<StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
+          .delete();
+
+      if (keep.isNotEmpty) {
+        await ctx.repository<StemWorkflowStep>().insertMany(keep);
       }
 
       // Update run status
