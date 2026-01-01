@@ -1,0 +1,49 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+
+COMPOSE_FILE := env_var_or_default("COMPOSE_FILE", "docker-compose.yml")
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "redis postgres")
+BUILD_DIR := env_var_or_default("BUILD_DIR", "build")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-mixed-cluster")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+COMPOSE_ENV := "REDIS_PORT=" + REDIS_PORT + " " + "POSTGRES_PORT=" + POSTGRES_PORT
+REDIS_PORT := env_var_or_default("REDIS_PORT", "6379")
+POSTGRES_PORT := env_var_or_default("POSTGRES_PORT", "5432")
+
+
+
+build-enqueuer:
+    cd "{{ROOT}}/enqueuer"; dart pub get; dart build cli -o "{{BUILD_DIR}}"
+
+build-redis-worker:
+    cd "{{ROOT}}/redis_worker"; dart pub get; dart build cli -o "{{BUILD_DIR}}"
+
+build-postgres-worker:
+    cd "{{ROOT}}/postgres_worker"; dart pub get; dart build cli -o "{{BUILD_DIR}}"
+
+build: build-enqueuer build-redis-worker build-postgres-worker
+
+run-enqueuer:
+    cd "{{ROOT}}/enqueuer"; if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi; export REDIS_PORT="${REDIS_PORT:-6379}"; export POSTGRES_PORT="${POSTGRES_PORT:-5432}"; export REDIS_STEM_BROKER_URL="${REDIS_STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"; export REDIS_STEM_RESULT_BACKEND_URL="${REDIS_STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"; export REDIS_STEM_DEFAULT_QUEUE="${REDIS_STEM_DEFAULT_QUEUE:-redis-tasks}"; export POSTGRES_STEM_BROKER_URL="${POSTGRES_STEM_BROKER_URL:-postgres://stem:stem@localhost:${POSTGRES_PORT}/stem_demo}"; export POSTGRES_STEM_RESULT_BACKEND_URL="${POSTGRES_STEM_RESULT_BACKEND_URL:-postgres://stem:stem@localhost:${POSTGRES_PORT}/stem_demo}"; export POSTGRES_STEM_DEFAULT_QUEUE="${POSTGRES_STEM_DEFAULT_QUEUE:-postgres-tasks}"; "{{BUILD_DIR}}/bundle/bin"/*
+
+run-redis-worker:
+    cd "{{ROOT}}/redis_worker"; if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi; export REDIS_PORT="${REDIS_PORT:-6379}"; export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"; export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"; export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-redis-tasks}"; "{{BUILD_DIR}}/bundle/bin"/*
+
+run-postgres-worker:
+    cd "{{ROOT}}/postgres_worker"; if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi; export POSTGRES_PORT="${POSTGRES_PORT:-5432}"; export STEM_BROKER_URL="${STEM_BROKER_URL:-postgres://stem:stem@localhost:${POSTGRES_PORT}/stem_demo}"; export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgres://stem:stem@localhost:${POSTGRES_PORT}/stem_demo}"; export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-postgres-tasks}"; "{{BUILD_DIR}}/bundle/bin"/*
+
+run: run-enqueuer
+
+clean:
+    rm -rf "{{ROOT}}/enqueuer/{{BUILD_DIR}}" "{{ROOT}}/redis_worker/{{BUILD_DIR}}" "{{ROOT}}/postgres_worker/{{BUILD_DIR}}"
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run-redis-worker"
+    tmux split-window -t "{{SESSION}}:app" -v "cd \"{{ROOT}}\" && {{JUST}} run-postgres-worker"
+    tmux split-window -t "{{SESSION}}:app" -h "cd \"{{ROOT}}\" && {{JUST}} run-enqueuer"
+    tmux select-layout -t "{{SESSION}}:app" tiled
+    {{JUST}} tmux-attach

@@ -31,7 +31,7 @@ void main() {
           name: 'soak.task',
           onCall: (context, args) async {
             await Future<void>.delayed(const Duration(milliseconds: 5));
-            completed.add(args['index'] as int);
+            completed.add(args['index']! as int);
           },
         ),
       );
@@ -55,7 +55,6 @@ void main() {
 
     await _waitFor(
       () async => completed.length == total,
-      timeout: const Duration(seconds: 30),
     );
 
     await worker.shutdown();

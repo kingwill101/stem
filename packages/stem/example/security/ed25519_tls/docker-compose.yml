@@ -2,7 +2,7 @@ services:
   redis:
     image: quay.io/opstree/redis:latest
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     command:
       [
         "redis-server",
@@ -27,7 +27,7 @@ services:
   enqueuer:
     build:
       context: ../../..
-      dockerfile: examples/microservice/enqueuer/Dockerfile
+      dockerfile: example/microservice/enqueuer/Dockerfile
       target: dev
     env_file:
       - .env
@@ -44,7 +44,7 @@ services:
   worker:
     build:
       context: ../../..
-      dockerfile: examples/microservice/worker/Dockerfile
+      dockerfile: example/microservice/worker/Dockerfile
       target: dev
     env_file:
       - .env

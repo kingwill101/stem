@@ -141,7 +141,7 @@ Jaeger is designed for **distributed tracing** (tracking requests across service
 ```
 Worker (Dart) 
   → Metrics via HTTP (OTLP/JSON)
-  → OTEL Collector (port 4318)
+  → OTEL Collector (gRPC 4317, HTTP 4318)
   → Prometheus exporter (port 8888)
   → Prometheus scrapes every 15s
   → Grafana queries Prometheus

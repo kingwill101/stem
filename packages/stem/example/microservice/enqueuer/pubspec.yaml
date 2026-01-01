@@ -8,10 +8,14 @@ environment:
 dependencies:
   shelf: ^1.4.1
   shelf_router: ^1.1.4
+  stem: any
+  stem_redis: any
+
+dev_dependencies:
+  lints: ^6.0.0
+
+dependency_overrides:
   stem:
     path: ../../..
   stem_redis:
     path: ../../../../stem_redis
-
-dev_dependencies:
-  lints: ^6.0.0

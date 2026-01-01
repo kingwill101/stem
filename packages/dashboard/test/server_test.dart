@@ -123,7 +123,8 @@ void main() {
 
     final response = await client.post(
       '/tasks/enqueue',
-      'queue=alpha&task=demo.task&priority=3&maxRetries=2&payload=%7B%22foo%22%3A%22bar%22%7D',
+      'queue=alpha&task=demo.task&priority=3&maxRetries=2&payload='
+          '%7B%22foo%22%3A%22bar%22%7D',
       headers: {
         'content-type': ['application/x-www-form-urlencoded'],
       },
@@ -187,15 +188,15 @@ void main() {
   });
 
   test('POST /workers/control reports errors from replies', () async {
-    final service = _RecordingService();
-    service.controlReplies = [
-      ControlReplyMessage(
-        requestId: 'req',
-        workerId: 'worker-1',
-        status: 'error',
-        error: const {'message': 'boom'},
-      ),
-    ];
+    final service = _RecordingService()
+      ..controlReplies = [
+        ControlReplyMessage(
+          requestId: 'req',
+          workerId: 'worker-1',
+          status: 'error',
+          error: const {'message': 'boom'},
+        ),
+      ];
     final state = DashboardState(service: service);
     final client = await _buildClient(service, state);
 
@@ -216,26 +217,31 @@ void main() {
   });
 
   test('POST /queues/replay forwards to dashboard service', () async {
-    final service = _RecordingService(
-      queues: const [
-        QueueSummary(queue: 'default', pending: 0, inflight: 0, deadLetters: 3),
-      ],
-    );
-    service.replayResult = DeadLetterReplayResult(
-      entries: [
-        DeadLetterEntry(
-          envelope: Envelope(
-            id: 'dlq-1',
-            name: 'demo.task',
-            queue: 'default',
-            args: const {},
-          ),
-          reason: 'retry-limit',
-          deadAt: DateTime.now().toUtc(),
-        ),
-      ],
-      dryRun: false,
-    );
+    final service =
+        _RecordingService(
+            queues: const [
+              QueueSummary(
+                queue: 'default',
+                pending: 0,
+                inflight: 0,
+                deadLetters: 3,
+              ),
+            ],
+          )
+          ..replayResult = DeadLetterReplayResult(
+            entries: [
+              DeadLetterEntry(
+                envelope: Envelope(
+                  id: 'dlq-1',
+                  name: 'demo.task',
+                  args: const {},
+                ),
+                reason: 'retry-limit',
+                deadAt: DateTime.now().toUtc(),
+              ),
+            ],
+            dryRun: false,
+          );
     final state = DashboardState(service: service);
     final client = await _buildClient(service, state);
 

@@ -21,10 +21,7 @@ Future<void> main(List<String> args) async {
   }
 
   final backend = await PostgresResultBackend.connect(
-    backendUrl,
-    namespace: 'stem_demo',
-    applicationName: 'stem-redis-postgres-enqueuer',
-    tls: config.tls,
+    connectionString: backendUrl,
   );
 
   final registry = SimpleTaskRegistry()
@@ -60,4 +57,5 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _noop(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) => 'noop';
+) =>
+    'noop';

@@ -11,5 +11,17 @@ dependencies:
   mailer: ^6.1.0
   stem:
     path: ../..
+  stem_cli:
+    path: ../../../stem_cli
   stem_redis:
     path: ../../../stem_redis
+
+dependency_overrides:
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis
+  stem_sqlite:
+    path: ../../../stem_sqlite
+  stem_postgres:
+    path: ../../../stem_postgres

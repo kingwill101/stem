@@ -85,3 +85,13 @@ Prometheus scrape endpoint and forwards spans to Jaeger.
 - Grafana alerting is provisioned from `grafana-alerts.yml`. Update notification
   policies inside Grafana to target your PagerDuty or Slack channels so SLO
   alerts reach the right on-call engineers.
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+just run
+# Or:
+just tmux
+```

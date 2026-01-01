@@ -24,6 +24,7 @@ Environment variables used by the services:
 | `SMTP_ALLOW_INSECURE` | `true` | Allow insecure connections (useful with MailHog). |
 | `EMAIL_FROM_ADDRESS` | `noreply@example.com` | Sender email address. |
 | `EMAIL_FROM_NAME` | `Stem Email Service` | Sender display name. |
+| `STEM_ROUTING_CONFIG` | `/config/routing.yaml` | Routing config defining the `emails` queue. |
 
 Copy `.env.example` to `.env` before running with Docker and adjust values as needed.
 
@@ -80,3 +81,17 @@ Stop the stack with `docker compose down`.
 5. Send email tasks using the curl command above.
 
 This setup demonstrates how to integrate Stem with external I/O, retries, and a result backend while using MailHog as a development-friendly SMTP server.
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example`.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-enqueuer
+# Or:
+just tmux
+```

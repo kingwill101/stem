@@ -47,3 +47,15 @@ You can also override retries per task via `TaskOptions(maxRetries: N)` in
 `bin/producer.dart`. Lower values result in fewer attempts. When you need a
 fixed delay instead of exponential backoff, implement a custom
 `RetryStrategy` or set `TaskOptions.notBefore` inside your own retry logic.
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-producer
+# Or:
+just tmux
+```

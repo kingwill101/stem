@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Canvas', () {
@@ -37,38 +37,46 @@ void main() {
       broker.dispose();
     });
 
-    test('group executes all tasks', () async {
-      final ids = await canvas.group([
-        task('echo', args: {'value': 1}),
-        task('echo', args: {'value': 2}),
+    test('group executes all tasks and streams typed results', () async {
+      final dispatch = await canvas.group<int>([
+        task<int>('echo', args: {'value': 4}),
+        task<int>('echo', args: {'value': 6}),
       ]);
+
+      final received = await dispatch.results
+          .map((result) => result.value)
+          .toList();
+      final typed = received.whereType<int>().toList();
+      expect(typed, containsAll([4, 6]));
 
       final statuses = await Future.wait(
-        ids.map((id) => _waitForSuccess(backend, id)),
+        dispatch.taskIds.map((id) => _waitForSuccess(backend, id)),
       );
-      expect(statuses.map((s) => s.payload), containsAll([1, 2]));
+      expect(statuses.map((s) => s.payload), containsAll([4, 6]));
+      await dispatch.dispose();
     });
 
-    test('chain sequences tasks', () async {
-      final finalId = await canvas.chain([
-        task('echo', args: {'value': 1}),
-        task('sum', args: {'add': 2}),
+    test('chain returns typed payload', () async {
+      final result = await canvas.chain<int>([
+        task<int>('echo', args: {'value': 1}),
+        task<int>('sum', args: {'add': 2}),
       ]);
 
-      final status = await _waitForSuccess(backend, finalId);
-      expect(status.payload, equals(3));
+      expect(result.value, 3);
+      expect(result.finalStatus?.state, TaskState.succeeded);
     });
 
-    test('chord triggers callback after group completes', () async {
-      final callbackId = await canvas.chord(
+    test('chord returns typed body results', () async {
+      final result = await canvas.chord<int>(
         body: [
-          task('echo', args: {'value': 2}),
-          task('echo', args: {'value': 3}),
+          task<int>('echo', args: {'value': 2}),
+          task<int>('echo', args: {'value': 3}),
         ],
         callback: task('sum'),
       );
 
-      final status = await _waitForSuccess(backend, callbackId);
+      expect(result.values, containsAll(<int>[2, 3]));
+      final status = await _waitForSuccess(backend, result.callbackTaskId);
       expect(status.payload, equals(5));
     });
   });
@@ -134,11 +142,8 @@ class _SumTask implements TaskHandler<int> {
       );
     }
     final previous = context.meta['chainPrevResult'];
-    var total = 0;
-    if (previous is num) {
-      total += previous.toInt();
-    }
-    total += (args['add'] as num?)?.toInt() ?? 0;
-    return total;
+    final previousValue = previous is num ? previous.toInt() : 0;
+    final addValue = (args['add'] as num?)?.toInt() ?? 0;
+    return previousValue + addValue;
   }
 }

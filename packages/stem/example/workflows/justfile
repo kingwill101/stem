@@ -1,0 +1,42 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+STEM_ROOT := "{{ROOT}}/../.."
+COMPOSE_FILE := env_var_or_default("COMPOSE_FILE", "")
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "")
+COMPOSE_ENV := env_var_or_default("COMPOSE_ENV", "")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-workflows")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+
+build:
+    @true
+
+run-basic:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/basic_in_memory.dart
+
+run-cancel:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/cancellation_policy.dart
+
+run-custom:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/custom_factories.dart
+
+run-sleep:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/sleep_and_event.dart
+
+run-sqlite:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/sqlite_store.dart
+
+run-versioned:
+    if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi cd "{{STEM_ROOT}}" && dart run example/workflows/versioned_rewind.dart
+
+run: run-basic
+
+clean:
+    @true
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run"
+    {{JUST}} tmux-attach

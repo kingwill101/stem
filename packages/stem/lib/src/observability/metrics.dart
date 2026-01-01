@@ -6,9 +6,19 @@ import 'package:collection/collection.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as dotel_api;
+import 'package:meta/meta.dart';
 
 /// Known metric aggregation types supported by the exporters.
-enum MetricType { counter, histogram, gauge }
+enum MetricType {
+  /// Monotonic counter metric.
+  counter,
+
+  /// Distribution-based histogram metric.
+  histogram,
+
+  /// Instantaneous gauge metric.
+  gauge,
+}
 
 /// Immutable metric event emitted to exporters.
 class MetricEvent {
@@ -54,12 +64,13 @@ class MetricEvent {
     'value': value,
     'tags': tags,
     'timestamp': timestamp.toIso8601String(),
-    if (unit != null) 'unit': unit!,
+    if (unit != null) 'unit': unit! as Object,
   };
 }
 
 /// Consumers implement exporters to relay metric events to specific sinks.
 abstract class MetricsExporter {
+  /// Creates a metrics exporter instance.
   const MetricsExporter();
 
   /// Processes a single [event] from the registry.
@@ -108,8 +119,7 @@ class StemMetrics {
     int value = 1,
   }) {
     final key = _MetricKey(name, tags);
-    final counter = _counters.putIfAbsent(key, () => _CounterState(name, tags));
-    counter.add(value);
+    _counters.putIfAbsent(key, () => _CounterState(name, tags)).add(value);
     _emit(
       MetricEvent(
         type: MetricType.counter,
@@ -152,8 +162,7 @@ class StemMetrics {
     Map<String, String> tags = const {},
   }) {
     final key = _MetricKey(name, tags);
-    final gauge = _gauges.putIfAbsent(key, () => _GaugeState(name, tags));
-    gauge.update(value);
+    _gauges.putIfAbsent(key, () => _GaugeState(name, tags)).update(value);
     _emit(
       MetricEvent(type: MetricType.gauge, name: name, value: value, tags: tags),
     );
@@ -190,7 +199,7 @@ class StemMetrics {
     for (final exporter in _exporters) {
       try {
         exporter.record(event);
-      } catch (_) {
+      } on Object {
         // Exporter errors are isolated so other outputs proceed.
       }
     }
@@ -294,6 +303,7 @@ class _GaugeState {
 }
 
 /// Lookup key combining metric name and tags.
+@immutable
 class _MetricKey {
   _MetricKey(this.name, Map<String, String> tags)
     : tags = Map.unmodifiable(tags);
@@ -306,7 +316,8 @@ class _MetricKey {
 
   /// Hash code based on name and tag content.
   @override
-  int get hashCode => Object.hash(name, const MapEquality().hash(tags));
+  int get hashCode =>
+      Object.hash(name, const MapEquality<String, String>().hash(tags));
 
   /// Equality compares both name and tags.
   @override
@@ -319,13 +330,14 @@ class _MetricKey {
 
 /// Simple exporter that prints JSON metrics to either [sink] or stdout.
 class ConsoleMetricsExporter extends MetricsExporter {
+  /// Creates a console exporter that writes to [sink] or stdout.
   ConsoleMetricsExporter({this.sink});
 
   /// Optional sink used instead of stdout.
   final StringSink? sink;
 
-  @override
   /// Writes the encoded [event] as a single JSON line.
+  @override
   void record(MetricEvent event) {
     final line = jsonEncode(event.toJson());
     final target = sink;
@@ -339,6 +351,7 @@ class ConsoleMetricsExporter extends MetricsExporter {
 
 /// Metrics exporter that relays events through Dartastic's OTLP pipeline.
 class DartasticMetricsExporter extends MetricsExporter {
+  /// Creates a Dartastic OTLP exporter.
   DartasticMetricsExporter({
     required Uri endpoint,
     required String serviceName,
@@ -368,15 +381,16 @@ class PrometheusMetricsExporter extends MetricsExporter {
   /// Cached samples keyed by metric identity and tag string.
   final Map<String, _PrometheusSample> _samples = {};
 
-  @override
   /// Updates Prometheus-style aggregates for [event].
+  @override
   void record(MetricEvent event) {
     final key = _PrometheusSample.keyFor(event);
-    final sample = _samples.putIfAbsent(
-      key,
-      () => _PrometheusSample(event.name, event.tags, event.type),
-    );
-    sample.record(event.value);
+    _samples
+        .putIfAbsent(
+          key,
+          () => _PrometheusSample(event.name, event.tags, event.type),
+        )
+        .record(event.value);
   }
 
   /// Renders accumulated samples into the Prometheus text exposition format.
@@ -493,8 +507,9 @@ class _DartasticMetricsRuntimeRegistry {
 }
 
 /// Unique key for runtime lookup based on exporter configuration.
+@immutable
 class _DartasticRuntimeKey {
-  _DartasticRuntimeKey({
+  const _DartasticRuntimeKey({
     required this.endpoint,
     required this.serviceName,
     required this.exportInterval,
@@ -525,7 +540,7 @@ class _DartasticMetricsRuntime {
     required this.serviceName,
     required this.exportInterval,
   }) {
-    _ensureInitialized();
+    unawaited(_ensureInitialized());
   }
 
   final Uri endpoint;
@@ -567,7 +582,6 @@ class _DartasticMetricsRuntime {
         serviceName: serviceName,
         endpoint: grpcEndpoint.toString(),
         secure: grpcEndpoint.scheme == 'https',
-        enableMetrics: true,
         metricExporter: exporter,
         metricReader: reader,
         spanProcessor: _NoopSpanProcessor(),
@@ -577,11 +591,9 @@ class _DartasticMetricsRuntime {
       if (_buffer.isNotEmpty) {
         final pending = List<MetricEvent>.from(_buffer);
         _buffer.clear();
-        for (final event in pending) {
-          _record(event);
-        }
+        pending.forEach(_record);
       }
-    } catch (_) {
+    } on Object {
       // If initialization fails, keep events buffered for a later attempt.
       _initializing = null;
     }
@@ -590,7 +602,7 @@ class _DartasticMetricsRuntime {
   void record(MetricEvent event) {
     if (!_initialized) {
       _buffer.add(event);
-      _ensureInitialized();
+      unawaited(_ensureInitialized());
       return;
     }
 
@@ -616,7 +628,6 @@ class _DartasticMetricsRuntime {
           );
         });
         counter.addWithMap(event.value, attributes);
-        break;
       case MetricType.histogram:
         final histogram = _histograms.putIfAbsent(instrumentName, () {
           return _meter!.createHistogram<double>(
@@ -628,7 +639,6 @@ class _DartasticMetricsRuntime {
           _normalizedHistogramValue(event.value, event.unit),
           attributes,
         );
-        break;
       case MetricType.gauge:
         final gauge = _gauges.putIfAbsent(instrumentName, () {
           return _meter!.createGauge<double>(
@@ -637,7 +647,6 @@ class _DartasticMetricsRuntime {
           );
         });
         gauge.recordWithMap(event.value, attributes);
-        break;
     }
   }
 
@@ -672,7 +681,8 @@ Uri _normaliseGrpcEndpoint(Uri endpoint) {
   final defaultPort = useHttps ? 443 : 80;
   var port = endpoint.hasPort ? endpoint.port : defaultPort;
 
-  // Many configurations point at the HTTP OTLP port 4318 with a /v1/metrics path.
+  // Many configurations point at the HTTP OTLP port 4318 with a
+  // /v1/metrics path.
   // When using gRPC we need to target the gRPC port (4317) with no path.
   if (endpoint.path.contains('/v1/metrics') && port == 4318) {
     port = 4317;

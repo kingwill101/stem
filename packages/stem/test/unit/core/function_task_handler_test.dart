@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   test(
@@ -16,8 +16,8 @@ void main() {
           invocation.heartbeat();
           await invocation.extendLease(const Duration(seconds: 3));
           await invocation.progress(0.5, data: {'stage': 'halfway'});
-          final a = args['a'] as int;
-          final b = args['b'] as int;
+          final a = args['a']! as int;
+          final b = args['b']! as int;
           return a + b;
         },
       );

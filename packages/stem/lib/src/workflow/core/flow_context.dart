@@ -1,18 +1,19 @@
-import 'flow_step.dart';
-import 'workflow_clock.dart';
+import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_clock.dart';
 
 /// Context provided to each workflow step invocation.
 ///
 /// The engine replays a step from the beginning whenever the run resumes from a
 /// suspension (sleep, awaited event, manual rewind). Steps should therefore
 /// treat `sleep`/`awaitEvent` as signalling mechanisms rather than control-flow
-/// exits. Use [takeResumeData] to distinguish between the initial invocation and
-/// resumption payloads supplied by the runtime.
+/// exits. Use [takeResumeData] to distinguish between the initial invocation
+/// and resumption payloads supplied by the runtime.
 ///
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
 class FlowContext {
+  /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
     required this.runId,
@@ -26,12 +27,25 @@ class FlowContext {
   }) : _clock = clock,
        _resumeData = resumeData;
 
+  /// Name of the workflow.
   final String workflow;
+
+  /// Identifier of the workflow run.
   final String runId;
+
+  /// Name of the current step.
   final String stepName;
+
+  /// Parameters passed when the workflow was started.
   final Map<String, Object?> params;
+
+  /// Result of the previous step, if any.
   final Object? previousResult;
+
+  /// Zero-based index of the current step.
   final int stepIndex;
+
+  /// Current iteration when auto-versioning is enabled.
   final int iteration;
   final WorkflowClock _clock;
 
@@ -91,6 +105,8 @@ class FlowContext {
   /// Injects a payload that will be returned the next time [takeResumeData] is
   /// called. Primarily used by the runtime; tests may also leverage it to mock
   /// resumption data.
+  // Uses method form to stay consistent with other control helpers.
+  // ignore: use_setters_to_change_properties
   void resumeWith(Object? payload) {
     _resumeData = payload;
   }

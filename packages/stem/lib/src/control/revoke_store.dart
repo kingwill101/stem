@@ -3,6 +3,7 @@ import 'dart:convert';
 
 /// Represents a persisted revoke entry for a task.
 class RevokeEntry {
+  /// Creates a revoke entry snapshot.
   const RevokeEntry({
     required this.namespace,
     required this.taskId,
@@ -13,6 +14,22 @@ class RevokeEntry {
     this.requestedBy,
     this.expiresAt,
   });
+
+  /// Creates a [RevokeEntry] from a JSON map.
+  factory RevokeEntry.fromJson(Map<String, Object?> json) {
+    return RevokeEntry(
+      namespace: json['namespace']! as String,
+      taskId: json['taskId']! as String,
+      version: (json['version']! as num).toInt(),
+      issuedAt: DateTime.parse(json['issuedAt']! as String),
+      terminate: json['terminate'] == true,
+      reason: json['reason'] as String?,
+      requestedBy: json['requestedBy'] as String?,
+      expiresAt: json['expiresAt'] != null
+          ? DateTime.parse(json['expiresAt']! as String)
+          : null,
+    );
+  }
 
   /// Logical namespace the revoke applies to.
   final String namespace;
@@ -54,22 +71,7 @@ class RevokeEntry {
     if (expiresAt != null) 'expiresAt': expiresAt!.toIso8601String(),
   };
 
-  /// Creates a [RevokeEntry] from a JSON map.
-  factory RevokeEntry.fromJson(Map<String, Object?> json) {
-    return RevokeEntry(
-      namespace: json['namespace'] as String,
-      taskId: json['taskId'] as String,
-      version: (json['version'] as num).toInt(),
-      issuedAt: DateTime.parse(json['issuedAt'] as String),
-      terminate: json['terminate'] == true,
-      reason: json['reason'] as String?,
-      requestedBy: json['requestedBy'] as String?,
-      expiresAt: json['expiresAt'] != null
-          ? DateTime.parse(json['expiresAt'] as String)
-          : null,
-    );
-  }
-
+  /// Returns a copy of this entry with the provided overrides.
   RevokeEntry copyWith({
     String? namespace,
     String? taskId,
@@ -100,8 +102,8 @@ class RevokeEntry {
 abstract class RevokeStore {
   /// Persists or updates the provided revoke [entries].
   ///
-  /// Implementations MUST only update existing records when [version] is
-  /// greater than the stored value to maintain monotonic ordering.
+  /// Implementations MUST only update existing records when the entry version
+  /// is greater than the stored value to maintain monotonic ordering.
   Future<List<RevokeEntry>> upsertAll(List<RevokeEntry> entries);
 
   /// Lists revoke entries for the given [namespace]. Implementations should
@@ -116,4 +118,6 @@ abstract class RevokeStore {
 }
 
 /// Generates a monotonically increasing revoke version based on UTC time.
+///
+/// Useful for ordering revocation updates across distributed callers.
 int generateRevokeVersion() => DateTime.now().toUtc().microsecondsSinceEpoch;

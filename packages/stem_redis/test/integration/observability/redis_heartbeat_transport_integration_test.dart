@@ -61,7 +61,7 @@ Future<bool> _canConnect(String host, int port) async {
     );
     socket.destroy();
     return true;
-  } catch (_) {
+  } on Object {
     return false;
   }
 }

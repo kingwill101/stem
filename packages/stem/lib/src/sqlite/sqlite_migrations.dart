@@ -16,7 +16,8 @@ class SqliteMigrations {
     final jobs = _tableName(namespace, 'queue_jobs');
     final deadLetters = _tableName(namespace, 'dead_letters');
 
-    db.execute('''
+    db
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $jobs (
   id TEXT PRIMARY KEY,
   queue TEXT NOT NULL,
@@ -31,19 +32,16 @@ CREATE TABLE IF NOT EXISTS $jobs (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${jobs}_queue_priority_idx
   ON $jobs(queue, priority DESC, created_at)
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${jobs}_not_before_idx
   ON $jobs(not_before)
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $deadLetters (
   id TEXT PRIMARY KEY,
   queue TEXT NOT NULL,
@@ -52,9 +50,8 @@ CREATE TABLE IF NOT EXISTS $deadLetters (
   meta TEXT,
   dead_at INTEGER NOT NULL
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${deadLetters}_queue_dead_at_idx
   ON $deadLetters(queue, dead_at DESC)
 ''');
@@ -67,7 +64,8 @@ CREATE INDEX IF NOT EXISTS ${deadLetters}_queue_dead_at_idx
     final groupResults = _tableName(namespace, 'group_results');
     final workerHeartbeats = _tableName(namespace, 'worker_heartbeats');
 
-    db.execute('''
+    db
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $taskResults (
   id TEXT PRIMARY KEY,
   state TEXT NOT NULL,
@@ -79,14 +77,12 @@ CREATE TABLE IF NOT EXISTS $taskResults (
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${taskResults}_expires_at_idx
   ON $taskResults(expires_at)
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $groups (
   id TEXT PRIMARY KEY,
   expected INTEGER NOT NULL,
@@ -94,14 +90,12 @@ CREATE TABLE IF NOT EXISTS $groups (
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${groups}_expires_at_idx
   ON $groups(expires_at)
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $groupResults (
   group_id TEXT NOT NULL,
   task_id TEXT NOT NULL,
@@ -114,9 +108,8 @@ CREATE TABLE IF NOT EXISTS $groupResults (
   PRIMARY KEY (group_id, task_id),
   FOREIGN KEY (group_id) REFERENCES $groups(id) ON DELETE CASCADE
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE TABLE IF NOT EXISTS $workerHeartbeats (
   worker_id TEXT PRIMARY KEY,
   namespace TEXT NOT NULL,
@@ -130,9 +123,8 @@ CREATE TABLE IF NOT EXISTS $workerHeartbeats (
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 )
-''');
-
-    db.execute('''
+''')
+      ..execute('''
 CREATE INDEX IF NOT EXISTS ${workerHeartbeats}_expires_at_idx
   ON $workerHeartbeats(expires_at)
 ''');

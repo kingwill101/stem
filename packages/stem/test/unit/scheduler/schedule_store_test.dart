@@ -1,5 +1,5 @@
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('InMemoryScheduleStore versioning', () {
@@ -30,7 +30,6 @@ void main() {
         'demo',
         scheduledFor: scheduledFor,
         executedAt: executedAt,
-        success: true,
       );
 
       stored = await store.get('demo');

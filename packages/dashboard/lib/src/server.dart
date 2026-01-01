@@ -4,27 +4,33 @@ import 'dart:io';
 import 'package:routed/routed.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
 import 'package:stem/stem.dart' show generateEnvelopeId;
-
-import 'config/config.dart';
-import 'services/models.dart';
-import 'services/stem_service.dart';
-import 'state/dashboard_state.dart';
-import 'ui/content.dart';
-import 'ui/layout.dart';
-import 'stem/control_messages.dart';
+import 'package:stem_dashboard/src/config/config.dart';
+import 'package:stem_dashboard/src/services/models.dart';
+import 'package:stem_dashboard/src/services/stem_service.dart';
+import 'package:stem_dashboard/src/state/dashboard_state.dart';
+import 'package:stem_dashboard/src/stem/control_messages.dart';
+import 'package:stem_dashboard/src/ui/content.dart';
+import 'package:stem_dashboard/src/ui/layout.dart';
 
 /// Options controlling how the dashboard server binds to the network.
 class DashboardServerOptions {
+  /// Creates server options with optional overrides.
   const DashboardServerOptions({
     this.host = '127.0.0.1',
     this.port = 3080,
     this.echoRoutes = false,
   });
 
+  /// Hostname or IP address for the HTTP server.
   final String host;
+
+  /// TCP port for the HTTP server.
   final int port;
+
+  /// Whether to log each registered route on startup.
   final bool echoRoutes;
 
+  /// Returns a copy with the provided fields replaced.
   DashboardServerOptions copyWith({String? host, int? port, bool? echoRoutes}) {
     return DashboardServerOptions(
       host: host ?? this.host,
@@ -34,7 +40,7 @@ class DashboardServerOptions {
   }
 }
 
-/// Boot the Stem dashboard HTTP server.
+/// Boots the Stem dashboard HTTP server.
 Future<void> runDashboardServer({
   DashboardServerOptions options = const DashboardServerOptions(),
   DashboardConfig? config,
@@ -77,7 +83,7 @@ Future<void> runDashboardServer({
   }
 }
 
-/// Construct the dashboard engine with routes and Turbo streaming.
+/// Constructs the dashboard engine with routes and Turbo streaming.
 Engine buildDashboardEngine({
   required DashboardDataSource service,
   required DashboardState state,
@@ -101,25 +107,26 @@ void _registerRoutes(
   DashboardDataSource service,
   DashboardState state,
 ) {
-  engine.get(
-    '/',
-    (ctx) => _renderPage(ctx, DashboardPage.overview, service, state),
-  );
-  engine.get(
-    '/tasks',
-    (ctx) => _renderPage(ctx, DashboardPage.tasks, service, state),
-  );
-  engine.get(
-    '/events',
-    (ctx) => _renderPage(ctx, DashboardPage.events, service, state),
-  );
-  engine.get(
-    '/workers',
-    (ctx) => _renderPage(ctx, DashboardPage.workers, service, state),
-  );
-  engine.post('/tasks/enqueue', (ctx) => _enqueueTask(ctx, service));
-  engine.post('/workers/control', (ctx) => _controlWorkers(ctx, service));
-  engine.post('/queues/replay', (ctx) => _replayDeadLetters(ctx, service));
+  engine
+    ..get(
+      '/',
+      (ctx) => _renderPage(ctx, DashboardPage.overview, service, state),
+    )
+    ..get(
+      '/tasks',
+      (ctx) => _renderPage(ctx, DashboardPage.tasks, service, state),
+    )
+    ..get(
+      '/events',
+      (ctx) => _renderPage(ctx, DashboardPage.events, service, state),
+    )
+    ..get(
+      '/workers',
+      (ctx) => _renderPage(ctx, DashboardPage.workers, service, state),
+    )
+    ..post('/tasks/enqueue', (ctx) => _enqueueTask(ctx, service))
+    ..post('/workers/control', (ctx) => _controlWorkers(ctx, service))
+    ..post('/queues/replay', (ctx) => _replayDeadLetters(ctx, service));
 }
 
 Future<Response> _renderPage(
@@ -148,6 +155,7 @@ Future<Response> _renderPage(
       page: page,
       queues: queues,
       workers: workers,
+      throughput: page == DashboardPage.overview ? state.throughput : null,
       events: page == DashboardPage.events ? state.events : const [],
       tasksOptions: tasksOptions,
       workersOptions: workersOptions,
@@ -158,11 +166,12 @@ Future<Response> _renderPage(
     }
 
     return ctx.turboHtml(renderLayout(page, content));
-  } catch (error, stack) {
-    stderr.writeln(
-      '[stem-dashboard] Failed to render ${page.name} page: $error',
-    );
-    stderr.writeln(stack);
+  } on Object catch (error, stack) {
+    stderr
+      ..writeln(
+        '[stem-dashboard] Failed to render ${page.name} page: $error',
+      )
+      ..writeln(stack);
     final errorContent = _renderErrorPanel(error);
     if (turbo.isFrameRequest) {
       return ctx.turboFrame(renderFrame(page, errorContent));
@@ -176,7 +185,9 @@ String _renderErrorPanel(Object error) {
 <section class="event-feed">
   <div class="event-item">
     <h3>Unable to load data</h3>
-    <p class="muted">The dashboard could not reach Stem services. Root cause: $error</p>
+    <p class="muted">
+      The dashboard could not reach Stem services. Root cause: $error
+    </p>
   </div>
 </section>
 ''';
@@ -194,7 +205,7 @@ Future<Response> _enqueueTask(
     }
 
     final payloadText = (await ctx.postForm('payload')).trim();
-    Map<String, Object?> args = const {};
+    var args = const <String, Object?>{};
     if (payloadText.isNotEmpty) {
       try {
         final decoded = jsonDecode(payloadText);
@@ -203,7 +214,7 @@ Future<Response> _enqueueTask(
         } else {
           return ctx.turboSeeOther('/tasks?error=invalid-payload');
         }
-      } catch (_) {
+      } on Object {
         return ctx.turboSeeOther('/tasks?error=invalid-payload');
       }
     }
@@ -212,7 +223,7 @@ Future<Response> _enqueueTask(
         int.tryParse((await ctx.postForm('priority')).trim()) ?? 0;
     final maxRetriesInput =
         int.tryParse((await ctx.postForm('maxRetries')).trim()) ?? 0;
-    final priority = (priorityInput.clamp(0, 9)).toInt();
+    final priority = priorityInput.clamp(0, 9);
     final maxRetries = maxRetriesInput < 0 ? 0 : maxRetriesInput;
 
     await service.enqueueTask(
@@ -225,9 +236,10 @@ Future<Response> _enqueueTask(
       ),
     );
     return ctx.turboSeeOther('/tasks?flash=queued');
-  } catch (error, stack) {
-    stderr.writeln('[stem-dashboard] enqueue failed: $error');
-    stderr.writeln(stack);
+  } on Object catch (error, stack) {
+    stderr
+      ..writeln('[stem-dashboard] enqueue failed: $error')
+      ..writeln(stack);
     return ctx.turboSeeOther('/tasks?error=enqueue-failed');
   }
 }
@@ -248,8 +260,8 @@ TasksPageOptions _parseTasksOptions(Map<String, String> params) {
     sortKey: sortKey,
     descending: descending,
     filter: filter,
-    flashKey: params['flash']?.trim().isEmpty == true ? null : params['flash'],
-    errorKey: params['error']?.trim().isEmpty == true ? null : params['error'],
+    flashKey: params['flash']?.trim().isEmpty ?? false ? null : params['flash'],
+    errorKey: params['error']?.trim().isEmpty ?? false ? null : params['error'],
   );
 }
 
@@ -258,9 +270,9 @@ WorkersPageOptions _parseWorkersOptions(Map<String, String> params) {
   final error = params['error']?.trim();
   final target = params['scope']?.trim();
   return WorkersPageOptions(
-    flashMessage: flash?.isNotEmpty == true ? flash : null,
-    errorMessage: error?.isNotEmpty == true ? error : null,
-    scope: target?.isNotEmpty == true ? target : null,
+    flashMessage: flash?.isNotEmpty ?? false ? flash : null,
+    errorMessage: error?.isNotEmpty ?? false ? error : null,
+    scope: target?.isNotEmpty ?? false ? target : null,
   );
 }
 
@@ -301,9 +313,10 @@ Future<Response> _controlWorkers(
     };
 
     if (commandType == null) {
-      return ctx.turboSeeOther(
-        '/workers?error=${Uri.encodeComponent('Unsupported control action "$rawAction".')}',
+      final encodedError = Uri.encodeComponent(
+        'Unsupported control action "$rawAction".',
       );
+      return ctx.turboSeeOther('/workers?error=$encodedError');
     }
 
     final payload = <String, Object?>{};
@@ -344,25 +357,32 @@ Future<Response> _controlWorkers(
           .error?['message'];
       final message = StringBuffer()
         ..write(
-          '$label command reached $scope but $errorReplies replies reported errors.',
+          '$label command reached $scope but $errorReplies replies '
+          'reported errors.',
         );
       if (primaryError is String && primaryError.isNotEmpty) {
         message.write(' Example: $primaryError');
       }
+      final encodedMessage = Uri.encodeComponent(message.toString());
+      final encodedScope = Uri.encodeComponent(scope);
       return ctx.turboSeeOther(
-        '/workers?error=${Uri.encodeComponent(message.toString())}&scope=${Uri.encodeComponent(scope)}',
+        '/workers?error=$encodedMessage&scope=$encodedScope',
       );
     }
 
+    final ackLabel = okReplies == 1 ? 'reply' : 'replies';
     final message = replies.isEmpty
         ? '$label command sent to $scope.'
-        : '$label command acknowledged by $okReplies reply${okReplies == 1 ? '' : 'ies'} from $scope.';
+        : '$label command acknowledged by $okReplies $ackLabel from $scope.';
+    final encodedMessage = Uri.encodeComponent(message);
+    final encodedScope = Uri.encodeComponent(scope);
     return ctx.turboSeeOther(
-      '/workers?flash=${Uri.encodeComponent(message)}&scope=${Uri.encodeComponent(scope)}',
+      '/workers?flash=$encodedMessage&scope=$encodedScope',
     );
-  } catch (error, stack) {
-    stderr.writeln('[stem-dashboard] control command failed: $error');
-    stderr.writeln(stack);
+  } on Object catch (error, stack) {
+    stderr
+      ..writeln('[stem-dashboard] control command failed: $error')
+      ..writeln(stack);
     return ctx.turboSeeOther(
       '/workers?error=${Uri.encodeComponent('Control command failed.')}',
     );
@@ -376,12 +396,13 @@ Future<Response> _replayDeadLetters(
   try {
     final queue = (await ctx.postForm('queue')).trim();
     if (queue.isEmpty) {
-      return ctx.turboSeeOther(
-        '/workers?error=${Uri.encodeComponent('Queue name is required for replay.')}',
+      final encodedError = Uri.encodeComponent(
+        'Queue name is required for replay.',
       );
+      return ctx.turboSeeOther('/workers?error=$encodedError');
     }
     final limitInput = (await ctx.defaultPostForm('limit', '50')).trim();
-    final limit = int.tryParse(limitInput)?.clamp(1, 500).toInt() ?? 50;
+    final limit = int.tryParse(limitInput)?.clamp(1, 500) ?? 50;
     final dryRunFlag = (await ctx.defaultPostForm(
       'dryRun',
       'false',
@@ -400,20 +421,28 @@ Future<Response> _replayDeadLetters(
       final message = dryRun
           ? 'Dry run replay found no dead letters for "$queue".'
           : 'No dead letters replayed for "$queue".';
+      final encodedMessage = Uri.encodeComponent(message);
+      final encodedScope = Uri.encodeComponent(scope);
       return ctx.turboSeeOther(
-        '/workers?flash=${Uri.encodeComponent(message)}&scope=${Uri.encodeComponent(scope)}',
+        '/workers?flash=$encodedMessage&scope=$encodedScope',
       );
     }
 
+    final entryCount = result.entries.length;
+    final entrySuffix = entryCount == 1 ? '' : 's';
     final message = dryRun
-        ? 'Dry run replay would consider ${result.entries.length} dead letter${result.entries.length == 1 ? '' : 's'} for "$queue".'
-        : 'Replayed ${result.entries.length} dead letter${result.entries.length == 1 ? '' : 's'} for "$queue".';
+        ? 'Dry run replay would consider $entryCount dead letter$entrySuffix '
+              'for "$queue".'
+        : 'Replayed $entryCount dead letter$entrySuffix for "$queue".';
+    final encodedMessage = Uri.encodeComponent(message);
+    final encodedScope = Uri.encodeComponent(scope);
     return ctx.turboSeeOther(
-      '/workers?flash=${Uri.encodeComponent(message)}&scope=${Uri.encodeComponent(scope)}',
+      '/workers?flash=$encodedMessage&scope=$encodedScope',
     );
-  } catch (error, stack) {
-    stderr.writeln('[stem-dashboard] DLQ replay failed: $error');
-    stderr.writeln(stack);
+  } on Object catch (error, stack) {
+    stderr
+      ..writeln('[stem-dashboard] DLQ replay failed: $error')
+      ..writeln(stack);
     return ctx.turboSeeOther(
       '/workers?error=${Uri.encodeComponent('Failed to replay dead letters.')}',
     );

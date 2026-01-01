@@ -3,13 +3,19 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+/// Factory hooks used by the workflow store contract test suite.
 class WorkflowStoreContractFactory {
+  /// Creates a workflow store contract factory.
   const WorkflowStoreContractFactory({required this.create, this.dispose});
 
+  /// Creates a fresh workflow store using the provided clock.
   final Future<WorkflowStore> Function(FakeWorkflowClock clock) create;
+
+  /// Optional disposer invoked after each test.
   final FutureOr<void> Function(WorkflowStore store)? dispose;
 }
 
+/// Runs contract tests covering the required WorkflowStore semantics.
 void runWorkflowStoreContractTests({
   required String adapterName,
   required WorkflowStoreContractFactory factory,
@@ -19,7 +25,7 @@ void runWorkflowStoreContractTests({
     late FakeWorkflowClock clock;
 
     setUp(() async {
-      clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+      clock = FakeWorkflowClock(DateTime.utc(2024));
       store = await factory.create(clock);
     });
 
@@ -64,8 +70,8 @@ void runWorkflowStoreContractTests({
 
       await current.rewindToStep(runId, 'step-b');
 
-      expect(await current.readStep(runId, 'step-b'), isNull);
-      expect(await current.readStep(runId, 'step-c'), isNull);
+      expect(await current.readStep<int>(runId, 'step-b'), isNull);
+      expect(await current.readStep<String>(runId, 'step-c'), isNull);
       expect(await current.readStep<Map<String, Object?>>(runId, 'step-a'), {
         'value': 1,
       });
@@ -109,14 +115,14 @@ void runWorkflowStoreContractTests({
         var state = await current.get(runId);
         expect(state?.cursor, 2); // repeat + tail
 
-        expect(await current.readStep(runId, 'repeat#0'), 'first');
-        expect(await current.readStep(runId, 'repeat#1'), 'second');
+        expect(await current.readStep<String>(runId, 'repeat#0'), 'first');
+        expect(await current.readStep<String>(runId, 'repeat#1'), 'second');
 
         await current.rewindToStep(runId, 'repeat');
 
-        expect(await current.readStep(runId, 'repeat#0'), isNull);
-        expect(await current.readStep(runId, 'repeat#1'), isNull);
-        expect(await current.readStep(runId, 'tail'), isNull);
+        expect(await current.readStep<String>(runId, 'repeat#0'), isNull);
+        expect(await current.readStep<String>(runId, 'repeat#1'), isNull);
+        expect(await current.readStep<String>(runId, 'tail'), isNull);
 
         state = await current.get(runId);
         expect(state?.cursor, 0);
@@ -188,6 +194,35 @@ void runWorkflowStoreContractTests({
       expect(state?.waitTopic, isNull);
     });
 
+    test('dueRuns honors limit and leaves remaining runs due', () async {
+      final current = store!;
+      final resumeAt = clock.now().subtract(const Duration(seconds: 1));
+      final runIds = <String>[];
+
+      for (var i = 0; i < 3; i++) {
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {'batch': true},
+        );
+        await current.suspendUntil(
+          runId,
+          'step-$i',
+          resumeAt,
+          data: {'index': i},
+        );
+        runIds.add(runId);
+      }
+
+      final firstBatch = await current.dueRuns(clock.now(), limit: 2);
+      expect(firstBatch.length, 2);
+
+      final secondBatch = await current.dueRuns(clock.now(), limit: 2);
+      expect(secondBatch.length, 1);
+
+      final combined = {...firstBatch, ...secondBatch}.toSet();
+      expect(combined, runIds.toSet());
+    });
+
     test('suspendOnTopic/runsWaitingOn/cancel workflow lifecycle', () async {
       final current = store!;
       final runId = await current.createRun(
@@ -210,6 +245,41 @@ void runWorkflowStoreContractTests({
       final state = await current.get(runId);
       expect(state?.status, WorkflowStatus.cancelled);
       expect(state?.waitTopic, isNull);
+    });
+
+    test('runsWaitingOn returns all workflows suspended on a topic', () async {
+      final current = store!;
+      final runIds = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final runId = await current.createRun(
+          workflow: 'contract.workflow.$i',
+          params: const {},
+        );
+        await current.suspendOnTopic(
+          runId,
+          'group-step',
+          'group.topic',
+          data: {'index': i},
+        );
+        runIds.add(runId);
+      }
+
+      final waiting = await current.runsWaitingOn('group.topic');
+      expect(waiting.toSet(), runIds.toSet());
+
+      for (final runId in runIds) {
+        await current.markResumed(runId, data: {'payload': 'resume-$runId'});
+      }
+
+      final after = await current.runsWaitingOn('group.topic');
+      expect(after, isEmpty);
+
+      for (final runId in runIds) {
+        final state = await current.get(runId);
+        expect(state?.status, WorkflowStatus.running);
+        expect(state?.suspensionData?['payload'], 'resume-$runId');
+        expect(state?.waitTopic, isNull);
+      }
     });
 
     test('registerWatcher resolves payload exactly once', () async {
@@ -393,7 +463,7 @@ void runWorkflowStoreContractTests({
 
     test('createRun persists cancellation policy metadata', () async {
       final current = store!;
-      final policy = const WorkflowCancellationPolicy(
+      const policy = WorkflowCancellationPolicy(
         maxRunDuration: Duration(minutes: 5),
         maxSuspendDuration: Duration(minutes: 1),
       );

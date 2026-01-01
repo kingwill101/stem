@@ -1,0 +1,12 @@
+driver:
+  type: postgres
+  options:
+    url: ${STEM_RESULT_BACKEND_URL:-postgres://stem:stem@localhost:${POSTGRES_PORT:-5432}/stem_demo}
+migrations:
+  directory: ../../../stem_postgres/lib/src/database/migrations
+  registry: ../../../stem_postgres/lib/src/database/migrations.dart
+  ledger_table: orm_migrations
+  schema_dump: database/schema.sql
+seeds:
+  directory: ../../../stem_postgres/lib/src/database/seeders
+  registry: ../../../stem_postgres/lib/src/database/seeders.dart

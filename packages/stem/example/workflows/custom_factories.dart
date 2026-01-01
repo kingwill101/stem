@@ -21,8 +21,8 @@ Future<void> main() async {
 
   try {
     final runId = await app.startWorkflow('redis.workflow');
-    final state = await app.waitForCompletion(runId);
-    print('Workflow $runId finished with result: ${state?.result}');
+    final result = await app.waitForCompletion<String>(runId);
+    print('Workflow $runId finished with result: ${result?.value}');
   } finally {
     await app.shutdown();
   }

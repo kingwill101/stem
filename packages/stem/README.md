@@ -154,8 +154,9 @@ final app = await StemWorkflowApp.inMemory(
 );
 
 final runId = await app.startWorkflow('demo.workflow');
-final state = await app.waitForCompletion(runId);
-print(state?.status); // WorkflowStatus.completed
+final result = await app.waitForCompletion<String>(runId);
+print(result?.value); // 'hello world'
+print(result?.state.status); // WorkflowStatus.completed
 
 await app.shutdown();
 ```
@@ -192,7 +193,7 @@ final app = await StemWorkflowApp.inMemory(
           return status.value;
         }, autoVersion: true);
 
-        final receipt = await script.step('notify', (step) async {
+        final receipt = await script.step<String>('notify', (step) async {
           await sendReceiptEmail(checkout);
           return 'emailed';
         });
@@ -212,6 +213,212 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
 - `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
   you can branch on resume paths.
+
+### Typed workflow completion
+
+All workflow definitions (flows and scripts) accept an optional type argument
+representing the value they produce. `StemWorkflowApp.waitForCompletion<T>`
+exposes the decoded value along with the raw `RunState`, letting you work with
+domain models without manual casts:
+
+```dart
+final runId = await app.startWorkflow('orders.workflow');
+final result = await app.waitForCompletion<OrderReceipt>(
+  runId,
+  decode: (payload) => OrderReceipt.fromJson(payload! as Map<String, Object?>),
+);
+if (result?.isCompleted == true) {
+  print(result!.value?.total);
+} else if (result?.timedOut == true) {
+  inspectSuspension(result?.state);
+}
+```
+
+### Typed task completion
+
+Producers can now wait for individual task results using `Stem.waitForTask<T>`
+with optional decoders. The helper returns a `TaskResult<T>` containing the
+underlying `TaskStatus`, decoded payload, and a timeout flag:
+
+```dart
+final taskId = await stem.enqueueCall(
+  ChargeCustomer.definition.call(ChargeArgs(orderId: '123')),
+);
+
+final charge = await stem.waitForTask<ChargeReceipt>(
+  taskId,
+  decode: (payload) => ChargeReceipt.fromJson(
+    payload! as Map<String, Object?>,
+  ),
+);
+if (charge?.isSucceeded == true) {
+  print('Captured ${charge!.value!.total}');
+} else if (charge?.isFailed == true) {
+  log.severe('Charge failed: ${charge!.status.error}');
+}
+```
+
+### Typed canvas helpers
+
+`TaskSignature<T>` (and the `task<T>()` helper) lets you declare the result type
+for canvas primitives. The existing `Canvas.group`, `Canvas.chain`, and
+`Canvas.chord` APIs now accept generics so typed values flow through sequential
+steps, groups, and chords without manual casts:
+
+```dart
+final dispatch = await canvas.group<OrderSummary>([
+  task<OrderSummary>(
+    'orders.fetch',
+    args: {'storeId': 42},
+    decode: (payload) => OrderSummary.fromJson(
+      payload! as Map<String, Object?>,
+    ),
+  ),
+  task<OrderSummary>('orders.refresh'),
+]);
+
+dispatch.results.listen((result) {
+  if (result.isSucceeded) {
+    dashboard.update(result.value!);
+  }
+});
+
+final chainResult = await canvas.chain<int>([
+  task<int>('metrics.seed', args: {'value': 1}),
+  task<int>('metrics.bump', args: {'add': 3}),
+]);
+print(chainResult.value); // 4
+
+final chordResult = await canvas.chord<double>(
+  body: [
+    task<double>('image.resize', args: {'size': 256}),
+    task<double>('image.resize', args: {'size': 512}),
+  ],
+  callback: task('image.aggregate'),
+);
+print('Body results: ${chordResult.values}');
+```
+
+### Task payload encoders
+
+By default Stem stores handler arguments/results exactly as provided (JSON-friendly
+structures). Configure default `TaskPayloadEncoder`s when bootstrapping `StemApp`,
+`StemWorkflowApp`, or `Canvas` to plug in custom serialization (encryption,
+compression, base64 wrappers, etc.) for both task arguments and persisted results:
+
+```dart
+import 'dart:convert';
+
+class Base64ResultEncoder extends TaskPayloadEncoder {
+  const Base64ResultEncoder();
+
+  @override
+  Object? encode(Object? value) {
+    if (value is String) {
+      return base64Encode(utf8.encode(value));
+    }
+    return value;
+  }
+
+  @override
+  Object? decode(Object? stored) {
+    if (stored is String) {
+      return utf8.decode(base64Decode(stored));
+    }
+    return stored;
+  }
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
+  additionalEncoders: const [MyOtherEncoder()],
+);
+
+final canvas = Canvas(
+  broker: broker,
+  backend: backend,
+  registry: registry,
+  resultEncoder: const Base64ResultEncoder(),
+  argsEncoder: const Base64ResultEncoder(),
+);
+```
+
+Every envelope published by Stem carries the argument encoder id in headers/meta
+(`stem-args-encoder` / `__stemArgsEncoder`) and every status stored in a result
+backend carries the result encoder id (`__stemResultEncoder`). Workers use the same
+`TaskPayloadEncoderRegistry` to resolve IDs, ensuring payloads are decoded exactly
+once regardless of how many custom encoders you register.
+
+Per-task overrides live on `TaskMetadata`, so both handlers and the corresponding
+`TaskDefinition` share the same configuration:
+
+```dart
+class SecretTask extends TaskHandler<void> {
+  static const _encoder = Base64ResultEncoder();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata(
+        description: 'Encrypt args + results',
+        argsEncoder: _encoder,
+        resultEncoder: _encoder,
+      );
+
+  // ...
+}
+```
+
+Encoders run exactly once per persistence/read cycle and fall back to the JSON
+behavior when none is provided.
+
+### Unique task deduplication
+
+Set `TaskOptions(unique: true)` to prevent duplicate enqueues when a matching
+task is already in-flight. Stem uses a `UniqueTaskCoordinator` backed by a
+`LockStore` (Redis or in-memory) to claim uniqueness before publishing:
+
+```dart
+final lockStore = await RedisLockStore.connect('redis://localhost:6379');
+final unique = UniqueTaskCoordinator(
+  lockStore: lockStore,
+  defaultTtl: const Duration(minutes: 5),
+);
+
+final stem = Stem(
+  broker: broker,
+  registry: registry,
+  backend: backend,
+  uniqueTaskCoordinator: unique,
+);
+```
+
+The unique key is derived from:
+
+- task name
+- queue name
+- task arguments
+- headers
+- metadata (excluding keys prefixed with `stem.`)
+
+Keys are canonicalized (sorted maps, stable JSON) so equivalent inputs produce
+the same hash. Use `uniqueFor` to control the TTL; when unset, the coordinator
+falls back to `visibilityTimeout` or its default TTL.
+
+Override the unique key when needed:
+
+```dart
+final id = await stem.enqueue(
+  'orders.sync',
+  args: {'id': 42},
+  options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),
+  meta: {UniqueTaskMetadata.override: 'order-42'},
+);
+```
+
+When a duplicate is skipped, Stem returns the existing task id, emits the
+`stem.tasks.deduplicated` metric, and appends a duplicate entry to the result
+backend metadata under `stem.unique.duplicates`.
 
 ### Durable workflow semantics
 
@@ -302,8 +509,15 @@ drivers by importing the adapter you need.
 - [cancellation_policy](example/workflows/cancellation_policy.dart) - demonstrates auto-cancelling long workflows using `WorkflowCancellationPolicy`.
 - [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
 - [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.
+- [autoscaling_demo](example/autoscaling_demo) - autoscaling worker concurrency under queue backlog.
+- [scheduler_observability](example/scheduler_observability) - Beat drift metrics, schedule signals, and CLI checks.
 - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
+- [progress_heartbeat](example/progress_heartbeat) - task progress + heartbeat reporting.
+- [worker_control_lab](example/worker_control_lab) - worker ping/stats/revoke/shutdown drills.
 - [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
+- [signing_key_rotation](example/signing_key_rotation) - rotate HMAC signing keys with overlap.
+- [ops_health_suite](example/ops_health_suite) - CLI health checks + queue/worker snapshots.
+- [quality_gates](example/quality_gates) - justfile-driven quality gate runner.
 - [security examples](example/security/*) - payload signing + TLS profiles.
 - [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
 - [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.

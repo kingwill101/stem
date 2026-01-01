@@ -1,11 +1,12 @@
-import 'run_state.dart';
-import 'workflow_status.dart';
-import 'workflow_step_entry.dart';
-import 'workflow_cancellation_policy.dart';
-import 'workflow_watcher.dart';
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_step_entry.dart';
+import 'package:stem/src/workflow/core/workflow_watcher.dart';
 
 /// Persistent storage for workflow runs, checkpoints, and suspensions.
 abstract class WorkflowStore {
+  /// Creates a new workflow run record and returns its run id.
   Future<String> createRun({
     required String workflow,
     required Map<String, Object?> params,
@@ -16,14 +17,16 @@ abstract class WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   });
 
+  /// Fetches the persisted run state for [runId], or `null` if missing.
   Future<RunState?> get(String runId);
 
+  /// Reads the persisted checkpoint value for [stepName].
   Future<T?> readStep<T>(String runId, String stepName);
 
   /// Saves a checkpoint for [stepName] and refreshes the run heartbeat.
   ///
-  /// Implementations MUST atomically persist the checkpoint and update the run's
-  /// last-modified timestamp so operators can identify active ownership.
+  /// Implementations MUST atomically persist the checkpoint and update the
+  /// run's last-modified timestamp so operators can identify active ownership.
   Future<void> saveStep<T>(String runId, String stepName, T value);
 
   /// Suspends [runId] until the given [when].
@@ -81,10 +84,13 @@ abstract class WorkflowStore {
   /// The metadata helps CLIs and dashboards explain why a run is waiting.
   Future<List<WorkflowWatcher>> listWatchers(String topic, {int limit = 256});
 
+  /// Marks the run as running and optionally sets the active [stepName].
   Future<void> markRunning(String runId, {String? stepName});
 
+  /// Marks the run as completed with the provided [result].
   Future<void> markCompleted(String runId, Object? result);
 
+  /// Marks the run as failed and records [error] and [stack].
   Future<void> markFailed(
     String runId,
     Object error,

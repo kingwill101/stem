@@ -3,4 +3,4 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "56379:6379"
+      - "${REDIS_PORT:-6379}:6379"

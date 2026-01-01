@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:collection/collection.dart';
 
-import 'revoke_store.dart';
+import 'package:stem/src/control/revoke_store.dart';
 
 /// Simple in-memory implementation of [RevokeStore] useful for tests.
 class InMemoryRevokeStore implements RevokeStore {
@@ -30,9 +30,7 @@ class InMemoryRevokeStore implements RevokeStore {
         toRemove.add(key);
       }
     });
-    for (final key in toRemove) {
-      records.remove(key);
-    }
+    toRemove.forEach(records.remove);
     if (records.isEmpty) {
       _entries.remove(namespace);
     }

@@ -1,3 +1,9 @@
+## 0.1.0-dev
+
+- Updated CLI adapter wiring and docker test stack to the Ormed-backed
+  integrations.
+- Added workflow agent help output to document required configuration.
+
 ## 0.1.0-alpha.4
 
 - Introduced the `stem wf` command group for starting runs, listing history and

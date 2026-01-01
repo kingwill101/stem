@@ -88,6 +88,61 @@ Future<void> main() async {
 </TabItem>
 </Tabs>
 
+## Typed Enqueue Helpers
+
+When you need compile-time guarantees for task arguments and result types, wrap
+your handler in a `TaskDefinition`. The definition knows how to encode args and
+decode results, and exposes a fluent builder for overrides (headers, meta,
+options, scheduling):
+
+```dart title="bin/producer_typed.dart"
+class ReportPayload {
+  const ReportPayload({required this.reportId});
+  final String reportId;
+}
+
+class GenerateReportTask implements TaskHandler<String> {
+  static final definition = TaskDefinition<ReportPayload, String>(
+    name: 'reports.generate',
+    encodeArgs: (payload) => {'reportId': payload.reportId},
+    metadata: const TaskMetadata(description: 'Generate PDF reports'),
+  );
+
+  @override
+  String get name => definition.name;
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: 'reports');
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    final id = args['reportId'] as String;
+    return await generateReport(id);
+  }
+}
+
+final registry = SimpleTaskRegistry()..register(GenerateReportTask());
+final stem = Stem(
+  broker: InMemoryBroker(),
+  registry: registry,
+  backend: InMemoryResultBackend(),
+);
+
+final call = GenerateReportTask.definition.call(
+  const ReportPayload(reportId: 'monthly-2025-10'),
+  options: const TaskOptions(priority: 5),
+  headers: const {'x-requested-by': 'analytics'},
+);
+
+final taskId = await stem.enqueueCall(call);
+final result = await stem.waitForTask<String>(taskId);
+```
+
+Typed helpers are also available on `Canvas` (`definition.toSignature`) so
+group/chain/chord APIs produce strongly typed `TaskResult<T>` streams.
+Need to tweak headers/meta/queue at call sites? Wrap the definition in a
+`TaskEnqueueBuilder` and invoke `await builder.enqueueWith(stem);`.
+
 ## Tips
 
 - Reuse a single `Stem` instance; create it during application bootstrap.
@@ -96,6 +151,36 @@ Future<void> main() async {
 - `meta` is stored with result backend entries—great for audit trails.
 - `headers` travel with the envelope and can carry tracing information.
 - To schedule tasks in the future, set `notBefore`.
+
+## Configuring Payload Encoders
+
+Every `Stem`, `StemApp`, `StemWorkflowApp`, and `Canvas` now accepts a
+`TaskPayloadEncoderRegistry` or explicit `argsEncoder`/`resultEncoder` values.
+Encoders run exactly once in each direction: producers encode arguments, workers
+decode them before invoking handlers, and handler return values are encoded
+before hitting the result backend. Example:
+
+```dart title="lib/bootstrap_typed_encoders.dart"
+class AesPayloadEncoder extends TaskPayloadEncoder {
+  const AesPayloadEncoder();
+  @override
+  Object? encode(Object? value) => encrypt(value);
+  @override
+  Object? decode(Object? stored) => decrypt(stored);
+}
+
+final app = await StemApp.inMemory(
+  tasks: [...],
+  argsEncoder: const AesPayloadEncoder(),
+  resultEncoder: const JsonTaskPayloadEncoder(),
+  additionalEncoders: const [CustomBinaryEncoder()],
+);
+```
+
+Handlers needing different encoders can override `TaskMetadata.argsEncoder` and
+`TaskMetadata.resultEncoder`. The worker automatically stamps every task status
+with the encoder id (`__stemResultEncoder`), so downstream consumers and
+adapters always know how to decode stored payloads.
 
 Continue with the [Worker guide](../workers/programmatic-integration.md) to
 consume the tasks you enqueue.

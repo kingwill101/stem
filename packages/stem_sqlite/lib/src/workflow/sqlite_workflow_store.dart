@@ -1,97 +1,41 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:collection/collection.dart';
-import 'package:sqlite3/sqlite3.dart';
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_sqlite/src/connection.dart';
+import 'package:stem_sqlite/src/models/models.dart';
 
-void _ensureColumn(
-  Database db,
-  String table,
-  String column,
-  String definition,
-) {
-  final existing = db.select('PRAGMA table_info($table)');
-  final hasColumn = existing.any((row) => row['name'] == column);
-  if (!hasColumn) {
-    db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
-  }
-}
-
+/// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore implements WorkflowStore {
-  SqliteWorkflowStore._(this._db, this._clock);
-
-  final Database _db;
-  final WorkflowClock _clock;
-  int _idCounter = 0;
-
-  factory SqliteWorkflowStore.open(
+  /// Opens a SQLite-backed workflow store using [file].
+  static Future<SqliteWorkflowStore> open(
     File file, {
+    String namespace = 'stem',
     WorkflowClock clock = const SystemWorkflowClock(),
-  }) {
-    final db = sqlite3.open(file.path);
-    db.execute('PRAGMA journal_mode = WAL;');
-    db.execute('PRAGMA synchronous = NORMAL;');
-    db.execute('''
-      CREATE TABLE IF NOT EXISTS wf_runs (
-        id TEXT PRIMARY KEY,
-        workflow TEXT NOT NULL,
-        status TEXT NOT NULL,
-        params TEXT NOT NULL,
-        result TEXT,
-        wait_topic TEXT,
-        resume_at INTEGER,
-        last_error TEXT,
-        suspension_data TEXT,
-        cancellation_policy TEXT,
-        cancellation_data TEXT,
-        created_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER)),
-        updated_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER))
-      )
-    ''');
-    db.execute('''
-      CREATE TABLE IF NOT EXISTS wf_steps (
-        run_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        value TEXT,
-        PRIMARY KEY (run_id, name)
-      )
-    ''');
-    db.execute('''
-      CREATE INDEX IF NOT EXISTS wf_runs_resume_idx ON wf_runs(resume_at)
-    ''');
-    db.execute(
-      'CREATE INDEX IF NOT EXISTS wf_runs_topic_idx ON wf_runs(wait_topic)',
+  }) async {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final connections = await SqliteConnections.open(file);
+    return SqliteWorkflowStore._(
+      connections,
+      clock,
+      namespace: resolvedNamespace,
     );
-    db.execute('''
-      CREATE TABLE IF NOT EXISTS wf_watchers (
-        run_id TEXT PRIMARY KEY REFERENCES wf_runs(id) ON DELETE CASCADE,
-        step_name TEXT NOT NULL,
-        topic TEXT NOT NULL,
-        data TEXT,
-        created_at INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER)),
-        deadline INTEGER
-      )
-    ''');
-    db.execute(
-      'CREATE INDEX IF NOT EXISTS wf_watchers_topic_idx ON wf_watchers(topic, created_at)',
-    );
-    _ensureColumn(db, 'wf_runs', 'cancellation_policy', 'TEXT');
-    _ensureColumn(db, 'wf_runs', 'cancellation_data', 'TEXT');
-    _ensureColumn(
-      db,
-      'wf_runs',
-      'created_at',
-      "INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER))",
-    );
-    _ensureColumn(
-      db,
-      'wf_runs',
-      'updated_at',
-      "INTEGER NOT NULL DEFAULT (CAST(1000 * strftime('%s','now') AS INTEGER))",
-    );
-    return SqliteWorkflowStore._(db, clock);
   }
+
+  SqliteWorkflowStore._(
+    this._connections,
+    this._clock, {
+    required this.namespace,
+  })
+    : _context = _connections.context;
+
+  final SqliteConnections _connections;
+  final QueryContext _context;
+  final WorkflowClock _clock;
+  final String namespace;
+  int _idCounter = 0;
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -123,117 +67,131 @@ class SqliteWorkflowStore implements WorkflowStore {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final nowInstant = _clock.now();
-    final now = nowInstant.millisecondsSinceEpoch;
-    final id = 'wf-${nowInstant.microsecondsSinceEpoch}-${_idCounter++}';
+    final now = _clock.now().toUtc();
+    final id = 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final policyJson = cancellationPolicy == null || cancellationPolicy.isEmpty
         ? null
         : jsonEncode(cancellationPolicy.toJson());
-    _db.execute(
-      'INSERT INTO wf_runs(id, workflow, status, params, created_at, updated_at, cancellation_policy) '
-      'VALUES(?, ?, ?, ?, ?, ?, ?)',
-      [
-        id,
-        workflow,
-        WorkflowStatus.running.name,
-        jsonEncode(params),
-        now,
-        now,
-        policyJson,
-      ],
-    );
+
+    await _connections.runInTransaction((ctx) async {
+      await ctx.repository<StemWorkflowRun>().insert(
+        StemWorkflowRunInsertDto(
+          id: id,
+          namespace: namespace,
+          workflow: workflow,
+          status: WorkflowStatus.running.name,
+          params: jsonEncode(params),
+          cancellationPolicy: policyJson,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    });
+
     return id;
   }
 
   @override
   Future<RunState?> get(String runId) async {
-    final row = _db.select(
-      'SELECT id, workflow, status, params, result, wait_topic, resume_at, '
-      'last_error, suspension_data, cancellation_policy, cancellation_data, '
-      'created_at, updated_at FROM wf_runs WHERE id = ?',
-      [runId],
-    ).firstOrNull;
-    if (row == null) return null;
-    final params = _decodeMap(row['params'] as String?);
-    final suspension = _decodeMap(row['suspension_data'] as String?);
-    final cursor =
-        _db
-                .select(
-                  '''
-          SELECT COUNT(
-            DISTINCT CASE instr(name, '#')
-              WHEN 0 THEN name
-              ELSE substr(name, 1, instr(name, '#') - 1)
-            END
-          ) AS count
-          FROM wf_steps
-          WHERE run_id = ?
-          ''',
-                  [runId],
-                )
-                .first['count']
-            as int;
-    final createdAt =
-        _decodeDate(row['created_at'] as int?) ??
-        DateTime.fromMillisecondsSinceEpoch(0);
-    final updatedAt = _decodeDate(row['updated_at'] as int?);
-    final cancellationPolicy = _decode(row['cancellation_policy'] as String?);
-    final cancellationDataRaw = _decodeMap(row['cancellation_data'] as String?);
+    return _readRunState(_context, runId);
+  }
+
+  Future<RunState?> _readRunState(QueryContext ctx, String runId) async {
+    final run = await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('id', runId)
+        .whereEquals('namespace', namespace)
+        .first();
+
+    if (run == null) return null;
+
+    final steps = await ctx
+        .query<StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
+        .get();
+
+    final baseSteps = <String>{};
+    for (final step in steps) {
+      baseSteps.add(_baseStepName(step.name));
+    }
+
+    final cancellationPolicyRaw = _decodeMap(run.cancellationPolicy);
+    final cancellationData = _decodeMap(run.cancellationData);
 
     return RunState(
-      id: row['id'] as String,
-      workflow: row['workflow'] as String,
+      id: run.id,
+      workflow: run.workflow,
       status: WorkflowStatus.values.firstWhere(
-        (v) => v.name == (row['status'] as String),
+        (v) => v.name == run.status,
         orElse: () => WorkflowStatus.running,
       ),
-      cursor: cursor,
-      params: params,
-      result: _decode(row['result'] as String?),
-      waitTopic: row['wait_topic'] as String?,
-      resumeAt: _decodeDate(row['resume_at'] as int?),
-      lastError: _decodeMap(row['last_error'] as String?),
-      suspensionData: suspension,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-      cancellationPolicy:
-          cancellationPolicy is Map && cancellationPolicy.isNotEmpty
-          ? WorkflowCancellationPolicy.fromJson(cancellationPolicy)
+      cursor: baseSteps.length,
+      params: _decodeMap(run.params),
+      result: _decodeValue(run.result),
+      waitTopic: run.waitTopic,
+      resumeAt: run.resumeAt,
+      lastError: _decodeMap(run.lastError),
+      suspensionData: _decodeMap(run.suspensionData),
+      createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
+      cancellationPolicy: cancellationPolicyRaw.isNotEmpty
+          ? WorkflowCancellationPolicy.fromJson(cancellationPolicyRaw)
           : null,
-      cancellationData: cancellationDataRaw.isEmpty
-          ? null
-          : cancellationDataRaw,
+      cancellationData: cancellationData.isEmpty ? null : cancellationData,
     );
   }
 
   @override
   Future<T?> readStep<T>(String runId, String stepName) async {
-    final row = _db.select(
-      'SELECT value FROM wf_steps WHERE run_id = ? AND name = ?',
-      [runId, stepName],
-    ).firstOrNull;
-    if (row == null) return null;
-    return _decode(row['value'] as String?) as T?;
+    final step = await _context
+        .query<StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('name', stepName)
+        .whereEquals('namespace', namespace)
+        .first();
+
+    if (step == null) return null;
+    return _decodeValue(step.value) as T?;
   }
 
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
-    _db.execute('BEGIN IMMEDIATE');
-    try {
-      _db.execute(
-        'INSERT OR REPLACE INTO wf_steps(run_id, name, value) VALUES(?, ?, ?)',
-        [runId, stepName, jsonEncode(value)],
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      final existing = await ctx
+          .query<StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('name', stepName)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (existing != null) {
+        await ctx.repository<StemWorkflowStep>().update(
+          StemWorkflowStepUpdateDto(value: jsonEncode(value)),
+          where: StemWorkflowStepPartial(
+            runId: runId,
+            name: stepName,
+            namespace: namespace,
+          ),
+        );
+      } else {
+        await ctx.repository<StemWorkflowStep>().insert(
+          StemWorkflowStepInsertDto(
+            runId: runId,
+            name: stepName,
+            namespace: namespace,
+            value: jsonEncode(value),
+          ),
+        );
+      }
+
+      await ctx.repository<StemWorkflowRun>().update(
+        StemWorkflowRunUpdateDto(updatedAt: now),
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
       );
-      _db.execute('UPDATE wf_runs SET updated_at = ? WHERE id = ?', [
-        nowMillis,
-        runId,
-      ]);
-      _db.execute('COMMIT');
-    } catch (error) {
-      _db.execute('ROLLBACK');
-      rethrow;
-    }
+    });
   }
 
   @override
@@ -243,19 +201,30 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime when, {
     Map<String, Object?>? data,
   }) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final now = _clock.now().toUtc();
     final metadata = _prepareSuspensionData(data, resumeAt: when);
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, resume_at = ?, wait_topic = NULL, '
-      'suspension_data = ?, updated_at = ? WHERE id = ?',
-      [
-        WorkflowStatus.suspended.name,
-        when.millisecondsSinceEpoch,
-        jsonEncode(metadata),
-        nowMillis,
-        runId,
-      ],
-    );
+
+    await _connections.runInTransaction((ctx) async {
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.suspended.name,
+          resumeAt: when,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: now,
+        ).toMap();
+        updates['wait_topic'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
@@ -266,25 +235,35 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final now = _clock.now().toUtc();
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
       deadline: deadline,
       topic: topic,
     );
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
-      'suspension_data = ?, updated_at = ? WHERE id = ?',
-      [
-        WorkflowStatus.suspended.name,
-        topic,
-        deadline?.millisecondsSinceEpoch,
-        jsonEncode(metadata),
-        nowMillis,
-        runId,
-      ],
-    );
+
+    await _connections.runInTransaction((ctx) async {
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.suspended.name,
+          waitTopic: topic,
+          resumeAt: deadline,
+          suspensionData: jsonEncode(metadata),
+          updatedAt: now,
+        ).toMap();
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
@@ -295,7 +274,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
+    final now = _clock.now().toUtc();
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -303,59 +282,121 @@ class SqliteWorkflowStore implements WorkflowStore {
       topic: topic,
     );
     final payload = jsonEncode(metadata);
-    final deadlineMillis = deadline?.millisecondsSinceEpoch;
-    _db.execute('BEGIN IMMEDIATE');
-    try {
-      _db.execute(
-        'INSERT INTO wf_watchers(run_id, step_name, topic, data, created_at, deadline) '
-        'VALUES(?, ?, ?, ?, ?, ?) '
-        'ON CONFLICT(run_id) DO UPDATE SET '
-        'step_name = excluded.step_name, '
-        'topic = excluded.topic, '
-        'data = excluded.data, '
-        'created_at = excluded.created_at, '
-        'deadline = excluded.deadline',
-        [runId, stepName, topic, payload, nowMillis, deadlineMillis],
-      );
-      _db.execute(
-        'UPDATE wf_runs SET status = ?, wait_topic = ?, resume_at = ?, '
-        'suspension_data = ?, updated_at = ? WHERE id = ?',
-        [
-          WorkflowStatus.suspended.name,
-          topic,
-          deadlineMillis,
-          payload,
-          nowMillis,
-          runId,
-        ],
-      );
-      _db.execute('COMMIT');
-    } catch (error) {
-      _db.execute('ROLLBACK');
-      rethrow;
-    }
+
+    await _connections.runInTransaction((ctx) async {
+      final existing = await ctx
+          .query<StemWorkflowWatcher>()
+          .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (existing != null) {
+        await ctx.repository<StemWorkflowWatcher>().update(
+          StemWorkflowWatcherUpdateDto(
+            stepName: stepName,
+            topic: topic,
+            data: payload,
+            createdAt: now,
+            deadline: deadline,
+          ),
+          where: StemWorkflowWatcherPartial(
+            runId: runId,
+            namespace: namespace,
+          ),
+        );
+      } else {
+        await ctx.repository<StemWorkflowWatcher>().insert(
+          StemWorkflowWatcherInsertDto(
+            runId: runId,
+            stepName: stepName,
+            topic: topic,
+            namespace: namespace,
+            data: payload,
+            createdAt: now,
+            deadline: deadline,
+          ),
+        );
+      }
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.suspended.name,
+          waitTopic: topic,
+          resumeAt: deadline,
+          suspensionData: payload,
+          updatedAt: now,
+        ).toMap();
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
   Future<void> markRunning(String runId, {String? stepName}) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
-    _deleteWatcher(runId);
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
-      'updated_at = ? WHERE id = ?',
-      [WorkflowStatus.running.name, nowMillis, runId],
-    );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.running.name,
+          updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = null;
+        updates['wait_topic'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
-    _deleteWatcher(runId);
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, result = ?, suspension_data = NULL, '
-      'updated_at = ? WHERE id = ?',
-      [WorkflowStatus.completed.name, jsonEncode(result), nowMillis, runId],
-    );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.completed.name,
+          result: result != null ? jsonEncode(result) : null,
+          updatedAt: now,
+        ).toMap();
+        if (result == null) {
+          updates['result'] = null;
+        }
+        updates['suspension_data'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
@@ -365,67 +406,120 @@ class SqliteWorkflowStore implements WorkflowStore {
     StackTrace stack, {
     bool terminal = false,
   }) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
-    if (terminal) {
-      _deleteWatcher(runId);
-    }
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, last_error = ?, updated_at = ? WHERE id = ?',
-      [
-        (terminal ? WorkflowStatus.failed : WorkflowStatus.running).name,
-        jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
-        nowMillis,
-        runId,
-      ],
-    );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      if (terminal) {
+        await _deleteWatcher(ctx, runId);
+      }
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: terminal ? WorkflowStatus.failed.name : null,
+          lastError: jsonEncode({
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+          updatedAt: now,
+        ).toMap();
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
-    final nowMillis = _clock.now().millisecondsSinceEpoch;
-    _deleteWatcher(runId);
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, resume_at = NULL, wait_topic = NULL, '
-      'suspension_data = ?, updated_at = ? WHERE id = ?',
-      [WorkflowStatus.running.name, jsonEncode(data), nowMillis, runId],
-    );
+    final now = _clock.now().toUtc();
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.running.name,
+          suspensionData: data != null ? jsonEncode(data) : null,
+          updatedAt: now,
+        ).toMap();
+        updates['resume_at'] = null;
+        updates['wait_topic'] = null;
+        if (data == null) {
+          updates['suspension_data'] = null;
+        }
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
-    final rows = _db.select(
-      'SELECT id FROM wf_runs WHERE resume_at IS NOT NULL '
-      'AND resume_at <= ? AND status = ? LIMIT ?',
-      [now.millisecondsSinceEpoch, WorkflowStatus.suspended.name, limit],
-    );
-    final ids = rows.map((r) => r['id'] as String).toList(growable: false);
-    if (ids.isNotEmpty) {
-      final placeholders = List.filled(ids.length, '?').join(',');
-      _db.execute(
-        'UPDATE wf_runs SET resume_at = NULL WHERE id IN ($placeholders)',
-        ids,
-      );
-    }
-    return ids;
+    return _connections.runInTransaction((ctx) async {
+      final dueRuns = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('namespace', namespace)
+          .whereNotNull('resumeAt')
+          .where('resumeAt', now, PredicateOperator.lessThanOrEqual)
+          .whereEquals('status', WorkflowStatus.suspended.name)
+          .limit(limit)
+          .get();
+
+      if (dueRuns.isEmpty) {
+        return const <String>[];
+      }
+
+      final nowUtc = now.toUtc();
+      for (final run in dueRuns) {
+        final updates = StemWorkflowRunUpdateDto(updatedAt: nowUtc).toMap();
+        updates['resume_at'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: run.id, namespace: namespace),
+        );
+      }
+
+      return dueRuns.map((run) => run.id).toList(growable: false);
+    });
   }
 
   @override
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
-    final watcherRows = _db.select(
-      'SELECT run_id FROM wf_watchers WHERE topic = ? '
-      'ORDER BY created_at ASC LIMIT ?',
-      [topic, limit],
-    );
+    final watcherRows = await _context
+        .query<StemWorkflowWatcher>()
+        .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
+        .orderBy('createdAt')
+        .limit(limit)
+        .get();
+
     if (watcherRows.isNotEmpty) {
-      return watcherRows
-          .map((row) => row['run_id'] as String)
-          .toList(growable: false);
+      return watcherRows.map((row) => row.runId).toList(growable: false);
     }
-    final fallback = _db.select(
-      'SELECT id FROM wf_runs WHERE wait_topic = ? LIMIT ?',
-      [topic, limit],
-    );
-    return fallback.map((r) => r['id'] as String).toList(growable: false);
+
+    final fallbackRows = await _context
+        .query<StemWorkflowRun>()
+        .whereEquals('waitTopic', topic)
+        .whereEquals('namespace', namespace)
+        .limit(limit)
+        .get();
+
+    return fallbackRows.map((row) => row.id).toList(growable: false);
   }
 
   @override
@@ -434,59 +528,74 @@ class SqliteWorkflowStore implements WorkflowStore {
     Map<String, Object?> payload, {
     int limit = 256,
   }) async {
-    final now = _clock.now();
-    final nowMs = now.millisecondsSinceEpoch;
-    final nowIso = now.toIso8601String();
-    _db.execute('BEGIN IMMEDIATE');
-    try {
-      final rows = _db.select(
-        'SELECT run_id, step_name, data FROM wf_watchers '
-        'WHERE topic = ? ORDER BY created_at ASC LIMIT ?',
-        [topic, limit],
-      );
-      if (rows.isEmpty) {
-        _db.execute('COMMIT');
-        return const [];
+    return _connections.runInTransaction((ctx) async {
+      final watchers = await ctx
+          .query<StemWorkflowWatcher>()
+          .whereEquals('topic', topic)
+          .whereEquals('namespace', namespace)
+          .orderBy('createdAt')
+          .limit(limit)
+          .get();
+
+      if (watchers.isEmpty) {
+        return const <WorkflowWatcherResolution>[];
       }
+
       final resolutions = <WorkflowWatcherResolution>[];
-      for (final row in rows) {
-        final runId = row['run_id'] as String;
-        final stepName = row['step_name'] as String;
-        final stored = _decodeMap(row['data'] as String?);
-        final metadata = Map<String, Object?>.from(stored);
+      final now = _clock.now();
+      final nowUtc = now.toUtc();
+
+      for (final watcher in watchers) {
+        final data = _decodeMap(watcher.data);
+        final metadata = Map<String, Object?>.from(data);
         metadata['type'] = 'event';
         metadata['topic'] = topic;
         metadata['payload'] = payload;
-        metadata.putIfAbsent('step', () => stepName);
-        metadata.putIfAbsent(
-          'iterationStep',
-          () => metadata['step'] ?? stepName,
-        );
-        metadata['deliveredAt'] = nowIso;
+        metadata
+          ..putIfAbsent('step', () => watcher.stepName)
+          ..putIfAbsent(
+            'iterationStep',
+            () => metadata['step'] ?? watcher.stepName,
+          );
+        metadata['deliveredAt'] = now.toIso8601String();
 
-        _db.execute(
-          'UPDATE wf_runs SET status = ?, wait_topic = NULL, resume_at = NULL, '
-          'suspension_data = ?, updated_at = ? WHERE id = ?',
-          [WorkflowStatus.running.name, jsonEncode(metadata), nowMs, runId],
-        );
+        final run = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', watcher.runId)
+            .whereEquals('namespace', namespace)
+            .first();
 
-        _db.execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
+        if (run != null) {
+          final updates = StemWorkflowRunUpdateDto(
+            status: WorkflowStatus.running.name,
+            suspensionData: jsonEncode(metadata),
+            updatedAt: nowUtc,
+          ).toMap();
+          updates['wait_topic'] = null;
+          updates['resume_at'] = null;
+          await ctx.repository<StemWorkflowRun>().update(
+            updates,
+            where: StemWorkflowRunPartial(
+              id: watcher.runId,
+              namespace: namespace,
+            ),
+          );
+        }
+
+        await ctx.repository<StemWorkflowWatcher>().delete(watcher);
 
         resolutions.add(
           WorkflowWatcherResolution(
-            runId: runId,
-            stepName: stepName,
+            runId: watcher.runId,
+            stepName: watcher.stepName,
             topic: topic,
             resumeData: metadata,
           ),
         );
       }
-      _db.execute('COMMIT');
+
       return resolutions;
-    } catch (error) {
-      _db.execute('ROLLBACK');
-      rethrow;
-    }
+    });
   }
 
   @override
@@ -494,25 +603,27 @@ class SqliteWorkflowStore implements WorkflowStore {
     String topic, {
     int limit = 256,
   }) async {
-    final rows = _db.select(
-      'SELECT run_id, step_name, data, created_at, deadline '
-      'FROM wf_watchers WHERE topic = ? ORDER BY created_at ASC LIMIT ?',
-      [topic, limit],
-    );
+    final rows = await _context
+        .query<StemWorkflowWatcher>()
+        .whereEquals('topic', topic)
+        .whereEquals('namespace', namespace)
+        .orderBy('createdAt')
+        .limit(limit)
+        .get();
+
     if (rows.isEmpty) {
       return const [];
     }
+
     return rows
         .map(
           (row) => WorkflowWatcher(
-            runId: row['run_id'] as String,
-            stepName: row['step_name'] as String,
+            runId: row.runId,
+            stepName: row.stepName,
             topic: topic,
-            createdAt:
-                _decodeDate(row['created_at'] as int?) ??
-                DateTime.fromMillisecondsSinceEpoch(0),
-            deadline: _decodeDate(row['deadline'] as int?),
-            data: _decodeMap(row['data'] as String?),
+            createdAt: row.createdAt,
+            deadline: row.deadline,
+            data: _decodeMap(row.data),
           ),
         )
         .toList(growable: false);
@@ -520,68 +631,109 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
-    final nowInstant = _clock.now();
-    final now = nowInstant.millisecondsSinceEpoch;
+    final now = _clock.now();
+    final nowUtc = now.toUtc();
     final cancellation = jsonEncode({
       'reason': reason ?? 'cancelled',
-      'cancelledAt': nowInstant.toIso8601String(),
+      'cancelledAt': now.toIso8601String(),
     });
-    _deleteWatcher(runId);
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, suspension_data = NULL, wait_topic = NULL, '
-      'resume_at = NULL, cancellation_data = ?, updated_at = ? WHERE id = ?',
-      [WorkflowStatus.cancelled.name, cancellation, now, runId],
-    );
+
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final run = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .first();
+
+      if (run != null) {
+        final updates = StemWorkflowRunUpdateDto(
+          status: WorkflowStatus.cancelled.name,
+          cancellationData: cancellation,
+          updatedAt: nowUtc,
+        ).toMap();
+        updates['suspension_data'] = null;
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
+        await ctx.repository<StemWorkflowRun>().update(
+          updates,
+          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+        );
+      }
+    });
   }
 
   @override
   Future<void> rewindToStep(String runId, String stepName) async {
-    _deleteWatcher(runId);
-    final stepRows = _db.select(
-      'SELECT name, value FROM wf_steps WHERE run_id = ? ORDER BY rowid',
-      [runId],
-    );
-    final names = stepRows.map((row) => row['name'] as String).toList();
-    final baseIndexMap = <String, int>{};
-    var nextIndex = 0;
-    final entryIndexes = <int>[];
-    for (final name in names) {
-      final base = _baseStepName(name);
-      baseIndexMap.putIfAbsent(base, () => nextIndex++);
-      entryIndexes.add(baseIndexMap[base]!);
-    }
-    final targetIndex = baseIndexMap[stepName];
-    if (targetIndex == null) return;
-    final keep = <Map<String, Object?>>[];
-    for (var i = 0; i < stepRows.length; i++) {
-      final baseIndex = entryIndexes[i];
-      if (baseIndex < targetIndex) {
-        keep.add(stepRows[i]);
-      } else {
-        break;
+    await _connections.runInTransaction((ctx) async {
+      await _deleteWatcher(ctx, runId);
+
+      final stepRows = await ctx
+          .query<StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
+          .orderBy('name')
+          .get();
+
+      final names = stepRows.map((row) => row.name).toList();
+      final baseIndexMap = <String, int>{};
+      var nextIndex = 0;
+      final entryIndexes = <int>[];
+
+      for (final name in names) {
+        final base = _baseStepName(name);
+        baseIndexMap.putIfAbsent(base, () => nextIndex++);
+        entryIndexes.add(baseIndexMap[base]!);
       }
-    }
-    _db.execute('DELETE FROM wf_steps WHERE run_id = ?', [runId]);
-    for (final row in keep) {
-      _db.execute(
-        'INSERT OR REPLACE INTO wf_steps(run_id, name, value) VALUES(?, ?, ?)',
-        [runId, row['name'], row['value']],
-      );
-    }
-    const iterations = 0;
-    _db.execute(
-      'UPDATE wf_runs SET status = ?, wait_topic = NULL, resume_at = NULL, '
-      'suspension_data = ? WHERE id = ?',
-      [
-        WorkflowStatus.suspended.name,
-        jsonEncode({
+
+      final targetIndex = baseIndexMap[stepName];
+      if (targetIndex == null) return;
+
+      final keep = <StemWorkflowStepInsertDto>[];
+      for (var i = 0; i < stepRows.length; i++) {
+        final baseIndex = entryIndexes[i];
+        if (baseIndex < targetIndex) {
+          final step = stepRows[i];
+          keep.add(
+            StemWorkflowStepInsertDto(
+              runId: runId,
+              name: step.name,
+              namespace: namespace,
+              value: step.value,
+            ),
+          );
+        } else {
+          break;
+        }
+      }
+
+      await ctx
+          .query<StemWorkflowStep>()
+          .whereEquals('runId', runId)
+          .whereEquals('namespace', namespace)
+          .delete();
+
+      if (keep.isNotEmpty) {
+        await ctx.repository<StemWorkflowStep>().insertMany(keep);
+      }
+
+      final updates = StemWorkflowRunUpdateDto(
+        status: WorkflowStatus.suspended.name,
+        suspensionData: jsonEncode({
           'step': stepName,
-          'iteration': iterations,
+          'iteration': 0,
           'iterationStep': stepName,
         }),
-        runId,
-      ],
-    );
+        updatedAt: _clock.now().toUtc(),
+      ).toMap();
+      updates['wait_topic'] = null;
+      updates['resume_at'] = null;
+      await ctx.repository<StemWorkflowRun>().update(
+        updates,
+        where: StemWorkflowRunPartial(id: runId, namespace: namespace),
+      );
+    });
   }
 
   @override
@@ -590,80 +742,104 @@ class SqliteWorkflowStore implements WorkflowStore {
     WorkflowStatus? status,
     int limit = 50,
   }) async {
-    final conditions = <String>[];
-    final params = <Object?>[];
-    if (workflow != null) {
-      conditions.add('workflow = ?');
-      params.add(workflow);
-    }
-    if (status != null) {
-      conditions.add('status = ?');
-      params.add(status.name);
-    }
-    final buffer = StringBuffer('SELECT id FROM wf_runs');
-    if (conditions.isNotEmpty) {
-      buffer.write(' WHERE ${conditions.join(' AND ')}');
-    }
-    buffer.write(' ORDER BY rowid DESC LIMIT ?');
-    params.add(limit);
+    var query = _context.query<StemWorkflowRun>();
+    query = query.whereEquals('namespace', namespace);
 
-    final ids = _db
-        .select(buffer.toString(), params)
-        .map((row) => row['id'] as String)
-        .toList(growable: false);
+    if (workflow != null) {
+      query = query.whereEquals('workflow', workflow);
+    }
+
+    if (status != null) {
+      query = query.whereEquals('status', status.name);
+    }
+
+    final ids = await query
+        .orderBy('updatedAt', descending: true)
+        .orderBy('id', descending: true)
+        .limit(limit)
+        .get()
+        .then((runs) => runs.map((run) => run.id).toList());
+
     final results = <RunState>[];
     for (final id in ids) {
-      final state = await get(id);
+      final state = await _readRunState(_context, id);
       if (state != null) {
         results.add(state);
       }
     }
+
     return results;
   }
 
   @override
   Future<List<WorkflowStepEntry>> listSteps(String runId) async {
-    final rows = _db.select(
-      'SELECT name, value FROM wf_steps WHERE run_id = ? ORDER BY rowid',
-      [runId],
-    );
+    final rows = await _context
+        .query<StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
+        .orderBy('name')
+        .get();
+
     final entries = <WorkflowStepEntry>[];
     var position = 0;
+
     for (final row in rows) {
       entries.add(
         WorkflowStepEntry(
-          name: row['name'] as String,
-          value: _decode(row['value'] as String?),
+          name: row.name,
+          value: _decodeValue(row.value),
           position: position,
         ),
       );
       position += 1;
     }
+
     return entries;
   }
 
-  Future<void> close() async {
-    _db.dispose();
+  /// Closes the workflow store and releases database resources.
+  Future<void> close() => _connections.close();
+
+  Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
+    final watcher = await ctx
+        .query<StemWorkflowWatcher>()
+        .whereEquals('runId', runId)
+        .whereEquals('namespace', namespace)
+        .first();
+
+    if (watcher != null) {
+      await ctx.repository<StemWorkflowWatcher>().delete(watcher);
+    }
   }
 
-  void _deleteWatcher(String runId) {
-    _db.execute('DELETE FROM wf_watchers WHERE run_id = ?', [runId]);
-  }
-
-  Map<String, Object?> _decodeMap(String? input) {
+  Map<String, Object?> _decodeMap(dynamic input) {
     if (input == null) return const {};
-    final decoded = jsonDecode(input);
-    return decoded is Map ? decoded.cast<String, Object?>() : const {};
+    if (input is String) {
+      try {
+        final decoded = jsonDecode(input);
+        return decoded is Map
+            ? decoded.map((key, value) => MapEntry(key as String, value))
+            : const {};
+      } on Object {
+        return const {};
+      }
+    }
+    if (input is Map) {
+      return input.map((key, value) => MapEntry(key.toString(), value));
+    }
+    return const {};
   }
 
-  Object? _decode(String? input) {
+  Object? _decodeValue(dynamic input) {
     if (input == null) return null;
-    return jsonDecode(input);
-  }
-
-  DateTime? _decodeDate(int? millis) {
-    if (millis == null) return null;
-    return DateTime.fromMillisecondsSinceEpoch(millis);
+    if (input is String) {
+      try {
+        return jsonDecode(input);
+      } on Object {
+        return input;
+      }
+    }
+    return input;
   }
 
   String _baseStepName(String name) {

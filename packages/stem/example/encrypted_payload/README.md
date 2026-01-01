@@ -40,8 +40,8 @@ stored in the `PAYLOAD_SECRET` environment variable.
    anything beyond local testing):
 
    ```bash
-   export STEM_BROKER_URL=redis://127.0.0.1:6381/0
-   export STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6381/1
+   export STEM_BROKER_URL=redis://127.0.0.1:6379/0
+   export STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6379/1
    export STEM_DEFAULT_QUEUE=secure
    export PAYLOAD_SECRET=$(openssl rand -base64 32)
    ```
@@ -89,8 +89,8 @@ docker compose up redis -d
 dart pub get
 dart compile exe examples/encrypted_payload/docker/main.dart -o build/container_mixed_encrypted
 PAYLOAD_SECRET=$(openssl rand -base64 32) \
-STEM_BROKER_URL=redis://127.0.0.1:6381/0 \
-STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6381/1 \
+STEM_BROKER_URL=redis://127.0.0.1:6379/0 \
+STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6379/1 \
 STEM_DEFAULT_QUEUE=secure \
 ./build/container_mixed_encrypted
 ```
@@ -100,9 +100,23 @@ To run it fully containerised:
 ```bash
 docker build -t container_mixed_encrypted -f docker/Dockerfile .
 docker run --network host \
-  -e STEM_BROKER_URL=redis://127.0.0.1:6381/0 \
-  -e STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6381/1 \
+  -e STEM_BROKER_URL=redis://127.0.0.1:6379/0 \
+  -e STEM_RESULT_BACKEND_URL=redis://127.0.0.1:6379/1 \
   -e STEM_DEFAULT_QUEUE=secure \
   -e PAYLOAD_SECRET=$(openssl rand -base64 32) \
   container_mixed_encrypted
+```
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example` and update hostnames to `localhost` for local runs.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-enqueuer
+# Or:
+just tmux
 ```

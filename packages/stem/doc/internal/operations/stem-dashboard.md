@@ -9,7 +9,8 @@ the routed ecosystem overrides, and validate the control-plane features.
 ## Prerequisites
 
 - Stem repository cloned (this document lives alongside the code).
-- Routed ecosystem checkout at `~/code/dart_packages/routed_ecosystem`.
+- Routed ecosystem checkout alongside this repository (expected at
+  `../routed_ecosystem` relative to `packages/dashboard`).
   - The dashboard package overrides `routed`, `routed_hotwire`,
     `server_testing`, `routed_testing`, and `property_testing` to that path.
   - A lightweight stub for `dartastic_opentelemetry_sdk` lives in

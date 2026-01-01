@@ -1,12 +1,13 @@
 import 'dart:math';
 
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/scheduler/solar_calculator.dart';
 import 'package:timezone/timezone.dart' as tz;
 
-import '../core/contracts.dart';
-import 'schedule_spec.dart';
-import 'solar_calculator.dart';
-
+/// Computes the next run time for schedule entries.
 class ScheduleCalculator {
+  /// Creates a calculator with optional randomness and timezone resolution.
   ScheduleCalculator({
     Random? random,
     ScheduleTimezoneResolver? timezoneResolver,
@@ -19,32 +20,28 @@ class ScheduleCalculator {
   final ScheduleTimezoneResolver? _timezoneResolver;
   final SolarCalculator _solar;
 
+  /// Calculates the next run time for a schedule [entry].
   DateTime nextRun(
     ScheduleEntry entry,
     DateTime now, {
     bool includeJitter = true,
   }) {
     final spec = entry.spec;
-    final tz.Location? location = _timezoneResolver?.resolve(entry.timezone);
-    final DateTime base = entry.lastRunAt ?? now;
+    final location = _timezoneResolver?.resolve(entry.timezone);
+    final base = entry.lastRunAt ?? now;
     DateTime next;
 
     switch (spec) {
-      case IntervalScheduleSpec interval:
+      case final IntervalScheduleSpec interval:
         next = _nextInterval(interval, base, now);
-        break;
-      case CronScheduleSpec cron:
+      case final CronScheduleSpec cron:
         next = _nextCron(cron, base, location);
-        break;
-      case SolarScheduleSpec solar:
+      case final SolarScheduleSpec solar:
         next = _nextSolar(solar, base, location);
-        break;
-      case ClockedScheduleSpec clocked:
+      case final ClockedScheduleSpec clocked:
         next = _nextClocked(clocked, base, now);
-        break;
-      case CalendarScheduleSpec calendar:
+      case final CalendarScheduleSpec calendar:
         next = _nextCalendar(calendar, base, location);
-        break;
     }
 
     final jitter = entry.jitter;
@@ -66,7 +63,7 @@ class ScheduleCalculator {
       final elapsed = now.difference(candidate);
       final ticks = (elapsed.inMilliseconds / spec.every.inMilliseconds).ceil();
       candidate = candidate.add(
-        Duration(milliseconds: (ticks * spec.every.inMilliseconds)),
+        Duration(milliseconds: ticks * spec.every.inMilliseconds),
       );
     } else if (candidate.isAtSameMomentAs(reference)) {
       candidate = candidate.add(spec.every);
@@ -103,7 +100,7 @@ class ScheduleCalculator {
     tz.Location? location,
   ) {
     if (location != null) {
-      final tz.TZDateTime localRef = tz.TZDateTime.from(reference, location);
+      final localRef = tz.TZDateTime.from(reference, location);
       return _nextCronTz(spec, localRef, location).toUtc();
     }
     final expression = _cronExpression(spec);
@@ -121,7 +118,7 @@ class ScheduleCalculator {
     final monthField = _CronField.parse(fields[3], 1, 12);
     final weekdayField = _CronField.parse(fields[4], 0, 6, sundayValue: {0, 7});
 
-    DateTime candidate = DateTime.utc(
+    var candidate = DateTime.utc(
       reference.year,
       reference.month,
       reference.day,
@@ -131,7 +128,7 @@ class ScheduleCalculator {
 
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
-        candidate = DateTime.utc(candidate.year, candidate.month + 1, 1);
+        candidate = DateTime.utc(candidate.year, candidate.month + 1);
         continue;
       }
 
@@ -196,7 +193,7 @@ class ScheduleCalculator {
     final monthField = _CronField.parse(fields[3], 1, 12);
     final weekdayField = _CronField.parse(fields[4], 0, 6, sundayValue: {0, 7});
 
-    tz.TZDateTime candidate = tz.TZDateTime(
+    var candidate = tz.TZDateTime(
       location,
       reference.year,
       reference.month,
@@ -273,8 +270,8 @@ class ScheduleCalculator {
     DateTime reference,
     tz.Location? location,
   ) {
-    final DateTime start = reference.toUtc();
-    final DateTime candidate = _solar.nextEvent(spec, start, location);
+    final start = reference.toUtc();
+    final candidate = _solar.nextEvent(spec, start, location);
     if (spec.offset != null) {
       return candidate.add(spec.offset!);
     }
@@ -323,9 +320,7 @@ class ScheduleCalculator {
 class _CronField {
   _CronField(this.values);
 
-  final Set<int>? values;
-
-  static _CronField parse(
+  factory _CronField.parse(
     String token,
     int min,
     int max, {
@@ -341,6 +336,8 @@ class _CronField {
     return _CronField(result);
   }
 
+  final Set<int>? values;
+
   static void _expandPart(
     String part,
     int min,
@@ -349,7 +346,7 @@ class _CronField {
     Set<int>? sundayValue,
   }) {
     if (part.isEmpty) {
-      throw FormatException('Empty cron field');
+      throw const FormatException('Empty cron field');
     }
     var step = 1;
     var rangePart = part;

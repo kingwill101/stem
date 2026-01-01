@@ -4,8 +4,8 @@ import 'dart:math';
 
 import 'package:async/async.dart';
 import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -32,14 +32,46 @@ void main() {
       dispose: (broker) => _safeCloseRedisBroker(broker as RedisStreamsBroker),
     ),
     settings: const BrokerContractSettings(
-      visibilityTimeout: Duration(seconds: 1),
       leaseExtension: Duration(seconds: 1),
       queueSettleDelay: Duration(milliseconds: 200),
-      replayDelay: Duration(milliseconds: 200),
-      verifyBroadcastFanout: false,
       requeueTimeout: Duration(seconds: 10),
     ),
   );
+
+  test('namespace isolates queue data', () async {
+    final namespaceA = _uniqueNamespace();
+    final namespaceB = _uniqueNamespace();
+    final brokerA = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespaceA,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      blockTime: const Duration(milliseconds: 100),
+    );
+    final brokerB = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespaceB,
+      defaultVisibilityTimeout: const Duration(seconds: 1),
+      blockTime: const Duration(milliseconds: 100),
+    );
+    try {
+      final queue = _uniqueQueue();
+      final envelope = Envelope(
+        name: 'integration.redis.namespace',
+        args: const {'value': 1},
+        queue: queue,
+      );
+      await brokerA.publish(envelope);
+
+      final pendingA = await brokerA.pendingCount(queue);
+      final pendingB = await brokerB.pendingCount(queue);
+
+      expect(pendingA, 1);
+      expect(pendingB, 0);
+    } finally {
+      await _safeCloseRedisBroker(brokerA);
+      await _safeCloseRedisBroker(brokerB);
+    }
+  });
 
   test('purge clears priority stream data', () async {
     final namespace = _uniqueNamespace();
@@ -92,7 +124,6 @@ void main() {
       final iterator = StreamIterator(
         broker.consume(
           RoutingSubscription.singleQueue(queue),
-          prefetch: 1,
           consumerName: 'purge-check-$queue',
         ),
       );
@@ -115,7 +146,7 @@ void main() {
     try {
       final queue = _uniqueQueue();
       final subscription = broker
-          .consume(RoutingSubscription.singleQueue(queue), prefetch: 1)
+          .consume(RoutingSubscription.singleQueue(queue))
           .listen((_) {});
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -125,6 +156,63 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(broker.activeClaimTimerCount, 0);
     } finally {
+      await _safeCloseRedisBroker(broker);
+    }
+  });
+
+  test('concurrent consumers do not block publishes', () async {
+    final namespace = _uniqueNamespace();
+    const blockTime = Duration(milliseconds: 1500);
+    final broker = await RedisStreamsBroker.connect(
+      redisUrl,
+      namespace: namespace,
+      blockTime: blockTime,
+    );
+    StreamQueue<Delivery>? queueA;
+    StreamQueue<Delivery>? queueB;
+    try {
+      final queueAName = '${_uniqueQueue()}-a';
+      final queueBName = '${_uniqueQueue()}-b';
+      queueA = StreamQueue(
+        broker.consume(
+          RoutingSubscription.singleQueue(queueAName),
+          consumerName: 'consumer-a-$queueAName',
+        ),
+      );
+      queueB = StreamQueue(
+        broker.consume(
+          RoutingSubscription.singleQueue(queueBName),
+          consumerName: 'consumer-b-$queueBName',
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final envelope = Envelope(
+        name: 'integration.redis.concurrent',
+        args: const {'value': 'ok'},
+        queue: queueBName,
+      );
+      final publishWatch = Stopwatch()..start();
+      await broker.publish(envelope);
+      publishWatch.stop();
+
+      expect(
+        publishWatch.elapsedMilliseconds,
+        lessThan(blockTime.inMilliseconds ~/ 2),
+        reason: 'publish should not be delayed by another consumer',
+      );
+
+      final delivery = await queueB.next.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () =>
+            fail('consumer-b timed out waiting for concurrent message'),
+      );
+      expect(delivery.envelope.id, envelope.id);
+      await broker.ack(delivery);
+    } finally {
+      await queueA?.cancel(immediate: true);
+      await queueB?.cancel(immediate: true);
       await _safeCloseRedisBroker(broker);
     }
   });
@@ -154,7 +242,6 @@ void main() {
       final workerOne = StreamQueue(
         workerOneBroker.consume(
           subscription,
-          prefetch: 1,
           consumerGroup: 'group-$queue',
           consumerName: 'worker-one-$queue',
         ),
@@ -162,7 +249,6 @@ void main() {
       final workerTwo = StreamQueue(
         workerTwoBroker.consume(
           subscription,
-          prefetch: 1,
           consumerGroup: 'group-$queue',
           consumerName: 'worker-two-$queue',
         ),
@@ -230,6 +316,8 @@ String _uniqueNamespace() {
 
 Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
   try {
-    await runZonedGuarded(() => broker.close(), (Object _, StackTrace __) {});
-  } catch (_) {}
+    await runZonedGuarded(() => broker.close(), (Object _, StackTrace _) {});
+  } on Object {
+    // Ignore broker shutdown errors in cleanup.
+  }
 }

@@ -71,7 +71,7 @@ The stack now brings up Redis, the enqueue API, three workers, the beat schedule
 - Jaeger: <http://localhost:8080/jaeger/>
 - OTLP ingest from the host: `http://localhost:4318` (HTTP) or `grpc://localhost:4317`
 
-- **Local overrides:** The compose file mounts your existing routed ecosystem checkout from `/home/kingwill101/code/dart_packages/routed_ecosystem` into the containers so that `dependency_overrides` resolve correctly. If your local path differs, update the `volumes` entries in `docker-compose.yml` accordingly.
+- **Local overrides:** The compose file expects a routed ecosystem checkout next to this repo (sibling directory at `../routed_ecosystem`) so the dashboard overrides resolve correctly. If your local path differs, update the `volumes` entries in `docker-compose.yml` accordingly.
 
 Workers emit metrics to the collector via OTLP; Prometheus scrapes the collector and Grafana ships with a pre-provisioned datasource so you can build dashboards immediately. Jaeger receives spans published through the collector, allowing you to trace enqueue and worker execution paths without extra configuration.
 
@@ -148,4 +148,29 @@ The worker logs progress for each greeting task, demonstrating isolate execution
 cd examples/microservice/beat
 dart pub get
 dart run bin/beat.dart
+```
+
+## Local build + Docker deps (just)
+
+Pick an environment profile and set `ENV_FILE` (or copy one to `.env`):
+
+```bash
+cp .env.hmac .env
+# or: ENV_FILE=.env.hmac just tmux
+```
+
+Start dependencies, build binaries, and run in tmux:
+
+```bash
+just deps-up
+just build
+just tmux
+```
+
+If you prefer separate terminals:
+
+```bash
+just run-worker
+just run-enqueuer
+just run-beat
 ```

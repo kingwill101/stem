@@ -104,8 +104,8 @@ stem worker diagnose --node web-1 \
 
 Before every deployment run through these guardrails:
 
-- **Quality gates** – execute `tool/quality/run_quality_checks.sh` to run
-  format, analyze, unit/integration tests, chaos suites, and coverage targets.
+- **Quality gates** – run `example/quality_gates` (`just quality`) to execute
+  format, analyze, unit/chaos/perf tests, and coverage targets.
 - **Observability** – confirm Grafana dashboards (task success rate, latency
   p95, queue depth) and OpenTelemetry exporters are healthy.
 - **Routing & schedules** – `stem routing dump --json` to confirm the active

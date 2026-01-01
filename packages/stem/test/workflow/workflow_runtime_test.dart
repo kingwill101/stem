@@ -15,7 +15,7 @@ void main() {
     backend = InMemoryResultBackend();
     registry = SimpleTaskRegistry();
     stem = Stem(broker: broker, registry: registry, backend: backend);
-    clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+    clock = FakeWorkflowClock(DateTime.utc(2024));
     store = InMemoryWorkflowStore(clock: clock);
     runtime = WorkflowRuntime(
       stem: stem,
@@ -38,11 +38,12 @@ void main() {
       Flow(
         name: 'demo.workflow',
         build: (flow) {
-          flow.step('prepare', (context) async => 'ready');
-          flow.step(
-            'finish',
-            (context) async => '${context.previousResult}-done',
-          );
+          flow
+            ..step('prepare', (context) async => 'ready')
+            ..step(
+              'finish',
+              (context) async => '${context.previousResult}-done',
+            );
         },
       ).definition,
     );
@@ -53,8 +54,8 @@ void main() {
     final state = await store.get(runId);
     expect(state?.status, WorkflowStatus.completed);
     expect(state?.result, 'ready-done');
-    expect(await store.readStep(runId, 'prepare'), 'ready');
-    expect(await store.readStep(runId, 'finish'), 'ready-done');
+    expect(await store.readStep<String>(runId, 'prepare'), 'ready');
+    expect(await store.readStep<String>(runId, 'finish'), 'ready-done');
   });
 
   test('extends lease when checkpoints persist', () async {
@@ -93,18 +94,19 @@ void main() {
       Flow(
         name: 'sleep.workflow',
         build: (flow) {
-          flow.step('wait', (context) async {
-            final resume = context.takeResumeData();
-            if (resume == true) {
-              return 'slept';
-            }
-            context.sleep(const Duration(milliseconds: 20));
-            return null;
-          });
-          flow.step(
-            'complete',
-            (context) async => '${context.previousResult}-done',
-          );
+          flow
+            ..step('wait', (context) async {
+              final resume = context.takeResumeData();
+              if (resume == true) {
+                return 'slept';
+              }
+              context.sleep(const Duration(milliseconds: 20));
+              return null;
+            })
+            ..step(
+              'complete',
+              (context) async => '${context.previousResult}-done',
+            );
         },
       ).definition,
     );
@@ -269,24 +271,24 @@ void main() {
       Flow(
         name: 'durable.sleep.event',
         build: (flow) {
-          flow.step('initial', (context) async {
-            final resume = context.takeResumeData();
-            if (resume != true) {
-              context.sleep(const Duration(milliseconds: 20));
-              return null;
-            }
-            return 'awake';
-          });
-
-          flow.step('await-event', (context) async {
-            final resume = context.takeResumeData();
-            if (resume == null) {
-              context.awaitEvent('demo.event');
-              return null;
-            }
-            final payload = resume as Map<String, Object?>;
-            return payload['message'];
-          });
+          flow
+            ..step('initial', (context) async {
+              final resume = context.takeResumeData();
+              if (resume != true) {
+                context.sleep(const Duration(milliseconds: 20));
+                return null;
+              }
+              return 'awake';
+            })
+            ..step('await-event', (context) async {
+              final resume = context.takeResumeData();
+              if (resume == null) {
+                context.awaitEvent('demo.event');
+                return null;
+              }
+              final payload = resume as Map<String, Object?>;
+              return payload['message'];
+            });
         },
       ).definition,
     );
@@ -321,7 +323,7 @@ void main() {
   });
 
   test('idempotency helper returns stable key across retries', () async {
-    int attempts = 0;
+    var attempts = 0;
     final observedKeys = <String>[];
 
     runtime.registerWorkflow(
@@ -371,11 +373,12 @@ void main() {
       Flow(
         name: 'repeat.workflow',
         build: (flow) {
-          flow.step('repeat', (context) async {
-            iterations.add(context.iteration);
-            return 'value-${context.iteration}';
-          }, autoVersion: true);
-          flow.step('tail', (context) async => context.previousResult);
+          flow
+            ..step('repeat', (context) async {
+              iterations.add(context.iteration);
+              return 'value-${context.iteration}';
+            }, autoVersion: true)
+            ..step('tail', (context) async => context.previousResult);
         },
       ).definition,
     );
@@ -458,8 +461,8 @@ void main() {
     expect(state?.status, WorkflowStatus.completed);
     expect(state?.result, 'ready-done');
     expect(previousSeen, 'ready');
-    expect(await store.readStep(runId, 'first'), 'ready');
-    expect(await store.readStep(runId, 'second'), 'ready-done');
+    expect(await store.readStep<String>(runId, 'first'), 'ready');
+    expect(await store.readStep<String>(runId, 'second'), 'ready-done');
   });
 
   test('script step sleep suspends and resumes', () async {
@@ -498,7 +501,7 @@ void main() {
     final completed = await store.get(runId);
     expect(completed?.status, WorkflowStatus.completed);
     expect(completed?.result, 'done');
-    expect(await store.readStep(runId, 'wait'), 'slept');
+    expect(await store.readStep<String>(runId, 'wait'), 'slept');
   });
 
   test('script sleep auto resumes without manual guard', () async {
@@ -599,9 +602,9 @@ void main() {
     await runtime.executeRun(runId);
 
     expect(iterations, [0, 1, 2]);
-    expect(await store.readStep(runId, 'repeat#0'), 0);
-    expect(await store.readStep(runId, 'repeat#1'), 1);
-    expect(await store.readStep(runId, 'repeat#2'), 2);
+    expect(await store.readStep<int>(runId, 'repeat#0'), 0);
+    expect(await store.readStep<int>(runId, 'repeat#1'), 1);
+    expect(await store.readStep<int>(runId, 'repeat#2'), 2);
     final state = await store.get(runId);
     expect(state?.result, 3);
   });

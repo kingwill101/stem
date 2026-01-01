@@ -1,13 +1,24 @@
+/// Pages supported by the dashboard UI.
 enum DashboardPage {
+  /// Overview landing page.
   overview('/'),
+
+  /// Task and queue details page.
   tasks('/tasks'),
+
+  /// Event feed page.
   events('/events'),
+
+  /// Worker status page.
   workers('/workers');
 
+  /// Creates a dashboard page entry with a path.
   const DashboardPage(this.path);
 
+  /// Route path for this page.
   final String path;
 
+  /// Display label used in navigation.
   String get label {
     switch (this) {
       case DashboardPage.overview:
@@ -21,9 +32,11 @@ enum DashboardPage {
     }
   }
 
+  /// Browser title for this page.
   String get title => 'Stem Dashboard · $label';
 }
 
+/// Renders the full HTML layout for a dashboard page.
 String renderLayout(DashboardPage page, String content) {
   return '''
 <!doctype html>
@@ -592,11 +605,27 @@ String renderLayout(DashboardPage page, String content) {
     window.stemDashboardEventsWs = socket;
   };
 
+  const scheduleOverviewRefresh = (page) => {
+    if (window.stemDashboardOverviewTimer) {
+      clearInterval(window.stemDashboardOverviewTimer);
+      window.stemDashboardOverviewTimer = null;
+    }
+    if (page !== 'overview') return;
+    window.stemDashboardOverviewTimer = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      if (!window.Turbo || !frame) return;
+      const url = window.location.pathname + window.location.search;
+      window.Turbo.visit(url, { frame: 'dashboard-content', action: 'replace' });
+    }, 5000);
+  };
+
   if (frame) {
     setActive(frame.dataset.page ?? '${page.name}');
-    if ((frame.dataset.page ?? '${page.name}') === 'events') {
+    const initialPage = frame.dataset.page ?? '${page.name}';
+    if (initialPage === 'events') {
       ensureEventsStream();
     }
+    scheduleOverviewRefresh(initialPage);
     document.addEventListener('turbo:frame-load', (event) => {
       if (event.target.id !== 'dashboard-content') return;
       const currentPage = event.target.dataset.page ?? '${page.name}';
@@ -604,6 +633,7 @@ String renderLayout(DashboardPage page, String content) {
       if (currentPage === 'events') {
         ensureEventsStream();
       }
+      scheduleOverviewRefresh(currentPage);
     });
   }
 
@@ -622,6 +652,7 @@ String renderLayout(DashboardPage page, String content) {
 ''';
 }
 
+/// Renders a Turbo frame payload for a dashboard page.
 String renderFrame(DashboardPage page, String content) {
   return '''
 <turbo-frame id="dashboard-content" data-page="${page.name}">

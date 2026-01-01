@@ -1,0 +1,16 @@
+- id: scheduler-fast
+  task: scheduler.demo
+  spec: every:4s
+  queue: scheduled
+  args:
+    label: fast
+    workMs: 250
+
+- id: scheduler-drift
+  task: scheduler.demo
+  spec: every:6s
+  queue: scheduled
+  jitter: 500ms
+  args:
+    label: drift
+    workMs: 900

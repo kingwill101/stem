@@ -224,4 +224,5 @@ start emitting events.
   [Observe & Operate](./observability-and-ops.md) to enable telemetry, inspect
   heartbeats, replay DLQs, and issue remote control commands.
 - Browse the runnable examples under `examples/` for Redis/Postgres,
-  mixed-cluster, and observability stacks you can adapt to your environment.
+  mixed-cluster, autoscaling, scheduler observability, and signing-key rotation
+  drills you can adapt to your environment.

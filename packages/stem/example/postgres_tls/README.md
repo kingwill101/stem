@@ -18,8 +18,8 @@ can be reused across brokers and backends.
    ```
 2. Export the environment expected by the scripts:
    ```bash
-   export STEM_BROKER_URL=redis://127.0.0.1:56379
-   export STEM_RESULT_BACKEND_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test
+   export STEM_BROKER_URL=redis://127.0.0.1:6379
+   export STEM_RESULT_BACKEND_URL=postgresql://postgres:postgres@127.0.0.1:5432/stem_test
    export STEM_TLS_CA_CERT=../../stem_cli/docker/testing/certs/postgres-root.crt
    # Optional: allow verification bypass during CA troubleshooting
    # export STEM_TLS_ALLOW_INSECURE=true

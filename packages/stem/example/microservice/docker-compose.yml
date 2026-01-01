@@ -5,9 +5,9 @@ services:
     volumes:
       - ./collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
-      - "4317:4317"
-      - "4318:4318"
-      - "8889:8889"
+      - "${OTEL_GRPC_PORT:-4317}:4317"
+      - "${OTEL_HTTP_PORT:-4318}:4318"
+      - "${OTEL_PROM_PORT:-8889}:8889"
     depends_on:
       - jaeger
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
     image: redis:7.2-alpine
     user: "0"
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     command:
       - redis-server
       - --appendonly

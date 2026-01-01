@@ -1,8 +1,8 @@
 import 'package:stem/stem.dart';
+import 'package:stem_adapter_tests/src/workflow_store_contract_suite.dart';
 import 'package:test/test.dart';
 
-import 'workflow_store_contract_suite.dart';
-
+/// Runs contract tests covering the workflow script facade behavior.
 void runWorkflowScriptFacadeTests({
   required String adapterName,
   required WorkflowStoreContractFactory factory,
@@ -17,12 +17,12 @@ void runWorkflowScriptFacadeTests({
     late FakeWorkflowClock clock;
 
     setUp(() async {
-      clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
+      clock = FakeWorkflowClock(DateTime.utc(2024));
       store = await factory.create(clock);
       broker = InMemoryBroker();
       backend = InMemoryResultBackend();
       registry = SimpleTaskRegistry();
-      stem = Stem(broker: broker!, registry: registry!, backend: backend!);
+      stem = Stem(broker: broker!, registry: registry!, backend: backend);
       runtime = WorkflowRuntime(
         stem: stem!,
         store: store!,
@@ -75,8 +75,9 @@ void runWorkflowScriptFacadeTests({
       expect(state?.status, WorkflowStatus.completed);
       expect(state?.result, 'ready-done');
       expect(previousSeen, 'ready');
-      expect(await currentStore.readStep(runId, 'first'), 'ready');
-      expect(await currentStore.readStep(runId, 'second'), 'ready-done');
+      expect(await currentStore.readStep<String>(runId, 'first'), 'ready');
+      final secondResult = await currentStore.readStep<String>(runId, 'second');
+      expect(secondResult, 'ready-done');
     });
 
     test('sleep suspends and resumes with stored payload', () async {
@@ -117,7 +118,7 @@ void runWorkflowScriptFacadeTests({
 
       final completed = await currentStore.get(runId);
       expect(completed?.status, WorkflowStatus.completed);
-      expect(await currentStore.readStep(runId, 'wait'), 'slept');
+      expect(await currentStore.readStep<String>(runId, 'wait'), 'slept');
     });
 
     test('autoVersion steps persist sequential checkpoints', () async {
@@ -146,9 +147,9 @@ void runWorkflowScriptFacadeTests({
       await currentRuntime.executeRun(runId);
 
       expect(iterations, [0, 1, 2]);
-      expect(await currentStore.readStep(runId, 'repeat#0'), 0);
-      expect(await currentStore.readStep(runId, 'repeat#1'), 1);
-      expect(await currentStore.readStep(runId, 'repeat#2'), 2);
+      expect(await currentStore.readStep<int>(runId, 'repeat#0'), 0);
+      expect(await currentStore.readStep<int>(runId, 'repeat#1'), 1);
+      expect(await currentStore.readStep<int>(runId, 'repeat#2'), 2);
       final state = await currentStore.get(runId);
       expect(state?.result, 3);
     });

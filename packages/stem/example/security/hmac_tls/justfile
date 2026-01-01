@@ -1,0 +1,28 @@
+import "../../Justfile.common"
+
+ROOT := justfile_directory()
+
+COMPOSE_FILE := env_var_or_default("COMPOSE_FILE", "docker-compose.yml")
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "redis")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env.local")
+SESSION := env_var_or_default("SESSION", "stem-security-hmac-tls")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+COMPOSE_ENV := "REDIS_PORT=" + REDIS_PORT
+REDIS_PORT := env_var_or_default("REDIS_PORT", "6379")
+
+build:
+    {{JUST}} -f "{{ROOT}}/../../microservice/justfile" ENV_FILE="{{ROOT}}/{{ENV_FILE}}" build
+
+run:
+    {{JUST}} -f "{{ROOT}}/../../microservice/justfile" ENV_FILE="{{ROOT}}/{{ENV_FILE}}" run-enqueuer
+
+clean:
+    {{JUST}} -f "{{ROOT}}/../../microservice/justfile" clean
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} -f \"{{ROOT}}/../../microservice/justfile\" ENV_FILE=\"{{ROOT}}/{{ENV_FILE}}\" run-worker"
+    tmux split-window -t "{{SESSION}}:app" -v "cd \"{{ROOT}}\" && {{JUST}} -f \"{{ROOT}}/../../microservice/justfile\" ENV_FILE=\"{{ROOT}}/{{ENV_FILE}}\" run-enqueuer"
+    tmux select-layout -t "{{SESSION}}:app" even-vertical
+    {{JUST}} tmux-attach

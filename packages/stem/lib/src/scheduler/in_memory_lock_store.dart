@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 
-import '../core/contracts.dart';
+import 'package:stem/src/core/contracts.dart';
 
+/// In-memory lock store used for tests and local scheduling.
 class InMemoryLockStore implements LockStore {
   final Map<String, _InMemoryLock> _locks = {};
 
@@ -47,6 +48,7 @@ class InMemoryLockStore implements LockStore {
     return true;
   }
 
+  /// Releases a lock regardless of owner (internal helper).
   void releaseLock(String key) {
     _locks.remove(key);
   }
@@ -56,7 +58,8 @@ class _InMemoryLock implements Lock {
   _InMemoryLock(this.key, this.owner, this.expiresAt, this.store);
 
   static String generateOwner() =>
-      'owner-${DateTime.now().microsecondsSinceEpoch}-${Random().nextInt(1 << 32)}';
+      'owner-${DateTime.now().microsecondsSinceEpoch}-'
+      '${Random().nextInt(1 << 32)}';
 
   @override
   final String key;

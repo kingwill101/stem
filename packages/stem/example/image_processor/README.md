@@ -69,3 +69,17 @@ Stop the stack with `docker compose down`.
 3. Run the worker and API in separate terminals using `dart pub get` / `dart run`.
 
 This example demonstrates offloading I/O heavy work, retry semantics, and sharing metadata between the API and worker through the result backend.
+
+### Local build + Docker deps (just)
+
+By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example`.
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-api
+# Or:
+just tmux
+```

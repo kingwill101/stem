@@ -83,13 +83,15 @@ Future<void> main(List<String> args) async {
           body: jsonEncode({'error': 'Provide a non-empty "names" array'}),
         );
       }
-      final groupId = await canvas.group([
+      final dispatch = await canvas.group<Object?>([
         for (final name in names)
           task(
             'greeting.send',
             args: {'name': name},
           )
       ]);
+      await dispatch.dispose();
+      final groupId = dispatch.groupId;
       return Response.ok(
         jsonEncode({'groupId': groupId, 'count': names.length}),
         headers: {'content-type': 'application/json'},

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 
 import 'subscription_loader.dart';
@@ -21,7 +21,7 @@ class RoutingCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a routing subcommand.', usage);
+    throw Exception('Specify a routing subcommand.');
   }
 }
 

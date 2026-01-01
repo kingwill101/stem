@@ -28,3 +28,15 @@ signals-worker-1  | [signals][worker][task_postrun] {"task":"tasks.always_fail",
 Stop the demo with `Ctrl+C`. The worker and producer trap TERM signals and
 shut down gracefully. To rebuild after editing the example, run
 `docker compose build`.
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-producer
+# Or:
+just tmux
+```

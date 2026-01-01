@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+
+  worker_alpha:
+    build:
+      context: ../..
+      dockerfile: example/worker_control_lab/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+      STEM_REVOKE_STORE_URL: redis://redis:6379/2
+      WORKER_NAME: control-alpha
+    depends_on:
+      - redis
+    command: ["dart", "bin/worker.dart"]
+
+  worker_bravo:
+    build:
+      context: ../..
+      dockerfile: example/worker_control_lab/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+      STEM_REVOKE_STORE_URL: redis://redis:6379/2
+      WORKER_NAME: control-bravo
+    depends_on:
+      - redis
+    command: ["dart", "bin/worker.dart"]
+
+  producer:
+    build:
+      context: ../..
+      dockerfile: example/worker_control_lab/Dockerfile
+    environment:
+      STEM_BROKER_URL: redis://redis:6379/0
+      STEM_RESULT_BACKEND_URL: redis://redis:6379/1
+      LONG_TASKS: 3
+      LONG_TASK_STEPS: 20
+    depends_on:
+      - redis
+      - worker_alpha
+      - worker_bravo
+    command: ["dart", "bin/producer.dart"]

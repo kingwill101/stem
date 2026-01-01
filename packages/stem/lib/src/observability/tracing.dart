@@ -18,12 +18,10 @@ class StemTracer {
   static dotel_api.APITracer _obtainTracer() {
     try {
       return dotel.OTel.tracerProvider().getTracer('stem');
-    } catch (error) {
+    } on Object catch (error) {
       if (error is TypeError || error is StateError) {
-        try {
+        if (dotel_api.OTelFactory.otelFactory == null) {
           dotel_api.OTelAPI.initialize();
-        } on StateError {
-          // Already initialised elsewhere; ignore.
         }
         return dotel_api.OTelAPI.tracerProvider().getTracer('stem');
       }
@@ -40,7 +38,7 @@ class StemTracer {
     dotel.SpanKind spanKind = dotel.SpanKind.internal,
   }) async {
     if (!_isTelemetryReady) {
-      return await fn();
+      return fn();
     }
     final attributeSet = attributes.isEmpty
         ? null
@@ -190,7 +188,7 @@ class StemTracer {
         traceState: traceState,
         isRemote: true,
       );
-    } catch (_) {
+    } on Object {
       return null;
     }
   }

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('Worker', () {
@@ -18,7 +18,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-1',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -69,7 +68,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'chord-worker',
         concurrency: 2,
         prefetchMultiplier: 1,
@@ -83,16 +81,16 @@ void main() {
         registry: registry,
       );
 
-      final callbackId = await canvas.chord(
+      final chordResult = await canvas.chord<int>(
         body: [
-          () => Envelope(name: 'tasks.body', args: const {'value': 2}),
-          () => Envelope(name: 'tasks.body', args: const {'value': 5}),
+          task<int>('tasks.body', args: const {'value': 2}),
+          task<int>('tasks.body', args: const {'value': 5}),
         ],
-        callback: () => Envelope(name: 'tasks.chord.callback', args: const {}),
+        callback: task('tasks.chord.callback'),
       );
 
-      await _waitForCallbackSuccess(backend, callbackId);
-      final status = await backend.get(callbackId);
+      await _waitForCallbackSuccess(backend, chordResult.callbackTaskId);
+      final status = await backend.get(chordResult.callbackTaskId);
       expect(status?.state, TaskState.succeeded);
       expect(status?.payload, equals(7));
       expect(status?.meta['chordResults'], equals([2, 5]));
@@ -116,7 +114,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'unique-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -178,7 +175,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'signal-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -251,7 +247,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'heartbeat-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -298,7 +293,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-autoscale',
         concurrency: 4,
         prefetchMultiplier: 1,
@@ -306,9 +300,6 @@ void main() {
           enabled: true,
           minConcurrency: 1,
           maxConcurrency: 4,
-          scaleUpStep: 1,
-          scaleDownStep: 1,
-          backlogPerIsolate: 1.0,
           tick: Duration(milliseconds: 40),
           idlePeriod: Duration(milliseconds: 120),
           scaleUpCooldown: Duration(milliseconds: 40),
@@ -328,7 +319,6 @@ void main() {
 
       await _waitFor(
         () => worker.activeConcurrency >= 3,
-        timeout: const Duration(seconds: 2),
       );
       expect(worker.activeConcurrency, greaterThanOrEqualTo(3));
 
@@ -364,7 +354,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-life',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -438,7 +427,6 @@ void main() {
           FunctionTaskHandler<int>(
             name: 'tasks.isolate',
             entrypoint: _isolateEntrypoint,
-            options: const TaskOptions(maxRetries: 0),
           ),
         );
 
@@ -446,7 +434,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'isolate-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -509,7 +496,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-life',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -583,7 +569,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-retry',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -727,7 +712,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-warm-shutdown',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -778,7 +762,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-recycle',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -835,7 +818,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-memory-recycle',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -895,7 +877,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-signed',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -953,7 +934,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-signed-invalid',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1000,7 +980,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-2',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1061,7 +1040,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-3',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1136,7 +1114,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-isolate',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1192,7 +1169,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-timeout',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1266,7 +1242,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'worker-revoked',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1327,7 +1302,6 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
-        queue: 'default',
         consumerName: 'control-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1418,7 +1392,7 @@ class _ChordBodyTask implements TaskHandler<int> {
 
   @override
   Future<int> call(TaskContext context, Map<String, Object?> args) async {
-    return (args['value'] as num).toInt();
+    return (args['value']! as num).toInt();
   }
 }
 
@@ -1499,7 +1473,7 @@ class _FlakyTask implements TaskHandler<void> {
       _attempts++;
       throw StateError('first attempt fails');
     }
-    context.progress(1.0);
+    await context.progress(1);
   }
 }
 
@@ -1528,7 +1502,7 @@ FutureOr<Object?> _isolateEntrypoint(
 ) async {
   context.heartbeat();
   await context.progress(0.5);
-  return (args['value'] as int) * 2;
+  return (args['value']! as int) * 2;
 }
 
 FutureOr<Object?> _hardLimitEntrypoint(

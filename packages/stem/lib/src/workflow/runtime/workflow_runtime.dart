@@ -1,23 +1,23 @@
 import 'dart:async';
 
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
+import 'package:stem/src/signals/emitter.dart';
+import 'package:stem/src/signals/payloads.dart';
+import 'package:stem/src/workflow/core/event_bus.dart';
+import 'package:stem/src/workflow/core/flow_context.dart';
+import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_script_context.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
-import '../../core/contracts.dart';
-import '../../core/stem.dart';
-import '../../signals/emitter.dart';
-import '../../signals/payloads.dart';
-import '../core/event_bus.dart';
-import '../core/flow_context.dart';
-import '../core/flow_step.dart';
-import '../core/workflow_cancellation_policy.dart';
-import '../core/workflow_definition.dart';
-import '../core/workflow_script_context.dart';
-import '../core/run_state.dart';
-import '../core/workflow_status.dart';
-import '../core/workflow_store.dart';
-import '../core/workflow_clock.dart';
-import 'workflow_registry.dart';
-
+/// Task name used for workflow run execution tasks.
 const String workflowRunTaskName = 'stem.workflow.run';
 
 /// Coordinates execution of workflow runs by dequeuing tasks, invoking steps,
@@ -27,6 +27,8 @@ const String workflowRunTaskName = 'stem.workflow.run';
 /// suspension or worker crash. Handlers must therefore be idempotent and rely
 /// on persisted step outputs or resume payloads to detect prior progress.
 class WorkflowRuntime {
+  /// Creates a workflow runtime backed by a [Stem] instance and
+  /// [WorkflowStore].
   WorkflowRuntime({
     required Stem stem,
     required WorkflowStore store,
@@ -45,18 +47,25 @@ class WorkflowRuntime {
   final WorkflowStore _store;
   final EventBus _eventBus;
   final Duration _pollInterval;
+
+  /// Duration used when extending worker leases for workflow runs.
   final Duration leaseExtension;
   final WorkflowRegistry _registry = WorkflowRegistry();
+
+  /// Queue name used to enqueue workflow run tasks.
   final String queue;
   final WorkflowClock _clock;
-  final StemSignalEmitter _signals = StemSignalEmitter(
+  final StemSignalEmitter _signals = const StemSignalEmitter(
     defaultSender: 'workflow',
   );
 
   Timer? _timer;
   bool _started = false;
 
+  /// Registry of workflow definitions.
   WorkflowRegistry get registry => _registry;
+
+  /// Clock used for scheduling and timeout calculations.
   WorkflowClock get clock => _clock;
 
   /// Registers a workflow definition so it can be scheduled via
@@ -112,7 +121,6 @@ class WorkflowRuntime {
       final resolutions = await _store.resolveWatchers(
         topic,
         payload,
-        limit: batchSize,
       );
       if (resolutions.isEmpty) {
         break;
@@ -246,7 +254,7 @@ class WorkflowRuntime {
         previousResult = await _store.readStep(runId, checkpoint);
       }
     }
-    Object? resumeData = suspensionData?['payload'];
+    var resumeData = suspensionData?['payload'];
 
     while (cursor < definition.steps.length) {
       if (policy != null && policy.maxRunDuration != null) {
@@ -306,7 +314,7 @@ class WorkflowRuntime {
       try {
         result = await step.handler(context);
       } catch (error, stack) {
-        await _store.markFailed(runId, error, stack, terminal: false);
+        await _store.markFailed(runId, error, stack);
         await _signals.workflowRunFailed(
           WorkflowRunPayload(
             runId: runId,
@@ -364,7 +372,7 @@ class WorkflowRuntime {
         } else if (control.type == FlowControlType.waitForEvent) {
           metadata['type'] = 'event';
           metadata['topic'] = control.topic;
-          DateTime? deadline = control.deadline;
+          var deadline = control.deadline;
           if (deadline != null) {
             metadata['deadline'] = deadline.toIso8601String();
           }
@@ -481,7 +489,7 @@ class WorkflowRuntime {
     } on _WorkflowScriptSuspended {
       return;
     } catch (error, stack) {
-      await _store.markFailed(runId, error, stack, terminal: false);
+      await _store.markFailed(runId, error, stack);
       await _signals.workflowRunFailed(
         WorkflowRunPayload(
           runId: runId,
@@ -571,7 +579,7 @@ class WorkflowRuntime {
     if (leaseExtension.inMicroseconds <= 0) return;
     try {
       await context.extendLease(leaseExtension);
-    } catch (_) {
+    } on Object {
       // Ignore lease extension failures; broker will fall back to default TTL.
     }
   }
@@ -700,8 +708,8 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     required Map<String, int> completedIterations,
     required Object? previousResult,
     required int initialStepIndex,
-    Map<String, Object?>? suspensionData,
     required this.policy,
+    Map<String, Object?>? suspensionData,
   }) : _completedIterations = Map<String, int>.from(completedIterations),
        _previousResult = previousResult,
        _stepIndex = initialStepIndex,
@@ -899,7 +907,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     } else if (control.type == _ScriptControlType.waitForEvent) {
       metadata['type'] = 'event';
       metadata['topic'] = control.topic;
-      DateTime? deadline = control.deadline;
+      var deadline = control.deadline;
       if (deadline != null) {
         metadata['deadline'] = deadline.toIso8601String();
       }

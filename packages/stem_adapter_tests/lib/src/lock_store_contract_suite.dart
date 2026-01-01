@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+/// Settings that tune the lock store contract test suite.
 class LockStoreContractSettings {
+  /// Creates lock store contract settings.
   const LockStoreContractSettings({
     this.initialTtl = const Duration(milliseconds: 200),
     this.expiryBackoff = const Duration(milliseconds: 200),
@@ -16,7 +18,9 @@ class LockStoreContractSettings {
   final Duration expiryBackoff;
 }
 
+/// Factory hooks used by the lock store contract test suite.
 class LockStoreContractFactory {
+  /// Creates a lock store contract factory.
   const LockStoreContractFactory({required this.create, this.dispose});
 
   /// Creates a fresh lock store instance for each test case.
@@ -103,6 +107,47 @@ void runLockStoreContractTests({
       final reacquired = await current.acquire(key, owner: 'owner-new');
       expect(reacquired, isNotNull);
       await reacquired!.release();
+    });
+
+    test('renew extends the lock TTL', () async {
+      final current = store!;
+      final key = _lockKey('renew');
+      final lock = await current.acquire(
+        key,
+        owner: 'owner-renew',
+        ttl: settings.initialTtl,
+      );
+      expect(lock, isNotNull);
+
+      final extended = Duration(
+        milliseconds: settings.initialTtl.inMilliseconds * 4,
+      );
+      final renewed = await lock!.renew(extended);
+      expect(renewed, isTrue);
+
+      await Future<void>.delayed(settings.initialTtl + settings.expiryBackoff);
+      final owner = await current.ownerOf(key);
+      expect(owner, equals('owner-renew'));
+
+      await lock.release();
+    });
+
+    test('renew fails after lock expiry', () async {
+      final current = store!;
+      final key = _lockKey('renew-expired');
+      final lock = await current.acquire(
+        key,
+        owner: 'owner-expired',
+        ttl: settings.initialTtl,
+      );
+      expect(lock, isNotNull);
+
+      await Future<void>.delayed(settings.initialTtl + settings.expiryBackoff);
+      final renewed = await lock!.renew(settings.initialTtl);
+      expect(renewed, isFalse);
+
+      final owner = await current.ownerOf(key);
+      expect(owner, isNull);
     });
   });
 }

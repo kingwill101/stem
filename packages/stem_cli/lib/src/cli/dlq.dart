@@ -5,7 +5,7 @@ import 'package:stem_cli/src/cli/utilities.dart';
 import 'package:stem/stem.dart';
 import 'dart:async';
 
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
 
@@ -27,7 +27,7 @@ class DlqCommand extends Command<int> {
 
   @override
   Future<int> run() async {
-    throw UsageException('Specify a dlq subcommand.', usage);
+    throw Exception('Specify a dlq subcommand.');
   }
 }
 

@@ -69,24 +69,24 @@ If you prefer running everything locally without Docker:
 
 ```bash
 # Start Redis
-docker run --rm -p 6382:6379 redis:7-alpine
+docker run --rm -p 6379:6379 redis:7-alpine
 
 # Terminal 1: worker
 cd examples/dlq_sandbox
-STEM_BROKER_URL=redis://localhost:6382/0 \
-STEM_RESULT_BACKEND_URL=redis://localhost:6382/1 \
+STEM_BROKER_URL=redis://localhost:6379/0 \
+STEM_RESULT_BACKEND_URL=redis://localhost:6379/1 \
 dart run bin/worker.dart
 
 # Terminal 2: producer
 cd examples/dlq_sandbox
-STEM_BROKER_URL=redis://localhost:6382/0 \
-STEM_RESULT_BACKEND_URL=redis://localhost:6382/1 \
+STEM_BROKER_URL=redis://localhost:6379/0 \
+STEM_RESULT_BACKEND_URL=redis://localhost:6379/1 \
 dart run bin/producer.dart
 
 # Terminal 3: CLI operations
 cd examples/dlq_sandbox
-STEM_BROKER_URL=redis://localhost:6382/0 \
-STEM_RESULT_BACKEND_URL=redis://localhost:6382/1 \
+STEM_BROKER_URL=redis://localhost:6379/0 \
+STEM_RESULT_BACKEND_URL=redis://localhost:6379/1 \
 dart run ../../bin/stem.dart dlq list --queue default --limit 10
 ```
 
@@ -100,3 +100,15 @@ Repeat the CLI command with `dlq replay ... --yes` to requeue entries.
   transitions.
 - The CLI updates result backend metadata with `replayCount`, providing a simple
   way for the handler to detect a replay.
+
+### Local build + Docker deps (just)
+
+```bash
+just deps-up
+just build
+# In separate terminals:
+just run-worker
+just run-producer
+# Or:
+just tmux
+```

@@ -19,14 +19,23 @@ class RedisResultBackend implements ResultBackend {
 
   final RedisConnection _connection;
   final Command _command;
+
+  /// Namespace used to scope keys in Redis.
   final String namespace;
+
+  /// Default TTL applied to task results.
   final Duration defaultTtl;
+
+  /// Default TTL applied to group metadata.
   final Duration groupDefaultTtl;
+
+  /// TTL applied to worker heartbeat records.
   final Duration heartbeatTtl;
 
   final Map<String, StreamController<TaskStatus>> _watchers = {};
   bool _closed = false;
 
+  /// Connects to Redis and returns a result backend instance.
   static Future<RedisResultBackend> connect(
     String uri, {
     String namespace = 'stem',
@@ -48,7 +57,7 @@ class RedisResultBackend implements ResultBackend {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
         );
         command = await connection.connectWithSocket(socket);
       } on HandshakeException catch (error, stack) {
@@ -90,6 +99,7 @@ class RedisResultBackend implements ResultBackend {
     );
   }
 
+  /// Closes the backend and releases any Redis resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -149,7 +159,10 @@ class RedisResultBackend implements ResultBackend {
       () => StreamController<TaskStatus>.broadcast(
         onCancel: () {
           if (!(_watchers[taskId]?.hasListener ?? false)) {
-            _watchers.remove(taskId)?.close();
+            final controller = _watchers.remove(taskId);
+            if (controller != null) {
+              unawaited(controller.close());
+            }
           }
         },
       ),
@@ -208,7 +221,7 @@ class RedisResultBackend implements ResultBackend {
 
     final descriptor =
         jsonDecode(descriptorRaw as String) as Map<String, Object?>;
-    final expected = descriptor['expected'] as num;
+    final expected = descriptor['expected']! as num;
     final meta =
         (descriptor['meta'] as Map?)?.cast<String, Object?>() ?? const {};
 

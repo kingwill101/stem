@@ -10,7 +10,7 @@ class FakeRedisConnection extends RedisConnection {
   bool closed = false;
 
   @override
-  Future close() async {
+  Future<void> close() async {
     closed = true;
   }
 }
@@ -27,8 +27,9 @@ class FakeRedisCommand extends Command {
   }
 
   @override
+  // Matches Redis Command API naming in the upstream package.
   // ignore: non_constant_identifier_names
-  Future send_object(Object obj) async {
+  Future<Object?> send_object(Object obj) async {
     final command = (obj as List).cast<Object?>();
     sent.add(command);
     if (command.isNotEmpty && command.first == 'XREADGROUP') {
@@ -40,7 +41,7 @@ class FakeRedisCommand extends Command {
     final responder = _responders.removeFirst();
     final result = responder(command);
     if (result is Future) {
-      return await result;
+      return result;
     }
     return result;
   }

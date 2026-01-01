@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:test/test.dart';
 import 'package:stem/stem.dart';
+import 'package:test/test.dart';
 
 class _RecordingMetricsExporter extends MetricsExporter {
   final List<MetricEvent> events = [];
@@ -88,18 +88,21 @@ void main() {
     expect(leaseRenewals, isNotEmpty);
 
     final snapshot = StemMetrics.instance.snapshot();
-    final counterSnapshot = snapshot['counters'] as List<dynamic>;
-    final started = counterSnapshot.firstWhere(
+    final counterSnapshot = snapshot['counters'] as List<dynamic>? ?? const [];
+    final counterMaps = counterSnapshot
+        .whereType<Map<String, Object?>>()
+        .toList();
+    final started = counterMaps.firstWhere(
       (value) => value['name'] == 'stem.tasks.started',
     );
     expect(started['value'], equals(1));
-    final succeeded = counterSnapshot.firstWhere(
+    final succeeded = counterMaps.firstWhere(
       (value) => value['name'] == 'stem.tasks.succeeded',
     );
     expect(succeeded['value'], equals(1));
 
     StemMetrics.instance.reset();
-    StemMetrics.instance.configure(exporters: const []);
+    StemMetrics.instance.configure();
   });
 }
 

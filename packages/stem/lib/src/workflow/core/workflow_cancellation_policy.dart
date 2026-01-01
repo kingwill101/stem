@@ -4,6 +4,7 @@
 /// a run suspends or before each step is executed. Limits apply per run and do
 /// not prevent manual cancellation.
 class WorkflowCancellationPolicy {
+  /// Creates a cancellation policy for a workflow run.
   const WorkflowCancellationPolicy({
     this.maxRunDuration,
     this.maxSuspendDuration,
@@ -15,8 +16,10 @@ class WorkflowCancellationPolicy {
   /// Maximum duration a single suspension (sleep/event wait) may last.
   final Duration? maxSuspendDuration;
 
+  /// Whether no limits are configured.
   bool get isEmpty => maxRunDuration == null && maxSuspendDuration == null;
 
+  /// Serializes this policy to JSON.
   Map<String, Object?> toJson() => {
     if (maxRunDuration != null)
       'maxRunDuration': maxRunDuration!.inMilliseconds,
@@ -24,6 +27,7 @@ class WorkflowCancellationPolicy {
       'maxSuspendDuration': maxSuspendDuration!.inMilliseconds,
   };
 
+  /// Parses a cancellation policy from JSON.
   static WorkflowCancellationPolicy? fromJson(Object? source) {
     if (source == null) return null;
     if (source is WorkflowCancellationPolicy) return source;
@@ -53,6 +57,7 @@ class WorkflowCancellationPolicy {
     );
   }
 
+  /// Returns a copy of this policy with updated values.
   WorkflowCancellationPolicy copyWith({
     Duration? maxRunDuration,
     Duration? maxSuspendDuration,

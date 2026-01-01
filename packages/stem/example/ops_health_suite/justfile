@@ -1,0 +1,43 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+
+COMPOSE_FILE := env_var_or_default("COMPOSE_FILE", "docker-compose.yml")
+DEPS_SERVICES := env_var_or_default("DEPS_SERVICES", "redis")
+BUILD_DIR := env_var_or_default("BUILD_DIR", "build")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-ops-health")
+PROJECT_NAME := env_var_or_default("PROJECT_NAME", SESSION)
+COMPOSE_ENV := "REDIS_PORT=" + REDIS_PORT
+REDIS_PORT := env_var_or_default("REDIS_PORT", "6379")
+
+
+
+build-worker:
+    cd "{{ROOT}}"; dart pub get
+    cd "{{ROOT}}"; dart build cli -t bin/worker.dart -o "{{BUILD_DIR}}/worker"
+
+build-producer:
+    cd "{{ROOT}}"; dart pub get
+    cd "{{ROOT}}"; dart build cli -t bin/producer.dart -o "{{BUILD_DIR}}/producer"
+
+build: build-worker build-producer
+
+run-worker:
+    cd "{{ROOT}}"; if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi; export REDIS_PORT="${REDIS_PORT:-6379}"; export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"; export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"; "{{BUILD_DIR}}/worker/bundle/bin"/*
+
+run-producer:
+    cd "{{ROOT}}"; if [ -f "{{ENV_FILE}}" ]; then set -a; . "{{ENV_FILE}}"; set +a; elif [ -f "{{ROOT}}/{{ENV_FILE}}" ]; then set -a; . "{{ROOT}}/{{ENV_FILE}}"; set +a; fi; export REDIS_PORT="${REDIS_PORT:-6379}"; export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"; export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"; "{{BUILD_DIR}}/producer/bundle/bin"/*
+
+run: run-producer
+
+clean:
+    rm -rf "{{BUILD_DIR}}"
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run-worker"
+    tmux split-window -t "{{SESSION}}:app" -v "cd \"{{ROOT}}\" && {{JUST}} run-producer"
+    tmux select-layout -t "{{SESSION}}:app" even-vertical
+    {{JUST}} tmux-attach

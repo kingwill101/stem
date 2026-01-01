@@ -16,3 +16,14 @@ Use `@/openspec/AGENTS.md` to learn:
 Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
+
+## Workflow agent help
+
+When refreshing workflow guidance for AGENTS/CLAUDE docs, run:
+
+```
+stem wf agent-help
+```
+
+Paste the output into your assistant documentation to keep command listings
+and safety notes in sync with the CLI.

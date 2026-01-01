@@ -3,18 +3,31 @@ import 'dart:collection';
 import 'dart:isolate';
 import 'dart:math' as math;
 
-import '../core/task_invocation.dart';
-import 'isolate_messages.dart';
+import 'package:stem/src/core/task_invocation.dart';
+import 'package:stem/src/worker/isolate_messages.dart';
 
 /// A handler for task control signals.
 typedef TaskControlHandler =
     FutureOr<void> Function(TaskInvocationSignal signal);
 
 /// Reason an isolate was recycled or disposed.
-enum IsolateRecycleReason { scaleDown, maxTasks, memory, shutdown }
+enum IsolateRecycleReason {
+  /// Recycled due to scaling down the pool.
+  scaleDown,
+
+  /// Recycled after reaching the max task limit.
+  maxTasks,
+
+  /// Recycled after exceeding memory limits.
+  memory,
+
+  /// Recycled during shutdown.
+  shutdown,
+}
 
 /// Metadata describing an isolate recycle event.
 class IsolateRecycleEvent {
+  /// Creates a recycle event record.
   IsolateRecycleEvent({
     required this.reason,
     required this.tasksExecuted,
@@ -45,8 +58,13 @@ class TaskIsolatePool {
     this.onDisposed,
   }) : _targetSize = math.max(1, size);
 
+  /// Callback invoked when an isolate is recycled.
   final void Function(IsolateRecycleEvent event)? onRecycle;
+
+  /// Callback invoked after an isolate is spawned.
   final FutureOr<void> Function(int isolateId)? onSpawned;
+
+  /// Callback invoked after an isolate is disposed.
   final FutureOr<void> Function(int isolateId)? onDisposed;
 
   int _targetSize;
@@ -152,8 +170,8 @@ class TaskIsolatePool {
     Map<String, Object?> meta,
     int attempt,
     TaskControlHandler onControl, {
-    Duration? hardTimeout,
     required String taskName,
+    Duration? hardTimeout,
   }) {
     if (_disposed) {
       return Future.error(StateError('TaskIsolatePool disposed'));
@@ -186,45 +204,47 @@ class TaskIsolatePool {
       _active.add(entry);
       Timer? hardTimer;
 
-      entry.worker
-          .run(job)
-          .then((response) {
-            if (job.completer.isCompleted) {
-              return;
-            }
-            if (response is TaskRunSuccess) {
-              entry.lastRssBytes = response.memoryBytes;
-              job.completer.complete(
-                TaskExecutionSuccess(
-                  response.result,
-                  memoryBytes: response.memoryBytes,
-                ),
-              );
-            } else if (response is TaskRunFailure) {
-              job.completer.complete(
-                TaskExecutionFailure(
-                  _RemoteTaskError(
-                    response.errorType,
-                    response.message,
-                    response.stackTrace,
+      unawaited(
+        entry.worker
+            .run(job)
+            .then((response) {
+              if (job.completer.isCompleted) {
+                return;
+              }
+              if (response is TaskRunSuccess) {
+                entry.lastRssBytes = response.memoryBytes;
+                job.completer.complete(
+                  TaskExecutionSuccess(
+                    response.result,
+                    memoryBytes: response.memoryBytes,
                   ),
-                  StackTrace.fromString(response.stackTrace),
-                ),
-              );
-            } else {
-              job.completer.complete(
-                TaskExecutionFailure(
-                  StateError('Unexpected response: $response'),
-                  StackTrace.current,
-                ),
-              );
-            }
-          })
-          .catchError((error, StackTrace stack) {
-            if (!job.completer.isCompleted) {
-              job.completer.complete(TaskExecutionFailure(error, stack));
-            }
-          });
+                );
+              } else if (response is TaskRunFailure) {
+                job.completer.complete(
+                  TaskExecutionFailure(
+                    _RemoteTaskError(
+                      response.errorType,
+                      response.message,
+                      response.stackTrace,
+                    ),
+                    StackTrace.fromString(response.stackTrace),
+                  ),
+                );
+              } else {
+                job.completer.complete(
+                  TaskExecutionFailure(
+                    StateError('Unexpected response: $response'),
+                    StackTrace.current,
+                  ),
+                );
+              }
+            })
+            .catchError((Object error, StackTrace stack) {
+              if (!job.completer.isCompleted) {
+                job.completer.complete(TaskExecutionFailure(error, stack));
+              }
+            }),
+      );
 
       if (job.hardTimeout != null) {
         hardTimer = Timer(job.hardTimeout!, () {
@@ -242,26 +262,28 @@ class TaskIsolatePool {
         });
       }
 
-      job.completer.future.whenComplete(() async {
-        hardTimer?.cancel();
-        _active.remove(entry);
-        entry.tasksExecuted += 1;
-        final shouldRecycle = _shouldRecycle(entry);
-        if (_disposed) {
-          await entry.worker.dispose();
-          return;
-        }
-        if (shouldRecycle) {
-          await _disposeEntry(entry, reason: _determineRecycleReason(entry));
-        } else if (_pendingDisposals > 0 && entry.draining) {
-          _pendingDisposals -= 1;
-          await _disposeEntry(entry, reason: IsolateRecycleReason.scaleDown);
-        } else {
-          entry.draining = false;
-          _idle.add(entry);
-        }
-        _pump();
-      });
+      unawaited(
+        job.completer.future.whenComplete(() async {
+          hardTimer?.cancel();
+          _active.remove(entry);
+          entry.tasksExecuted += 1;
+          final shouldRecycle = _shouldRecycle(entry);
+          if (_disposed) {
+            await entry.worker.dispose();
+            return;
+          }
+          if (shouldRecycle) {
+            await _disposeEntry(entry, reason: _determineRecycleReason(entry));
+          } else if (_pendingDisposals > 0 && entry.draining) {
+            _pendingDisposals -= 1;
+            await _disposeEntry(entry, reason: IsolateRecycleReason.scaleDown);
+          } else {
+            entry.draining = false;
+            _idle.add(entry);
+          }
+          _pump();
+        }),
+      );
     }
   }
 
@@ -357,8 +379,8 @@ class _TaskJob {
     required this.meta,
     required this.attempt,
     required this.onControl,
-    this.hardTimeout,
     required this.taskName,
+    this.hardTimeout,
   });
 
   final TaskEntrypoint entrypoint;
@@ -376,11 +398,13 @@ class _TaskJob {
 
 /// The result of a task execution.
 sealed class TaskExecutionResult {
+  /// Creates a task execution result.
   const TaskExecutionResult();
 }
 
 /// A successful task execution with result [value].
 class TaskExecutionSuccess extends TaskExecutionResult {
+  /// Creates a successful execution result.
   const TaskExecutionSuccess(this.value, {this.memoryBytes});
 
   /// The result value of the task.
@@ -392,6 +416,7 @@ class TaskExecutionSuccess extends TaskExecutionResult {
 
 /// A failed task execution with [error] and [stackTrace].
 class TaskExecutionFailure extends TaskExecutionResult {
+  /// Creates a failed execution result.
   const TaskExecutionFailure(this.error, this.stackTrace);
 
   /// The error that occurred.
@@ -403,6 +428,7 @@ class TaskExecutionFailure extends TaskExecutionResult {
 
 /// A timed-out task execution for [taskName] with optional [limit].
 class TaskExecutionTimeout extends TaskExecutionResult {
+  /// Creates a timeout execution result.
   const TaskExecutionTimeout({required this.taskName, this.limit});
 
   /// The name of the task that timed out.
@@ -479,8 +505,10 @@ class _IsolateWorker {
     }
     _disposed = true;
     try {
-      _sendPort.send(TaskWorkerShutdown());
-    } catch (_) {}
+      _sendPort.send(const TaskWorkerShutdown());
+    } on Object {
+      // Ignore send failures if the isolate already exited.
+    }
     _isolate.kill(priority: Isolate.immediate);
   }
 }

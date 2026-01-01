@@ -16,11 +16,14 @@ class RedisRevokeStore implements RevokeStore {
 
   final RedisConnection _connection;
   final Command _command;
+
+  /// Namespace used when entries do not specify one explicitly.
   final String defaultNamespace;
   bool _closed = false;
 
   String _recordsKey(String namespace) => '$namespace:control:revokes';
 
+  /// Connects to Redis and returns a revoke store instance.
   static Future<RedisRevokeStore> connect(
     String uri, {
     String namespace = 'stem',
@@ -39,7 +42,7 @@ class RedisRevokeStore implements RevokeStore {
           host,
           port,
           context: securityContext,
-          onBadCertificate: tls?.allowInsecure == true ? (_) => true : null,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
         );
         command = await connection.connectWithSocket(socket);
       } on HandshakeException catch (error, stack) {
@@ -77,6 +80,7 @@ class RedisRevokeStore implements RevokeStore {
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 
   @override
+  /// Closes the revoke store and releases Redis resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -118,7 +122,7 @@ class RedisRevokeStore implements RevokeStore {
   @override
   Future<List<RevokeEntry>> upsertAll(List<RevokeEntry> entries) async {
     if (entries.isEmpty) return const [];
-    final script = '''
+    const script = '''
 local key = KEYS[1]
 local taskId = ARGV[1]
 local payload = ARGV[2]

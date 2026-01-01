@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import '../security/signing.dart';
-import '../security/tls.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/security/tls.dart';
 
 /// Configuration source for Stem clients and worker processes.
 ///
@@ -12,6 +12,7 @@ import '../security/tls.dart';
 /// producers log actionable warnings when signing misconfigurations are
 /// detected.
 class StemConfig {
+  /// Creates a configuration snapshot for clients and workers.
   StemConfig({
     required this.brokerUrl,
     this.resultBackendUrl,
@@ -29,6 +30,41 @@ class StemConfig {
        workerBroadcasts = List.unmodifiable(workerBroadcasts ?? const []),
        signing = signing ?? const SigningConfig.disabled(),
        tls = tls ?? const TlsConfig.disabled();
+
+  /// Construct configuration from environment variables.
+  factory StemConfig.fromEnvironment([Map<String, String>? env]) {
+    final environment = env ?? Platform.environment;
+    final broker = environment[_Keys.brokerUrl];
+    if (broker == null || broker.isEmpty) {
+      throw StateError(
+        'Missing ${_Keys.brokerUrl} environment variable (e.g. redis://host:6379).',
+      );
+    }
+    return StemConfig(
+      brokerUrl: broker,
+      resultBackendUrl: _optional(environment[_Keys.resultBackendUrl]),
+      scheduleStoreUrl: _optional(environment[_Keys.scheduleStoreUrl]),
+      revokeStoreUrl: _optional(environment[_Keys.revokeStoreUrl]),
+      defaultQueue: environment[_Keys.defaultQueue]?.trim().isNotEmpty ?? false
+          ? environment[_Keys.defaultQueue]!.trim()
+          : 'default',
+      prefetchMultiplier: _parseInt(
+        environment[_Keys.prefetchMultiplier],
+        fallback: 2,
+        min: 1,
+      ),
+      defaultMaxRetries: _parseInt(
+        environment[_Keys.defaultMaxRetries],
+        fallback: 3,
+        min: 0,
+      ),
+      routingConfigPath: _optional(environment[_Keys.routingConfigPath]),
+      workerQueues: _parseList(environment[_Keys.workerQueues]),
+      workerBroadcasts: _parseList(environment[_Keys.workerBroadcasts]),
+      signing: SigningConfig.fromEnvironment(environment),
+      tls: TlsConfig.fromEnvironment(environment),
+    );
+  }
 
   /// Broker connection string (e.g. redis://localhost:6379).
   final String brokerUrl;
@@ -74,41 +110,6 @@ class StemConfig {
   /// short-lived debugging sessions.
   final TlsConfig tls;
 
-  /// Construct configuration from environment variables.
-  factory StemConfig.fromEnvironment([Map<String, String>? env]) {
-    final environment = env ?? Platform.environment;
-    final broker = environment[_Keys.brokerUrl];
-    if (broker == null || broker.isEmpty) {
-      throw StateError(
-        'Missing ${_Keys.brokerUrl} environment variable (e.g. redis://host:6379).',
-      );
-    }
-    return StemConfig(
-      brokerUrl: broker,
-      resultBackendUrl: _optional(environment[_Keys.resultBackendUrl]),
-      scheduleStoreUrl: _optional(environment[_Keys.scheduleStoreUrl]),
-      revokeStoreUrl: _optional(environment[_Keys.revokeStoreUrl]),
-      defaultQueue: environment[_Keys.defaultQueue]?.trim().isNotEmpty == true
-          ? environment[_Keys.defaultQueue]!.trim()
-          : 'default',
-      prefetchMultiplier: _parseInt(
-        environment[_Keys.prefetchMultiplier],
-        fallback: 2,
-        min: 1,
-      ),
-      defaultMaxRetries: _parseInt(
-        environment[_Keys.defaultMaxRetries],
-        fallback: 3,
-        min: 0,
-      ),
-      routingConfigPath: _optional(environment[_Keys.routingConfigPath]),
-      workerQueues: _parseList(environment[_Keys.workerQueues]),
-      workerBroadcasts: _parseList(environment[_Keys.workerBroadcasts]),
-      signing: SigningConfig.fromEnvironment(environment),
-      tls: TlsConfig.fromEnvironment(environment),
-    );
-  }
-
   static String? _optional(String? value) {
     if (value == null) return null;
     final trimmed = value.trim();
@@ -140,6 +141,7 @@ class StemConfig {
     return values;
   }
 
+  /// Returns a copy of this configuration with the provided overrides.
   StemConfig copyWith({
     String? brokerUrl,
     String? resultBackendUrl,

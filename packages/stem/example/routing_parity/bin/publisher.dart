@@ -6,7 +6,7 @@ import 'package:stem_routing_parity_example/routing_demo.dart';
 
 Future<void> main() async {
   final redisUrl = Platform.environment['ROUTING_DEMO_REDIS_URL'] ??
-      'redis://localhost:56379';
+      'redis://localhost:6379/0';
 
   final routing = buildRoutingRegistry();
   final registry = buildDemoTaskRegistry();

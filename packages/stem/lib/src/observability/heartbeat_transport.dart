@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'heartbeat.dart';
+import 'package:stem/src/observability/heartbeat.dart';
 
 /// Transport abstraction for distributing worker heartbeat payloads.
 abstract class HeartbeatTransport {
+  /// Creates a heartbeat transport implementation.
   const HeartbeatTransport();
 
   /// Publish the [heartbeat] to the underlying channel.
@@ -14,6 +15,7 @@ abstract class HeartbeatTransport {
 
 /// Transport that intentionally drops all heartbeats.
 class NoopHeartbeatTransport extends HeartbeatTransport {
+  /// Creates a transport that drops all heartbeats.
   const NoopHeartbeatTransport();
 
   /// Intentionally drops the provided [heartbeat].

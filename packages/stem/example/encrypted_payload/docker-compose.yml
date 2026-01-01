@@ -3,12 +3,12 @@ services:
     image: redis:7.2-alpine
     restart: unless-stopped
     ports:
-      - "6381:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/encrypted_payload/worker/Dockerfile
+      dockerfile: example/encrypted_payload/worker/Dockerfile
       target: dev
     env_file:
       - .env.example
@@ -25,7 +25,7 @@ services:
   enqueuer:
     build:
       context: ../..
-      dockerfile: examples/encrypted_payload/enqueuer/Dockerfile
+      dockerfile: example/encrypted_payload/enqueuer/Dockerfile
       target: dev
     env_file:
       - .env.example

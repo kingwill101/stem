@@ -1,17 +1,22 @@
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/src/backend/postgres_backend.dart';
+import 'package:stem_postgres/src/brokers/postgres_broker.dart';
+import 'package:stem_postgres/src/workflow/postgres_workflow_store.dart';
 
-import '../brokers/postgres_broker.dart';
-import '../backend/postgres_backend.dart';
-import 'postgres_workflow_store.dart';
-
+/// Creates a [StemBrokerFactory] backed by PostgreSQL.
 StemBrokerFactory postgresBrokerFactory(
   String uri, {
+  String namespace = 'stem',
   String? applicationName,
   TlsConfig? tls,
 }) {
   return StemBrokerFactory(
-    create: () async =>
-        PostgresBroker.connect(uri, applicationName: applicationName, tls: tls),
+    create: () async => PostgresBroker.connect(
+      uri,
+      namespace: namespace,
+      applicationName: applicationName,
+      tls: tls,
+    ),
     dispose: (broker) async {
       if (broker is PostgresBroker) {
         await broker.close();
@@ -20,26 +25,19 @@ StemBrokerFactory postgresBrokerFactory(
   );
 }
 
-StemBackendFactory postgresResultBackendFactory(
-  String uri, {
-  String schema = 'public',
+/// Creates a [StemBackendFactory] backed by PostgreSQL.
+StemBackendFactory postgresResultBackendFactory({
   String namespace = 'stem',
   Duration defaultTtl = const Duration(days: 1),
   Duration groupDefaultTtl = const Duration(days: 1),
   Duration heartbeatTtl = const Duration(minutes: 1),
-  String? applicationName,
-  TlsConfig? tls,
 }) {
   return StemBackendFactory(
     create: () async => PostgresResultBackend.connect(
-      uri,
-      schema: schema,
       namespace: namespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,
       heartbeatTtl: heartbeatTtl,
-      applicationName: applicationName,
-      tls: tls,
     ),
     dispose: (backend) async {
       if (backend is PostgresResultBackend) {
@@ -49,6 +47,7 @@ StemBackendFactory postgresResultBackendFactory(
   );
 }
 
+/// Creates a [WorkflowStoreFactory] backed by PostgreSQL.
 WorkflowStoreFactory postgresWorkflowStoreFactory(
   String uri, {
   String schema = 'public',

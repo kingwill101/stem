@@ -21,10 +21,7 @@ Future<void> main(List<String> args) async {
   }
 
   final backend = await PostgresResultBackend.connect(
-    backendUrl,
-    namespace: 'stem_tls_demo',
-    applicationName: 'stem-postgres-tls-enqueuer',
-    tls: config.tls,
+    connectionString: backendUrl,
   );
 
   final registry = SimpleTaskRegistry()

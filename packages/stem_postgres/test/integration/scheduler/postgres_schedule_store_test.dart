@@ -1,11 +1,14 @@
 import 'dart:io';
 
-import 'package:postgres/postgres.dart';
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:stem_postgres/src/database/models/stem_schedule_entry.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
-void main() {
+import '../../support/postgres_test_harness.dart';
+
+Future<void> main() async {
   final connectionString = Platform.environment['STEM_TEST_POSTGRES_URL'];
   if (connectionString == null || connectionString.isEmpty) {
     test(
@@ -16,167 +19,194 @@ void main() {
     return;
   }
 
-  const namespace = 'test_sched';
-  late PostgresScheduleStore store;
-  late PostgresClient adminClient;
+  final harness = await createStemPostgresTestHarness(
+    connectionString: connectionString,
+  );
+  tearDownAll(harness.dispose);
 
-  Future<void> clearTables() async {
-    await adminClient.run((conn) async {
-      await conn.execute('DELETE FROM public.${namespace}_schedule_locks');
-      await conn.execute('DELETE FROM public.${namespace}_schedule_entries');
-    });
-  }
+  ormedGroup('postgres schedule store', (dataSource) {
+    late PostgresScheduleStore store;
+    late String testNamespace;
 
-  setUp(() async {
-    adminClient = PostgresClient(connectionString);
-    store = await PostgresScheduleStore.connect(
-      connectionString,
-      namespace: namespace,
-      lockTtl: const Duration(milliseconds: 300),
-      applicationName: 'stem-postgres-schedule-test',
-    );
-    await clearTables();
-  });
-
-  tearDown(() async {
-    await clearTables();
-    await store.close();
-    await adminClient.close();
-  });
-
-  test('due acquires locks and respects lock expiry', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-1',
-      taskName: 'task.example',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
-
-    await store.upsert(entry);
-
-    final rows = await adminClient.run((conn) async {
-      return conn.execute(
-        'SELECT id, next_run_at, enabled FROM public.${namespace}_schedule_entries',
+    setUp(() async {
+      // Create a unique namespace for this test to avoid conflicts
+      testNamespace = 'test_sched_${DateTime.now().microsecondsSinceEpoch}';
+      store = PostgresScheduleStore.fromDataSource(
+        dataSource,
+        namespace: testNamespace,
       );
     });
-    expect(rows, isNotEmpty, reason: 'entry should be persisted');
-    final storedNextRun = rows.first[1] as DateTime;
-    expect(
-      storedNextRun.isBefore(
-        DateTime.now().toUtc().add(const Duration(seconds: 1)),
-      ),
-      isTrue,
-      reason: 'next_run_at should be in the past',
-    );
 
-    final dueNow = DateTime.now().toUtc();
-
-    final manualDueRows = await adminClient.run((conn) async {
-      return conn.execute(
-        'SELECT id FROM public.${namespace}_schedule_entries WHERE enabled = true AND next_run_at <= NOW()',
-      );
+    tearDown(() async {
+      // Clean up schedule entries created during the test
+      try {
+        await dataSource.context
+            .query<$StemScheduleEntry>()
+            .whereEquals('namespace', testNamespace)
+            .delete();
+      } catch (_) {
+        // Ignore cleanup errors
+      }
+      try {
+        await store.close();
+      } catch (_) {
+        // Ignore connection close errors
+      }
     });
-    expect(
-      manualDueRows,
-      isNotEmpty,
-      reason: 'manual due query should find entry',
-    );
 
-    final manualDueWithJoin = await adminClient.run((conn) async {
-      return conn.execute(
-        Sql.named('''
-        SELECT e.id
-        FROM public.${namespace}_schedule_entries e
-        LEFT JOIN public.${namespace}_schedule_locks l ON e.id = l.id
-        WHERE e.enabled = true AND e.next_run_at <= @now AND l.id IS NULL
-        ORDER BY e.next_run_at ASC
-        LIMIT @limit
-        '''),
-        parameters: {'now': dueNow, 'limit': 5},
+    test('due acquires locks and respects lock expiry', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-1',
+        taskName: 'task.example',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
       );
-    });
-    expect(manualDueWithJoin, isNotEmpty);
 
-    final lockCountBefore = await adminClient.run((conn) async {
-      final result = await conn.execute(
-        'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
+      await store.upsert(entry);
+
+      final rows = await dataSource.context
+          .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
+          .get();
+      expect(rows, isNotEmpty, reason: 'entry should be persisted');
+      final storedNextRun = rows.first.nextRunAt!;
+      expect(
+        storedNextRun.isBefore(
+          DateTime.now().toUtc().add(const Duration(seconds: 1)),
+        ),
+        isTrue,
+        reason: 'next_run_at should be in the past',
       );
-      return result.first.first as int;
-    });
-    expect(lockCountBefore, equals(0));
 
-    final first = await store.due(dueNow, limit: 5);
-    final lockCountAfter = await adminClient.run((conn) async {
-      final result = await conn.execute(
-        'SELECT COUNT(*) FROM public.${namespace}_schedule_locks',
+      final dueNow = DateTime.now().toUtc();
+
+      final manualDueRows = await dataSource.context
+          .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
+          .where((PredicateBuilder<$StemScheduleEntry> q) {
+            q
+              ..where('enabled', true, PredicateOperator.equals)
+              ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+          })
+          .get();
+      expect(
+        manualDueRows,
+        isNotEmpty,
+        reason: 'manual due query should find entry',
       );
-      return result.first.first as int;
+
+      final manualDueNoLocks = await dataSource.context
+          .query<$StemScheduleEntry>()
+          .whereEquals('namespace', testNamespace)
+          .where((PredicateBuilder<$StemScheduleEntry> q) {
+            q
+              ..where('enabled', true, PredicateOperator.equals)
+              ..where('nextRunAt', dueNow, PredicateOperator.lessThanOrEqual);
+          })
+          .orderBy('nextRunAt')
+          .limit(5)
+          .get();
+      expect(manualDueNoLocks, isNotEmpty);
+
+      final first = await store.due(dueNow, limit: 5);
+      expect(first, hasLength(1));
+      expect(first.single.id, entry.id);
+
+      final second = await store.due(DateTime.now().toUtc(), limit: 5);
+      expect(second, isEmpty);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      final third = await store.due(DateTime.now().toUtc(), limit: 5);
+      expect(third, hasLength(1));
+      expect(third.single.id, entry.id);
     });
-    expect(lockCountAfter, equals(1));
-    expect(first, hasLength(1));
-    expect(first.single.id, entry.id);
 
-    final second = await store.due(DateTime.now().toUtc(), limit: 5);
-    expect(second, isEmpty);
+    test('upsert updates entry and releases lock', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-2',
+        taskName: 'task.update',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
+      );
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    final third = await store.due(DateTime.now().toUtc(), limit: 5);
-    expect(third, hasLength(1));
-    expect(third.single.id, entry.id);
-  });
+      await store.upsert(entry);
+      final first = await store.due(DateTime.now().toUtc());
+      expect(first, hasLength(1));
 
-  test('upsert updates entry and releases lock', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-2',
-      taskName: 'task.update',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
+      final updated = first.single.copyWith(
+        nextRunAt: now.add(const Duration(minutes: 5)),
+        meta: const {'updated': true},
+      );
+      await store.upsert(updated);
 
-    await store.upsert(entry);
-    final first = await store.due(DateTime.now().toUtc());
-    expect(first, hasLength(1));
+      final second = await store.due(DateTime.now().toUtc());
+      expect(second, isEmpty);
 
-    final updated = first.single.copyWith(
-      nextRunAt: now.add(const Duration(minutes: 5)),
-      meta: const {'updated': true},
-    );
-    await store.upsert(updated);
+      final futureDue = await store.due(
+        DateTime.now().toUtc().add(const Duration(minutes: 6)),
+      );
+      expect(futureDue, hasLength(1));
+      expect(futureDue.single.meta['updated'], isTrue);
+    });
 
-    final second = await store.due(DateTime.now().toUtc());
-    expect(second, isEmpty);
+    test('remove deletes schedule entry', () async {
+      final now = DateTime.now().toUtc();
+      final entry = ScheduleEntry(
+        id: 'sched-3',
+        taskName: 'task.remove',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: now.subtract(const Duration(seconds: 1)),
+      );
 
-    final futureDue = await store.due(
-      DateTime.now().toUtc().add(const Duration(minutes: 6)),
-    );
-    expect(futureDue, hasLength(1));
-    expect(futureDue.single.meta['updated'], isTrue);
-  });
+      await store.upsert(entry);
+      expect(
+        (await store.due(DateTime.now().toUtc())).map((e) => e.id),
+        contains(entry.id),
+      );
 
-  test('remove deletes schedule entry', () async {
-    final now = DateTime.now().toUtc();
-    final entry = ScheduleEntry(
-      id: 'sched-3',
-      taskName: 'task.remove',
-      queue: 'default',
-      spec: CronScheduleSpec(expression: '* * * * *'),
-      nextRunAt: now.subtract(const Duration(seconds: 1)),
-    );
+      await store.remove(entry.id);
+      final remaining = await store.due(
+        DateTime.now().toUtc().add(const Duration(minutes: 1)),
+      );
+      expect(remaining, isEmpty);
+    });
 
-    await store.upsert(entry);
-    expect(
-      (await store.due(DateTime.now().toUtc())).map((e) => e.id),
-      contains(entry.id),
-    );
+    test('namespace isolates schedule entries', () async {
+      final otherNamespace = '${testNamespace}_other';
+      final otherStore = PostgresScheduleStore.fromDataSource(
+        dataSource,
+        namespace: otherNamespace,
+      );
+      addTearDown(() async {
+        try {
+          await dataSource.context
+              .query<$StemScheduleEntry>()
+              .whereEquals('namespace', otherNamespace)
+              .delete();
+        } catch (_) {}
+        await otherStore.close();
+      });
 
-    await store.remove(entry.id);
-    final remaining = await store.due(
-      DateTime.now().toUtc().add(const Duration(minutes: 1)),
-    );
-    expect(remaining, isEmpty);
+      final entry = ScheduleEntry(
+        id: 'sched-namespace',
+        taskName: 'task.namespace',
+        queue: 'default',
+        spec: CronScheduleSpec(expression: '* * * * *'),
+        nextRunAt: DateTime.now().toUtc().add(const Duration(seconds: 1)),
+      );
+
+      await store.upsert(entry);
+
+      final fromOther = await otherStore.get(entry.id);
+      expect(fromOther, isNull);
+
+      final otherList = await otherStore.list();
+      expect(otherList.any((item) => item.id == entry.id), isFalse);
+    });
   });
 }

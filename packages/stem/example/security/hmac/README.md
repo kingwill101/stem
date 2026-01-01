@@ -16,3 +16,13 @@ openssl rand -base64 32
 ```
 
 All build contexts point back to `examples/microservice`, so changes there are automatically reflected.
+
+## Local build + Docker deps (just)
+
+The Justfile in this directory runs the microservice binaries locally while using this profile's `.env` for configuration.
+
+```bash
+just deps-up
+just build
+just tmux
+```

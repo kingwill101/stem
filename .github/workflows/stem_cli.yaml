@@ -2,6 +2,9 @@ name: stem_cli
 
 on:
   push:
+    branches:
+      - master
+      - main
     paths:
       - 'packages/stem_cli/**'
       - 'packages/stem/**'
@@ -22,11 +25,23 @@ jobs:
       STEM_CLI_RUN_MULTI: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 libsqlite3-dev
       - uses: ./.github/actions/setup-test-services
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
+      - name: Get Dart packages cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
       - name: Install dependencies
         run: dart pub get
       - name: Run stem_cli tests
-        run: dart test packages/stem_cli
+        working-directory: packages/stem_cli
+        run: dart test

@@ -2,12 +2,12 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "56380:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/retry_task/Dockerfile
+      dockerfile: example/retry_task/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
       WORKER_NAME: retry-demo-worker
@@ -18,7 +18,7 @@ services:
   producer:
     build:
       context: ../..
-      dockerfile: examples/retry_task/Dockerfile
+      dockerfile: example/retry_task/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
     depends_on:

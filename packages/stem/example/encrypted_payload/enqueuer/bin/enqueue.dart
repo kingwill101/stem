@@ -73,7 +73,8 @@ Future<void> main(List<String> args) async {
 FutureOr<Object?> _noopEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
-) => 'noop';
+) =>
+    'noop';
 
 String _requireEnv(String name) {
   final value = Platform.environment[name];

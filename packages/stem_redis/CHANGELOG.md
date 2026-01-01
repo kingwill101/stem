@@ -1,3 +1,7 @@
+## 0.1.0-dev
+
+- Maintenance updates to adapter tooling and formatting (no runtime changes).
+
 ## 0.1.0-alpha.4
 
 - Added durable watcher storage and atomic event delivery so Durable Workflows

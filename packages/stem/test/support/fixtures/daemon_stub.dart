@@ -4,13 +4,13 @@ import 'dart:io';
 Future<void> main(List<String> args) async {
   final logPath = Platform.environment['STEM_WORKER_LOGFILE'];
   if (logPath != null && logPath.isNotEmpty) {
-    final logFile = File(logPath);
-    logFile.createSync(recursive: true);
-    logFile.writeAsStringSync(
-      'started ${DateTime.now().toIso8601String()} pid $pid\n',
-      mode: FileMode.append,
-      flush: true,
-    );
+    File(logPath)
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        'started ${DateTime.now().toIso8601String()} pid $pid\n',
+        mode: FileMode.append,
+        flush: true,
+      );
   }
 
   final completer = Completer<void>();

@@ -54,9 +54,7 @@ void main() {
     StemMetrics.instance.reset();
   });
 
-  tearDown(() {
-    StemMetrics.instance.reset();
-  });
+  tearDown(StemMetrics.instance.reset);
 
   test('traces flow from enqueue to execution', () async {
     final broker = InMemoryBroker();

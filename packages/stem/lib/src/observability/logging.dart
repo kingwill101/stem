@@ -1,15 +1,13 @@
 import 'package:contextual/contextual.dart';
 
-/// Shared logger configured with console output suitable for worker diagnostics.
+/// Shared logger configured with console output suitable for worker
+/// diagnostics.
 final stemLogger = Logger()
   ..addChannel(
     'console',
     ConsoleLogDriver(),
     formatter: PlainTextLogFormatter(
       settings: FormatterSettings(
-        includeTimestamp: true,
-        includeLevel: true,
-        includeContext: true,
         includePrefix: false,
       ),
     ),

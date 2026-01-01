@@ -2,60 +2,118 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:postgres/postgres.dart';
-
+import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 
-import '../postgres/postgres_client.dart';
-import '../postgres/postgres_migrations.dart';
+import 'package:stem_postgres/src/connection.dart';
+import 'package:stem_postgres/src/database/models/models.dart';
 
+/// PostgreSQL-backed implementation of [Broker].
 class PostgresBroker implements Broker {
   PostgresBroker._(
-    this._client, {
+    this._connections, {
+    required this.namespace,
     required this.defaultVisibilityTimeout,
     required this.pollInterval,
-  });
+    this.sweeperInterval = const Duration(seconds: 10),
+    this.deadLetterRetention = const Duration(days: 7),
+  }) : _context = _connections.context,
+       _random = Random() {
+    _startSweeper();
+  }
 
+  /// Connects to PostgreSQL and returns a broker instance.
   static Future<PostgresBroker> connect(
     String connectionString, {
+    String namespace = 'stem',
     Duration defaultVisibilityTimeout = const Duration(seconds: 30),
     Duration pollInterval = const Duration(milliseconds: 500),
+    Duration sweeperInterval = const Duration(seconds: 10),
+    Duration deadLetterRetention = const Duration(days: 7),
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final client = PostgresClient(
-      connectionString,
-      applicationName: applicationName,
-      tls: tls,
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final connections = await PostgresConnections.open(
+      connectionString: connectionString,
     );
-    final broker = PostgresBroker._(
-      client,
+    return PostgresBroker._(
+      connections,
+      namespace: resolvedNamespace,
       defaultVisibilityTimeout: defaultVisibilityTimeout,
       pollInterval: pollInterval,
+      sweeperInterval: sweeperInterval,
+      deadLetterRetention: deadLetterRetention,
     );
-    final migrations = PostgresMigrations(client);
-    await migrations.ensureQueueTables();
-    return broker;
   }
 
-  final PostgresClient _client;
+  /// Creates a broker using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static PostgresBroker fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration sweeperInterval = const Duration(seconds: 10),
+    Duration deadLetterRetention = const Duration(days: 7),
+  }) {
+    final resolvedNamespace =
+        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final connections = PostgresConnections.fromDataSource(dataSource);
+    return PostgresBroker._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      pollInterval: pollInterval,
+      sweeperInterval: sweeperInterval,
+      deadLetterRetention: deadLetterRetention,
+    );
+  }
+
+  final PostgresConnections _connections;
+  final QueryContext _context;
+
+  /// Namespace used to scope broker data.
+  final String namespace;
+
+  /// Default visibility timeout applied to deliveries.
   final Duration defaultVisibilityTimeout;
+
+  /// Poll interval used while waiting for jobs.
   final Duration pollInterval;
 
-  final Set<_ConsumerRunner> _consumers = {};
-  final Random _random = Random();
+  /// Interval used to sweep for expired locks.
+  final Duration sweeperInterval;
 
+  /// Retention window for dead letter records.
+  final Duration deadLetterRetention;
+
+  /// Simple async mutex to serialize DB access because the Postgres driver
+  /// rejects concurrent work on the same connection while a transaction is
+  /// open.
+  Future<void> _dbLock = Future.value();
+
+  final Set<_ConsumerRunner> _consumers = {};
+  final Random _random;
+
+  Timer? _sweeperTimer;
   bool _closed = false;
 
+  /// Closes the broker and releases any database resources.
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
+    _sweeperTimer?.cancel();
+    _sweeperTimer = null;
     for (final runner in List<_ConsumerRunner>.of(_consumers)) {
       runner.stop();
       await runner.controller.close();
     }
     _consumers.clear();
-    await _client.close();
+    await _dbLock.catchError((_, _) {});
+    await _connections.close();
   }
 
   @override
@@ -64,103 +122,57 @@ class PostgresBroker implements Broker {
   @override
   bool get supportsPriority => true;
 
+  Future<T> _withDb<T>(Future<T> Function() action) {
+    final run = _dbLock.then((_) => action());
+    // Swallow errors on the lock chain so it continues for later callers.
+    _dbLock = run.then<void>((_) {}).catchError((_, _) {});
+    return run;
+  }
+
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     final resolvedRoute =
         routing ??
         RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
+
     if (resolvedRoute.isBroadcast) {
       final channel = resolvedRoute.broadcastChannel ?? envelope.queue;
       final message = envelope.copyWith(queue: channel);
-      await _client.run((Connection conn) async {
-        await conn.execute(
-          Sql.named('''
-INSERT INTO stem_broadcast_messages (
-  id,
-  channel,
-  envelope,
-  delivery,
-  created_at
-) VALUES (
-  @id,
-  @channel,
-  @envelope::jsonb,
-  @delivery,
-  @createdAt
-)
-ON CONFLICT (id) DO UPDATE SET
-  channel = EXCLUDED.channel,
-  envelope = EXCLUDED.envelope,
-  delivery = EXCLUDED.delivery,
-  created_at = EXCLUDED.created_at
-'''),
-          parameters: {
-            'id': message.id,
-            'channel': channel,
-            'envelope': jsonEncode(message.toJson()),
-            'delivery': resolvedRoute.delivery ?? 'at-least-once',
-            'createdAt': message.enqueuedAt.toUtc(),
-          },
-        );
-      });
+      final model = StemBroadcastMessage(
+        id: message.id,
+        namespace: namespace,
+        channel: channel,
+        envelope: message.toJson(),
+        delivery: resolvedRoute.delivery ?? 'at-least-once',
+      ).toTracked();
+      await _context.repository<StemBroadcastMessage>().upsert(
+        model,
+        uniqueBy: ['id'],
+      );
       return;
     }
+
     final targetQueue = (resolvedRoute.queue ?? envelope.queue).trim();
     if (targetQueue.isEmpty) {
       throw StateError('Resolved queue must not be empty.');
     }
+
     final stored = envelope.copyWith(
       queue: targetQueue,
       priority: resolvedRoute.priority ?? envelope.priority,
     );
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-INSERT INTO stem_jobs (
-  id,
-  queue,
-  envelope,
-  attempt,
-  max_retries,
-  priority,
-  not_before,
-  locked_until,
-  locked_by,
-  created_at
-) VALUES (
-  @id,
-  @queue,
-  @envelope::jsonb,
-  @attempt,
-  @maxRetries,
-  @priority,
-  @notBefore,
-  NULL,
-  NULL,
-  @createdAt
-)
-ON CONFLICT (id) DO UPDATE SET
-  queue = EXCLUDED.queue,
-  envelope = EXCLUDED.envelope,
-  attempt = EXCLUDED.attempt,
-  max_retries = EXCLUDED.max_retries,
-  priority = EXCLUDED.priority,
-  not_before = EXCLUDED.not_before,
-  locked_until = NULL,
-  locked_by = NULL,
-  created_at = EXCLUDED.created_at
-'''),
-        parameters: {
-          'id': stored.id,
-          'queue': targetQueue,
-          'envelope': jsonEncode(stored.toJson()),
-          'attempt': stored.attempt,
-          'maxRetries': stored.maxRetries,
-          'priority': stored.priority,
-          'notBefore': stored.notBefore?.toUtc(),
-          'createdAt': stored.enqueuedAt.toUtc(),
-        },
-      );
+
+    await _withDb(() async {
+      await _connections.runInTransaction((txn) async {
+        await _insertJob(
+          txn,
+          envelope: stored,
+          queue: targetQueue,
+          priority: stored.priority,
+          attempt: stored.attempt,
+          notBefore: stored.notBefore,
+        );
+      });
     });
   }
 
@@ -178,15 +190,17 @@ ON CONFLICT (id) DO UPDATE SET
     }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
-        'PostgresBroker currently supports consuming a single queue per subscription.',
+        'PostgresBroker currently supports consuming a single queue per '
+        'subscription.',
       );
     }
+
     final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
     final consumer =
         consumerName ??
-        'consumer-${DateTime.now().microsecondsSinceEpoch}'
-            '-${_random.nextInt(1 << 16)}';
+        'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-'
+            '${_random.nextInt(1 << 16)}';
     final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
 
@@ -222,15 +236,13 @@ ON CONFLICT (id) DO UPDATE SET
       await _ackBroadcast(delivery);
       return;
     }
-    final receipt = _Receipt.parse(delivery.receipt);
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-DELETE FROM stem_jobs
-WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-'''),
-        parameters: receipt.toMap(),
-      );
+    final jobId = _parseReceipt(delivery.receipt);
+    await _withDb(() {
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .delete();
     });
   }
 
@@ -240,36 +252,25 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
       await _ackBroadcast(delivery);
       return;
     }
-    final receipt = _Receipt.parse(delivery.receipt);
     if (!requeue) {
-      await ack(delivery);
+      await deadLetter(delivery, reason: 'nack');
       return;
     }
-    final updatedEnvelope = delivery.envelope.copyWith(
-      queue: receipt.queue,
-      attempt: delivery.envelope.attempt + 1,
-    );
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-UPDATE stem_jobs
-SET
-  envelope = @envelope::jsonb,
-  attempt = @attempt,
-  max_retries = @maxRetries,
-  not_before = @notBefore,
-  locked_until = NULL,
-  locked_by = NULL
-WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-'''),
-        parameters: {
-          ...receipt.toMap(),
-          'envelope': jsonEncode(updatedEnvelope.toJson()),
-          'attempt': updatedEnvelope.attempt,
-          'maxRetries': updatedEnvelope.maxRetries,
-          'notBefore': updatedEnvelope.notBefore?.toUtc(),
-        },
-      );
+    final jobId = _parseReceipt(delivery.receipt);
+    final now = DateTime.now().toUtc();
+    await _withDb(() {
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .update({
+            'lockedAt': null,
+            'lockedUntil': null,
+            'lockedBy': null,
+            'attempt': delivery.envelope.attempt + 1,
+            'notBefore': null,
+            'updatedAt': now,
+          });
     });
   }
 
@@ -283,121 +284,100 @@ WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
       await _ackBroadcast(delivery);
       return;
     }
-    final receipt = _Receipt.parse(delivery.receipt);
+    final jobId = _parseReceipt(delivery.receipt);
     final entryReason = (reason == null || reason.trim().isEmpty)
         ? 'unknown'
         : reason.trim();
     final deadAt = DateTime.now().toUtc();
-    await _client.run((Connection conn) async {
-      await conn.runTx((tx) async {
-        await tx.execute(
-          Sql.named('''
-DELETE FROM stem_jobs
-WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-'''),
-          parameters: receipt.toMap(),
-        );
-        await tx.execute(
-          Sql.named('''
-INSERT INTO stem_jobs_dead (
-  id,
-  queue,
-  envelope,
-  reason,
-  meta,
-  dead_lettered_at
-) VALUES (
-  @id,
-  @queue,
-  @envelope::jsonb,
-  @reason,
-  @meta::jsonb,
-  @deadAt
-)
-ON CONFLICT (id) DO UPDATE SET
-  queue = EXCLUDED.queue,
-  envelope = EXCLUDED.envelope,
-  reason = EXCLUDED.reason,
-  meta = EXCLUDED.meta,
-  dead_lettered_at = EXCLUDED.dead_lettered_at
-'''),
-          parameters: {
-            'id': delivery.envelope.id,
-            'queue': receipt.queue,
-            'envelope': jsonEncode(delivery.envelope.toJson()),
-            'reason': entryReason,
-            'meta': meta == null ? null : jsonEncode(meta),
-            'deadAt': deadAt,
-          },
-        );
+
+    await _withDb(() async {
+      await _connections.runInTransaction((txn) async {
+        final row = await txn
+            .query<StemQueueJob>()
+            .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
+            .firstOrNull();
+        await txn
+            .query<StemQueueJob>()
+            .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
+            .delete();
+        if (row != null) {
+          await txn.repository<StemDeadLetter>().upsert(
+            StemDeadLetter(
+              id: row.id,
+              namespace: namespace,
+              queue: row.queue,
+              envelope: row.envelope,
+              reason: entryReason,
+              meta: meta,
+              deadAt: deadAt,
+            ).toTracked(),
+            uniqueBy: ['id'],
+          );
+        }
       });
     });
   }
 
   @override
   Future<void> purge(String queue) async {
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('DELETE FROM stem_jobs WHERE queue = @queue'),
-        parameters: {'queue': queue},
-      );
+    await _withDb(() {
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
+          .delete();
     });
   }
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
     if (by <= Duration.zero) return;
-    final receipt = _Receipt.parse(delivery.receipt);
-    final milliseconds = by.inMilliseconds;
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-UPDATE stem_jobs
-SET locked_until = COALESCE(locked_until, NOW())
-  + (@ms * INTERVAL '1 millisecond')
-WHERE id = @id AND queue = @queue AND locked_by = @lockedBy
-'''),
-        parameters: {...receipt.toMap(), 'ms': milliseconds},
+    final jobId = _parseReceipt(delivery.receipt);
+    final leaseUntil = DateTime.now().toUtc().add(by);
+    await _withDb(() {
+      return _context.repository<StemQueueJob>().update(
+        StemQueueJobUpdateDto(lockedUntil: leaseUntil),
+        where: StemQueueJobPartial(id: jobId, namespace: namespace),
       );
     });
   }
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final result = await _client.run((Connection conn) async {
-      final rows = await conn.execute(
-        Sql.named('''
-SELECT COUNT(1)
-FROM stem_jobs
-WHERE queue = @queue
-  AND (not_before IS NULL OR not_before <= NOW())
-  AND (locked_by IS NULL OR locked_until <= NOW())
-'''),
-        parameters: {'queue': queue},
-      );
-      if (rows.isEmpty) return 0;
-      return _asInt(rows.first.first);
+    final now = DateTime.now().toUtc();
+    return _withDb(() {
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
+          .where((PredicateBuilder<StemQueueJob> q) {
+            q
+              ..whereNull('notBefore')
+              ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+          })
+          .where((PredicateBuilder<StemQueueJob> q) {
+            q
+              ..whereNull('lockedUntil')
+              ..orWhere('lockedUntil', now, PredicateOperator.lessThanOrEqual);
+          })
+          .count();
     });
-    return result;
   }
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final result = await _client.run((Connection conn) async {
-      final rows = await conn.execute(
-        Sql.named('''
-SELECT COUNT(1)
-FROM stem_jobs
-WHERE queue = @queue
-  AND locked_by IS NOT NULL
-  AND (locked_until IS NULL OR locked_until > NOW())
-'''),
-        parameters: {'queue': queue},
-      );
-      if (rows.isEmpty) return 0;
-      return _asInt(rows.first.first);
+    final now = DateTime.now().toUtc();
+    return _withDb(() {
+      return _context
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
+          .whereNotNull('lockedUntil')
+          .where('lockedUntil', now, PredicateOperator.greaterThan)
+          .count();
     });
-    return result;
   }
 
   @override
@@ -410,61 +390,34 @@ WHERE queue = @queue
       return const DeadLetterPage(entries: []);
     }
     final normalizedOffset = offset < 0 ? 0 : offset;
-    final rows = await _client.run((Connection conn) async {
-      return conn.execute(
-        Sql.named('''
-SELECT envelope, reason, meta, dead_lettered_at
-FROM stem_jobs_dead
-WHERE queue = @queue
-ORDER BY dead_lettered_at DESC
-LIMIT @limit OFFSET @offset
-'''),
-        parameters: {
-          'queue': queue,
-          'limit': limit,
-          'offset': normalizedOffset,
-        },
-      );
+    final entries = await _withDb(() async {
+      final rows = await _context
+          .query<StemDeadLetter>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
+          .orderBy('deadAt', descending: true)
+          .limit(limit)
+          .offset(normalizedOffset)
+          .get();
+      return rows.map(_deadLetterFromRow).toList(growable: false);
     });
-    final entries = rows.map((row) {
-      final envelope = _decodeEnvelope(row[0]);
-      final reason = row[1] as String?;
-      final meta = _decodeMeta(row[2]);
-      final deadAt = (row[3] as DateTime).toUtc();
-      return DeadLetterEntry(
-        envelope: envelope,
-        reason: reason,
-        meta: meta,
-        deadAt: deadAt,
-      );
-    }).toList();
-    final nextOffset = entries.length == limit
-        ? normalizedOffset + entries.length
-        : null;
+    final nextOffset = entries.length < limit
+        ? null
+        : normalizedOffset + entries.length;
     return DeadLetterPage(entries: entries, nextOffset: nextOffset);
   }
 
   @override
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
-    final rows = await _client.run((Connection conn) async {
-      return conn.execute(
-        Sql.named('''
-SELECT envelope, reason, meta, dead_lettered_at
-FROM stem_jobs_dead
-WHERE queue = @queue AND id = @id
-LIMIT 1
-'''),
-        parameters: {'queue': queue, 'id': id},
-      );
+    final row = await _withDb(() {
+      return _context
+          .query<StemDeadLetter>()
+          .whereEquals('queue', queue)
+          .whereEquals('id', id)
+          .whereEquals('namespace', namespace)
+          .firstOrNull();
     });
-    if (rows.isEmpty) return null;
-    final row = rows.first;
-    return DeadLetterEntry(
-      envelope: _decodeEnvelope(row[0]),
-      reason: row[1] as String?,
-      meta: _decodeMeta(row[2]),
-      deadAt: (row[3] as DateTime).toUtc(),
-    );
+    return row == null ? null : _deadLetterFromRow(row);
   }
 
   @override
@@ -475,103 +428,53 @@ LIMIT 1
     Duration? delay,
     bool dryRun = false,
   }) async {
-    if (limit <= 0) {
-      return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
+    final bounded = limit.clamp(1, 500);
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
+    if (since != null) {
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
     }
-    final result = await _client.run((Connection conn) async {
-      final dynamic replay = await conn.runTx((tx) async {
-        final rows = await tx.execute(
-          Sql.named('''
-SELECT id, envelope, reason, meta, dead_lettered_at
-FROM stem_jobs_dead
-WHERE queue = @queue
-  AND (@since::timestamptz IS NULL OR dead_lettered_at >= @since)
-ORDER BY dead_lettered_at ASC
-FOR UPDATE SKIP LOCKED
-LIMIT @limit
-'''),
-          parameters: {'queue': queue, 'limit': limit, 'since': since?.toUtc()},
-        );
-        if (rows.isEmpty) {
-          return DeadLetterReplayResult(entries: const [], dryRun: dryRun);
-        }
-        final entries = rows.map((row) {
-          return DeadLetterEntry(
-            envelope: _decodeEnvelope(row[1]),
-            reason: row[2] as String?,
-            meta: _decodeMeta(row[3]),
-            deadAt: (row[4] as DateTime).toUtc(),
-          );
-        }).toList();
-        if (dryRun) {
-          return DeadLetterReplayResult(entries: entries, dryRun: true);
-        }
-        final now = DateTime.now().toUtc();
-        for (var index = 0; index < rows.length; index++) {
-          final row = rows[index];
-          final id = row[0] as String;
-          final entry = entries[index];
-          final replayEnvelope = entry.envelope.copyWith(
-            queue: queue,
-            attempt: entry.envelope.attempt + 1,
-            notBefore: delay == null ? null : now.add(delay),
-          );
-          await tx.execute(
-            Sql.named('''
-INSERT INTO stem_jobs (
-  id,
-  queue,
-  envelope,
-  attempt,
-  max_retries,
-  not_before,
-  locked_until,
-  locked_by,
-  created_at
-) VALUES (
-  @id,
-  @queue,
-  @envelope::jsonb,
-  @attempt,
-  @maxRetries,
-  @notBefore,
-  NULL,
-  NULL,
-  @createdAt
-)
-ON CONFLICT (id) DO UPDATE SET
-  queue = EXCLUDED.queue,
-  envelope = EXCLUDED.envelope,
-  attempt = EXCLUDED.attempt,
-  max_retries = EXCLUDED.max_retries,
-  not_before = EXCLUDED.not_before,
-  locked_until = NULL,
-  locked_by = NULL,
-  created_at = EXCLUDED.created_at
-'''),
-            parameters: {
-              'id': id,
-              'queue': queue,
-              'envelope': jsonEncode(replayEnvelope.toJson()),
-              'attempt': replayEnvelope.attempt,
-              'maxRetries': replayEnvelope.maxRetries,
-              'notBefore': replayEnvelope.notBefore?.toUtc(),
-              'createdAt': replayEnvelope.enqueuedAt.toUtc(),
-            },
-          );
-          await tx.execute(
-            Sql.named('''
-DELETE FROM stem_jobs_dead
-WHERE id = @id AND queue = @queue
-'''),
-            parameters: {'id': id, 'queue': queue},
-          );
-        }
-        return DeadLetterReplayResult(entries: entries, dryRun: false);
-      });
-      return replay as DeadLetterReplayResult;
+    final rows = await _withDb(() {
+      return query.orderBy('deadAt', descending: true).limit(bounded).get();
     });
-    return result;
+
+    final entries = rows.map(_deadLetterFromRow).toList(growable: false);
+    if (dryRun || entries.isEmpty) {
+      return DeadLetterReplayResult(entries: entries, dryRun: true);
+    }
+
+    await _withDb(() async {
+      await _connections.runInTransaction((txn) async {
+        for (final entry in entries) {
+          final updatedEnvelope = delay == null
+              ? entry.envelope
+              : entry.envelope.copyWith(
+                  notBefore: DateTime.now().toUtc().add(delay),
+                );
+          await _insertJob(
+            txn,
+            envelope: updatedEnvelope,
+            queue: queue,
+            priority: updatedEnvelope.priority,
+            attempt: updatedEnvelope.attempt,
+            notBefore: updatedEnvelope.notBefore,
+          );
+          await txn
+              .query<StemDeadLetter>()
+              .whereEquals('id', entry.envelope.id)
+              .whereEquals('namespace', namespace)
+              .delete();
+        }
+      });
+    });
+
+    return DeadLetterReplayResult(entries: entries, dryRun: false);
   }
 
   @override
@@ -580,112 +483,98 @@ WHERE id = @id AND queue = @queue
     DateTime? since,
     int? limit,
   }) async {
-    final effectiveLimit = limit != null && limit >= 0 ? limit : null;
-    final result = await _client.run((Connection conn) async {
-      final dynamic deletedCount = await conn.runTx((tx) async {
-        final query = StringBuffer()
-          ..writeln('''
-SELECT id
-FROM stem_jobs_dead
-WHERE queue = @queue
-  AND (@since::timestamptz IS NULL OR dead_lettered_at >= @since)
-ORDER BY dead_lettered_at DESC
-''');
-        if (effectiveLimit != null) {
-          query.writeln('LIMIT @limit');
-        }
-        final params = <String, Object?>{
-          'queue': queue,
-          'since': since?.toUtc(),
-        };
-        if (effectiveLimit != null) {
-          params['limit'] = effectiveLimit;
-        }
-        final ids = await tx.execute(
-          Sql.named(query.toString()),
-          parameters: params,
-        );
-        if (ids.isEmpty) return 0;
-        final idList = ids.map((row) => row[0] as String).toList();
-        final deleted = await tx.execute(
-          Sql.named('''
-DELETE FROM stem_jobs_dead
-WHERE queue = @queue AND id = ANY(@ids)
-'''),
-          parameters: {'queue': queue, 'ids': idList},
-        );
-        return deleted;
+    if (limit != null) {
+      final ids = await _withDb(() {
+        return _context
+            .query<StemDeadLetter>()
+            .whereEquals('queue', queue)
+            .whereEquals('namespace', namespace)
+            .orderBy('deadAt', descending: true)
+            .limit(limit)
+            .pluck<String>('id');
       });
-      return deletedCount as int;
-    });
-    return result;
+      if (ids.isEmpty) return 0;
+      await _withDb(() {
+        return _context
+            .query<StemDeadLetter>()
+            .whereIn('id', ids)
+            .whereEquals('namespace', namespace)
+            .delete();
+      });
+      return ids.length;
+    }
+
+    var query = _context
+        .query<StemDeadLetter>()
+        .whereEquals('queue', queue)
+        .whereEquals('namespace', namespace);
+    if (since != null) {
+      query = query.where(
+        'deadAt',
+        since,
+        PredicateOperator.greaterThanOrEqual,
+      );
+    }
+    return _withDb(() => query.delete());
   }
 
-  Future<List<Delivery>> _reserve(
-    String queue,
-    String locker,
-    int limit,
-  ) async {
-    return _client.run((Connection conn) async {
-      final dynamic list = await conn.runTx((tx) async {
-        final rows = await tx.execute(
-          Sql.named('''
-SELECT id, envelope
-FROM stem_jobs
-WHERE queue = @queue
-  AND (not_before IS NULL OR not_before <= NOW())
-  AND (locked_by IS NULL OR locked_until <= NOW())
-ORDER BY priority DESC, created_at
-FOR UPDATE SKIP LOCKED
-LIMIT @limit
-'''),
-          parameters: {'queue': queue, 'limit': limit},
-        );
-        if (rows.isEmpty) {
-          return const <Delivery>[];
-        }
-        final now = DateTime.now().toUtc();
-        final deliveries = <Delivery>[];
-        for (final row in rows) {
-          final id = row[0] as String;
-          var envelope = _decodeEnvelope(row[1]);
-          if (envelope.queue != queue) {
-            envelope = envelope.copyWith(queue: queue);
-          }
-          final lease = envelope.visibilityTimeout ?? defaultVisibilityTimeout;
-          final leaseExpiresAt = lease == Duration.zero ? null : now.add(lease);
-          await tx.execute(
-            Sql.named('''
-UPDATE stem_jobs
-SET locked_by = @lockedBy, locked_until = @lockedUntil
-WHERE id = @id
-'''),
-            parameters: {
-              'lockedBy': locker,
-              'lockedUntil': leaseExpiresAt,
-              'id': id,
-            },
-          );
-          final receipt = _Receipt(
-            queue: queue,
-            id: id,
-            lockedBy: locker,
-          ).encode();
-          deliveries.add(
-            Delivery(
-              envelope: envelope,
-              receipt: receipt,
-              leaseExpiresAt: leaseExpiresAt,
-              route: RoutingInfo.queue(
-                queue: envelope.queue,
-                priority: envelope.priority,
-              ),
-            ),
-          );
-        }
-        return deliveries;
+  Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
+    final now = DateTime.now().toUtc();
+    final visibilityUntil = now.add(defaultVisibilityTimeout);
+
+    return _withDb(() {
+      return _connections.runInTransaction((txn) async {
+        final candidate = await txn
+            .query<StemQueueJob>()
+            .whereEquals('queue', queue)
+            .whereEquals('namespace', namespace)
+            .where((PredicateBuilder<StemQueueJob> q) {
+              q
+                ..whereNull('notBefore')
+                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+            })
+            .where((PredicateBuilder<StemQueueJob> q) {
+              q
+                ..whereNull('lockedUntil')
+                ..orWhere(
+                  'lockedUntil',
+                  now,
+                  PredicateOperator.lessThanOrEqual,
+                );
+            })
+            .orderBy('priority', descending: true)
+            .orderBy('createdAt')
+            .limit(1)
+            .firstOrNull();
+        if (candidate == null) return null;
+
+        final updated = await txn
+            .query<StemQueueJob>()
+            .whereEquals('id', candidate.id)
+            .whereEquals('namespace', namespace)
+            .where((PredicateBuilder<StemQueueJob> q) {
+              q
+                ..whereNull('lockedUntil')
+                ..orWhere(
+                  'lockedUntil',
+                  now,
+                  PredicateOperator.lessThanOrEqual,
+                );
+            })
+            .where((PredicateBuilder<StemQueueJob> q) {
+              q
+                ..whereNull('notBefore')
+                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
+            })
+            .update({
+              'lockedAt': now,
+              'lockedUntil': visibilityUntil,
+              'lockedBy': consumerId,
+              'updatedAt': now,
+            });
+        if (updated == 0) return null;
+        return _QueuedJob.fromModel(candidate);
       });
-      return list as List<Delivery>;
     });
   }
 
@@ -695,67 +584,132 @@ WHERE id = @id
     int limit,
   ) async {
     if (channels.isEmpty) return const <Delivery>[];
-    return _client.run((Connection conn) async {
-      final rows = await conn.execute(
-        Sql.named('''
-SELECT id, channel, envelope, delivery
-FROM stem_broadcast_messages
-WHERE channel = ANY(@channels)
-  AND NOT EXISTS (
-    SELECT 1 FROM stem_broadcast_ack
-    WHERE message_id = stem_broadcast_messages.id
-      AND worker_id = @worker
-  )
-ORDER BY created_at
-LIMIT @limit
-'''),
-        parameters: {
-          'channels': channels,
-          'worker': workerId,
-          'limit': limit < 1 ? 1 : limit,
-        },
-      );
-      final deliveries = <Delivery>[];
-      for (final row in rows) {
-        final id = row[0] as String;
-        final channel = row[1] as String;
-        final envelope = _decodeEnvelope(row[2]);
-        final deliveryType = row[3] as String? ?? 'at-least-once';
-        deliveries.add(
-          Delivery(
-            envelope: envelope.copyWith(queue: channel),
-            receipt: jsonEncode({'messageId': id, 'worker': workerId}),
-            leaseExpiresAt: null,
-            route: RoutingInfo.broadcast(
-              channel: channel,
-              delivery: deliveryType,
-            ),
-          ),
-        );
-      }
-      return deliveries;
+    final messages = await _withDb(() {
+      return _context
+          .query<StemBroadcastMessage>()
+          .whereEquals('namespace', namespace)
+          .whereIn('channel', channels)
+          .orderBy('createdAt')
+          .limit(limit < 1 ? 1 : limit)
+          .get();
     });
+
+    final deliveries = <Delivery>[];
+    for (final message in messages) {
+      final alreadyAcked = await _withDb(() {
+        return _context
+            .query<StemBroadcastAck>()
+            .whereEquals('messageId', message.id)
+            .whereEquals('workerId', workerId)
+            .whereEquals('namespace', namespace)
+            .exists();
+      });
+      if (alreadyAcked) continue;
+      deliveries.add(
+        Delivery(
+          envelope: Envelope.fromJson(
+            message.envelope,
+          ).copyWith(queue: message.channel),
+          receipt: jsonEncode({'messageId': message.id, 'worker': workerId}),
+          leaseExpiresAt: null,
+          route: RoutingInfo.broadcast(
+            channel: message.channel,
+            delivery: message.delivery,
+          ),
+        ),
+      );
+      if (deliveries.length >= limit) break;
+    }
+    return deliveries;
   }
 
   Future<void> _ackBroadcast(Delivery delivery) async {
     final data = jsonDecode(delivery.receipt) as Map<String, dynamic>;
     final messageId = data['messageId'] as String;
     final workerId = data['worker'] as String;
-    await _client.run((Connection conn) async {
-      await conn.execute(
-        Sql.named('''
-INSERT INTO stem_broadcast_ack (message_id, worker_id)
-VALUES (@messageId, @workerId)
-ON CONFLICT (message_id, worker_id) DO UPDATE SET acknowledged_at = NOW()
-'''),
-        parameters: {'messageId': messageId, 'workerId': workerId},
+    final ack = StemBroadcastAck(
+      messageId: messageId,
+      workerId: workerId,
+      namespace: namespace,
+      acknowledgedAt: DateTime.now().toUtc(),
+    ).toTracked();
+    await _withDb(() {
+      return _context.repository<StemBroadcastAck>().upsert(
+        ack,
+        uniqueBy: ['messageId', 'workerId'],
       );
     });
   }
 
+  void _startSweeper() {
+    _sweeperTimer?.cancel();
+    _sweeperTimer = Timer.periodic(sweeperInterval, (_) {
+      if (_closed) return;
+      unawaited(_runSweeperCycle());
+    });
+  }
+
+  Future<void> _runSweeperCycle() async {
+    final now = DateTime.now().toUtc();
+    await _withDb(() async {
+      await _connections.runInTransaction((txn) async {
+        await txn
+            .query<StemQueueJob>()
+            .whereEquals('namespace', namespace)
+            .whereNotNull('lockedUntil')
+            .where('lockedUntil', now, PredicateOperator.lessThanOrEqual)
+            .update({'lockedAt': null, 'lockedUntil': null, 'lockedBy': null});
+
+        if (!deadLetterRetention.isNegative &&
+            deadLetterRetention > Duration.zero) {
+          final cutoff = now.subtract(deadLetterRetention);
+          await txn
+              .query<StemDeadLetter>()
+              .whereEquals('namespace', namespace)
+              .where('deadAt', cutoff, PredicateOperator.lessThanOrEqual)
+              .delete();
+        }
+      });
+    });
+  }
+
+  String _parseReceipt(String receipt) => receipt;
+
+  Future<void> _insertJob(
+    QueryContext db, {
+    required Envelope envelope,
+    required String queue,
+    required int priority,
+    required int attempt,
+    DateTime? notBefore,
+  }) async {
+    final model = StemQueueJob(
+      id: envelope.id,
+      namespace: namespace,
+      queue: queue,
+      envelope: envelope.toJson(),
+      attempt: attempt,
+      maxRetries: envelope.maxRetries,
+      priority: priority,
+      notBefore: notBefore,
+    ).toTracked();
+    await db.repository<StemQueueJob>().upsert(model, uniqueBy: ['id']);
+  }
+
+  DeadLetterEntry _deadLetterFromRow(StemDeadLetter row) {
+    final envelope = Envelope.fromJson(row.envelope);
+    return DeadLetterEntry(
+      envelope: envelope,
+      reason: row.reason,
+      meta: row.meta,
+      deadAt: row.deadAt,
+    );
+  }
+
   String _encodeLocker(String queue, String group, String consumer) {
     final salt = _random.nextInt(1 << 32);
-    return '$queue::$group::$consumer::$salt::${DateTime.now().microsecondsSinceEpoch}';
+    return '$queue::$group::$consumer::$salt::'
+        '${DateTime.now().microsecondsSinceEpoch}';
   }
 }
 
@@ -784,7 +738,7 @@ class _ConsumerRunner {
   void start() {
     if (_started) return;
     _started = true;
-    _loop();
+    unawaited(_loop());
   }
 
   void stop() {
@@ -794,7 +748,12 @@ class _ConsumerRunner {
   Future<void> _loop() async {
     while (!_stopped && !controller.isClosed && !broker._closed) {
       try {
-        final deliveries = await broker._reserve(queue, locker, prefetch);
+        final jobs = <_QueuedJob>[];
+        for (var i = 0; i < prefetch; i++) {
+          final job = await broker._claimNextJob(queue, locker);
+          if (job == null) break;
+          jobs.add(job);
+        }
         final broadcasts = broadcastChannels.isEmpty
             ? const <Delivery>[]
             : await broker._reserveBroadcast(
@@ -802,81 +761,52 @@ class _ConsumerRunner {
                 workerId,
                 prefetch,
               );
-        if (deliveries.isEmpty && broadcasts.isEmpty) {
-          await Future.delayed(broker.pollInterval);
+        if (jobs.isEmpty && broadcasts.isEmpty) {
+          await Future<void>.delayed(broker.pollInterval);
           continue;
         }
-        for (final delivery in [...deliveries, ...broadcasts]) {
+        final leaseExpiresAt = DateTime.now().toUtc().add(
+          broker.defaultVisibilityTimeout,
+        );
+        for (final delivery in [
+          ...jobs.map((job) => job.toDelivery(leaseExpiresAt: leaseExpiresAt)),
+          ...broadcasts,
+        ]) {
           if (_stopped || controller.isClosed) {
             return;
           }
           controller.add(delivery);
         }
-      } catch (error, stack) {
+      } on Object catch (error, stack) {
         if (controller.isClosed) return;
         controller.addError(error, stack);
-        await Future.delayed(broker.pollInterval);
+        await Future<void>.delayed(broker.pollInterval);
       }
     }
   }
 }
 
-class _Receipt {
-  _Receipt({required this.queue, required this.id, required this.lockedBy});
+class _QueuedJob {
+  _QueuedJob({required this.id, required this.queue, required this.envelope});
 
-  final String queue;
-  final String id;
-  final String lockedBy;
-
-  String encode() => jsonEncode(toMap());
-
-  Map<String, Object?> toMap() => {
-    'queue': queue,
-    'id': id,
-    'lockedBy': lockedBy,
-  };
-
-  static _Receipt parse(String raw) {
-    final decoded = jsonDecode(raw) as Map<String, dynamic>;
-    return _Receipt(
-      queue: decoded['queue'] as String,
-      id: decoded['id'] as String,
-      lockedBy: decoded['lockedBy'] as String,
+  factory _QueuedJob.fromModel(StemQueueJob row) {
+    return _QueuedJob(
+      id: row.id,
+      queue: row.queue,
+      envelope: Envelope.fromJson(row.envelope),
     );
   }
-}
 
-int _asInt(dynamic value) {
-  if (value is int) return value;
-  if (value is BigInt) return value.toInt();
-  if (value is String) {
-    final parsed = int.tryParse(value);
-    if (parsed != null) return parsed;
-  }
-  return 0;
-}
+  final String id;
+  final String queue;
+  final Envelope envelope;
 
-Envelope _decodeEnvelope(dynamic raw) {
-  if (raw is Map) {
-    return Envelope.fromJson(raw.cast<String, Object?>());
+  Delivery toDelivery({required DateTime leaseExpiresAt}) {
+    return Delivery(
+      envelope: envelope,
+      receipt: id,
+      leaseExpiresAt: leaseExpiresAt,
+      route: RoutingInfo.queue(queue: queue, priority: envelope.priority),
+    );
   }
-  if (raw is String) {
-    final map = (jsonDecode(raw) as Map).cast<String, Object?>();
-    return Envelope.fromJson(map);
-  }
-  throw StateError('Unsupported envelope payload: $raw');
-}
-
-Map<String, Object?> _decodeMeta(dynamic raw) {
-  if (raw == null) return const {};
-  if (raw is Map) {
-    return raw.cast<String, Object?>();
-  }
-  if (raw is String) {
-    final decoded = jsonDecode(raw);
-    if (decoded is Map) {
-      return decoded.cast<String, Object?>();
-    }
-  }
-  return const {};
 }

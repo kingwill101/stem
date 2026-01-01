@@ -1,3 +1,12 @@
+## 0.1.0-dev
+
+- Migrated the Postgres adapter to Ormed with generated registry/migrations for
+  schema management.
+- Added a local seed runtime to run Postgres seeders without requiring
+  ormed_cli.
+- Hardened lock-store timing/TTL evaluation for more reliable coordination.
+- Updated Ormed dependencies to 0.1.0-dev+6.
+
 ## 0.1.0-alpha.4
 
 - Added durable watcher persistence and atomic event resolution so Durable

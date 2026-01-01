@@ -1,12 +1,13 @@
-import '../control/control_messages.dart';
-import '../core/contracts.dart';
-import '../core/envelope.dart';
-import 'payloads.dart';
-import 'stem_signals.dart';
+import 'package:stem/src/control/control_messages.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/signals/payloads.dart';
+import 'package:stem/src/signals/stem_signals.dart';
 
 /// Helper used by coordinators, workers, and middleware to emit strongly
 /// typed Stem signals without duplicating payload construction.
 class StemSignalEmitter {
+  /// Creates a signal emitter with an optional default sender.
   const StemSignalEmitter({this.defaultSender});
 
   /// Optional sender identifier applied when no explicit sender is supplied.
@@ -14,6 +15,7 @@ class StemSignalEmitter {
 
   String? _senderOverride(String? sender) => sender ?? defaultSender;
 
+  /// Emits the before-task-publish signal.
   Future<void> beforeTaskPublish(
     Envelope envelope, {
     int? attempt,
@@ -28,6 +30,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the after-task-publish signal.
   Future<void> afterTaskPublish(
     Envelope envelope, {
     int? attempt,
@@ -44,6 +47,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-received signal.
   Future<void> taskReceived(
     Envelope envelope,
     WorkerInfo worker, {
@@ -55,6 +59,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-prerun signal.
   Future<void> taskPrerun(
     Envelope envelope,
     WorkerInfo worker,
@@ -67,6 +72,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-postrun signal.
   Future<void> taskPostrun(
     Envelope envelope,
     WorkerInfo worker,
@@ -87,6 +93,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-retry signal.
   Future<void> taskRetry(
     Envelope envelope,
     WorkerInfo worker, {
@@ -105,6 +112,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-succeeded signal.
   Future<void> taskSucceeded(
     Envelope envelope,
     WorkerInfo worker, {
@@ -117,6 +125,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-failed signal.
   Future<void> taskFailed(
     Envelope envelope,
     WorkerInfo worker, {
@@ -135,6 +144,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the task-revoked signal.
   Future<void> taskRevoked(
     Envelope envelope,
     WorkerInfo worker, {
@@ -147,6 +157,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-init signal.
   Future<void> workerInit(WorkerInfo worker, {String? reason, String? sender}) {
     return StemSignals.workerInit.emit(
       WorkerLifecyclePayload(worker: worker, reason: reason),
@@ -154,6 +165,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-ready signal.
   Future<void> workerReady(
     WorkerInfo worker, {
     String? reason,
@@ -165,6 +177,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-stopping signal.
   Future<void> workerStopping(
     WorkerInfo worker, {
     String? reason,
@@ -176,6 +189,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-shutdown signal.
   Future<void> workerShutdown(
     WorkerInfo worker, {
     String? reason,
@@ -187,6 +201,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-heartbeat signal.
   Future<void> workerHeartbeat(
     WorkerInfo worker,
     DateTime timestamp, {
@@ -198,11 +213,12 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the worker-child-lifecycle signal.
   Future<void> workerChildLifecycle(
     WorkerInfo worker,
     int isolateId, {
-    String? sender,
     required bool initializing,
+    String? sender,
   }) {
     final payload = WorkerChildLifecyclePayload(
       worker: worker,
@@ -218,6 +234,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the schedule-entry-due signal.
   Future<void> scheduleEntryDue(
     ScheduleEntry entry,
     DateTime tickAt, {
@@ -229,6 +246,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the schedule-entry-dispatched signal.
   Future<void> scheduleEntryDispatched(
     ScheduleEntry entry, {
     required DateTime scheduledFor,
@@ -247,6 +265,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the schedule-entry-failed signal.
   Future<void> scheduleEntryFailed(
     ScheduleEntry entry, {
     required DateTime scheduledFor,
@@ -265,6 +284,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the control-command-received signal.
   Future<void> controlCommandReceived(
     WorkerInfo worker,
     ControlCommandMessage command, {
@@ -276,6 +296,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the control-command-completed signal.
   Future<void> controlCommandCompleted(
     WorkerInfo worker,
     ControlCommandMessage command, {
@@ -296,6 +317,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-started signal.
   Future<void> workflowRunStarted(
     WorkflowRunPayload payload, {
     String? sender,
@@ -306,6 +328,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-suspended signal.
   Future<void> workflowRunSuspended(
     WorkflowRunPayload payload, {
     String? sender,
@@ -316,6 +339,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-resumed signal.
   Future<void> workflowRunResumed(
     WorkflowRunPayload payload, {
     String? sender,
@@ -326,6 +350,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-completed signal.
   Future<void> workflowRunCompleted(
     WorkflowRunPayload payload, {
     String? sender,
@@ -336,6 +361,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-failed signal.
   Future<void> workflowRunFailed(WorkflowRunPayload payload, {String? sender}) {
     return StemSignals.workflowRunFailed.emit(
       payload,
@@ -343,6 +369,7 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits the workflow-run-cancelled signal.
   Future<void> workflowRunCancelled(
     WorkflowRunPayload payload, {
     String? sender,

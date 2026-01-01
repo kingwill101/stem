@@ -2,12 +2,12 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "56381:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
   worker:
     build:
       context: ../..
-      dockerfile: examples/rate_limit_delay/Dockerfile
+      dockerfile: example/rate_limit_delay/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
       STEM_RESULT_BACKEND_URL: redis://redis:6379/1
@@ -20,7 +20,7 @@ services:
   producer:
     build:
       context: ../..
-      dockerfile: examples/rate_limit_delay/Dockerfile
+      dockerfile: example/rate_limit_delay/Dockerfile
     environment:
       STEM_BROKER_URL: redis://redis:6379/0
       STEM_RESULT_BACKEND_URL: redis://redis:6379/1

@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: stem
       POSTGRES_PASSWORD: stem
     ports:
-      - "65432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U stem -d stem_demo"]
       interval: 5s
@@ -17,7 +17,7 @@ services:
   enqueuer:
     build:
       context: ../..
-      dockerfile: examples/postgres_worker/enqueuer/Dockerfile
+      dockerfile: example/postgres_worker/enqueuer/Dockerfile
       target: dev
     env_file:
       - .env.example
@@ -31,7 +31,7 @@ services:
   worker:
     build:
       context: ../..
-      dockerfile: examples/postgres_worker/worker/Dockerfile
+      dockerfile: example/postgres_worker/worker/Dockerfile
       target: dev
     env_file:
       - .env.example

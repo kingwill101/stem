@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:args/args.dart';
-import 'package:args/command_runner.dart';
+import 'package:artisanal/args.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
 import 'package:stem_cli/src/cli/dlq.dart';
 import 'package:stem_cli/src/cli/observer.dart';
@@ -16,6 +15,7 @@ import 'package:stem_cli/src/cli/workflow.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
 
 const brokerEnvKey = 'STEM_BROKER_URL';
 const backendEnvKey = 'STEM_RESULT_BACKEND_URL';
@@ -41,7 +41,7 @@ class StemCommandRunner extends CommandRunner<int> {
     try {
       final result = await run(arguments);
       return result ?? 0;
-    } on UsageException catch (e) {
+    } on Exception catch (e) {
       dependencies.err.writeln(e);
       return 64;
     }
@@ -129,6 +129,7 @@ class HealthCommand extends Command<int> {
   Future<int> _healthCheck(ArgResults args) async {
     final out = dependencies.out;
     final err = dependencies.err;
+    final io = dependencies.console;
     final environment = dependencies.environment;
 
     final overrides = Map<String, String>.from(environment);
@@ -166,19 +167,24 @@ class HealthCommand extends Command<int> {
     if (jsonOutput) {
       out.writeln(jsonEncode(results.map((r) => r.toJson()).toList()));
     } else {
+      io.title('Health checks');
       for (final result in results) {
-        final prefix = result.success ? '[ok]   ' : '[fail]';
-        out.writeln('$prefix ${result.component}: ${result.message}');
+        final message = '${result.component}: ${result.message}';
+        if (result.success) {
+          io.success(message);
+        } else {
+          io.error(message);
+        }
         if (!result.success && result.context.isNotEmpty) {
           final tls = result.context['tls'] as Map<String, Object?>?;
           if (tls != null) {
-            out.writeln(
+            io.writeln(
               '       TLS -> ca=${tls['caCertificate']}, client=${tls['clientCertificate']}, allowInsecure=${tls['allowInsecure']}',
             );
           }
           final hints = result.context['hints'] as List<String>? ?? const [];
           for (final hint in hints) {
-            out.writeln('       hint: $hint');
+            io.writeln('       hint: $hint');
           }
         }
       }
@@ -195,11 +201,7 @@ class HealthCommand extends Command<int> {
     final uri = Uri.parse(url);
     if (isPostgresScheme(uri.scheme)) {
       try {
-        final broker = await PostgresBroker.connect(
-          url,
-          applicationName: 'stem-cli-health',
-          tls: tls,
-        );
+        final broker = await PostgresBroker.connect(url, tls: tls);
         await broker.close();
         return _HealthCheckResult(
           component: 'broker',
@@ -254,12 +256,11 @@ class HealthCommand extends Command<int> {
     TlsConfig tls,
   ) async {
     final uri = Uri.parse(url);
-    if (isPostgresScheme(uri.scheme)) {
-      try {
+
+    try {
+      if (isPostgresScheme(uri.scheme)) {
         final backend = await PostgresResultBackend.connect(
-          url,
-          applicationName: 'stem-cli-health',
-          tls: tls,
+          connectionString: url,
         );
         await backend.close();
         return _HealthCheckResult(
@@ -267,23 +268,26 @@ class HealthCommand extends Command<int> {
           success: true,
           message: 'Connected to $url',
         );
-      } on Object catch (error) {
+      } else if (uri.scheme == 'sqlite') {
+        final backend = await SqliteResultBackend.connect(
+          connectionString: url,
+        );
+        await backend.close();
         return _HealthCheckResult(
           component: 'backend',
-          success: false,
-          message: 'Connection failed for $url: $error',
+          success: true,
+          message: 'Connected to $url',
+        );
+      } else {
+        // Redis or rediss
+        final backend = await RedisResultBackend.connect(url, tls: tls);
+        await backend.close();
+        return _HealthCheckResult(
+          component: 'backend',
+          success: true,
+          message: 'Connected to $url',
         );
       }
-    }
-
-    try {
-      final backend = await RedisResultBackend.connect(url, tls: tls);
-      await backend.close();
-      return _HealthCheckResult(
-        component: 'backend',
-        success: true,
-        message: 'Connected to $url',
-      );
     } on HandshakeException catch (error) {
       return _HealthCheckResult(
         component: 'backend',

@@ -1,0 +1,5 @@
+default_queue:
+  alias: emails
+  queue: emails
+queues:
+  emails: {}

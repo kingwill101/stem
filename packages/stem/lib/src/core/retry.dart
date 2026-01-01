@@ -1,16 +1,20 @@
 import 'dart:math' as math;
 
-import 'contracts.dart';
+import 'package:stem/src/core/contracts.dart';
 
 /// Exponential backoff with jitter, capped at a configurable duration.
 class ExponentialJitterRetryStrategy implements RetryStrategy {
+  /// Creates an exponential backoff strategy with jitter.
   ExponentialJitterRetryStrategy({
     this.base = const Duration(seconds: 2),
     this.max = const Duration(minutes: 5),
     int? seed,
   }) : _random = math.Random(seed);
 
+  /// Base delay used for the first retry.
   final Duration base;
+
+  /// Maximum delay cap for retries.
   final Duration max;
   final math.Random _random;
 
