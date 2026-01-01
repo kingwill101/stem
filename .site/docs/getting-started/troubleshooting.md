@@ -5,6 +5,9 @@ sidebar_position: 7
 slug: /getting-started/troubleshooting
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Common issues when getting started with Stem and how to resolve them.
 
 ## Worker starts but no tasks are processed
@@ -14,6 +17,30 @@ Checklist:
 - Make sure the producer and worker share the same broker URL.
 - Confirm the worker is subscribed to the queue you are enqueueing into.
 - If routing is enabled, verify the routing file and default queue.
+
+<Tabs>
+<TabItem value="task" label="Minimal task handler">
+
+```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-task
+
+```
+
+</TabItem>
+<TabItem value="bootstrap" label="Worker + broker bootstrap">
+
+```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-bootstrap
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Producer enqueue">
+
+```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-enqueue
+
+```
+
+</TabItem>
+</Tabs>
 
 Helpful commands:
 
@@ -32,6 +59,23 @@ Checklist:
 - Confirm the registry matches the task names referenced in the file.
 - If you use queue priorities, ensure the broker supports them.
 
+<Tabs>
+<TabItem value="load" label="Load routing file">
+
+```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-load
+
+```
+
+</TabItem>
+<TabItem value="inline" label="Inline routing registry">
+
+```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
+
+```
+
+</TabItem>
+</Tabs>
+
 Helpful commands:
 
 ```bash
@@ -49,6 +93,23 @@ Checklist:
 - Set `STEM_RESULT_BACKEND_URL` for any workflow that needs stored results.
 - Ensure the backend URL uses the correct scheme (`redis://`, `postgres://`).
 - Confirm the worker is configured with the same result backend.
+
+<Tabs>
+<TabItem value="redis" label="Redis result backend">
+
+```dart title="lib/persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-redis
+
+```
+
+</TabItem>
+<TabItem value="postgres" label="Postgres result backend">
+
+```dart title="lib/persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-postgres
+
+```
+
+</TabItem>
+</Tabs>
 
 Helpful commands:
 
@@ -69,6 +130,23 @@ Checklist:
 - Ensure `STEM_SIGNING_ACTIVE_KEY` is set and present in the key list.
 - Check DLQ entries for `signature-invalid` reasons.
 
+<Tabs>
+<TabItem value="signed" label="Signed enqueue">
+
+```dart title="lib/producer.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-signed
+
+```
+
+</TabItem>
+<TabItem value="shared-signer" label="Shared signer config">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing
+
+```
+
+</TabItem>
+</Tabs>
+
 Helpful commands:
 
 ```bash
@@ -88,6 +166,23 @@ Checklist:
 
 - Ensure all processes (producer, worker, CLI) use the same namespace string.
 - For workers, confirm `STEM_WORKER_NAMESPACE` matches your CLI `--namespace`.
+
+<Tabs>
+<TabItem value="broker" label="Broker + backend namespace">
+
+```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker-backend
+
+```
+
+</TabItem>
+<TabItem value="worker" label="Worker namespace">
+
+```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-worker
+
+```
+
+</TabItem>
+</Tabs>
 
 Helpful commands:
 
