@@ -5,8 +5,8 @@ sidebar_position: 8
 slug: /core-concepts/cli-control
 ---
 
-The `stem` CLI complements the programmatic APIs—use it to enqueue test jobs,
-inspect state, and manage workers.
+The `stem` CLI complements the programmatic APIs—use it to inspect state,
+manage workers, and operate schedules and routing.
 
 ## Inspect vs control
 
@@ -57,63 +57,59 @@ stem worker stats --worker worker-a
 
 ## Registry resolution
 
-Many CLI commands that reference task names need a registry. By default, the
-CLI uses `--registry` when provided, otherwise it relies on the registry wired
-into the CLI context (for example, a `runStemCli(..., contextBuilder: ...)`
-wrapper that sets `CliContext.registry`). For multi-binary deployments, point
-the CLI at the same registry entrypoint you use for workers so task names,
+Many CLI commands that reference task names need a registry. The default CLI
+context does not load one automatically, so wire it via `runStemCli` with a
+`contextBuilder` that sets `CliContext.registry`. For multi-binary deployments,
+ensure the CLI and workers share the same registry entrypoint so task names,
 encoders, and routing rules stay consistent.
-
-Use a Dart entrypoint that registers tasks, for example:
-
-```bash
---registry lib/main.dart
-```
 
 If a command needs a registry and none is available, it will exit with an error
 or fall back to raw task metadata (depending on the subcommand).
 
-## Enqueue tasks
+## List registered tasks
 
 ```bash
-stem enqueue hello.print \
-  --args '{"name":"CLI"}' \
-  --registry lib/main.dart \
-  --broker redis://localhost:6379
+stem tasks ls
 ```
 
 Expected output:
 
 ```text
-taskId=... queue=default
+NAME            DESCRIPTION        IDEMPOTENT  TAGS
+email.send      Sends an email     yes         notifications
 ```
 
-## Observe tasks and groups
+## Observe queues, workers, and schedules
 
 ```bash
-stem observe tasks list --broker "$STEM_BROKER_URL"
-stem observe groups --backend "$STEM_RESULT_BACKEND_URL"
+stem observe queues
+stem observe workers
+stem observe dlq
+stem observe schedules
 ```
 
 Expected output:
 
 ```text
-tasks: [id=..., state=..., attempt=...]
-groups: [id=..., completed=..., expected=...]
+Queue     | Pending | Inflight
+Worker    | Active  | Last Heartbeat
+Queue     | Task ID                        | Reason
+Summary: due=... overdue=...
 ```
 
 Requirements:
 
-- `stem observe tasks` needs a broker.
-- `stem observe groups` requires a result backend.
+- `stem observe queues` and `stem observe dlq` need a broker.
+- `stem observe workers` requires a result backend.
+- `stem observe schedules` reads from `STEM_SCHEDULE_STORE_URL` or a schedule file.
 
 ## Worker control commands
 
 ```bash
-stem worker ping --broker "$STEM_BROKER_URL"
-stem worker stats --broker "$STEM_BROKER_URL"
-stem worker revoke --broker "$STEM_BROKER_URL" --task-id <id>
-stem worker shutdown --broker "$STEM_BROKER_URL" --mode warm
+stem worker ping
+stem worker stats
+stem worker revoke --task <id>
+stem worker shutdown --mode warm
 ```
 
 Expected output:
@@ -130,19 +126,23 @@ Combine with programmatic signals for richer telemetry (see
 
 ```bash
 stem schedule apply \
-  --file config/schedules.yaml \
-  --store "$STEM_SCHEDULE_STORE_URL"
+  --file config/schedules.yaml
 
-stem beat start \
-  --store "$STEM_SCHEDULE_STORE_URL" \
-  --broker "$STEM_BROKER_URL" \
-  --registry lib/main.dart
+stem schedule list
+stem schedule dry-run --spec "every:5m"
+```
+
+Run Beat from a Dart entrypoint wired to your schedule store:
+
+```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-redis
+
 ```
 
 Requirements:
 
-- `stem schedule apply` and `stem beat start` require a schedule store.
-- `stem beat start` also needs a broker and registry.
+- `stem schedule apply/list/dry-run` use `STEM_SCHEDULE_STORE_URL` when set,
+  otherwise they operate on local schedule files.
+- Beat needs a broker, schedule store, and (for HA) a lock store.
 
 Expected output (schedule list):
 
@@ -157,8 +157,7 @@ cleanup   | maintenance... | default  | every:5m         | 2025-01-01T00:05:00Z 
 ```bash
 stem health \
   --broker "$STEM_BROKER_URL" \
-  --backend "$STEM_RESULT_BACKEND_URL" \
-  --schedule-store "$STEM_SCHEDULE_STORE_URL"
+  --backend "$STEM_RESULT_BACKEND_URL"
 ```
 
 The command exits non-zero when connectivity, TLS, or signing checks fail—ideal
@@ -170,18 +169,17 @@ Use this table to sanity-check which connection strings are required:
 
 | Command | Broker | Result backend | Schedule store | Revoke store | Registry |
 | --- | --- | --- | --- | --- | --- |
-| `stem enqueue` | ✅ | optional | ❌ | ❌ | ✅ |
-| `stem observe tasks` | ✅ | ❌ | ❌ | ❌ | ❌ |
-| `stem observe groups` | ❌ | ✅ | ❌ | ❌ | ❌ |
-| `stem observe queues` | ✅ | optional | ❌ | ❌ | ❌ |
+| `stem tasks ls` | ❌ | ❌ | ❌ | ❌ | ✅ |
+| `stem observe queues` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `stem observe workers` | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `stem observe dlq` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `stem observe schedules` | ❌ | ❌ | ✅ | ❌ | ❌ |
-| `stem worker ping/stats/status` | ✅ | optional | ❌ | ❌ | ❌ |
-| `stem worker revoke` | ✅ | optional | ❌ | ✅ | ❌ |
+| `stem worker ping/stats/inspect` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `stem worker status` | optional (follow) | optional (snapshot) | ❌ | ❌ | ❌ |
+| `stem worker revoke` | ✅ | optional | ❌ | optional | ❌ |
 | `stem worker shutdown` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `stem schedule apply/list/dry-run` | ❌ | ❌ | ✅ | ❌ | ❌ |
-| `stem beat start` | ✅ | optional | ✅ | ❌ | ✅ |
-| `stem health` | ✅ | optional | optional | ❌ | ❌ |
+| `stem health` | ✅ | optional | ❌ | ❌ | ❌ |
 
 Notes:
 
@@ -189,5 +187,7 @@ Notes:
   `STEM_SCHEDULE_STORE_URL`, and `STEM_REVOKE_STORE_URL`.
 - When a backend is “optional”, the command still runs but will skip that
   slice of data (for example, worker heartbeats without a result backend).
+- Schedule commands fall back to local schedule files when no schedule store
+  is configured.
 
 Keep the CLI handy when iterating on the code examples in the feature guides.

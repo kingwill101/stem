@@ -9,31 +9,29 @@ Stem supports per-task rate limits via `TaskOptions.rateLimit` and a pluggable
 `RateLimiter` interface. This lets you throttle hot handlers with a shared
 Redis-backed limiter or custom driver.
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## Quick start
 
-1) Set a rate limit on the task options:
+<Tabs>
+<TabItem value="task-options" label="Task Options">
 
-```dart
-TaskOptions(
-  queue: 'throttled',
-  rateLimit: '3/s',
-)
+```dart title="lib/shared.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/lib/shared.dart#rate-limit-task-options
+
 ```
 
-2) Wire a rate limiter into the worker:
+</TabItem>
+<TabItem value="worker-wiring" label="Worker Wiring">
 
-```dart
-final rateLimiter = await connectRateLimiter(config);
+```dart title="bin/worker.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/bin/worker.dart#rate-limit-worker
 
-final worker = Worker(
-  broker: broker,
-  registry: registry,
-  backend: backend,
-  rateLimiter: rateLimiter,
-);
 ```
 
-3) Run the `rate_limit_delay` example for a full demo:
+</TabItem>
+</Tabs>
+
+Run the `rate_limit_delay` example for a full demo:
 
 - `packages/stem/example/rate_limit_delay`
 
@@ -64,7 +62,9 @@ The `example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
 
 Inspect it here:
 
-- `packages/stem/example/rate_limit_delay/lib/rate_limiter.dart`
+```dart title="lib/rate_limiter.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/lib/rate_limiter.dart#rate-limit-redis-limiter
+
+```
 
 ## Observability
 

@@ -41,7 +41,7 @@ Result backends store the task state and payload:
 
 ```
 
-## Choosing a broker and backend
+## Choose a broker and backend
 
 Stem lets you mix brokers and backends. Use this quick guide when selecting
 your first deployment:
@@ -60,6 +60,47 @@ Decision shortcuts:
 
 For more detail, see [Broker Overview](../brokers/overview.md) and
 [Persistence](../core-concepts/persistence.md).
+
+## Install
+
+- Install Stem and the CLI as shown in [Quick Start](./quick-start.md).
+- Ensure `stem --version` runs in your shell.
+
+## App setup
+
+- Register tasks and options in a shared registry (see
+  [Tasks & Retries](../core-concepts/tasks.md)).
+- Wire producers with the same registry (see
+  [Producer API](../core-concepts/producer.md)).
+
+## Run a worker
+
+- Start a worker against your broker and queues (see
+  [Connect to Infrastructure](./developer-environment.md)).
+- Use [Worker Control CLI](../workers/worker-control.md) to confirm it is
+  responding.
+
+## Call a task
+
+- Enqueue from your app or the CLI (see
+  [Producer API](../core-concepts/producer.md)).
+
+## Keeping results
+
+- Configure a result backend for stored task results and groups (see
+  [Persistence](../core-concepts/persistence.md)).
+
+## Configuration
+
+- Use `STEM_*` environment variables for brokers, routing, scheduling, and
+  signing (see [CLI & Control](../core-concepts/cli-control.md)).
+- Define routing rules in `STEM_ROUTING_CONFIG` for multi-queue setups (see
+  [Routing](../core-concepts/routing.md)).
+
+## Troubleshooting
+
+- Diagnose common errors in
+  [Troubleshooting](./troubleshooting.md).
 
 ## Next steps
 

@@ -46,11 +46,14 @@ so scaling does not starve queues.
 
 - `STEM_BROKER_URL` – broker connection string (Redis/Postgres/memory).
 - `STEM_RESULT_BACKEND_URL` – durable result backend (optional but recommended).
-- `STEM_WORKER_CONCURRENCY` – override concurrency without code changes.
-- `STEM_WORKER_PREFETCH` – override prefetch count (or use multiplier).
-- `STEM_WORKER_NAMESPACE` – namespace for worker IDs and heartbeats.
-- `STEM_CONTROL_NAMESPACE` – override control command namespace.
+- `STEM_DEFAULT_QUEUE` – fallback queue when routing is unset.
+- `STEM_PREFETCH_MULTIPLIER` – prefetch multiplier applied to concurrency.
+- `STEM_WORKER_QUEUES` – explicit queue subscriptions (comma separated).
+- `STEM_WORKER_BROADCASTS` – broadcast channel subscriptions (comma separated).
+- `STEM_WORKER_NAMESPACE` – worker heartbeat/control namespace (observability).
+- `STEM_ROUTING_CONFIG` – path to routing config (YAML/JSON).
 - `STEM_SIGNING_*` – enable payload signing for tamper detection.
+- `STEM_TLS_*` – TLS settings for broker/backends.
 
 - **[Programmatic Integration](./programmatic-integration.md)** – Wire producers
   and workers inside your Dart services (includes in-memory and Redis examples).

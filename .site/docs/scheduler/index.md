@@ -37,10 +37,10 @@ pattern out of the box.
 
 ## Schedule stores
 
-Beat persists schedule entries so restarts do not lose state. The schedule store
-defaults to the broker when `STEM_SCHEDULE_STORE_URL` is unset, but you can
-point it at a dedicated Redis or Postgres database to isolate scheduler traffic.
-For HA deployments, pair the schedule store with a shared lock store.
+Beat persists schedule entries so restarts do not lose state. For production,
+use a shared schedule store (Redis/Postgres) and a lock store to coordinate HA
+instances. The CLI schedule commands use `STEM_SCHEDULE_STORE_URL` when set;
+otherwise they operate on local schedule files.
 
 ## CLI entrypoints
 
@@ -49,8 +49,9 @@ Common scheduler CLI commands:
 - `stem schedule apply` — load schedule entries from JSON/YAML into the store.
 - `stem schedule list` — inspect entries in the store.
 - `stem schedule dry-run` — preview due times before rollout.
-- `stem beat start` — run the Beat process against a schedule store.
 - `stem observe schedules` — inspect schedule drift and dispatch status.
+
+Beat itself runs as a Dart process; see the Beat guide for entrypoints.
 
 - **[Beat Scheduler Guide](./beat-guide.md)** – Configure Beat, load schedules, and run it with in-memory, Redis, or Postgres stores.
 - **Example:** `example/scheduler_observability` shows drift metrics, schedule signals, and CLI inspection.

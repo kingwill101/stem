@@ -10,49 +10,53 @@ between tenants sharing the same infrastructure. Most Stem components honor the
 namespace when naming queues, result keys, and control channels. Unless you pass
 an explicit namespace, adapters default to `stem`.
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## What uses the namespace
 
-- **Brokers**: queue names and stream keys are prefixed by namespace.
-- **Result backends**: task status, group results, and heartbeats are stored
-  under namespace-prefixed keys or tables.
-- **Schedule & lock stores**: schedules, locks, and leases include namespace
-  prefixes so multiple schedulers can share a store safely.
+- **Brokers & backends**: queue streams, task results, heartbeats, and dead
+  letters are scoped by the namespace configured on each adapter.
+- **Schedule & lock stores**: schedule entries and scheduler locks use
+  namespace-prefixed keys/tables so multiple schedulers can share a store.
 - **Revoke stores**: revocation entries are scoped by namespace.
 - **Workflow stores**: workflow runs and topic queues are namespaced.
-- **Control plane**: control broadcast channels and reply queues are scoped by
+- **Control plane**: worker control channels and heartbeat topics use the
+  worker namespace.
+- **Dashboard**: reads control/observability data using its configured
   namespace.
-- **CLI**: worker control commands accept `--namespace` to target non-default
-  namespaces.
 
-## Configuration options
+## Configure namespaces
 
-Stem uses a few namespace-related environment variables. The defaults are
-sensible for single-environment deployments; override them when you need
-isolation:
+<Tabs>
+<TabItem value="broker" label="Broker + Backend">
+
+```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker-backend
+
+```
+
+</TabItem>
+<TabItem value="worker" label="Worker Heartbeats">
+
+```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-worker
+
+```
+
+</TabItem>
+</Tabs>
+
+## Environment variables
+
+Stem does not use a single global namespace variable; instead, namespaces are
+configured per adapter or via the worker observability settings. The default is
+`stem` when no override is provided.
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
-| `STEM_WORKER_NAMESPACE` | Namespace for worker IDs + heartbeats | `stem` |
-| `STEM_WORKFLOW_NAMESPACE` | Namespace for workflow store entries | `stem` |
-| `STEM_DASHBOARD_NAMESPACE` | Namespace the dashboard reads | `stem` |
-
-Most adapter namespaces are set when you construct the broker/backend/store,
-for example:
-
-```dart
-final broker = await RedisStreamsBroker.connect(
-  'redis://localhost:6379',
-  namespace: 'staging',
-);
-final backend = await RedisResultBackend.connect(
-  'redis://localhost:6379/1',
-  namespace: 'staging',
-);
-final scheduleStore = await RedisScheduleStore.connect(
-  'redis://localhost:6379/2',
-  namespace: 'staging',
-);
-```
+| `STEM_WORKER_NAMESPACE` | Worker heartbeat/control namespace when using `ObservabilityConfig.fromEnvironment` | `stem` |
+| `STEM_WORKFLOW_NAMESPACE` | Workflow store namespace used by the CLI workflow runner | `stem` |
+| `STEM_DASHBOARD_NAMESPACE` | Namespace the dashboard reads | falls back to `STEM_NAMESPACE` or `stem` |
+| `STEM_NAMESPACE` | Dashboard fallback namespace value | `stem` |
 
 ## CLI usage
 

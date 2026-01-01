@@ -32,6 +32,45 @@ Avoid retrying when:
 - Cap the maximum delay.
 - Add random jitter to avoid spikes.
 
+## Stem defaults
+
+Workers use `ExponentialJitterRetryStrategy` by default:
+
+- `base`: 2 seconds
+- `max`: 5 minutes
+
+Retries are scheduled by publishing a new envelope with `notBefore` set to the
+next retry time. Each retry increments the attempt counter until
+`TaskOptions.maxRetries` is exhausted.
+
+## Custom strategies
+
+Provide a custom `RetryStrategy` to the worker when you need fixed delays,
+linear backoff, or bespoke logic:
+
+```dart
+final worker = Worker(
+  broker: broker,
+  backend: backend,
+  registry: registry,
+  retryStrategy: ExponentialJitterRetryStrategy(
+    base: Duration(milliseconds: 200),
+    max: Duration(seconds: 5),
+  ),
+);
+```
+
+You can also implement your own strategy by conforming to the `RetryStrategy`
+interface and returning the desired delay for each attempt.
+
+## Observability cues
+
+Watch these signals and metrics to verify retry behavior:
+
+- `StemSignals.taskRetry` includes the next retry timestamp.
+- `stem.tasks.retried` and `stem.tasks.failed` counters highlight spikes.
+- DLQ volume indicates retries are exhausting or errors are permanent.
+
 ## Operational checklist
 
 - Monitor retry rates and DLQ volume.

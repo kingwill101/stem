@@ -7,19 +7,23 @@ slug: /getting-started/next-steps
 
 Use this page as a jump table once you’ve finished the first walkthroughs.
 
-## Call tasks
+## Calling tasks
 
 - [Producer API](../core-concepts/producer.md)
 - [Tasks & Retries](../core-concepts/tasks.md)
+- [Retry & Backoff](./retry-backoff.md)
 
-## Canvas & workflows
+## Canvas/Workflows
 
 - [Canvas Patterns](../core-concepts/canvas.md)
 - [Workflows](../core-concepts/workflows.md)
 
-## Routing & control
+## Routing
 
 - [Routing](../core-concepts/routing.md)
+
+## Remote control
+
 - [CLI & Control](../core-concepts/cli-control.md)
 - [Worker Control CLI](../workers/worker-control.md)
 
@@ -29,12 +33,12 @@ Use this page as a jump table once you’ve finished the first walkthroughs.
 - [Dashboard](../core-concepts/dashboard.md)
 - [Production Checklist](./production-checklist.md)
 
-## Scheduling & time
+## Timezone
 
 - [Scheduler](../scheduler/index.md)
 - [Beat Scheduler Guide](../scheduler/beat-guide.md)
 
-## Performance & safety
+## Optimization
 
 - [Rate Limiting](../core-concepts/rate-limiting.md)
 - [Uniqueness](../core-concepts/uniqueness.md)
