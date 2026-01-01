@@ -27,6 +27,7 @@ Future<void> main() async {
 
   stdout.writeln(
       '[producer] enqueueing invoices $invoices (all expected to fail first)');
+  // #region dlq-producer-enqueue
   for (final invoice in invoices) {
     final id = await stem.enqueue(
       taskName(),
@@ -43,6 +44,7 @@ Future<void> main() async {
     );
     stdout.writeln('[producer] queued invoice=$invoice taskId=$id');
   }
+  // #endregion dlq-producer-enqueue
 
   stdout.writeln('[producer] jobs queued. Waiting 3s before exit...');
   await Future<void>.delayed(const Duration(seconds: 3));

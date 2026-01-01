@@ -125,6 +125,11 @@ stem dlq show --queue <queue> --id <task-id>
 stem dlq replay --queue <queue> --id <task-id>
 ```
 
+Example enqueue that will land in the DLQ:
+
+```dart title="bin/producer.dart" file=<rootDir>/../packages/stem/example/dlq_sandbox/bin/producer.dart#dlq-producer-enqueue
+```
+
 ## Control commands return no replies
 
 This usually means the control broadcast channel is not being consumed.
