@@ -97,12 +97,10 @@ Prefer configuration over code? Use the CLI with the same schedule file:
 ```bash
 stem schedule apply \
   --file config/schedules.yaml \
-  --store "$STEM_SCHEDULE_STORE_URL"
+  --yes
 
-stem beat start \
-  --store "$STEM_SCHEDULE_STORE_URL" \
-  --broker "$STEM_BROKER_URL" \
-  --registry lib/main.dart
+stem schedule list
+stem schedule dry-run --spec "every:5m"
 ```
 
 ## Programmatic spec helpers
@@ -146,10 +144,14 @@ You can also query the schedule store directly:
 - Use `lockStore` (Redis or Postgres) when running Beat in HA mode so only one
   instance triggers jobs at a time.
 - Call `Beat.stop()` on shutdown to flush outstanding timers and release locks.
-- Combine Beat with `stem worker start --bundle` to ship the same registry to
-  both components.
+- Run Beat from a Dart entrypoint wired to your schedule store (see the Redis
+  example below):
+
+```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-redis
+
+```
 - Store schedules in source control and re-apply them with
-  `stem schedule apply` after deployments.
+  `stem schedule apply --yes` after deployments.
 
 Next, hook Beat into your deployment automation and monitor the scheduler
 signals alongside worker metrics.
