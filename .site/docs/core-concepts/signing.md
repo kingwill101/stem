@@ -50,13 +50,13 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 
 Create a signer from your environment-driven config:
 
-```dart title="enqueuer/bin/main.dart" file=<rootDir>/../packages/stem/example/microservice/enqueuer/bin/main.dart#signing-producer-signer
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-producer-signer
 
 ```
 
 Attach the signer to the producer so envelopes are signed:
 
-```dart title="enqueuer/bin/main.dart" file=<rootDir>/../packages/stem/example/microservice/enqueuer/bin/main.dart#signing-producer-stem
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-producer-stem
 
 ```
 
@@ -65,13 +65,13 @@ Attach the signer to the producer so envelopes are signed:
 
 If your worker only needs to verify, the signer can be created from public keys:
 
-```dart title="worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/microservice/worker/bin/worker.dart#signing-worker-signer
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-worker-signer
 
 ```
 
 Attach the signer to the worker so signatures are verified:
 
-```dart title="worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/microservice/worker/bin/worker.dart#signing-worker-wire
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-worker-wire
 
 ```
 
@@ -80,11 +80,11 @@ Attach the signer to the worker so signatures are verified:
 
 Schedulers that enqueue tasks should also sign:
 
-```dart title="beat/bin/beat.dart" file=<rootDir>/../packages/stem/example/microservice/beat/bin/beat.dart#signing-beat-signer
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-beat-signer
 
 ```
 
-```dart title="beat/bin/beat.dart" file=<rootDir>/../packages/stem/example/microservice/beat/bin/beat.dart#signing-beat-wire
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-beat-wire
 
 ```
 
@@ -126,14 +126,14 @@ Example: producer logging the active key and enqueuing during rotation:
 <Tabs>
 <TabItem value="active-key" label="Rotation: log active key">
 
-```dart title="signing_key_rotation/bin/producer.dart" file=<rootDir>/../packages/stem/example/signing_key_rotation/bin/producer.dart#signing-rotation-producer-active-key
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-rotation-producer-active-key
 
 ```
 
 </TabItem>
 <TabItem value="enqueue" label="Rotation: enqueue tasks">
 
-```dart title="signing_key_rotation/bin/producer.dart" file=<rootDir>/../packages/stem/example/signing_key_rotation/bin/producer.dart#signing-rotation-producer-enqueue
+```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-rotation-producer-enqueue
 
 ```
 

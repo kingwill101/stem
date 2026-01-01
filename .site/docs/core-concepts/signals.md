@@ -5,6 +5,9 @@ sidebar_position: 4
 slug: /core-concepts/signals
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Stem now exposes Celery-style lifecycle signals so instrumentation can react to
 publish, worker, scheduler, and control-plane events without modifying the
 runtime. All payloads live in `package:stem/src/signals/payloads.dart` and map
@@ -57,6 +60,39 @@ Environment knobs:
 Workers automatically apply the configuration passed through
 `ObservabilityConfig`, enabling cluster-wide rollouts without code changes.
 
+## Listening for signals
+
+<Tabs>
+<TabItem value="task" label="Task lifecycle">
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-task-listeners
+
+```
+
+</TabItem>
+<TabItem value="worker" label="Worker lifecycle">
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-worker-listeners
+
+```
+
+</TabItem>
+<TabItem value="scheduler" label="Scheduler">
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-scheduler-listeners
+
+```
+
+</TabItem>
+<TabItem value="control" label="Control plane">
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-control-listeners
+
+```
+
+</TabItem>
+</Tabs>
+
 ## Adapters & Middleware
 
 - `StemSignalEmitter` builds payloads and emits signals; it powers Stem itself
@@ -66,6 +102,10 @@ Workers automatically apply the configuration passed through
   `taskPrerun`, and `taskFailed` from existing worker middleware chains. Success
   and postrun events remain wired through the runtime so result payloads stay
   accurate.
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-middleware
+
+```
 
 ## Example (Docker Compose)
 
