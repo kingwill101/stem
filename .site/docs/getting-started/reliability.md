@@ -7,6 +7,9 @@ slug: /getting-started/reliability
 
 This guide summarizes reliability practices for task systems using Stem.
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## Recovery workflow
 
 1. Identify the failing task or queue.
@@ -38,6 +41,23 @@ This guide summarizes reliability practices for task systems using Stem.
 - Use bounded retries with jittered backoff to avoid thundering herds.
 - Separate transient failures from permanent failures.
 - For permanent errors, fail fast and alert.
+
+<Tabs>
+<TabItem value="strategy" label="Retry Strategy">
+
+```dart title="lib/workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-retry
+
+```
+
+</TabItem>
+<TabItem value="signals" label="Retry Signals">
+
+```dart title="lib/observability_ops.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-analytics
+
+```
+
+</TabItem>
+</Tabs>
 
 ## Observability signals
 

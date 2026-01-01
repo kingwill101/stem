@@ -8,6 +8,9 @@ slug: /getting-started/monitoring
 This guide focuses on visibility: dashboards, metrics, and signals that help
 catch issues early.
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 ## Dashboard deployment
 
 - **Local**: run the dashboard on a developer workstation for quick checks.
@@ -37,14 +40,35 @@ See the [Dashboard](../core-concepts/dashboard.md) guide for setup details.
 - Export metrics to your standard stack (OTLP, Prometheus, Datadog, etc.).
 - Correlate task IDs with traces/logs.
 
-Stem exposes OpenTelemetry exporters via environment variables:
+<Tabs>
+<TabItem value="metrics" label="Metrics Exporters">
+
+```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
+
+```
+
+</TabItem>
+<TabItem value="signals" label="Signal Hooks">
+
+```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-signals
+
+```
+
+</TabItem>
+<TabItem value="env" label="Env Vars">
 
 ```bash
 export STEM_METRIC_EXPORTERS=otlp:http://localhost:4318/v1/metrics
 export STEM_OTLP_ENDPOINT=http://localhost:4318
 ```
 
+</TabItem>
+</Tabs>
+
 ## CLI probes
+
+<Tabs>
+<TabItem value="cli" label="CLI Commands">
 
 ```bash
 stem observe queues
@@ -54,6 +78,16 @@ stem worker stats --json
 ```
 
 Set `STEM_SCHEDULE_STORE_URL` before running `stem observe schedules`.
+
+</TabItem>
+<TabItem value="dart" label="Dart (Heartbeats)">
+
+```dart title="lib/observability_ops.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-heartbeats
+
+```
+
+</TabItem>
+</Tabs>
 
 ## Next steps
 

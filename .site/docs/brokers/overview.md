@@ -125,6 +125,20 @@ final broker = await RedisStreamsBroker.connect(
 );
 ```
 
+Or use the broker snippet entrypoints:
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-redis
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-postgres
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-in-memory
+
+```
+
 For result storage, see the [Persistence](../core-concepts/persistence.md)
 guide.
 

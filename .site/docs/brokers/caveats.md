@@ -67,3 +67,17 @@ implementations.
   or Postgres.
 - Prefer Redis when you need low-latency delivery and high throughput.
 - Prefer Postgres when you need SQL visibility and a single durable store.
+
+## Example entrypoints
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-in-memory
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-redis
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-postgres
+
+```
