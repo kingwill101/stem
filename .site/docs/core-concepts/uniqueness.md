@@ -5,6 +5,9 @@ sidebar_position: 5
 slug: /core-concepts/uniqueness
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Stem can prevent duplicate enqueues for naturally unique tasks. Enable
 `TaskOptions.unique` and configure a `UniqueTaskCoordinator` backed by a
 `LockStore` (Redis or in-memory).
@@ -13,19 +16,32 @@ Stem can prevent duplicate enqueues for naturally unique tasks. Enable
 
 1) Mark the task as unique:
 
-```dart title="unique_task_example.dart" file=<rootDir>/../packages/stem/example/unique_tasks/unique_task_example.dart#unique-task-options
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-task-options
 
 ```
 
 2) Create a coordinator with a shared lock store:
 
-```dart title="unique_task_example.dart" file=<rootDir>/../packages/stem/example/unique_tasks/unique_task_example.dart#unique-task-coordinator
+<Tabs>
+<TabItem value="in-memory" label="In-memory (local)">
+
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-coordinator-inmemory
 
 ```
 
+</TabItem>
+<TabItem value="redis" label="Redis (shared)">
+
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-coordinator-redis
+
+```
+
+</TabItem>
+</Tabs>
+
 3) Wire the coordinator into the producer and worker:
 
-```dart title="unique_task_example.dart" file=<rootDir>/../packages/stem/example/unique_tasks/unique_task_example.dart#unique-task-stem-worker
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-stem-worker
 
 ```
 
@@ -43,13 +59,8 @@ Stem can prevent duplicate enqueues for naturally unique tasks. Enable
 
 Override the computed key when you need custom grouping:
 
-```dart
-await stem.enqueue(
-  'orders.sync',
-  args: {'id': 42},
-  options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),
-  meta: {UniqueTaskMetadata.override: 'order-42'},
-);
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-override-key
+
 ```
 
 ## What happens on duplicates
@@ -72,9 +83,9 @@ retries do not create new unique claims.
 
 ## Example
 
-The `unique_tasks` example shows end-to-end behavior:
+The snippet below shows the enqueue behavior (see `unique_tasks` for a full demo):
 
-```dart title="unique_task_example.dart" file=<rootDir>/../packages/stem/example/unique_tasks/unique_task_example.dart#unique-task-enqueue
+```dart title="lib/uniqueness.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/uniqueness.dart#uniqueness-enqueue
 
 ```
 
