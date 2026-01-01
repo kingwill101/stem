@@ -17,6 +17,15 @@ workers like you would with Celery’s `celery multi`. This guide mirrors
 - Copy templates from the repository (`templates/`) into your packaging step:
   systemd units, SysV scripts, and `/etc/default/stem`.
 
+## Worker entrypoint
+
+The daemonization templates expect a worker launcher that runs until signaled.
+This is the stub worker used by the daemonized worker example:
+
+```dart title="worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-main
+
+```
+
 ## Systemd Example
 
 ```bash

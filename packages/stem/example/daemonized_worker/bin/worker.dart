@@ -1,3 +1,4 @@
+// #region daemonized-worker-main
 import 'dart:async';
 import 'dart:io';
 
@@ -27,3 +28,4 @@ Future<void> main(List<String> args) async {
     }
   }
 }
+// #endregion daemonized-worker-main

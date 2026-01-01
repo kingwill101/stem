@@ -7,6 +7,16 @@ sidebar_position: 0
 Workers pull tasks, manage concurrency, and publish lifecycle signals. Use these
 guides to embed workers programmatically and operate them in production.
 
+## Minimal entrypoints
+
+```dart title="workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-minimal
+
+```
+
+```dart title="workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-producer-minimal
+
+```
+
 ## Lifecycle overview
 
 Workers connect to the broker, claim deliveries, execute task handlers, and
