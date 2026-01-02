@@ -6,8 +6,8 @@ slug: /core-concepts/signing
 ---
 
 Stem can sign every task envelope so workers can detect tampering or untrusted
-publishers. This guide covers the mental model, a quick start, and a full
-reference for signing configuration.
+publishers. This guide focuses on newcomers: how signing works, how to wire it
+into your app, and where to look when something fails.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -26,6 +26,7 @@ reason.
   into `Stem` to sign new envelopes.
 - Workers create the same signer (or verification-only config) and pass it into
   `Worker` to verify each delivery.
+- Schedulers/Beat that enqueue tasks should also sign.
 - Signatures are stored in envelope headers: `stem-signature` and
   `stem-signature-key`.
 
@@ -43,48 +44,69 @@ export STEM_SIGNING_KEYS="v1:$(openssl rand -base64 32)"
 export STEM_SIGNING_ACTIVE_KEY=v1
 ```
 
-2) Wire the signer into producers, workers, and schedulers:
+2) Wire the signer into producers, workers, and schedulers.
+
+These snippets come from the `example/microservice` project so you can see the
+full context.
 
 <Tabs>
-<TabItem value="producer" label="Producer: sign envelopes">
+<TabItem value="producer" label="Producer (enqueuer): sign outgoing envelopes">
 
-Create a signer from your environment-driven config:
+Load signing config once at startup:
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-producer-signer
+```dart title="example/microservice/enqueuer/bin/main.dart" file=<rootDir>/../packages/stem/example/microservice/enqueuer/bin/main.dart#signing-producer-config
+
+```
+
+Create a signer from that config:
+
+```dart title="example/microservice/enqueuer/bin/main.dart" file=<rootDir>/../packages/stem/example/microservice/enqueuer/bin/main.dart#signing-producer-signer
 
 ```
 
 Attach the signer to the producer so envelopes are signed:
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-producer-stem
+```dart title="example/microservice/enqueuer/bin/main.dart" file=<rootDir>/../packages/stem/example/microservice/enqueuer/bin/main.dart#signing-producer-stem
 
 ```
 
 </TabItem>
-<TabItem value="worker" label="Worker: verify signatures">
+<TabItem value="worker" label="Worker: verify signatures on every delivery">
+
+Load signing config once at startup:
+
+```dart title="example/microservice/worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/microservice/worker/bin/worker.dart#signing-worker-config
+
+```
 
 If your worker only needs to verify, the signer can be created from public keys:
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-worker-signer
+```dart title="example/microservice/worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/microservice/worker/bin/worker.dart#signing-worker-signer
 
 ```
 
 Attach the signer to the worker so signatures are verified:
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-worker-wire
+```dart title="example/microservice/worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/microservice/worker/bin/worker.dart#signing-worker-wire
 
 ```
 
 </TabItem>
-<TabItem value="scheduler" label="Scheduler: sign scheduled tasks">
+<TabItem value="scheduler" label="Scheduler (Beat): sign scheduled tasks">
 
-Schedulers that enqueue tasks should also sign:
+Load signing config once at startup:
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-beat-signer
+```dart title="example/microservice/beat/bin/beat.dart" file=<rootDir>/../packages/stem/example/microservice/beat/bin/beat.dart#signing-beat-config
 
 ```
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-beat-wire
+Schedulers that enqueue tasks should also sign:
+
+```dart title="example/microservice/beat/bin/beat.dart" file=<rootDir>/../packages/stem/example/microservice/beat/bin/beat.dart#signing-beat-signer
+
+```
+
+```dart title="example/microservice/beat/bin/beat.dart" file=<rootDir>/../packages/stem/example/microservice/beat/bin/beat.dart#signing-beat-wire
 
 ```
 
@@ -121,19 +143,20 @@ export STEM_SIGNING_ACTIVE_KEY=primary
 3) Roll workers (they accept all configured keys).
 4) Remove the old key after the backlog drains.
 
-Example: producer logging the active key and enqueuing during rotation:
+Example: producer logging the active key and enqueuing during rotation (from
+`example/signing_key_rotation`):
 
 <Tabs>
-<TabItem value="active-key" label="Rotation: log active key">
+<TabItem value="active-key" label="Rotation: log active key + signing state">
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-rotation-producer-active-key
+```dart title="example/signing_key_rotation/bin/producer.dart" file=<rootDir>/../packages/stem/example/signing_key_rotation/bin/producer.dart#signing-rotation-producer-active-key
 
 ```
 
 </TabItem>
-<TabItem value="enqueue" label="Rotation: enqueue tasks">
+<TabItem value="enqueue" label="Rotation: enqueue tasks with current key">
 
-```dart title="lib/signing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signing.dart#signing-rotation-producer-enqueue
+```dart title="example/signing_key_rotation/bin/producer.dart" file=<rootDir>/../packages/stem/example/signing_key_rotation/bin/producer.dart#signing-rotation-producer-enqueue
 
 ```
 
