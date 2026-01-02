@@ -10,7 +10,7 @@ jobs:
   build-docs:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     defaults:
       run:
         working-directory: .site
@@ -30,3 +30,12 @@ jobs:
 
       - name: Build Docusaurus site
         run: npm run build
+
+      - name: Deploy to GitHub Pages branch
+        if: github.ref == 'refs/heads/master'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .site/build
+          publish_branch: gh-pages
+          force_orphan: true
