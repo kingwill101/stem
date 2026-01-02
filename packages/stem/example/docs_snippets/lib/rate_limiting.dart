@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
+// #region rate-limit-demo-limiter
 class DemoRateLimiter implements RateLimiter {
   DemoRateLimiter({required this.capacity, required this.interval});
 
@@ -41,6 +42,7 @@ class DemoRateLimiter implements RateLimiter {
     );
   }
 }
+// #endregion rate-limit-demo-limiter
 
 // #region rate-limit-task-options
 class RateLimitedTask extends TaskHandler<void> {

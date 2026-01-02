@@ -44,6 +44,10 @@ import TabItem from '@theme/TabItem';
 
 ```
 
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-limiter
+
+```
+
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-worker
 
 ```
