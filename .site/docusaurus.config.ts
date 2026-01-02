@@ -16,14 +16,14 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://example.com',
+  url: 'https://kingwill101.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: '/stem/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'stem', // Usually your GitHub org/user name.
+  organizationName: 'kingwill101', // Usually your GitHub org/user name.
   projectName: 'stem', // Usually your repo name.
 
   onBrokenLinks: 'throw',
@@ -43,7 +43,7 @@ const config: Config = {
         docs: {
           routeBasePath: '/',
           sidebarPath: './sidebars.ts',
-          editUrl: 'https://github.com/stem/stem/tree/main/.site/docs/',
+          editUrl: 'https://github.com/kingwill101/stem/tree/main/.site/docs/',
           remarkPlugins: [[remarkCodeRegion, { rootDir: __dirname }]],
         },
         blog: {
@@ -52,7 +52,7 @@ const config: Config = {
             type: ['rss', 'atom'],
             xslt: true,
           },
-          editUrl: 'https://github.com/stem/stem/tree/main/.site/blog/',
+          editUrl: 'https://github.com/kingwill101/stem/tree/main/.site/blog/',
           // Useful options to enforce blogging best practices
           onInlineTags: 'warn',
           onInlineAuthors: 'warn',
