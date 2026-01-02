@@ -30,6 +30,17 @@ include queue depth, retry counts, lease renewals, and worker concurrency;
 traces connect `Stem.enqueue` spans with worker execution spans so you can
 follow a task end-to-end.
 
+If you want an explicit in-process configuration, wire metrics and tracing
+directly:
+
+```dart title="Configure metrics" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-metrics
+
+```
+
+```dart title="Tracing-enabled Stem" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-tracing
+
+```
+
 ## 2. Inspect Worker Heartbeats & Status
 
 Workers publish detailed heartbeats (in-flight counts, leases, queues) to the
@@ -130,6 +141,14 @@ Signals fire for task, worker, and scheduler lifecycle events. Wire them into
 chat, incident tooling, or analytics:
 
 ```dart title="lib/analytics.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-analytics
+
+```
+
+```dart title="Signal handlers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-signals
+
+```
+
+```dart title="Structured logging" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-logging
 
 ```
 
