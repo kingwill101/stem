@@ -23,6 +23,12 @@ const sidebars: SidebarsConfig = {
         "getting-started/quick-start",
         "getting-started/first-steps",
         "getting-started/developer-environment",
+      ],
+    },
+    {
+      type: "category",
+      label: "Guides",
+      items: [
         "getting-started/observability-and-ops",
         "getting-started/production-checklist",
         "getting-started/troubleshooting",
@@ -63,7 +69,7 @@ const sidebars: SidebarsConfig = {
         "workers/daemonization",
       ],
     },
-  {
+    {
       type: "category",
       label: "Scheduler",
       link: { type: "doc", id: "scheduler/index" },
