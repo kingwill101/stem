@@ -7,13 +7,16 @@ import 'package:stem/stem.dart';
 
 // #region rate-limit-demo-limiter
 class DemoRateLimiter implements RateLimiter {
+  // #region rate-limit-demo-limiter-config
   DemoRateLimiter({required this.capacity, required this.interval});
 
   final int capacity;
   final Duration interval;
   int _used = 0;
   DateTime _windowStart = DateTime.now();
+  // #endregion rate-limit-demo-limiter-config
 
+  // #region rate-limit-demo-limiter-acquire
   @override
   Future<RateLimitDecision> acquire(
     String key, {
@@ -41,6 +44,7 @@ class DemoRateLimiter implements RateLimiter {
       meta: {'key': key},
     );
   }
+  // #endregion rate-limit-demo-limiter-acquire
 }
 // #endregion rate-limit-demo-limiter
 
@@ -93,21 +97,31 @@ Future<String> enqueueRateLimited(Stem stem) async {
 // #endregion rate-limit-producer
 
 Future<void> main() async {
+  // #region rate-limit-demo-registry
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()..register(RateLimitedTask());
+  // #endregion rate-limit-demo-registry
 
+  // #region rate-limit-demo-worker-start
   final worker = buildRateLimitedWorker(
     broker: broker,
     backend: backend,
     registry: registry,
   );
   await worker.start();
+  // #endregion rate-limit-demo-worker-start
 
+  // #region rate-limit-demo-stem
   final stem = Stem(broker: broker, backend: backend, registry: registry);
+  // #endregion rate-limit-demo-stem
+  // #region rate-limit-demo-enqueue
   await enqueueRateLimited(stem);
+  // #endregion rate-limit-demo-enqueue
   await Future<void>.delayed(const Duration(milliseconds: 200));
 
+  // #region rate-limit-demo-shutdown
   await worker.shutdown();
   broker.dispose();
+  // #endregion rate-limit-demo-shutdown
 }

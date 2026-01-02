@@ -40,21 +40,78 @@ import TabItem from '@theme/TabItem';
 
 ### Docs snippet (in-memory demo)
 
+<Tabs>
+<TabItem value="task" label="Define a rate-limited task">
+
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-task-options
 
 ```
 
-```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-limiter
+</TabItem>
+<TabItem value="limiter-config" label="Limiter config + state">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-limiter-config
 
 ```
+
+</TabItem>
+<TabItem value="limiter-acquire" label="Limiter acquire decision">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-limiter-acquire
+
+```
+
+</TabItem>
+<TabItem value="worker" label="Wire worker with rate limiter">
 
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-worker
 
 ```
 
+</TabItem>
+<TabItem value="producer" label="Enqueue with tenant header">
+
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-producer
 
 ```
+
+</TabItem>
+<TabItem value="registry" label="Build registry + broker">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-registry
+
+```
+
+</TabItem>
+<TabItem value="start" label="Start worker">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-worker-start
+
+```
+
+</TabItem>
+<TabItem value="stem" label="Create Stem client">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-stem
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Enqueue demo task">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-enqueue
+
+```
+
+</TabItem>
+<TabItem value="shutdown" label="Shutdown cleanly">
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-shutdown
+
+```
+
+</TabItem>
+</Tabs>
 
 Run the `rate_limit_delay` example for a full demo:
 
