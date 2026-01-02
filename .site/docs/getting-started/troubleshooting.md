@@ -40,6 +40,13 @@ Checklist:
 ```
 
 </TabItem>
+<TabItem value="results" label="Read results from the backend">
+
+```dart title="lib/troubleshooting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/troubleshooting.dart#troubleshooting-results
+
+```
+
+</TabItem>
 </Tabs>
 
 Helpful commands:
@@ -140,7 +147,14 @@ Checklist:
 </TabItem>
 <TabItem value="shared-signer" label="Shared signer config">
 
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-config
+
+```
+
+</TabItem>
+<TabItem value="runtime" label="Stem + worker signing setup">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-runtime
 
 ```
 
@@ -249,6 +263,23 @@ Checklist:
 - Confirm your task’s `TaskOptions` (`maxRetries`, `visibilityTimeout`).
 - Ensure the broker supports delayed deliveries (`notBefore`).
 - Check broker clock drift if delays feel inconsistent.
+
+<Tabs>
+<TabItem value="task-options" label="Retry-related task options">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-task-options
+
+```
+
+</TabItem>
+<TabItem value="strategy" label="Jittered retry strategy">
+
+```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-strategy
+
+```
+
+</TabItem>
+</Tabs>
 
 ## Connection refused
 
