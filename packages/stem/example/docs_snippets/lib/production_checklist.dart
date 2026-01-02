@@ -8,10 +8,13 @@ import 'package:stem/stem.dart';
 // #region production-signing-config
 Future<void> configureSigning() async {
   final config = StemConfig.fromEnvironment();
-  final signer = PayloadSigner.maybe(config.signing);
   // #endregion production-signing-config
 
-  // #region production-signing-runtime
+  // #region production-signing-signer
+  final signer = PayloadSigner.maybe(config.signing);
+  // #endregion production-signing-signer
+
+  // #region production-signing-registry
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()
@@ -24,26 +27,33 @@ Future<void> configureSigning() async {
         },
       ),
     );
+  // #endregion production-signing-registry
 
+  // #region production-signing-stem
   final stem = Stem(
     broker: broker,
     backend: backend,
     registry: registry,
     signer: signer,
   );
+  // #endregion production-signing-stem
 
+  // #region production-signing-worker
   final worker = Worker(
     broker: broker,
     backend: backend,
     registry: registry,
     signer: signer,
   );
-  // #endregion production-signing-runtime
+  // #endregion production-signing-worker
 
   // #region production-signing-enqueue
   await stem.enqueue('audit.log', args: {'message': 'hello'});
-  await worker.shutdown();
   // #endregion production-signing-enqueue
+
+  // #region production-signing-shutdown
+  await worker.shutdown();
+  // #endregion production-signing-shutdown
 }
 
 Future<void> main() async {

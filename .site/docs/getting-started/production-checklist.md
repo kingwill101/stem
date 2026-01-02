@@ -25,23 +25,48 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 In code, wire the signer into both producers and workers:
 
 <Tabs>
-<TabItem value="config" label="Signing config">
+<TabItem value="config" label="Load signing config">
 
 ```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-config
 
 ```
 
 </TabItem>
-<TabItem value="runtime" label="Stem + worker setup">
+<TabItem value="signer" label="Create the signer">
 
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-runtime
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-signer
 
 ```
 
 </TabItem>
-<TabItem value="enqueue" label="Signed enqueue">
+<TabItem value="registry" label="Register tasks + storage">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-registry
+
+```
+
+</TabItem>
+<TabItem value="stem" label="Stem setup (signing enabled)">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-stem
+
+```
+
+</TabItem>
+<TabItem value="worker" label="Worker setup (verify signatures)">
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-worker
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Signed enqueue + shutdown">
 
 ```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-enqueue
+
+```
+
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-shutdown
 
 ```
 
