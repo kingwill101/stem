@@ -55,15 +55,47 @@ stem worker ping
 stem worker stats --worker worker-a
 ```
 
-```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe
+```dart title="Observe queues" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe-queues
 
 ```
 
-```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker
+```dart title="Observe workers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe-workers
 
 ```
 
-```dart title="lib/cli_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-schedule
+```dart title="Observe DLQ" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe-dlq
+
+```
+
+```dart title="Observe schedules" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-observe-schedules
+
+```
+
+```dart title="Ping workers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-ping
+
+```
+
+```dart title="Worker stats" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-stats
+
+```
+
+```dart title="Revoke a task" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-revoke
+
+```
+
+```dart title="Shutdown workers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-shutdown
+
+```
+
+```dart title="Apply schedules" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-schedule-apply
+
+```
+
+```dart title="List schedules" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-schedule-list
+
+```
+
+```dart title="Dry-run a schedule" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-schedule-dry-run
 
 ```
 
