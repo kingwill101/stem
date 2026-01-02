@@ -61,7 +61,7 @@ Future<void> runTroubleshootingDemo() async {
   // #region troubleshooting-results
   await Future<void>.delayed(const Duration(milliseconds: 200));
   final result = await backend.get(taskId);
-  print('Result: ${result?.value}');
+  print('Result: ${result?.payload}');
   // #endregion troubleshooting-results
 
   await worker.shutdown();
