@@ -31,7 +31,15 @@ import TabItem from '@theme/TabItem';
 <Tabs>
 <TabItem value="broker" label="Broker + Backend">
 
-```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker-backend
+```dart title="Broker namespace" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker
+
+```
+
+```dart title="Backend namespace" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-backend
+
+```
+
+```dart title="Broker + Backend (combined)" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-broker-backend
 
 ```
 
@@ -39,6 +47,13 @@ import TabItem from '@theme/TabItem';
 <TabItem value="worker" label="Worker Heartbeats">
 
 ```dart title="lib/namespaces.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-worker
+
+```
+
+</TabItem>
+<TabItem value="isolation" label="Isolation">
+
+```dart title="Namespace isolation" file=<rootDir>/../packages/stem/example/docs_snippets/lib/namespaces.dart#namespaces-isolation
 
 ```
 
