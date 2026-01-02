@@ -17,6 +17,16 @@ guides to embed workers programmatically and operate them in production.
 
 ```
 
+## Redis-backed worker
+
+```dart title="workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-redis
+
+```
+
+```dart title="workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-producer-redis
+
+```
+
 ## Lifecycle overview
 
 Workers connect to the broker, claim deliveries, execute task handlers, and
@@ -24,6 +34,10 @@ emit lifecycle signals as they progress (`taskReceived`, `taskPrerun`,
 `taskPostrun`, `taskSucceeded`, `taskFailed`). Worker-level signals announce
 startup, readiness, heartbeat, and shutdown so dashboards and alerts can track
 capacity in near real time.
+
+```dart title="signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-worker-listeners
+
+```
 
 Shutdowns are cooperative: warm stops fetching new work, soft requests
 termination checkpoints, and hard requeues active deliveries. The Worker
@@ -41,6 +55,10 @@ Workers can subscribe to:
 Queue subscriptions determine which stream shards the worker polls, so keep
 queue names stable and document them alongside task registries.
 
+```dart title="routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-bootstrap
+
+```
+
 ## Concurrency & autoscaling
 
 Workers run multiple tasks in parallel using isolate pools. Configure base
@@ -51,6 +69,10 @@ Prefetch controls how aggressively a worker claims work ahead of execution.
 Use smaller values for fairness and larger values for throughput. If you're
 using autoscaling, align the prefetch multiplier with your maximum concurrency
 so scaling does not starve queues.
+
+```dart title="worker_control.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-autoscale
+
+```
 
 ## Key environment variables
 

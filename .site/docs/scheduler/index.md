@@ -53,11 +53,23 @@ Common scheduler CLI commands:
 
 ## Scheduler snippets
 
-```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-specs
+```dart title="Interval schedule" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-interval-spec
 
 ```
 
-```dart title="lib/scheduler.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-signals
+```dart title="Cron schedule" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-cron-spec
+
+```
+
+```dart title="Solar schedule" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-solar-spec
+
+```
+
+```dart title="Clocked schedule" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-clocked-spec
+
+```
+
+```dart title="Scheduler signals" file=<rootDir>/../packages/stem/example/docs_snippets/lib/scheduler.dart#beat-signals
 
 ```
 

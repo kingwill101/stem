@@ -119,8 +119,8 @@ class ReportTask extends TaskHandler<void> {
 }
 // #endregion beat-postgres
 
-// #region beat-specs
-Future<void> addScheduleSpecs(ScheduleStore store) async {
+// #region beat-interval-spec
+Future<void> addIntervalSchedule(ScheduleStore store) async {
   await store.upsert(
     ScheduleEntry(
       id: 'interval-demo',
@@ -132,7 +132,11 @@ Future<void> addScheduleSpecs(ScheduleStore store) async {
       jitter: const Duration(minutes: 1),
     ),
   );
+}
+// #endregion beat-interval-spec
 
+// #region beat-cron-spec
+Future<void> addCronSchedule(ScheduleStore store) async {
   await store.upsert(
     ScheduleEntry(
       id: 'cron-demo',
@@ -141,7 +145,11 @@ Future<void> addScheduleSpecs(ScheduleStore store) async {
       spec: CronScheduleSpec(expression: '0 12 * * MON'),
     ),
   );
+}
+// #endregion beat-cron-spec
 
+// #region beat-solar-spec
+Future<void> addSolarSchedule(ScheduleStore store) async {
   await store.upsert(
     ScheduleEntry(
       id: 'solar-demo',
@@ -155,6 +163,29 @@ Future<void> addScheduleSpecs(ScheduleStore store) async {
       ),
     ),
   );
+}
+// #endregion beat-solar-spec
+
+// #region beat-clocked-spec
+Future<void> addClockedSchedule(ScheduleStore store) async {
+  final runAt = DateTime.now().add(const Duration(hours: 6));
+  await store.upsert(
+    ScheduleEntry(
+      id: 'clocked-demo',
+      taskName: 'demo.clocked',
+      queue: 'default',
+      spec: ClockedScheduleSpec(runAt: runAt),
+    ),
+  );
+}
+// #endregion beat-clocked-spec
+
+// #region beat-specs
+Future<void> addScheduleSpecs(ScheduleStore store) async {
+  await addIntervalSchedule(store);
+  await addCronSchedule(store);
+  await addSolarSchedule(store);
+  await addClockedSchedule(store);
 }
 // #endregion beat-specs
 
