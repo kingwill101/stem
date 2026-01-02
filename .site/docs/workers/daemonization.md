@@ -23,26 +23,26 @@ workers like you would with Celery’s `celery multi`. This guide mirrors
 ## Worker entrypoint
 
 The daemonization templates expect a worker launcher that runs until signaled.
-This is the stub worker used by the daemonized worker example:
+This stub worker lives in `examples/daemonized_worker/bin/worker.dart`:
 
 <Tabs>
-<TabItem value="entrypoint" label="Worker entrypoint">
+<TabItem value="entrypoint" label="Entrypoint: read node + log startup">
 
-```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-entrypoint
-
-```
-
-</TabItem>
-<TabItem value="signals" label="Signal handling">
-
-```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-signal-handlers
+```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-entrypoint
 
 ```
 
 </TabItem>
-<TabItem value="loop" label="Heartbeat loop">
+<TabItem value="signals" label="Signal handlers: graceful shutdown">
 
-```dart title="lib/daemonization.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/daemonization.dart#daemonization-loop
+```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-signal-handlers
+
+```
+
+</TabItem>
+<TabItem value="loop" label="Heartbeat: keep the process alive">
+
+```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-loop
 
 ```
 
