@@ -36,13 +36,34 @@ export STEM_CONTROL_NAMESPACE=stem
 ## 2. Bootstrap Stem Config
 
 Use `StemConfig.fromEnvironment()` to hydrate adapters from the environment and
-share them across your app:
+share them across your app. Split the bootstrap into smaller steps so each
+piece is easy to scan and reuse:
 
-```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-bootstrap
+### Load configuration
+
+```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-config
 
 ```
 
-This single bootstrap gives you access to routing, rate limiting, revoke
+### Connect adapters
+
+```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-adapters
+
+```
+
+### Create the Stem producer
+
+```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-stem
+
+```
+
+### Create the worker
+
+```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-worker
+
+```
+
+Together, these steps give you access to routing, rate limiting, revoke
 storage, and queue configuration—all backed by Redis.
 
 ## 3. Launch Workers, Beat, and Producers

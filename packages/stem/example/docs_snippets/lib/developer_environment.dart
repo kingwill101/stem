@@ -8,8 +8,11 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region dev-env-bootstrap
 Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
+  // #region dev-env-config
   final config = StemConfig.fromEnvironment(Platform.environment);
+  // #endregion dev-env-config
 
+  // #region dev-env-adapters
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
     tls: config.tls,
@@ -23,14 +26,18 @@ Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
   );
   final routing = await _loadRoutingRegistry(config);
   final rateLimiter = await connectRateLimiter(config);
+  // #endregion dev-env-adapters
 
+  // #region dev-env-stem
   final stem = Stem(
     broker: broker,
     backend: backend,
     registry: registry,
     routing: routing,
   );
+  // #endregion dev-env-stem
 
+  // #region dev-env-worker
   final subscription = _buildSubscription(config);
   final worker = Worker(
     broker: broker,
@@ -49,6 +56,7 @@ Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
       idlePeriod: Duration(seconds: 45),
     ),
   );
+  // #endregion dev-env-worker
 
   return Bootstrap(
     stem: stem,
