@@ -97,8 +97,8 @@ Future<void> main() async {
     registerControlSignals(),
   ];
 
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final app = await StemApp.inMemory(
+    tasks: [
       FunctionTaskHandler<void>(
         name: 'signals.demo',
         entrypoint: (context, args) async {
@@ -106,30 +106,19 @@ Future<void> main() async {
           return null;
         },
       ),
-    );
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    registry: registry,
-    backend: backend,
+    ],
     middleware: buildSignalMiddlewareForProducer(),
-  );
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    middleware: buildSignalMiddlewareForWorker(),
+    workerConfig: StemWorkerConfig(
+      middleware: buildSignalMiddlewareForWorker(),
+    ),
   );
 
-  unawaited(worker.start());
-  await stem.enqueue('signals.demo', args: const {});
+  unawaited(app.start());
+  await app.stem.enqueue('signals.demo', args: const {});
   await Future<void>.delayed(const Duration(milliseconds: 200));
-  await worker.shutdown();
+  await app.shutdown();
 
   for (final subscription in subscriptions) {
     subscription.cancel();
   }
-  broker.dispose();
-  await backend.dispose();
 }

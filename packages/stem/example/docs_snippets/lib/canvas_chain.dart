@@ -7,16 +7,12 @@ import 'package:stem/stem.dart';
 
 // #region canvas-chain
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final app = await StemApp.inMemory(
+    tasks: [
       FunctionTaskHandler<String>(
         name: 'fetch.user',
         entrypoint: (context, args) async => 'Ada',
       ),
-    )
-    ..register(
       FunctionTaskHandler<String>(
         name: 'enrich.user',
         entrypoint: (context, args) async {
@@ -24,8 +20,6 @@ Future<void> main() async {
           return '$prev Lovelace';
         },
       ),
-    )
-    ..register(
       FunctionTaskHandler<Object?>(
         name: 'send.email',
         entrypoint: (context, args) async {
@@ -35,19 +29,16 @@ Future<void> main() async {
           return null;
         },
       ),
-    );
-
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    consumerName: 'chain-worker',
-    concurrency: 1,
-    prefetchMultiplier: 1,
+    ],
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'chain-worker',
+      concurrency: 1,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
+  await app.start();
 
-  final canvas = Canvas(broker: broker, backend: backend, registry: registry);
+  final canvas = app.canvas;
   final chainResult = await canvas.chain([
     task('fetch.user'),
     task('enrich.user'),
@@ -59,7 +50,7 @@ Future<void> main() async {
     'value=${chainResult.value}',
   );
 
-  await worker.shutdown();
-  broker.dispose();
+  await app.shutdown();
 }
+
 // #endregion canvas-chain

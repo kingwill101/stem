@@ -22,37 +22,21 @@ class EchoTask extends TaskHandler<String> {
 }
 // #endregion troubleshooting-task
 
-Future<(Stem, Worker, InMemoryResultBackend)> _bootstrap() async {
+Future<void> runTroubleshootingDemo() async {
   // #region troubleshooting-bootstrap
-  final registry = SimpleTaskRegistry()..register(EchoTask());
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    queue: 'default',
-    consumerName: 'troubleshooting-worker',
-    concurrency: 1,
+  final app = await StemApp.inMemory(
+    tasks: [EchoTask()],
+    workerConfig: const StemWorkerConfig(
+      queue: 'default',
+      consumerName: 'troubleshooting-worker',
+      concurrency: 1,
+    ),
   );
-  unawaited(worker.start());
-
-  final stem = Stem(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-  );
+  unawaited(app.start());
   // #endregion troubleshooting-bootstrap
 
-  return (stem, worker, backend);
-}
-
-Future<void> runTroubleshootingDemo() async {
-  final (stem, worker, backend) = await _bootstrap();
-
   // #region troubleshooting-enqueue
-  final taskId = await stem.enqueue(
+  final taskId = await app.stem.enqueue(
     'debug.echo',
     args: {'message': 'troubleshooting'},
   );
@@ -60,11 +44,11 @@ Future<void> runTroubleshootingDemo() async {
 
   // #region troubleshooting-results
   await Future<void>.delayed(const Duration(milliseconds: 200));
-  final result = await backend.get(taskId);
+  final result = await app.backend.get(taskId);
   print('Result: ${result?.payload}');
   // #endregion troubleshooting-results
 
-  await worker.shutdown();
+  await app.shutdown();
 }
 
 Future<void> main() async {

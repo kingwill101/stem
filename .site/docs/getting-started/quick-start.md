@@ -59,7 +59,7 @@ Each task declares its name and retry/timeout options.
 
 ### Bootstrap worker + Stem
 
-Wire up the registry, in-memory broker/backend, and start the worker:
+Use `StemApp` to wire tasks, the in-memory broker/backend, and the worker:
 
 <Tabs>
 <TabItem value="bootstrap" label="Registry + runtime bootstrap">
@@ -160,4 +160,4 @@ and replay those entries in the next guide.
   [Connect to Infrastructure](./developer-environment.md).
 - Explore worker control commands, DLQ tooling, and OpenTelemetry export in
   [Observe & Operate](./observability-and-ops.md).
-- Keep the script—you’ll reuse the registry and tasks in later steps.
+- Keep the script—you’ll reuse the tasks and app bootstrap in later steps.

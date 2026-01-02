@@ -1,5 +1,6 @@
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
+import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -20,7 +21,14 @@ class StemApp {
     required this.stem,
     required this.worker,
     required List<Future<void> Function()> disposers,
-  }) : _disposers = disposers;
+  }) : _disposers = disposers {
+    canvas = Canvas(
+      broker: broker,
+      backend: backend,
+      registry: registry,
+      encoderRegistry: stem.payloadEncoders,
+    );
+  }
 
   /// Task registry containing all registered handlers.
   final TaskRegistry registry;
@@ -36,6 +44,9 @@ class StemApp {
 
   /// Worker managed by the helper.
   final Worker worker;
+
+  /// Canvas facade used for chains, groups, and chords.
+  late final Canvas canvas;
 
   final List<Future<void> Function()> _disposers;
 
@@ -97,30 +108,50 @@ class StemApp {
       payloadEncoders,
     );
 
+    final resolvedMiddleware = middleware.toList(growable: false);
     final stem = Stem(
       broker: brokerInstance,
       registry: taskRegistry,
       backend: encodedBackend,
       uniqueTaskCoordinator: uniqueTaskCoordinator,
       retryStrategy: retryStrategy,
-      middleware: middleware.toList(growable: false),
+      middleware: resolvedMiddleware,
       routing: routing ?? RoutingRegistry(RoutingConfig.legacy()),
       signer: signer,
       encoderRegistry: payloadEncoders,
     );
 
-    final revoke = revokeStore ?? InMemoryRevokeStore();
+    final revoke =
+        workerConfig.revokeStore ?? revokeStore ?? InMemoryRevokeStore();
+    final workerMiddleware = workerConfig.middleware ?? resolvedMiddleware;
+    final workerRetryStrategy = workerConfig.retryStrategy ?? retryStrategy;
+    final workerUniqueTaskCoordinator =
+        workerConfig.uniqueTaskCoordinator ?? uniqueTaskCoordinator;
+    final workerSigner = workerConfig.signer ?? signer;
 
     final worker = Worker(
       broker: brokerInstance,
       registry: taskRegistry,
       backend: encodedBackend,
+      rateLimiter: workerConfig.rateLimiter,
+      middleware: workerMiddleware,
       revokeStore: revoke,
+      uniqueTaskCoordinator: workerUniqueTaskCoordinator,
+      retryStrategy: workerRetryStrategy,
       queue: workerConfig.queue,
+      subscription: workerConfig.subscription,
       consumerName: workerConfig.consumerName,
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
       prefetch: workerConfig.prefetch,
+      heartbeatInterval: workerConfig.heartbeatInterval,
+      workerHeartbeatInterval: workerConfig.workerHeartbeatInterval,
+      heartbeatTransport: workerConfig.heartbeatTransport,
+      heartbeatNamespace: workerConfig.heartbeatNamespace,
+      autoscale: workerConfig.autoscale,
+      lifecycle: workerConfig.lifecycle,
+      observability: workerConfig.observability,
+      signer: workerSigner,
       encoderRegistry: payloadEncoders,
     );
 

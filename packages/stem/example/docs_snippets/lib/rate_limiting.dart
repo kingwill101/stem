@@ -44,10 +44,12 @@ class DemoRateLimiter implements RateLimiter {
       meta: {'key': key},
     );
   }
+
   // #endregion rate-limit-demo-limiter-acquire
 }
 // #endregion rate-limit-demo-limiter
 
+// #region rate-limit-task
 // #region rate-limit-task-options
 class RateLimitedTask extends TaskHandler<void> {
   @override
@@ -55,9 +57,9 @@ class RateLimitedTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        rateLimit: '10/s',
-        maxRetries: 3,
-      );
+    rateLimit: '10/s',
+    maxRetries: 3,
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
@@ -66,25 +68,7 @@ class RateLimitedTask extends TaskHandler<void> {
   }
 }
 // #endregion rate-limit-task-options
-
-// #region rate-limit-worker
-Worker buildRateLimitedWorker({
-  required Broker broker,
-  required ResultBackend backend,
-  required TaskRegistry registry,
-}) {
-  final limiter = DemoRateLimiter(
-    capacity: 2,
-    interval: const Duration(seconds: 1),
-  );
-  return Worker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    rateLimiter: limiter,
-  );
-}
-// #endregion rate-limit-worker
+// #endregion rate-limit-task
 
 // #region rate-limit-producer
 Future<String> enqueueRateLimited(Stem stem) async {
@@ -98,22 +82,25 @@ Future<String> enqueueRateLimited(Stem stem) async {
 
 Future<void> main() async {
   // #region rate-limit-demo-registry
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()..register(RateLimitedTask());
+  // #region rate-limit-worker
+  final limiter = DemoRateLimiter(
+    capacity: 2,
+    interval: const Duration(seconds: 1),
+  );
+  final workerConfig = StemWorkerConfig(rateLimiter: limiter);
+  // #endregion rate-limit-worker
+  final app = await StemApp.inMemory(
+    tasks: [RateLimitedTask()],
+    workerConfig: workerConfig,
+  );
   // #endregion rate-limit-demo-registry
 
   // #region rate-limit-demo-worker-start
-  final worker = buildRateLimitedWorker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-  );
-  await worker.start();
+  await app.start();
   // #endregion rate-limit-demo-worker-start
 
   // #region rate-limit-demo-stem
-  final stem = Stem(broker: broker, backend: backend, registry: registry);
+  final stem = app.stem;
   // #endregion rate-limit-demo-stem
   // #region rate-limit-demo-enqueue
   await enqueueRateLimited(stem);
@@ -121,7 +108,6 @@ Future<void> main() async {
   await Future<void>.delayed(const Duration(milliseconds: 200));
 
   // #region rate-limit-demo-shutdown
-  await worker.shutdown();
-  broker.dispose();
+  await app.shutdown();
   // #endregion rate-limit-demo-shutdown
 }

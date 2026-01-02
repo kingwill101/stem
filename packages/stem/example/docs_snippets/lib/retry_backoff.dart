@@ -41,34 +41,10 @@ class FixedDelayRetryStrategy implements RetryStrategy {
 }
 // #endregion retry-backoff-custom-strategy
 
-// #region retry-backoff-worker
-Worker buildRetryWorker({
-  required Broker broker,
-  required ResultBackend backend,
-  required TaskRegistry registry,
-}) {
-  return Worker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    retryStrategy: retryStrategy,
-  );
-}
-// #endregion retry-backoff-worker
-
 // #region retry-backoff-custom-worker
-Worker buildFixedDelayWorker({
-  required Broker broker,
-  required ResultBackend backend,
-  required TaskRegistry registry,
-}) {
-  return Worker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    retryStrategy: const FixedDelayRetryStrategy(Duration(seconds: 1)),
-  );
-}
+const fixedDelayWorkerConfig = StemWorkerConfig(
+  retryStrategy: FixedDelayRetryStrategy(Duration(seconds: 1)),
+);
 // #endregion retry-backoff-custom-worker
 
 // #region retry-backoff-signals
@@ -81,22 +57,17 @@ void registerRetrySignals() {
 
 Future<void> main() async {
   registerRetrySignals();
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()..register(FlakyTask());
-
-  final worker = buildRetryWorker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
+  // #region retry-backoff-worker
+  final workerConfig = StemWorkerConfig(retryStrategy: retryStrategy);
+  // #endregion retry-backoff-worker
+  final app = await StemApp.inMemory(
+    tasks: [FlakyTask()],
+    workerConfig: workerConfig,
   );
-  await worker.start();
+  await app.start();
 
-  final stem = Stem(broker: broker, backend: backend, registry: registry);
-  final taskId = await stem.enqueue('demo.flaky');
-  await stem.waitForTask<void>(taskId, timeout: const Duration(seconds: 5));
+  final taskId = await app.stem.enqueue('demo.flaky');
+  await app.stem.waitForTask<void>(taskId, timeout: const Duration(seconds: 5));
 
-  await worker.shutdown();
-  broker.dispose();
-  await backend.dispose();
+  await app.shutdown();
 }

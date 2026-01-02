@@ -7,10 +7,8 @@ import 'package:stem/stem.dart';
 
 // #region canvas-group
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final app = await StemApp.inMemory(
+    tasks: [
       FunctionTaskHandler<int>(
         name: 'square',
         entrypoint: (context, args) async {
@@ -19,19 +17,16 @@ Future<void> main() async {
           return value * value;
         },
       ),
-    );
-
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    consumerName: 'group-worker',
-    concurrency: 2,
-    prefetchMultiplier: 1,
+    ],
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'group-worker',
+      concurrency: 2,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
+  await app.start();
 
-  final canvas = Canvas(broker: broker, backend: backend, registry: registry);
+  final canvas = app.canvas;
   const groupHandle = 'squares-demo';
   await canvas.group([
     task('square', args: <String, Object?>{'value': 2}),
@@ -40,16 +35,15 @@ Future<void> main() async {
   ], groupId: groupHandle);
 
   await _waitFor(() async {
-    final status = await backend.getGroup(groupHandle);
+    final status = await app.backend.getGroup(groupHandle);
     return status?.results.length == 3;
   });
 
-  final groupStatus = await backend.getGroup(groupHandle);
+  final groupStatus = await app.backend.getGroup(groupHandle);
   final values = groupStatus?.results.values.map((s) => s.payload).toList();
   print('Group results: $values');
 
-  await worker.shutdown();
-  broker.dispose();
+  await app.shutdown();
 }
 
 Future<void> _waitFor(
@@ -64,4 +58,5 @@ Future<void> _waitFor(
   }
   throw TimeoutException('Timed out waiting for group completion', timeout);
 }
+
 // #endregion canvas-group

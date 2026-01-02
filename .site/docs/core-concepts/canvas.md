@@ -8,7 +8,8 @@ slug: /core-concepts/canvas
 This guide walks through Stem's task composition primitives—chains, groups, and
 chords—using in-memory brokers and backends. Each snippet references a runnable
 file under `packages/stem/example/docs_snippets/` so you can experiment locally
-with `dart run`.
+with `dart run`. If you bootstrap with `StemApp`, use `app.canvas` to reuse the
+same broker, backend, registry, and encoder registry.
 
 ## Chains
 
@@ -75,7 +76,8 @@ dart run lib/canvas_group.dart
 dart run lib/canvas_chord.dart
 ```
 
-Each script starts its own in-memory broker, backend, and worker.
+Each script bootstraps a `StemApp` in-memory runtime, starts a worker, and then
+uses `app.canvas` for composition.
 
 ## Best practices
 

@@ -24,6 +24,101 @@ void main() {
         await app.shutdown();
       }
     });
+
+    test('inMemory applies worker config overrides', () async {
+      final handler = FunctionTaskHandler<void>(
+        name: 'test.worker-config',
+        entrypoint: (context, args) async => null,
+        metadata: const TaskMetadata(idempotent: true),
+      );
+      final rateLimiter = _TestRateLimiter();
+      final middleware = _TestMiddleware();
+      final revokeStore = InMemoryRevokeStore();
+      final uniqueTaskCoordinator = UniqueTaskCoordinator(
+        lockStore: InMemoryLockStore(),
+      );
+      final retryStrategy = _TestRetryStrategy();
+      final subscription = RoutingSubscription(
+        queues: ['alpha', 'beta'],
+        broadcastChannels: ['broadcast'],
+      );
+      const autoscale = WorkerAutoscaleConfig(
+        enabled: true,
+        minConcurrency: 2,
+        maxConcurrency: 4,
+      );
+      const lifecycle = WorkerLifecycleConfig(
+        installSignalHandlers: false,
+        maxTasksPerIsolate: 5,
+      );
+      final observability = ObservabilityConfig(
+        namespace: 'observed',
+        heartbeatInterval: const Duration(seconds: 3),
+      );
+      final signer = PayloadSigner(const SigningConfig.disabled());
+
+      final app = await StemApp.inMemory(
+        tasks: [handler],
+        workerConfig: StemWorkerConfig(
+          queue: 'priority',
+          consumerName: 'custom-worker',
+          concurrency: 4,
+          prefetchMultiplier: 3,
+          prefetch: 7,
+          rateLimiter: rateLimiter,
+          middleware: [middleware],
+          revokeStore: revokeStore,
+          uniqueTaskCoordinator: uniqueTaskCoordinator,
+          retryStrategy: retryStrategy,
+          subscription: subscription,
+          heartbeatInterval: const Duration(seconds: 9),
+          workerHeartbeatInterval: const Duration(seconds: 7),
+          heartbeatTransport: const NoopHeartbeatTransport(),
+          heartbeatNamespace: 'heartbeat',
+          autoscale: autoscale,
+          lifecycle: lifecycle,
+          observability: observability,
+          signer: signer,
+        ),
+      );
+      try {
+        final worker = app.worker;
+        expect(worker.queue, 'priority');
+        expect(worker.consumerName, 'custom-worker');
+        expect(worker.concurrency, 4);
+        expect(worker.prefetchMultiplier, 3);
+        expect(worker.prefetch, 7);
+        expect(worker.rateLimiter, same(rateLimiter));
+        expect(worker.middleware, hasLength(1));
+        expect(worker.middleware.first, same(middleware));
+        expect(worker.revokeStore, same(revokeStore));
+        expect(worker.uniqueTaskCoordinator, same(uniqueTaskCoordinator));
+        expect(worker.retryStrategy, same(retryStrategy));
+        expect(worker.subscription.queues, ['alpha', 'beta']);
+        expect(worker.subscription.broadcastChannels, ['broadcast']);
+        expect(worker.heartbeatInterval, const Duration(seconds: 9));
+        expect(
+          worker.workerHeartbeatInterval,
+          observability.heartbeatInterval,
+        );
+        expect(worker.heartbeatTransport, isA<NoopHeartbeatTransport>());
+        expect(worker.namespace, 'observed');
+        expect(worker.autoscaleConfig.enabled, isTrue);
+        expect(worker.autoscaleConfig.minConcurrency, 2);
+        expect(worker.autoscaleConfig.maxConcurrency, 4);
+        expect(worker.lifecycleConfig.installSignalHandlers, isFalse);
+        expect(worker.lifecycleConfig.maxTasksPerIsolate, 5);
+        expect(worker.signer, same(signer));
+
+        final canvas = app.canvas;
+        expect(canvas.broker, same(app.broker));
+        expect(canvas.backend, same(app.backend));
+        expect(canvas.registry, same(app.registry));
+        expect(canvas.payloadEncoders, same(app.stem.payloadEncoders));
+      } finally {
+        await app.shutdown();
+      }
+    });
   });
 
   group('StemWorkflowApp', () {
@@ -154,4 +249,43 @@ class _DemoPayload {
       _DemoPayload(json['foo']! as String);
 
   final String foo;
+}
+
+class _TestRateLimiter implements RateLimiter {
+  @override
+  Future<RateLimitDecision> acquire(
+    String key, {
+    int tokens = 1,
+    Duration? interval,
+    Map<String, Object?>? meta,
+  }) async {
+    return const RateLimitDecision(allowed: true);
+  }
+}
+
+class _TestRetryStrategy implements RetryStrategy {
+  @override
+  Duration nextDelay(int attempt, Object error, StackTrace stackTrace) =>
+      const Duration(milliseconds: 50);
+}
+
+class _TestMiddleware implements Middleware {
+  @override
+  Future<void> onConsume(Delivery delivery, Future<void> Function() next) =>
+      next();
+
+  @override
+  Future<void> onEnqueue(Envelope envelope, Future<void> Function() next) =>
+      next();
+
+  @override
+  Future<void> onError(
+    TaskContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) async {}
+
+  @override
+  Future<void> onExecute(TaskContext context, Future<void> Function() next) =>
+      next();
 }

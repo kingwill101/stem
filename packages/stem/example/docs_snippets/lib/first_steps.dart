@@ -26,7 +26,10 @@ Future<void> runInMemoryDemo() async {
   // #region first-steps-bootstrap
   final app = await StemApp.inMemory(
     tasks: [EmailTask()],
-    workerConfig: const StemWorkerConfig(queue: 'default', consumerName: 'first-steps-worker'),
+    workerConfig: const StemWorkerConfig(
+      queue: 'default',
+      consumerName: 'first-steps-worker',
+    ),
   );
   await app.start();
   // #endregion first-steps-bootstrap
@@ -47,7 +50,6 @@ Future<void> runInMemoryDemo() async {
   await app.shutdown();
 }
 // #endregion first-steps-run
-
 
 Future<void> main() async {
   await runInMemoryDemo();

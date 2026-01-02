@@ -1,6 +1,12 @@
 import 'package:stem/src/backend/in_memory_backend.dart';
 import 'package:stem/src/brokers/in_memory_broker.dart';
+import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/unique_task_coordinator.dart';
+import 'package:stem/src/observability/config.dart';
+import 'package:stem/src/observability/heartbeat_transport.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/worker/worker_config.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/event_bus/in_memory_event_bus.dart';
@@ -108,7 +114,7 @@ class WorkflowEventBusFactory {
   }
 }
 
-/// Lightweight worker configuration used by the bootstrap helpers.
+/// Worker configuration used by the bootstrap helpers.
 class StemWorkerConfig {
   /// Creates a worker configuration snapshot for bootstrap helpers.
   const StemWorkerConfig({
@@ -117,6 +123,20 @@ class StemWorkerConfig {
     this.concurrency,
     this.prefetchMultiplier = 2,
     this.prefetch,
+    this.rateLimiter,
+    this.middleware,
+    this.revokeStore,
+    this.uniqueTaskCoordinator,
+    this.retryStrategy,
+    this.subscription,
+    this.heartbeatInterval = const Duration(seconds: 10),
+    this.workerHeartbeatInterval,
+    this.heartbeatTransport,
+    this.heartbeatNamespace = 'stem',
+    this.autoscale,
+    this.lifecycle,
+    this.observability,
+    this.signer,
   });
 
   /// Queue name used by the worker.
@@ -133,4 +153,46 @@ class StemWorkerConfig {
 
   /// Optional prefetch override for the worker.
   final int? prefetch;
+
+  /// Optional rate limiter used by the worker.
+  final RateLimiter? rateLimiter;
+
+  /// Optional middleware chain applied by the worker.
+  final List<Middleware>? middleware;
+
+  /// Optional revoke store used for worker control.
+  final RevokeStore? revokeStore;
+
+  /// Optional unique task coordinator used by the worker.
+  final UniqueTaskCoordinator? uniqueTaskCoordinator;
+
+  /// Optional retry strategy used by the worker.
+  final RetryStrategy? retryStrategy;
+
+  /// Optional routing subscription for the worker.
+  final RoutingSubscription? subscription;
+
+  /// Interval between task heartbeats.
+  final Duration heartbeatInterval;
+
+  /// Optional override for worker-level heartbeat cadence.
+  final Duration? workerHeartbeatInterval;
+
+  /// Optional transport for emitting worker heartbeats.
+  final HeartbeatTransport? heartbeatTransport;
+
+  /// Namespace for worker heartbeat/control events.
+  final String heartbeatNamespace;
+
+  /// Optional autoscale configuration for the worker.
+  final WorkerAutoscaleConfig? autoscale;
+
+  /// Optional lifecycle configuration for the worker.
+  final WorkerLifecycleConfig? lifecycle;
+
+  /// Optional observability configuration for the worker.
+  final ObservabilityConfig? observability;
+
+  /// Optional payload signer used to verify envelopes.
+  final PayloadSigner? signer;
 }

@@ -29,6 +29,7 @@ Future<void> configureSigning() async {
     );
   // #endregion production-signing-registry
 
+  // #region production-signing-runtime
   // #region production-signing-stem
   final stem = Stem(
     broker: broker,
@@ -46,6 +47,7 @@ Future<void> configureSigning() async {
     signer: signer,
   );
   // #endregion production-signing-worker
+  // #endregion production-signing-runtime
 
   // #region production-signing-enqueue
   await stem.enqueue('audit.log', args: {'message': 'hello'});

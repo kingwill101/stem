@@ -14,13 +14,13 @@ class ResizeImageTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        maxRetries: 5,
-        softTimeLimit: Duration(seconds: 10),
-        hardTimeLimit: Duration(seconds: 20),
-        priority: 7,
-        rateLimit: '20/m',
-        visibilityTimeout: Duration(seconds: 60),
-      );
+    maxRetries: 5,
+    softTimeLimit: Duration(seconds: 10),
+    hardTimeLimit: Duration(seconds: 20),
+    priority: 7,
+    rateLimit: '20/m',
+    visibilityTimeout: Duration(seconds: 60),
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
@@ -39,10 +39,10 @@ class EmailReceiptTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: 'emails',
-        maxRetries: 3,
-        priority: 9,
-      );
+    queue: 'emails',
+    maxRetries: 3,
+    priority: 9,
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
@@ -55,30 +55,19 @@ class EmailReceiptTask extends TaskHandler<void> {
 
 Future<void> main() async {
   // #region quickstart-bootstrap
-  final registry = SimpleTaskRegistry()
-    ..register(ResizeImageTask())
-    ..register(EmailReceiptTask());
-
   // In-memory adapters make the quick start self-contained.
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    queue: 'default',
-    consumerName: 'quickstart-worker',
-    concurrency: 4,
+  final app = await StemApp.inMemory(
+    tasks: [ResizeImageTask(), EmailReceiptTask()],
+    workerConfig: const StemWorkerConfig(
+      queue: 'default',
+      consumerName: 'quickstart-worker',
+      concurrency: 4,
+    ),
   );
 
-  unawaited(worker.start());
+  unawaited(app.start());
 
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-  );
+  final stem = app.stem;
   // #endregion quickstart-bootstrap
 
   // #region quickstart-enqueue
@@ -99,20 +88,16 @@ Future<void> main() async {
   // #endregion quickstart-enqueue
 
   // #region quickstart-canvas-call
-  final canvas = Canvas(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-  );
+  final canvas = app.canvas;
   await runCanvasExample(canvas);
   // #endregion quickstart-canvas-call
 
   // #region quickstart-inspect
   await Future<void>.delayed(const Duration(seconds: 6));
-  final resizeStatus = await backend.get(resizeId);
+  final resizeStatus = await app.backend.get(resizeId);
   print('Resize status: ${resizeStatus?.state} (${resizeStatus?.attempt})');
 
-  await worker.shutdown();
+  await app.shutdown();
   // #endregion quickstart-inspect
 }
 // #endregion quickstart-main
@@ -134,4 +119,5 @@ Future<void> runCanvasExample(Canvas canvas) async {
 
   print('Canvas chain complete. Final task id = ${chainResult.finalTaskId}');
 }
+
 // #endregion quickstart-canvas-example

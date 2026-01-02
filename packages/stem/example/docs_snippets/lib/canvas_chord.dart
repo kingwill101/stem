@@ -7,10 +7,8 @@ import 'package:stem/stem.dart';
 
 // #region canvas-chord
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final app = await StemApp.inMemory(
+    tasks: [
       FunctionTaskHandler<int>(
         name: 'fetch.metric',
         entrypoint: (context, args) async {
@@ -18,12 +16,11 @@ Future<void> main() async {
           return args['value'] as int;
         },
       ),
-    )
-    ..register(
       FunctionTaskHandler<Object?>(
         name: 'aggregate.metric',
         entrypoint: (context, args) async {
-          final values = (context.meta['chordResults'] as List?)
+          final values =
+              (context.meta['chordResults'] as List?)
                   ?.whereType<int>()
                   .toList() ??
               const [];
@@ -32,19 +29,16 @@ Future<void> main() async {
           return null;
         },
       ),
-    );
-
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    consumerName: 'chord-worker',
-    concurrency: 3,
-    prefetchMultiplier: 1,
+    ],
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'chord-worker',
+      concurrency: 3,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
+  await app.start();
 
-  final canvas = Canvas(broker: broker, backend: backend, registry: registry);
+  final canvas = app.canvas;
   final chordResult = await canvas.chord(
     body: [
       task('fetch.metric', args: <String, Object?>{'value': 5}),
@@ -57,7 +51,7 @@ Future<void> main() async {
   print('Callback task id: ${chordResult.callbackTaskId}');
   print('Chord values: ${chordResult.values}');
 
-  await worker.shutdown();
-  broker.dispose();
+  await app.shutdown();
 }
+
 // #endregion canvas-chord

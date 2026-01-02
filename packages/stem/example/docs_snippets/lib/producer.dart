@@ -8,8 +8,8 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region producer-in-memory
 Future<void> enqueueInMemory() async {
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final app = await StemApp.inMemory(
+    tasks: [
       FunctionTaskHandler<void>(
         name: 'hello.print',
         entrypoint: (context, args) async {
@@ -18,19 +18,16 @@ Future<void> enqueueInMemory() async {
           return null;
         },
       ),
-    );
-  final stem = Stem(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
+    ],
   );
 
-  final taskId = await stem.enqueue(
+  final taskId = await app.stem.enqueue(
     'hello.print',
     args: {'name': 'Stem'},
   );
 
   print('Enqueued $taskId');
+  await app.shutdown();
 }
 // #endregion producer-in-memory
 
@@ -122,12 +119,8 @@ class GenerateReportTask extends TaskHandler<String> {
 }
 
 Future<void> enqueueTyped() async {
-  final registry = SimpleTaskRegistry()..register(GenerateReportTask());
-  final stem = Stem(
-    broker: InMemoryBroker(),
-    registry: registry,
-    backend: InMemoryResultBackend(),
-  );
+  final app = await StemApp.inMemory(tasks: [GenerateReportTask()]);
+  await app.start();
 
   final call = GenerateReportTask.definition.call(
     const ReportPayload(reportId: 'monthly-2025-10'),
@@ -135,9 +128,10 @@ Future<void> enqueueTyped() async {
     headers: const {'x-requested-by': 'analytics'},
   );
 
-  final taskId = await stem.enqueueCall(call);
-  final result = await stem.waitForTask<String>(taskId);
+  final taskId = await app.stem.enqueueCall(call);
+  final result = await app.stem.waitForTask<String>(taskId);
   print(result?.value);
+  await app.shutdown();
 }
 // #endregion producer-typed
 

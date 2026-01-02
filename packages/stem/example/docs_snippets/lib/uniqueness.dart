@@ -58,53 +58,6 @@ Future<UniqueTaskCoordinator> buildRedisCoordinator() async {
 }
 // #endregion uniqueness-coordinator-redis
 
-class UniqueRuntime {
-  const UniqueRuntime({
-    required this.broker,
-    required this.backend,
-    required this.registry,
-    required this.stem,
-    required this.worker,
-  });
-
-  final InMemoryBroker broker;
-  final InMemoryResultBackend backend;
-  final TaskRegistry registry;
-  final Stem stem;
-  final Worker worker;
-}
-
-// #region uniqueness-stem-worker
-UniqueRuntime buildUniqueRuntime(UniqueTaskCoordinator coordinator) {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()..register(SendDigestTask());
-
-  final stem = Stem(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    uniqueTaskCoordinator: coordinator,
-  );
-  final worker = Worker(
-    broker: broker,
-    registry: registry,
-    backend: backend,
-    uniqueTaskCoordinator: coordinator,
-    queue: 'email',
-    consumerName: 'unique-worker',
-  );
-
-  return UniqueRuntime(
-    broker: broker,
-    backend: backend,
-    registry: registry,
-    stem: stem,
-    worker: worker,
-  );
-}
-// #endregion uniqueness-stem-worker
-
 // #region uniqueness-enqueue
 Future<void> enqueueDigest(Stem stem) async {
   final firstId = await stem.enqueue(
@@ -145,16 +98,23 @@ Future<void> enqueueWithOverride(Stem stem) async {
 
 Future<void> main() async {
   final coordinator = buildInMemoryCoordinator();
-  final runtime = buildUniqueRuntime(coordinator);
+  // #region uniqueness-stem-worker
+  final app = await StemApp.inMemory(
+    tasks: [SendDigestTask()],
+    uniqueTaskCoordinator: coordinator,
+    workerConfig: const StemWorkerConfig(
+      queue: 'email',
+      consumerName: 'unique-worker',
+    ),
+  );
+  // #endregion uniqueness-stem-worker
 
-  unawaited(runtime.worker.start());
+  unawaited(app.start());
 
-  await enqueueDigest(runtime.stem);
-  await enqueueWithOverride(runtime.stem);
+  await enqueueDigest(app.stem);
+  await enqueueWithOverride(app.stem);
 
   await Future<void>.delayed(const Duration(milliseconds: 500));
 
-  await runtime.worker.shutdown();
-  runtime.broker.dispose();
-  await runtime.backend.dispose();
+  await app.shutdown();
 }

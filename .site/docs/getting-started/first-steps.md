@@ -11,7 +11,7 @@ verifies the result inside a single Dart process.
 
 ## 1. Define a task handler
 
-Create a task and register it with a registry:
+Create a task handler (StemApp will register it for you):
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/first_steps.dart#first-steps-task
 
@@ -68,9 +68,9 @@ For more detail, see [Broker Overview](../brokers/overview.md) and
 
 ## App setup
 
-- Register tasks and options in a shared registry (see
+- Register tasks and options via `StemApp` or a shared registry (see
   [Tasks & Retries](../core-concepts/tasks.md)).
-- Wire producers with the same registry (see
+- Wire producers with the same task list/registry (see
   [Producer API](../core-concepts/producer.md)).
 
 ## Run a worker

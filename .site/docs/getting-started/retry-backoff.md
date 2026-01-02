@@ -67,7 +67,7 @@ linear backoff, or bespoke logic:
 ```
 
 </TabItem>
-<TabItem value="worker" label="Worker wiring">
+<TabItem value="worker" label="StemApp worker config">
 
 ```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-worker
 
