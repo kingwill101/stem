@@ -4,6 +4,9 @@ sidebar_position: 0
 slug: /getting-started
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 This track is the recommended path for anyone new to Stem. Follow the pages in
 order—each builds on the previous one and links to deeper references when you
 want to explore further.
@@ -18,3 +21,39 @@ want to explore further.
 
 Once you complete the journey, continue with the in-depth material under
 [Core Concepts](../core-concepts/index.md) and [Workers](../workers/index.md).
+
+## Preview: a full Stem pipeline in one file
+
+Use this example as a mental model for how tasks, workers, and brokers fit
+together.
+
+<Tabs>
+<TabItem value="task-definition" label="Define the task handler">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-definition
+
+```
+
+</TabItem>
+<TabItem value="task-options" label="Configure retries and rate limits">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-options
+
+```
+
+</TabItem>
+<TabItem value="runtime-setup" label="Create the broker, backend, and worker">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-runtime-setup
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Start the worker and enqueue tasks">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-enqueue
+
+```
+
+</TabItem>
+</Tabs>

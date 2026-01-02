@@ -17,6 +17,7 @@ Future<void> main() async {
   final backend = await connectBackend(backendUrl);
   final registry = buildRegistry();
 
+  // #region reliability-heartbeat-worker
   final worker = Worker(
     broker: broker,
     registry: registry,
@@ -28,6 +29,7 @@ Future<void> main() async {
     workerHeartbeatInterval: const Duration(seconds: 5),
     prefetchMultiplier: 1,
   );
+  // #endregion reliability-heartbeat-worker
 
   attachWorkerEventLogging(worker);
 

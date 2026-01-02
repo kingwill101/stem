@@ -7,6 +7,9 @@ aliases:
   - /getting-started/intro
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 Stem is a Dart-native background work platform that gives you Celery‑level
 capabilities without leaving the Dart ecosystem. This onboarding path assumes
 you have never touched Stem before and walks you from “what is this?” to “I can
@@ -32,6 +35,35 @@ Producer → Broker → Worker → Result Backend
 
 In Stem, you can mix and match brokers and backends (for example, Redis for
 fast delivery and Postgres for durable results).
+
+## A minimal Stem pipeline
+
+The core objects are a task handler, a worker, and a producer. This example
+keeps everything in a single file so you can see the moving parts together.
+
+<Tabs>
+<TabItem value="task" label="Define a task handler">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-task-definition
+
+```
+
+</TabItem>
+<TabItem value="runtime" label="Set up the broker, backend, and worker">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-runtime-setup
+
+```
+
+</TabItem>
+<TabItem value="enqueue" label="Start the worker and enqueue work">
+
+```dart title="stem_example.dart" file=<rootDir>/../packages/stem/example/stem_example.dart#getting-started-enqueue
+
+```
+
+</TabItem>
+</Tabs>
 
 ## What You’ll Unlock
 

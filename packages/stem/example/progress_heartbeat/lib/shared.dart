@@ -20,6 +20,7 @@ SimpleTaskRegistry buildRegistry() {
   return registry;
 }
 
+// #region reliability-worker-event-logging
 void attachWorkerEventLogging(Worker worker) {
   worker.events.listen((event) {
     switch (event.type) {
@@ -48,7 +49,9 @@ void attachWorkerEventLogging(Worker worker) {
     }
   });
 }
+// #endregion reliability-worker-event-logging
 
+// #region reliability-progress-task
 class ProgressTask extends TaskHandler<String> {
   @override
   String get name => 'progress.demo';
@@ -82,3 +85,4 @@ class ProgressTask extends TaskHandler<String> {
     return 'ok';
   }
 }
+// #endregion reliability-progress-task

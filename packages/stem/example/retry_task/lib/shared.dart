@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:stem/stem.dart';
 
+// #region reliability-retry-registry
 SimpleTaskRegistry buildRegistry() {
   final registry = SimpleTaskRegistry()
     ..register(
@@ -14,7 +15,9 @@ SimpleTaskRegistry buildRegistry() {
     );
   return registry;
 }
+// #endregion reliability-retry-registry
 
+// #region reliability-retry-signals
 List<SignalSubscription> attachLogging(String label) {
   String prefix(String event) => '[retry][$label][$event]';
 
@@ -69,7 +72,9 @@ List<SignalSubscription> attachLogging(String label) {
     }),
   ];
 }
+// #endregion reliability-retry-signals
 
+// #region reliability-retry-entrypoint
 FutureOr<void> _alwaysFailEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
@@ -80,3 +85,4 @@ FutureOr<void> _alwaysFailEntrypoint(
   print('[retry][task][attempt] {"attempt":$attempt,"max":$max}');
   throw StateError('Simulated failure on attempt $attempt');
 }
+// #endregion reliability-retry-entrypoint

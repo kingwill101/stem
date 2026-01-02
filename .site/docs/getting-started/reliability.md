@@ -43,16 +43,52 @@ import TabItem from '@theme/TabItem';
 - For permanent errors, fail fast and alert.
 
 <Tabs>
-<TabItem value="strategy" label="Retry Strategy">
+<TabItem value="worker-retry" label="Configure a jittered retry strategy">
 
-```dart title="lib/workers_programmatic.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workers_programmatic.dart#workers-worker-retry
+```dart title="retry_task/bin/worker.dart" file=<rootDir>/../packages/stem/example/retry_task/bin/worker.dart#reliability-retry-worker
 
 ```
 
 </TabItem>
-<TabItem value="signals" label="Retry Signals">
+<TabItem value="signals" label="Log retry signals and outcomes">
 
-```dart title="lib/observability_ops.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability_ops.dart#ops-analytics
+```dart title="retry_task/lib/shared.dart" file=<rootDir>/../packages/stem/example/retry_task/lib/shared.dart#reliability-retry-signals
+
+```
+
+</TabItem>
+<TabItem value="task" label="Create a task that exercises retries">
+
+```dart title="retry_task/lib/shared.dart" file=<rootDir>/../packages/stem/example/retry_task/lib/shared.dart#reliability-retry-entrypoint
+
+```
+
+</TabItem>
+</Tabs>
+
+## Heartbeats and progress
+
+Use heartbeats and progress updates to prevent long-running tasks from being
+reclaimed prematurely.
+
+<Tabs>
+<TabItem value="heartbeat" label="Configure worker heartbeat intervals">
+
+```dart title="progress_heartbeat/bin/worker.dart" file=<rootDir>/../packages/stem/example/progress_heartbeat/bin/worker.dart#reliability-heartbeat-worker
+
+```
+
+</TabItem>
+<TabItem value="progress" label="Emit progress and heartbeats inside a task">
+
+```dart title="progress_heartbeat/lib/shared.dart" file=<rootDir>/../packages/stem/example/progress_heartbeat/lib/shared.dart#reliability-progress-task
+
+```
+
+</TabItem>
+<TabItem value="events" label="Stream worker events for observability">
+
+```dart title="progress_heartbeat/lib/shared.dart" file=<rootDir>/../packages/stem/example/progress_heartbeat/lib/shared.dart#reliability-worker-event-logging
 
 ```
 

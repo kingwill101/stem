@@ -19,6 +19,7 @@ Future<void> main() async {
   final registry = buildRegistry();
   final backend = InMemoryResultBackend();
 
+  // #region reliability-retry-worker
   final worker = Worker(
     broker: broker,
     registry: registry,
@@ -30,7 +31,9 @@ Future<void> main() async {
       max: const Duration(seconds: 1),
     ),
   );
+  // #endregion reliability-retry-worker
 
+  // #region reliability-retry-runtime-signals
   final subscriptions = attachLogging('worker');
   final shutdownCompleted = Completer<void>();
   var shuttingDown = false;
@@ -50,6 +53,7 @@ Future<void> main() async {
     await worker.shutdown(mode: WorkerShutdownMode.hard);
   });
   subscriptions.add(failureSubscription);
+  // #endregion reliability-retry-runtime-signals
 
   await worker.start();
   await shutdownCompleted.future;
