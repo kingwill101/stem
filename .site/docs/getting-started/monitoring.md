@@ -55,6 +55,13 @@ See the [Dashboard](../core-concepts/dashboard.md) guide for setup details.
 ```
 
 </TabItem>
+<TabItem value="queue-depth" label="Queue Depth Gauge">
+
+```dart title="lib/observability.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-queue-depth
+
+```
+
+</TabItem>
 <TabItem value="env" label="Env Vars">
 
 ```bash

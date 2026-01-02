@@ -73,6 +73,10 @@ routes:
   that hint when resolving a route. When no range is defined the value is
   clamped to `[0, 9]`.
 
+```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-priority-range
+
+```
+
 ## Broadcast channels
 
 - Add broadcast channels under `broadcasts`; each entry is keyed by the logical

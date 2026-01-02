@@ -34,6 +34,14 @@ void registerSignals() {
 }
 // #endregion observability-signals
 
+// #region observability-queue-depth
+final queueDepthGauge = GaugeMetric();
+
+void recordQueueDepth(String queue, int depth) {
+  queueDepthGauge.set(depth.toDouble(), tags: {'queue': queue});
+}
+// #endregion observability-queue-depth
+
 // #region observability-logging
 void logTaskStart(Envelope envelope) {
   stemLogger.info(

@@ -26,6 +26,20 @@ final registry = RoutingRegistry(
 );
 // #endregion routing-load
 
+// #region routing-priority-range
+final priorityQueue = QueueDefinition(
+  name: 'priority',
+  priorityRange: const QueuePriorityRange(min: 0, max: 5),
+);
+
+final priorityRegistry = RoutingRegistry(
+  RoutingConfig(
+    defaultQueue: const DefaultQueueConfig(alias: 'default', queue: 'priority'),
+    queues: {'priority': priorityQueue},
+  ),
+);
+// #endregion routing-priority-range
+
 // #region routing-bootstrap
 Future<(Stem, Worker)> bootstrapStem() async {
   final routing = await loadRouting();
