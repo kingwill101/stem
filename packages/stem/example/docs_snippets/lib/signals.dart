@@ -29,6 +29,19 @@ List<SignalSubscription> registerTaskSignals() {
 }
 // #endregion signals-task-listeners
 
+// #region signals-publish-listeners
+List<SignalSubscription> registerPublishSignals() {
+  return [
+    StemSignals.beforeTaskPublish.connect((payload, _) {
+      print('Publishing ${payload.envelope.name}');
+    }),
+    StemSignals.afterTaskPublish.connect((payload, _) {
+      print('Published ${payload.envelope.id}');
+    }),
+  ];
+}
+// #endregion signals-publish-listeners
+
 // #region signals-worker-listeners
 SignalSubscription registerWorkerSignals() {
   return StemSignals.workerReady.connect((payload, _) {
@@ -53,11 +66,14 @@ SignalSubscription registerControlSignals() {
 }
 // #endregion signals-control-listeners
 
-// #region signals-middleware
+// #region signals-middleware-producer
 List<Middleware> buildSignalMiddlewareForProducer() {
   return [SignalMiddleware.coordinator()];
 }
 
+// #endregion signals-middleware-producer
+
+// #region signals-middleware-worker
 List<Middleware> buildSignalMiddlewareForWorker() {
   return [
     SignalMiddleware.worker(
@@ -69,11 +85,12 @@ List<Middleware> buildSignalMiddlewareForWorker() {
     ),
   ];
 }
-// #endregion signals-middleware
+// #endregion signals-middleware-worker
 
 Future<void> main() async {
   configureSignals();
   final subscriptions = <SignalSubscription>[
+    ...registerPublishSignals(),
     ...registerTaskSignals(),
     registerWorkerSignals(),
     registerSchedulerSignals(),

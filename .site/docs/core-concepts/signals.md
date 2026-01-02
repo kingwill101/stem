@@ -63,6 +63,13 @@ Workers automatically apply the configuration passed through
 ## Listening for signals
 
 <Tabs>
+<TabItem value="publish" label="Publish">
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-publish-listeners
+
+```
+
+</TabItem>
 <TabItem value="task" label="Task lifecycle">
 
 ```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-task-listeners
@@ -103,7 +110,11 @@ Workers automatically apply the configuration passed through
   and postrun events remain wired through the runtime so result payloads stay
   accurate.
 
-```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-middleware
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-middleware-producer
+
+```
+
+```dart title="lib/signals.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/signals.dart#signals-middleware-worker
 
 ```
 
