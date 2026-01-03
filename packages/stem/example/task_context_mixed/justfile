@@ -1,0 +1,49 @@
+import "../Justfile.common"
+
+ROOT := justfile_directory()
+BUILD_DIR := env_var_or_default("BUILD_DIR", "build")
+ENV_FILE := env_var_or_default("ENV_FILE", ".env")
+SESSION := env_var_or_default("SESSION", "stem-task-context-mixed")
+BROKER_PATH := env_var_or_default(
+    "STEM_SQLITE_BROKER_PATH",
+    "task_context_mixed_broker.sqlite",
+)
+BACKEND_PATH := env_var_or_default(
+    "STEM_SQLITE_BACKEND_PATH",
+    "task_context_mixed_backend.sqlite",
+)
+
+build-worker:
+    cd "{{ROOT}}"; dart pub get
+    cd "{{ROOT}}"; dart build cli -t bin/worker.dart -o "{{BUILD_DIR}}/worker"
+
+build-enqueue:
+    cd "{{ROOT}}"; dart pub get
+    cd "{{ROOT}}"; dart build cli -t bin/enqueue.dart -o "{{BUILD_DIR}}/enqueue"
+
+build: build-worker build-enqueue
+
+run-worker:
+    {{ENV_LOAD}}; export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-{{BROKER_PATH}}}"; export STEM_SQLITE_BACKEND_PATH="${STEM_SQLITE_BACKEND_PATH:-{{BACKEND_PATH}}}"; if [ -d "{{BUILD_DIR}}/worker/bundle/bin" ]; then "{{BUILD_DIR}}/worker/bundle/bin"/*; else cd "{{ROOT}}"; dart run bin/worker.dart; fi
+
+run-enqueue:
+    {{ENV_LOAD}}; export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-{{BROKER_PATH}}}"; if [ -d "{{BUILD_DIR}}/enqueue/bundle/bin" ]; then "{{BUILD_DIR}}/enqueue/bundle/bin"/*; else cd "{{ROOT}}"; dart run bin/enqueue.dart; fi
+
+run-fail:
+    {{ENV_LOAD}}; export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-{{BROKER_PATH}}}"; if [ -d "{{BUILD_DIR}}/enqueue/bundle/bin" ]; then "{{BUILD_DIR}}/enqueue/bundle/bin"/* --fail; else cd "{{ROOT}}"; dart run bin/enqueue.dart --fail; fi
+
+run-overwrite:
+    {{ENV_LOAD}}; export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-{{BROKER_PATH}}}"; if [ -d "{{BUILD_DIR}}/enqueue/bundle/bin" ]; then "{{BUILD_DIR}}/enqueue/bundle/bin"/* --overwrite; else cd "{{ROOT}}"; dart run bin/enqueue.dart --overwrite; fi
+
+run: run-enqueue
+
+clean:
+    rm -rf "{{BUILD_DIR}}"
+
+tmux:
+    {{JUST}} tmux-guard
+    {{JUST}} tmux-prep
+    tmux new-session -d -s "{{SESSION}}" -n app "cd \"{{ROOT}}\" && {{JUST}} run-worker"
+    tmux split-window -t "{{SESSION}}:app" -v "cd \"{{ROOT}}\" && {{JUST}} run-enqueue"
+    tmux select-layout -t "{{SESSION}}:app" even-vertical
+    {{JUST}} tmux-attach

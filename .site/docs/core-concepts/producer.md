@@ -53,6 +53,37 @@ group/chain/chord APIs produce strongly typed `TaskResult<T>` streams.
 Need to tweak headers/meta/queue at call sites? Wrap the definition in a
 `TaskEnqueueBuilder` and invoke `await builder.enqueueWith(stem);`.
 
+## Enqueue options
+
+Use `TaskEnqueueOptions` to override scheduling, routing, retry behavior, and
+callbacks for a single publish. Common fields include `countdown`, `eta`,
+`expires`, `queue`, `exchange`, `routingKey`, `priority`, `serializer`,
+`compression`, `ignoreResult`, `taskId`, `retry`, `retryPolicy`, `link`, and
+`linkError`.
+
+Adapter support varies; for example, not every broker honors priorities or
+delayed delivery. Stem falls back to best-effort behavior when a capability is
+unsupported.
+
+Example:
+
+```dart
+await stem.enqueue(
+  'tasks.email',
+  args: {'to': 'ops@example.com'},
+  enqueueOptions: TaskEnqueueOptions(
+    countdown: const Duration(seconds: 30),
+    queue: 'critical',
+    retry: true,
+    retryPolicy: TaskRetryPolicy(
+      backoff: true,
+      defaultDelay: const Duration(seconds: 2),
+      maxRetries: 5,
+    ),
+  ),
+);
+```
+
 ## Tips
 
 - Reuse a single `Stem` instance; create it during application bootstrap.

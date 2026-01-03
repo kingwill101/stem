@@ -150,6 +150,10 @@ Isolate handlers communicate with the worker only when they emit control signals
 (heartbeat, lease extension, progress). That difference governs how quickly a
 `--terminate` revoke takes effect.
 
+If you are using `FunctionTaskHandler`, keep execution inline by passing
+`runInIsolate: false` or using the `FunctionTaskHandler.inline(...)` factory
+when the entrypoint captures state that cannot cross isolate boundaries.
+
 ### Inline handler example
 
 ```dart title="tasks/inline_report_task.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-inline

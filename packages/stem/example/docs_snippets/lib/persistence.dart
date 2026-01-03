@@ -2,10 +2,12 @@
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
 
 final registry = SimpleTaskRegistry()
   ..register(
@@ -19,23 +21,32 @@ final registry = SimpleTaskRegistry()
   );
 
 // #region persistence-backend-in-memory
-final backend = InMemoryResultBackend();
-final stem = Stem(
-  broker: InMemoryBroker(),
-  registry: registry,
-  backend: backend,
-);
+Future<void> connectInMemoryBackend() async {
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
+  final stem = Stem(
+    broker: broker,
+    registry: registry,
+    backend: backend,
+  );
+  await stem.enqueue('demo', args: {});
+  await backend.dispose();
+  broker.dispose();
+}
 // #endregion persistence-backend-in-memory
 
 // #region persistence-backend-redis
 Future<void> connectRedisBackend() async {
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
+  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final stem = Stem(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
+    broker: broker,
     registry: registry,
     backend: backend,
   );
   await stem.enqueue('demo', args: {});
+  await backend.close();
+  await broker.close();
 }
 // #endregion persistence-backend-redis
 
@@ -44,14 +55,32 @@ Future<void> connectPostgresBackend() async {
   final backend = await PostgresResultBackend.connect(
     connectionString: 'postgres://postgres:postgres@localhost:5432/stem',
   );
+  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final stem = Stem(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
+    broker: broker,
     registry: registry,
     backend: backend,
   );
   await stem.enqueue('demo', args: {});
+  await backend.close();
+  await broker.close();
 }
 // #endregion persistence-backend-postgres
+
+// #region persistence-backend-sqlite
+Future<void> connectSqliteBackend() async {
+  final broker = await SqliteBroker.open(File('stem_broker.sqlite'));
+  final backend = await SqliteResultBackend.open(File('stem_backend.sqlite'));
+  final stem = Stem(
+    broker: broker,
+    registry: registry,
+    backend: backend,
+  );
+  await stem.enqueue('demo', args: {});
+  await backend.close();
+  await broker.close();
+}
+// #endregion persistence-backend-sqlite
 
 // #region persistence-encoders
 class Base64PayloadEncoder extends TaskPayloadEncoder {
@@ -71,7 +100,7 @@ Future<void> configureEncoders() async {
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [GzipPayloadEncoder()],
   );
-  await app.worker.shutdown();
+  await app.shutdown();
 }
 // #endregion persistence-encoders
 
@@ -81,29 +110,39 @@ Future<void> configureBeatStores() async {
     'redis://localhost:6379/2',
   );
   final lockStore = await RedisLockStore.connect('redis://localhost:6379/3');
+  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
 
   final beat = Beat(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
+    broker: broker,
     store: scheduleStore,
     lockStore: lockStore,
   );
 
   await beat.stop();
+  await broker.close();
+  await scheduleStore.close();
+  await lockStore.close();
 }
 // #endregion persistence-beat-stores
 
 // #region persistence-revoke-store
 Future<void> configureRevokeStore() async {
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
+  final revokeStore = await PostgresRevokeStore.connect(
+    'postgres://postgres:postgres@localhost:5432/stem',
+  );
   final worker = Worker(
-    broker: InMemoryBroker(),
+    broker: broker,
     registry: registry,
-    backend: InMemoryResultBackend(),
-    revokeStore: await PostgresRevokeStore.connect(
-      'postgres://postgres:postgres@localhost:5432/stem',
-    ),
+    backend: backend,
+    revokeStore: revokeStore,
   );
 
   await worker.shutdown();
+  await revokeStore.close();
+  await backend.dispose();
+  broker.dispose();
 }
 // #endregion persistence-revoke-store
 

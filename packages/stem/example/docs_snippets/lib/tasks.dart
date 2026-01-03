@@ -87,8 +87,67 @@ Future<void> runTypedDefinitionExample() async {
   if (result?.isSucceeded == true) {
     print('Invoice published');
   }
+  await backend.dispose();
+  broker.dispose();
 }
 // #endregion tasks-typed-definition
+
+// #region tasks-context-enqueue
+Future<void> enqueueFromContext(TaskContext context) async {
+  await context.enqueue(
+    'tasks.child',
+    args: {'id': '123'},
+    enqueueOptions: TaskEnqueueOptions(
+      countdown: const Duration(seconds: 30),
+      queue: 'critical',
+      retry: true,
+      retryPolicy: const TaskRetryPolicy(
+        backoff: true,
+        defaultDelay: Duration(seconds: 2),
+        maxRetries: 5,
+      ),
+    ),
+  );
+
+  // Alias for enqueue.
+  await context.spawn('tasks.child', args: {'id': '456'});
+}
+// #endregion tasks-context-enqueue
+
+class ChildArgs {
+  const ChildArgs(this.value);
+  final String value;
+}
+
+final childDefinition = TaskDefinition<ChildArgs, void>(
+  name: 'tasks.child',
+  encodeArgs: (args) => {'value': args.value},
+);
+
+// #region tasks-invocation-builder
+Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
+  final call = invocation
+      .enqueueBuilder(
+        definition: childDefinition,
+        args: const ChildArgs('value'),
+      )
+      .queue('critical')
+      .priority(9)
+      .delay(const Duration(seconds: 5))
+      .enqueueOptions(
+        const TaskEnqueueOptions(
+          retry: true,
+          retryPolicy: TaskRetryPolicy(
+            backoff: true,
+            defaultDelay: Duration(seconds: 1),
+          ),
+        ),
+      )
+      .build();
+
+  await invocation.enqueueCall(call);
+}
+// #endregion tasks-invocation-builder
 
 // #region tasks-timeouts
 const emailTimeoutOptions = TaskOptions(

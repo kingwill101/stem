@@ -1,0 +1,16 @@
+name: stem_task_context_mixed_example
+description: Demonstrates TaskContext and TaskInvocationContext enqueue patterns.
+publish_to: "none"
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  stem:
+    path: ../..
+  stem_sqlite:
+    path: ../../../stem_sqlite
+
+dependency_overrides:
+  stem:
+    path: ../..

@@ -82,6 +82,54 @@ every retry signal and shows how the strategy interacts with broker timings.
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.
 
+See the `example/task_context_mixed` demo for a runnable sample that exercises
+inline + isolate enqueue, TaskRetryPolicy overrides, and enqueue options.
+The `example/task_usage_patterns.dart` sample shows in-memory TaskContext and
+TaskInvocationContext patterns without external dependencies.
+
+### Enqueue from a running task
+
+Use `TaskContext.enqueue`/`spawn` to schedule follow-up work with the same
+defaults as `Stem.enqueue`. For isolate entrypoints, `TaskInvocationContext`
+exposes the same API plus the fluent builder.
+
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-context-enqueue
+
+```
+
+Inside isolate entrypoints:
+
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-invocation-builder
+
+```
+
+### Retry from a running task
+
+Handlers can request a retry directly from the context:
+
+```dart
+await context.retry(countdown: const Duration(seconds: 10));
+```
+
+Retries respect `TaskOptions.retryPolicy` unless you override it with
+`TaskEnqueueOptions.retryPolicy` or `context.retry(retryPolicy: ...)`.
+
+### Retry policy overrides
+
+`TaskRetryPolicy` captures backoff controls and can be applied per handler or
+per enqueue:
+
+```dart
+final options = TaskOptions(
+  maxRetries: 3,
+  retryPolicy: TaskRetryPolicy(
+    backoff: true,
+    defaultDelay: const Duration(seconds: 1),
+    backoffMax: const Duration(seconds: 30),
+  ),
+);
+```
+
 ## Isolation & Timeouts
 
 Set soft/hard timeouts to guard against runaway tasks:

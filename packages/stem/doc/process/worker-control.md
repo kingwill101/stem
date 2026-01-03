@@ -155,6 +155,10 @@ control signals (heartbeat, lease extension, or progress). This distinction is
 important for revokes because it determines how quickly the worker can apply a
 `--terminate` request.
 
+If you are using `FunctionTaskHandler`, set `runInIsolate: false` or use the
+`FunctionTaskHandler.inline(...)` factory to force inline execution when the
+entrypoint captures non-sendable state.
+
 Docs can render multi-file examples using the `:::tabs`/`:::tab` directives
 introduced in this update. Each tab accepts `label`/`value` attributes and code
 blocks may add `title="path/to/file.dart"` metadata to display filenames.
@@ -224,6 +228,8 @@ Future<void> renderImageEntrypoint(
 
 The `isolateEntrypoint` must be a top-level or static function so it can be
 serialized across isolates. Returning `null` keeps execution inline.
+`FunctionTaskHandler.inline(...)` (or `runInIsolate: false`) is the easiest way
+to keep closure-based handlers inline.
 
 `stem worker revoke` accepts `--terminate` to request that active tasks stop as
 soon as the worker reaches a safe checkpoint. Inline handlers (tasks executed in
