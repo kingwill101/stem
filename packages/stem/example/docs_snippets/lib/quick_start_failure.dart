@@ -10,10 +10,10 @@ class EmailReceiptTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: 'emails',
-        maxRetries: 3,
-        priority: 9,
-      );
+    queue: 'emails',
+    maxRetries: 3,
+    priority: 9,
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {

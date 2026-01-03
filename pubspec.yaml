@@ -9,3 +9,5 @@ workspace:
   - packages/stem_postgres
   - packages/stem_cli
   - packages/stem/example/docs_snippets
+dev_dependencies:
+  very_good_analysis: ^10.0.0

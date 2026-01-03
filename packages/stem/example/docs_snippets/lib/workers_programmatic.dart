@@ -151,10 +151,10 @@ class RedisEmailTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: 'default',
-        maxRetries: 3,
-        visibilityTimeout: Duration(seconds: 30),
-      );
+    queue: 'default',
+    maxRetries: 3,
+    visibilityTimeout: Duration(seconds: 30),
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {}

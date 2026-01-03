@@ -59,7 +59,9 @@ class AddNamespaceScoping extends Migration {
       })
       ..table('stem_workflow_watchers', (table) {
         table.text('namespace').defaultValue('stem');
-        table.index(['namespace'], name: 'stem_workflow_watchers_namespace_idx');
+        table.index([
+          'namespace',
+        ], name: 'stem_workflow_watchers_namespace_idx');
       })
       ..table('stem_schedules', (table) {
         table.text('namespace').defaultValue('stem');

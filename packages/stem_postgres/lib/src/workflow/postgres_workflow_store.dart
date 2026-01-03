@@ -55,8 +55,9 @@ class PostgresWorkflowStore implements WorkflowStore {
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresWorkflowStore._(
       connections,

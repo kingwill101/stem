@@ -70,4 +70,5 @@ Future<void> configureWorkerNamespace() async {
   await worker.shutdown();
   broker.dispose();
 }
+
 // #endregion namespaces-worker

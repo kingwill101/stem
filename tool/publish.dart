@@ -1,3 +1,5 @@
+#!/usr/bin/env dartrun
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -36,7 +38,10 @@ Future<void> main(List<String> args) async {
   }
 
   try {
-    await _formatRepository();
+    for (final pkgPath in packages) {
+      await _formatPackage(pkgPath);
+    }
+
     for (final pkgPath in packages) {
       await publishPackage(
         pkgPath,
@@ -53,12 +58,18 @@ Future<void> main(List<String> args) async {
   }
 }
 
-Future<void> _formatRepository() async {
-  print('\n--> Running dart format at repo root...');
+Future<void> _formatPackage(String pkgPath, {bool exitIfChanged = true}) async {
+  final fullPath = _resolvePackagePath(pkgPath);
+
+  print('\n--> Running dart format at $fullPath...');
   final process = await Process.start(
     'dart',
-    ['format', '.'],
-    workingDirectory: Directory.current.path,
+    [
+      'format',
+      '.',
+      ...[if (exitIfChanged) '--set-exit-if-changed'],
+    ],
+    workingDirectory: fullPath,
     mode: ProcessStartMode.inheritStdio,
   );
   final exitCode = await process.exitCode;

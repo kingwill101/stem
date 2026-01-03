@@ -14,8 +14,9 @@ class SqliteWorkflowStore implements WorkflowStore {
     String namespace = 'stem',
     WorkflowClock clock = const SystemWorkflowClock(),
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await SqliteConnections.open(file);
     return SqliteWorkflowStore._(
       connections,
@@ -28,8 +29,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     this._connections,
     this._clock, {
     required this.namespace,
-  })
-    : _context = _connections.context;
+  }) : _context = _connections.context;
 
   final SqliteConnections _connections;
   final QueryContext _context;

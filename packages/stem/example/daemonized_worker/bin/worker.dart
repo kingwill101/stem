@@ -34,4 +34,5 @@ Future<void> main(List<String> args) async {
   }
   // #endregion daemonized-worker-loop
 }
+
 // #endregion daemonized-worker-main

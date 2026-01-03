@@ -12,7 +12,7 @@
 # The core lints are also what is used by pub.dev for scoring packages.
 
 # include: package:lints/recommended.yaml
-include: package:very_good_analysis/analysis_options.10.0.0.yaml
+include: package:very_good_analysis/analysis_options.yaml
 # Uncomment the following section to specify additional rules.
 
 # linter:
@@ -23,10 +23,9 @@ analyzer:
   errors:
     avoid_returning_this: ignore
   exclude:
-    - example/**
+    - example/**/**
     - "**/*.g.dart"
     - "**/*.orm.dart"
-
 # For more information about the core and recommended set of lints, see
 # https://dart.dev/go/core-lints
 

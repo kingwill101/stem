@@ -45,6 +45,7 @@ dev_dependencies:
   stem_redis: ^0.1.0-dev
   stem_sqlite: ^0.1.0-dev
   test: ^1.26.3
+  very_good_analysis: ^10.0.0
 
 false_secrets:
   - /example/microservice/certs/*

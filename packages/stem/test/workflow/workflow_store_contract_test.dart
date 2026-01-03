@@ -50,7 +50,8 @@ void main() {
   final redisFactory = WorkflowStoreContractFactory(
     create: (clock) async => RedisWorkflowStore.connect(
       redisUrl,
-      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
+      namespace:
+          'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
       clock: clock,
     ),
     dispose: (store) async {
@@ -68,7 +69,8 @@ void main() {
   final postgresFactory = WorkflowStoreContractFactory(
     create: (clock) async => PostgresWorkflowStore.connect(
       postgresUrl,
-      namespace: 'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
+      namespace:
+          'wf_contract_${DateTime.now().microsecondsSinceEpoch}_${random.nextInt(999999)}',
       clock: clock,
     ),
     dispose: (store) async {

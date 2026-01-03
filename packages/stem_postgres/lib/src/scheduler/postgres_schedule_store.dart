@@ -22,8 +22,9 @@ class PostgresScheduleStore implements ScheduleStore {
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await PostgresConnections.open(connectionString: uri);
     return PostgresScheduleStore._(
       connections,
@@ -38,8 +39,9 @@ class PostgresScheduleStore implements ScheduleStore {
     DataSource dataSource, {
     String namespace = 'stem',
   }) {
-    final resolvedNamespace =
-        namespace.trim().isNotEmpty ? namespace.trim() : 'stem';
+    final resolvedNamespace = namespace.trim().isNotEmpty
+        ? namespace.trim()
+        : 'stem';
     final connections = PostgresConnections.fromDataSource(dataSource);
     return PostgresScheduleStore._(
       connections,

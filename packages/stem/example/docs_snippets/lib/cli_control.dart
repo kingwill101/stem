@@ -45,8 +45,7 @@ const String scheduleListCommand = 'stem schedule list';
 // #endregion cli-control-schedule-list
 
 // #region cli-control-schedule-dry-run
-const String scheduleDryRunCommand =
-    'stem schedule dry-run --spec "every:5m"';
+const String scheduleDryRunCommand = 'stem schedule dry-run --spec "every:5m"';
 // #endregion cli-control-schedule-dry-run
 
 Future<void> main() async {

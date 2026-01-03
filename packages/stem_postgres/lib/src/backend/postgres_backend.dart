@@ -55,8 +55,9 @@ class PostgresResultBackend implements ResultBackend {
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
     );
@@ -80,8 +81,9 @@ class PostgresResultBackend implements ResultBackend {
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
   }) {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = PostgresConnections.fromDataSource(dataSource);
     final backend = PostgresResultBackend._(
       connections,

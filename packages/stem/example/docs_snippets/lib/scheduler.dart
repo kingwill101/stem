@@ -94,7 +94,8 @@ class EmailTask extends TaskHandler<void> {
 
 // #region beat-postgres
 Future<void> startPostgresBeat() async {
-  final scheduleUrl = Platform.environment['STEM_SCHEDULE_STORE_URL'] ??
+  final scheduleUrl =
+      Platform.environment['STEM_SCHEDULE_STORE_URL'] ??
       'postgres://postgres:postgres@localhost:5432/stem';
   final store = await PostgresScheduleStore.connect(scheduleUrl);
   final beat = Beat(
@@ -216,4 +217,5 @@ Future<void> listDueEntries(ScheduleStore store) async {
     print('Upcoming: ${entry.id} at ${entry.nextRunAt}');
   }
 }
+
 // #endregion beat-due

@@ -18,4 +18,5 @@ Future<PostgresBroker> connectPostgresBroker() {
 InMemoryBroker createInMemoryBroker() {
   return InMemoryBroker();
 }
+
 // #endregion brokers-in-memory

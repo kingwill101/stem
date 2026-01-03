@@ -53,10 +53,8 @@ Future<void> main() async {
     );
 
     test('namespace isolates queue data', () async {
-      final namespaceA =
-          'broker-ns-a-${DateTime.now().microsecondsSinceEpoch}';
-      final namespaceB =
-          'broker-ns-b-${DateTime.now().microsecondsSinceEpoch}';
+      final namespaceA = 'broker-ns-a-${DateTime.now().microsecondsSinceEpoch}';
+      final namespaceB = 'broker-ns-b-${DateTime.now().microsecondsSinceEpoch}';
       final brokerA = PostgresBroker.fromDataSource(
         dataSource,
         namespace: namespaceA,

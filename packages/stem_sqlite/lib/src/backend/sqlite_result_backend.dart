@@ -30,8 +30,9 @@ class SqliteResultBackend implements ResultBackend {
     Duration heartbeatTtl = const Duration(seconds: 60),
     Duration cleanupInterval = const Duration(minutes: 1),
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await SqliteConnections.open(file);
     return SqliteResultBackend._(
       connections,

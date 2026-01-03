@@ -11,7 +11,11 @@ void configureMetrics() {
 // #endregion observability-metrics
 
 // #region observability-tracing
-Stem buildTracedStem(Broker broker, ResultBackend backend, TaskRegistry registry) {
+Stem buildTracedStem(
+  Broker broker,
+  ResultBackend backend,
+  TaskRegistry registry,
+) {
   // Configure OpenTelemetry globally; StemTracer.instance reads from it.
   final _ = StemTracer.instance;
   return Stem(

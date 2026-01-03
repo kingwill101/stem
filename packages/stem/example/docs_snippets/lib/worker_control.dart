@@ -72,7 +72,10 @@ Future<void> renderImageEntrypoint(
 // #endregion worker-control-isolate
 
 // #region worker-control-crunch
-Future<void> crunch(TaskInvocationContext ctx, Map<String, Object?> args) async {
+Future<void> crunch(
+  TaskInvocationContext ctx,
+  Map<String, Object?> args,
+) async {
   final items = args['items'] as List<Object?>;
   for (var i = 0; i < items.length; i++) {
     await process(items[i]);

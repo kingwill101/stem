@@ -30,8 +30,9 @@ class SqliteBroker implements Broker {
     Duration sweeperInterval = const Duration(seconds: 10),
     Duration deadLetterRetention = const Duration(days: 7),
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await SqliteConnections.open(file);
     return SqliteBroker._(
       connections,

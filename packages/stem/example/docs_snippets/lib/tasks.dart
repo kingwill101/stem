@@ -30,12 +30,12 @@ class RedisEmailTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        queue: 'email',
-        maxRetries: 4,
-        visibilityTimeout: Duration(seconds: 30),
-        unique: true,
-        uniqueFor: Duration(minutes: 5),
-      );
+    queue: 'email',
+    maxRetries: 4,
+    visibilityTimeout: Duration(seconds: 30),
+    unique: true,
+    uniqueFor: Duration(minutes: 5),
+  );
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
@@ -129,9 +129,9 @@ class EncodedTask extends TaskHandler<void> {
 
   @override
   TaskMetadata get metadata => const TaskMetadata(
-        argsEncoder: Base64PayloadEncoder(),
-        resultEncoder: Base64PayloadEncoder(),
-      );
+    argsEncoder: Base64PayloadEncoder(),
+    resultEncoder: Base64PayloadEncoder(),
+  );
 
   @override
   TaskOptions get options => const TaskOptions();

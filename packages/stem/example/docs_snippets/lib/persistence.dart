@@ -77,8 +77,9 @@ Future<void> configureEncoders() async {
 
 // #region persistence-beat-stores
 Future<void> configureBeatStores() async {
-  final scheduleStore =
-      await RedisScheduleStore.connect('redis://localhost:6379/2');
+  final scheduleStore = await RedisScheduleStore.connect(
+    'redis://localhost:6379/2',
+  );
   final lockStore = await RedisLockStore.connect('redis://localhost:6379/3');
 
   final beat = Beat(

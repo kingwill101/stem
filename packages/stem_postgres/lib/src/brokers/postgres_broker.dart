@@ -33,8 +33,9 @@ class PostgresBroker implements Broker {
     String? applicationName,
     TlsConfig? tls,
   }) async {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
     );
@@ -59,8 +60,9 @@ class PostgresBroker implements Broker {
     Duration sweeperInterval = const Duration(seconds: 10),
     Duration deadLetterRetention = const Duration(days: 7),
   }) {
-    final resolvedNamespace =
-        namespace.trim().isEmpty ? 'stem' : namespace.trim();
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
     final connections = PostgresConnections.fromDataSource(dataSource);
     return PostgresBroker._(
       connections,

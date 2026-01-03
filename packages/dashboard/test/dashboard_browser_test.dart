@@ -194,7 +194,9 @@ Future<void> main() async {
     });
   });
 
-  _dashboardBrowserTest('overview renders metrics from backend', (browser) async {
+  _dashboardBrowserTest('overview renders metrics from backend', (
+    browser,
+  ) async {
     await browser.visit('/');
     await browser.waiter.waitFor('.cards');
     await browser.assertSee('Overview');
@@ -235,7 +237,9 @@ return fetch('/tasks/enqueue', {
     expect(service.lastEnqueue!.args, {'userId': 123});
   });
 
-  _dashboardBrowserTest('workers control endpoint posts commands', (browser) async {
+  _dashboardBrowserTest('workers control endpoint posts commands', (
+    browser,
+  ) async {
     service.reset();
 
     await browser.visit('/workers');
@@ -256,7 +260,9 @@ return fetch('/workers/control', {
     expect(command.payload['mode'], 'soft');
   });
 
-  _dashboardBrowserTest('queue replay form replays dead letters', (browser) async {
+  _dashboardBrowserTest('queue replay form replays dead letters', (
+    browser,
+  ) async {
     service.reset();
 
     await browser.visit('/workers');
