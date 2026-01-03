@@ -42,7 +42,7 @@ Future<void> main() async {
   await worker.start();
 
   final canvas = Canvas(broker: broker, backend: backend, registry: registry);
-  final callbackId = await canvas.chord(
+  final chordResult = await canvas.chord(
     body: [
       task('fetch.metric', args: <String, Object?>{'value': 5}),
       task('fetch.metric', args: <String, Object?>{'value': 7}),
@@ -50,6 +50,8 @@ Future<void> main() async {
     ],
     callback: task('aggregate.metric'),
   );
+
+  final callbackId = chordResult.callbackTaskId;
 
   await _waitFor(() async {
     final status = await backend.get(callbackId);

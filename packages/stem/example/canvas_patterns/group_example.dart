@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
@@ -29,38 +27,23 @@ Future<void> main() async {
 
   final canvas = Canvas(broker: broker, backend: backend, registry: registry);
   const groupHandle = 'squares-demo';
+  await backend.initGroup(GroupDescriptor(id: groupHandle, expected: 3));
   final dispatch = await canvas.group<int>([
     task<int>('square', args: <String, Object?>{'value': 2}),
     task<int>('square', args: <String, Object?>{'value': 3}),
     task<int>('square', args: <String, Object?>{'value': 4}),
   ], groupId: groupHandle);
 
-  await _waitFor(() async {
-    final status = await backend.getGroup(groupHandle);
-    return status?.results.length == 3;
-  });
-
   final squares = await dispatch.results
       .map((result) => result.value)
-      .whereType<int>()
+      .where((value) => value != null)
+      .cast<int>()
       .toList();
-  print('Group results: $squares');
+  final status = await backend.getGroup(groupHandle);
+  print('Group results: $squares (backend count: ${status?.results.length})');
   await dispatch.dispose();
 
   await worker.shutdown();
   await backend.dispose();
   broker.dispose();
-}
-
-Future<void> _waitFor(
-  Future<bool> Function() predicate, {
-  Duration timeout = const Duration(seconds: 5),
-  Duration pollInterval = const Duration(milliseconds: 50),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (DateTime.now().isBefore(deadline)) {
-    if (await predicate()) return;
-    await Future<void>.delayed(pollInterval);
-  }
-  throw TimeoutException('Timed out waiting for group completion', timeout);
 }
