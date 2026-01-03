@@ -11,6 +11,7 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/retry.dart';
+import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
@@ -129,6 +130,16 @@ class Worker {
        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
     observability?.applySignalConfiguration();
+    _enqueuer = Stem(
+      broker: broker,
+      registry: registry,
+      backend: backend,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      retryStrategy: retryStrategy,
+      middleware: middleware,
+      signer: signer,
+      encoderRegistry: payloadEncoders,
+    );
     _maxConcurrency = this.concurrency;
     final autoscaleMax =
         autoscaleConfig.maxConcurrency != null &&
@@ -240,6 +251,11 @@ class Worker {
 
   /// Registry of payload encoders used by the worker.
   final TaskPayloadEncoderRegistry payloadEncoders;
+
+  /// Enqueuer used by task contexts for spawning new work.
+  late final Stem _enqueuer;
+
+  static final math.Random _random = math.Random();
 
   /// Resolved routing subscription for this worker.
   late final RoutingSubscription subscription;
@@ -495,6 +511,13 @@ class Worker {
             return;
           }
         }
+
+        if (_isExpired(envelope)) {
+          await _handleExpiredDelivery(delivery, envelope, resultEncoder);
+          await _releaseUniqueLock(envelope);
+          return;
+        }
+
         final decodedArgs = _decodeArgs(envelope, argsEncoder);
 
         final rateSpec = handler.options.rateLimit != null
@@ -600,6 +623,7 @@ class Worker {
             checkTermination();
             _reportProgress(envelope, progress, data: data);
           },
+          enqueuer: _enqueuer,
         );
 
         await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
@@ -633,6 +657,8 @@ class Worker {
           _cancelLeaseTimer(delivery.receipt);
           _heartbeatTimers.remove(envelope.id)?.cancel();
 
+          final ignoreResult = _shouldIgnoreResult(envelope);
+          final persistedResult = ignoreResult ? null : result;
           final successMeta = _statusMeta(
             envelope,
             resultEncoder,
@@ -645,7 +671,7 @@ class Worker {
           final successStatus = TaskStatus(
             id: envelope.id,
             state: TaskState.succeeded,
-            payload: result,
+            payload: persistedResult,
             attempt: envelope.attempt,
             meta: successMeta,
           );
@@ -653,7 +679,7 @@ class Worker {
           await backend.set(
             envelope.id,
             TaskState.succeeded,
-            payload: result,
+            payload: persistedResult,
             attempt: envelope.attempt,
             meta: successMeta,
           );
@@ -699,6 +725,17 @@ class Worker {
             groupId: groupId,
           );
           completionState = TaskState.cancelled;
+        } on TaskRetryRequest catch (request) {
+          _cancelLeaseTimer(delivery.receipt);
+          _heartbeatTimers.remove(envelope.id)?.cancel();
+          completionState = await _handleRetryRequest(
+            handler,
+            delivery,
+            envelope,
+            resultEncoder,
+            request,
+            groupId,
+          );
         } on Object catch (error, stack) {
           await _notifyErrorMiddleware(context, error, stack);
           _cancelLeaseTimer(delivery.receipt);
@@ -713,6 +750,11 @@ class Worker {
             groupId,
           );
         } finally {
+          if (completionState == TaskState.succeeded) {
+            await _dispatchLinkedTasks(envelope, onSuccess: true);
+          } else if (completionState == TaskState.failed) {
+            await _dispatchLinkedTasks(envelope, onSuccess: false);
+          }
           heartbeatTimer?.cancel();
           softTimer?.cancel();
           final completed = _releaseDelivery(envelope);
@@ -787,7 +829,7 @@ class Worker {
     Envelope envelope,
     Map<String, Object?> args,
   ) {
-    final hard = handler.options.hardTimeLimit;
+    final hard = _resolveHardTimeLimit(envelope, handler.options);
     if (_shouldUseIsolate(handler)) {
       return _runInIsolate(handler, context, envelope, args, hardTimeout: hard);
     }
@@ -805,7 +847,7 @@ class Worker {
   }
 
   Timer? _scheduleSoftLimit(Envelope envelope, TaskOptions options) {
-    final soft = options.softTimeLimit;
+    final soft = _resolveSoftTimeLimit(envelope, options);
     if (soft == null) return null;
     return Timer(soft, () {
       _events.add(
@@ -1007,6 +1049,92 @@ class Worker {
     }
   }
 
+  Future<void> _dispatchLinkedTasks(
+    Envelope envelope, {
+    required bool onSuccess,
+  }) async {
+    final key = onSuccess ? 'stem.link' : 'stem.linkError';
+    final raw = envelope.meta[key];
+    if (raw is! List) return;
+
+    for (final entry in raw) {
+      if (entry is! Map) continue;
+      final data = entry.cast<String, Object?>();
+      final name = data['name'];
+      if (name is! String || name.trim().isEmpty) continue;
+      final args = _castObjectMap(data['args']);
+      final headers = _castStringMap(data['headers']);
+      final meta = _castObjectMap(data['meta']);
+      final options = _decodeTaskOptions(data['options']);
+      final enqueueOptions = _decodeTaskEnqueueOptions(data['enqueueOptions']);
+      final notBefore = _parseDateTime(data['notBefore']);
+
+      final mergedHeaders = Map<String, String>.from(envelope.headers);
+      mergedHeaders.addAll(headers);
+
+      final mergedMeta = Map<String, Object?>.from(envelope.meta)
+        ..remove('stem.link')
+        ..remove('stem.linkError');
+      mergedMeta.addAll(meta);
+
+      if ((enqueueOptions?.addToParent ?? true)) {
+        mergedMeta['stem.parentTaskId'] = envelope.id;
+        mergedMeta['stem.parentAttempt'] = envelope.attempt;
+        final root = envelope.meta['stem.rootTaskId'];
+        mergedMeta['stem.rootTaskId'] = root is String && root.isNotEmpty
+            ? root
+            : envelope.id;
+      }
+
+      try {
+        await _enqueuer.enqueue(
+          name,
+          args: args,
+          headers: mergedHeaders,
+          options: options,
+          notBefore: notBefore,
+          meta: mergedMeta,
+          enqueueOptions: enqueueOptions,
+        );
+      } on Object catch (error, stack) {
+        stemLogger.warning(
+          'Failed to dispatch linked task',
+          Context(
+            _logContext({
+              'task': envelope.name,
+              'id': envelope.id,
+              'linkedTask': name,
+              'error': error.toString(),
+              'stack': stack.toString(),
+            }),
+          ),
+        );
+      }
+    }
+  }
+
+  TaskOptions _decodeTaskOptions(Object? value) {
+    if (value is TaskOptions) return value;
+    if (value is Map) {
+      return TaskOptions.fromJson(value.cast<String, Object?>());
+    }
+    return const TaskOptions();
+  }
+
+  TaskEnqueueOptions? _decodeTaskEnqueueOptions(Object? value) {
+    if (value is TaskEnqueueOptions) return value;
+    if (value is Map) {
+      return TaskEnqueueOptions.fromJson(value.cast<String, Object?>());
+    }
+    return null;
+  }
+
+  DateTime? _parseDateTime(Object? value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    return DateTime.tryParse(value.toString());
+  }
+
   bool _isTerminalState(TaskState state) {
     return state == TaskState.succeeded ||
         state == TaskState.failed ||
@@ -1117,14 +1245,23 @@ class Worker {
     StackTrace stack,
     String? groupId,
   ) async {
-    final canRetry = envelope.attempt < handler.options.maxRetries;
-    if (canRetry) {
-      final delay = retryStrategy.nextDelay(envelope.attempt, error, stack);
+    final retryPolicy = _resolveRetryPolicy(envelope, handler.options);
+    final maxRetries = retryPolicy?.maxRetries ?? envelope.maxRetries;
+    final canRetry = envelope.attempt < maxRetries;
+    final shouldRetry = canRetry && _shouldAutoRetry(retryPolicy, error);
+    if (shouldRetry) {
+      final delay = _computeRetryDelay(
+        envelope.attempt,
+        error,
+        stack,
+        retryPolicy,
+      );
       final nextRunAt = DateTime.now().add(delay);
       await broker.nack(delivery, requeue: false);
       await broker.publish(
         envelope.copyWith(
           attempt: envelope.attempt + 1,
+          maxRetries: maxRetries,
           notBefore: DateTime.now().add(delay),
         ),
       );
@@ -1235,6 +1372,130 @@ class Worker {
       );
       return TaskState.failed;
     }
+  }
+
+  Future<TaskState> _handleRetryRequest(
+    TaskHandler<Object?> handler,
+    Delivery delivery,
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
+    TaskRetryRequest request,
+    String? groupId,
+  ) async {
+    final policy =
+        request.retryPolicy ?? _resolveRetryPolicy(envelope, handler.options);
+    final maxRetries =
+        request.maxRetries ?? policy?.maxRetries ?? envelope.maxRetries;
+    final canRetry = envelope.attempt < maxRetries;
+    if (!canRetry) {
+      final failureMeta = _statusMeta(
+        envelope,
+        resultEncoder,
+        extra: {
+          'queue': envelope.queue,
+          'worker': consumerName,
+          'failedAt': DateTime.now().toIso8601String(),
+          'retryExhausted': true,
+        },
+      );
+      await broker.nack(delivery, requeue: false);
+      await backend.set(
+        envelope.id,
+        TaskState.failed,
+        attempt: envelope.attempt,
+        error: TaskError(
+          type: 'RetryExhausted',
+          message: 'retry requested but max retries exceeded',
+          retryable: false,
+        ),
+        meta: failureMeta,
+      );
+      _events.add(
+        WorkerEvent(
+          type: WorkerEventType.failed,
+          envelope: envelope,
+          error: StateError('retry exhausted'),
+        ),
+      );
+      await _signals.taskFailed(
+        envelope,
+        _workerInfoSnapshot,
+        error: StateError('retry exhausted'),
+        stackTrace: StackTrace.current,
+      );
+      if (_isTerminalState(TaskState.failed)) {
+        await _releaseUniqueLock(envelope);
+      }
+      return TaskState.failed;
+    }
+
+    final scheduledAt =
+        request.eta ??
+        (request.countdown != null
+            ? DateTime.now().add(request.countdown!)
+            : null);
+    final delay = scheduledAt != null
+        ? scheduledAt.difference(DateTime.now())
+        : _computeRetryDelay(
+            envelope.attempt,
+            request,
+            StackTrace.current,
+            policy,
+          );
+    final notBefore = scheduledAt ?? DateTime.now().add(delay);
+
+    final updatedMeta = Map<String, Object?>.from(envelope.meta);
+    if (request.timeLimit != null) {
+      updatedMeta['stem.timeLimitMs'] = request.timeLimit!.inMilliseconds;
+    }
+    if (request.softTimeLimit != null) {
+      updatedMeta['stem.softTimeLimitMs'] =
+          request.softTimeLimit!.inMilliseconds;
+    }
+    if (request.retryPolicy != null) {
+      updatedMeta['stem.retryPolicy'] = request.retryPolicy!.toJson();
+    }
+
+    await broker.nack(delivery, requeue: false);
+    await broker.publish(
+      envelope.copyWith(
+        attempt: envelope.attempt + 1,
+        maxRetries: maxRetries,
+        notBefore: notBefore,
+        meta: updatedMeta,
+      ),
+    );
+
+    final retriedMeta = _statusMeta(
+      envelope,
+      resultEncoder,
+      extra: {'retryDelayMs': delay.inMilliseconds},
+    );
+    await backend.set(
+      envelope.id,
+      TaskState.retried,
+      attempt: envelope.attempt,
+      error: TaskError(
+        type: 'RetryRequested',
+        message: 'explicit retry requested',
+        retryable: true,
+      ),
+      meta: retriedMeta,
+    );
+    _events.add(
+      WorkerEvent(
+        type: WorkerEventType.retried,
+        envelope: envelope,
+        data: {'retryDelayMs': delay.inMilliseconds},
+      ),
+    );
+    await _signals.taskRetry(
+      envelope,
+      _workerInfoSnapshot,
+      reason: request,
+      nextRetryAt: notBefore,
+    );
+    return TaskState.retried;
   }
 
   String _rateLimitKey(TaskOptions options, Envelope envelope) =>
@@ -1947,6 +2208,144 @@ class Worker {
     );
   }
 
+  Map<String, Object?> _castObjectMap(Object? value) {
+    if (value == null) return const {};
+    if (value is Map<String, Object?>) {
+      return Map<String, Object?>.from(value);
+    }
+    if (value is Map) {
+      final result = <String, Object?>{};
+      value.forEach((key, entry) {
+        if (key is String) {
+          result[key] = entry;
+        }
+      });
+      return result;
+    }
+    return const {};
+  }
+
+  Map<String, String> _castStringMap(Object? value) {
+    if (value == null) return const {};
+    if (value is Map<String, String>) {
+      return Map<String, String>.from(value);
+    }
+    if (value is Map) {
+      final result = <String, String>{};
+      value.forEach((key, entry) {
+        if (key is! String) return;
+        if (entry == null) return;
+        result[key] = entry is String ? entry : entry.toString();
+      });
+      return result;
+    }
+    return const {};
+  }
+
+  Duration? _durationFromMeta(Object? value) {
+    if (value == null) return null;
+    if (value is Duration) return value;
+    if (value is num) {
+      return Duration(milliseconds: value.toInt());
+    }
+    final parsed = value is String
+        ? int.tryParse(value)
+        : int.tryParse(value.toString());
+    if (parsed != null) {
+      return Duration(milliseconds: parsed);
+    }
+    final fallback = value is String
+        ? double.tryParse(value)
+        : double.tryParse(value.toString());
+    if (fallback != null) {
+      return Duration(milliseconds: fallback.toInt());
+    }
+    return null;
+  }
+
+  Duration? _resolveHardTimeLimit(Envelope envelope, TaskOptions options) {
+    final override = _durationFromMeta(envelope.meta['stem.timeLimitMs']);
+    return override ?? options.hardTimeLimit;
+  }
+
+  Duration? _resolveSoftTimeLimit(Envelope envelope, TaskOptions options) {
+    final override = _durationFromMeta(envelope.meta['stem.softTimeLimitMs']);
+    return override ?? options.softTimeLimit;
+  }
+
+  bool _shouldIgnoreResult(Envelope envelope) {
+    final value = envelope.meta['stem.ignoreResult'];
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.toLowerCase();
+      if (normalized == 'true' || normalized == '1' || normalized == 'yes') {
+        return true;
+      }
+      if (normalized == 'false' || normalized == '0' || normalized == 'no') {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  TaskRetryPolicy? _resolveRetryPolicy(
+    Envelope envelope,
+    TaskOptions handlerOptions,
+  ) {
+    final override = envelope.meta['stem.retryPolicy'];
+    if (override is TaskRetryPolicy) {
+      return override;
+    }
+    if (override is Map) {
+      return TaskRetryPolicy.fromJson(override.cast<String, Object?>());
+    }
+    return handlerOptions.retryPolicy;
+  }
+
+  bool _shouldAutoRetry(TaskRetryPolicy? policy, Object error) {
+    if (policy == null) return true;
+    final errorType = error.runtimeType.toString();
+    bool matches(List<Object> filters) {
+      return filters.any((value) => value.toString() == errorType);
+    }
+
+    if (policy.dontAutoRetryFor.isNotEmpty &&
+        matches(policy.dontAutoRetryFor)) {
+      return false;
+    }
+    if (policy.autoRetryFor.isEmpty) {
+      return true;
+    }
+    return matches(policy.autoRetryFor);
+  }
+
+  Duration _computeRetryDelay(
+    int attempt,
+    Object error,
+    StackTrace stackTrace,
+    TaskRetryPolicy? policy,
+  ) {
+    if (policy == null) {
+      return retryStrategy.nextDelay(attempt, error, stackTrace);
+    }
+    final base = policy.defaultDelay ?? Duration.zero;
+    if (!policy.backoff) {
+      return base;
+    }
+    final rawMs = base.inMilliseconds == 0
+        ? 0
+        : base.inMilliseconds * (1 << attempt);
+    final capMs = policy.backoffMax?.inMilliseconds ?? rawMs;
+    final capped = rawMs == 0 ? capMs : rawMs.clamp(0, capMs);
+    if (!policy.jitter || capped == 0) {
+      return Duration(milliseconds: capped);
+    }
+    final jitter = _random.nextInt((capped ~/ 4) + 1);
+    final jittered = (capped - jitter).clamp(0, capMs);
+    return Duration(milliseconds: jittered);
+  }
+
   Map<String, Object?> _statusMeta(
     Envelope envelope,
     TaskPayloadEncoder resultEncoder, {
@@ -2030,6 +2429,45 @@ class Worker {
       reason: revokeEntry?.reason ?? 'revoked',
     );
     _revocations.remove(envelope.id);
+  }
+
+  bool _isExpired(Envelope envelope) {
+    final value = envelope.meta['stem.expiresAt'];
+    if (value == null) return false;
+    final expiresAt = value is DateTime
+        ? value
+        : DateTime.tryParse(value.toString());
+    if (expiresAt == null) return false;
+    return DateTime.now().isAfter(expiresAt);
+  }
+
+  Future<void> _handleExpiredDelivery(
+    Delivery delivery,
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
+  ) async {
+    await broker.ack(delivery);
+    final meta = _statusMeta(
+      envelope,
+      resultEncoder,
+      extra: {
+        'queue': envelope.queue,
+        'worker': consumerName,
+        'expiredAt': DateTime.now().toIso8601String(),
+        'stem.expired': true,
+      },
+    );
+    await backend.set(
+      envelope.id,
+      TaskState.cancelled,
+      attempt: envelope.attempt,
+      error: TaskError(
+        type: 'TaskExpired',
+        message: 'Task expired before execution',
+        retryable: false,
+      ),
+      meta: meta,
+    );
   }
 
   Future<Map<String, Object?>> _processRevokeCommand(
@@ -2429,12 +2867,15 @@ class Worker {
       envelope.meta,
       envelope.attempt,
       _controlHandler(context),
-      hardTimeout: hardTimeout,
       taskName: handler.name,
+      taskId: envelope.id,
+      hardTimeout: hardTimeout,
     );
 
     if (outcome is TaskExecutionSuccess) {
       return outcome.value;
+    } else if (outcome is TaskExecutionRetry) {
+      throw outcome.request;
     } else if (outcome is TaskExecutionFailure) {
       Error.throwWithStackTrace(outcome.error, outcome.stackTrace);
     } else if (outcome is TaskExecutionTimeout) {
@@ -2455,6 +2896,28 @@ class Worker {
         await context.extendLease(signal.by);
       } else if (signal is ProgressSignal) {
         await context.progress(signal.percentComplete, data: signal.data);
+      } else if (signal is EnqueueTaskSignal) {
+        try {
+          final options = TaskOptions.fromJson(signal.request.options);
+          final enqueueOptions = signal.request.enqueueOptions != null
+              ? TaskEnqueueOptions.fromJson(
+                  signal.request.enqueueOptions!.cast<String, Object?>(),
+                )
+              : null;
+          final taskId = await _enqueuer.enqueue(
+            signal.request.name,
+            args: signal.request.args,
+            headers: signal.request.headers,
+            options: options,
+            meta: signal.request.meta,
+            enqueueOptions: enqueueOptions,
+          );
+          signal.replyPort.send(TaskEnqueueResponse(taskId: taskId));
+        } catch (error) {
+          signal.replyPort.send(
+            TaskEnqueueResponse(error: error.toString()),
+          );
+        }
       }
     };
   }

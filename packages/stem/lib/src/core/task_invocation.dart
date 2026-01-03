@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:stem/src/core/contracts.dart';
+
 /// Signature for task entrypoints that can run inside isolate executors.
 typedef TaskEntrypoint =
     FutureOr<Object?> Function(
@@ -40,10 +42,66 @@ class ProgressSignal extends TaskInvocationSignal {
   final Map<String, Object?>? data;
 }
 
+/// Request to enqueue a task from an isolate.
+class EnqueueTaskSignal extends TaskInvocationSignal {
+  /// Creates an enqueue request signal.
+  const EnqueueTaskSignal(this.request, this.replyPort);
+
+  /// Enqueue request payload.
+  final TaskEnqueueRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
+/// Enqueue request payload for isolate communication.
+class TaskEnqueueRequest {
+  /// Creates an enqueue request payload.
+  const TaskEnqueueRequest({
+    required this.name,
+    required this.args,
+    required this.headers,
+    required this.options,
+    required this.meta,
+    this.enqueueOptions,
+  });
+
+  /// Task name to enqueue.
+  final String name;
+
+  /// Task arguments.
+  final Map<String, Object?> args;
+
+  /// Task headers.
+  final Map<String, String> headers;
+
+  /// Task options.
+  final Map<String, Object?> options;
+
+  /// Task metadata.
+  final Map<String, Object?> meta;
+
+  /// Enqueue options.
+  final Map<String, Object?>? enqueueOptions;
+}
+
+/// Response payload for isolate enqueue requests.
+class TaskEnqueueResponse {
+  /// Creates a response payload.
+  const TaskEnqueueResponse({this.taskId, this.error});
+
+  /// Enqueued task id on success.
+  final String? taskId;
+
+  /// Error message when enqueue fails.
+  final String? error;
+}
+
 /// Context exposed to task entrypoints regardless of execution environment.
-class TaskInvocationContext {
+class TaskInvocationContext implements TaskEnqueuer {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
+    required String id,
     required Map<String, String> headers,
     required Map<String, Object?> meta,
     required int attempt,
@@ -54,22 +112,27 @@ class TaskInvocationContext {
       Map<String, Object?>? data,
     })
     progress,
+    TaskEnqueuer? enqueuer,
   }) => TaskInvocationContext._(
+    id: id,
     headers: headers,
     meta: meta,
     attempt: attempt,
     heartbeat: heartbeat,
     extendLease: extendLease,
     progress: progress,
+    enqueuer: enqueuer,
   );
 
   /// Context implementation used when executing inside a worker isolate.
   factory TaskInvocationContext.remote({
+    required String id,
     required SendPort controlPort,
     required Map<String, String> headers,
     required Map<String, Object?> meta,
     required int attempt,
   }) => TaskInvocationContext._(
+    id: id,
     headers: headers,
     meta: meta,
     attempt: attempt,
@@ -77,8 +140,10 @@ class TaskInvocationContext {
     extendLease: (by) async => controlPort.send(ExtendLeaseSignal(by)),
     progress: (percent, {data}) async =>
         controlPort.send(ProgressSignal(percent, data: data)),
+    enqueuer: _RemoteTaskEnqueuer(controlPort),
   );
   TaskInvocationContext._({
+    required this.id,
     required this.headers,
     required this.meta,
     required this.attempt,
@@ -89,9 +154,14 @@ class TaskInvocationContext {
       Map<String, Object?>? data,
     })
     progress,
+    TaskEnqueuer? enqueuer,
   }) : _heartbeat = heartbeat,
        _extendLease = extendLease,
-       _progress = progress;
+       _progress = progress,
+       _enqueuer = enqueuer;
+
+  /// The unique identifier of the task.
+  final String id;
 
   /// Headers passed to the task invocation.
   final Map<String, String> headers;
@@ -110,6 +180,8 @@ class TaskInvocationContext {
   })
   _progress;
 
+  final TaskEnqueuer? _enqueuer;
+
   /// Notify the worker that the task is still running.
   void heartbeat() => _heartbeat();
 
@@ -119,4 +191,186 @@ class TaskInvocationContext {
   /// Report progress back to the worker.
   Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
       _progress(percentComplete, data: data);
+
+  /// Enqueue a task from within a task invocation.
+  ///
+  /// Headers and metadata from this context are merged into the enqueue
+  /// request. Lineage is added to `meta` unless
+  /// `enqueueOptions.addToParent` is `false`.
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = _enqueuer;
+    if (delegate == null) {
+      throw StateError('TaskInvocationContext has no enqueuer configured');
+    }
+
+    final mergedHeaders = Map<String, String>.from(this.headers);
+    mergedHeaders.addAll(headers);
+    final mergedMeta = Map<String, Object?>.from(this.meta);
+    mergedMeta.addAll(meta);
+
+    if ((enqueueOptions?.addToParent ?? true)) {
+      mergedMeta['stem.parentTaskId'] = id;
+      mergedMeta['stem.parentAttempt'] = attempt;
+      mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
+    }
+
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: mergedHeaders,
+      options: options,
+      meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueue a typed task call from within a task invocation.
+  ///
+  /// This merges headers/meta from the task call and applies lineage metadata
+  /// unless `enqueueOptions.addToParent` is `false`.
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = _enqueuer;
+    if (delegate == null) {
+      throw StateError('TaskInvocationContext has no enqueuer configured');
+    }
+    final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
+    final mergedHeaders = Map<String, String>.from(headers);
+    mergedHeaders.addAll(call.headers);
+    final mergedMeta = Map<String, Object?>.from(meta);
+    mergedMeta.addAll(call.meta);
+
+    if ((resolvedEnqueueOptions?.addToParent ?? true)) {
+      mergedMeta['stem.parentTaskId'] = id;
+      mergedMeta['stem.parentAttempt'] = attempt;
+      mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
+    }
+
+    final mergedCall = call.copyWith(
+      headers: Map.unmodifiable(mergedHeaders),
+      meta: Map.unmodifiable(mergedMeta),
+    );
+    return delegate.enqueueCall(
+      mergedCall,
+      enqueueOptions: resolvedEnqueueOptions,
+    );
+  }
+
+  /// Build a fluent enqueue request for this invocation.
+  ///
+  /// Use [TaskEnqueueBuilder.build] + [enqueueCall] to dispatch.
+  TaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
+    required TaskDefinition<TArgs, TResult> definition,
+    required TArgs args,
+  }) {
+    return TaskEnqueueBuilder(definition: definition, args: args);
+  }
+
+  /// Alias for enqueue.
+  Future<String> spawn(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Request a retry of the current task invocation.
+  ///
+  /// Throws a [TaskRetryRequest] which is intercepted by the worker to
+  /// schedule the retry. Override retry policies/time limits per invocation
+  /// by passing the optional parameters.
+  Future<void> retry({
+    Duration? countdown,
+    DateTime? eta,
+    TaskRetryPolicy? retryPolicy,
+    int? maxRetries,
+    Duration? timeLimit,
+    Duration? softTimeLimit,
+  }) {
+    throw TaskRetryRequest(
+      countdown: countdown,
+      eta: eta,
+      retryPolicy: retryPolicy,
+      maxRetries: maxRetries,
+      timeLimit: timeLimit,
+      softTimeLimit: softTimeLimit,
+    );
+  }
+}
+
+class _RemoteTaskEnqueuer implements TaskEnqueuer {
+  _RemoteTaskEnqueuer(this._controlPort);
+
+  final SendPort _controlPort;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      EnqueueTaskSignal(
+        TaskEnqueueRequest(
+          name: name,
+          args: args,
+          headers: headers,
+          options: options.toJson(),
+          meta: meta,
+          enqueueOptions: enqueueOptions?.toJson(),
+        ),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is TaskEnqueueResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      return response.taskId ?? '';
+    }
+    throw StateError('Unexpected enqueue response: $response');
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      call.name,
+      args: call.encodeArgs(),
+      headers: call.headers,
+      options: call.resolveOptions(),
+      meta: call.meta,
+      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+    );
+  }
 }

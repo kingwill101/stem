@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:isolate';
 import 'dart:math' as math;
 
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/worker/isolate_messages.dart';
 
@@ -171,6 +172,7 @@ class TaskIsolatePool {
     int attempt,
     TaskControlHandler onControl, {
     required String taskName,
+    required String taskId,
     Duration? hardTimeout,
   }) {
     if (_disposed) {
@@ -185,6 +187,7 @@ class TaskIsolatePool {
       onControl: onControl,
       hardTimeout: hardTimeout,
       taskName: taskName,
+      taskId: taskId,
     );
     _queue.add(job);
     _pump();
@@ -218,6 +221,10 @@ class TaskIsolatePool {
                     response.result,
                     memoryBytes: response.memoryBytes,
                   ),
+                );
+              } else if (response is TaskRunRetry) {
+                job.completer.complete(
+                  TaskExecutionRetry(_retryRequestFromResponse(response)),
                 );
               } else if (response is TaskRunFailure) {
                 job.completer.complete(
@@ -380,6 +387,7 @@ class _TaskJob {
     required this.attempt,
     required this.onControl,
     required this.taskName,
+    required this.taskId,
     this.hardTimeout,
   });
 
@@ -391,6 +399,7 @@ class _TaskJob {
   final TaskControlHandler onControl;
   final Duration? hardTimeout;
   final String taskName;
+  final String taskId;
 
   final Completer<TaskExecutionResult> completer =
       Completer<TaskExecutionResult>();
@@ -424,6 +433,15 @@ class TaskExecutionFailure extends TaskExecutionResult {
 
   /// The stack trace of the error.
   final StackTrace stackTrace;
+}
+
+/// A retry request surfaced from an isolate task.
+class TaskExecutionRetry extends TaskExecutionResult {
+  /// Creates a retry execution result.
+  const TaskExecutionRetry(this.request);
+
+  /// Retry request details.
+  final TaskRetryRequest request;
 }
 
 /// A timed-out task execution for [taskName] with optional [limit].
@@ -476,6 +494,7 @@ class _IsolateWorker {
     });
 
     final request = TaskRunRequest(
+      id: job.taskId,
       entrypoint: job.entrypoint,
       args: job.args,
       headers: job.headers,
@@ -511,6 +530,28 @@ class _IsolateWorker {
     }
     _isolate.kill(priority: Isolate.immediate);
   }
+}
+
+TaskRetryRequest _retryRequestFromResponse(TaskRunRetry response) {
+  TaskRetryPolicy? retryPolicy;
+  final policy = response.retryPolicy;
+  if (policy != null) {
+    retryPolicy = TaskRetryPolicy.fromJson(policy);
+  }
+  return TaskRetryRequest(
+    countdown: response.countdownMs != null
+        ? Duration(milliseconds: response.countdownMs!)
+        : null,
+    eta: response.eta != null ? DateTime.tryParse(response.eta!) : null,
+    retryPolicy: retryPolicy,
+    maxRetries: response.maxRetries,
+    timeLimit: response.timeLimitMs != null
+        ? Duration(milliseconds: response.timeLimitMs!)
+        : null,
+    softTimeLimit: response.softTimeLimitMs != null
+        ? Duration(milliseconds: response.softTimeLimitMs!)
+        : null,
+  );
 }
 
 /// An error that occurred during remote task execution in an isolate.

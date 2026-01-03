@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/task_invocation.dart';
 
 /// A request to run a task in an isolate.
@@ -10,6 +11,7 @@ import 'package:stem/src/core/task_invocation.dart';
 class TaskRunRequest {
   /// Creates a request to execute a task in an isolate.
   TaskRunRequest({
+    required this.id,
     required this.entrypoint,
     required this.args,
     required this.headers,
@@ -18,6 +20,9 @@ class TaskRunRequest {
     required this.controlPort,
     required this.replyPort,
   });
+
+  /// Task id for the invocation.
+  final String id;
 
   /// The entrypoint function to execute.
   final TaskEntrypoint entrypoint;
@@ -74,6 +79,37 @@ class TaskRunFailure extends TaskRunResponse {
   final String stackTrace;
 }
 
+/// A retry request emitted from an isolate task.
+class TaskRunRetry extends TaskRunResponse {
+  /// Creates a retry response payload.
+  const TaskRunRetry({
+    this.countdownMs,
+    this.eta,
+    this.retryPolicy,
+    this.maxRetries,
+    this.timeLimitMs,
+    this.softTimeLimitMs,
+  });
+
+  /// Relative delay in milliseconds.
+  final int? countdownMs;
+
+  /// Absolute retry timestamp (ISO-8601).
+  final String? eta;
+
+  /// Serialized retry policy override.
+  final Map<String, Object?>? retryPolicy;
+
+  /// Optional max retries override.
+  final int? maxRetries;
+
+  /// Optional hard time limit override in milliseconds.
+  final int? timeLimitMs;
+
+  /// Optional soft time limit override in milliseconds.
+  final int? softTimeLimitMs;
+}
+
 /// A message to shut down the task worker.
 class TaskWorkerShutdown {
   /// Creates a shutdown signal for worker isolates.
@@ -97,6 +133,7 @@ void taskWorkerIsolate(SendPort handshakePort) {
 
     if (message is TaskRunRequest) {
       final invocationContext = TaskInvocationContext.remote(
+        id: message.id,
         controlPort: message.controlPort,
         headers: message.headers,
         meta: message.meta,
@@ -114,6 +151,17 @@ void taskWorkerIsolate(SendPort handshakePort) {
           // Ignore failures to read RSS in restricted runtimes.
         }
         message.replyPort.send(TaskRunSuccess(result, memoryBytes: rssBytes));
+      } on TaskRetryRequest catch (request) {
+        message.replyPort.send(
+          TaskRunRetry(
+            countdownMs: request.countdown?.inMilliseconds,
+            eta: request.eta?.toIso8601String(),
+            retryPolicy: request.retryPolicy?.toJson(),
+            maxRetries: request.maxRetries,
+            timeLimitMs: request.timeLimit?.inMilliseconds,
+            softTimeLimitMs: request.softTimeLimit?.inMilliseconds,
+          ),
+        );
       } on Object catch (error, stack) {
         message.replyPort.send(
           TaskRunFailure(

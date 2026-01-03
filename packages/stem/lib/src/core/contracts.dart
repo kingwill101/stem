@@ -282,6 +282,37 @@ class TaskError {
   };
 }
 
+/// Signals an explicit retry request from within a task handler.
+class TaskRetryRequest implements Exception {
+  /// Creates a retry request with optional scheduling overrides.
+  TaskRetryRequest({
+    this.countdown,
+    this.eta,
+    this.retryPolicy,
+    this.maxRetries,
+    this.timeLimit,
+    this.softTimeLimit,
+  });
+
+  /// Relative delay before retrying.
+  final Duration? countdown;
+
+  /// Absolute timestamp for retry.
+  final DateTime? eta;
+
+  /// Optional retry policy override.
+  final TaskRetryPolicy? retryPolicy;
+
+  /// Optional max retries override.
+  final int? maxRetries;
+
+  /// Optional hard time limit override.
+  final Duration? timeLimit;
+
+  /// Optional soft time limit override.
+  final Duration? softTimeLimit;
+}
+
 /// Dead letter queue entry containing the failed [envelope] and metadata.
 class DeadLetterEntry {
   /// Creates a dead letter entry record.
@@ -496,7 +527,7 @@ class ScheduleEntry {
   /// Positional arguments to pass to the task.
   final Map<String, Object?> args;
 
-  /// Keyword-style arguments passed to the task (parity with Celery).
+  /// Keyword-style arguments passed to the task.
   final Map<String, Object?> kwargs;
 
   /// Whether this schedule entry is enabled.
@@ -719,6 +750,7 @@ class TaskOptions {
     this.priority = 0,
     this.acksLate = true,
     this.visibilityTimeout,
+    this.retryPolicy,
   });
 
   /// The queue to which tasks with these options should be sent.
@@ -751,6 +783,9 @@ class TaskOptions {
   /// The visibility timeout for tasks.
   final Duration? visibilityTimeout;
 
+  /// Optional per-task retry policy overrides.
+  final TaskRetryPolicy? retryPolicy;
+
   /// Creates a modified copy of these options.
   TaskOptions copyWith({
     String? queue,
@@ -763,6 +798,7 @@ class TaskOptions {
     int? priority,
     bool? acksLate,
     Duration? visibilityTimeout,
+    TaskRetryPolicy? retryPolicy,
   }) {
     return TaskOptions(
       queue: queue ?? this.queue,
@@ -775,12 +811,504 @@ class TaskOptions {
       priority: priority ?? this.priority,
       acksLate: acksLate ?? this.acksLate,
       visibilityTimeout: visibilityTimeout ?? this.visibilityTimeout,
+      retryPolicy: retryPolicy ?? this.retryPolicy,
+    );
+  }
+
+  /// Serializes options to JSON-friendly data.
+  Map<String, Object?> toJson() => {
+    'queue': queue,
+    'maxRetries': maxRetries,
+    'softTimeLimitMs': softTimeLimit?.inMilliseconds,
+    'hardTimeLimitMs': hardTimeLimit?.inMilliseconds,
+    'rateLimit': rateLimit,
+    'unique': unique,
+    'uniqueForMs': uniqueFor?.inMilliseconds,
+    'priority': priority,
+    'acksLate': acksLate,
+    'visibilityTimeoutMs': visibilityTimeout?.inMilliseconds,
+    'retryPolicy': retryPolicy?.toJson(),
+  };
+
+  /// Builds options from JSON-friendly data.
+  factory TaskOptions.fromJson(Map<String, Object?> json) {
+    TaskRetryPolicy? retryPolicy;
+    final retryValue = json['retryPolicy'];
+    if (retryValue is TaskRetryPolicy) {
+      retryPolicy = retryValue;
+    } else if (retryValue is Map) {
+      retryPolicy = TaskRetryPolicy.fromJson(
+        retryValue.cast<String, Object?>(),
+      );
+    }
+    return TaskOptions(
+      queue: json['queue'] as String? ?? 'default',
+      maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
+      softTimeLimit: _durationFromJson(json['softTimeLimitMs']),
+      hardTimeLimit: _durationFromJson(json['hardTimeLimitMs']),
+      rateLimit: json['rateLimit'] as String?,
+      unique: json['unique'] as bool? ?? false,
+      uniqueFor: _durationFromJson(json['uniqueForMs']),
+      priority: (json['priority'] as num?)?.toInt() ?? 0,
+      acksLate: json['acksLate'] as bool? ?? true,
+      visibilityTimeout: _durationFromJson(json['visibilityTimeoutMs']),
+      retryPolicy: retryPolicy,
+    );
+  }
+
+  static Duration? _durationFromJson(Object? value) {
+    if (value == null) return null;
+    if (value is Duration) return value;
+    if (value is num) {
+      return Duration(milliseconds: value.toInt());
+    }
+    final parsed = value is String
+        ? int.tryParse(value)
+        : int.tryParse(value.toString());
+    if (parsed != null) {
+      return Duration(milliseconds: parsed);
+    }
+    final fallback = value is String
+        ? double.tryParse(value)
+        : double.tryParse(value.toString());
+    if (fallback != null) {
+      return Duration(milliseconds: fallback.toInt());
+    }
+    return null;
+  }
+}
+
+/// Retry policy configuration for tasks and publish attempts.
+///
+/// Apply via [TaskOptions.retryPolicy] or [TaskEnqueueOptions.retryPolicy].
+class TaskRetryPolicy {
+  /// Creates a retry policy configuration.
+  const TaskRetryPolicy({
+    this.backoff = false,
+    this.backoffMax,
+    this.jitter = true,
+    this.defaultDelay = const Duration(seconds: 0),
+    this.maxRetries,
+    this.autoRetryFor = const [],
+    this.dontAutoRetryFor = const [],
+  });
+
+  /// Whether to use exponential backoff.
+  final bool backoff;
+
+  /// Maximum delay cap when backoff is enabled.
+  final Duration? backoffMax;
+
+  /// Whether to apply jitter to computed backoff.
+  final bool jitter;
+
+  /// Default delay when not using backoff.
+  final Duration? defaultDelay;
+
+  /// Optional max retries override.
+  final int? maxRetries;
+
+  /// Error types that should be retried automatically.
+  final List<Object> autoRetryFor;
+
+  /// Error types that should not be retried automatically.
+  final List<Object> dontAutoRetryFor;
+
+  /// Serializes this policy to JSON-friendly data.
+  Map<String, Object?> toJson() => {
+    'backoff': backoff,
+    'backoffMaxMs': backoffMax?.inMilliseconds,
+    'jitter': jitter,
+    'defaultDelayMs': defaultDelay?.inMilliseconds,
+    'maxRetries': maxRetries,
+    'autoRetryFor': autoRetryFor.map((e) => e.toString()).toList(),
+    'dontAutoRetryFor': dontAutoRetryFor.map((e) => e.toString()).toList(),
+  };
+
+  /// Builds a retry policy from JSON-friendly data.
+  factory TaskRetryPolicy.fromJson(Map<String, Object?> json) {
+    final auto =
+        (json['autoRetryFor'] as List?)?.map((e) => e.toString()).toList() ??
+        const <String>[];
+    final dont =
+        (json['dontAutoRetryFor'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    return TaskRetryPolicy(
+      backoff: json['backoff'] as bool? ?? false,
+      backoffMax: json['backoffMaxMs'] != null
+          ? Duration(
+              milliseconds: (json['backoffMaxMs'] as num).toInt(),
+            )
+          : null,
+      jitter: json['jitter'] as bool? ?? true,
+      defaultDelay: json['defaultDelayMs'] != null
+          ? Duration(
+              milliseconds: (json['defaultDelayMs'] as num).toInt(),
+            )
+          : null,
+      maxRetries: (json['maxRetries'] as num?)?.toInt(),
+      autoRetryFor: auto,
+      dontAutoRetryFor: dont,
     );
   }
 }
 
+/// Options that apply only to the enqueue operation.
+///
+/// These values are applied at publish time and can override routing, timing,
+/// retry behavior, and result persistence without mutating handler defaults.
+class TaskEnqueueOptions {
+  /// Creates enqueue options.
+  const TaskEnqueueOptions({
+    this.taskId,
+    this.countdown,
+    this.eta,
+    this.expires,
+    this.queue,
+    this.exchange,
+    this.routingKey,
+    this.priority,
+    this.timeLimit,
+    this.softTimeLimit,
+    this.serializer,
+    this.compression,
+    this.ignoreResult,
+    this.shadow,
+    this.replyTo,
+    this.addToParent = true,
+    this.retry,
+    this.retryPolicy,
+    this.publishConnection,
+    this.producer,
+    this.link = const [],
+    this.linkError = const [],
+  });
+
+  /// Optional explicit task id override.
+  final String? taskId;
+
+  /// Delay before execution.
+  final Duration? countdown;
+
+  /// Scheduled execution time.
+  final DateTime? eta;
+
+  /// Expiration timestamp for execution.
+  final DateTime? expires;
+
+  /// Queue override.
+  final String? queue;
+
+  /// Exchange override.
+  final String? exchange;
+
+  /// Routing key override.
+  final String? routingKey;
+
+  /// Priority override.
+  final int? priority;
+
+  /// Hard time limit override.
+  final Duration? timeLimit;
+
+  /// Soft time limit override.
+  final Duration? softTimeLimit;
+
+  /// Payload serializer override.
+  final String? serializer;
+
+  /// Payload compression override.
+  final String? compression;
+
+  /// Suppress result persistence.
+  final bool? ignoreResult;
+
+  /// Shadow name for observability.
+  final String? shadow;
+
+  /// Reply-to queue hint.
+  final String? replyTo;
+
+  /// Whether to add parent/root lineage metadata (`stem.parentTaskId`, etc).
+  final bool addToParent;
+
+  /// Whether to retry publish attempts.
+  final bool? retry;
+
+  /// Retry policy for publish attempts.
+  final TaskRetryPolicy? retryPolicy;
+
+  /// Adapter-specific connection override for publish.
+  final Map<String, Object?>? publishConnection;
+
+  /// Adapter-specific producer override for publish.
+  final Map<String, Object?>? producer;
+
+  /// Callback tasks to enqueue on success.
+  final List<TaskCall<dynamic, dynamic>> link;
+
+  /// Callback tasks to enqueue on failure.
+  final List<TaskCall<dynamic, dynamic>> linkError;
+
+  /// Returns a copy with overridden values.
+  TaskEnqueueOptions copyWith({
+    String? taskId,
+    Duration? countdown,
+    DateTime? eta,
+    DateTime? expires,
+    String? queue,
+    String? exchange,
+    String? routingKey,
+    int? priority,
+    Duration? timeLimit,
+    Duration? softTimeLimit,
+    String? serializer,
+    String? compression,
+    bool? ignoreResult,
+    String? shadow,
+    String? replyTo,
+    bool? addToParent,
+    bool? retry,
+    TaskRetryPolicy? retryPolicy,
+    Map<String, Object?>? publishConnection,
+    Map<String, Object?>? producer,
+    List<TaskCall<dynamic, dynamic>>? link,
+    List<TaskCall<dynamic, dynamic>>? linkError,
+  }) {
+    return TaskEnqueueOptions(
+      taskId: taskId ?? this.taskId,
+      countdown: countdown ?? this.countdown,
+      eta: eta ?? this.eta,
+      expires: expires ?? this.expires,
+      queue: queue ?? this.queue,
+      exchange: exchange ?? this.exchange,
+      routingKey: routingKey ?? this.routingKey,
+      priority: priority ?? this.priority,
+      timeLimit: timeLimit ?? this.timeLimit,
+      softTimeLimit: softTimeLimit ?? this.softTimeLimit,
+      serializer: serializer ?? this.serializer,
+      compression: compression ?? this.compression,
+      ignoreResult: ignoreResult ?? this.ignoreResult,
+      shadow: shadow ?? this.shadow,
+      replyTo: replyTo ?? this.replyTo,
+      addToParent: addToParent ?? this.addToParent,
+      retry: retry ?? this.retry,
+      retryPolicy: retryPolicy ?? this.retryPolicy,
+      publishConnection: publishConnection ?? this.publishConnection,
+      producer: producer ?? this.producer,
+      link: link ?? this.link,
+      linkError: linkError ?? this.linkError,
+    );
+  }
+
+  /// Serializes enqueue options to JSON-friendly data.
+  Map<String, Object?> toJson() => {
+    'taskId': taskId,
+    'countdownMs': countdown?.inMilliseconds,
+    'eta': eta?.toIso8601String(),
+    'expires': expires?.toIso8601String(),
+    'queue': queue,
+    'exchange': exchange,
+    'routingKey': routingKey,
+    'priority': priority,
+    'timeLimitMs': timeLimit?.inMilliseconds,
+    'softTimeLimitMs': softTimeLimit?.inMilliseconds,
+    'serializer': serializer,
+    'compression': compression,
+    'ignoreResult': ignoreResult,
+    'shadow': shadow,
+    'replyTo': replyTo,
+    'addToParent': addToParent,
+    'retry': retry,
+    'retryPolicy': retryPolicy?.toJson(),
+    'publishConnection': publishConnection,
+    'producer': producer,
+    'link': link
+        .map(
+          (call) => {
+            'name': call.name,
+            'args': call.encodeArgs(),
+            'headers': call.headers,
+            'meta': call.meta,
+            'options': call.resolveOptions().toJson(),
+            'notBefore': call.notBefore?.toIso8601String(),
+            'enqueueOptions': call.enqueueOptions?.toJson(),
+          },
+        )
+        .toList(),
+    'linkError': linkError
+        .map(
+          (call) => {
+            'name': call.name,
+            'args': call.encodeArgs(),
+            'headers': call.headers,
+            'meta': call.meta,
+            'options': call.resolveOptions().toJson(),
+            'notBefore': call.notBefore?.toIso8601String(),
+            'enqueueOptions': call.enqueueOptions?.toJson(),
+          },
+        )
+        .toList(),
+  };
+
+  /// Builds enqueue options from JSON-friendly data.
+  factory TaskEnqueueOptions.fromJson(Map<String, Object?> json) {
+    return TaskEnqueueOptions(
+      taskId: json['taskId'] as String?,
+      countdown: json['countdownMs'] != null
+          ? Duration(milliseconds: (json['countdownMs'] as num).toInt())
+          : null,
+      eta: json['eta'] != null ? DateTime.parse(json['eta'] as String) : null,
+      expires: json['expires'] != null
+          ? DateTime.parse(json['expires'] as String)
+          : null,
+      queue: json['queue'] as String?,
+      exchange: json['exchange'] as String?,
+      routingKey: json['routingKey'] as String?,
+      priority: (json['priority'] as num?)?.toInt(),
+      timeLimit: json['timeLimitMs'] != null
+          ? Duration(milliseconds: (json['timeLimitMs'] as num).toInt())
+          : null,
+      softTimeLimit: json['softTimeLimitMs'] != null
+          ? Duration(milliseconds: (json['softTimeLimitMs'] as num).toInt())
+          : null,
+      serializer: json['serializer'] as String?,
+      compression: json['compression'] as String?,
+      ignoreResult: json['ignoreResult'] as bool?,
+      shadow: json['shadow'] as String?,
+      replyTo: json['replyTo'] as String?,
+      addToParent: json['addToParent'] as bool? ?? true,
+      retry: json['retry'] as bool?,
+      retryPolicy: json['retryPolicy'] is Map
+          ? TaskRetryPolicy.fromJson(
+              (json['retryPolicy'] as Map).cast<String, Object?>(),
+            )
+          : null,
+      publishConnection: (json['publishConnection'] as Map?)
+          ?.cast<String, Object?>(),
+      producer: (json['producer'] as Map?)?.cast<String, Object?>(),
+      link: _decodeTaskCallList(json['link']),
+      linkError: _decodeTaskCallList(json['linkError']),
+    );
+  }
+
+  static List<TaskCall<dynamic, dynamic>> _decodeTaskCallList(Object? value) {
+    if (value is! List) return const [];
+    final calls = <TaskCall<dynamic, dynamic>>[];
+
+    Map<String, String> castHeaders(Object? raw) {
+      if (raw is Map<String, String>) {
+        return Map<String, String>.from(raw);
+      }
+      if (raw is Map) {
+        final result = <String, String>{};
+        raw.forEach((key, entry) {
+          if (key is! String || entry == null) return;
+          result[key] = entry is String ? entry : entry.toString();
+        });
+        return result;
+      }
+      return const {};
+    }
+
+    Map<String, Object?> castMeta(Object? raw) {
+      if (raw is Map<String, Object?>) {
+        return Map<String, Object?>.from(raw);
+      }
+      if (raw is Map) {
+        final result = <String, Object?>{};
+        raw.forEach((key, entry) {
+          if (key is String) {
+            result[key] = entry;
+          }
+        });
+        return result;
+      }
+      return const {};
+    }
+
+    Map<String, Object?> castArgs(Object? raw) {
+      if (raw is Map<String, Object?>) {
+        return Map<String, Object?>.from(raw);
+      }
+      if (raw is Map) {
+        final result = <String, Object?>{};
+        raw.forEach((key, entry) {
+          if (key is String) {
+            result[key] = entry;
+          }
+        });
+        return result;
+      }
+      return const {};
+    }
+
+    for (final entry in value) {
+      if (entry is! Map) continue;
+      final map = entry.cast<String, Object?>();
+      final name = map['name'];
+      if (name is! String || name.trim().isEmpty) continue;
+      final args = castArgs(map['args']);
+      final headers = castHeaders(map['headers']);
+      final meta = castMeta(map['meta']);
+      final options = map['options'] is Map
+          ? TaskOptions.fromJson(
+              (map['options'] as Map).cast<String, Object?>(),
+            )
+          : const TaskOptions();
+      final notBefore = map['notBefore'] != null
+          ? DateTime.tryParse(map['notBefore'].toString())
+          : null;
+      final enqueueOptions = map['enqueueOptions'] is Map
+          ? TaskEnqueueOptions.fromJson(
+              (map['enqueueOptions'] as Map).cast<String, Object?>(),
+            )
+          : null;
+
+      final definition = TaskDefinition<Map<String, Object?>, Object?>(
+        name: name,
+        encodeArgs: (args) => args,
+      );
+      calls.add(
+        TaskCall._(
+          definition: definition,
+          args: args,
+          headers: Map.unmodifiable(headers),
+          options: options,
+          notBefore: notBefore,
+          meta: Map.unmodifiable(meta),
+          enqueueOptions: enqueueOptions,
+        ),
+      );
+    }
+
+    return List.unmodifiable(calls);
+  }
+}
+
+/// Interface implemented by enqueuers like [Stem] and task contexts.
+abstract class TaskEnqueuer {
+  /// Enqueue a task by name.
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args,
+    Map<String, String> headers,
+    TaskOptions options,
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  });
+
+  /// Enqueue a typed task call.
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  });
+}
+
 /// Context passed to handler implementations during execution.
-class TaskContext {
+class TaskContext implements TaskEnqueuer {
   /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
@@ -790,6 +1318,7 @@ class TaskContext {
     required this.heartbeat,
     required this.extendLease,
     required this.progress,
+    this.enqueuer,
   });
 
   /// The unique identifier of the task.
@@ -816,6 +1345,126 @@ class TaskContext {
     Map<String, Object?>? data,
   })
   progress;
+
+  /// Optional enqueuer for scheduling additional tasks.
+  final TaskEnqueuer? enqueuer;
+
+  /// Enqueue a task with default context propagation.
+  ///
+  /// Headers and metadata from this context are merged into the enqueue
+  /// request. Lineage is added to `meta` unless
+  /// `enqueueOptions.addToParent` is `false`.
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('TaskContext has no enqueuer configured');
+    }
+
+    final mergedHeaders = Map<String, String>.from(this.headers);
+    mergedHeaders.addAll(headers);
+    final mergedMeta = Map<String, Object?>.from(this.meta);
+    mergedMeta.addAll(meta);
+
+    if ((enqueueOptions?.addToParent ?? true)) {
+      mergedMeta['stem.parentTaskId'] = id;
+      mergedMeta['stem.parentAttempt'] = attempt;
+      mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
+    }
+
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: mergedHeaders,
+      options: options,
+      meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueue a typed call with default context propagation.
+  ///
+  /// This merges headers/meta from the task call and applies lineage metadata
+  /// unless `enqueueOptions.addToParent` is `false`.
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('TaskContext has no enqueuer configured');
+    }
+
+    final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
+    final mergedHeaders = Map<String, String>.from(headers);
+    mergedHeaders.addAll(call.headers);
+    final mergedMeta = Map<String, Object?>.from(meta);
+    mergedMeta.addAll(call.meta);
+
+    if ((resolvedEnqueueOptions?.addToParent ?? true)) {
+      mergedMeta['stem.parentTaskId'] = id;
+      mergedMeta['stem.parentAttempt'] = attempt;
+      mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
+    }
+
+    final mergedCall = call.copyWith(
+      headers: Map.unmodifiable(mergedHeaders),
+      meta: Map.unmodifiable(mergedMeta),
+    );
+
+    return delegate.enqueueCall(
+      mergedCall,
+      enqueueOptions: resolvedEnqueueOptions,
+    );
+  }
+
+  /// Alias for [enqueue].
+  Future<String> spawn(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Request a retry of the current task.
+  ///
+  /// Throws a [TaskRetryRequest] which is intercepted by the worker to
+  /// schedule the retry. Override retry policies/time limits per invocation
+  /// by passing the optional parameters.
+  Future<void> retry({
+    Duration? countdown,
+    DateTime? eta,
+    TaskRetryPolicy? retryPolicy,
+    int? maxRetries,
+    Duration? timeLimit,
+    Duration? softTimeLimit,
+  }) {
+    throw TaskRetryRequest(
+      countdown: countdown,
+      eta: eta,
+      retryPolicy: retryPolicy,
+      maxRetries: maxRetries,
+      timeLimit: timeLimit,
+      softTimeLimit: softTimeLimit,
+    );
+  }
 }
 
 /// Runtime task handler.
@@ -986,6 +1635,7 @@ class TaskDefinition<TArgs, TResult> {
     TaskOptions? options,
     DateTime? notBefore,
     Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
   }) {
     final metaBuilder = _encodeMeta;
     final resolvedMeta =
@@ -997,6 +1647,7 @@ class TaskDefinition<TArgs, TResult> {
       options: options,
       notBefore: notBefore,
       meta: Map.unmodifiable(resolvedMeta),
+      enqueueOptions: enqueueOptions,
     );
   }
 
@@ -1029,6 +1680,7 @@ class TaskCall<TArgs, TResult> {
     required this.meta,
     this.options,
     this.notBefore,
+    this.enqueueOptions,
   });
 
   /// The task definition this call was derived from.
@@ -1045,6 +1697,9 @@ class TaskCall<TArgs, TResult> {
 
   /// Optional schedule time for delayed execution.
   final DateTime? notBefore;
+
+  /// Optional enqueue options for this call.
+  final TaskEnqueueOptions? enqueueOptions;
 
   /// Metadata associated with this invocation.
   final Map<String, Object?> meta;
@@ -1064,6 +1719,7 @@ class TaskCall<TArgs, TResult> {
     TaskOptions? options,
     DateTime? notBefore,
     Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
   }) {
     return TaskCall._(
       definition: definition,
@@ -1072,11 +1728,14 @@ class TaskCall<TArgs, TResult> {
       options: options ?? this.options,
       notBefore: notBefore ?? this.notBefore,
       meta: meta ?? this.meta,
+      enqueueOptions: enqueueOptions ?? this.enqueueOptions,
     );
   }
 }
 
 /// Fluent builder used to construct rich enqueue requests.
+///
+/// Build a [TaskCall] and dispatch it via `TaskEnqueuer.enqueueCall`.
 class TaskEnqueueBuilder<TArgs, TResult> {
   /// Creates a fluent builder for enqueue calls.
   TaskEnqueueBuilder({required this.definition, required this.args});
@@ -1091,6 +1750,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
   TaskOptions? _optionsOverride;
   DateTime? _notBefore;
   Map<String, Object?>? _meta;
+  TaskEnqueueOptions? _enqueueOptions;
 
   /// Replaces headers entirely.
   TaskEnqueueBuilder<TArgs, TResult> headers(Map<String, String> headers) {
@@ -1152,6 +1812,14 @@ class TaskEnqueueBuilder<TArgs, TResult> {
     return this;
   }
 
+  /// Replaces the enqueue options for this call.
+  TaskEnqueueBuilder<TArgs, TResult> enqueueOptions(
+    TaskEnqueueOptions options,
+  ) {
+    _enqueueOptions = options;
+    return this;
+  }
+
   /// Builds the [TaskCall] with accumulated overrides.
   TaskCall<TArgs, TResult> build() {
     final base = definition(args);
@@ -1168,6 +1836,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
       options: _optionsOverride ?? base.options,
       notBefore: _notBefore ?? base.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: _enqueueOptions ?? base.enqueueOptions,
     );
   }
 }

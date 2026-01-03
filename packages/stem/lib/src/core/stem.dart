@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
@@ -18,7 +19,7 @@ import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 
 /// Facade used by producer applications to enqueue tasks.
-class Stem {
+class Stem implements TaskEnqueuer {
   /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
@@ -72,10 +73,14 @@ class Stem {
   static const StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'stem',
   );
+  static final math.Random _random = math.Random();
 
   /// Enqueue a typed task using a [TaskCall] wrapper produced by a
   /// [TaskDefinition].
-  Future<String> enqueueCall<TArgs, TResult>(TaskCall<TArgs, TResult> call) {
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
     return enqueue(
       call.name,
       args: call.encodeArgs(),
@@ -83,6 +88,7 @@ class Stem {
       options: call.resolveOptions(),
       notBefore: call.notBefore,
       meta: call.meta,
+      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
   }
 
@@ -94,13 +100,16 @@ class Stem {
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
     Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
   }) async {
     final tracer = StemTracer.instance;
+    final queueOverride = enqueueOptions?.queue ?? options.queue;
     final decision = routing.resolve(
-      RouteRequest(task: name, headers: headers, queue: options.queue),
+      RouteRequest(task: name, headers: headers, queue: queueOverride),
     );
     final targetName = decision.targetName;
-    final resolvedPriority = decision.effectivePriority(options.priority);
+    final basePriority = enqueueOptions?.priority ?? options.priority;
+    final resolvedPriority = decision.effectivePriority(basePriority);
 
     final handler = registry.resolve(name);
     if (handler == null) {
@@ -133,16 +142,36 @@ class Stem {
           argsEncoder,
         );
         final encodedArgs = _encodeArgs(args, argsEncoder);
-        final encodedMeta = _withArgsEncoderMeta(meta, argsEncoder);
+        final enrichedMeta = _applyEnqueueOptionsToMeta(
+          meta,
+          enqueueOptions,
+        );
+        if (options.retryPolicy != null &&
+            !enrichedMeta.containsKey('stem.retryPolicy')) {
+          enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
+        }
+        final encodedMeta = _withArgsEncoderMeta(enrichedMeta, argsEncoder);
+
+        final scheduledAt = _resolveNotBefore(
+          notBefore,
+          enqueueOptions,
+        );
+
+        final maxRetries = _resolveMaxRetries(
+          options,
+          handler.options,
+          enqueueOptions,
+        );
 
         var envelope = Envelope(
           name: name,
           args: encodedArgs,
+          id: enqueueOptions?.taskId,
           headers: encodedHeaders,
           queue: targetName,
-          notBefore: notBefore,
+          notBefore: scheduledAt,
           priority: resolvedPriority,
-          maxRetries: options.maxRetries,
+          maxRetries: maxRetries,
           visibilityTimeout: options.visibilityTimeout,
           meta: encodedMeta,
         );
@@ -211,15 +240,21 @@ class Stem {
               )
             : RoutingInfo.queue(
                 queue: decision.queue!.name,
-                exchange: decision.queue!.exchange,
-                routingKey: decision.queue!.routingKey,
+                exchange: enqueueOptions?.exchange ?? decision.queue!.exchange,
+                routingKey:
+                    enqueueOptions?.routingKey ?? decision.queue!.routingKey,
                 priority: resolvedPriority,
+                meta: _publishMeta(enqueueOptions),
               );
 
         await _signals.beforeTaskPublish(envelope);
 
         await _runEnqueueMiddleware(envelope, () async {
-          await broker.publish(envelope, routing: routingInfo);
+          await _publishWithRetry(
+            envelope,
+            routing: routingInfo,
+            enqueueOptions: enqueueOptions,
+          );
           if (backend != null) {
             final queuedMeta = _withResultEncoderMeta({
               ...envelope.meta,
@@ -331,6 +366,167 @@ class Stem {
     }
 
     await run(0);
+  }
+
+  DateTime? _resolveNotBefore(
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  ) {
+    if (enqueueOptions == null) return notBefore;
+    if (enqueueOptions.eta != null) {
+      return enqueueOptions.eta;
+    }
+    if (enqueueOptions.countdown != null) {
+      return DateTime.now().add(enqueueOptions.countdown!);
+    }
+    return notBefore;
+  }
+
+  int _resolveMaxRetries(
+    TaskOptions options,
+    TaskOptions handlerOptions,
+    TaskEnqueueOptions? enqueueOptions,
+  ) {
+    final policyMax = enqueueOptions?.retryPolicy?.maxRetries;
+    if (policyMax != null) {
+      return policyMax;
+    }
+    final taskPolicyMax = options.retryPolicy?.maxRetries;
+    if (taskPolicyMax != null) {
+      return taskPolicyMax;
+    }
+    if (options.maxRetries != 0) {
+      return options.maxRetries;
+    }
+    return handlerOptions.maxRetries;
+  }
+
+  Map<String, Object?> _applyEnqueueOptionsToMeta(
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  ) {
+    final merged = Map<String, Object?>.from(meta);
+    if (enqueueOptions == null) return merged;
+    if (enqueueOptions.expires != null) {
+      merged['stem.expiresAt'] = enqueueOptions.expires!.toIso8601String();
+    }
+    if (enqueueOptions.timeLimit != null) {
+      merged['stem.timeLimitMs'] = enqueueOptions.timeLimit!.inMilliseconds;
+    }
+    if (enqueueOptions.softTimeLimit != null) {
+      merged['stem.softTimeLimitMs'] =
+          enqueueOptions.softTimeLimit!.inMilliseconds;
+    }
+    if (enqueueOptions.serializer != null) {
+      merged['stem.serializer'] = enqueueOptions.serializer!;
+    }
+    if (enqueueOptions.compression != null) {
+      merged['stem.compression'] = enqueueOptions.compression!;
+    }
+    if (enqueueOptions.ignoreResult != null) {
+      merged['stem.ignoreResult'] = enqueueOptions.ignoreResult;
+    }
+    if (enqueueOptions.shadow != null) {
+      merged['stem.shadow'] = enqueueOptions.shadow!;
+    }
+    if (enqueueOptions.replyTo != null) {
+      merged['stem.replyTo'] = enqueueOptions.replyTo!;
+    }
+    if (enqueueOptions.retryPolicy != null) {
+      merged['stem.retryPolicy'] = enqueueOptions.retryPolicy!.toJson();
+    }
+    if (enqueueOptions.publishConnection != null) {
+      merged['stem.publishConnection'] = enqueueOptions.publishConnection;
+    }
+    if (enqueueOptions.producer != null) {
+      merged['stem.producer'] = enqueueOptions.producer;
+    }
+    if (enqueueOptions.link.isNotEmpty) {
+      merged['stem.link'] = _encodeTaskCalls(enqueueOptions.link);
+    }
+    if (enqueueOptions.linkError.isNotEmpty) {
+      merged['stem.linkError'] = _encodeTaskCalls(enqueueOptions.linkError);
+    }
+    return merged;
+  }
+
+  List<Map<String, Object?>> _encodeTaskCalls(
+    List<TaskCall<dynamic, dynamic>> calls,
+  ) {
+    return calls
+        .map(
+          (call) => {
+            'name': call.name,
+            'args': call.encodeArgs(),
+            'headers': call.headers,
+            'meta': call.meta,
+            'options': _encodeTaskOptions(call.resolveOptions()),
+            'notBefore': call.notBefore?.toIso8601String(),
+            'enqueueOptions': call.enqueueOptions?.toJson(),
+          },
+        )
+        .toList(growable: false);
+  }
+
+  Map<String, Object?> _encodeTaskOptions(TaskOptions options) =>
+      options.toJson();
+
+  Map<String, Object?> _publishMeta(TaskEnqueueOptions? enqueueOptions) {
+    if (enqueueOptions == null) return const {};
+    final meta = <String, Object?>{};
+    if (enqueueOptions.publishConnection != null) {
+      meta['connection'] = enqueueOptions.publishConnection;
+    }
+    if (enqueueOptions.producer != null) {
+      meta['producer'] = enqueueOptions.producer;
+    }
+    return meta;
+  }
+
+  Future<void> _publishWithRetry(
+    Envelope envelope, {
+    RoutingInfo? routing,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    if (enqueueOptions?.retry != true) {
+      await broker.publish(envelope, routing: routing);
+      return;
+    }
+
+    final policy = enqueueOptions?.retryPolicy ?? const TaskRetryPolicy();
+    final maxRetries = policy.maxRetries ?? 3;
+    var attempt = 0;
+    while (true) {
+      try {
+        await broker.publish(envelope, routing: routing);
+        return;
+      } catch (error) {
+        if (attempt >= maxRetries) rethrow;
+        final delay = _computeRetryDelay(policy, attempt);
+        attempt += 1;
+        if (delay > Duration.zero) {
+          await Future<void>.delayed(delay);
+        }
+      }
+    }
+  }
+
+  Duration _computeRetryDelay(TaskRetryPolicy policy, int attempt) {
+    final base = policy.defaultDelay ?? Duration.zero;
+    if (!policy.backoff) {
+      return base;
+    }
+    final rawMs = base.inMilliseconds == 0
+        ? 0
+        : base.inMilliseconds * (1 << attempt);
+    final capMs = policy.backoffMax?.inMilliseconds ?? rawMs;
+    final capped = rawMs == 0 ? capMs : rawMs.clamp(0, capMs);
+    if (!policy.jitter || capped == 0) {
+      return Duration(milliseconds: capped);
+    }
+    final jitter = _random.nextInt((capped ~/ 4) + 1);
+    final jittered = (capped - jitter).clamp(0, capMs);
+    return Duration(milliseconds: jittered);
   }
 
   Future<void> _recordDuplicateAttempt(
@@ -463,6 +659,7 @@ class Stem {
 /// Convenience helpers for enqueuing [TaskEnqueueBuilder] instances.
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
-  /// Builds the call and enqueues it with the provided [stem] instance.
-  Future<String> enqueueWith(Stem stem) => stem.enqueueCall(build());
+  /// Builds the call and enqueues it with the provided [enqueuer] instance.
+  Future<String> enqueueWith(TaskEnqueuer enqueuer) =>
+      enqueuer.enqueueCall(build());
 }
