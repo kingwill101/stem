@@ -52,6 +52,7 @@ Planned adapters may not support full control-plane tooling until release.
 | ----------------- | ------------ | -------- | ------ | -------- | ----------------- | ----- |
 | Redis Streams     | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Lowest latency, great default. |
 | Postgres          | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Durable, SQL-friendly; higher latency than Redis. |
+| SQLite            | ✅ Supported | At-least-once | ✅ | ✅ | ❌ | Single-host file broker; no broadcast/control. |
 | In-memory         | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Single-process only; testing/dev. |
 | RabbitMQ          | 🔜 Planned   | AMQP acks | ✅ | ✅ | ✅ | Mature routing; requires AMQP infra. |
 | Amazon SQS        | 🔜 Planned   | Visibility timeout | ✅ | Limited | ⚠️ | Fully managed; no native fanout. |
@@ -69,6 +70,13 @@ based on durability needs.
 A good fit when you prefer a single database dependency or want SQL visibility
 into queue state. Slightly higher latency than Redis; use a connection pool
 aligned with worker concurrency.
+
+### SQLite
+
+Best for single-host development and demos. The SQLite broker does not support
+broadcast control channels and uses polling-based delivery. Use separate
+SQLite files for broker vs. backend to avoid WAL contention. See the
+[SQLite adapter guide](./sqlite.md) for setup and operational notes.
 
 ### In-memory
 
@@ -94,6 +102,8 @@ and limited fanout without SNS.
 - **Postgres** integrates tightly with the existing result backend for teams
   already running Postgres. Leases are implemented via advisory locks; ensure
   the connection pool matches expected concurrency.
+- **SQLite** is ideal for single-host development and demos. Use separate DB
+  files for broker and backend; avoid producer writes to the backend.
 - **In-memory** adapters mirror the Redis API and are safe for smoke tests.
 - **RabbitMQ & SQS** bindings follow the same `Broker` contract. Keep tasks
   idempotent—visibility/lease guarantees differ slightly (documented in the
@@ -132,6 +142,10 @@ Or use the broker snippet entrypoints:
 ```
 
 ```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-postgres
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-sqlite
 
 ```
 

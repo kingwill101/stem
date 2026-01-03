@@ -17,6 +17,18 @@ implementations.
 - **Single-queue consumption**: only one queue can be consumed per subscription.
 - **Not durable**: data is lost when the process exits.
 
+## SQLite broker
+
+- **No broadcast channels**: worker control commands are not supported.
+- **Single-queue consumption**: only one queue can be consumed per subscription.
+- **Polling-based delivery**: tasks are polled on `pollInterval` and claimed
+  via row locks; latency depends on the poll interval.
+- **Single-writer constraint**: SQLite allows one writer at a time. Use
+  separate broker/backend files and avoid producer writes to the backend.
+- **Native assets**: build CLI bundles (`dart build cli`) when using `sqlite3`
+  to ensure the native library is packaged reliably.
+- **Local disk only**: avoid network filesystems for WAL-backed SQLite files.
+
 ## Redis Streams broker
 
 - **Single-queue consumption**: only one queue can be consumed per subscription.
@@ -79,5 +91,9 @@ implementations.
 ```
 
 ```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-postgres
+
+```
+
+```dart title="brokers.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/brokers.dart#brokers-sqlite
 
 ```

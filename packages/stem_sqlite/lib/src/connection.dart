@@ -25,17 +25,24 @@ class SqliteConnections {
     File file, {
     bool readOnly = false,
   }) async {
-    if (!readOnly) {
-      await _runMigrations(file);
-    }
-    final dataSource = await _openDataSource(file, readOnly: readOnly);
-    return SqliteConnections._(dataSource);
+    return _withFileLock(file, () async {
+      if (!readOnly) {
+        await _runMigrations(file);
+      }
+      final dataSource = await _openDataSource(file, readOnly: readOnly);
+      return SqliteConnections._(dataSource);
+    });
   }
 
   /// Runs [action] inside a database transaction.
   Future<T> runInTransaction<T>(
     Future<T> Function(QueryContext context) action,
-  ) => connection.transaction(() => action(context));
+  ) async {
+    if (!dataSource.isInitialized) {
+      await dataSource.init();
+    }
+    return dataSource.connection.transaction(() => action(dataSource.context));
+  }
 
   /// Closes the data source.
   Future<void> close() => dataSource.dispose();
@@ -80,4 +87,44 @@ Future<void> _runMigrations(File file) async {
   } finally {
     await adapter.close();
   }
+}
+
+Future<T> _withFileLock<T>(File file, Future<T> Function() action) async {
+  final lockFile = File('${file.path}.lock');
+  if (!lockFile.parent.existsSync()) {
+    lockFile.parent.createSync(recursive: true);
+  }
+  final handle = await lockFile.open(mode: FileMode.append);
+  try {
+    await _acquireLock(handle);
+    return await action();
+  } finally {
+    try {
+      await handle.unlock();
+    } finally {
+      await handle.close();
+    }
+  }
+}
+
+Future<void> _acquireLock(RandomAccessFile handle) async {
+  const retryDelay = Duration(milliseconds: 50);
+  const maxAttempts = 200;
+  for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      await handle.lock(FileLock.exclusive);
+      return;
+    } on FileSystemException catch (error) {
+      final code = error.osError?.errorCode;
+      if (code == 11 || code == 35) {
+        await Future<void>.delayed(retryDelay);
+        continue;
+      }
+      rethrow;
+    }
+  }
+  throw FileSystemException(
+    'lock failed after ${retryDelay.inMilliseconds * maxAttempts}ms',
+    handle.path,
+  );
 }

@@ -6,8 +6,8 @@ slug: /core-concepts/persistence
 ---
 
 Use persistence when you need durable task state, shared schedules, or
-revocation storage. Stem ships with Redis and Postgres adapters and in-memory
-variants for local development.
+revocation storage. Stem ships with Redis, Postgres, and SQLite adapters plus
+in-memory variants for local development.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -18,6 +18,13 @@ import TabItem from '@theme/TabItem';
 <TabItem value="in-memory" label="In-memory (lib/bootstrap.dart)">
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-in-memory
+
+```
+
+</TabItem>
+<TabItem value="sqlite" label="SQLite (stem_sqlite)">
+
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-sqlite
 
 ```
 
@@ -81,6 +88,8 @@ export STEM_REVOKE_STORE_URL=postgres://postgres:postgres@localhost:5432/stem
 
 - In-memory adapters are great for local tests; switch to Redis/Postgres when
 you need persistence or multi-process coordination.
+- SQLite is single-writer: keep only workers connected to the backend and use
+  a separate SQLite file for the broker.
 - Postgres adapters automatically migrate required tables on first connect.
 - Configure TTLs on the result backend via `backend.set` to limit retained data.
 - For HA Beat deployments, use the same lock store across instances.
