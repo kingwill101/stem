@@ -1,6 +1,14 @@
 
 ## 0.1.0-dev
 
+- Added TaskRetryPolicy and TaskEnqueueOptions for per-enqueue overrides
+  (timing, retries, callbacks), plus TaskContext/TaskInvocationContext enqueue,
+  spawn, and retry helpers including isolate entrypoint support and a fluent
+  TaskEnqueueBuilder.
+- Added inline FunctionTaskHandler execution (runInIsolate toggle) to simplify
+  choosing between inline vs. isolate task execution.
+- Added TaskContext demos and refreshed docs/snippets for enqueue options and
+  SQLite guidance.
 - Added typed workflow, task, and canvas result APIs with customizable encoders
   (TaskResultEncoder and payload encoders).
 - Added new example suites (progress heartbeat, worker control lab, and the
