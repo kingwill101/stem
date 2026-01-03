@@ -15,6 +15,7 @@ Future<void> listWorkerHeartbeats() async {
   for (final hb in heartbeats) {
     print('${hb.workerId} -> queues=${hb.queues} inflight=${hb.inflight}');
   }
+  await backend.close();
 }
 // #endregion ops-heartbeats
 

@@ -36,6 +36,8 @@ Future<void> enqueueWithRedis() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
 
+  final broker = await RedisStreamsBroker.connect(brokerUrl);
+  final backend = await RedisResultBackend.connect('$brokerUrl/1');
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<void>(
@@ -49,9 +51,9 @@ Future<void> enqueueWithRedis() async {
     );
 
   final stem = Stem(
-    broker: await RedisStreamsBroker.connect(brokerUrl),
+    broker: broker,
     registry: registry,
-    backend: await RedisResultBackend.connect('$brokerUrl/1'),
+    backend: backend,
   );
 
   await stem.enqueue(
@@ -60,12 +62,19 @@ Future<void> enqueueWithRedis() async {
     options: const TaskOptions(queue: 'reports', maxRetries: 3),
     meta: {'requestedBy': 'finance'},
   );
+  await backend.close();
+  await broker.close();
 }
 // #endregion producer-redis
 
 // #region producer-signed
 Future<void> enqueueWithSigning() async {
   final config = StemConfig.fromEnvironment();
+  final broker = await RedisStreamsBroker.connect(
+    config.brokerUrl,
+    tls: config.tls,
+  );
+  final backend = InMemoryResultBackend();
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<void>(
@@ -78,9 +87,9 @@ Future<void> enqueueWithSigning() async {
       ),
     );
   final stem = Stem(
-    broker: await RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
+    broker: broker,
     registry: registry,
-    backend: InMemoryResultBackend(),
+    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 
@@ -89,6 +98,8 @@ Future<void> enqueueWithSigning() async {
     args: {'customerId': 'cust_123', 'amount': 4200},
     notBefore: DateTime.now().add(const Duration(minutes: 5)),
   );
+  await backend.dispose();
+  await broker.close();
 }
 // #endregion producer-signed
 
@@ -152,7 +163,7 @@ Future<void> configureProducerEncoders() async {
     additionalEncoders: const [CustomBinaryEncoder()],
   );
 
-  await app.worker.shutdown();
+  await app.shutdown();
 }
 // #endregion producer-encoders
 

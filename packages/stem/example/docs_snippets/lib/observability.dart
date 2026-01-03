@@ -81,11 +81,9 @@ Future<void> main() async {
       ),
     );
 
-  final stem = buildTracedStem(
-    InMemoryBroker(),
-    InMemoryResultBackend(),
-    registry,
-  );
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
+  final stem = buildTracedStem(broker, backend, registry);
 
   logTaskStart(
     Envelope(
@@ -94,4 +92,6 @@ Future<void> main() async {
     ),
   );
   await stem.enqueue('demo.trace', args: const {});
+  await backend.dispose();
+  broker.dispose();
 }

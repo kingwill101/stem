@@ -3,11 +3,14 @@
 
 import 'package:stem/stem.dart';
 
+final InMemoryBroker _autoscaleBroker = InMemoryBroker();
+final InMemoryResultBackend _autoscaleBackend = InMemoryResultBackend();
+
 // #region worker-control-autoscale
 final worker = Worker(
-  broker: InMemoryBroker(),
+  broker: _autoscaleBroker,
   registry: SimpleTaskRegistry(),
-  backend: InMemoryResultBackend(),
+  backend: _autoscaleBackend,
   queue: 'critical',
   concurrency: 12,
   autoscale: const WorkerAutoscaleConfig(
@@ -88,11 +91,14 @@ Future<void> crunch(
 }
 // #endregion worker-control-crunch
 
+final InMemoryBroker _lifecycleBroker = InMemoryBroker();
+final InMemoryResultBackend _lifecycleBackend = InMemoryResultBackend();
+
 // #region worker-control-lifecycle
 final lifecycleWorker = Worker(
-  broker: InMemoryBroker(),
+  broker: _lifecycleBroker,
   registry: SimpleTaskRegistry(),
-  backend: InMemoryResultBackend(),
+  backend: _lifecycleBackend,
   lifecycle: const WorkerLifecycleConfig(
     maxTasksPerIsolate: 500,
     maxMemoryPerIsolateBytes: 512 * 1024 * 1024,
@@ -112,4 +118,8 @@ Future<void> main() async {
   await worker.start();
   await Future<void>.delayed(const Duration(milliseconds: 250));
   await worker.shutdown();
+  await _autoscaleBackend.dispose();
+  _autoscaleBroker.dispose();
+  await _lifecycleBackend.dispose();
+  _lifecycleBroker.dispose();
 }

@@ -68,6 +68,7 @@ Future<void> configureWorkerNamespace() async {
   );
 
   await worker.shutdown();
+  await backend.dispose();
   broker.dispose();
 }
 

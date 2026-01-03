@@ -74,10 +74,12 @@ class PublishInvoiceTask extends TaskHandler<void> {
 }
 
 Future<void> runTypedDefinitionExample() async {
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
   final stem = Stem(
-    broker: InMemoryBroker(),
+    broker: broker,
     registry: SimpleTaskRegistry()..register(PublishInvoiceTask()),
-    backend: InMemoryResultBackend(),
+    backend: backend,
   );
 
   final taskId = await stem.enqueueCall(
@@ -177,7 +179,7 @@ Future<void> configureEncoders() async {
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [MyOtherEncoder()],
   );
-  await app.worker.shutdown();
+  await app.shutdown();
 }
 // #endregion tasks-encoders-global
 

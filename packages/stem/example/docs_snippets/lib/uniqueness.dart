@@ -99,8 +99,10 @@ Future<void> enqueueWithOverride(Stem stem) async {
 Future<void> main() async {
   final coordinator = buildInMemoryCoordinator();
   // #region uniqueness-stem-worker
-  final app = await StemApp.inMemory(
+  final app = await StemApp.create(
     tasks: [SendDigestTask()],
+    broker: StemBrokerFactory.inMemory(),
+    backend: StemBackendFactory.inMemory(),
     uniqueTaskCoordinator: coordinator,
     workerConfig: const StemWorkerConfig(
       queue: 'email',

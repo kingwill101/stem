@@ -21,10 +21,12 @@ Future<void> minimalProducer() async {
       ),
     );
 
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
   final stem = Stem(
-    broker: InMemoryBroker(),
+    broker: broker,
     registry: registry,
-    backend: InMemoryResultBackend(),
+    backend: backend,
   );
 
   final taskId = await stem.enqueue(
@@ -33,6 +35,8 @@ Future<void> minimalProducer() async {
   );
 
   print('Enqueued $taskId');
+  await backend.dispose();
+  broker.dispose();
 }
 // #endregion workers-producer-minimal
 
@@ -41,6 +45,7 @@ Future<void> redisProducer() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
   final broker = await RedisStreamsBroker.connect(brokerUrl);
+  final backend = await RedisResultBackend.connect('$brokerUrl/1');
   final registry = SimpleTaskRegistry()
     ..register(
       FunctionTaskHandler<void>(
@@ -56,7 +61,7 @@ Future<void> redisProducer() async {
   final stem = Stem(
     broker: broker,
     registry: registry,
-    backend: await RedisResultBackend.connect('$brokerUrl/1'),
+    backend: backend,
   );
 
   await stem.enqueue(
@@ -64,6 +69,8 @@ Future<void> redisProducer() async {
     args: {'reportId': 'monthly-2025-10'},
     options: const TaskOptions(queue: 'reports'),
   );
+  await backend.close();
+  await broker.close();
 }
 // #endregion workers-producer-redis
 
@@ -83,10 +90,15 @@ Future<void> signedProducer() async {
       ),
     );
 
+  final broker = await RedisStreamsBroker.connect(
+    config.brokerUrl,
+    tls: config.tls,
+  );
+  final backend = InMemoryResultBackend();
   final stem = Stem(
-    broker: await RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
+    broker: broker,
     registry: registry,
-    backend: InMemoryResultBackend(),
+    backend: backend,
     signer: signer,
   );
 
@@ -94,6 +106,8 @@ Future<void> signedProducer() async {
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
   );
+  await backend.dispose();
+  await broker.close();
 }
 // #endregion workers-producer-signed
 
@@ -205,16 +219,21 @@ class StemRuntime {
   final TaskRegistry registry;
   final String brokerUrl;
 
+  final InMemoryBroker _stemBroker = InMemoryBroker();
+  final InMemoryResultBackend _stemBackend = InMemoryResultBackend();
+  final InMemoryBroker _workerBroker = InMemoryBroker();
+  final InMemoryResultBackend _workerBackend = InMemoryResultBackend();
+
   late final Stem stem = Stem(
-    broker: InMemoryBroker(),
+    broker: _stemBroker,
     registry: registry,
-    backend: InMemoryResultBackend(),
+    backend: _stemBackend,
   );
 
   late final Worker worker = Worker(
-    broker: InMemoryBroker(),
+    broker: _workerBroker,
     registry: registry,
-    backend: InMemoryResultBackend(),
+    backend: _workerBackend,
   );
 
   Future<void> start() async {
@@ -223,6 +242,10 @@ class StemRuntime {
 
   Future<void> stop() async {
     await worker.shutdown();
+    await _workerBackend.dispose();
+    _workerBroker.dispose();
+    await _stemBackend.dispose();
+    _stemBroker.dispose();
   }
 }
 // #endregion workers-bootstrap

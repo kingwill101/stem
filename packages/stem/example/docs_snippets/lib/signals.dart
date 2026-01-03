@@ -97,7 +97,7 @@ Future<void> main() async {
     registerControlSignals(),
   ];
 
-  final app = await StemApp.inMemory(
+  final app = await StemApp.create(
     tasks: [
       FunctionTaskHandler<void>(
         name: 'signals.demo',
@@ -107,6 +107,8 @@ Future<void> main() async {
         },
       ),
     ],
+    broker: StemBrokerFactory.inMemory(),
+    backend: StemBackendFactory.inMemory(),
     middleware: buildSignalMiddlewareForProducer(),
     workerConfig: StemWorkerConfig(
       middleware: buildSignalMiddlewareForWorker(),
