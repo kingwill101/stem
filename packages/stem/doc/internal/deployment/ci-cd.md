@@ -9,21 +9,35 @@ Follow these practices to keep Stem projects healthy in automation.
 
 ## Static checks
 
-Add `tool/quality/run_quality_checks.sh` to your pipeline. The script runs:
+Run the core quality gates either via `example/quality_gates` (requires `just`)
+or by invoking the commands directly. The default set includes:
 
 - `dart format --set-exit-if-changed`
 - `dart analyze`
 - `dart test --exclude-tags soak`
-- optional coverage via `RUN_COVERAGE` / `COVERAGE_THRESHOLD`
+- chaos tests (`dart test packages/stem_redis/test --tags chaos`)
+- coverage via `tool/quality/coverage.sh`
 
-Example GitHub Actions step:
+Example GitHub Actions steps:
 
 ```yaml
-- name: Run quality checks
-  run: tool/quality/run_quality_checks.sh
+- name: Format
+  run: dart format --set-exit-if-changed .
+
+- name: Analyze
+  run: dart analyze
+
+- name: Unit tests
+  run: dart test --exclude-tags soak
+
+- name: Chaos tests (Redis)
+  run: dart test packages/stem_redis/test --tags chaos --fail-fast
   env:
     STEM_CHAOS_REDIS_URL: redis://127.0.0.1:6379/15
-    RUN_COVERAGE: "0"
+
+- name: Coverage
+  run: tool/quality/coverage.sh
+  env:
     COVERAGE_THRESHOLD: "70"
 ```
 

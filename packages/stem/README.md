@@ -137,6 +137,38 @@ final taskId = await TaskEnqueueBuilder(
   .enqueueWith(stem);
 ```
 
+### Enqueue from inside a task
+
+Handlers can enqueue follow-up work using `TaskContext.enqueue` and request
+retries directly:
+
+```dart
+class ParentTask implements TaskHandler<void> {
+  @override
+  String get name => 'demo.parent';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 3);
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    await context.enqueue(
+      'demo.child',
+      args: {'id': 'child-1'},
+      enqueueOptions: TaskEnqueueOptions(
+        countdown: const Duration(seconds: 30),
+        retry: true,
+        retryPolicy: TaskRetryPolicy(backoff: true),
+      ),
+    );
+
+    if (context.attempt == 0) {
+      await context.retry(countdown: const Duration(seconds: 10));
+    }
+  }
+}
+```
+
 ### Bootstrap helpers
 
 Spin up a full runtime in one call using the bootstrap APIs:
@@ -498,7 +530,7 @@ drivers by importing the adapter you need.
 - **Observability** - Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
 - **Security** - Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
 - **Adapters** - In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
-- **Specs & tooling** - OpenSpec change workflow, quality gates (`tool/quality/run_quality_checks.sh`), chaos/regression suites.
+- **Specs & tooling** - OpenSpec change workflow, quality gates (see `example/quality_gates`), chaos/regression suites.
 
 ## Documentation & Examples
 
@@ -513,6 +545,8 @@ drivers by importing the adapter you need.
 - [scheduler_observability](example/scheduler_observability) - Beat drift metrics, schedule signals, and CLI checks.
 - [microservice](example/microservice), [monolith_service](example/monolith_service), [mixed_cluster](example/mixed_cluster) - production-style topologies.
 - [progress_heartbeat](example/progress_heartbeat) - task progress + heartbeat reporting.
+- [task_context_mixed](example/task_context_mixed) - TaskContext + TaskInvocationContext enqueue patterns, plus Celery-style apply_async options.
+- [task_usage_patterns.dart](example/task_usage_patterns.dart) - in-memory TaskContext enqueue, TaskInvocationContext builder, and typed enqueue calls.
 - [worker_control_lab](example/worker_control_lab) - worker ping/stats/revoke/shutdown drills.
 - [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
 - [signing_key_rotation](example/signing_key_rotation) - rotate HMAC signing keys with overlap.

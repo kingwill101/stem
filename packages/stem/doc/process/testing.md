@@ -11,15 +11,31 @@ resilience checks.
 ## Running the full suite
 
 ```
-tool/quality/run_quality_checks.sh
+cd packages/stem/example/quality_gates
+just quality
 ```
 
-The script performs:
+For a faster loop:
+
+```
+just quick
+```
+
+The quality runner executes:
 
 1. `dart format --set-exit-if-changed .`
 2. `dart analyze`
 3. `dart test --exclude-tags soak`
-4. Coverage via `tool/quality/coverage.sh`
+4. Chaos + performance suites (see `example/quality_gates/justfile`)
+5. Coverage (see `tool/quality/coverage.sh` for thresholded runs)
+
+If you prefer running the core gates directly:
+
+```
+dart format --set-exit-if-changed .
+dart analyze
+dart test --exclude-tags soak
+```
 
 ### Redis-backed chaos runs
 
@@ -29,12 +45,11 @@ quality checks or individual tests:
 
 ```
 docker compose -f scripts/docker/redis-chaos.yml up -d
-STEM_CHAOS_REDIS_URL=redis://127.0.0.1:6379/15 tool/quality/run_quality_checks.sh
+STEM_CHAOS_REDIS_URL=redis://127.0.0.1:6379/15 just chaos
 ```
 
-The script will reuse the environment variable in CI, so local runs with the
-same configuration match pipeline behaviour. Stop the temporary Redis service
-with:
+CI will reuse the environment variable, so local runs with the same
+configuration match pipeline behaviour. Stop the temporary Redis service with:
 
 ```
 docker compose -f scripts/docker/redis-chaos.yml down
@@ -54,8 +69,8 @@ dart test --tags soak
 The GitHub Actions workflow (`.github/workflows/ci.yml`) now:
 
 - Provisions a Redis service container for chaos tests.
-- Invokes `tool/quality/run_quality_checks.sh` with coverage threshold 60%.
-- Executes the Redis chaos suite as part of the quality script.
+- Executes format, analyze, unit tests, chaos tests, and coverage gates (either
+  via `example/quality_gates` or by calling the commands directly).
 
 Any failures in format, analyze, unit/integration tests, coverage, or chaos
 recovery cause the pipeline to fail.
