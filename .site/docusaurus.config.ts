@@ -66,8 +66,12 @@ const config: Config = {
   ],
 
   themeConfig: {
+    metadata: [
+      {name: 'keywords', content: 'dart, background-jobs, stem, task-queue, spec-driven'},
+      {name: 'twitter:card', content: 'summary_large_image'},
+    ],
     // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/stem-social-card.png',
     colorMode: {
       respectPrefersColorScheme: true,
     },
@@ -75,7 +79,9 @@ const config: Config = {
       title: 'Stem',
       logo: {
         alt: 'Stem Logo',
-        src: 'img/logo.svg',
+        src: 'img/stem-logo.png',
+        width: 140,
+        height: 40,
       },
       items: [
         {
@@ -85,7 +91,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/stem/stem',
+          href: 'https://github.com/kingwill101/stem',
           label: 'GitHub',
           position: 'right',
         },
@@ -116,7 +122,7 @@ const config: Config = {
           items: [
             {
               label: 'GitHub',
-              href: 'https://github.com/stem/stem',
+              href: 'https://github.com/kingwill101/stem',
             },
           ],
         },

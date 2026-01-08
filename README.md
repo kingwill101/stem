@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".site/static/img/stem-logo.png" width="400" alt="Stem Logo" />
+</p>
+
 # Stem
 
 This repository hosts the Stem background job platform and its related packages.

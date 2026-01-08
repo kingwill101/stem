@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../.site/static/img/stem-logo.png" width="300" alt="Stem Logo" />
+</p>
+
 # Stem Dashboard Overview
 
 This package houses the Hotwire + Routed dashboard that ships with Stem. The

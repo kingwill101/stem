@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../.site/static/img/stem-logo.png" width="300" alt="Stem Logo" />
+</p>
+
 # stem_postgres
 
 [![pub package](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres)

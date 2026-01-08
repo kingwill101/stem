@@ -4,6 +4,10 @@
 [![Build Status](https://github.com/kingwill101/stem/workflows/ci/badge.svg)](https://github.com/kingwill101/stem/actions)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
+<p align="center">
+  <img src="../../.site/static/img/stem-logo.png" width="300" alt="Stem Logo" />
+</p>
+
 # Stem
 
  Stem is a Dart-native background job platform. It gives you Celery-style
