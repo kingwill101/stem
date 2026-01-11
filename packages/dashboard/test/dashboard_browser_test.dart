@@ -127,7 +127,7 @@ void _dashboardBrowserTest(
     );
 
     await _withPrintFilter(() async {
-      final browser = await type.launch(launchOptions, useAsync: true);
+      final browser = await type.launch(launchOptions);
       try {
         await callback(browser);
       } finally {

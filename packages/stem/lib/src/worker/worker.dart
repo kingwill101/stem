@@ -25,7 +25,6 @@ import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
-import 'package:stem/src/worker/task_source.dart';
 import 'package:stem/src/worker/worker_config.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
@@ -42,8 +41,6 @@ import 'package:stem/src/worker/worker_config.dart';
 /// );
 /// await worker.start();
 ///
-/// // Remote workers can use:
-/// // final worker = Worker.fromTaskSource(taskSource: remoteSource, ...);
 /// ```
 /// Shutdown modes for workers.
 enum WorkerShutdownMode {
@@ -61,8 +58,7 @@ enum WorkerShutdownMode {
 class Worker {
   /// Creates a worker instance.
   ///
-  /// The [broker] handles message publishing and default consumption. Use
-  /// [taskSource] to override delivery/ack behavior (e.g. remote workers).
+  /// The [broker] handles message publishing and consumption.
   /// The [registry] provides task handlers. The [backend] stores task results
   /// and state.
   /// Optional [rateLimiter] enforces rate limits per task.
@@ -110,7 +106,6 @@ class Worker {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) : this._(
-         taskSource: BrokerTaskSource(broker),
          broker: broker,
          enqueuer: enqueuer,
          registry: registry,
@@ -140,71 +135,10 @@ class Worker {
          additionalEncoders: additionalEncoders,
        );
 
-  /// Creates a worker from a remote/local task source.
-  Worker.fromTaskSource({
-    required TaskSource taskSource,
-    required TaskRegistry registry,
-    required ResultBackend backend,
-    Stem? enqueuer,
-    RateLimiter? rateLimiter,
-    List<Middleware> middleware = const [],
-    RevokeStore? revokeStore,
-    UniqueTaskCoordinator? uniqueTaskCoordinator,
-    RetryStrategy? retryStrategy,
-    String queue = 'default',
-    RoutingSubscription? subscription,
-    String? consumerName,
-    int? concurrency,
-    int prefetchMultiplier = 2,
-    int? prefetch,
-    Duration heartbeatInterval = const Duration(seconds: 10),
-    Duration? workerHeartbeatInterval,
-    HeartbeatTransport? heartbeatTransport,
-    String heartbeatNamespace = 'stem',
-    WorkerAutoscaleConfig? autoscale,
-    WorkerLifecycleConfig? lifecycle,
-    ObservabilityConfig? observability,
-    PayloadSigner? signer,
-    TaskPayloadEncoderRegistry? encoderRegistry,
-    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
-    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
-    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-  }) : this._(
-         taskSource: taskSource,
-         broker: null,
-         enqueuer: enqueuer,
-         registry: registry,
-         backend: backend,
-         rateLimiter: rateLimiter,
-         middleware: middleware,
-         revokeStore: revokeStore,
-         uniqueTaskCoordinator: uniqueTaskCoordinator,
-         retryStrategy: retryStrategy,
-         queue: queue,
-         subscription: subscription,
-         consumerName: consumerName,
-         concurrency: concurrency,
-         prefetchMultiplier: prefetchMultiplier,
-         prefetch: prefetch,
-         heartbeatInterval: heartbeatInterval,
-         workerHeartbeatInterval: workerHeartbeatInterval,
-         heartbeatTransport: heartbeatTransport,
-         heartbeatNamespace: heartbeatNamespace,
-         autoscale: autoscale,
-         lifecycle: lifecycle,
-         observability: observability,
-         signer: signer,
-         encoderRegistry: encoderRegistry,
-         resultEncoder: resultEncoder,
-         argsEncoder: argsEncoder,
-         additionalEncoders: additionalEncoders,
-       );
-
   Worker._({
-    required this.taskSource,
+    required this.broker,
     required this.registry,
     required this.backend,
-    required Broker? broker,
     required Stem? enqueuer,
     this.rateLimiter,
     this.middleware = const [],
@@ -259,18 +193,16 @@ class Worker {
     observability?.applySignalConfiguration();
     _enqueuer =
         enqueuer ??
-        (broker != null
-            ? Stem(
-                broker: broker,
-                registry: registry,
-                backend: backend,
-                uniqueTaskCoordinator: uniqueTaskCoordinator,
-                retryStrategy: retryStrategy,
-                middleware: middleware,
-                signer: signer,
-                encoderRegistry: payloadEncoders,
-              )
-            : null);
+        Stem(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          uniqueTaskCoordinator: uniqueTaskCoordinator,
+          retryStrategy: retryStrategy,
+          middleware: middleware,
+          signer: signer,
+          encoderRegistry: payloadEncoders,
+        );
 
     _maxConcurrency = this.concurrency;
 
@@ -322,8 +254,8 @@ class Worker {
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
   }
 
-  /// Task source used to consume and acknowledge deliveries.
-  final TaskSource taskSource;
+  /// Broker used to consume and acknowledge deliveries.
+  final Broker broker;
 
   /// Task registry containing handlers and metadata.
   final TaskRegistry registry;
@@ -472,7 +404,7 @@ class Worker {
     }
     for (var index = 0; index < queueNames.length; index += 1) {
       final queueName = queueNames[index];
-      final stream = taskSource.consume(
+      final stream = broker.consume(
         RoutingSubscription(
           queues: [queueName],
           broadcastChannels: index == 0
@@ -605,7 +537,7 @@ class Worker {
       () async {
         final handler = registry.resolve(envelope.name);
         if (handler == null) {
-          await taskSource.deadLetter(delivery, reason: 'unregistered-task');
+          await broker.deadLetter(delivery, reason: 'unregistered-task');
           await _releaseUniqueLock(envelope);
           return;
         }
@@ -671,8 +603,8 @@ class Worker {
                   StateError('rate-limit'),
                   StackTrace.current,
                 );
-            await taskSource.nack(delivery, requeue: false);
-            await taskSource.publish(
+            await broker.nack(delivery, requeue: false);
+            await broker.publish(
               envelope.copyWith(notBefore: DateTime.now().add(backoff)),
             );
             await backend.set(
@@ -747,7 +679,7 @@ class Worker {
           },
           extendLease: (duration) async {
             checkTermination();
-            await taskSource.extendLease(delivery, duration);
+            await broker.extendLease(delivery, duration);
             _recordLeaseRenewal(delivery);
             _restartLeaseTimer(delivery, duration);
             _noteLeaseRenewal(delivery);
@@ -808,7 +740,7 @@ class Worker {
             attempt: envelope.attempt,
             meta: successMeta,
           );
-          await taskSource.ack(delivery);
+          await broker.ack(delivery);
           await backend.set(
             envelope.id,
             TaskState.succeeded,
@@ -1025,7 +957,7 @@ class Worker {
   void _startLeaseTimer(Delivery delivery, Duration interval) {
     _leaseTimers[delivery.receipt]?.cancel();
     final timer = Timer.periodic(interval, (_) async {
-      await taskSource.extendLease(delivery, interval);
+      await broker.extendLease(delivery, interval);
       _recordLeaseRenewal(delivery);
       _noteLeaseRenewal(delivery);
     });
@@ -1135,7 +1067,7 @@ class Worker {
         );
       }
 
-      await taskSource.publish(callbackEnvelope);
+      await broker.publish(callbackEnvelope);
       final callbackHandler = registry.resolve(callbackEnvelope.name);
       final callbackResultEncoder = _resolveResultEncoder(callbackHandler);
       final callbackMeta = _withResultEncoderMeta({
@@ -1290,7 +1222,7 @@ class Worker {
     StackTrace stack,
     String? groupId,
   ) async {
-    await taskSource.deadLetter(
+    await broker.deadLetter(
       delivery,
       reason: 'signature-invalid',
       meta: {
@@ -1398,8 +1330,8 @@ class Worker {
         retryPolicy,
       );
       final nextRunAt = DateTime.now().add(delay);
-      await taskSource.nack(delivery, requeue: false);
-      await taskSource.publish(
+      await broker.nack(delivery, requeue: false);
+      await broker.publish(
         envelope.copyWith(
           attempt: envelope.attempt + 1,
           maxRetries: maxRetries,
@@ -1464,7 +1396,7 @@ class Worker {
         attempt: envelope.attempt,
         meta: failureMeta,
       );
-      await taskSource.deadLetter(
+      await broker.deadLetter(
         delivery,
         reason: 'max-retries-exhausted',
         meta: {'error': error.toString()},
@@ -1539,7 +1471,7 @@ class Worker {
           'retryExhausted': true,
         },
       );
-      await taskSource.nack(delivery, requeue: false);
+      await broker.nack(delivery, requeue: false);
       await backend.set(
         envelope.id,
         TaskState.failed,
@@ -1596,8 +1528,8 @@ class Worker {
       updatedMeta['stem.retryPolicy'] = request.retryPolicy!.toJson();
     }
 
-    await taskSource.nack(delivery, requeue: false);
-    await taskSource.publish(
+    await broker.nack(delivery, requeue: false);
+    await broker.publish(
       envelope.copyWith(
         attempt: envelope.attempt + 1,
         maxRetries: maxRetries,
@@ -1745,7 +1677,7 @@ class Worker {
   Future<Map<String, int>> _collectQueueDepths() async {
     final result = <String, int>{};
     for (final queueName in _effectiveQueues) {
-      final depth = await taskSource.pendingCount(queueName);
+      final depth = await broker.pendingCount(queueName);
       if (depth != null) {
         result[queueName] = depth;
       }
@@ -1799,7 +1731,7 @@ class Worker {
       _heartbeatTimers.remove(active.envelope.id)?.cancel();
       _releaseDelivery(active.envelope);
       try {
-        await taskSource.nack(active.delivery);
+        await broker.nack(active.delivery);
       } on Object catch (error, stack) {
         stemLogger.warning(
           'Failed to requeue delivery during shutdown: $error',
@@ -2508,7 +2440,7 @@ class Worker {
     String? groupId,
   }) async {
     final revokeEntry = _revocationFor(envelope.id);
-    await taskSource.ack(delivery);
+    await broker.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -2586,7 +2518,7 @@ class Worker {
     Envelope envelope,
     TaskPayloadEncoder resultEncoder,
   ) async {
-    await taskSource.ack(delivery);
+    await broker.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -2750,7 +2682,7 @@ class Worker {
       if (_subscriptions.containsKey(queueName)) {
         continue;
       }
-      final stream = taskSource.consume(
+      final stream = broker.consume(
         RoutingSubscription.singleQueue(queueName),
         consumerName: '$_workerIdentifier-control',
       );
@@ -2775,19 +2707,19 @@ class Worker {
     try {
       final envelope = delivery.envelope;
       if (envelope.name != ControlEnvelopeTypes.command) {
-        await taskSource.ack(delivery);
+        await broker.ack(delivery);
         return;
       }
       final command = controlCommandFromEnvelope(envelope);
       await _handleControlCommand(command);
-      await taskSource.ack(delivery);
+      await broker.ack(delivery);
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to process control command: $error',
         Context(_logContext({'stack': stack.toString()})),
       );
       try {
-        await taskSource.ack(delivery);
+        await broker.ack(delivery);
       } on Object {
         // Ignore ack failures for control channel cleanup.
       }
@@ -2894,7 +2826,7 @@ class Worker {
   Future<void> _sendControlReply(ControlReplyMessage reply) async {
     final queueName = ControlQueueNames.reply(namespace, reply.requestId);
     try {
-      await taskSource.publish(reply.toEnvelope(queue: queueName));
+      await broker.publish(reply.toEnvelope(queue: queueName));
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to publish control reply: $error',

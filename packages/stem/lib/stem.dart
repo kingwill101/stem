@@ -48,7 +48,6 @@ export 'src/signals/payloads.dart';
 export 'src/signals/signal.dart';
 export 'src/signals/stem_signals.dart';
 export 'src/testing/fake_stem.dart';
-export 'src/worker/task_source.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';
 export 'src/workflow/workflow.dart';

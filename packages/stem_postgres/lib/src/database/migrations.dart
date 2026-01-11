@@ -15,7 +15,7 @@ final List<MigrationEntry> _entries = [
   ), // </ORM-MIGRATION-REGISTRY>
   MigrationEntry(
     id: MigrationId(
-      DateTime(2025, 12, 31, 16, 0, 0),
+      DateTime(2025, 12, 31, 16),
       'm_20251231160000_add_namespace_scoping',
     ),
     migration: const AddNamespaceScoping(),

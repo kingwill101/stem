@@ -8,6 +8,12 @@ import 'package:stem_sqlite/src/models/models.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore implements WorkflowStore {
+
+  SqliteWorkflowStore._(
+    this._connections,
+    this._clock, {
+    required this.namespace,
+  }) : _context = _connections.context;
   /// Opens a SQLite-backed workflow store using [file].
   static Future<SqliteWorkflowStore> open(
     File file, {
@@ -24,12 +30,6 @@ class SqliteWorkflowStore implements WorkflowStore {
       namespace: resolvedNamespace,
     );
   }
-
-  SqliteWorkflowStore._(
-    this._connections,
-    this._clock, {
-    required this.namespace,
-  }) : _context = _connections.context;
 
   final SqliteConnections _connections;
   final QueryContext _context;

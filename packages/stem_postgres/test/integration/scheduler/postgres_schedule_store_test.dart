@@ -44,12 +44,12 @@ Future<void> main() async {
             .query<$StemScheduleEntry>()
             .whereEquals('namespace', testNamespace)
             .delete();
-      } catch (_) {
+      } on Object catch (_) {
         // Ignore cleanup errors
       }
       try {
         await store.close();
-      } catch (_) {
+      } on Object catch (_) {
         // Ignore connection close errors
       }
     });
@@ -188,7 +188,7 @@ Future<void> main() async {
               .query<$StemScheduleEntry>()
               .whereEquals('namespace', otherNamespace)
               .delete();
-        } catch (_) {}
+        } on Object catch (_) {}
         await otherStore.close();
       });
 

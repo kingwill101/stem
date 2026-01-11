@@ -7,6 +7,30 @@ import 'package:stem_postgres/src/database/models/models.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
 class PostgresResultBackend implements ResultBackend {
+
+  /// Creates a backend using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  factory PostgresResultBackend.fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultTtl = const Duration(days: 1),
+    Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
+  }) {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = PostgresConnections.fromDataSource(dataSource);
+    final backend = PostgresResultBackend._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultTtl: defaultTtl,
+      groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
+    ).._startCleanupTimer();
+    return backend;
+  }
   PostgresResultBackend._(
     this._connections, {
     required this.namespace,
@@ -61,30 +85,6 @@ class PostgresResultBackend implements ResultBackend {
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
     );
-    final backend = PostgresResultBackend._(
-      connections,
-      namespace: resolvedNamespace,
-      defaultTtl: defaultTtl,
-      groupDefaultTtl: groupDefaultTtl,
-      heartbeatTtl: heartbeatTtl,
-    ).._startCleanupTimer();
-    return backend;
-  }
-
-  /// Creates a backend using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  static PostgresResultBackend fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-    Duration defaultTtl = const Duration(days: 1),
-    Duration groupDefaultTtl = const Duration(days: 1),
-    Duration heartbeatTtl = const Duration(seconds: 60),
-  }) {
-    final resolvedNamespace = namespace.trim().isEmpty
-        ? 'stem'
-        : namespace.trim();
-    final connections = PostgresConnections.fromDataSource(dataSource);
     final backend = PostgresResultBackend._(
       connections,
       namespace: resolvedNamespace,
