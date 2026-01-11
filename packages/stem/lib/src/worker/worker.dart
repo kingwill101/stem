@@ -25,6 +25,7 @@ import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
+import 'package:stem/src/worker/task_source.dart';
 import 'package:stem/src/worker/worker_config.dart';
 
 /// A daemon that consumes tasks from a broker and executes registered handlers.
@@ -40,6 +41,9 @@ import 'package:stem/src/worker/worker_config.dart';
 ///   backend: myBackend,
 /// );
 /// await worker.start();
+///
+/// // Remote workers can use:
+/// // final worker = Worker.fromTaskSource(taskSource: remoteSource, ...);
 /// ```
 /// Shutdown modes for workers.
 enum WorkerShutdownMode {
@@ -57,8 +61,10 @@ enum WorkerShutdownMode {
 class Worker {
   /// Creates a worker instance.
   ///
-  /// The [broker] handles message consumption and publishing. The [registry]
-  /// provides task handlers. The [backend] stores task results and state.
+  /// The [broker] handles message publishing and default consumption. Use
+  /// [taskSource] to override delivery/ack behavior (e.g. remote workers).
+  /// The [registry] provides task handlers. The [backend] stores task results
+  /// and state.
   /// Optional [rateLimiter] enforces rate limits per task.
   /// [uniqueTaskCoordinator] coordinates deduplicated tasks so locks are
   /// released when runs finish. [middleware] allows intercepting task
@@ -76,9 +82,130 @@ class Worker {
   /// The optional [signer] verifies payload signatures (see [SigningConfig]);
   /// invalid envelopes are dead-lettered with a `signature-invalid` reason.
   Worker({
-    required this.broker,
+    required Broker broker,
+    required TaskRegistry registry,
+    required ResultBackend backend,
+    Stem? enqueuer,
+    RateLimiter? rateLimiter,
+    List<Middleware> middleware = const [],
+    RevokeStore? revokeStore,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    RetryStrategy? retryStrategy,
+    String queue = 'default',
+    RoutingSubscription? subscription,
+    String? consumerName,
+    int? concurrency,
+    int prefetchMultiplier = 2,
+    int? prefetch,
+    Duration heartbeatInterval = const Duration(seconds: 10),
+    Duration? workerHeartbeatInterval,
+    HeartbeatTransport? heartbeatTransport,
+    String heartbeatNamespace = 'stem',
+    WorkerAutoscaleConfig? autoscale,
+    WorkerLifecycleConfig? lifecycle,
+    ObservabilityConfig? observability,
+    PayloadSigner? signer,
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) : this._(
+         taskSource: BrokerTaskSource(broker),
+         broker: broker,
+         enqueuer: enqueuer,
+         registry: registry,
+         backend: backend,
+         rateLimiter: rateLimiter,
+         middleware: middleware,
+         revokeStore: revokeStore,
+         uniqueTaskCoordinator: uniqueTaskCoordinator,
+         retryStrategy: retryStrategy,
+         queue: queue,
+         subscription: subscription,
+         consumerName: consumerName,
+         concurrency: concurrency,
+         prefetchMultiplier: prefetchMultiplier,
+         prefetch: prefetch,
+         heartbeatInterval: heartbeatInterval,
+         workerHeartbeatInterval: workerHeartbeatInterval,
+         heartbeatTransport: heartbeatTransport,
+         heartbeatNamespace: heartbeatNamespace,
+         autoscale: autoscale,
+         lifecycle: lifecycle,
+         observability: observability,
+         signer: signer,
+         encoderRegistry: encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       );
+
+  /// Creates a worker from a remote/local task source.
+  Worker.fromTaskSource({
+    required TaskSource taskSource,
+    required TaskRegistry registry,
+    required ResultBackend backend,
+    Stem? enqueuer,
+    RateLimiter? rateLimiter,
+    List<Middleware> middleware = const [],
+    RevokeStore? revokeStore,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    RetryStrategy? retryStrategy,
+    String queue = 'default',
+    RoutingSubscription? subscription,
+    String? consumerName,
+    int? concurrency,
+    int prefetchMultiplier = 2,
+    int? prefetch,
+    Duration heartbeatInterval = const Duration(seconds: 10),
+    Duration? workerHeartbeatInterval,
+    HeartbeatTransport? heartbeatTransport,
+    String heartbeatNamespace = 'stem',
+    WorkerAutoscaleConfig? autoscale,
+    WorkerLifecycleConfig? lifecycle,
+    ObservabilityConfig? observability,
+    PayloadSigner? signer,
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) : this._(
+         taskSource: taskSource,
+         broker: null,
+         enqueuer: enqueuer,
+         registry: registry,
+         backend: backend,
+         rateLimiter: rateLimiter,
+         middleware: middleware,
+         revokeStore: revokeStore,
+         uniqueTaskCoordinator: uniqueTaskCoordinator,
+         retryStrategy: retryStrategy,
+         queue: queue,
+         subscription: subscription,
+         consumerName: consumerName,
+         concurrency: concurrency,
+         prefetchMultiplier: prefetchMultiplier,
+         prefetch: prefetch,
+         heartbeatInterval: heartbeatInterval,
+         workerHeartbeatInterval: workerHeartbeatInterval,
+         heartbeatTransport: heartbeatTransport,
+         heartbeatNamespace: heartbeatNamespace,
+         autoscale: autoscale,
+         lifecycle: lifecycle,
+         observability: observability,
+         signer: signer,
+         encoderRegistry: encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       );
+
+  Worker._({
+    required this.taskSource,
     required this.registry,
     required this.backend,
+    required Broker? broker,
+    required Stem? enqueuer,
     this.rateLimiter,
     this.middleware = const [],
     this.revokeStore,
@@ -130,17 +257,23 @@ class Worker {
        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy() {
     observability?.applyMetricExporters();
     observability?.applySignalConfiguration();
-    _enqueuer = Stem(
-      broker: broker,
-      registry: registry,
-      backend: backend,
-      uniqueTaskCoordinator: uniqueTaskCoordinator,
-      retryStrategy: retryStrategy,
-      middleware: middleware,
-      signer: signer,
-      encoderRegistry: payloadEncoders,
-    );
+    _enqueuer =
+        enqueuer ??
+        (broker != null
+            ? Stem(
+                broker: broker,
+                registry: registry,
+                backend: backend,
+                uniqueTaskCoordinator: uniqueTaskCoordinator,
+                retryStrategy: retryStrategy,
+                middleware: middleware,
+                signer: signer,
+                encoderRegistry: payloadEncoders,
+              )
+            : null);
+
     _maxConcurrency = this.concurrency;
+
     final autoscaleMax =
         autoscaleConfig.maxConcurrency != null &&
             autoscaleConfig.maxConcurrency! > 0
@@ -189,8 +322,8 @@ class Worker {
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
   }
 
-  /// Broker used to consume and publish task envelopes.
-  final Broker broker;
+  /// Task source used to consume and acknowledge deliveries.
+  final TaskSource taskSource;
 
   /// Task registry containing handlers and metadata.
   final TaskRegistry registry;
@@ -253,7 +386,7 @@ class Worker {
   final TaskPayloadEncoderRegistry payloadEncoders;
 
   /// Enqueuer used by task contexts for spawning new work.
-  late final Stem _enqueuer;
+  Stem? _enqueuer;
 
   static final math.Random _random = math.Random();
 
@@ -339,7 +472,7 @@ class Worker {
     }
     for (var index = 0; index < queueNames.length; index += 1) {
       final queueName = queueNames[index];
-      final stream = broker.consume(
+      final stream = taskSource.consume(
         RoutingSubscription(
           queues: [queueName],
           broadcastChannels: index == 0
@@ -472,7 +605,7 @@ class Worker {
       () async {
         final handler = registry.resolve(envelope.name);
         if (handler == null) {
-          await broker.deadLetter(delivery, reason: 'unregistered-task');
+          await taskSource.deadLetter(delivery, reason: 'unregistered-task');
           await _releaseUniqueLock(envelope);
           return;
         }
@@ -538,8 +671,8 @@ class Worker {
                   StateError('rate-limit'),
                   StackTrace.current,
                 );
-            await broker.nack(delivery, requeue: false);
-            await broker.publish(
+            await taskSource.nack(delivery, requeue: false);
+            await taskSource.publish(
               envelope.copyWith(notBefore: DateTime.now().add(backoff)),
             );
             await backend.set(
@@ -614,7 +747,7 @@ class Worker {
           },
           extendLease: (duration) async {
             checkTermination();
-            await broker.extendLease(delivery, duration);
+            await taskSource.extendLease(delivery, duration);
             _recordLeaseRenewal(delivery);
             _restartLeaseTimer(delivery, duration);
             _noteLeaseRenewal(delivery);
@@ -675,7 +808,7 @@ class Worker {
             attempt: envelope.attempt,
             meta: successMeta,
           );
-          await broker.ack(delivery);
+          await taskSource.ack(delivery);
           await backend.set(
             envelope.id,
             TaskState.succeeded,
@@ -892,7 +1025,7 @@ class Worker {
   void _startLeaseTimer(Delivery delivery, Duration interval) {
     _leaseTimers[delivery.receipt]?.cancel();
     final timer = Timer.periodic(interval, (_) async {
-      await broker.extendLease(delivery, interval);
+      await taskSource.extendLease(delivery, interval);
       _recordLeaseRenewal(delivery);
       _noteLeaseRenewal(delivery);
     });
@@ -1002,7 +1135,7 @@ class Worker {
         );
       }
 
-      await broker.publish(callbackEnvelope);
+      await taskSource.publish(callbackEnvelope);
       final callbackHandler = registry.resolve(callbackEnvelope.name);
       final callbackResultEncoder = _resolveResultEncoder(callbackHandler);
       final callbackMeta = _withResultEncoderMeta({
@@ -1069,15 +1202,15 @@ class Worker {
       final enqueueOptions = _decodeTaskEnqueueOptions(data['enqueueOptions']);
       final notBefore = _parseDateTime(data['notBefore']);
 
-      final mergedHeaders = Map<String, String>.from(envelope.headers);
-      mergedHeaders.addAll(headers);
+      final mergedHeaders = Map<String, String>.from(envelope.headers)
+      ..addAll(headers);
 
       final mergedMeta = Map<String, Object?>.from(envelope.meta)
         ..remove('stem.link')
-        ..remove('stem.linkError');
-      mergedMeta.addAll(meta);
+        ..remove('stem.linkError')
+      ..addAll(meta);
 
-      if ((enqueueOptions?.addToParent ?? true)) {
+      if (enqueueOptions?.addToParent ?? true) {
         mergedMeta['stem.parentTaskId'] = envelope.id;
         mergedMeta['stem.parentAttempt'] = envelope.attempt;
         final root = envelope.meta['stem.rootTaskId'];
@@ -1087,7 +1220,15 @@ class Worker {
       }
 
       try {
-        await _enqueuer.enqueue(
+        final enqueuer = _enqueuer;
+        if (enqueuer == null) {
+          stemLogger.warning(
+            'Skipping linked task enqueue; no enqueuer configured.',
+            Context(_logContext({'task': name})),
+          );
+          continue;
+        }
+        await enqueuer.enqueue(
           name,
           args: args,
           headers: mergedHeaders,
@@ -1149,7 +1290,7 @@ class Worker {
     StackTrace stack,
     String? groupId,
   ) async {
-    await broker.deadLetter(
+    await taskSource.deadLetter(
       delivery,
       reason: 'signature-invalid',
       meta: {
@@ -1257,8 +1398,8 @@ class Worker {
         retryPolicy,
       );
       final nextRunAt = DateTime.now().add(delay);
-      await broker.nack(delivery, requeue: false);
-      await broker.publish(
+      await taskSource.nack(delivery, requeue: false);
+      await taskSource.publish(
         envelope.copyWith(
           attempt: envelope.attempt + 1,
           maxRetries: maxRetries,
@@ -1323,7 +1464,7 @@ class Worker {
         attempt: envelope.attempt,
         meta: failureMeta,
       );
-      await broker.deadLetter(
+      await taskSource.deadLetter(
         delivery,
         reason: 'max-retries-exhausted',
         meta: {'error': error.toString()},
@@ -1398,15 +1539,14 @@ class Worker {
           'retryExhausted': true,
         },
       );
-      await broker.nack(delivery, requeue: false);
+      await taskSource.nack(delivery, requeue: false);
       await backend.set(
         envelope.id,
         TaskState.failed,
         attempt: envelope.attempt,
-        error: TaskError(
+        error: const TaskError(
           type: 'RetryExhausted',
           message: 'retry requested but max retries exceeded',
-          retryable: false,
         ),
         meta: failureMeta,
       );
@@ -1456,8 +1596,8 @@ class Worker {
       updatedMeta['stem.retryPolicy'] = request.retryPolicy!.toJson();
     }
 
-    await broker.nack(delivery, requeue: false);
-    await broker.publish(
+    await taskSource.nack(delivery, requeue: false);
+    await taskSource.publish(
       envelope.copyWith(
         attempt: envelope.attempt + 1,
         maxRetries: maxRetries,
@@ -1475,7 +1615,7 @@ class Worker {
       envelope.id,
       TaskState.retried,
       attempt: envelope.attempt,
-      error: TaskError(
+      error: const TaskError(
         type: 'RetryRequested',
         message: 'explicit retry requested',
         retryable: true,
@@ -1605,7 +1745,7 @@ class Worker {
   Future<Map<String, int>> _collectQueueDepths() async {
     final result = <String, int>{};
     for (final queueName in _effectiveQueues) {
-      final depth = await broker.pendingCount(queueName);
+      final depth = await taskSource.pendingCount(queueName);
       if (depth != null) {
         result[queueName] = depth;
       }
@@ -1659,7 +1799,7 @@ class Worker {
       _heartbeatTimers.remove(active.envelope.id)?.cancel();
       _releaseDelivery(active.envelope);
       try {
-        await broker.nack(active.delivery);
+        await taskSource.nack(active.delivery);
       } on Object catch (error, stack) {
         stemLogger.warning(
           'Failed to requeue delivery during shutdown: $error',
@@ -2368,7 +2508,7 @@ class Worker {
     String? groupId,
   }) async {
     final revokeEntry = _revocationFor(envelope.id);
-    await broker.ack(delivery);
+    await taskSource.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -2446,7 +2586,7 @@ class Worker {
     Envelope envelope,
     TaskPayloadEncoder resultEncoder,
   ) async {
-    await broker.ack(delivery);
+    await taskSource.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -2461,10 +2601,9 @@ class Worker {
       envelope.id,
       TaskState.cancelled,
       attempt: envelope.attempt,
-      error: TaskError(
+      error: const TaskError(
         type: 'TaskExpired',
         message: 'Task expired before execution',
-        retryable: false,
       ),
       meta: meta,
     );
@@ -2611,7 +2750,7 @@ class Worker {
       if (_subscriptions.containsKey(queueName)) {
         continue;
       }
-      final stream = broker.consume(
+      final stream = taskSource.consume(
         RoutingSubscription.singleQueue(queueName),
         consumerName: '$_workerIdentifier-control',
       );
@@ -2636,19 +2775,19 @@ class Worker {
     try {
       final envelope = delivery.envelope;
       if (envelope.name != ControlEnvelopeTypes.command) {
-        await broker.ack(delivery);
+        await taskSource.ack(delivery);
         return;
       }
       final command = controlCommandFromEnvelope(envelope);
       await _handleControlCommand(command);
-      await broker.ack(delivery);
+      await taskSource.ack(delivery);
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to process control command: $error',
         Context(_logContext({'stack': stack.toString()})),
       );
       try {
-        await broker.ack(delivery);
+        await taskSource.ack(delivery);
       } on Object {
         // Ignore ack failures for control channel cleanup.
       }
@@ -2755,7 +2894,7 @@ class Worker {
   Future<void> _sendControlReply(ControlReplyMessage reply) async {
     final queueName = ControlQueueNames.reply(namespace, reply.requestId);
     try {
-      await broker.publish(reply.toEnvelope(queue: queueName));
+      await taskSource.publish(reply.toEnvelope(queue: queueName));
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to publish control reply: $error',
@@ -2904,7 +3043,14 @@ class Worker {
                   signal.request.enqueueOptions!.cast<String, Object?>(),
                 )
               : null;
-          final taskId = await _enqueuer.enqueue(
+          final enqueuer = _enqueuer;
+          if (enqueuer == null) {
+            signal.replyPort.send(
+              const TaskEnqueueResponse(error: 'No enqueuer configured'),
+            );
+            return;
+          }
+          final taskId = await enqueuer.enqueue(
             signal.request.name,
             args: signal.request.args,
             headers: signal.request.headers,
@@ -2913,7 +3059,7 @@ class Worker {
             enqueueOptions: enqueueOptions,
           );
           signal.replyPort.send(TaskEnqueueResponse(taskId: taskId));
-        } catch (error) {
+        } on Exception catch (error) {
           signal.replyPort.send(
             TaskEnqueueResponse(error: error.toString()),
           );

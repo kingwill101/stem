@@ -123,19 +123,18 @@ void main() {
         enqueuer: enqueuer,
       );
 
-      final retryPolicy = TaskRetryPolicy(
+      const retryPolicy = TaskRetryPolicy(
         backoff: true,
-        backoffMax: const Duration(seconds: 30),
-        jitter: true,
-        defaultDelay: const Duration(seconds: 3),
+        backoffMax: Duration(seconds: 30),
+        defaultDelay: Duration(seconds: 3),
       );
 
       await context.enqueue(
         'tasks.child',
         enqueueOptions: TaskEnqueueOptions(
           countdown: const Duration(seconds: 5),
-          eta: DateTime.utc(2026, 01, 03, 12, 0, 0),
-          expires: DateTime.utc(2026, 01, 03, 12, 5, 0),
+          eta: DateTime.utc(2026, 01, 03, 12),
+          expires: DateTime.utc(2026, 01, 03, 12, 5),
           queue: 'critical',
           exchange: 'billing',
           routingKey: 'invoices',
@@ -158,8 +157,8 @@ void main() {
       final record = enqueuer.last!;
       final options = record.enqueueOptions!;
       expect(options.countdown, equals(const Duration(seconds: 5)));
-      expect(options.eta, equals(DateTime.utc(2026, 01, 03, 12, 0, 0)));
-      expect(options.expires, equals(DateTime.utc(2026, 01, 03, 12, 5, 0)));
+      expect(options.eta, equals(DateTime.utc(2026, 01, 03, 12)));
+      expect(options.expires, equals(DateTime.utc(2026, 01, 03, 12, 5)));
       expect(options.queue, equals('critical'));
       expect(options.exchange, equals('billing'));
       expect(options.routingKey, equals('invoices'));

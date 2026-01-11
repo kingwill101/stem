@@ -211,12 +211,12 @@ class TaskInvocationContext implements TaskEnqueuer {
       throw StateError('TaskInvocationContext has no enqueuer configured');
     }
 
-    final mergedHeaders = Map<String, String>.from(this.headers);
-    mergedHeaders.addAll(headers);
-    final mergedMeta = Map<String, Object?>.from(this.meta);
-    mergedMeta.addAll(meta);
+    final mergedHeaders = Map<String, String>.from(this.headers)
+      ..addAll(headers);
+    final mergedMeta = Map<String, Object?>.from(this.meta)
+      ..addAll(meta);
 
-    if ((enqueueOptions?.addToParent ?? true)) {
+    if (enqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
@@ -246,12 +246,12 @@ class TaskInvocationContext implements TaskEnqueuer {
       throw StateError('TaskInvocationContext has no enqueuer configured');
     }
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
-    final mergedHeaders = Map<String, String>.from(headers);
-    mergedHeaders.addAll(call.headers);
-    final mergedMeta = Map<String, Object?>.from(meta);
-    mergedMeta.addAll(call.meta);
+    final mergedHeaders = Map<String, String>.from(headers)
+    ..addAll(call.headers);
+    final mergedMeta = Map<String, Object?>.from(meta)
+    ..addAll(call.meta);
 
-    if ((resolvedEnqueueOptions?.addToParent ?? true)) {
+    if (resolvedEnqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);

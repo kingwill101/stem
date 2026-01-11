@@ -11,14 +11,13 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final policy = TaskRetryPolicy(
-        backoff: false,
+      const policy = TaskRetryPolicy(
         jitter: false,
-        defaultDelay: const Duration(milliseconds: 25),
+        defaultDelay: Duration(milliseconds: 25),
       );
       final task = _PolicyFlakyTask(
         name: 'tasks.policy',
-        options: TaskOptions(maxRetries: 1, retryPolicy: policy),
+        options: const TaskOptions(maxRetries: 1, retryPolicy: policy),
       );
       final registry = SimpleTaskRegistry()..register(task);
       final worker = Worker(
@@ -64,21 +63,22 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final handlerPolicy = TaskRetryPolicy(
-        backoff: false,
+      const handlerPolicy = TaskRetryPolicy(
         jitter: false,
-        defaultDelay: const Duration(milliseconds: 80),
+        defaultDelay: Duration(milliseconds: 80),
       );
-      final overridePolicy = TaskRetryPolicy(
-        backoff: false,
+      const overridePolicy = TaskRetryPolicy(
         jitter: false,
-        defaultDelay: const Duration(milliseconds: 15),
+        defaultDelay: Duration(milliseconds: 15),
       );
       final registry = SimpleTaskRegistry()
         ..register(
           _PolicyFlakyTask(
             name: 'tasks.override',
-            options: TaskOptions(maxRetries: 1, retryPolicy: handlerPolicy),
+            options: const TaskOptions(
+              maxRetries: 1,
+              retryPolicy: handlerPolicy,
+            ),
           ),
         );
 
@@ -101,7 +101,7 @@ void main() {
       final stem = Stem(broker: broker, registry: registry, backend: backend);
       await stem.enqueue(
         'tasks.override',
-        options: TaskOptions(maxRetries: 1, retryPolicy: overridePolicy),
+        options: const TaskOptions(maxRetries: 1, retryPolicy: overridePolicy),
       );
 
       await _waitFor(
@@ -124,18 +124,17 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final policy = TaskRetryPolicy(
-        backoff: false,
+      const policy = TaskRetryPolicy(
         jitter: false,
-        defaultDelay: const Duration(milliseconds: 15),
-        autoRetryFor: const [StateError],
-        dontAutoRetryFor: const [ArgumentError],
+        defaultDelay: Duration(milliseconds: 15),
+        autoRetryFor: [StateError],
+        dontAutoRetryFor: [ArgumentError],
       );
       final registry = SimpleTaskRegistry()
         ..register(
           _AlwaysErrorTask(
             name: 'tasks.filtered',
-            options: TaskOptions(maxRetries: 1, retryPolicy: policy),
+            options: const TaskOptions(maxRetries: 1, retryPolicy: policy),
           ),
         );
 

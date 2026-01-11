@@ -77,6 +77,7 @@ class Stem implements TaskEnqueuer {
 
   /// Enqueue a typed task using a [TaskCall] wrapper produced by a
   /// [TaskDefinition].
+  @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
@@ -93,6 +94,7 @@ class Stem implements TaskEnqueuer {
   }
 
   /// Enqueue a task by name.
+  @override
   Future<String> enqueue(
     String name, {
     Map<String, Object?> args = const {},
@@ -418,19 +420,19 @@ class Stem implements TaskEnqueuer {
           enqueueOptions.softTimeLimit!.inMilliseconds;
     }
     if (enqueueOptions.serializer != null) {
-      merged['stem.serializer'] = enqueueOptions.serializer!;
+      merged['stem.serializer'] = enqueueOptions.serializer;
     }
     if (enqueueOptions.compression != null) {
-      merged['stem.compression'] = enqueueOptions.compression!;
+      merged['stem.compression'] = enqueueOptions.compression;
     }
     if (enqueueOptions.ignoreResult != null) {
       merged['stem.ignoreResult'] = enqueueOptions.ignoreResult;
     }
     if (enqueueOptions.shadow != null) {
-      merged['stem.shadow'] = enqueueOptions.shadow!;
+      merged['stem.shadow'] = enqueueOptions.shadow;
     }
     if (enqueueOptions.replyTo != null) {
-      merged['stem.replyTo'] = enqueueOptions.replyTo!;
+      merged['stem.replyTo'] = enqueueOptions.replyTo;
     }
     if (enqueueOptions.retryPolicy != null) {
       merged['stem.retryPolicy'] = enqueueOptions.retryPolicy!.toJson();

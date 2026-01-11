@@ -25,7 +25,8 @@ void main() {
           FunctionTaskHandler<void>.inline(
             name: _childDefinition.name,
             entrypoint: (context, args) async {
-              childCompleted.complete(args['value'] as String);
+              childCompleted.complete(args['value']! as String);
+              return null;
             },
           ),
         )
@@ -72,7 +73,9 @@ void main() {
         ..register(
           FunctionTaskHandler<void>.inline(
             name: 'tasks.primary.success',
-            entrypoint: (context, args) async {},
+            entrypoint: (context, args) async {
+              return null;
+            },
           ),
         )
         ..register(
@@ -80,6 +83,7 @@ void main() {
             name: linkDefinition.name,
             entrypoint: (context, args) async {
               linked.complete();
+              return null;
             },
           ),
         );
@@ -129,7 +133,6 @@ void main() {
             entrypoint: (context, args) async {
               throw StateError('fail');
             },
-            options: const TaskOptions(maxRetries: 0),
           ),
         )
         ..register(
@@ -137,6 +140,7 @@ void main() {
             name: linkDefinition.name,
             entrypoint: (context, args) async {
               linked.complete();
+              return null;
             },
           ),
         );
@@ -226,6 +230,7 @@ void main() {
             name: 'tasks.expiring',
             entrypoint: (context, args) async {
               executed = true;
+              return null;
             },
           ),
         );
