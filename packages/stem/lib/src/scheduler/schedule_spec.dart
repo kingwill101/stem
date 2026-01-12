@@ -423,7 +423,17 @@ class ScheduleTimezoneResolver {
         'Configure ScheduleCalculator with a location provider.',
       );
     }
-    return resolver(id);
+    try {
+      return resolver(id);
+    } on Exception {
+      if (id == 'UTC') {
+        return resolver('Etc/UTC');
+      }
+      if (id == 'Etc/UTC') {
+        return resolver('UTC');
+      }
+      rethrow;
+    }
   }
 }
 
