@@ -112,7 +112,7 @@ Future<void> _acquireLock(RandomAccessFile handle) async {
   const maxAttempts = 200;
   for (var attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      await handle.lock(FileLock.exclusive);
+      await handle.lock();
       return;
     } on FileSystemException catch (error) {
       final code = error.osError?.errorCode;

@@ -73,6 +73,7 @@ class SqliteBroker implements Broker {
   bool get supportsPriority => true;
 
   /// Closes the broker and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;

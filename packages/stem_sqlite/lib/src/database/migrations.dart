@@ -10,21 +10,21 @@ import 'package:stem_sqlite/src/database/migrations/m_20251231161000_add_namespa
 final List<MigrationEntry> _entries = [
   MigrationEntry(
     id: MigrationId(
-      DateTime(2025, 12, 22, 7, 8, 16),
+      DateTime.utc(2025, 12, 22, 7, 8, 16),
       'm_20251222070816_create_stem_tables',
     ),
     migration: const CreateStemTables(),
   ),
   MigrationEntry(
     id: MigrationId(
-      DateTime(2025, 12, 31, 12, 0, 0),
+      DateTime.utc(2025, 12, 31, 12),
       'm_20251231120000_create_workflow_tables',
     ),
     migration: const CreateWorkflowTables(),
   ),
   MigrationEntry(
     id: MigrationId(
-      DateTime(2025, 12, 31, 16, 10, 0),
+      DateTime.utc(2025, 12, 31, 16, 10),
       'm_20251231161000_add_namespace_scoping',
     ),
     migration: const AddNamespaceScoping(),

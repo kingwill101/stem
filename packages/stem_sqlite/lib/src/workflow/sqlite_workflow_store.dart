@@ -8,7 +8,6 @@ import 'package:stem_sqlite/src/models/models.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore implements WorkflowStore {
-
   SqliteWorkflowStore._(
     this._connections,
     this._clock, {
@@ -34,6 +33,7 @@ class SqliteWorkflowStore implements WorkflowStore {
   final SqliteConnections _connections;
   final QueryContext _context;
   final WorkflowClock _clock;
+  /// Namespace used to scope workflow data.
   final String namespace;
   int _idCounter = 0;
 
