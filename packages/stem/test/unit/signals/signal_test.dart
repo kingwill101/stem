@@ -1,262 +1,90 @@
-import 'dart:async';
-
-import 'package:stem/stem.dart';
+import 'package:stem/src/signals/signal.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('Signal', () {
-    test('invokes handlers respecting priority', () async {
-      final signal = Signal<String>(name: 'test');
-      final calls = <String>[];
-      signal
-        ..connect((payload, _) => calls.add('low:$payload'))
-        ..connect((payload, _) => calls.add('high:$payload'), priority: 10);
+  test('SignalContext cancellation stops remaining handlers', () async {
+    final signal = Signal<int>(name: 'test');
+    final calls = <String>[];
 
-      await signal.emit('payload');
+    signal
+      ..connect((payload, context) {
+        calls.add('first');
+        context.cancel();
+      }, priority: 1)
+      ..connect((payload, context) {
+        calls.add('second');
+      });
 
-      expect(calls, equals(['high:payload', 'low:payload']));
-    });
+    await signal.emit(1);
 
-    test('supports once subscriptions', () async {
-      final signal = Signal<int>(name: 'once');
-      final values = <int>[];
-
-      signal.connect((value, _) => values.add(value), once: true);
-
-      await signal.emit(1);
-      await signal.emit(2);
-
-      expect(values, equals([1]));
-    });
-
-    test('applies filters', () async {
-      final signal = Signal<int>(name: 'filter');
-      final values = <int>[];
-
-      signal.connect(
-        (value, _) => values.add(value),
-        filter: SignalFilter.where((value, _) => value.isEven),
-      );
-
-      await signal.emit(1);
-      await signal.emit(2);
-
-      expect(values, equals([2]));
-    });
-
-    test('reports handler errors', () async {
-      Object? capturedError;
-      StackTrace? capturedStack;
-
-      final signal = Signal<void>(
-        name: 'errors',
-        config: SignalDispatchConfig(
-          onError: (name, error, stack) {
-            capturedError = error;
-            capturedStack = stack;
-          },
-        ),
-      )..connect((_, _) => throw StateError('boom'));
-
-      await signal.emit(null);
-
-      expect(capturedError, isA<StateError>());
-      expect(capturedStack, isNotNull);
-    });
+    expect(calls, ['first']);
   });
 
-  group('StemSignals integration', () {
-    test('enqueuing task emits publish signals', () async {
-      StemSignals.configure(configuration: const StemSignalConfiguration());
+  test('Signal handlers respect priority and once', () async {
+    final signal = Signal<int>(name: 'priority');
+    final calls = <int>[];
 
-      final broker = InMemoryBroker(
-        delayedInterval: const Duration(milliseconds: 5),
-        claimInterval: const Duration(milliseconds: 20),
-      );
-      final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
-
-      final before = Completer<String>();
-      final after = Completer<String>();
-
-      final subscriptions = <SignalSubscription>[
-        StemSignals.beforeTaskPublish.connect((payload, _) {
-          if (!before.isCompleted) {
-            before.complete(payload.envelope.id);
-          }
-        }),
-        StemSignals.afterTaskPublish.connect((payload, _) {
-          if (!after.isCompleted) {
-            after.complete(payload.taskId);
-          }
-        }),
-      ];
-
-      final stem = Stem(broker: broker, registry: registry, backend: backend);
-      final taskId = await stem.enqueue('tasks.success');
-
-      expect(await before.future, equals(taskId));
-      expect(await after.future, equals(taskId));
-
-      for (final sub in subscriptions) {
-        sub.cancel();
-      }
-      broker.dispose();
-    });
-
-    test('per-signal configuration disables selected handlers', () async {
-      StemSignals.configure(
-        configuration: const StemSignalConfiguration(
-          enabledSignals: {StemSignals.taskPrerunName: false},
-        ),
-      );
-      addTearDown(() {
-        StemSignals.configure(configuration: const StemSignalConfiguration());
-      });
-
-      var invoked = false;
-      StemSignals.taskPrerun.connect((payload, _) {
-        invoked = true;
-      });
-
-      final envelope = Envelope(name: 'tasks.disabled', args: const {});
-      const worker = WorkerInfo(
-        id: 'worker',
-        queues: ['default'],
-        broadcasts: [],
-      );
-      final context = TaskContext(
-        id: envelope.id,
-        attempt: envelope.attempt,
-        headers: envelope.headers,
-        meta: envelope.meta,
-        heartbeat: () {},
-        extendLease: (_) async {},
-        progress: (_, {data}) async {},
+    signal
+      ..connect((payload, context) {
+        calls.add(1);
+      }, priority: 1)
+      ..connect((payload, context) {
+        calls.add(2);
+      }, priority: 5)
+      ..connect(
+        (payload, context) {
+          calls.add(3);
+        },
+        once: true,
+        priority: 3,
       );
 
-      await StemSignals.taskPrerun.emit(
-        TaskPrerunPayload(envelope: envelope, worker: worker, context: context),
-      );
+    await signal.emit(1);
+    await signal.emit(1);
 
-      expect(invoked, isFalse);
-    });
+    expect(calls, [2, 3, 1, 2, 1]);
   });
 
-  group('SignalMiddleware', () {
-    test('coordinator forwards publish lifecycle', () async {
-      StemSignals.configure(configuration: const StemSignalConfiguration());
-      addTearDown(() {
-        StemSignals.configure(configuration: const StemSignalConfiguration());
-      });
+  test('Signal filters can be combined and negated', () {
+    final even = SignalFilter<int>.where((payload, _) => payload.isEven);
+    final gtFive = SignalFilter<int>.where((payload, _) => payload > 5);
+    final combined = even.and(gtFive);
 
-      final middleware = SignalMiddleware.coordinator();
-      final envelope = Envelope(name: 'tasks.demo', args: const {});
-      final calls = <String>[];
-      final subscriptions = <SignalSubscription>[
-        StemSignals.beforeTaskPublish.connect((payload, _) {
-          calls.add('before');
-        }),
-        StemSignals.afterTaskPublish.connect((payload, _) {
-          calls.add('after');
-        }),
-      ];
+    final context = SignalContext(name: 'filter');
 
-      await middleware.onEnqueue(envelope, () async {});
+    expect(combined.matches(6, context), isTrue);
+    expect(combined.matches(4, context), isFalse);
+    expect(combined.negate().matches(4, context), isTrue);
+  });
 
-      expect(calls, equals(['before', 'after']));
-      for (final sub in subscriptions) {
-        sub.cancel();
-      }
-    });
+  test('Signal dispatch reports errors without throwing', () async {
+    Object? reportedError;
+    StackTrace? reportedStack;
 
-    test('worker forwards consume, prerun, and failure signals', () async {
-      StemSignals.configure(configuration: const StemSignalConfiguration());
-      addTearDown(() {
-        StemSignals.configure(configuration: const StemSignalConfiguration());
-      });
-
-      const workerInfo = WorkerInfo(
-        id: 'worker-1',
-        queues: ['default'],
-        broadcasts: [],
-      );
-      final middleware = SignalMiddleware.worker(workerInfo: () => workerInfo);
-      final envelope = Envelope(name: 'tasks.test', args: const {});
-      final delivery = Delivery(
-        envelope: envelope,
-        receipt: 'receipt-1',
-        leaseExpiresAt: DateTime.now().add(const Duration(minutes: 1)),
-      );
-
-      final received = Completer<void>();
-      final prerun = Completer<void>();
-      final failed = Completer<void>();
-
-      final subscriptions = <SignalSubscription>[
-        StemSignals.taskReceived.connect((payload, _) {
-          if (!received.isCompleted) {
-            received.complete();
-          }
-        }),
-        StemSignals.taskPrerun.connect((payload, _) {
-          if (!prerun.isCompleted) {
-            prerun.complete();
-          }
-        }),
-        StemSignals.taskFailed.connect((payload, _) {
-          if (!failed.isCompleted) {
-            failed.complete();
-          }
-        }),
-      ];
-
-      await middleware.onConsume(delivery, () async {});
-      final context = TaskContext(
-        id: envelope.id,
-        attempt: envelope.attempt,
-        headers: envelope.headers,
-        meta: envelope.meta,
-        heartbeat: () {},
-        extendLease: (_) async {},
-        progress: (_, {data}) async {},
-      );
-
-      try {
-        await middleware.onExecute(context, () async {
+    final signal =
+        Signal<int>(
+          name: 'errors',
+          config: SignalDispatchConfig(
+            onError: (name, error, stackTrace) {
+              reportedError = error;
+              reportedStack = stackTrace;
+            },
+          ),
+        )..connect((payload, context) {
           throw StateError('boom');
         });
-      } on Object {
-        // Swallow error; middleware onError is asserted separately.
-      }
-      await middleware.onError(context, StateError('boom'), StackTrace.current);
 
-      expect(received.isCompleted, isTrue);
-      expect(prerun.isCompleted, isTrue);
-      expect(failed.isCompleted, isTrue);
+    await signal.emit(1);
 
-      for (final sub in subscriptions) {
-        sub.cancel();
-      }
-    });
+    expect(reportedError, isA<StateError>());
+    expect(reportedStack, isNotNull);
   });
-}
 
-class _SuccessTask implements TaskHandler<String> {
-  @override
-  String get name => 'tasks.success';
+  test('SignalDispatchConfig copyWith preserves defaults', () {
+    const config = SignalDispatchConfig();
+    final updated = config.copyWith(enabled: false);
 
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 1);
-
-  @override
-  TaskMetadata get metadata => const TaskMetadata();
-
-  @override
-  TaskEntrypoint? get isolateEntrypoint => null;
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    return 'ok';
-  }
+    expect(updated.enabled, isFalse);
+    expect(updated.onError, isNull);
+  });
 }

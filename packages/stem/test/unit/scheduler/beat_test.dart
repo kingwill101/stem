@@ -5,6 +5,21 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
+  Future<void> waitForEvents(
+    List<WorkerEvent> events, {
+    required int completed,
+    Duration timeout = const Duration(seconds: 1),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      final done = events
+          .where((event) => event.type == WorkerEventType.completed)
+          .length;
+      if (done >= completed) return;
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+  }
+
   group('Beat', () {
     test('fires schedule once per interval', () async {
       final broker = InMemoryBroker();
@@ -40,7 +55,7 @@ void main() {
       worker.events.listen(events.add);
       await worker.start();
 
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await waitForEvents(events, completed: 2);
       expect(
         events.where((e) => e.type == WorkerEventType.completed).length,
         greaterThanOrEqualTo(2),
@@ -93,7 +108,7 @@ void main() {
       worker.events.listen(events.add);
       await worker.start();
 
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      await waitForEvents(events, completed: 2);
 
       expect(
         events.where((e) => e.type == WorkerEventType.completed).length,
