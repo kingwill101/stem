@@ -159,6 +159,7 @@ class RedisStreamsBroker implements Broker {
   }
 
   /// Closes the broker and releases Redis resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;

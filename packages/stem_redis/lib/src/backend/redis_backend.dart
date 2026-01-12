@@ -100,6 +100,7 @@ class RedisResultBackend implements ResultBackend {
   }
 
   /// Closes the backend and releases any Redis resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
