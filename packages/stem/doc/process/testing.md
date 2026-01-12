@@ -40,16 +40,10 @@ dart test --exclude-tags soak
 ### Property-based testing
 
 Stem uses `property_testing` to exercise core invariants under randomized
-inputs. These tests live under `test/property_testing/` and run as part of the
-normal `dart test` suite (they are not excluded by default). You can also run
-just the property tests directly when iterating on them:
-
-```
-dart test test/property_testing
-```
-
-The helpers in `test/property_testing/property_test_helpers.dart` define the
-default run counts and chaos configuration used across the suite.
+inputs. These cases are embedded alongside the related unit tests, so they run
+with the normal `dart test` suite. The helpers in
+`test/support/property_test_helpers.dart` define the default run counts and
+chaos configuration used across the suite.
 
 ### Redis-backed chaos runs
 
