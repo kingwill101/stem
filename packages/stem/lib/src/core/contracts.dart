@@ -145,6 +145,9 @@ abstract class Broker {
   /// to the timestamp must be removed. When [limit] is set, at most that many
   /// entries are purged. Returns the number of entries removed.
   Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit});
+
+  /// Releases any resources held by the broker.
+  Future<void> close() async {}
 }
 
 /// Logical task status across enqueue, running, success, failure states.
@@ -445,6 +448,9 @@ abstract class ResultBackend {
     String? callbackTaskId,
     DateTime? dispatchedAt,
   });
+
+  /// Releases any resources held by the backend.
+  Future<void> close() async {}
 }
 
 /// Schedule entry persisted by a Beat-like scheduler.

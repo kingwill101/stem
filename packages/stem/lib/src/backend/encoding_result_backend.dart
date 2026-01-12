@@ -109,6 +109,9 @@ class EncodingResultBackend implements ResultBackend {
     dispatchedAt: dispatchedAt,
   );
 
+  @override
+  Future<void> close() => _inner.close();
+
   TaskStatus _encodeStatus(TaskStatus status) {
     final encoderId = status.meta[stemResultEncoderMetaKey] as String?;
     final encoder = registry.resolveResult(encoderId);

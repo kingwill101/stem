@@ -248,6 +248,9 @@ class InMemoryResultBackend implements ResultBackend {
     _heartbeats.clear();
   }
 
+  @override
+  Future<void> close() => dispose();
+
   void _pruneExpiredHeartbeats() {
     final now = DateTime.now();
     _heartbeats.entries

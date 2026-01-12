@@ -70,6 +70,9 @@ class StemApp {
     _started = false;
   }
 
+  /// Alias for [shutdown].
+  Future<void> close() => shutdown();
+
   /// Creates a new Stem application with the provided configuration.
   static Future<StemApp> create({
     Iterable<TaskHandler<Object?>> tasks = const [],

@@ -45,11 +45,7 @@ class StemBrokerFactory extends StemResourceFactory<Broker> {
   factory StemBrokerFactory.inMemory() {
     return StemBrokerFactory(
       create: () async => InMemoryBroker(),
-      dispose: (broker) async {
-        if (broker is InMemoryBroker) {
-          broker.dispose();
-        }
-      },
+      dispose: (broker) => broker.close(),
     );
   }
 }
@@ -63,11 +59,7 @@ class StemBackendFactory extends StemResourceFactory<ResultBackend> {
   factory StemBackendFactory.inMemory() {
     return StemBackendFactory(
       create: () async => InMemoryResultBackend(),
-      dispose: (backend) async {
-        if (backend is InMemoryResultBackend) {
-          await backend.dispose();
-        }
-      },
+      dispose: (backend) => backend.close(),
     );
   }
 }

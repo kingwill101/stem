@@ -232,6 +232,9 @@ class _RecordingBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  Future<void> close() async {}
 }
 
 class _FlakyPublishBroker extends _RecordingBroker {

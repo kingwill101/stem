@@ -75,6 +75,15 @@ class Stem implements TaskEnqueuer {
   );
   static final math.Random _random = math.Random();
 
+  /// Releases broker/backend resources used by this producer.
+  Future<void> close() async {
+    await broker.close();
+    final resolved = backend;
+    if (resolved != null) {
+      await resolved.close();
+    }
+  }
+
   /// Enqueue a typed task using a [TaskCall] wrapper produced by a
   /// [TaskDefinition].
   @override

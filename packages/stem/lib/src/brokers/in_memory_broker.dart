@@ -63,6 +63,11 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  Future<void> close() async {
+    dispose();
+  }
+
+  @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     final resolvedRoute =
         routing ??

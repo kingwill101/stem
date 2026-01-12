@@ -71,6 +71,29 @@ class RoutingInfo {
     );
   }
 
+  /// Parses routing metadata from JSON.
+  factory RoutingInfo.fromJson(Map<String, Object?> json) {
+    final type = json['type']?.toString();
+    if (type == RoutingTargetType.broadcast.name) {
+      final channel = json['broadcastChannel']?.toString() ??
+          json['channel']?.toString() ??
+          '';
+      return RoutingInfo.broadcast(
+        channel: channel,
+        delivery: json['delivery']?.toString() ?? 'at-least-once',
+        meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+      );
+    }
+    final queue = json['queue']?.toString() ?? '';
+    return RoutingInfo.queue(
+      queue: queue,
+      exchange: json['exchange']?.toString(),
+      routingKey: json['routingKey']?.toString(),
+      priority: (json['priority'] as num?)?.toInt(),
+      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+    );
+  }
+
   /// The routing target type (queue or broadcast).
   final RoutingTargetType type;
 
@@ -97,6 +120,18 @@ class RoutingInfo {
 
   /// Whether this routing info targets a broadcast channel.
   bool get isBroadcast => type == RoutingTargetType.broadcast;
+
+  /// Serializes this routing descriptor to JSON.
+  Map<String, Object?> toJson() => {
+        'type': type.name,
+        'queue': queue,
+        'exchange': exchange,
+        'routingKey': routingKey,
+        'priority': priority,
+        'broadcastChannel': broadcastChannel,
+        'delivery': delivery,
+        'meta': meta,
+      };
 }
 
 /// Unique identifier generator used for task envelopes by default.
