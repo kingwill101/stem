@@ -69,5 +69,5 @@ Future<void> main() async {
   final taskId = await app.stem.enqueue('demo.flaky');
   await app.stem.waitForTask<void>(taskId, timeout: const Duration(seconds: 5));
 
-  await app.shutdown();
+  await app.close();
 }

@@ -30,8 +30,8 @@ Future<void> connectInMemoryBackend() async {
     backend: backend,
   );
   await stem.enqueue('demo', args: {});
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 // #endregion persistence-backend-in-memory
 
@@ -100,7 +100,7 @@ Future<void> configureEncoders() async {
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [GzipPayloadEncoder()],
   );
-  await app.shutdown();
+  await app.close();
 }
 // #endregion persistence-encoders
 
@@ -141,8 +141,8 @@ Future<void> configureRevokeStore() async {
 
   await worker.shutdown();
   await revokeStore.close();
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 // #endregion persistence-revoke-store
 

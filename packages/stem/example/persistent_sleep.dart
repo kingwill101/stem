@@ -41,5 +41,5 @@ Future<void> main() async {
 
   final completed = await app.store.get(runId);
   print('Workflow completed with result: ${completed?.result}');
-  await app.shutdown();
+  await app.close();
 }

@@ -97,7 +97,7 @@ Future<void> main() async {
   final resizeStatus = await app.backend.get(resizeId);
   print('Resize status: ${resizeStatus?.state} (${resizeStatus?.attempt})');
 
-  await app.shutdown();
+  await app.close();
   // #endregion quickstart-inspect
 }
 // #endregion quickstart-main

@@ -47,7 +47,7 @@ Future<void> runInMemoryDemo() async {
   print('Task state: ${result?.status.state} value=${result?.value}');
   // #endregion first-steps-results
 
-  await app.shutdown();
+  await app.close();
 }
 // #endregion first-steps-run
 

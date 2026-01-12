@@ -62,6 +62,6 @@ Future<void> main() async {
     sub.cancel();
   }
 
-  await backend.dispose();
+  await backend.close();
   await broker.close();
 }

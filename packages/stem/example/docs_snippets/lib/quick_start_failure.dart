@@ -40,5 +40,5 @@ Future<void> main() async {
   );
   print('Task state: ${result?.status.state}');
 
-  await app.shutdown();
+  await app.close();
 }

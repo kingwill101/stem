@@ -32,5 +32,5 @@ Future<void> main() async {
   }
   print('Iterations executed: $iterations');
 
-  await app.shutdown();
+  await app.close();
 }

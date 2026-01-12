@@ -118,8 +118,8 @@ Future<void> main() async {
   await worker.start();
   await Future<void>.delayed(const Duration(milliseconds: 250));
   await worker.shutdown();
-  await _autoscaleBackend.dispose();
-  _autoscaleBroker.dispose();
-  await _lifecycleBackend.dispose();
-  _lifecycleBroker.dispose();
+  await _autoscaleBackend.close();
+  await _autoscaleBroker.close();
+  await _lifecycleBackend.close();
+  await _lifecycleBroker.close();
 }

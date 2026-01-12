@@ -105,6 +105,6 @@ Future<void> main() async {
 
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }

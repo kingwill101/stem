@@ -123,7 +123,7 @@ Future<void> configureWorkflowEncoders() async {
     additionalEncoders: const [GzipPayloadEncoder()],
   );
 
-  await app.shutdown();
+  await app.close();
 }
 // #endregion workflows-encoders
 
@@ -165,5 +165,5 @@ Future<void> main() async {
   );
   print('Workflow result: ${result?.status} value=${result?.value}');
 
-  await app.shutdown();
+  await app.close();
 }

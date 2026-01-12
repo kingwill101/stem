@@ -51,7 +51,7 @@ Future<void> main() async {
   print('Callback task id: ${chordResult.callbackTaskId}');
   print('Chord values: ${chordResult.values}');
 
-  await app.shutdown();
+  await app.close();
 }
 
 // #endregion canvas-chord

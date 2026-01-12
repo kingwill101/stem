@@ -59,8 +59,8 @@ Future<void> main() async {
   print('Chain completed with state: ${status?.state}');
 
   await worker.shutdown();
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 
 Future<void> _waitFor(

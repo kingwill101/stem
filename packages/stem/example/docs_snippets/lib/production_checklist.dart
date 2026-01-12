@@ -55,8 +55,8 @@ Future<void> configureSigning() async {
 
   // #region production-signing-shutdown
   await worker.shutdown();
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
   // #endregion production-signing-shutdown
 }
 
