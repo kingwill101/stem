@@ -104,6 +104,7 @@ class PostgresBroker implements Broker {
   bool _closed = false;
 
   /// Closes the broker and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;

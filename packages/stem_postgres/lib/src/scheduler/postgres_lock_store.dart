@@ -8,7 +8,6 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
-
   /// Creates a lock store using an existing [DataSource].
   ///
   /// The caller remains responsible for disposing the [DataSource].
@@ -25,8 +24,9 @@ class PostgresLockStore implements LockStore {
   /// Creates a lock store backed by PostgreSQL.
   PostgresLockStore._(this._connections, {required this.namespace});
 
-  final PostgresConnections _connections;
+  /// Namespace used to scope lock records.
   final String namespace;
+  final PostgresConnections _connections;
   final Random _random = Random();
 
   /// Connects to a PostgreSQL database and initializes the locks table.

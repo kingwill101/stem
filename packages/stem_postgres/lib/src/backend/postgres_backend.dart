@@ -129,6 +129,7 @@ class PostgresResultBackend implements ResultBackend {
   }
 
   /// Closes the backend and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
