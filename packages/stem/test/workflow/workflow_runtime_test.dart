@@ -9,6 +9,7 @@ void main() {
   late InMemoryWorkflowStore store;
   late WorkflowRuntime runtime;
   late FakeWorkflowClock clock;
+  late _RecordingWorkflowIntrospectionSink introspection;
 
   setUp(() {
     broker = InMemoryBroker();
@@ -17,6 +18,7 @@ void main() {
     stem = Stem(broker: broker, registry: registry, backend: backend);
     clock = FakeWorkflowClock(DateTime.utc(2024));
     store = InMemoryWorkflowStore(clock: clock);
+    introspection = _RecordingWorkflowIntrospectionSink();
     runtime = WorkflowRuntime(
       stem: stem,
       store: store,
@@ -24,6 +26,7 @@ void main() {
       clock: clock,
       pollInterval: const Duration(milliseconds: 25),
       leaseExtension: const Duration(seconds: 5),
+      introspectionSink: introspection,
     );
     registry.register(runtime.workflowRunnerHandler());
   });
@@ -609,6 +612,35 @@ void main() {
     expect(state?.result, 3);
   });
 
+  test('emits step events to the introspection sink', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'introspection.workflow',
+        build: (flow) {
+          flow
+            ..step('first', (context) async => 'one')
+            ..step('second', (context) async => 'two');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('introspection.workflow');
+    await runtime.executeRun(runId);
+
+    final events = introspection.events
+        .where((event) => event.workflow == 'introspection.workflow')
+        .toList();
+
+    expect(
+      events.any((event) => event.type == WorkflowStepEventType.started),
+      isTrue,
+    );
+    expect(
+      events.any((event) => event.type == WorkflowStepEventType.completed),
+      isTrue,
+    );
+  });
+
   test('records failures and propagates errors', () async {
     runtime.registerWorkflow(
       Flow(
@@ -706,4 +738,13 @@ void main() {
     expect(state?.status, WorkflowStatus.cancelled);
     expect(state?.cancellationData?['reason'], 'maxSuspendDuration');
   });
+}
+
+class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
+  final List<WorkflowStepEvent> events = [];
+
+  @override
+  Future<void> recordStepEvent(WorkflowStepEvent event) async {
+    events.add(event);
+  }
 }

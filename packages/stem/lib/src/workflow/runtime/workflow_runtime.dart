@@ -15,6 +15,7 @@ import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Task name used for workflow run execution tasks.
@@ -37,11 +38,16 @@ class WorkflowRuntime {
     Duration pollInterval = const Duration(milliseconds: 500),
     this.leaseExtension = const Duration(seconds: 30),
     this.queue = 'workflow',
+    WorkflowRegistry? registry,
+    WorkflowIntrospectionSink? introspectionSink,
   }) : _stem = stem,
        _store = store,
        _eventBus = eventBus,
        _clock = clock,
-       _pollInterval = pollInterval;
+       _pollInterval = pollInterval,
+       _registry = registry ?? InMemoryWorkflowRegistry(),
+       _introspection =
+           introspectionSink ?? const NoopWorkflowIntrospectionSink();
 
   final Stem _stem;
   final WorkflowStore _store;
@@ -50,7 +56,8 @@ class WorkflowRuntime {
 
   /// Duration used when extending worker leases for workflow runs.
   final Duration leaseExtension;
-  final WorkflowRegistry _registry = WorkflowRegistry();
+  final WorkflowRegistry _registry;
+  final WorkflowIntrospectionSink _introspection;
 
   /// Queue name used to enqueue workflow run tasks.
   final String queue;
@@ -279,8 +286,22 @@ class WorkflowRuntime {
           ? _versionedName(step.name, iteration)
           : step.name;
 
+      if (iteration > 0) {
+        await _recordStepEvent(
+          WorkflowStepEventType.retrying,
+          runState,
+          step.name,
+          iteration: iteration,
+        );
+      }
       await _store.markRunning(runId, stepName: step.name);
       await _extendLease(taskContext);
+      await _recordStepEvent(
+        WorkflowStepEventType.started,
+        runState,
+        step.name,
+        iteration: iteration,
+      );
       await _signals.workflowRunResumed(
         WorkflowRunPayload(
           runId: runId,
@@ -293,6 +314,14 @@ class WorkflowRuntime {
       final cached = await _store.readStep<Object?>(runId, checkpointName);
       if (cached != null) {
         previousResult = cached;
+        await _recordStepEvent(
+          WorkflowStepEventType.completed,
+          runState,
+          step.name,
+          iteration: iteration,
+          result: cached,
+          metadata: const {'replayed': true},
+        );
         cursor += 1;
         await _extendLease(taskContext);
         continue;
@@ -315,6 +344,13 @@ class WorkflowRuntime {
         result = await step.handler(context);
       } catch (error, stack) {
         await _store.markFailed(runId, error, stack);
+        await _recordStepEvent(
+          WorkflowStepEventType.failed,
+          runState,
+          step.name,
+          iteration: iteration,
+          error: error.toString(),
+        );
         await _signals.workflowRunFailed(
           WorkflowRunPayload(
             runId: runId,
@@ -412,6 +448,13 @@ class WorkflowRuntime {
 
       await _store.saveStep(runId, checkpointName, result);
       await _extendLease(taskContext);
+      await _recordStepEvent(
+        WorkflowStepEventType.completed,
+        runState,
+        step.name,
+        iteration: iteration,
+        result: result,
+      );
       if (step.autoVersion) {
         completedIterations[step.name] = iteration + 1;
       } else {
@@ -500,6 +543,34 @@ class WorkflowRuntime {
         ),
       );
       rethrow;
+    }
+  }
+
+  Future<void> _recordStepEvent(
+    WorkflowStepEventType type,
+    RunState runState,
+    String stepName, {
+    int? iteration,
+    Object? result,
+    String? error,
+    Map<String, Object?>? metadata,
+  }) async {
+    try {
+      await _introspection.recordStepEvent(
+        WorkflowStepEvent(
+          runId: runState.id,
+          workflow: runState.workflow,
+          stepId: stepName,
+          type: type,
+          timestamp: _clock.now(),
+          iteration: iteration,
+          result: result,
+          error: error,
+          metadata: metadata == null ? null : Map.unmodifiable(metadata),
+        ),
+      );
+    } catch (_) {
+      // Ignore introspection failures to avoid impacting workflow execution.
     }
   }
 
@@ -773,8 +844,22 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         ? runtime._versionedName(name, iteration)
         : name;
 
+    if (iteration > 0) {
+      await runtime._recordStepEvent(
+        WorkflowStepEventType.retrying,
+        runState,
+        name,
+        iteration: iteration,
+      );
+    }
     await runtime._store.markRunning(runId, stepName: name);
     await runtime._extendLease(taskContext);
+    await runtime._recordStepEvent(
+      WorkflowStepEventType.started,
+      runState,
+      name,
+      iteration: iteration,
+    );
     await runtime._signals.workflowRunResumed(
       WorkflowRunPayload(
         runId: runId,
@@ -790,6 +875,14 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     );
     if (cached != null) {
       _previousResult = cached;
+      await runtime._recordStepEvent(
+        WorkflowStepEventType.completed,
+        runState,
+        name,
+        iteration: iteration,
+        result: cached,
+        metadata: const {'replayed': true},
+      );
       if (autoVersion) {
         _completedIterations[name] = iteration + 1;
       } else {
@@ -808,8 +901,19 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       iteration: iteration,
       resumeData: resumeData,
     );
-
-    final result = await handler(stepContext);
+    T result;
+    try {
+      result = await handler(stepContext);
+    } catch (error, stack) {
+      await runtime._recordStepEvent(
+        WorkflowStepEventType.failed,
+        runState,
+        name,
+        iteration: iteration,
+        error: error.toString(),
+      );
+      Error.throwWithStackTrace(error, stack);
+    }
 
     final control = stepContext.takeControl();
     if (control != null) {
@@ -821,6 +925,13 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
 
     await runtime._store.saveStep(runId, checkpointName, result);
     await runtime._extendLease(taskContext);
+    await runtime._recordStepEvent(
+      WorkflowStepEventType.completed,
+      runState,
+      name,
+      iteration: iteration,
+      result: result,
+    );
     if (autoVersion) {
       _completedIterations[name] = iteration + 1;
     } else {

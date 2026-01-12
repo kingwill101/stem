@@ -10,6 +10,8 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
@@ -201,6 +203,9 @@ class StemWorkflowApp {
     _started = false;
   }
 
+  /// Alias for [shutdown].
+  Future<void> close() => shutdown();
+
   /// Creates a workflow app with custom backends and factories.
   ///
   /// Useful for wiring Redis/Postgres adapters or sharing an existing
@@ -226,6 +231,8 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
@@ -256,6 +263,8 @@ class StemWorkflowApp {
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       queue: workerConfig.queue,
+      registry: workflowRegistry,
+      introspectionSink: introspectionSink,
     );
 
     appInstance.register(runtime.workflowRunnerHandler());
@@ -295,6 +304,8 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
@@ -311,6 +322,8 @@ class StemWorkflowApp {
       workerConfig: workerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
+      workflowRegistry: workflowRegistry,
+      introspectionSink: introspectionSink,
       encoderRegistry: encoderRegistry,
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,

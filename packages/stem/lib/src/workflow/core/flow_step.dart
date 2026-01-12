@@ -5,6 +5,24 @@ import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
 
+/// Kinds of workflow steps exposed for introspection.
+enum WorkflowStepKind {
+  /// Step executes a task-like handler.
+  task,
+
+  /// Step represents a choice/branching decision.
+  choice,
+
+  /// Step represents parallel work.
+  parallel,
+
+  /// Step represents a wait/suspension.
+  wait,
+
+  /// Step has custom semantics not captured by the built-in kinds.
+  custom,
+}
+
 /// Node in a workflow [Flow].
 ///
 /// The [handler] may execute multiple times when a run resumes from a
@@ -19,10 +37,29 @@ class FlowStep {
     required this.name,
     required this.handler,
     this.autoVersion = false,
-  });
+    String? title,
+    WorkflowStepKind kind = WorkflowStepKind.task,
+    Iterable<String> taskNames = const [],
+    Map<String, Object?>? metadata,
+  }) : title = title ?? name,
+       kind = kind,
+       taskNames = List.unmodifiable(taskNames),
+       metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
   /// Step name used for checkpoints and scheduling.
   final String name;
+
+  /// Human-friendly step title exposed for introspection.
+  final String title;
+
+  /// Step kind classification.
+  final WorkflowStepKind kind;
+
+  /// Task names associated with this step (for UI introspection).
+  final List<String> taskNames;
+
+  /// Optional metadata associated with the step.
+  final Map<String, Object?>? metadata;
 
   /// Handler invoked when the step executes.
   final FutureOr<dynamic> Function(FlowContext context) handler;
