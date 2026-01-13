@@ -362,7 +362,6 @@ class _FlakyTask extends TaskHandler<String> {
         maxRetries: 3,
         retryPolicy: TaskRetryPolicy(
           defaultDelay: Duration(milliseconds: 10),
-          backoff: false,
           jitter: false,
         ),
       );

@@ -129,7 +129,7 @@ void main() {
         final spec = IntervalScheduleSpec(
           every: Duration(milliseconds: sample.everyMs),
         );
-        final now = DateTime.utc(2025, 1, 1, 12, 0, 0);
+        final now = DateTime.utc(2025, 1, 1, 12);
         final lastRunAt = now.subtract(
           Duration(milliseconds: sample.offsetMs),
         );

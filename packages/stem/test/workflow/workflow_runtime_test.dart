@@ -738,6 +738,53 @@ void main() {
     expect(state?.status, WorkflowStatus.cancelled);
     expect(state?.cancellationData?['reason'], 'maxSuspendDuration');
   });
+
+  test('enqueued tasks include workflow metadata', () async {
+    const taskName = 'tasks.meta';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            final enqueuer = context.enqueuer;
+            expect(enqueuer, isNotNull);
+            await enqueuer!.enqueue(
+              taskName,
+              meta: const {'custom': 'value'},
+            );
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['custom'], 'value');
+  });
 }
 
 class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
