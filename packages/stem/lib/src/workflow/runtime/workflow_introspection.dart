@@ -57,7 +57,7 @@ class WorkflowStepEvent {
 }
 
 /// Sink for workflow step execution events.
-abstract class WorkflowIntrospectionSink {
+mixin WorkflowIntrospectionSink {
   /// Records a workflow step execution [event].
   Future<void> recordStepEvent(WorkflowStepEvent event);
 }

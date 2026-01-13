@@ -113,7 +113,7 @@ class WorkflowRuntime {
         status: WorkflowRunStatus.running,
       ),
     );
-    await _enqueueRun(runId);
+    await _enqueueRun(runId, workflow: name);
     return runId;
   }
 
@@ -141,7 +141,7 @@ class WorkflowRuntime {
         if (await _maybeCancelForPolicy(state, now: now)) {
           continue;
         }
-        await _enqueueRun(resolution.runId);
+        await _enqueueRun(resolution.runId, workflow: state.workflow);
       }
       if (resolutions.length < batchSize) {
         break;
@@ -165,7 +165,7 @@ class WorkflowRuntime {
           continue;
         }
         await _store.markResumed(runId, data: state.suspensionData);
-        await _enqueueRun(runId);
+        await _enqueueRun(runId, workflow: state.workflow);
       }
     });
   }
@@ -337,6 +337,13 @@ class WorkflowRuntime {
         iteration: iteration,
         clock: _clock,
         resumeData: resumeData,
+        enqueuer: _stepEnqueuer(
+          taskContext: taskContext,
+          runState: runState,
+          stepName: step.name,
+          stepIndex: cursor,
+          iteration: iteration,
+        ),
       );
       resumeData = null;
       dynamic result;
@@ -655,12 +662,35 @@ class WorkflowRuntime {
     }
   }
 
-  Future<void> _enqueueRun(String runId) async {
+  Future<void> _enqueueRun(String runId, {String? workflow}) async {
+    final meta = <String, Object?>{
+      'stem.workflow.runId': runId,
+      if (workflow != null && workflow.isNotEmpty) 'stem.workflow.name': workflow,
+    };
     await _stem.enqueue(
       workflowRunTaskName,
       args: {'runId': runId},
+      meta: meta,
       options: TaskOptions(queue: queue),
     );
+  }
+
+  TaskEnqueuer _stepEnqueuer({
+    required RunState runState,
+    required String stepName,
+    required int stepIndex,
+    required int iteration,
+    TaskContext? taskContext,
+  }) {
+    final baseMeta = <String, Object?>{
+      'stem.workflow.name': runState.workflow,
+      'stem.workflow.runId': runState.id,
+      'stem.workflow.step': stepName,
+      'stem.workflow.stepIndex': stepIndex,
+      'stem.workflow.iteration': iteration,
+    };
+    final delegate = taskContext ?? _stem;
+    return _WorkflowStepEnqueuer(delegate: delegate, baseMeta: baseMeta);
   }
 
   Future<bool> _maybeCancelForPolicy(
@@ -900,6 +930,13 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       stepIndex: _stepIndex,
       iteration: iteration,
       resumeData: resumeData,
+      enqueuer: runtime._stepEnqueuer(
+        taskContext: taskContext,
+        runState: runState,
+        stepName: name,
+        stepIndex: _stepIndex,
+        iteration: iteration,
+      ),
     );
     T result;
     try {
@@ -1070,6 +1107,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     required int stepIndex,
     required int iteration,
     Object? resumeData,
+    this.enqueuer,
   }) : _stepName = stepName,
        _stepIndex = stepIndex,
        _iteration = iteration,
@@ -1151,7 +1189,56 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   int get iteration => _iteration;
 
   @override
+  final TaskEnqueuer? enqueuer;
+
+  @override
   String get workflow => execution.workflow;
+}
+
+class _WorkflowStepEnqueuer implements TaskEnqueuer {
+  _WorkflowStepEnqueuer({
+    required this.delegate,
+    required this.baseMeta,
+  });
+
+  final TaskEnqueuer delegate;
+  final Map<String, Object?> baseMeta;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(meta);
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    final mergedMeta = Map<String, Object?>.from(baseMeta)
+      ..addAll(call.meta);
+    final mergedCall = call.copyWith(
+      meta: Map.unmodifiable(mergedMeta),
+    );
+    return delegate.enqueueCall(
+      mergedCall,
+      enqueueOptions: enqueueOptions,
+    );
+  }
 }
 
 class _WorkflowScriptSuspended implements Exception {
