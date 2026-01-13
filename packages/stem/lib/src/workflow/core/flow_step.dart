@@ -38,11 +38,10 @@ class FlowStep {
     required this.handler,
     this.autoVersion = false,
     String? title,
-    WorkflowStepKind kind = WorkflowStepKind.task,
+    this.kind = WorkflowStepKind.task,
     Iterable<String> taskNames = const [],
     Map<String, Object?>? metadata,
   }) : title = title ?? name,
-       kind = kind,
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
@@ -66,6 +65,18 @@ class FlowStep {
 
   /// Whether to auto-version checkpoints across repeated executions.
   final bool autoVersion;
+
+  /// Serialize step metadata for workflow introspection.
+  Map<String, Object?> toJson() {
+    return {
+      'name': name,
+      'title': title,
+      'kind': kind.name,
+      'taskNames': taskNames,
+      'autoVersion': autoVersion,
+      if (metadata != null) 'metadata': metadata,
+    };
+  }
 }
 
 /// Control directive emitted by a workflow step to suspend execution.

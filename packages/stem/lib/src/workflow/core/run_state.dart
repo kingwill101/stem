@@ -117,4 +117,24 @@ class RunState {
       cancellationData: cancellationData ?? this.cancellationData,
     );
   }
+
+  /// Converts this run state into a JSON-compatible map.
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'workflow': workflow,
+      'status': status.name,
+      'cursor': cursor,
+      'params': params,
+      'createdAt': createdAt.toIso8601String(),
+      'result': result,
+      'waitTopic': waitTopic,
+      'resumeAt': resumeAt?.toIso8601String(),
+      'lastError': lastError,
+      'suspensionData': suspensionData,
+      'updatedAt': updatedAt?.toIso8601String(),
+      'cancellationPolicy': cancellationPolicy?.toJson(),
+      'cancellationData': cancellationData,
+    };
+  }
 }

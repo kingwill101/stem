@@ -109,6 +109,25 @@ class WorkflowDefinition<T extends Object?> {
 
   /// Whether this definition represents a script-based workflow.
   bool get isScript => _kind == WorkflowDefinitionKind.script;
+
+  /// Serialize the workflow definition for introspection.
+  Map<String, Object?> toJson() {
+    final steps = <Map<String, Object?>>[];
+    for (var i = 0; i < _steps.length; i += 1) {
+      final step = _steps[i].toJson();
+      step['position'] = i;
+      steps.add(step);
+    }
+    return {
+      'name': name,
+      'kind': isScript ? 'script' : 'flow',
+      if (version != null) 'version': version,
+      if (description != null) 'description': description,
+      if (metadata != null) 'metadata': metadata,
+      'steps': steps,
+      'edges': _edges.map((edge) => edge.toJson()).toList(),
+    };
+  }
 }
 
 /// Describes a directed edge between workflow steps.
@@ -128,6 +147,15 @@ class WorkflowEdge {
 
   /// Optional condition or label for the transition.
   final String? condition;
+
+  /// Serialize edge metadata for workflow introspection.
+  Map<String, Object?> toJson() {
+    return {
+      'from': from,
+      'to': to,
+      if (condition != null) 'condition': condition,
+    };
+  }
 }
 
 /// Builder used by [Flow] to capture workflow steps in declaration order.

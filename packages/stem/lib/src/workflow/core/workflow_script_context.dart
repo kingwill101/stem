@@ -1,10 +1,7 @@
 import 'dart:async';
 
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
-
-import 'package:stem/src/workflow/workflow.dart' show FlowContext;
-
-import 'package:stem/stem.dart' show FlowContext;
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
@@ -69,4 +66,7 @@ abstract class WorkflowScriptStepContext {
 
   /// Returns a stable idempotency key derived from workflow/run/step.
   String idempotencyKey([String? scope]);
+
+  /// Optional enqueuer for scheduling tasks with workflow metadata.
+  TaskEnqueuer? get enqueuer;
 }
