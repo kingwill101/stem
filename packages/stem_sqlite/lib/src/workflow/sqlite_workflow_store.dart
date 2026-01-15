@@ -762,6 +762,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     var query = _context.query<StemWorkflowRun>();
     query = query.whereEquals('namespace', namespace);
@@ -777,6 +778,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final ids = await query
         .orderBy('updatedAt', descending: true)
         .orderBy('id', descending: true)
+        .offset(offset)
         .limit(limit)
         .get()
         .then((runs) => runs.map((run) => run.id).toList());
