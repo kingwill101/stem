@@ -19,6 +19,20 @@ class WorkflowResult<T extends Object?> {
     this.timedOut = false,
   });
 
+  /// Rehydrates a workflow result from serialized JSON.
+  factory WorkflowResult.fromJson(Map<String, Object?> json) {
+    return WorkflowResult<T>(
+      runId: json['runId']?.toString() ?? '',
+      status: _statusFromJson(json['status']),
+      state: RunState.fromJson(
+        (json['state'] as Map?)?.cast<String, Object?>() ?? const {},
+      ),
+      value: json['value'] as T?,
+      rawResult: json['rawResult'],
+      timedOut: json['timedOut'] == true,
+    );
+  }
+
   /// Identifier of the workflow run.
   final String runId;
 
@@ -45,4 +59,25 @@ class WorkflowResult<T extends Object?> {
 
   /// Whether the workflow failed.
   bool get isFailed => status == WorkflowStatus.failed;
+
+  /// Converts this result to a JSON-compatible map.
+  Map<String, Object?> toJson() {
+    return {
+      'runId': runId,
+      'status': status.name,
+      'state': state.toJson(),
+      'value': value,
+      'rawResult': rawResult,
+      'timedOut': timedOut,
+    };
+  }
+}
+
+WorkflowStatus _statusFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowStatus.running;
+  return WorkflowStatus.values.firstWhere(
+    (status) => status.name == raw,
+    orElse: () => WorkflowStatus.running,
+  );
 }

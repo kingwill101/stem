@@ -370,6 +370,10 @@ class Worker {
   int? _lastQueueDepth;
   final Map<String, RevokeEntry> _revocations = {};
   int _latestRevocationVersion = 0;
+  DateTime? _startedAt;
+  int _startedCount = 0;
+  int _completedCount = 0;
+  int _failedCount = 0;
 
   /// A stream of events emitted during task processing.
   ///
@@ -392,6 +396,10 @@ class Worker {
     _lastScaleUp = null;
     _lastScaleDown = null;
     _drainCompleter = null;
+    _startedAt ??= DateTime.now().toUtc();
+    _startedCount = 0;
+    _completedCount = 0;
+    _failedCount = 0;
     await _signals.workerInit(_workerInfoSnapshot);
     await _initializeRevocations();
     _startWorkerHeartbeatLoop();
@@ -653,11 +661,18 @@ class Worker {
           'stem.tasks.started',
           tags: {'task': envelope.name, 'queue': envelope.queue},
         );
+        _startedCount += 1;
 
+        String? startedAtIso;
+        final startedAt = DateTime.now().toUtc();
         final runningMeta = _statusMeta(
           envelope,
           resultEncoder,
-          extra: {'queue': envelope.queue, 'worker': consumerName},
+          extra: {
+            'queue': envelope.queue,
+            'worker': consumerName,
+            'startedAt': (startedAtIso = startedAt.toIso8601String()),
+          },
         );
         await backend.set(
           envelope.id,
@@ -731,6 +746,7 @@ class Worker {
               'queue': envelope.queue,
               'worker': consumerName,
               'completedAt': DateTime.now().toIso8601String(),
+              'startedAt': startedAtIso,
             },
           );
           final successStatus = TaskStatus(
@@ -756,6 +772,7 @@ class Worker {
             'stem.tasks.succeeded',
             tags: {'task': envelope.name, 'queue': envelope.queue},
           );
+          _completedCount += 1;
           stemLogger.debug(
             'Task {task} succeeded',
             Context(
@@ -813,6 +830,7 @@ class Worker {
             error,
             stack,
             groupId,
+            startedAtIso,
           );
         } finally {
           if (completionState == TaskState.succeeded) {
@@ -1317,6 +1335,7 @@ class Worker {
     Object error,
     StackTrace stack,
     String? groupId,
+    String? startedAtIso,
   ) async {
     final retryPolicy = _resolveRetryPolicy(envelope, handler.options);
     final maxRetries = retryPolicy?.maxRetries ?? envelope.maxRetries;
@@ -1383,6 +1402,7 @@ class Worker {
           'queue': envelope.queue,
           'worker': consumerName,
           'failedAt': DateTime.now().toIso8601String(),
+          'startedAt': startedAtIso,
         },
       );
       final failureStatus = TaskStatus(
@@ -1415,6 +1435,7 @@ class Worker {
         'stem.tasks.failed',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
+      _failedCount += 1;
       stemLogger.warning(
         'Task {task} failed: {error}',
         Context(
@@ -2103,13 +2124,30 @@ class Worker {
       lastLeaseRenewal: _lastLeaseRenewal,
       queues: queues,
       extras: () {
+        final startedAt = _startedAt ?? now;
+        final uptime = now.difference(startedAt);
+        final memoryBytes = ProcessInfo.currentRss;
+        final memoryMaxBytes = ProcessInfo.maxRss;
+        final loadAvg = _readLoadAverage();
         final extras = {
           'host': Platform.localHostname,
+          'hostname': Platform.localHostname,
           'pid': pid,
           'concurrency': _currentConcurrency,
           'maxConcurrency': concurrency,
           'prefetch': prefetch,
           'autoscale': autoscaleConfig.enabled,
+          'startedAt': startedAt.toIso8601String(),
+          'uptimeMs': uptime.inMilliseconds,
+          'uptime': _formatUptime(uptime),
+          'memoryBytes': memoryBytes,
+          'memoryMaxBytes': memoryMaxBytes,
+          'memoryPercent': _calculatePercent(memoryBytes, memoryMaxBytes),
+          'loadAvg': loadAvg,
+          'cpuCount': Platform.numberOfProcessors,
+          'started': _startedCount,
+          'completed': _completedCount,
+          'failed': _failedCount,
         };
         if (_lastQueueDepth != null) {
           extras['queueDepth'] = _lastQueueDepth!;
@@ -2122,6 +2160,42 @@ class Worker {
         return extras;
       }(),
     );
+  }
+
+  static List<double> _readLoadAverage() {
+    if (!Platform.isLinux) {
+      return const [];
+    }
+    try {
+      final content = File('/proc/loadavg').readAsStringSync().trim();
+      final parts = content.split(RegExp(r'\s+'));
+      if (parts.length < 3) return const [];
+      return [
+        double.tryParse(parts[0]) ?? 0,
+        double.tryParse(parts[1]) ?? 0,
+        double.tryParse(parts[2]) ?? 0,
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static int _calculatePercent(int current, int max) {
+    if (max <= 0) return 0;
+    return ((current / max) * 100).round();
+  }
+
+  static String _formatUptime(Duration uptime) {
+    final days = uptime.inDays;
+    final hours = uptime.inHours % 24;
+    final minutes = uptime.inMinutes % 60;
+    if (days > 0) {
+      return '${days}d ${hours}h ${minutes}m';
+    }
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
   }
 
   String get _workerIdentifier =>

@@ -213,8 +213,12 @@ class TaskInvocationContext implements TaskEnqueuer {
 
     final mergedHeaders = Map<String, String>.from(this.headers)
       ..addAll(headers);
-    final mergedMeta = Map<String, Object?>.from(this.meta)
-      ..addAll(meta);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...this.meta,
+      ...meta,
+    };
 
     if (enqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
@@ -248,8 +252,12 @@ class TaskInvocationContext implements TaskEnqueuer {
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
     final mergedHeaders = Map<String, String>.from(headers)
     ..addAll(call.headers);
-    final mergedMeta = Map<String, Object?>.from(meta)
-    ..addAll(call.meta);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...meta,
+      ...call.meta,
+    };
 
     if (resolvedEnqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;

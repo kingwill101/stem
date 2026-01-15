@@ -1,5 +1,10 @@
 ## 0.1.0-dev
 
+- Fixed worker heartbeat lookups by restoring soft-deleted heartbeat rows on
+  upsert.
+- Added DataSource-based initialization that runs migrations before use, and
+  introduced async `fromDataSource` helpers across Postgres adapters (including
+  workflow stores).
 - Migrated the Postgres adapter to Ormed with generated registry/migrations for
   schema management.
 - Added a local seed runtime to run Postgres seeders without requiring

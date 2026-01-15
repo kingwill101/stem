@@ -10,31 +10,6 @@ import 'package:stem_postgres/src/database/models/models.dart';
 
 /// PostgreSQL-backed implementation of [Broker].
 class PostgresBroker implements Broker {
-
-  /// Creates a broker using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  factory PostgresBroker.fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
-    Duration pollInterval = const Duration(milliseconds: 500),
-    Duration sweeperInterval = const Duration(seconds: 10),
-    Duration deadLetterRetention = const Duration(days: 7),
-  }) {
-    final resolvedNamespace = namespace.trim().isEmpty
-        ? 'stem'
-        : namespace.trim();
-    final connections = PostgresConnections.fromDataSource(dataSource);
-    return PostgresBroker._(
-      connections,
-      namespace: resolvedNamespace,
-      defaultVisibilityTimeout: defaultVisibilityTimeout,
-      pollInterval: pollInterval,
-      sweeperInterval: sweeperInterval,
-      deadLetterRetention: deadLetterRetention,
-    );
-  }
   PostgresBroker._(
     this._connections, {
     required this.namespace,
@@ -45,6 +20,33 @@ class PostgresBroker implements Broker {
   }) : _context = _connections.context,
        _random = Random() {
     _startSweeper();
+  }
+
+  /// Creates a broker using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresBroker> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration sweeperInterval = const Duration(seconds: 10),
+    Duration deadLetterRetention = const Duration(days: 7),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    return PostgresBroker._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      pollInterval: pollInterval,
+      sweeperInterval: sweeperInterval,
+      deadLetterRetention: deadLetterRetention,
+    );
   }
 
   /// Connects to PostgreSQL and returns a broker instance.

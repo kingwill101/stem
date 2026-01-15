@@ -6,15 +6,25 @@ import 'package:stem_postgres/src/database/migrations.dart';
 
 /// Holds an active Postgres data source and query helpers.
 class PostgresConnections {
-
   /// Wraps an existing data source without running migrations.
   ///
   /// The caller remains responsible for disposing [dataSource].
   factory PostgresConnections.fromDataSource(DataSource dataSource) =>
       PostgresConnections._(dataSource, ownsDataSource: false);
+
   /// Creates a connection wrapper for an initialized data source.
   PostgresConnections._(this.dataSource, {required bool ownsDataSource})
     : _ownsDataSource = ownsDataSource;
+
+  /// Wraps an existing data source and runs migrations before use.
+  ///
+  /// The caller remains responsible for disposing [dataSource].
+  static Future<PostgresConnections> openWithDataSource(
+    DataSource dataSource,
+  ) async {
+    await _runMigrationsForDataSource(dataSource);
+    return PostgresConnections._(dataSource, ownsDataSource: false);
+  }
 
   /// Underlying data source instance.
   final DataSource dataSource;
@@ -78,4 +88,29 @@ Future<void> _runMigrations(String? connectionString) async {
   } finally {
     await adapter.close();
   }
+}
+
+Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
+  ensurePostgresDriverRegistration();
+  final driver = dataSource.connection.driver;
+  if (driver is! SchemaDriver) {
+    throw StateError('Expected a SchemaDriver for Postgres migrations.');
+  }
+  final schemaDriver = driver as SchemaDriver;
+
+  final schema = dataSource.options.defaultSchema;
+  if (schema != null && schema.isNotEmpty) {
+    await schemaDriver.setCurrentSchema(schema);
+  }
+
+  final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
+  await ledger.ensureInitialized();
+
+  final runner = MigrationRunner(
+    schemaDriver: schemaDriver,
+    ledger: ledger,
+    migrations: buildMigrations(),
+    defaultSchema: schema,
+  );
+  await runner.applyAll();
 }

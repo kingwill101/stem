@@ -8,25 +8,27 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [ScheduleStore] using ormed ORM.
 class PostgresScheduleStore implements ScheduleStore {
+  /// Creates a schedule store backed by PostgreSQL.
+  PostgresScheduleStore._(this._connections, {required this.namespace});
 
   /// Creates a schedule store using an existing [DataSource].
   ///
   /// The caller remains responsible for disposing the [DataSource].
-  factory PostgresScheduleStore.fromDataSource(
+  static Future<PostgresScheduleStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
-  }) {
+  }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
-    final connections = PostgresConnections.fromDataSource(dataSource);
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
     return PostgresScheduleStore._(
       connections,
       namespace: resolvedNamespace,
     );
   }
-  /// Creates a schedule store backed by PostgreSQL.
-  PostgresScheduleStore._(this._connections, {required this.namespace});
 
   final PostgresConnections _connections;
   /// Namespace used to partition schedule entries.

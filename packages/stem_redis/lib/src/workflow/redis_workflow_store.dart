@@ -756,6 +756,7 @@ return 1
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final ids = <String>[];
     var cursor = '0';
@@ -778,11 +779,16 @@ return 1
 
     final states = <RunState>[];
     ids.sort((a, b) => b.compareTo(a));
+    var skipped = 0;
     for (final id in ids) {
       final state = await get(id);
       if (state == null) continue;
       if (workflow != null && state.workflow != workflow) continue;
       if (status != null && state.status != status) continue;
+      if (skipped < offset) {
+        skipped += 1;
+        continue;
+      }
       states.add(state);
       if (states.length >= limit) break;
     }

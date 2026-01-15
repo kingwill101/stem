@@ -8,21 +8,24 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
+  /// Creates a lock store backed by PostgreSQL.
+  PostgresLockStore._(this._connections, {required this.namespace});
+
   /// Creates a lock store using an existing [DataSource].
   ///
   /// The caller remains responsible for disposing the [DataSource].
-  factory PostgresLockStore.fromDataSource(
+  static Future<PostgresLockStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
-  }) {
+  }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
-    final connections = PostgresConnections.fromDataSource(dataSource);
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
     return PostgresLockStore._(connections, namespace: resolvedNamespace);
   }
-  /// Creates a lock store backed by PostgreSQL.
-  PostgresLockStore._(this._connections, {required this.namespace});
 
   /// Namespace used to scope lock records.
   final String namespace;

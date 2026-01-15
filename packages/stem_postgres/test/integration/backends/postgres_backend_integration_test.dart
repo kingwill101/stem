@@ -51,14 +51,14 @@ Future<void> main() async {
           'backend-ns-a-${DateTime.now().microsecondsSinceEpoch}';
       final namespaceB =
           'backend-ns-b-${DateTime.now().microsecondsSinceEpoch}';
-      final backendA = PostgresResultBackend.fromDataSource(
+      final backendA = await PostgresResultBackend.fromDataSource(
         dataSource,
         namespace: namespaceA,
         defaultTtl: const Duration(seconds: 2),
         groupDefaultTtl: const Duration(seconds: 2),
         heartbeatTtl: const Duration(seconds: 2),
       );
-      final backendB = PostgresResultBackend.fromDataSource(
+      final backendB = await PostgresResultBackend.fromDataSource(
         dataSource,
         namespace: namespaceB,
         defaultTtl: const Duration(seconds: 2),

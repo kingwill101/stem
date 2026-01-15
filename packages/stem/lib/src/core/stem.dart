@@ -153,8 +153,15 @@ class Stem implements TaskEnqueuer {
           argsEncoder,
         );
         final encodedArgs = _encodeArgs(args, argsEncoder);
+        final scopeMeta = TaskEnqueueScope.currentMeta();
+        final mergedMeta = scopeMeta == null
+            ? meta
+            : <String, Object?>{
+              ...scopeMeta,
+              ...meta,
+            };
         final enrichedMeta = _applyEnqueueOptionsToMeta(
-          meta,
+          mergedMeta,
           enqueueOptions,
         );
         if (options.retryPolicy != null &&
@@ -671,6 +678,16 @@ class Stem implements TaskEnqueuer {
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
   /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueueWith(TaskEnqueuer enqueuer) =>
-      enqueuer.enqueueCall(build());
+  Future<String> enqueueWith(TaskEnqueuer enqueuer) {
+    final call = build();
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    if (scopeMeta == null || scopeMeta.isEmpty) {
+      return enqueuer.enqueueCall(call);
+    }
+    final mergedMeta = Map<String, Object?>.from(scopeMeta)
+      ..addAll(call.meta);
+    return enqueuer.enqueueCall(
+      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+    );
+  }
 }

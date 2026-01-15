@@ -786,6 +786,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final ctx = _connections.context;
     var query = ctx.query<StemWorkflowRun>();
@@ -802,6 +803,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final ids = await query
         .orderBy('updatedAt', descending: true)
         .orderBy('id', descending: true)
+        .offset(offset)
         .limit(limit)
         .get()
         .then((runs) => runs.map((r) => r.id).toList());

@@ -8,21 +8,23 @@ import 'package:stem_postgres/src/database/models/workflow_models.dart';
 
 /// PostgreSQL-backed implementation of [RevokeStore].
 class PostgresRevokeStore implements RevokeStore {
+  PostgresRevokeStore._(this._connections, {required this.namespace});
 
   /// Creates a revoke store using an existing [DataSource].
   ///
   /// The caller remains responsible for disposing the [DataSource].
-  factory PostgresRevokeStore.fromDataSource(
+  static Future<PostgresRevokeStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
-  }) {
+  }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
-    final connections = PostgresConnections.fromDataSource(dataSource);
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
     return PostgresRevokeStore._(connections, namespace: resolvedNamespace);
   }
-  PostgresRevokeStore._(this._connections, {required this.namespace});
 
   final PostgresConnections _connections;
 

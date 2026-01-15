@@ -122,6 +122,7 @@ abstract class WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   });
 
   /// Returns persisted step results for inspection/debugging.

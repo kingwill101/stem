@@ -31,7 +31,7 @@ Future<void> main() async {
     setUp(() async {
       // Create a unique namespace for this test to avoid conflicts
       testNamespace = 'test_sched_${DateTime.now().microsecondsSinceEpoch}';
-      store = PostgresScheduleStore.fromDataSource(
+      store = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: testNamespace,
       );
@@ -178,7 +178,7 @@ Future<void> main() async {
 
     test('namespace isolates schedule entries', () async {
       final otherNamespace = '${testNamespace}_other';
-      final otherStore = PostgresScheduleStore.fromDataSource(
+      final otherStore = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: otherNamespace,
       );

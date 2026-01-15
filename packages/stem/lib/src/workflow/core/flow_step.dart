@@ -45,6 +45,19 @@ class FlowStep {
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
+  /// Rehydrates a flow step from serialized JSON.
+  factory FlowStep.fromJson(Map<String, Object?> json) {
+    return FlowStep(
+      name: json['name']?.toString() ?? '',
+      title: json['title']?.toString(),
+      kind: _kindFromJson(json['kind']),
+      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
+      autoVersion: json['autoVersion'] == true,
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+      handler: (_) async {},
+    );
+  }
+
   /// Step name used for checkpoints and scheduling.
   final String name;
 
@@ -77,6 +90,15 @@ class FlowStep {
       if (metadata != null) 'metadata': metadata,
     };
   }
+}
+
+WorkflowStepKind _kindFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowStepKind.task;
+  return WorkflowStepKind.values.firstWhere(
+    (kind) => kind.name == raw,
+    orElse: () => WorkflowStepKind.task,
+  );
 }
 
 /// Control directive emitted by a workflow step to suspend execution.

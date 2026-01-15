@@ -18,6 +18,29 @@ class PostgresWorkflowStore implements WorkflowStore {
 
   final PostgresConnections _connections;
 
+  /// Creates a workflow store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresWorkflowStore> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Uuid? uuid,
+    WorkflowClock clock = const SystemWorkflowClock(),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    return PostgresWorkflowStore._(
+      connections,
+      namespace: resolvedNamespace,
+      clock: clock,
+      uuid: uuid,
+    );
+  }
+
   /// Namespace used to scope workflow resources.
   final String namespace;
   final Uuid _uuid;
@@ -760,6 +783,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final ctx = _connections.context;
     var query = ctx.query<StemWorkflowRun>();
@@ -776,6 +800,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     final ids = await query
         .orderBy('updatedAt', descending: true)
         .orderBy('id', descending: true)
+        .offset(offset)
         .limit(limit)
         .get()
         .then((runs) => runs.map((r) => r.id).toList());

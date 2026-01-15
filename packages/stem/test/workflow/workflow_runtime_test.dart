@@ -785,6 +785,101 @@ void main() {
     expect(meta['stem.workflow.iteration'], 0);
     expect(meta['custom'], 'value');
   });
+
+  test('stem enqueue in steps includes workflow metadata', () async {
+    const taskName = 'tasks.meta.direct';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.direct.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            await stem.enqueue(
+              taskName,
+              meta: const {'origin': 'direct'},
+            );
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.direct.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.direct.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['origin'], 'direct');
+  });
+
+  test('enqueue builder in steps includes workflow metadata', () async {
+    const taskName = 'tasks.meta.builder';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    final definition = TaskDefinition<Map<String, Object?>, void>(
+      name: taskName,
+      encodeArgs: (args) => args,
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.builder.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            await TaskEnqueueBuilder(
+              definition: definition,
+              args: const <String, Object?>{},
+            ).meta('origin', 'builder').enqueueWith(stem);
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.builder.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.builder.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['origin'], 'builder');
+  });
 }
 
 class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {

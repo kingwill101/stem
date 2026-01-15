@@ -327,6 +327,12 @@ class WorkflowRuntime {
         continue;
       }
 
+      final stepMeta = _stepMeta(
+        runState: runState,
+        stepName: step.name,
+        stepIndex: cursor,
+        iteration: iteration,
+      );
       final context = FlowContext(
         workflow: runState.workflow,
         runId: runId,
@@ -339,16 +345,16 @@ class WorkflowRuntime {
         resumeData: resumeData,
         enqueuer: _stepEnqueuer(
           taskContext: taskContext,
-          runState: runState,
-          stepName: step.name,
-          stepIndex: cursor,
-          iteration: iteration,
+          baseMeta: stepMeta,
         ),
       );
       resumeData = null;
       dynamic result;
       try {
-        result = await step.handler(context);
+        result = await TaskEnqueueScope.run(
+          stepMeta,
+          () async => await step.handler(context),
+        );
       } catch (error, stack) {
         await _store.markFailed(runId, error, stack);
         await _recordStepEvent(
@@ -675,20 +681,25 @@ class WorkflowRuntime {
     );
   }
 
-  TaskEnqueuer _stepEnqueuer({
+  Map<String, Object?> _stepMeta({
     required RunState runState,
     required String stepName,
     required int stepIndex,
     required int iteration,
-    TaskContext? taskContext,
   }) {
-    final baseMeta = <String, Object?>{
+    return Map<String, Object?>.unmodifiable({
       'stem.workflow.name': runState.workflow,
       'stem.workflow.runId': runState.id,
       'stem.workflow.step': stepName,
       'stem.workflow.stepIndex': stepIndex,
       'stem.workflow.iteration': iteration,
-    };
+    });
+  }
+
+  TaskEnqueuer _stepEnqueuer({
+    required Map<String, Object?> baseMeta,
+    TaskContext? taskContext,
+  }) {
     final delegate = taskContext ?? _stem;
     return _WorkflowStepEnqueuer(delegate: delegate, baseMeta: baseMeta);
   }
@@ -751,6 +762,12 @@ class WorkflowRuntime {
     return false;
   }
 
+  /// Marks a workflow run as cancelled due to a [WorkflowCancellationPolicy]
+  /// violation.
+  ///
+  /// This updates the [WorkflowStore] and emits a [WorkflowRunStatus.cancelled]
+  /// signal. The [reason] should identify which policy limit was exceeded
+  /// (e.g., 'maxRunDuration').
   Future<void> _cancelForPolicy(
     RunState state, {
     required String reason,
@@ -924,6 +941,12 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     }
 
     final resumeData = _takeResumePayload(name, autoVersion ? iteration : null);
+    final stepMeta = runtime._stepMeta(
+      runState: runState,
+      stepName: name,
+      stepIndex: _stepIndex,
+      iteration: iteration,
+    );
     final stepContext = _WorkflowScriptStepContextImpl(
       execution: this,
       stepName: name,
@@ -932,15 +955,15 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       resumeData: resumeData,
       enqueuer: runtime._stepEnqueuer(
         taskContext: taskContext,
-        runState: runState,
-        stepName: name,
-        stepIndex: _stepIndex,
-        iteration: iteration,
+        baseMeta: stepMeta,
       ),
     );
     T result;
     try {
-      result = await handler(stepContext);
+      result = await TaskEnqueueScope.run(
+        stepMeta,
+        () async => await handler(stepContext),
+      );
     } catch (error, stack) {
       await runtime._recordStepEvent(
         WorkflowStepEventType.failed,

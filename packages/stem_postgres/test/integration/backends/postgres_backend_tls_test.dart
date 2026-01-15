@@ -44,8 +44,8 @@ Future<void> main() async {
     // TLS config no longer used directly by backend connection
     late PostgresResultBackend backend;
 
-    setUp(() {
-      backend = PostgresResultBackend.fromDataSource(
+    setUp(() async {
+      backend = await PostgresResultBackend.fromDataSource(
         dataSource,
         defaultTtl: const Duration(seconds: 5),
         groupDefaultTtl: const Duration(seconds: 5),
@@ -104,7 +104,7 @@ Future<void> main() async {
       expect(streamed.id, signed.id);
       expect(streamed.state, TaskState.succeeded);
 
-      final insecureBackend = PostgresResultBackend.fromDataSource(
+      final insecureBackend = await PostgresResultBackend.fromDataSource(
         dataSource,
         defaultTtl: const Duration(seconds: 5),
         groupDefaultTtl: const Duration(seconds: 5),

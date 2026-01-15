@@ -7,21 +7,30 @@ import 'package:stem_postgres/src/database/models/models.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
 class PostgresResultBackend implements ResultBackend {
+  PostgresResultBackend._(
+    this._connections, {
+    required this.namespace,
+    this.defaultTtl = const Duration(days: 1),
+    this.groupDefaultTtl = const Duration(days: 1),
+    this.heartbeatTtl = const Duration(seconds: 60),
+  }) : _context = _connections.context;
 
   /// Creates a backend using an existing [DataSource].
   ///
   /// The caller remains responsible for disposing the [DataSource].
-  factory PostgresResultBackend.fromDataSource(
+  static Future<PostgresResultBackend> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
-  }) {
+  }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
-    final connections = PostgresConnections.fromDataSource(dataSource);
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
     final backend = PostgresResultBackend._(
       connections,
       namespace: resolvedNamespace,
@@ -31,13 +40,6 @@ class PostgresResultBackend implements ResultBackend {
     ).._startCleanupTimer();
     return backend;
   }
-  PostgresResultBackend._(
-    this._connections, {
-    required this.namespace,
-    this.defaultTtl = const Duration(days: 1),
-    this.groupDefaultTtl = const Duration(days: 1),
-    this.heartbeatTtl = const Duration(seconds: 60),
-  }) : _context = _connections.context;
 
   final PostgresConnections _connections;
   final QueryContext _context;
@@ -317,6 +319,12 @@ class PostgresResultBackend implements ResultBackend {
       await txn.repository<StemWorkerHeartbeat>().upsert(
         model,
         uniqueBy: ['workerId'],
+      );
+      await txn.repository<StemWorkerHeartbeat>().restore(
+        StemWorkerHeartbeatPartial(
+          workerId: heartbeat.workerId,
+          namespace: namespace,
+        ),
       );
     });
   }

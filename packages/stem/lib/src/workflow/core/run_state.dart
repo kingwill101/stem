@@ -27,6 +27,29 @@ class RunState {
     this.cancellationData,
   });
 
+  /// Rehydrates a run state from serialized JSON.
+  factory RunState.fromJson(Map<String, Object?> json) {
+    return RunState(
+      id: json['id']?.toString() ?? '',
+      workflow: json['workflow']?.toString() ?? '',
+      status: _statusFromJson(json['status']),
+      cursor: _intFromJson(json['cursor']),
+      params: (json['params'] as Map?)?.cast<String, Object?>() ?? const {},
+      createdAt: _dateFromJson(json['createdAt']) ?? DateTime.now().toUtc(),
+      result: json['result'],
+      waitTopic: json['waitTopic'] as String?,
+      resumeAt: _dateFromJson(json['resumeAt']),
+      lastError: (json['lastError'] as Map?)?.cast<String, Object?>(),
+      suspensionData: (json['suspensionData'] as Map?)?.cast<String, Object?>(),
+      updatedAt: _dateFromJson(json['updatedAt']),
+      cancellationPolicy: WorkflowCancellationPolicy.fromJson(
+        json['cancellationPolicy'],
+      ),
+      cancellationData:
+          (json['cancellationData'] as Map?)?.cast<String, Object?>(),
+    );
+  }
+
   /// Unique run identifier.
   final String id;
 
@@ -137,4 +160,25 @@ class RunState {
       'cancellationData': cancellationData,
     };
   }
+}
+
+WorkflowStatus _statusFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowStatus.running;
+  return WorkflowStatus.values.firstWhere(
+    (status) => status.name == raw,
+    orElse: () => WorkflowStatus.running,
+  );
+}
+
+int _intFromJson(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+DateTime? _dateFromJson(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  return DateTime.tryParse(value.toString());
 }

@@ -471,13 +471,15 @@ class InMemoryWorkflowStore implements WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final candidates = _runs.values.where((state) {
       if (workflow != null && state.workflow != workflow) return false;
       if (status != null && state.status != status) return false;
       return true;
     }).toList()..sort((a, b) => b.id.compareTo(a.id));
-    final limited = candidates.take(limit);
+    final start = offset < 0 ? 0 : offset;
+    final limited = candidates.skip(start).take(limit);
     final results = <RunState>[];
     for (final state in limited) {
       final steps = _steps[state.id];

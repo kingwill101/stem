@@ -1313,6 +1313,30 @@ abstract class TaskEnqueuer {
   });
 }
 
+/// Provides ambient metadata for task enqueue operations.
+///
+/// Use [run] to scope workflow or tracing metadata so `Stem.enqueue` can
+/// enrich task metadata without requiring explicit plumbing.
+class TaskEnqueueScope {
+  const TaskEnqueueScope._();
+
+  static final Object _zoneKey = Object();
+
+  /// Returns the current scoped metadata, if any.
+  static Map<String, Object?>? currentMeta() {
+    final value = Zone.current[_zoneKey];
+    if (value is Map<String, Object?>) return value;
+    if (value is Map) return value.cast<String, Object?>();
+    return null;
+  }
+
+  /// Runs [body] in a zone that provides [meta] to task enqueue operations.
+  static R run<R>(Map<String, Object?> meta, R Function() body) {
+    if (meta.isEmpty) return body();
+    return runZoned(body, zoneValues: {_zoneKey: meta});
+  }
+}
+
 /// Context passed to handler implementations during execution.
 class TaskContext implements TaskEnqueuer {
   /// Creates a task execution context for a handler invocation.
@@ -1376,8 +1400,12 @@ class TaskContext implements TaskEnqueuer {
 
     final mergedHeaders = Map<String, String>.from(this.headers)
       ..addAll(headers);
-    final mergedMeta = Map<String, Object?>.from(this.meta)
-      ..addAll(meta);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...this.meta,
+      ...meta,
+    };
 
     if (enqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
@@ -1412,8 +1440,12 @@ class TaskContext implements TaskEnqueuer {
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
     final mergedHeaders = Map<String, String>.from(headers)
       ..addAll(call.headers);
-    final mergedMeta = Map<String, Object?>.from(meta)
-      ..addAll(call.meta);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...meta,
+      ...call.meta,
+    };
 
     if (resolvedEnqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;

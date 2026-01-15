@@ -38,6 +38,41 @@ class WorkflowDefinition<T extends Object?> {
        _edges = edges,
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
+  /// Rehydrates a workflow definition from serialized JSON.
+  factory WorkflowDefinition.fromJson(Map<String, Object?> json) {
+    final kind = _kindFromJson(json['kind']);
+    final stepsJson = (json['steps'] as List?) ?? const [];
+    final steps = stepsJson
+        .whereType<Map<String, Object?>>()
+        .map(FlowStep.fromJson)
+        .toList();
+    final edgesJson = (json['edges'] as List?) ?? const [];
+    final edges = edgesJson
+        .whereType<Map<String, Object?>>()
+        .map(WorkflowEdge.fromJson)
+        .toList();
+    if (kind == WorkflowDefinitionKind.script) {
+      return WorkflowDefinition._(
+        name: json['name']?.toString() ?? '',
+        kind: kind,
+        steps: const [],
+        edges: edges,
+        version: json['version']?.toString(),
+        description: json['description']?.toString(),
+        metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+      );
+    }
+    return WorkflowDefinition._(
+      name: json['name']?.toString() ?? '',
+      kind: kind,
+      steps: steps,
+      edges: edges,
+      version: json['version']?.toString(),
+      description: json['description']?.toString(),
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+    );
+  }
+
   /// Creates a flow-based workflow definition.
   factory WorkflowDefinition.flow({
     required String name,
@@ -139,6 +174,15 @@ class WorkflowEdge {
     this.condition,
   });
 
+  /// Rehydrates an edge from serialized JSON.
+  factory WorkflowEdge.fromJson(Map<String, Object?> json) {
+    return WorkflowEdge(
+      from: json['from']?.toString() ?? '',
+      to: json['to']?.toString() ?? '',
+      condition: json['condition']?.toString(),
+    );
+  }
+
   /// Originating step identifier.
   final String from;
 
@@ -156,6 +200,15 @@ class WorkflowEdge {
       if (condition != null) 'condition': condition,
     };
   }
+}
+
+WorkflowDefinitionKind _kindFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowDefinitionKind.flow;
+  return WorkflowDefinitionKind.values.firstWhere(
+    (kind) => kind.name == raw,
+    orElse: () => WorkflowDefinitionKind.flow,
+  );
 }
 
 /// Builder used by [Flow] to capture workflow steps in declaration order.
