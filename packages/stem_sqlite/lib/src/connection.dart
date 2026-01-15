@@ -8,11 +8,19 @@ import 'package:stem_sqlite/src/database/migrations.dart';
 
 /// Holds an active SQLite data source and query helpers.
 class SqliteConnections {
+  /// Wraps an existing data source without running migrations.
+  ///
+  /// The caller remains responsible for disposing [dataSource].
+  factory SqliteConnections.fromDataSource(DataSource dataSource) =>
+      SqliteConnections._(dataSource, ownsDataSource: false);
+
   /// Creates a connection wrapper for an initialized data source.
-  SqliteConnections._(this.dataSource);
+  SqliteConnections._(this.dataSource, {required bool ownsDataSource})
+    : _ownsDataSource = ownsDataSource;
 
   /// Underlying data source instance.
   final DataSource dataSource;
+  final bool _ownsDataSource;
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => dataSource.connection;
@@ -30,8 +38,18 @@ class SqliteConnections {
         await _runMigrations(file);
       }
       final dataSource = await _openDataSource(file, readOnly: readOnly);
-      return SqliteConnections._(dataSource);
+      return SqliteConnections._(dataSource, ownsDataSource: true);
     });
+  }
+
+  /// Wraps an existing data source and runs migrations before use.
+  ///
+  /// The caller remains responsible for disposing [dataSource].
+  static Future<SqliteConnections> openWithDataSource(
+    DataSource dataSource,
+  ) async {
+    await _runMigrationsForDataSource(dataSource);
+    return SqliteConnections._(dataSource, ownsDataSource: false);
   }
 
   /// Runs [action] inside a database transaction.
@@ -45,7 +63,11 @@ class SqliteConnections {
   }
 
   /// Closes the data source.
-  Future<void> close() => dataSource.dispose();
+  Future<void> close() async {
+    if (_ownsDataSource) {
+      await dataSource.dispose();
+    }
+  }
 }
 
 Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
@@ -87,6 +109,28 @@ Future<void> _runMigrations(File file) async {
   } finally {
     await adapter.close();
   }
+}
+
+Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
+  ensureSqliteDriverRegistration();
+  if (!dataSource.isInitialized) {
+    await dataSource.init();
+  }
+  final driver = dataSource.connection.driver;
+  if (driver is! SchemaDriver) {
+    throw StateError('Expected a SchemaDriver for SQLite migrations.');
+  }
+  final schemaDriver = driver as SchemaDriver;
+
+  final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
+  await ledger.ensureInitialized();
+
+  final runner = MigrationRunner(
+    schemaDriver: schemaDriver,
+    ledger: ledger,
+    migrations: buildMigrations(),
+  );
+  await runner.applyAll();
 }
 
 Future<T> _withFileLock<T>(File file, Future<T> Function() action) async {

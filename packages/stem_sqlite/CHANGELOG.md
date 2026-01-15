@@ -1,5 +1,7 @@
 ## 0.1.0-dev
 
+- Added DataSource-based factory helpers that run SQLite migrations for
+  brokers, result backends, and workflow stores.
 - Hardened SQLite connection initialization with file locking/retry to avoid
   concurrent migration/WAL conflicts, and ensured lazy init before
   transactions.

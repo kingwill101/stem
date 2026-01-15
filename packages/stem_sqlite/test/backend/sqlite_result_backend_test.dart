@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:ormed/ormed.dart';
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
@@ -45,6 +47,38 @@ void main() {
       settleDelay: Duration(milliseconds: 120),
     ),
   );
+
+  test('fromDataSource runs migrations', () async {
+    ensureSqliteDriverRegistration();
+    final dataSource = DataSource(
+      DataSourceOptions(
+        driver: SqliteDriverAdapter.file(dbFile.path),
+        registry: buildOrmRegistry(),
+        database: dbFile.path,
+      ),
+    );
+    final backend = await SqliteResultBackend.fromDataSource(
+      dataSource,
+      defaultTtl: const Duration(seconds: 1),
+      groupDefaultTtl: const Duration(seconds: 1),
+      heartbeatTtl: const Duration(seconds: 1),
+      cleanupInterval: const Duration(milliseconds: 200),
+    );
+    try {
+      const taskId = 'datasource-task';
+      await backend.set(
+        taskId,
+        TaskState.succeeded,
+        payload: const {'value': 'ok'},
+      );
+
+      final result = await backend.get(taskId);
+      expect(result, isNotNull);
+    } finally {
+      await backend.close();
+      await dataSource.dispose();
+    }
+  });
 
   test('namespace isolates task results', () async {
     final namespaceA =

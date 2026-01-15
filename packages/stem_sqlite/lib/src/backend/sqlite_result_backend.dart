@@ -21,6 +21,31 @@ class SqliteResultBackend implements ResultBackend {
     _startCleanupTimer();
   }
 
+  /// Creates a backend using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<SqliteResultBackend> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultTtl = const Duration(days: 1),
+    Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
+    Duration cleanupInterval = const Duration(minutes: 1),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await SqliteConnections.openWithDataSource(dataSource);
+    return SqliteResultBackend._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultTtl: defaultTtl,
+      groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
+      cleanupInterval: cleanupInterval,
+    );
+  }
+
   /// Opens a SQLite backend from an existing database file.
   static Future<SqliteResultBackend> open(
     File file, {

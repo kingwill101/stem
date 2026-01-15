@@ -13,6 +13,26 @@ class SqliteWorkflowStore implements WorkflowStore {
     this._clock, {
     required this.namespace,
   }) : _context = _connections.context;
+
+  /// Creates a workflow store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<SqliteWorkflowStore> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    WorkflowClock clock = const SystemWorkflowClock(),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await SqliteConnections.openWithDataSource(dataSource);
+    return SqliteWorkflowStore._(
+      connections,
+      clock,
+      namespace: resolvedNamespace,
+    );
+  }
+
   /// Opens a SQLite-backed workflow store using [file].
   static Future<SqliteWorkflowStore> open(
     File file, {
@@ -33,6 +53,7 @@ class SqliteWorkflowStore implements WorkflowStore {
   final SqliteConnections _connections;
   final QueryContext _context;
   final WorkflowClock _clock;
+
   /// Namespace used to scope workflow data.
   final String namespace;
   int _idCounter = 0;
