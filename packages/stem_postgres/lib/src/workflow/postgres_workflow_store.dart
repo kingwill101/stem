@@ -114,8 +114,6 @@ class PostgresWorkflowStore implements WorkflowStore {
         workflow: workflowName,
         status: WorkflowStatus.running.name,
         params: jsonEncode(params),
-        ownerId: null,
-        leaseExpiresAt: null,
         cancellationPolicy: cancellationPolicy == null
             ? null
             : jsonEncode(cancellationPolicy.toJson()),

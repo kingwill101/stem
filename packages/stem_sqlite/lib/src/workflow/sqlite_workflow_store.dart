@@ -105,8 +105,6 @@ class SqliteWorkflowStore implements WorkflowStore {
           cancellationPolicy: policyJson,
           createdAt: now,
           updatedAt: now,
-          ownerId: null,
-          leaseExpiresAt: null,
         ),
       );
     });
