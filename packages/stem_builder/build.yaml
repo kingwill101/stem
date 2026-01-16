@@ -1,0 +1,7 @@
+builders:
+  stem_registry_builder:
+    import: "package:stem_builder/stem_builder.dart"
+    builder_factories: ["stemRegistryBuilder"]
+    build_extensions: {"lib/$lib$": ["lib/stem_registry.g.dart"]}
+    auto_apply: dependents
+    build_to: source

@@ -10,6 +10,8 @@
   TaskEnqueueBuilder.
 - Added inline FunctionTaskHandler execution (runInIsolate toggle) to simplify
   choosing between inline vs. isolate task execution.
+- Added workflow/task annotations and a registry builder to streamline
+  declarative workflow setup with existing Flow/WorkflowScript APIs.
 - Added TaskContext demos and refreshed docs/snippets for enqueue options and
   SQLite guidance.
 - Added typed workflow, task, and canvas result APIs with customizable encoders
