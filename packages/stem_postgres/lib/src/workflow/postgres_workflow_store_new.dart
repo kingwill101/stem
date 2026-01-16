@@ -90,6 +90,8 @@ class PostgresWorkflowStore implements WorkflowStore {
         workflow: workflow,
         status: WorkflowStatus.running.name,
         params: jsonEncode(params),
+        ownerId: null,
+        leaseExpiresAt: null,
         cancellationPolicy: cancellationPolicy == null
             ? null
             : jsonEncode(cancellationPolicy.toJson()),
@@ -145,6 +147,8 @@ class PostgresWorkflowStore implements WorkflowStore {
       suspensionData: _decodeMap(run.suspensionData),
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
+      ownerId: run.ownerId,
+      leaseExpiresAt: run.leaseExpiresAt,
       cancellationPolicy: run.cancellationPolicy != null
           ? WorkflowCancellationPolicy.fromJson(
               _decodeMap(run.cancellationPolicy),
@@ -420,6 +424,8 @@ class PostgresWorkflowStore implements WorkflowStore {
           updates['result'] = null;
         }
         updates['suspension_data'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -457,6 +463,10 @@ class PostgresWorkflowStore implements WorkflowStore {
           }),
           updatedAt: now,
         ).toMap();
+        if (terminal) {
+          updates['owner_id'] = null;
+          updates['lease_expires_at'] = null;
+        }
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -494,6 +504,79 @@ class PostgresWorkflowStore implements WorkflowStore {
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
+    });
+  }
+
+  @override
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final leaseExpiresAt = now.add(leaseDuration);
+    final updated = await _connections.runInTransaction((ctx) async {
+      final query = ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereNull('waitTopic')
+          .where((PredicateBuilder<StemWorkflowRun> q) {
+            q
+              ..whereNull('leaseExpiresAt')
+              ..orWhere(
+                'leaseExpiresAt',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          });
+      return query.update({
+        'ownerId': ownerId,
+        'leaseExpiresAt': leaseExpiresAt,
+        'updatedAt': now,
+      });
+    });
+    return updated > 0;
+  }
+
+  @override
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final leaseExpiresAt = now.add(leaseDuration);
+    final updated = await _connections.runInTransaction((ctx) async {
+      final query = ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereEquals('ownerId', ownerId);
+      return query.update({
+        'leaseExpiresAt': leaseExpiresAt,
+        'updatedAt': now,
+      });
+    });
+    return updated > 0;
+  }
+
+  @override
+  Future<void> releaseRun(String runId, {required String ownerId}) async {
+    final now = _clock.now().toUtc();
+    await _connections.runInTransaction((ctx) async {
+      await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('ownerId', ownerId)
+          .update({
+            'ownerId': null,
+            'leaseExpiresAt': null,
+            'updatedAt': now,
+          });
     });
   }
 
@@ -691,6 +774,8 @@ class PostgresWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = null;
         updates['wait_topic'] = null;
         updates['resume_at'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -817,6 +902,35 @@ class PostgresWorkflowStore implements WorkflowStore {
     }
 
     return results;
+  }
+
+  @override
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resolvedNow = (now ?? _clock.now()).toUtc();
+    final ctx = _connections.context;
+    final runs = await ctx
+        .query<StemWorkflowRun>()
+        .whereEquals('namespace', namespace)
+        .whereEquals('status', WorkflowStatus.running.name)
+        .whereNull('waitTopic')
+        .where((PredicateBuilder<StemWorkflowRun> q) {
+          q
+            ..whereNull('leaseExpiresAt')
+            ..orWhere(
+              'leaseExpiresAt',
+              resolvedNow,
+              PredicateOperator.lessThanOrEqual,
+            );
+        })
+        .orderBy('updatedAt', descending: true)
+        .offset(offset)
+        .limit(limit)
+        .get();
+    return runs.map((run) => run.id).toList(growable: false);
   }
 
   @override

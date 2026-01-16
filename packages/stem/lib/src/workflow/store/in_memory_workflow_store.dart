@@ -59,6 +59,12 @@ class InMemoryWorkflowStore implements WorkflowStore {
     return name.substring(0, index);
   }
 
+  bool _leaseExpired(RunState state, DateTime now) {
+    final expiresAt = state.leaseExpiresAt;
+    if (expiresAt == null) return true;
+    return !expiresAt.isAfter(now);
+  }
+
   void _removeWatcherForRun(String runId) {
     final record = _watchersByRun.remove(runId);
     if (record == null) return;
@@ -89,6 +95,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       createdAt: now,
       updatedAt: now,
       suspensionData: const <String, Object?>{},
+      ownerId: null,
+      leaseExpiresAt: null,
       cancellationPolicy: cancellationPolicy,
     );
     _steps[id] = {};
@@ -232,6 +240,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: const <String, Object?>{},
+      ownerId: null,
+      leaseExpiresAt: null,
       updatedAt: _clock.now(),
     );
   }
@@ -251,6 +261,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
+      ownerId: terminal ? null : state.ownerId,
+      leaseExpiresAt: terminal ? null : state.leaseExpiresAt,
       updatedAt: _clock.now(),
     );
   }
@@ -298,6 +310,62 @@ class InMemoryWorkflowStore implements WorkflowStore {
     }
     toRemove.forEach(_due.remove);
     return ids;
+  }
+
+  @override
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null) return false;
+    if (state.status != WorkflowStatus.running) return false;
+    if (state.waitTopic != null) return false;
+    final now = _clock.now();
+    final currentOwner = state.ownerId;
+    if (currentOwner != null &&
+        currentOwner.isNotEmpty &&
+        currentOwner != ownerId &&
+        !_leaseExpired(state, now)) {
+      return false;
+    }
+    _runs[runId] = state.copyWith(
+      ownerId: ownerId,
+      leaseExpiresAt: now.add(leaseDuration),
+      updatedAt: now,
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null) return false;
+    if (state.status != WorkflowStatus.running) return false;
+    if (state.ownerId != ownerId) return false;
+    final now = _clock.now();
+    _runs[runId] = state.copyWith(
+      leaseExpiresAt: now.add(leaseDuration),
+      updatedAt: now,
+    );
+    return true;
+  }
+
+  @override
+  Future<void> releaseRun(String runId, {required String ownerId}) async {
+    final state = _runs[runId];
+    if (state == null) return;
+    if (state.ownerId != ownerId) return;
+    _runs[runId] = state.copyWith(
+      ownerId: null,
+      leaseExpiresAt: null,
+      updatedAt: _clock.now(),
+    );
   }
 
   @override
@@ -405,6 +473,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       waitTopic: null,
       resumeAt: null,
       suspensionData: const <String, Object?>{},
+      ownerId: null,
+      leaseExpiresAt: null,
       cancellationData: cancellationData,
       updatedAt: now,
     );
@@ -494,6 +564,31 @@ class InMemoryWorkflowStore implements WorkflowStore {
       results.add(state.copyWith(cursor: cursor));
     }
     return results;
+  }
+
+  @override
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resolvedNow = now ?? _clock.now();
+    final candidates = _runs.values.where((state) {
+      if (state.status != WorkflowStatus.running) return false;
+      if (state.waitTopic != null) return false;
+      if (!_leaseExpired(state, resolvedNow) &&
+          state.ownerId != null &&
+          state.ownerId!.isNotEmpty) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => b.id.compareTo(a.id));
+    final start = offset < 0 ? 0 : offset;
+    return candidates
+        .skip(start)
+        .take(limit)
+        .map((state) => state.id)
+        .toList(growable: false);
   }
 
   @override

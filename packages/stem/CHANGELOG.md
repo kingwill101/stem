@@ -1,6 +1,9 @@
 
 ## 0.1.0-dev
 
+- Added workflow run leasing APIs (`claimRun`, `renewRunLease`, `releaseRun`,
+  `listRunnableRuns`) and runtime ownership tracking to safely spread workflows
+  across workers.
 - Added TaskRetryPolicy and TaskEnqueueOptions for per-enqueue overrides
   (timing, retries, callbacks), plus TaskContext/TaskInvocationContext enqueue,
   spawn, and retry helpers including isolate entrypoint support and a fluent

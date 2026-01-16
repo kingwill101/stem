@@ -1,5 +1,7 @@
 ## 0.1.0-dev
 
+- Added workflow run lease tracking and claim/renew helpers to distribute
+  workflow execution safely across workers.
 - Maintenance updates to adapter tooling and formatting (no runtime changes).
 
 ## 0.1.0-alpha.4

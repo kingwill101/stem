@@ -194,6 +194,83 @@ void runWorkflowStoreContractTests({
       expect(state?.waitTopic, isNull);
     });
 
+    test(
+      'claimRun enforces leases and listRunnableRuns respects them',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
+
+        final runnable = await current.listRunnableRuns(now: clock.now());
+        expect(runnable, contains(runId));
+
+        final claimed = await current.claimRun(
+          runId,
+          ownerId: 'worker-a',
+          leaseDuration: const Duration(seconds: 5),
+        );
+        expect(claimed, isTrue);
+
+        final blocked = await current.claimRun(
+          runId,
+          ownerId: 'worker-b',
+          leaseDuration: const Duration(seconds: 5),
+        );
+        expect(blocked, isFalse);
+
+        final afterClaim = await current.listRunnableRuns(now: clock.now());
+        expect(afterClaim, isNot(contains(runId)));
+
+        clock.advance(const Duration(seconds: 6));
+
+        final expired = await current.listRunnableRuns(now: clock.now());
+        expect(expired, contains(runId));
+
+        final claimedAfterExpiry = await current.claimRun(
+          runId,
+          ownerId: 'worker-b',
+          leaseDuration: const Duration(seconds: 5),
+        );
+        expect(claimedAfterExpiry, isTrue);
+
+        final renewed = await current.renewRunLease(
+          runId,
+          ownerId: 'worker-b',
+          leaseDuration: const Duration(seconds: 5),
+        );
+        expect(renewed, isTrue);
+
+        final wrongOwner = await current.renewRunLease(
+          runId,
+          ownerId: 'worker-c',
+          leaseDuration: const Duration(seconds: 5),
+        );
+        expect(wrongOwner, isFalse);
+
+        await current.releaseRun(runId, ownerId: 'worker-b');
+        final released = await current.listRunnableRuns(now: clock.now());
+        expect(released, contains(runId));
+      },
+    );
+
+    test('listRunnableRuns excludes suspended runs', () async {
+      final current = store!;
+      final runId = await current.createRun(
+        workflow: 'contract.workflow',
+        params: const {},
+      );
+      await current.suspendUntil(
+        runId,
+        'step-a',
+        clock.now().add(const Duration(minutes: 1)),
+      );
+
+      final runnable = await current.listRunnableRuns(now: clock.now());
+      expect(runnable, isNot(contains(runId)));
+    });
+
     test('dueRuns honors limit and leaves remaining runs due', () async {
       final current = store!;
       final resumeAt = clock.now().subtract(const Duration(seconds: 1));

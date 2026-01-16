@@ -396,6 +396,7 @@ void main() {
     await store.rewindToStep(runId, 'repeat');
     final rewoundState = await store.get(runId);
     expect(rewoundState?.status, WorkflowStatus.suspended);
+    await store.markRunning(runId);
     await runtime.executeRun(runId);
 
     steps = await store.listSteps(runId);

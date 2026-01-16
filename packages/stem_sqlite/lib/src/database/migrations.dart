@@ -6,6 +6,7 @@ import 'package:ormed/migrations.dart';
 import 'package:stem_sqlite/src/database/migrations/m_20251222070816_create_stem_tables.dart';
 import 'package:stem_sqlite/src/database/migrations/m_20251231120000_create_workflow_tables.dart';
 import 'package:stem_sqlite/src/database/migrations/m_20251231161000_add_namespace_scoping.dart';
+import 'package:stem_sqlite/src/database/migrations/m_20260116120000_add_workflow_run_leases.dart';
 
 final List<MigrationEntry> _entries = [
   MigrationEntry(
@@ -28,6 +29,13 @@ final List<MigrationEntry> _entries = [
       'm_20251231161000_add_namespace_scoping',
     ),
     migration: const AddNamespaceScoping(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime.utc(2026, 1, 16, 12),
+      'm_20260116120000_add_workflow_run_leases',
+    ),
+    migration: const AddWorkflowRunLeases(),
   ),
 ];
 

@@ -23,6 +23,8 @@ class RunState {
     this.lastError,
     this.suspensionData,
     this.updatedAt,
+    this.ownerId,
+    this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
   });
@@ -42,11 +44,13 @@ class RunState {
       lastError: (json['lastError'] as Map?)?.cast<String, Object?>(),
       suspensionData: (json['suspensionData'] as Map?)?.cast<String, Object?>(),
       updatedAt: _dateFromJson(json['updatedAt']),
+      ownerId: json['ownerId']?.toString(),
+      leaseExpiresAt: _dateFromJson(json['leaseExpiresAt']),
       cancellationPolicy: WorkflowCancellationPolicy.fromJson(
         json['cancellationPolicy'],
       ),
-      cancellationData:
-          (json['cancellationData'] as Map?)?.cast<String, Object?>(),
+      cancellationData: (json['cancellationData'] as Map?)
+          ?.cast<String, Object?>(),
     );
   }
 
@@ -86,6 +90,12 @@ class RunState {
   /// Timestamp of the most recent state mutation / heartbeat, if any.
   final DateTime? updatedAt;
 
+  /// Identifier of the worker/runtime currently leasing this run, if any.
+  final String? ownerId;
+
+  /// Timestamp when the current lease expires, if any.
+  final DateTime? leaseExpiresAt;
+
   /// Cancellation policy that was configured when the run started, if any.
   final WorkflowCancellationPolicy? cancellationPolicy;
 
@@ -110,6 +120,8 @@ class RunState {
     Map<String, Object?>? lastError,
     Object? suspensionData = _unset,
     DateTime? updatedAt,
+    Object? ownerId = _unset,
+    Object? leaseExpiresAt = _unset,
     WorkflowCancellationPolicy? cancellationPolicy,
     Map<String, Object?>? cancellationData,
   }) {
@@ -123,6 +135,12 @@ class RunState {
     final resolvedSuspensionData = suspensionData == _unset
         ? this.suspensionData
         : suspensionData as Map<String, Object?>?;
+    final resolvedOwnerId = ownerId == _unset
+        ? this.ownerId
+        : ownerId as String?;
+    final resolvedLeaseExpiresAt = leaseExpiresAt == _unset
+        ? this.leaseExpiresAt
+        : leaseExpiresAt as DateTime?;
     return RunState(
       id: id,
       workflow: workflow,
@@ -136,6 +154,8 @@ class RunState {
       suspensionData: resolvedSuspensionData,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      ownerId: resolvedOwnerId,
+      leaseExpiresAt: resolvedLeaseExpiresAt,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       cancellationData: cancellationData ?? this.cancellationData,
     );
@@ -156,6 +176,8 @@ class RunState {
       'lastError': lastError,
       'suspensionData': suspensionData,
       'updatedAt': updatedAt?.toIso8601String(),
+      'ownerId': ownerId,
+      'leaseExpiresAt': leaseExpiresAt?.toIso8601String(),
       'cancellationPolicy': cancellationPolicy?.toJson(),
       'cancellationData': cancellationData,
     };

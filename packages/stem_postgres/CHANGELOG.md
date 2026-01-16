@@ -1,5 +1,7 @@
 ## 0.1.0-dev
 
+- Added workflow run lease tracking and claim/renew helpers to distribute
+  workflow execution safely across workers.
 - Fixed worker heartbeat lookups by restoring soft-deleted heartbeat rows on
   upsert.
 - Added DataSource-based initialization that runs migrations before use, and

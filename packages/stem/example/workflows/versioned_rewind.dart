@@ -24,6 +24,7 @@ Future<void> main() async {
 
   // Rewind and execute again to append a new iteration checkpoint.
   await app.store.rewindToStep(runId, 'repeat');
+  await app.store.markRunning(runId);
   await app.runtime.executeRun(runId);
 
   final entries = await app.store.listSteps(runId);

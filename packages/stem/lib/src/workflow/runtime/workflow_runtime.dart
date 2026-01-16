@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
@@ -37,9 +38,11 @@ class WorkflowRuntime {
     WorkflowClock clock = const SystemWorkflowClock(),
     Duration pollInterval = const Duration(milliseconds: 500),
     this.leaseExtension = const Duration(seconds: 30),
+    this.runLeaseDuration = const Duration(seconds: 30),
     this.queue = 'workflow',
     WorkflowRegistry? registry,
     WorkflowIntrospectionSink? introspectionSink,
+    String? runtimeId,
   }) : _stem = stem,
        _store = store,
        _eventBus = eventBus,
@@ -47,7 +50,8 @@ class WorkflowRuntime {
        _pollInterval = pollInterval,
        _registry = registry ?? InMemoryWorkflowRegistry(),
        _introspection =
-           introspectionSink ?? const NoopWorkflowIntrospectionSink();
+           introspectionSink ?? const NoopWorkflowIntrospectionSink(),
+       _runtimeId = runtimeId ?? _defaultRuntimeId();
 
   final Stem _stem;
   final WorkflowStore _store;
@@ -56,8 +60,10 @@ class WorkflowRuntime {
 
   /// Duration used when extending worker leases for workflow runs.
   final Duration leaseExtension;
+  final Duration runLeaseDuration;
   final WorkflowRegistry _registry;
   final WorkflowIntrospectionSink _introspection;
+  final String _runtimeId;
 
   /// Queue name used to enqueue workflow run tasks.
   final String queue;
@@ -208,8 +214,23 @@ class WorkflowRuntime {
     if (runState.isTerminal) {
       return;
     }
+    if (runState.status == WorkflowStatus.suspended) {
+      final now = _clock.now();
+      if (await _maybeCancelForPolicy(runState, now: now)) {
+        return;
+      }
+    }
+    final claimed = await _store.claimRun(
+      runId,
+      ownerId: _runtimeId,
+      leaseDuration: runLeaseDuration,
+    );
+    if (!claimed) {
+      return;
+    }
     final now = _clock.now();
     if (await _maybeCancelForPolicy(runState, now: now)) {
+      await _store.releaseRun(runId, ownerId: _runtimeId);
       return;
     }
     final definition = _registry.lookup(runState.workflow);
@@ -228,265 +249,283 @@ class WorkflowRuntime {
           metadata: {'error': 'Unknown workflow ${runState.workflow}'},
         ),
       );
+      await _store.releaseRun(runId, ownerId: _runtimeId);
       return;
     }
 
-    final wasSuspended = runState.status == WorkflowStatus.suspended;
-    await _store.markRunning(runId);
-    if (wasSuspended) {
-      await _signals.workflowRunResumed(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.running,
-        ),
-      );
-    }
-
-    if (definition.isScript) {
-      await _executeScript(definition, runState, taskContext: taskContext);
-      return;
-    }
-
-    final policy = runState.cancellationPolicy;
-    final suspensionData = runState.suspensionData;
-    final completedIterations = await _loadCompletedIterations(runId);
-    var cursor = _computeCursor(definition, runState, completedIterations);
-    Object? previousResult;
-    if (cursor > 0) {
-      final prevStep = definition.steps[cursor - 1];
-      final completedCount = completedIterations[prevStep.name] ?? 0;
-      if (completedCount > 0) {
-        final checkpoint = _checkpointName(prevStep, completedCount - 1);
-        previousResult = await _store.readStep(runId, checkpoint);
+    try {
+      final wasSuspended = runState.status == WorkflowStatus.suspended;
+      await _store.markRunning(runId);
+      if (wasSuspended) {
+        await _signals.workflowRunResumed(
+          WorkflowRunPayload(
+            runId: runId,
+            workflow: runState.workflow,
+            status: WorkflowRunStatus.running,
+          ),
+        );
       }
-    }
-    var resumeData = suspensionData?['payload'];
 
-    while (cursor < definition.steps.length) {
-      if (policy != null && policy.maxRunDuration != null) {
-        final elapsed = _clock.now().difference(runState.createdAt);
-        if (elapsed >= policy.maxRunDuration!) {
-          await _cancelForPolicy(
-            runState,
-            reason: 'maxRunDuration',
-            metadata: {
-              'elapsedMillis': elapsed.inMilliseconds,
-              'limitMillis': policy.maxRunDuration!.inMilliseconds,
-            },
-          );
-          return;
+      if (definition.isScript) {
+        await _executeScript(definition, runState, taskContext: taskContext);
+        return;
+      }
+
+      final policy = runState.cancellationPolicy;
+      final suspensionData = runState.suspensionData;
+      final completedIterations = await _loadCompletedIterations(runId);
+      var cursor = _computeCursor(definition, runState, completedIterations);
+      Object? previousResult;
+      if (cursor > 0) {
+        final prevStep = definition.steps[cursor - 1];
+        final completedCount = completedIterations[prevStep.name] ?? 0;
+        if (completedCount > 0) {
+          final checkpoint = _checkpointName(prevStep, completedCount - 1);
+          previousResult = await _store.readStep(runId, checkpoint);
         }
       }
-      final step = definition.steps[cursor];
-      final iteration = step.autoVersion
-          ? _currentIterationForStep(step, completedIterations, suspensionData)
-          : 0;
-      final checkpointName = step.autoVersion
-          ? _versionedName(step.name, iteration)
-          : step.name;
+      var resumeData = suspensionData?['payload'];
 
-      if (iteration > 0) {
+      while (cursor < definition.steps.length) {
+        if (policy != null && policy.maxRunDuration != null) {
+          final elapsed = _clock.now().difference(runState.createdAt);
+          if (elapsed >= policy.maxRunDuration!) {
+            await _cancelForPolicy(
+              runState,
+              reason: 'maxRunDuration',
+              metadata: {
+                'elapsedMillis': elapsed.inMilliseconds,
+                'limitMillis': policy.maxRunDuration!.inMilliseconds,
+              },
+            );
+            return;
+          }
+        }
+        final step = definition.steps[cursor];
+        final iteration = step.autoVersion
+            ? _currentIterationForStep(
+                step,
+                completedIterations,
+                suspensionData,
+              )
+            : 0;
+        final checkpointName = step.autoVersion
+            ? _versionedName(step.name, iteration)
+            : step.name;
+
+        if (iteration > 0) {
+          await _recordStepEvent(
+            WorkflowStepEventType.retrying,
+            runState,
+            step.name,
+            iteration: iteration,
+          );
+        }
+        await _store.markRunning(runId, stepName: step.name);
+        await _extendLeases(taskContext, runId);
         await _recordStepEvent(
-          WorkflowStepEventType.retrying,
+          WorkflowStepEventType.started,
           runState,
           step.name,
           iteration: iteration,
         );
-      }
-      await _store.markRunning(runId, stepName: step.name);
-      await _extendLease(taskContext);
-      await _recordStepEvent(
-        WorkflowStepEventType.started,
-        runState,
-        step.name,
-        iteration: iteration,
-      );
-      await _signals.workflowRunResumed(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.running,
-          step: step.name,
-        ),
-      );
+        await _signals.workflowRunResumed(
+          WorkflowRunPayload(
+            runId: runId,
+            workflow: runState.workflow,
+            status: WorkflowRunStatus.running,
+            step: step.name,
+          ),
+        );
 
-      final cached = await _store.readStep<Object?>(runId, checkpointName);
-      if (cached != null) {
-        previousResult = cached;
+        final cached = await _store.readStep<Object?>(runId, checkpointName);
+        if (cached != null) {
+          previousResult = cached;
+          await _recordStepEvent(
+            WorkflowStepEventType.completed,
+            runState,
+            step.name,
+            iteration: iteration,
+            result: cached,
+            metadata: const {'replayed': true},
+          );
+          cursor += 1;
+          await _extendLeases(taskContext, runId);
+          continue;
+        }
+
+        final stepMeta = _stepMeta(
+          runState: runState,
+          stepName: step.name,
+          stepIndex: cursor,
+          iteration: iteration,
+        );
+        final context = FlowContext(
+          workflow: runState.workflow,
+          runId: runId,
+          stepName: step.name,
+          params: runState.params,
+          previousResult: previousResult,
+          stepIndex: cursor,
+          iteration: iteration,
+          clock: _clock,
+          resumeData: resumeData,
+          enqueuer: _stepEnqueuer(
+            taskContext: taskContext,
+            baseMeta: stepMeta,
+          ),
+        );
+        resumeData = null;
+        dynamic result;
+        try {
+          result = await TaskEnqueueScope.run(
+            stepMeta,
+            () async => await step.handler(context),
+          );
+        } on _WorkflowLeaseLost {
+          return;
+        } catch (error, stack) {
+          await _store.markFailed(runId, error, stack);
+          await _recordStepEvent(
+            WorkflowStepEventType.failed,
+            runState,
+            step.name,
+            iteration: iteration,
+            error: error.toString(),
+          );
+          await _signals.workflowRunFailed(
+            WorkflowRunPayload(
+              runId: runId,
+              workflow: runState.workflow,
+              status: WorkflowRunStatus.failed,
+              step: step.name,
+              metadata: {'error': error.toString(), 'stack': stack.toString()},
+            ),
+          );
+          rethrow;
+        }
+        final control = context.takeControl();
+        if (control != null && control.type != FlowControlType.continueRun) {
+          final metadata = <String, Object?>{
+            'step': step.name,
+            'iteration': iteration,
+            'iterationStep': step.name,
+          };
+          final suspendedAt = _clock.now();
+          metadata['suspendedAt'] = suspendedAt.toIso8601String();
+          DateTime? policyDeadline;
+          final suspendLimit = policy?.maxSuspendDuration;
+          if (suspendLimit != null) {
+            policyDeadline = suspendedAt.add(suspendLimit);
+            metadata['policyDeadline'] = policyDeadline.toIso8601String();
+          }
+          if (control.type == FlowControlType.sleep) {
+            final requestedResumeAt = suspendedAt.add(control.delay!);
+            var resumeAt = requestedResumeAt;
+            metadata['type'] = 'sleep';
+            metadata['requestedResumeAt'] = requestedResumeAt.toIso8601String();
+            if (policyDeadline != null && policyDeadline.isBefore(resumeAt)) {
+              resumeAt = policyDeadline;
+              metadata['policyDeadlineApplied'] = true;
+            }
+            metadata['resumeAt'] = resumeAt.toIso8601String();
+            final controlData = control.data;
+            if (controlData != null && controlData.isNotEmpty) {
+              metadata.addAll(controlData);
+            }
+            metadata.putIfAbsent('payload', () => true);
+            await _store.suspendUntil(
+              runId,
+              step.name,
+              resumeAt,
+              data: metadata,
+            );
+            await _signals.workflowRunSuspended(
+              WorkflowRunPayload(
+                runId: runId,
+                workflow: runState.workflow,
+                status: WorkflowRunStatus.suspended,
+                step: step.name,
+                metadata: {
+                  'type': 'sleep',
+                  'resumeAt': resumeAt.toIso8601String(),
+                },
+              ),
+            );
+          } else if (control.type == FlowControlType.waitForEvent) {
+            metadata['type'] = 'event';
+            metadata['topic'] = control.topic;
+            var deadline = control.deadline;
+            if (deadline != null) {
+              metadata['deadline'] = deadline.toIso8601String();
+            }
+            if (policyDeadline != null) {
+              if (deadline == null || policyDeadline.isBefore(deadline)) {
+                deadline = policyDeadline;
+                metadata['policyDeadlineApplied'] = true;
+              }
+            }
+            final controlData = control.data;
+            if (controlData != null && controlData.isNotEmpty) {
+              metadata.addAll(controlData);
+            }
+            await _store.registerWatcher(
+              runId,
+              step.name,
+              control.topic!,
+              deadline: deadline,
+              data: metadata,
+            );
+            await _signals.workflowRunSuspended(
+              WorkflowRunPayload(
+                runId: runId,
+                workflow: runState.workflow,
+                status: WorkflowRunStatus.suspended,
+                step: step.name,
+                metadata: {
+                  'type': 'waitForEvent',
+                  'topic': control.topic,
+                  if (deadline != null) 'deadline': deadline.toIso8601String(),
+                },
+              ),
+            );
+          }
+          return;
+        }
+
+        await _store.saveStep(runId, checkpointName, result);
+        await _extendLeases(taskContext, runId);
         await _recordStepEvent(
           WorkflowStepEventType.completed,
           runState,
           step.name,
           iteration: iteration,
-          result: cached,
-          metadata: const {'replayed': true},
+          result: result,
         );
+        if (step.autoVersion) {
+          completedIterations[step.name] = iteration + 1;
+        } else {
+          completedIterations[step.name] = 1;
+        }
+        previousResult = result;
         cursor += 1;
-        await _extendLease(taskContext);
-        continue;
       }
 
-      final stepMeta = _stepMeta(
-        runState: runState,
-        stepName: step.name,
-        stepIndex: cursor,
-        iteration: iteration,
-      );
-      final context = FlowContext(
-        workflow: runState.workflow,
-        runId: runId,
-        stepName: step.name,
-        params: runState.params,
-        previousResult: previousResult,
-        stepIndex: cursor,
-        iteration: iteration,
-        clock: _clock,
-        resumeData: resumeData,
-        enqueuer: _stepEnqueuer(
-          taskContext: taskContext,
-          baseMeta: stepMeta,
+      await _store.markCompleted(runId, previousResult);
+      await _extendLeases(taskContext, runId);
+      await _signals.workflowRunCompleted(
+        WorkflowRunPayload(
+          runId: runId,
+          workflow: runState.workflow,
+          status: WorkflowRunStatus.completed,
+          metadata: {'result': previousResult},
         ),
       );
-      resumeData = null;
-      dynamic result;
-      try {
-        result = await TaskEnqueueScope.run(
-          stepMeta,
-          () async => await step.handler(context),
-        );
-      } catch (error, stack) {
-        await _store.markFailed(runId, error, stack);
-        await _recordStepEvent(
-          WorkflowStepEventType.failed,
-          runState,
-          step.name,
-          iteration: iteration,
-          error: error.toString(),
-        );
-        await _signals.workflowRunFailed(
-          WorkflowRunPayload(
-            runId: runId,
-            workflow: runState.workflow,
-            status: WorkflowRunStatus.failed,
-            step: step.name,
-            metadata: {'error': error.toString(), 'stack': stack.toString()},
-          ),
-        );
-        rethrow;
-      }
-      final control = context.takeControl();
-      if (control != null && control.type != FlowControlType.continueRun) {
-        final metadata = <String, Object?>{
-          'step': step.name,
-          'iteration': iteration,
-          'iterationStep': step.name,
-        };
-        final suspendedAt = _clock.now();
-        metadata['suspendedAt'] = suspendedAt.toIso8601String();
-        DateTime? policyDeadline;
-        final suspendLimit = policy?.maxSuspendDuration;
-        if (suspendLimit != null) {
-          policyDeadline = suspendedAt.add(suspendLimit);
-          metadata['policyDeadline'] = policyDeadline.toIso8601String();
-        }
-        if (control.type == FlowControlType.sleep) {
-          final requestedResumeAt = suspendedAt.add(control.delay!);
-          var resumeAt = requestedResumeAt;
-          metadata['type'] = 'sleep';
-          metadata['requestedResumeAt'] = requestedResumeAt.toIso8601String();
-          if (policyDeadline != null && policyDeadline.isBefore(resumeAt)) {
-            resumeAt = policyDeadline;
-            metadata['policyDeadlineApplied'] = true;
-          }
-          metadata['resumeAt'] = resumeAt.toIso8601String();
-          final controlData = control.data;
-          if (controlData != null && controlData.isNotEmpty) {
-            metadata.addAll(controlData);
-          }
-          metadata.putIfAbsent('payload', () => true);
-          await _store.suspendUntil(runId, step.name, resumeAt, data: metadata);
-          await _signals.workflowRunSuspended(
-            WorkflowRunPayload(
-              runId: runId,
-              workflow: runState.workflow,
-              status: WorkflowRunStatus.suspended,
-              step: step.name,
-              metadata: {
-                'type': 'sleep',
-                'resumeAt': resumeAt.toIso8601String(),
-              },
-            ),
-          );
-        } else if (control.type == FlowControlType.waitForEvent) {
-          metadata['type'] = 'event';
-          metadata['topic'] = control.topic;
-          var deadline = control.deadline;
-          if (deadline != null) {
-            metadata['deadline'] = deadline.toIso8601String();
-          }
-          if (policyDeadline != null) {
-            if (deadline == null || policyDeadline.isBefore(deadline)) {
-              deadline = policyDeadline;
-              metadata['policyDeadlineApplied'] = true;
-            }
-          }
-          final controlData = control.data;
-          if (controlData != null && controlData.isNotEmpty) {
-            metadata.addAll(controlData);
-          }
-          await _store.registerWatcher(
-            runId,
-            step.name,
-            control.topic!,
-            deadline: deadline,
-            data: metadata,
-          );
-          await _signals.workflowRunSuspended(
-            WorkflowRunPayload(
-              runId: runId,
-              workflow: runState.workflow,
-              status: WorkflowRunStatus.suspended,
-              step: step.name,
-              metadata: {
-                'type': 'waitForEvent',
-                'topic': control.topic,
-                if (deadline != null) 'deadline': deadline.toIso8601String(),
-              },
-            ),
-          );
-        }
-        return;
-      }
-
-      await _store.saveStep(runId, checkpointName, result);
-      await _extendLease(taskContext);
-      await _recordStepEvent(
-        WorkflowStepEventType.completed,
-        runState,
-        step.name,
-        iteration: iteration,
-        result: result,
-      );
-      if (step.autoVersion) {
-        completedIterations[step.name] = iteration + 1;
-      } else {
-        completedIterations[step.name] = 1;
-      }
-      previousResult = result;
-      cursor += 1;
+    } on _WorkflowLeaseLost {
+      return;
+    } finally {
+      await _store.releaseRun(runId, ownerId: _runtimeId);
     }
-
-    await _store.markCompleted(runId, previousResult);
-    await _extendLease(taskContext);
-    await _signals.workflowRunCompleted(
-      WorkflowRunPayload(
-        runId: runId,
-        workflow: runState.workflow,
-        status: WorkflowRunStatus.completed,
-        metadata: {'result': previousResult},
-      ),
-    );
   }
 
   Future<void> _executeScript(
@@ -533,7 +572,7 @@ class WorkflowRuntime {
         return;
       }
       await _store.markCompleted(runId, result);
-      await _extendLease(taskContext);
+      await _extendLeases(taskContext, runId);
       await _signals.workflowRunCompleted(
         WorkflowRunPayload(
           runId: runId,
@@ -542,6 +581,8 @@ class WorkflowRuntime {
           metadata: {'result': result},
         ),
       );
+    } on _WorkflowLeaseLost {
+      return;
     } on _WorkflowScriptSuspended {
       return;
     } catch (error, stack) {
@@ -668,10 +709,31 @@ class WorkflowRuntime {
     }
   }
 
+  Future<void> _extendLeases(TaskContext? context, String runId) async {
+    if (runLeaseDuration.inMicroseconds > 0) {
+      final renewed = await _store.renewRunLease(
+        runId,
+        ownerId: _runtimeId,
+        leaseDuration: runLeaseDuration,
+      );
+      if (!renewed) {
+        throw _WorkflowLeaseLost();
+      }
+    }
+    await _extendLease(context);
+  }
+
+  static String _defaultRuntimeId() {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final suffix = Random().nextInt(1 << 31);
+    return 'workflow-runtime-$now-$suffix';
+  }
+
   Future<void> _enqueueRun(String runId, {String? workflow}) async {
     final meta = <String, Object?>{
       'stem.workflow.runId': runId,
-      if (workflow != null && workflow.isNotEmpty) 'stem.workflow.name': workflow,
+      if (workflow != null && workflow.isNotEmpty)
+        'stem.workflow.name': workflow,
     };
     await _stem.enqueue(
       workflowRunTaskName,
@@ -900,7 +962,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       );
     }
     await runtime._store.markRunning(runId, stepName: name);
-    await runtime._extendLease(taskContext);
+    await runtime._extendLeases(taskContext, runId);
     await runtime._recordStepEvent(
       WorkflowStepEventType.started,
       runState,
@@ -936,7 +998,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         _completedIterations[name] = 1;
       }
       _stepIndex += 1;
-      await runtime._extendLease(taskContext);
+      await runtime._extendLeases(taskContext, runId);
       return cached as T;
     }
 
@@ -984,7 +1046,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     }
 
     await runtime._store.saveStep(runId, checkpointName, result);
-    await runtime._extendLease(taskContext);
+    await runtime._extendLeases(taskContext, runId);
     await runtime._recordStepEvent(
       WorkflowStepEventType.completed,
       runState,
@@ -1252,8 +1314,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    final mergedMeta = Map<String, Object?>.from(baseMeta)
-      ..addAll(call.meta);
+    final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(call.meta);
     final mergedCall = call.copyWith(
       meta: Map.unmodifiable(mergedMeta),
     );
@@ -1266,6 +1327,10 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
 
 class _WorkflowScriptSuspended implements Exception {
   const _WorkflowScriptSuspended();
+}
+
+class _WorkflowLeaseLost implements Exception {
+  const _WorkflowLeaseLost();
 }
 
 enum _ScriptControlType { continueRun, sleep, waitForEvent }

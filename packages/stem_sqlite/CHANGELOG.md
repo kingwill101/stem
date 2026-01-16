@@ -1,5 +1,7 @@
 ## 0.1.0-dev
 
+- Added workflow run lease tracking and claim/renew support so workflows can be
+  distributed safely across workers.
 - Added DataSource-based factory helpers that run SQLite migrations for
   brokers, result backends, and workflow stores.
 - Hardened SQLite connection initialization with file locking/retry to avoid

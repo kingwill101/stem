@@ -104,6 +104,29 @@ abstract class WorkflowStore {
   /// step invocation.
   Future<void> markResumed(String runId, {Map<String, Object?>? data});
 
+  /// Attempts to claim a run for execution with a lease.
+  ///
+  /// Returns `true` when the claim succeeds, or `false` if another worker
+  /// holds an active lease.
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  });
+
+  /// Renews the lease for [runId] when owned by [ownerId].
+  ///
+  /// Returns `true` when the lease is extended, or `false` if ownership
+  /// has changed or the run is no longer runnable.
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  });
+
+  /// Releases the lease on [runId] when owned by [ownerId].
+  Future<void> releaseRun(String runId, {required String ownerId});
+
   /// Returns run identifiers whose wake-up time is at or before [now].
   Future<List<String>> dueRuns(DateTime now, {int limit = 256});
 
@@ -121,6 +144,13 @@ abstract class WorkflowStore {
   Future<List<RunState>> listRuns({
     String? workflow,
     WorkflowStatus? status,
+    int limit = 50,
+    int offset = 0,
+  });
+
+  /// Returns runnable run identifiers filtered by status and lease availability.
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
     int limit = 50,
     int offset = 0,
   });
