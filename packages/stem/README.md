@@ -34,6 +34,47 @@ stem --help
 
 ## Quick Start
 
+### StemClient entrypoint
+
+Use a single entrypoint to share broker/backend/config between workers and
+workflow apps.
+
+```dart
+import 'dart:async';
+import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+
+class HelloTask implements TaskHandler<void> {
+  @override
+  String get name => 'demo.hello';
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: 'default');
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    print('Hello from StemClient');
+  }
+}
+
+Future<void> main() async {
+  final client = await StemClient.create(
+    broker: StemBrokerFactory.redis(url: 'redis://localhost:6379'),
+    backend: StemBackendFactory.redis(url: 'redis://localhost:6379/1'),
+    tasks: [HelloTask()],
+  );
+
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  await client.stem.enqueue('demo.hello');
+  await Future<void>.delayed(const Duration(seconds: 1));
+
+  await worker.shutdown();
+  await client.close();
+}
+```
+
 ### Direct enqueue (map-based)
 
 ```dart

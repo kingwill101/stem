@@ -12,6 +12,8 @@
   choosing between inline vs. isolate task execution.
 - Added workflow/task annotations and a registry builder to streamline
   declarative workflow setup with existing Flow/WorkflowScript APIs.
+- Added StemClient as a single entrypoint for configuring workers and workflow
+  apps with shared broker/backend registries.
 - Added TaskContext demos and refreshed docs/snippets for enqueue options and
   SQLite guidance.
 - Added typed workflow, task, and canvas result APIs with customizable encoders

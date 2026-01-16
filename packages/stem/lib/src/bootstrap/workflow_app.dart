@@ -1,5 +1,6 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
+import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow.dart';
@@ -328,6 +329,38 @@ class StemWorkflowApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a workflow app backed by a shared [StemClient].
+  static Future<StemWorkflowApp> fromClient({
+    required StemClient client,
+    Iterable<WorkflowDefinition> workflows = const [],
+    Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
+    WorkflowStoreFactory? storeFactory,
+    WorkflowEventBusFactory? eventBusFactory,
+    StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowIntrospectionSink? introspectionSink,
+  }) async {
+    final appInstance = await StemApp.fromClient(
+      client,
+      workerConfig: workerConfig,
+    );
+    return StemWorkflowApp.create(
+      workflows: workflows,
+      flows: flows,
+      scripts: scripts,
+      stemApp: appInstance,
+      storeFactory: storeFactory,
+      eventBusFactory: eventBusFactory,
+      workerConfig: workerConfig,
+      pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
+      workflowRegistry: client.workflowRegistry,
+      introspectionSink: introspectionSink,
     );
   }
 }

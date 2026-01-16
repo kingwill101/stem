@@ -7,6 +7,7 @@ export 'src/backend/encoding_result_backend.dart';
 export 'src/backend/in_memory_backend.dart';
 export 'src/bootstrap/factories.dart';
 export 'src/bootstrap/stem_app.dart';
+export 'src/bootstrap/stem_client.dart';
 export 'src/bootstrap/workflow_app.dart';
 export 'src/brokers/in_memory_broker.dart';
 export 'src/canvas/canvas.dart';

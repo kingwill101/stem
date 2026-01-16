@@ -1,5 +1,6 @@
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
+import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
@@ -198,6 +199,56 @@ class StemApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a Stem app using a shared [StemClient].
+  static Future<StemApp> fromClient(
+    StemClient client, {
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    StemWorkerConfig workerConfig = const StemWorkerConfig(),
+  }) async {
+    tasks.forEach(client.taskRegistry.register);
+
+    final worker = Worker(
+      broker: client.broker,
+      registry: client.taskRegistry,
+      backend: client.backend,
+      enqueuer: client.stem,
+      rateLimiter: workerConfig.rateLimiter,
+      middleware: workerConfig.middleware ?? client.middleware,
+      revokeStore: workerConfig.revokeStore,
+      uniqueTaskCoordinator:
+          workerConfig.uniqueTaskCoordinator ?? client.uniqueTaskCoordinator,
+      retryStrategy: workerConfig.retryStrategy ?? client.retryStrategy,
+      queue: workerConfig.queue,
+      subscription: workerConfig.subscription,
+      consumerName: workerConfig.consumerName,
+      concurrency: workerConfig.concurrency,
+      prefetchMultiplier: workerConfig.prefetchMultiplier,
+      prefetch: workerConfig.prefetch,
+      heartbeatInterval: workerConfig.heartbeatInterval,
+      workerHeartbeatInterval: workerConfig.workerHeartbeatInterval,
+      heartbeatTransport: workerConfig.heartbeatTransport,
+      heartbeatNamespace: workerConfig.heartbeatNamespace,
+      autoscale: workerConfig.autoscale,
+      lifecycle: workerConfig.lifecycle,
+      observability: workerConfig.observability,
+      signer: workerConfig.signer ?? client.signer,
+      encoderRegistry: client.encoderRegistry,
+    );
+
+    return StemApp._(
+      registry: client.taskRegistry,
+      broker: client.broker,
+      backend: client.backend,
+      stem: client.stem,
+      worker: worker,
+      disposers: [
+        () async {
+          await worker.shutdown();
+        },
+      ],
     );
   }
 }

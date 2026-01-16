@@ -2,13 +2,15 @@ import 'package:stem/stem.dart';
 import 'package:stem_annotated_workflows/stem_registry.g.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory();
-
+  final client = await StemClient.inMemory();
   registerStemDefinitions(
-    workflows: app.runtime.registry,
-    tasks: app.app.registry,
+    workflows: client.workflowRegistry,
+    tasks: client.taskRegistry,
   );
-
+  final app = await client.createWorkflowApp(
+    flows: stemFlows,
+    scripts: stemScripts,
+  );
   await app.start();
 
   final flowRunId = await app.startWorkflow('annotated.flow');
@@ -26,4 +28,5 @@ Future<void> main() async {
   print('Script result: ${scriptResult?.value}');
 
   await app.close();
+  await client.close();
 }

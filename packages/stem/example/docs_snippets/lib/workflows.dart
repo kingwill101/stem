@@ -27,6 +27,16 @@ Future<void> bootstrapWorkflowRuntime() async {
 }
 // #endregion workflows-runtime
 
+// #region workflows-client
+Future<void> bootstrapWorkflowClient() async {
+  final client = await StemClient.inMemory();
+  final app = await client.createWorkflowApp(flows: [ApprovalsFlow.flow]);
+  await app.start();
+  await app.close();
+  await client.close();
+}
+// #endregion workflows-client
+
 // #region workflows-flow
 class ApprovalsFlow {
   static final flow = Flow<String>(
