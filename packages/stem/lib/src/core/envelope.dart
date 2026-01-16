@@ -75,7 +75,8 @@ class RoutingInfo {
   factory RoutingInfo.fromJson(Map<String, Object?> json) {
     final type = json['type']?.toString();
     if (type == RoutingTargetType.broadcast.name) {
-      final channel = json['broadcastChannel']?.toString() ??
+      final channel =
+          json['broadcastChannel']?.toString() ??
           json['channel']?.toString() ??
           '';
       return RoutingInfo.broadcast(
@@ -123,15 +124,15 @@ class RoutingInfo {
 
   /// Serializes this routing descriptor to JSON.
   Map<String, Object?> toJson() => {
-        'type': type.name,
-        'queue': queue,
-        'exchange': exchange,
-        'routingKey': routingKey,
-        'priority': priority,
-        'broadcastChannel': broadcastChannel,
-        'delivery': delivery,
-        'meta': meta,
-      };
+    'type': type.name,
+    'queue': queue,
+    'exchange': exchange,
+    'routingKey': routingKey,
+    'priority': priority,
+    'broadcastChannel': broadcastChannel,
+    'delivery': delivery,
+    'meta': meta,
+  };
 }
 
 /// Unique identifier generator used for task envelopes by default.

@@ -66,6 +66,24 @@ class EncodingResultBackend implements ResultBackend {
   }
 
   @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    final page = await _inner.listTaskStatuses(request);
+    if (page.items.isEmpty) return page;
+    final decodedItems = page.items
+        .map((record) {
+          return TaskStatusRecord(
+            status: _decodeStatus(record.status),
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt,
+          );
+        })
+        .toList(growable: false);
+    return TaskStatusPage(items: decodedItems, nextOffset: page.nextOffset);
+  }
+
+  @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) =>
       _inner.setWorkerHeartbeat(heartbeat);
 

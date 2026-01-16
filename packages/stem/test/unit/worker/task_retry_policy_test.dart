@@ -359,12 +359,12 @@ class _FlakyTask extends TaskHandler<String> {
 
   @override
   TaskOptions get options => const TaskOptions(
-        maxRetries: 3,
-        retryPolicy: TaskRetryPolicy(
-          defaultDelay: Duration(milliseconds: 10),
-          jitter: false,
-        ),
-      );
+    maxRetries: 3,
+    retryPolicy: TaskRetryPolicy(
+      defaultDelay: Duration(milliseconds: 10),
+      jitter: false,
+    ),
+  );
 
   @override
   TaskMetadata get metadata => const TaskMetadata();

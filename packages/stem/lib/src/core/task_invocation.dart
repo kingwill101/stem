@@ -251,7 +251,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     }
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
     final mergedHeaders = Map<String, String>.from(headers)
-    ..addAll(call.headers);
+      ..addAll(call.headers);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = <String, Object?>{
       if (scopeMeta != null) ...scopeMeta,

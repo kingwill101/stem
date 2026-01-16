@@ -1153,12 +1153,12 @@ class Worker {
       final notBefore = _parseDateTime(data['notBefore']);
 
       final mergedHeaders = Map<String, String>.from(envelope.headers)
-      ..addAll(headers);
+        ..addAll(headers);
 
       final mergedMeta = Map<String, Object?>.from(envelope.meta)
         ..remove('stem.link')
         ..remove('stem.linkError')
-      ..addAll(meta);
+        ..addAll(meta);
 
       if (enqueueOptions?.addToParent ?? true) {
         mergedMeta['stem.parentTaskId'] = envelope.id;

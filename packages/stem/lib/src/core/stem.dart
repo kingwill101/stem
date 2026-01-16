@@ -157,13 +157,16 @@ class Stem implements TaskEnqueuer {
         final mergedMeta = scopeMeta == null
             ? meta
             : <String, Object?>{
-              ...scopeMeta,
-              ...meta,
-            };
+                ...scopeMeta,
+                ...meta,
+              };
         final enrichedMeta = _applyEnqueueOptionsToMeta(
           mergedMeta,
           enqueueOptions,
         );
+        if (!enrichedMeta.containsKey('stem.task')) {
+          enrichedMeta['stem.task'] = name;
+        }
         if (options.retryPolicy != null &&
             !enrichedMeta.containsKey('stem.retryPolicy')) {
           enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
@@ -684,8 +687,7 @@ extension TaskEnqueueBuilderExtension<TArgs, TResult>
     if (scopeMeta == null || scopeMeta.isEmpty) {
       return enqueuer.enqueueCall(call);
     }
-    final mergedMeta = Map<String, Object?>.from(scopeMeta)
-      ..addAll(call.meta);
+    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
     return enqueuer.enqueueCall(
       call.copyWith(meta: Map.unmodifiable(mergedMeta)),
     );

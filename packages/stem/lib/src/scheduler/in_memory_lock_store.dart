@@ -36,6 +36,23 @@ class InMemoryLockStore implements LockStore {
   }
 
   @override
+  Future<bool> renew(String key, String owner, Duration ttl) async {
+    final lock = _locks[key];
+    if (lock == null) {
+      return false;
+    }
+    if (lock.owner != owner) {
+      return false;
+    }
+    if (lock.isExpired(DateTime.now())) {
+      _locks.remove(key);
+      return false;
+    }
+    lock.expiresAt = DateTime.now().add(ttl);
+    return true;
+  }
+
+  @override
   Future<bool> release(String key, String owner) async {
     final lock = _locks[key];
     if (lock == null) {

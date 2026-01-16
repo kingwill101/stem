@@ -238,6 +238,68 @@ class TaskStatus {
   };
 }
 
+/// Immutable record representing a persisted task status with timestamps.
+class TaskStatusRecord {
+  /// Creates a task status record.
+  const TaskStatusRecord({
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  /// Task status payload.
+  final TaskStatus status;
+
+  /// Timestamp when the task status was first persisted.
+  final DateTime createdAt;
+
+  /// Timestamp when the task status was last updated.
+  final DateTime updatedAt;
+}
+
+/// Query parameters used to list task status records.
+class TaskStatusListRequest {
+  /// Creates a task status list request.
+  const TaskStatusListRequest({
+    this.state,
+    this.queue,
+    this.meta = const {},
+    this.limit = 50,
+    this.offset = 0,
+  }) : assert(limit >= 0, 'limit must be >= 0'),
+       assert(offset >= 0, 'offset must be >= 0');
+
+  /// Optional task state filter.
+  final TaskState? state;
+
+  /// Optional queue filter (matches `meta["queue"]`).
+  final String? queue;
+
+  /// Metadata key/value filters (null values match key presence).
+  final Map<String, Object?> meta;
+
+  /// Maximum number of records to return.
+  final int limit;
+
+  /// Number of records to skip.
+  final int offset;
+}
+
+/// Paginated page of task status records.
+class TaskStatusPage {
+  /// Creates a task status page.
+  const TaskStatusPage({required this.items, this.nextOffset});
+
+  /// Records included in this page.
+  final List<TaskStatusRecord> items;
+
+  /// Offset to continue pagination, or `null` if no more results.
+  final int? nextOffset;
+
+  /// Whether additional records are available.
+  bool get hasMore => nextOffset != null;
+}
+
 /// Error metadata captured for failures.
 class TaskError {
   /// Creates an error metadata record.
@@ -413,6 +475,13 @@ abstract class ResultBackend {
   /// Returns a stream of [TaskStatus] updates for the task with the given
   /// [taskId].
   Stream<TaskStatus> watch(String taskId);
+
+  /// Lists task status records using the provided [request] filters.
+  ///
+  /// Implementations SHOULD order results from newest to oldest.
+  Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request) async {
+    return const TaskStatusPage(items: [], nextOffset: null);
+  }
 
   /// Persist the latest [heartbeat] snapshot for a worker.
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
@@ -1933,6 +2002,12 @@ abstract class LockStore {
     Duration ttl = const Duration(seconds: 30),
     String? owner,
   });
+
+  /// Renews the lock for [key] when held by [owner], extending by [ttl].
+  ///
+  /// Returns `true` when the lock was renewed, otherwise `false` (e.g. owner
+  /// mismatch or lock expired).
+  Future<bool> renew(String key, String owner, Duration ttl);
 
   /// Returns the owner currently holding the lock for [key], or null if
   /// unlocked.

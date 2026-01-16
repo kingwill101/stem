@@ -29,6 +29,45 @@ void main() {
     expect(await backend.get('task-1'), isNull);
   });
 
+  test('InMemoryResultBackend lists task statuses with filters', () async {
+    final backend = InMemoryResultBackend();
+    addTearDown(backend.dispose);
+
+    await backend.set(
+      'task-1',
+      TaskState.queued,
+      meta: const {'queue': 'default', 'kind': 'demo'},
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 2));
+    await backend.set(
+      'task-2',
+      TaskState.succeeded,
+      meta: const {'queue': 'default', 'kind': 'demo'},
+    );
+    await backend.set(
+      'task-3',
+      TaskState.running,
+      meta: const {'queue': 'other', 'kind': 'demo'},
+    );
+
+    final page = await backend.listTaskStatuses(
+      const TaskStatusListRequest(
+        queue: 'default',
+        meta: {'kind': 'demo'},
+        limit: 10,
+        offset: 0,
+      ),
+    );
+    expect(page.items, hasLength(2));
+    expect(page.items.first.status.id, 'task-2');
+    expect(page.items.first.createdAt, isA<DateTime>());
+
+    final queuedOnly = await backend.listTaskStatuses(
+      const TaskStatusListRequest(state: TaskState.queued, limit: 10),
+    );
+    expect(queuedOnly.items.map((item) => item.status.id), contains('task-1'));
+  });
+
   test('InMemoryResultBackend group/chord operations', () async {
     final backend = InMemoryResultBackend(
       groupDefaultTtl: const Duration(milliseconds: 50),

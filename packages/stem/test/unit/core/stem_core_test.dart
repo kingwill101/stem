@@ -196,6 +196,13 @@ class _RecordingBackend implements ResultBackend {
   }
 
   @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    return const TaskStatusPage(items: [], nextOffset: null);
+  }
+
+  @override
   Future<void> set(
     String taskId,
     TaskState state, {

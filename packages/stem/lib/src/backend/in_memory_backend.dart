@@ -42,6 +42,9 @@ class InMemoryResultBackend implements ResultBackend {
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) async {
+    final now = DateTime.now();
+    final existing = _entries[taskId];
+    final createdAt = existing?.createdAt ?? now;
     final status = TaskStatus(
       id: taskId,
       state: state,
@@ -54,6 +57,8 @@ class InMemoryResultBackend implements ResultBackend {
     _entries[taskId] = _Entry(
       status: status,
       expiresAt: DateTime.now().add(ttl ?? defaultTtl),
+      createdAt: createdAt,
+      updatedAt: now,
     );
 
     _scheduleExpiry(taskId, ttl ?? defaultTtl);
@@ -87,6 +92,51 @@ class InMemoryResultBackend implements ResultBackend {
       ),
     );
     return controller.stream;
+  }
+
+  @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    _pruneExpired();
+    if (request.limit <= 0) {
+      return const TaskStatusPage(items: [], nextOffset: null);
+    }
+    final matches = _entries.values.where((entry) {
+      if (request.state != null && entry.status.state != request.state) {
+        return false;
+      }
+      if (request.queue != null) {
+        final queue = entry.status.meta['queue']?.toString();
+        if (queue != request.queue) {
+          return false;
+        }
+      }
+      if (!_matchesMeta(entry.status.meta, request.meta)) {
+        return false;
+      }
+      return true;
+    }).toList();
+
+    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final offset = request.offset;
+    final limit = request.limit;
+    final pageItems = matches
+        .skip(offset)
+        .take(limit)
+        .map((entry) {
+          return TaskStatusRecord(
+            status: entry.status,
+            createdAt: entry.createdAt,
+            updatedAt: entry.updatedAt,
+          );
+        })
+        .toList(growable: false);
+    final hasNext = matches.length > offset + limit;
+    return TaskStatusPage(
+      items: pageItems,
+      nextOffset: hasNext ? offset + limit : null,
+    );
   }
 
   @override
@@ -259,13 +309,45 @@ class InMemoryResultBackend implements ResultBackend {
         .toList(growable: false)
         .forEach(_removeHeartbeat);
   }
+
+  void _pruneExpired() {
+    final now = DateTime.now();
+    final expired = _entries.entries
+        .where((entry) => entry.value.expiresAt.isBefore(now))
+        .map((entry) => entry.key)
+        .toList(growable: false);
+    for (final key in expired) {
+      _remove(key);
+    }
+  }
+
+  bool _matchesMeta(
+    Map<String, Object?> meta,
+    Map<String, Object?> filters,
+  ) {
+    if (filters.isEmpty) return true;
+    for (final entry in filters.entries) {
+      if (!meta.containsKey(entry.key)) return false;
+      final expected = entry.value;
+      if (expected == null) continue;
+      if (meta[entry.key] != expected) return false;
+    }
+    return true;
+  }
 }
 
 class _Entry {
-  _Entry({required this.status, required this.expiresAt});
+  _Entry({
+    required this.status,
+    required this.expiresAt,
+    required this.createdAt,
+    required this.updatedAt,
+  });
 
   final TaskStatus status;
   DateTime expiresAt;
+  DateTime createdAt;
+  DateTime updatedAt;
 }
 
 class _GroupEntry {

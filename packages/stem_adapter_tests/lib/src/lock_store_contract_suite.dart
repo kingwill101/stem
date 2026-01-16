@@ -132,6 +132,49 @@ void runLockStoreContractTests({
       await lock.release();
     });
 
+    test('store renew extends the lock TTL for the owner', () async {
+      final current = store!;
+      final key = _lockKey('store-renew');
+      final lock = await current.acquire(
+        key,
+        owner: 'owner-store-renew',
+        ttl: settings.initialTtl,
+      );
+      expect(lock, isNotNull);
+
+      final extended = Duration(
+        milliseconds: settings.initialTtl.inMilliseconds * 4,
+      );
+      final renewed = await current.renew(key, 'owner-store-renew', extended);
+      expect(renewed, isTrue);
+
+      await Future<void>.delayed(settings.initialTtl + settings.expiryBackoff);
+      final owner = await current.ownerOf(key);
+      expect(owner, equals('owner-store-renew'));
+
+      await current.release(key, 'owner-store-renew');
+    });
+
+    test('store renew rejects mismatched owners', () async {
+      final current = store!;
+      final key = _lockKey('store-renew-mismatch');
+      final lock = await current.acquire(
+        key,
+        owner: 'owner-store-mismatch',
+        ttl: settings.initialTtl,
+      );
+      expect(lock, isNotNull);
+
+      final renewed = await current.renew(
+        key,
+        'owner-wrong',
+        settings.initialTtl,
+      );
+      expect(renewed, isFalse);
+
+      await lock!.release();
+    });
+
     test('renew fails after lock expiry', () async {
       final current = store!;
       final key = _lockKey('renew-expired');

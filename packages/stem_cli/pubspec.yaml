@@ -9,6 +9,7 @@ environment:
 dependencies:
   artisanal: ^0.1.0
   stem: ^0.1.0-dev
+  stem_cloud_worker: ^0.1.0-dev
   stem_redis: ^0.1.0-dev
   stem_postgres: ^0.1.0-dev
   stem_sqlite: ^0.1.0-dev
