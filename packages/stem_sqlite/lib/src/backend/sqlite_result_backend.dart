@@ -231,6 +231,70 @@ class SqliteResultBackend implements ResultBackend {
   }
 
   @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    if (request.limit <= 0) {
+      return const TaskStatusPage(items: [], nextOffset: null);
+    }
+    final now = DateTime.now();
+    final matches = <TaskStatusRecord>[];
+    var scanOffset = 0;
+    final target = request.offset + request.limit;
+    const batchSize = 200;
+
+    while (matches.length < target) {
+      var query = _context
+          .query<StemTaskResult>()
+          .whereEquals('namespace', namespace)
+          .where('expiresAt', now, PredicateOperator.greaterThan)
+          .orderBy('updatedAt', descending: true)
+          .offset(scanOffset)
+          .limit(batchSize);
+      if (request.state != null) {
+        query = query.whereEquals('state', request.state!.name);
+      }
+      final rows = await query.get();
+      if (rows.isEmpty) break;
+      for (final row in rows) {
+        final status = _taskStatusFromRow(row);
+        if (request.queue != null) {
+          final queue = status.meta['queue']?.toString();
+          if (queue != request.queue) {
+            continue;
+          }
+        }
+        if (!_matchesMeta(status.meta, request.meta)) {
+          continue;
+        }
+        final createdAt =
+            row.createdAt?.toDateTime() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+        final updatedAt = row.updatedAt?.toDateTime() ?? createdAt;
+        matches.add(
+          TaskStatusRecord(
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+      }
+      scanOffset += rows.length;
+      if (rows.length < batchSize) break;
+    }
+
+    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final offset = request.offset;
+    final limit = request.limit;
+    final pageItems = matches.skip(offset).take(limit).toList(growable: false);
+    final hasNext = matches.length > offset + limit;
+    return TaskStatusPage(
+      items: pageItems,
+      nextOffset: hasNext ? offset + limit : null,
+    );
+  }
+
+  @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
     final now = DateTime.now();
     final expiresAt = now.add(heartbeatTtl);
@@ -478,6 +542,20 @@ class SqliteResultBackend implements ResultBackend {
       meta: row.meta,
       attempt: row.attempt,
     );
+  }
+
+  bool _matchesMeta(
+    Map<String, Object?> meta,
+    Map<String, Object?> filters,
+  ) {
+    if (filters.isEmpty) return true;
+    for (final entry in filters.entries) {
+      if (!meta.containsKey(entry.key)) return false;
+      final expected = entry.value;
+      if (expected == null) continue;
+      if (meta[entry.key] != expected) return false;
+    }
+    return true;
   }
 
   static const _scalarWrapperKey = '__wrapped_scalar__';

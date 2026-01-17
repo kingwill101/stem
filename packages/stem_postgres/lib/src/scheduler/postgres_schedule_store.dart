@@ -31,6 +31,7 @@ class PostgresScheduleStore implements ScheduleStore {
   }
 
   final PostgresConnections _connections;
+
   /// Namespace used to partition schedule entries.
   final String namespace;
 

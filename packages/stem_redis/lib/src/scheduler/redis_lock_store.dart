@@ -147,6 +147,10 @@ end
   }
 
   @override
+  Future<bool> renew(String key, String owner, Duration ttl) =>
+      _renew(_key(key), owner, ttl);
+
+  @override
   Future<bool> release(String key, String owner) => _release(_key(key), owner);
 }
 

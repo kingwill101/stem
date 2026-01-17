@@ -141,6 +141,11 @@ class PostgresLockStore implements LockStore {
     return true;
   }
 
+  /// Renews the lock for [key] when held by [owner].
+  @override
+  Future<bool> renew(String key, String owner, Duration ttl) =>
+      _renew(key, owner, ttl);
+
   Future<bool> _release(String key, String owner) async {
     final ctx = _connections.context;
 

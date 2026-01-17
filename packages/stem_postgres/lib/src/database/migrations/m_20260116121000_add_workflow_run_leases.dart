@@ -10,10 +10,11 @@ class AddWorkflowRunLeases extends Migration {
     schema.table('stem_workflow_runs', (table) {
       table.text('owner_id').nullable();
       table.timestamp('lease_expires_at').nullable();
-      table..index(['owner_id'], name: 'stem_workflow_runs_owner_idx')
-      ..index([
-        'lease_expires_at',
-      ], name: 'stem_workflow_runs_lease_idx');
+      table
+        ..index(['owner_id'], name: 'stem_workflow_runs_owner_idx')
+        ..index([
+          'lease_expires_at',
+        ], name: 'stem_workflow_runs_lease_idx');
     });
   }
 

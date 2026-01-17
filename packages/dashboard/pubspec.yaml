@@ -35,6 +35,10 @@ dependency_overrides:
     path: ../stem
   stem_cli:
     path: ../stem_cli
+  stem_cloud_worker:
+    path: ../cloud/stem_cloud_worker
+  stem_cloud_protocol:
+    path: ../cloud/stem_cloud_protocol
   stem_postgres:
     path: ../stem_postgres
   stem_redis:

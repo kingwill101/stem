@@ -41,3 +41,11 @@ The workflow store SHALL provide APIs to list runnable runs with optional filter
 - **GIVEN** runnable workflow runs exist
 - **WHEN** a worker queries for runnable runs
 - **THEN** the store returns a filtered, paginated list of runnable runs
+
+### Requirement: Gateway workflow store access
+The system SHALL expose workflow store operations via the API gateway so workers can coordinate workflow runs across processes.
+
+#### Scenario: Worker claims runs through the gateway
+- **GIVEN** a worker connected to the API gateway
+- **WHEN** the worker requests runnable runs and claims a lease
+- **THEN** the gateway proxies the workflow store operations and enforces lease semantics
