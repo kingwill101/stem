@@ -342,8 +342,7 @@ class StemQueueJobModelFactory {
 
   static ModelFactoryBuilder<StemQueueJob> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemQueueJob>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemQueueJob>(
     generatorProvider: generatorProvider,
   );
 }

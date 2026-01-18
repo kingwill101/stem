@@ -7,18 +7,18 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
-  artisanal: ^0.1.0-dev+4
-  collection: ^1.18.0
-  meta: ^1.17.0
-  ormed: ^0.1.0-dev+6
-  ormed_sqlite: ^0.1.0-dev+6
+  artisanal: ^0.1.2
+  collection: ^1.19.1
+  meta: ^1.18.0
+  ormed: ^0.1.0-dev+10
+  ormed_sqlite: ^0.1.0-dev+10
   path: ^1.9.1
   stem: ^0.1.0-dev
 
 dev_dependencies:
-  build_runner: ^2.10.4
+  build_runner: ^2.10.5
   coverage: ^1.15.0
   lints: ^6.0.0
   stem_adapter_tests: ^0.1.0-dev
-  test: ^1.26.3
+  test: ^1.29.0
   very_good_analysis: ^10.0.0

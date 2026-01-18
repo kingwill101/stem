@@ -265,8 +265,7 @@ class StemWorkflowWatcherModelFactory {
 
   static ModelFactoryBuilder<StemWorkflowWatcher> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemWorkflowWatcher>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemWorkflowWatcher>(
     generatorProvider: generatorProvider,
   );
 }

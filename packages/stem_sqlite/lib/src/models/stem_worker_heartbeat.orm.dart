@@ -365,8 +365,7 @@ class StemWorkerHeartbeatModelFactory {
 
   static ModelFactoryBuilder<StemWorkerHeartbeat> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemWorkerHeartbeat>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemWorkerHeartbeat>(
     generatorProvider: generatorProvider,
   );
 }
