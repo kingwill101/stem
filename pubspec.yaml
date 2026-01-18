@@ -17,5 +17,6 @@ dev_dependencies:
   coverage: ^1.15.0
   very_good_analysis: ^10.0.0
 dependency_overrides:
+  liquify: ^1.5.0
   timezone: 0.11.0
   pointycastle: ^4.0.0
