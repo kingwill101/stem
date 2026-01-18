@@ -1,3 +1,31 @@
+/// Durable workflow execution runtime.
+///
+/// This library provides the [WorkflowRuntime], which is responsible for
+/// executing workflows defined via the `WorkflowDefinition` API.
+///
+/// ## Durability and Idempotency
+///
+/// The runtime is designed to be durable across worker crashes or restarts.
+/// It achieves this by:
+/// 1. Persisting every step result to the [WorkflowStore].
+/// 2. Re-executing the workflow from the beginning on every "tick".
+/// 3. Skipping steps that already have a persisted result.
+///
+/// Because of this "re-run" model, all code inside a workflow (including
+/// non-flow-step logic) MUST be idempotent or strictly rely on the
+/// provided [WorkflowScriptContext] for side effects.
+///
+/// ## Execution Model
+///
+/// Workflows are triggered by enqueuing a special `stem.workflow.run` task.
+/// The [WorkflowRuntime] consumes these tasks and "ticks" the workflow
+/// state machine until completion or suspension.
+///
+/// See also:
+/// - `WorkflowDefinition` for defining flows and scripts.
+/// - `WorkflowStore` for the persistence layer.
+library;
+
 import 'dart:async';
 import 'dart:math';
 
@@ -60,6 +88,8 @@ class WorkflowRuntime {
 
   /// Duration used when extending worker leases for workflow runs.
   final Duration leaseExtension;
+
+  /// Duration used when claiming and renewing workflow run leases.
   final Duration runLeaseDuration;
   final WorkflowRegistry _registry;
   final WorkflowIntrospectionSink _introspection;
@@ -220,13 +250,14 @@ class WorkflowRuntime {
         return;
       }
     }
+    // Attempt to claim the run lease before executing steps.
     final claimed = await _store.claimRun(
       runId,
       ownerId: _runtimeId,
       leaseDuration: runLeaseDuration,
     );
     if (!claimed) {
-      return;
+      throw StateError('Workflow run $runId lease is held by another runtime');
     }
     final now = _clock.now();
     if (await _maybeCancelForPolicy(runState, now: now)) {
@@ -528,6 +559,7 @@ class WorkflowRuntime {
     }
   }
 
+  /// Executes a script-based workflow definition with resume handling.
   Future<void> _executeScript(
     WorkflowDefinition definition,
     RunState runState, {
@@ -600,6 +632,7 @@ class WorkflowRuntime {
     }
   }
 
+  /// Records a workflow step lifecycle event to the introspection sink.
   Future<void> _recordStepEvent(
     WorkflowStepEventType type,
     RunState runState,
@@ -623,11 +656,12 @@ class WorkflowRuntime {
           metadata: metadata == null ? null : Map.unmodifiable(metadata),
         ),
       );
-    } catch (_) {
+    } on Object catch (_) {
       // Ignore introspection failures to avoid impacting workflow execution.
     }
   }
 
+  /// Loads the latest iteration number for each step name.
   Future<Map<String, int>> _loadCompletedIterations(String runId) async {
     final entries = await _store.listSteps(runId);
     final counts = <String, int>{};
@@ -641,6 +675,7 @@ class WorkflowRuntime {
     return counts;
   }
 
+  /// Computes the next step cursor from persisted state and suspension data.
   int _computeCursor(
     WorkflowDefinition definition,
     RunState runState,
@@ -665,6 +700,7 @@ class WorkflowRuntime {
     return cursor;
   }
 
+  /// Resolves the current iteration index for a step.
   int _currentIterationForStep(
     FlowStep step,
     Map<String, int> completedIterations,
@@ -686,6 +722,7 @@ class WorkflowRuntime {
   String _checkpointName(FlowStep step, int iteration) =>
       step.autoVersion ? _versionedName(step.name, iteration) : step.name;
 
+  /// Parses an iteration suffix from a versioned step name.
   int? _parseIterationSuffix(String name) {
     final hashIndex = name.lastIndexOf('#');
     if (hashIndex == -1) return null;
@@ -693,12 +730,14 @@ class WorkflowRuntime {
     return int.tryParse(suffix);
   }
 
+  /// Removes an iteration suffix from a versioned step name.
   String _baseStepName(String name) {
     final hashIndex = name.indexOf('#');
     if (hashIndex == -1) return name;
     return name.substring(0, hashIndex);
   }
 
+  /// Extends the broker visibility timeout for the current workflow task.
   Future<void> _extendLease(TaskContext? context) async {
     if (context == null) return;
     if (leaseExtension.inMicroseconds <= 0) return;
@@ -709,6 +748,7 @@ class WorkflowRuntime {
     }
   }
 
+  /// Renews the workflow run lease and the broker visibility timeout.
   Future<void> _extendLeases(TaskContext? context, String runId) async {
     if (runLeaseDuration.inMicroseconds > 0) {
       final renewed = await _store.renewRunLease(
@@ -717,7 +757,7 @@ class WorkflowRuntime {
         leaseDuration: runLeaseDuration,
       );
       if (!renewed) {
-        throw _WorkflowLeaseLost();
+        throw const _WorkflowLeaseLost();
       }
     }
     await _extendLease(context);
@@ -729,6 +769,7 @@ class WorkflowRuntime {
     return 'workflow-runtime-$now-$suffix';
   }
 
+  /// Enqueues a workflow run execution task.
   Future<void> _enqueueRun(String runId, {String? workflow}) async {
     final meta = <String, Object?>{
       'stem.workflow.runId': runId,
@@ -762,10 +803,12 @@ class WorkflowRuntime {
     required Map<String, Object?> baseMeta,
     TaskContext? taskContext,
   }) {
+    /// Builds an enqueuer that injects workflow metadata into step tasks.
     final delegate = taskContext ?? _stem;
     return _WorkflowStepEnqueuer(delegate: delegate, baseMeta: baseMeta);
   }
 
+  /// Returns true when a cancellation policy triggers a terminal cancel.
   Future<bool> _maybeCancelForPolicy(
     RunState state, {
     required DateTime now,
@@ -852,6 +895,7 @@ class WorkflowRuntime {
   }
 }
 
+/// Task handler that dispatches workflow run execution for a run id.
 class _WorkflowRunTaskHandler implements TaskHandler<void> {
   _WorkflowRunTaskHandler({required this.runtime});
 
@@ -872,6 +916,7 @@ class _WorkflowRunTaskHandler implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    /// Executes a workflow run based on the payload in the task args.
     final runId = args['runId'] as String?;
     if (runId == null) {
       throw ArgumentError('workflow.run missing runId');
@@ -880,6 +925,7 @@ class _WorkflowRunTaskHandler implements TaskHandler<void> {
   }
 }
 
+/// Script-based workflow execution adapter with checkpointing and suspension.
 class _WorkflowScriptExecution implements WorkflowScriptContext {
   _WorkflowScriptExecution({
     required this.runtime,
@@ -914,7 +960,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   int? _suspensionIteration;
   Object? _resumePayload;
 
+  /// Whether a script step suspended the run.
   bool get wasSuspended => _wasSuspended;
+
+  /// Last executed step name, if any.
   String? get lastStepName => _lastStepName;
 
   @override
@@ -932,6 +981,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
   }) async {
+    /// Executes a script step with checkpoint replay and suspension handling.
     _lastStepName = name;
     final policy = this.policy;
     if (policy != null && policy.maxRunDuration != null) {
@@ -1064,6 +1114,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return result;
   }
 
+  /// Computes the next iteration for an auto-versioned step.
   int _nextIteration(String name) {
     final completed = _completedIterations[name] ?? 0;
     if (_suspensionStep == name && _suspensionIteration != null) {
@@ -1072,6 +1123,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return completed;
   }
 
+  /// Returns resume payload if it matches the current step/iteration.
   Object? _takeResumePayload(String stepName, int? iteration) {
     final matchesStep = _suspensionStep == stepName;
     if (!matchesStep) return null;
@@ -1087,6 +1139,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return payload;
   }
 
+  /// Persists suspension metadata and registers watchers/alarms.
   Future<void> _suspend(
     _ScriptControl control,
     String stepName,
@@ -1174,8 +1227,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     _wasSuspended = true;
   }
 
+  /// Previously completed step result, if any.
   Object? get previousResult => _previousResult;
 
+  /// Builds a stable idempotency key for a step/iteration scope.
   String idempotencyKey(String stepName, int iteration, [String? scope]) {
     final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
     final effectiveScope = (scope == null || scope.isEmpty)
@@ -1185,6 +1240,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   }
 }
 
+/// Workflow script step context used by script-defined workflows.
 class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   _WorkflowScriptStepContextImpl({
     required this.execution,
@@ -1205,6 +1261,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   _ScriptControl? _control;
   Object? _resumeData;
 
+  /// Consumes any control signal emitted by the step.
   _ScriptControl? takeControl() {
     final value = _control;
     _control = null;
@@ -1217,6 +1274,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    /// Suspends the run until an external event arrives.
     _control = _ScriptControl.waitForEvent(
       topic,
       deadline,
@@ -1226,6 +1284,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
 
   @override
   Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {
+    /// Suspends the run until the sleep duration elapses.
     final resume = _resumeData;
     if (resume is Map<String, Object?>) {
       final type = resume['type'];
@@ -1280,6 +1339,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   String get workflow => execution.workflow;
 }
 
+/// Enqueuer that prefixes workflow step metadata onto spawned tasks.
 class _WorkflowStepEnqueuer implements TaskEnqueuer {
   _WorkflowStepEnqueuer({
     required this.delegate,
@@ -1298,6 +1358,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
+    /// Merges workflow metadata into task enqueue requests.
     final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(meta);
     return delegate.enqueue(
       name,

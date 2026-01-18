@@ -1,3 +1,28 @@
+/// Configuration system for the Stem framework.
+///
+/// This library provides [StemConfig], which centralizes the settings for
+/// brokers, backends, security, and worker behavior.
+///
+/// ## Environment Variables
+///
+/// [StemConfig.fromEnvironment] is the primary way to configure Stem in most
+/// deployments. It looks for variables prefixed with `STEM_`, such as:
+/// - `STEM_BROKER_URL`: Connection string for the message broker.
+/// - `STEM_RESULT_BACKEND_URL`: Connection string for result tracking.
+/// - `STEM_SIGNING_PRIVATE_KEY`: Key used for payload signing.
+///
+/// ## Extensibility
+///
+/// Configuration is divided into logical sub-sections like:
+/// - **Broker/Backend**: Connectivity details for different storage providers.
+/// - **Worker**: Subscriptions, concurrency limits, and prefetch settings.
+/// - **Security**: Signing and TLS (Translocation Layer Security) configs.
+///
+/// See also:
+/// - `Stem` which uses this config for initialization.
+/// - `Worker` which uses this config to determine its subscriptions.
+library;
+
 import 'dart:io';
 
 import 'package:stem/src/security/signing.dart';

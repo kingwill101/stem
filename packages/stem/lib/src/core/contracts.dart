@@ -1,3 +1,35 @@
+/// Core interfaces and data structures for the Stem framework.
+///
+/// This library defines the fundamental building blocks of Stem, including
+/// the [Broker], [ResultBackend], and [TaskRegistry] interfaces. It also
+/// contains common DTOs used throughout the system.
+///
+/// ## Key Interfaces
+///
+/// - **[Broker]**: Responsible for asynchronous task delivery. Implementations
+///   exist for Redis, Postgres, SQS, etc.
+/// - **[ResultBackend]**: Persists task state, results, and workflow progress.
+/// - **[TaskRegistry]**: Maps task names to their implementation handlers.
+/// - **[TaskHandler]**: The logic responsible for executing a specific task.
+///
+/// ## Data Structures
+///
+/// - **[Envelope]**: The physical unit of work sent between processes.
+/// - **[TaskStatus]**: A point-in-time record of a task's lifecycle state.
+/// - **[Delivery]**: A message received from a broker, including lease and
+///   routing information.
+///
+/// ## Lifecycle Enums
+///
+/// - **[TaskState]**: Represents the different stages of a task (queued,
+///   running, succeeded, failed, etc).
+/// - `WorkerShutdownMode`: Controls how the worker terminates.
+///
+/// See also:
+/// - `Stem` for the enqueuing facade.
+/// - `Worker` for the execution runtime.
+library;
+
 import 'dart:async';
 import 'dart:collection';
 
@@ -480,7 +512,7 @@ abstract class ResultBackend {
   ///
   /// Implementations SHOULD order results from newest to oldest.
   Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request) async {
-    return const TaskStatusPage(items: [], nextOffset: null);
+    return const TaskStatusPage(items: []);
   }
 
   /// Persist the latest [heartbeat] snapshot for a worker.

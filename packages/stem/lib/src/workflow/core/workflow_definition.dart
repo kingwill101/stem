@@ -1,3 +1,58 @@
+/// Declarative workflow definitions and builders.
+///
+/// This library provides the [WorkflowDefinition] class, which is used to
+/// describe the structure of a workflow, and builders for creating them
+/// in a fluent style.
+///
+/// ## Workflow Kinds
+///
+/// Stem supports two primary ways to define workflows:
+///
+/// 1. **Flow**: A list of discrete `FlowStep`s that execute in order. This is
+///    the most common model and is easily visualized.
+/// 2. **Script**: A procedural Dart function that uses `context.step` to
+///    wrap individual pieces of work. This allows for complex branching
+///    logic and loops using standard Dart control flow.
+///
+/// ## Versioning and Metadata
+///
+/// Each definition can have a `version`, `description`, and arbitrary
+/// `metadata`. The `WorkflowRuntime` uses these to track execution and
+/// assist with introspection.
+///
+/// ## Examples
+///
+/// ### Flow Workflow
+/// ```dart
+/// final flow = WorkflowDefinition.flow(
+///   name: 'process_order',
+///   build: (builder) {
+///     builder.step('validate_order');
+///     builder.step('charge_customer');
+///     builder.step('ship_items');
+///   },
+/// );
+/// ```
+///
+/// ### Script Workflow
+/// ```dart
+/// final script = WorkflowDefinition.script(
+///   name: 'process_order',
+///   body: (context) async {
+///     await context.step('validate_order', ...);
+///     if (isPremium) {
+///       await context.step('apply_discount', ...);
+///     }
+///     await context.step('charge_customer', ...);
+///   },
+/// );
+/// ```
+///
+/// See also:
+/// - `WorkflowRuntime` for the execution engine.
+/// - [FlowStep] for the building blocks of flows.
+library;
+
 import 'dart:async';
 
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
@@ -110,7 +165,6 @@ class WorkflowDefinition<T extends Object?> {
       name: name,
       kind: WorkflowDefinitionKind.script,
       steps: const [],
-      edges: const [],
       version: version,
       description: description,
       metadata: metadata,

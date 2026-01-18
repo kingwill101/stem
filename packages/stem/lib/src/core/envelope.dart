@@ -1,3 +1,35 @@
+/// Task envelopes and routing metadata.
+///
+/// This library defines the [Envelope], which is the serialized representation
+/// of a task as it travels from a producer to a consumer. It also contains
+/// [RoutingInfo] for describing how messages should be dispatched by brokers.
+///
+/// ## Envelopes
+///
+/// An [Envelope] contains:
+/// - **Identity**: Unique ID and fully qualified task name.
+/// - **Payload**: Arguments (`args`) and metadata (`headers`).
+/// - **Scheduling**: `enqueuedAt`, `notBefore`, and `priority`.
+/// - **Lifecycle**: `attempt` count and `maxRetries` limit.
+/// - **Routing**: Target `queue` and visibility settings.
+///
+/// ## Routing
+///
+/// [RoutingInfo] provides flexible dispatching options:
+/// - **Queue**: Point-to-point delivery with priority and exchange support.
+/// - **Broadcast**: Fan-out delivery to all active listeners on a channel.
+///
+/// ## IDs and Receipts
+///
+/// - [Envelope.id]: The logical ID that follows the task across retries.
+/// - [Delivery.receipt]: A broker-specific transient ID used for
+///   acknowledgment (ACK) or lease extensions.
+///
+/// See also:
+/// - `Broker` for the interface that consumes and publishes these types.
+/// - `Stem` for the facade that creates envelopes.
+library;
+
 import 'dart:convert';
 import 'dart:math';
 

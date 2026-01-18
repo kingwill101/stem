@@ -1,3 +1,18 @@
+/// Retry strategies and backoff logic.
+///
+/// This library provides implementations of [RetryStrategy] used by the
+/// `Stem` producer and `Worker` to calculate delays between task attempts.
+///
+/// ## Strategies
+///
+/// - [ExponentialJitterRetryStrategy]: The default strategy, which uses
+///   exponential backoff with random jitter to prevent "thundering herd"
+///   problems on shared resources like brokers or backends.
+///
+/// See also:
+/// - [RetryStrategy] in `contracts.dart` for the interface definition.
+library;
+
 import 'dart:math' as math;
 
 import 'package:stem/src/core/contracts.dart';

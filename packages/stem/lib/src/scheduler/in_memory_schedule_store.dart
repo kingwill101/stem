@@ -1,8 +1,25 @@
+/// Volatile, in-memory implementation of a schedule store.
+///
+/// This library provides [InMemoryScheduleStore], which maintains schedule
+/// definitions and their execution state in process memory. It is suitable
+/// for unit tests or transient local scheduling.
+library;
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
 
 /// Simple in-memory schedule store implementation used in tests.
+///
+/// The store maintains a map of IDs to [_ScheduleState] objects. It uses
+/// [ScheduleCalculator] to automatically compute future run times during
+/// upserts and execution marking.
+///
+/// ## Concurrency Control
+///
+/// This implementation uses optimistic concurrency control via the `version`
+/// property on [ScheduleEntry]. If a version mismatch is detected during
+/// [upsert], a [ScheduleConflictException] is thrown.
 class InMemoryScheduleStore implements ScheduleStore {
   /// Creates an in-memory schedule store.
   InMemoryScheduleStore({ScheduleCalculator? calculator})
@@ -139,10 +156,19 @@ class InMemoryScheduleStore implements ScheduleStore {
   }
 }
 
+/// Internal wrapper for schedule records within the memory store.
+///
+/// Tracks ephemeral locking and high-frequency calculation fields
+/// that aren't persisted in the primary record.
 class _ScheduleState {
   _ScheduleState(this.entry, this.nextRun, {required this.locked});
 
+  /// The public schedule entry object.
   ScheduleEntry entry;
+
+  /// Cached next run time to avoid repeated calculation during filtering.
   DateTime nextRun;
+
+  /// Ephemeral bit to prevent double-dispatch within a single poll tick.
   bool locked;
 }

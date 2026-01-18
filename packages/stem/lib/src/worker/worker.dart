@@ -1,3 +1,100 @@
+/// Main worker runtime for task consumption and execution.
+///
+/// This library provides the [Worker] class, which is the core runtime that
+/// consumes tasks from a message broker and executes registered handlers.
+///
+/// ## Architecture Overview
+///
+/// ```text
+/// ┌─────────────────────────────────────────────────────────┐
+/// │                        Worker                           │
+/// │  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐  │
+/// │  │  Broker  │  │ Registry │  │   Result Backend      │  │
+/// │  │(consume) │  │(handlers)│  │  (persist state)      │  │
+/// │  └────┬─────┘  └────┬─────┘  └───────────┬───────────┘  │
+/// │       │             │                    │              │
+/// │       ▼             ▼                    ▼              │
+/// │  ┌──────────────────────────────────────────────────┐   │
+/// │  │              Task Handler Loop                   │   │
+/// │  │  • Rate limiting   • Retry policies              │   │
+/// │  │  • Heartbeats      • Lease renewal               │   │
+/// │  │  • Middleware      • Revocation                  │   │
+/// │  └──────────────────────┬───────────────────────────┘   │
+/// │                         │                               │
+/// │                         ▼                               │
+/// │  ┌──────────────────────────────────────────────────┐   │
+/// │  │               TaskIsolatePool                    │   │
+/// │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐     │   │
+/// │  │  │Isolate1│ │Isolate2│ │Isolate3│ │IsolateN│     │   │
+/// │  │  └────────┘ └────────┘ └────────┘ └────────┘     │   │
+/// │  └──────────────────────────────────────────────────┘   │
+/// └─────────────────────────────────────────────────────────┘
+/// ```
+///
+/// ## Key Features
+///
+/// - **Concurrent Execution**: Tasks run in parallel up to [Worker.concurrency]
+/// - **Isolate-Based Execution**: CPU-intensive tasks run in separate isolates
+/// - **Rate Limiting**: Per-task rate limits via [RateLimiter]
+/// - **Automatic Retries**: Configurable retry policies with backoff
+/// - **Task Revocation**: Cancel running or pending tasks
+/// - **Observability**: Metrics, tracing, heartbeats, and structured logging
+/// - **Graceful Shutdown**: Multiple shutdown modes for different scenarios
+///
+/// ## Basic Usage
+///
+/// ```dart
+/// // 1. Set up dependencies
+/// final broker = RedisBroker();
+/// final registry = TaskRegistry()
+///   ..register('process_order', TaskHandler(processOrder));
+/// final backend = RedisResultBackend();
+///
+/// // 2. Create and start worker
+/// final worker = Worker(
+///   broker: broker,
+///   registry: registry,
+///   backend: backend,
+///   concurrency: 8,
+/// );
+///
+/// await worker.start();
+///
+/// // 3. Listen to events (optional)
+/// worker.events.listen((event) {
+///   print('Task ${event.envelope?.name}: ${event.type}');
+/// });
+///
+/// // 4. Graceful shutdown
+/// await worker.shutdown(mode: WorkerShutdownMode.soft);
+/// ```
+///
+/// ## Shutdown Modes
+///
+/// The worker supports three shutdown modes via [WorkerShutdownMode]:
+///
+/// | Mode | Behavior |
+/// |------|----------|
+/// | `warm` | Let in-flight tasks complete, don't accept new work |
+/// | `soft` | Request cooperative termination, wait for grace period |
+/// | `hard` | Immediately stop all tasks, requeue deliveries |
+///
+/// ## Task Lifecycle
+///
+/// 1. **Received**: Task delivered from broker
+/// 2. **Validated**: Signature verification (if configured)
+/// 3. **Running**: Handler executing, heartbeats active
+/// 4. **Completed**: Success, failure, or retry
+/// 5. **Acknowledged**: Broker notified
+///
+/// ## See Also
+///
+/// - [TaskIsolatePool] for isolate-based execution
+/// - [WorkerAutoscaleConfig] for dynamic concurrency scaling
+/// - [WorkerLifecycleConfig] for shutdown and recycling configuration
+/// - [Stem] for the task enqueuing API
+library;
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -27,56 +124,178 @@ import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
 
-/// A daemon that consumes tasks from a broker and executes registered handlers.
+/// Shutdown modes for workers.
 ///
-/// Manages task execution with features like concurrency control, rate
-/// limiting, retries, heartbeats, and observability.
-/// Supports running tasks in isolates for isolation and performance.
+/// Controls how the worker terminates when [Worker.shutdown] is called.
+/// Each mode offers different trade-offs between task completion and
+/// shutdown speed.
+///
+/// ## Mode Comparison
+///
+/// | Mode | In-Flight Tasks | New Tasks | Grace Period |
+/// |------|-----------------|-----------|--------------|
+/// | [warm] | Complete | Rejected | None |
+/// | [soft] | Terminate cooperatively | Rejected | Yes |
+/// | [hard] | Cancelled immediately | Rejected | None |
+///
+/// ## Example
 ///
 /// ```dart
-/// final worker = Worker(
-///   broker: myBroker,
-///   registry: myRegistry,
-///   backend: myBackend,
-/// );
-/// await worker.start();
+/// // For deployments: let tasks finish but stop accepting new work
+/// await worker.shutdown(mode: WorkerShutdownMode.warm);
 ///
+/// // For updates: give tasks time to checkpoint
+/// await worker.shutdown(mode: WorkerShutdownMode.soft);
+///
+/// // For emergencies: stop immediately
+/// await worker.shutdown(mode: WorkerShutdownMode.hard);
 /// ```
-/// Shutdown modes for workers.
 enum WorkerShutdownMode {
   /// Allows in-flight tasks to complete without draining new work.
+  ///
+  /// The worker stops accepting new deliveries immediately but waits
+  /// indefinitely for currently running tasks to finish. Use this for
+  /// graceful deployments when tasks are short-lived.
   warm,
 
   /// Drains the worker before shutting down.
+  ///
+  /// Requests cooperative termination of running tasks by signaling them
+  /// via [TaskContext]. If tasks don't terminate within
+  /// [WorkerLifecycleConfig.softGracePeriod], escalates to hard shutdown.
+  ///
+  /// Tasks can check for termination requests by calling
+  /// `context.checkTermination()` periodically.
   soft,
 
   /// Immediately stops and cancels active work.
+  ///
+  /// All running tasks are cancelled immediately and their deliveries
+  /// are requeued to the broker (if supported). Use this for emergencies
+  /// or when tasks are safe to retry from the beginning.
   hard,
 }
 
 /// Worker runtime that consumes tasks from a broker and executes handlers.
+///
+/// The [Worker] is the core runtime component of Stem that:
+/// 1. Subscribes to message queues via the [broker]
+/// 2. Resolves task handlers from the [registry]
+/// 3. Executes tasks with full lifecycle management
+/// 4. Persists results to the [backend]
+///
+/// ## Features
+///
+/// - **Concurrent Execution**: Process multiple tasks in parallel
+/// - **Isolate Support**: Run CPU-intensive tasks in separate isolates
+/// - **Rate Limiting**: Enforce per-task rate limits
+/// - **Automatic Retries**: Retry failed tasks with configurable policies
+/// - **Heartbeats**: Keep-alive signals for long-running tasks
+/// - **Graceful Shutdown**: Multiple shutdown modes for different scenarios
+///
+/// ## Constructor Parameters
+///
+/// | Parameter | Required | Description |
+/// |-----------|----------|-------------|
+/// | [broker] | Yes | Message broker for queue operations |
+/// | [registry] | Yes | Task handler registry |
+/// | [backend] | Yes | Result persistence backend |
+/// | [concurrency] | No | Max parallel tasks (default: CPU count) |
+/// | [queue] | No | Default queue name (default: 'default') |
+/// | `autoscale` | No | Dynamic concurrency scaling config |
+/// | `lifecycle` | No | Shutdown and recycling config |
+///
+/// ## Example
+///
+/// ```dart
+/// final worker = Worker(
+///   broker: RedisBroker(),
+///   registry: registry,
+///   backend: RedisResultBackend(),
+///   concurrency: 8,
+///   middleware: [LoggingMiddleware()],
+///   autoscale: WorkerAutoscaleConfig(
+///     enabled: true,
+///     minConcurrency: 2,
+///     maxConcurrency: 16,
+///   ),
+/// );
+///
+/// await worker.start();
+/// // Worker is now consuming tasks...
+///
+/// // Graceful shutdown
+/// await worker.shutdown(mode: WorkerShutdownMode.soft);
+/// ```
+///
+/// ## Event Stream
+///
+/// Monitor task lifecycle via [events]:
+///
+/// ```dart
+/// worker.events.listen((event) {
+///   switch (event.type) {
+///     case WorkerEventType.completed:
+///       print('Task completed');
+///       break;
+///     case WorkerEventType.failed:
+///       print('Task failed: ${event.error}');
+///       break;
+///     default:
+///       break;
+///   }
+/// });
+/// ```
+///
+/// ## See Also
+///
+/// - [Stem] for enqueuing tasks
+/// - [TaskHandler] for writing task handlers
+/// - [WorkerShutdownMode] for shutdown options
 class Worker {
   /// Creates a worker instance.
   ///
-  /// The [broker] handles message publishing and consumption.
-  /// The [registry] provides task handlers. The [backend] stores task results
-  /// and state.
-  /// Optional [rateLimiter] enforces rate limits per task.
-  /// [uniqueTaskCoordinator] coordinates deduplicated tasks so locks are
-  /// released when runs finish. [middleware] allows intercepting task
-  /// lifecycle events. [retryStrategy] determines retry delays on failure.
-  /// [queue] specifies the queue to consume from, defaulting to 'default'.
-  /// [consumerName] identifies this worker instance. [concurrency] sets the
-  /// maximum concurrent tasks, defaulting to the number of processors.
-  /// [prefetchMultiplier] scales prefetch count relative to concurrency.
-  /// [prefetch] overrides the calculated prefetch count.
-  /// [heartbeatInterval] sets the interval for task heartbeats.
-  /// [workerHeartbeatInterval] sets the interval for worker-level heartbeats.
-  /// [heartbeatTransport] handles heartbeat publishing.
-  /// [heartbeatNamespace] provides the namespace for heartbeats.
-  /// [observability] configures metrics and logging.
-  /// The optional [signer] verifies payload signatures (see [SigningConfig]);
-  /// invalid envelopes are dead-lettered with a `signature-invalid` reason.
+  /// ## Required Parameters
+  ///
+  /// - [broker]: The message broker for consuming and acknowledging tasks.
+  ///   Must be connected before calling [start].
+  /// - [registry]: Contains registered task handlers. Tasks without handlers
+  ///   are dead-lettered with reason 'unregistered-task'.
+  /// - [backend]: Stores task state and results. Used for task status tracking
+  ///   and result retrieval by callers.
+  ///
+  /// ## Optional Parameters
+  ///
+  /// - [enqueuer]: [Stem] instance for spawning child tasks from handlers.
+  ///   Created automatically if not provided.
+  /// - [rateLimiter]: Enforces per-task rate limits. Rate limits are defined
+  ///   on individual handlers via [TaskOptions.rateLimit].
+  /// - [middleware]: List of middleware for intercepting task lifecycle events.
+  /// - [revokeStore]: Store for task revocation commands. Enables cancellation
+  ///   of running or pending tasks.
+  /// - [uniqueTaskCoordinator]: Coordinates task deduplication. Ensures only
+  ///   one instance of a unique task runs at a time.
+  /// - [retryStrategy]: Strategy for computing retry delays. Defaults to
+  ///   [ExponentialJitterRetryStrategy].
+  /// - [queue]: Default queue name. Defaults to 'default'.
+  /// - [subscription]: Custom routing subscription for multi-queue consumption.
+  /// - [consumerName]: Identifier for this worker instance in logs and metrics.
+  /// - [concurrency]: Maximum concurrent tasks. Defaults to CPU count.
+  /// - [prefetchMultiplier]: Multiplier for broker prefetch count.
+  /// - [prefetch]: Override for calculated prefetch count.
+  /// - [heartbeatInterval]: Interval for task heartbeats. Defaults to 10s.
+  /// - [workerHeartbeatInterval]: Interval for worker-level heartbeats.
+  /// - [heartbeatTransport]: Transport for publishing heartbeats.
+  /// - [heartbeatNamespace]: Namespace for observability data.
+  /// - [autoscale]: Configuration for dynamic concurrency scaling.
+  /// - [lifecycle]: Configuration for shutdown and isolate recycling.
+  /// - [observability]: Configuration for metrics and tracing.
+  /// - [signer]: Payload signer for envelope verification. Invalid signatures
+  ///   result in dead-lettering with reason 'signature-invalid'.
+  /// - [encoderRegistry]: Custom encoder registry for payload serialization.
+  /// - [resultEncoder]: Default encoder for task results.
+  /// - [argsEncoder]: Default encoder for task arguments.
+  /// - [additionalEncoders]: Additional payload encoders to register.
   Worker({
     required Broker broker,
     required TaskRegistry registry,
@@ -531,6 +750,7 @@ class Worker {
     return completer.future;
   }
 
+  /// Handles a single broker delivery end-to-end.
   Future<void> _handle(Delivery delivery) async {
     final envelope = delivery.envelope;
     final tracer = StemTracer.instance;
@@ -869,6 +1089,34 @@ class Worker {
     );
   }
 
+  /// Executes the consume middleware chain for a delivery before task handling.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Uses a recursive chain pattern where each middleware calls the `next`
+  /// function to invoke the next middleware in sequence. The chain starts
+  /// at index 0 and progresses through [middleware] until all have executed.
+  ///
+  /// ```dart
+  /// middleware[0].onConsume(delivery, () =>
+  ///   middleware[1].onConsume(delivery, () =>
+  ///     middleware[2].onConsume(delivery, () => done)
+  ///   )
+  /// )
+  /// ```
+  ///
+  /// If a middleware throws, the error propagates up and subsequent
+  /// middleware are not executed.
+  ///
+  /// ## Data Flow
+  ///
+  /// 1. Called after delivery received, before handler resolution
+  /// 2. Middleware can inspect/modify delivery headers and metadata
+  /// 3. Middleware can short-circuit by not calling `next()`
+  ///
+  /// See also:
+  /// - `_invokeWithMiddleware` for handler execution middleware
+  /// - `_notifyErrorMiddleware` for error notification
   Future<void> _runConsumeMiddleware(Delivery delivery) async {
     Future<void> run(int index) async {
       if (index >= middleware.length) return;
@@ -878,6 +1126,28 @@ class Worker {
     await run(0);
   }
 
+  /// Notifies all middleware about an error raised during task processing.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Unlike [_runConsumeMiddleware], this iterates through ALL middleware
+  /// sequentially without a chain pattern. Each middleware's `onError` method
+  /// is awaited before the next, ensuring error handlers run in order.
+  ///
+  /// Errors thrown by middleware error handlers are NOT caught here - they
+  /// will propagate to the caller, potentially affecting task state.
+  ///
+  /// ## When Called
+  ///
+  /// - After catching an exception from the task handler
+  /// - Before determining retry behavior
+  /// - Allows middleware to log, transform, or suppress errors
+  ///
+  /// ## Parameters
+  ///
+  /// - [context]: The task context with id, attempt, headers, meta
+  /// - [error]: The caught exception object
+  /// - [stack]: The stack trace captured at the error site
   Future<void> _notifyErrorMiddleware(
     TaskContext context,
     Object error,
@@ -888,6 +1158,36 @@ class Worker {
     }
   }
 
+  /// Invokes a task handler through the middleware execution chain.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Uses a recursive chain pattern similar to `_runConsumeMiddleware` but
+  /// for the `onExecute` hook. The actual handler is invoked only after
+  /// all middleware have had a chance to wrap the execution.
+  ///
+  /// The result of the handler is captured in a closure variable and
+  /// returned after the chain completes. This allows middleware to:
+  /// - Execute code before the handler runs
+  /// - Execute code after the handler completes
+  /// - Transform or intercept the result
+  /// - Skip handler execution entirely (by not calling `next()`)
+  ///
+  /// ## Example Middleware Flow
+  ///
+  /// ```dart
+  /// // TimingMiddleware.onExecute:
+  /// final start = DateTime.now();
+  /// await next();  // Inner middleware and handler run here
+  /// final duration = DateTime.now().difference(start);
+  /// log('Task took $duration');
+  /// ```
+  ///
+  /// ## Error Handling
+  ///
+  /// Errors thrown by the handler or any middleware propagate up through
+  /// the chain. Middleware can catch errors from inner layers and handle
+  /// or rethrow them.
   Future<dynamic> _invokeWithMiddleware(
     TaskContext context,
     Future<dynamic> Function() handler,
@@ -906,6 +1206,7 @@ class Worker {
     return result;
   }
 
+  /// Runs the handler with a hard time limit if configured.
   Future<dynamic> _executeWithHardLimit(
     TaskHandler<Object?> handler,
     TaskContext context,
@@ -929,6 +1230,18 @@ class Worker {
     );
   }
 
+  /// Schedules a soft timeout warning timer for a task.
+  ///
+  /// If [options] or [envelope] metadata specify a soft time limit, creates
+  /// a timer that fires a [WorkerEventType.timeout] event when exceeded.
+  /// Unlike hard limits, soft timeouts don't terminate the task but allow
+  /// handlers to checkpoint their work.
+  ///
+  /// Returns `null` if no soft limit is configured.
+  ///
+  /// See also:
+  /// - [_resolveHardTimeLimit] for hard timeout behavior
+  /// - [TaskOptions.softTimeLimit] for per-handler configuration
   Timer? _scheduleSoftLimit(Envelope envelope, TaskOptions options) {
     final soft = _resolveSoftTimeLimit(envelope, options);
     if (soft == null) return null;
@@ -943,6 +1256,17 @@ class Worker {
     });
   }
 
+  /// Starts a periodic heartbeat timer for a running task.
+  ///
+  /// Heartbeats are emitted at [heartbeatInterval] intervals and serve as:
+  /// - Keep-alive signals to monitoring systems
+  /// - Progress indicators for long-running tasks
+  /// - Lease renewal triggers for broker visibility
+  ///
+  /// The timer is stored in [_heartbeatTimers] and cancelled when the task
+  /// completes or is revoked.
+  ///
+  /// Returns `null` if heartbeat interval is zero or negative.
   Timer? _startHeartbeat(String envelopeId) {
     if (heartbeatInterval <= Duration.zero) return null;
     final timer = Timer.periodic(
@@ -954,6 +1278,36 @@ class Worker {
     return timer;
   }
 
+  /// Schedules automatic lease/visibility renewal while a task is running.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Brokers like SQS grant a "visibility timeout" for each message. If
+  /// not acknowledged or renewed within this window, the message becomes
+  /// visible to other consumers. This method prevents that for long-running
+  /// tasks.
+  ///
+  /// ## Algorithm
+  ///
+  /// 1. Get the lease expiration time from `delivery.leaseExpiresAt`
+  /// 2. Calculate remaining time: `expiresAt - now`
+  /// 3. Set renewal interval to half the remaining time, clamped to 1-30s
+  /// 4. Start a periodic timer that calls `broker.extendLease`
+  ///
+  /// The "half remaining" strategy ensures we renew well before expiration
+  /// while not hammering the broker with too-frequent requests.
+  ///
+  /// ## Edge Cases
+  ///
+  /// - If `leaseExpiresAt` is null: broker doesn't support leases, skip
+  /// - If remaining time <= 0: lease already expired, skip
+  /// - Minimum interval: 1 second (prevents tight loops)
+  /// - Maximum interval: 30 seconds (ensures timely renewal)
+  ///
+  /// ## State Changes
+  ///
+  /// - Adds timer to `_leaseTimers` keyed by receipt
+  /// - Updates `_lastLeaseRenewal` via `_noteLeaseRenewal`
   void _scheduleLeaseRenewal(Delivery delivery) {
     final expiresAt = delivery.leaseExpiresAt;
     if (expiresAt == null) return;
@@ -966,12 +1320,51 @@ class Worker {
     _noteLeaseRenewal(delivery);
   }
 
+  /// Restarts the lease timer after a successful manual renewal.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Called when task code explicitly extends its lease via
+  /// [TaskContext.extendLease]. The new timer interval is calculated as
+  /// half the granted [duration], clamped to 1-30 seconds.
+  ///
+  /// This differs from [_scheduleLeaseRenewal] in that:
+  /// - It uses a provided duration rather than calculating from expiry time
+  /// - It's triggered by explicit user action, not automatic scheduling
+  ///
+  /// ## Side Effects
+  ///
+  /// - Cancels existing lease timer for this delivery
+  /// - Creates new timer with recalculated interval
+  /// - Updates [_lastLeaseRenewal] timestamp
   void _restartLeaseTimer(Delivery delivery, Duration duration) {
     final intervalMs = (duration.inMilliseconds ~/ 2).clamp(1000, 30000);
     _startLeaseTimer(delivery, Duration(milliseconds: intervalMs));
     _noteLeaseRenewal(delivery);
   }
 
+  /// Starts or replaces the lease renewal timer for a delivery.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Creates a [Timer.periodic] that fires every [interval] to extend
+  /// the broker lease. The timer callback:
+  ///
+  /// 1. Calls `broker.extendLease` to renew visibility
+  /// 2. Increments the 'stem.lease.renewed' metric via `_recordLeaseRenewal`
+  /// 3. Updates internal tracking via `_noteLeaseRenewal`
+  ///
+  /// ## Timer Management
+  ///
+  /// - Keyed by `delivery.receipt` (unique broker message ID)
+  /// - Any existing timer for the same receipt is cancelled first
+  /// - Timer stored in `_leaseTimers` map for later cancellation
+  ///
+  /// ## Thread Safety
+  ///
+  /// The timer callback is async but runs in the main isolate's event loop.
+  /// If task completes before callback fires, the timer is cancelled via
+  /// `_cancelLeaseTimer` and the callback becomes a no-op.
   void _startLeaseTimer(Delivery delivery, Duration interval) {
     _leaseTimers[delivery.receipt]?.cancel();
     final timer = Timer.periodic(interval, (_) async {
@@ -982,10 +1375,46 @@ class Worker {
     _leaseTimers[delivery.receipt] = timer;
   }
 
+  /// Cancels and removes the lease renewal timer for a broker receipt.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Called when:
+  /// - Task completes successfully or fails
+  /// - Task is revoked
+  /// - Worker is shutting down
+  ///
+  /// Uses [Map.remove] with null-safe chaining to atomically remove
+  /// and cancel in one operation. If no timer exists for the receipt,
+  /// this is a no-op.
+  ///
+  /// ## Parameters
+  ///
+  /// - [receipt]: The broker-assigned unique message identifier
+  ///   (e.g., SQS ReceiptHandle, RabbitMQ delivery tag)
   void _cancelLeaseTimer(String receipt) {
     _leaseTimers.remove(receipt)?.cancel();
   }
 
+  /// Records the timestamp of the most recent lease renewal.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Updates two locations with the current UTC timestamp:
+  ///
+  /// 1. **Worker-level**: [_lastLeaseRenewal] - used in worker heartbeats
+  ///    to show when any task last renewed its lease
+  ///
+  /// 2. **Per-delivery**: [_ActiveDelivery.lastLeaseRenewal] - used for
+  ///    per-task observability and debugging stalled tasks
+  ///
+  /// This is called after every successful lease extension, both automatic
+  /// (from [_startLeaseTimer]) and manual (from [TaskContext.extendLease]).
+  ///
+  /// ## Difference from [_recordLeaseRenewal]
+  ///
+  /// - This method: updates timestamps for observability
+  /// - [_recordLeaseRenewal]: emits metrics to the metrics backend
   void _noteLeaseRenewal(Delivery delivery) {
     final now = DateTime.now().toUtc();
     _lastLeaseRenewal = now;
@@ -995,6 +1424,42 @@ class Worker {
     }
   }
 
+  /// Releases the unique task lock after processing completes.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Unique tasks use distributed locks to ensure only one instance
+  /// runs at a time. This method releases the lock so another task
+  /// with the same unique key can execute.
+  ///
+  /// ## Lock Identification
+  ///
+  /// Locks are identified by two metadata values from the envelope:
+  /// - `UniqueTaskMetadata.key`: The unique key (e.g., `report:daily`)
+  /// - `UniqueTaskMetadata.owner`: The lock owner ID (prevents stealing)
+  ///
+  /// If either value is missing or not a string, the method silently returns
+  /// (task wasn't unique-constrained).
+  ///
+  /// ## Release Behavior
+  ///
+  /// The [UniqueTaskCoordinator.release] method compares the owner ID to
+  /// ensure only the rightful lock holder can release. If the lock was
+  /// already released (expired, stolen, or duplicate call), `release`
+  /// returns `false` and we log at debug level.
+  ///
+  /// ## Error Handling
+  ///
+  /// Errors from the coordinator (e.g., network issues) are caught and
+  /// logged at warning level. We don't rethrow because lock release is
+  /// best-effort - the lock will eventually expire anyway.
+  ///
+  /// ## When Called
+  ///
+  /// Called at the end of task processing for all terminal states:
+  /// - SUCCESS: Task completed normally
+  /// - FAILURE: Task exhausted retries
+  /// - REVOKED: Task was cancelled
   Future<void> _releaseUniqueLock(Envelope envelope) async {
     final coordinator = uniqueTaskCoordinator;
     if (coordinator == null) return;
@@ -1031,6 +1496,45 @@ class Worker {
     }
   }
 
+  /// Dispatches chord callbacks once all group member tasks complete.
+  ///
+  /// ## What is a Chord?
+  ///
+  /// A chord is a group of tasks that must ALL complete successfully
+  /// before a callback task runs with the aggregated results.
+  ///
+  /// ## Implementation Details
+  ///
+  /// 1. Check if group is complete (all member tasks finished)
+  /// 2. Verify all members succeeded (chords don't fire on partial failure)
+  /// 3. Extract callback envelope from group metadata
+  /// 4. Build results payload as ordered list of member results
+  /// 5. Enqueue callback task with results as arguments
+  ///
+  /// ## Callback Envelope Format
+  ///
+  /// The callback definition is stored in
+  /// `status.meta[ChordMetadata.callbackEnvelope]`:
+  /// ```json
+  /// {
+  ///   "name": "process_results",
+  ///   "id": "optional-custom-id",
+  ///   "args": {"extra": "args"},
+  ///   "headers": {},
+  ///   "meta": {}
+  /// }
+  /// ```
+  ///
+  /// ## Error Handling
+  ///
+  /// Errors during callback dispatch are logged but don't affect the
+  /// original task's status. The increment of 'stem.chords.dispatch_failed'
+  /// helps monitor callback failures.
+  ///
+  /// ## Metrics
+  ///
+  /// - `stem.chords.dispatched`: Successful callback enqueue
+  /// - `stem.chords.dispatch_failed`: Failed callback enqueue
   Future<void> _maybeDispatchChord(GroupStatus status) async {
     if (!status.isComplete) return;
     final allSucceeded = status.results.values.every(
@@ -1132,6 +1636,7 @@ class Worker {
     }
   }
 
+  /// Enqueues linked tasks for chains or chord callbacks.
   Future<void> _dispatchLinkedTasks(
     Envelope envelope, {
     required bool onSuccess,
@@ -1204,6 +1709,22 @@ class Worker {
     }
   }
 
+  /// Decodes [TaskOptions] from envelope metadata.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Handles three input types:
+  /// 1. **TaskOptions instance**: Returns as-is (already decoded)
+  /// 2. **Map**: Deserializes via [TaskOptions.fromJson]
+  /// 3. **null/other**: Returns empty [TaskOptions]
+  ///
+  /// This flexibility allows linked tasks to pass options as either
+  /// pre-constructed objects or serialized JSON from the envelope.
+  ///
+  /// ## Usage
+  ///
+  /// Called when processing linked task metadata in [_dispatchLinkedTasks]
+  /// to extract handler configuration like retries, timeouts, and rate limits.
   TaskOptions _decodeTaskOptions(Object? value) {
     if (value is TaskOptions) return value;
     if (value is Map) {
@@ -1212,6 +1733,23 @@ class Worker {
     return const TaskOptions();
   }
 
+  /// Decodes [TaskEnqueueOptions] from envelope metadata.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Similar to [_decodeTaskOptions] but returns `null` instead of
+  /// empty defaults when no valid input is provided. This allows
+  /// distinguishing between "use defaults" and "explicitly configured".
+  ///
+  /// Handles:
+  /// - **TaskEnqueueOptions instance**: Returns as-is
+  /// - **Map**: Deserializes via [TaskEnqueueOptions.fromJson]
+  /// - **null/other**: Returns null (use system defaults)
+  ///
+  /// ## EnqueueOptions vs TaskOptions
+  ///
+  /// - **TaskOptions**: Handler-level config (retries, timeouts, rate limits)
+  /// - **TaskEnqueueOptions**: Enqueue-level config (queue routing, priority)
   TaskEnqueueOptions? _decodeTaskEnqueueOptions(Object? value) {
     if (value is TaskEnqueueOptions) return value;
     if (value is Map) {
@@ -1220,18 +1758,79 @@ class Worker {
     return null;
   }
 
+  /// Parses a [DateTime] from various input formats.
+  ///
+  /// Accepts:
+  /// - `null` → returns `null`
+  /// - [DateTime] instance → returns as-is
+  /// - [String] → parses using [DateTime.tryParse] (ISO-8601 format)
+  /// - Other types → converts to string and attempts parse
+  ///
+  /// Used internally to parse timestamps from envelope metadata.
   DateTime? _parseDateTime(Object? value) {
     if (value == null) return null;
     if (value is DateTime) return value;
     return DateTime.tryParse(value.toString());
   }
 
+  /// Checks if a task state represents a terminal (final) condition.
+  ///
+  /// ## Terminal States
+  ///
+  /// Terminal states are end-of-lifecycle states where no further
+  /// processing will occur:
+  ///
+  /// - [TaskState.succeeded]: Task completed successfully
+  /// - [TaskState.failed]: Task exhausted all retry attempts
+  /// - [TaskState.cancelled]: Task was revoked before/during execution
+  ///
+  /// ## Non-Terminal States
+  ///
+  /// - `TaskState.pending`: Not yet started
+  /// - `TaskState.running`: Currently executing
+  /// - `TaskState.retried`: Scheduled for retry
+  ///
+  /// ## Usage
+  ///
+  /// Used to determine if unique locks should be released and if
+  /// linked tasks should be dispatched at the end of processing.
   bool _isTerminalState(TaskState state) {
     return state == TaskState.succeeded ||
         state == TaskState.failed ||
         state == TaskState.cancelled;
   }
 
+  /// Dead-letters envelopes with invalid signatures and records failures.
+  ///
+  /// ## Implementation Details
+  ///
+  /// When signature verification fails (tampering, key mismatch, etc.),
+  /// the envelope is removed from normal processing and moved to the
+  /// dead-letter queue for manual inspection.
+  ///
+  /// ## Processing Flow
+  ///
+  /// 1. Dead-letter the delivery with reason 'signature-invalid'
+  /// 2. Record failure status to backend with security metadata
+  /// 3. If task belongs to a group, record group failure
+  /// 4. Emit 'failed' event to worker event stream
+  /// 5. Fire task failure signal
+  ///
+  /// ## Security Metadata
+  ///
+  /// The dead-letter metadata includes:
+  /// - `error`: Human-readable error message
+  /// - `keyId`: The key ID that failed (if available)
+  ///
+  /// ## Metrics
+  ///
+  /// - `stem.tasks.failed` incremented with `security=signature` tag
+  /// - Failure recorded to result backend for status queries
+  ///
+  /// ## Error Handling
+  ///
+  /// This method doesn't throw - all errors are handled internally
+  /// to ensure the task is properly failed and cleaned up.
   Future<void> _handleSignatureFailure(
     Delivery delivery,
     Envelope envelope,
@@ -1327,6 +1926,49 @@ class Worker {
     );
   }
 
+  /// Handles task failure, determining retry behavior and updating state.
+  ///
+  /// ## Implementation Details
+  ///
+  /// This is the central failure handler that decides whether to retry
+  /// or permanently fail a task. The decision tree is:
+  ///
+  /// 1. **Resolve retry policy**: Check envelope metadata and handler options
+  /// 2. **Check retry budget**: Compare `attempt` vs `maxRetries`
+  /// 3. **Check error eligibility**: Apply retry policy filters (if any)
+  /// 4. **Retry or fail permanently**
+  ///
+  /// ## Retry Flow (if eligible)
+  ///
+  /// 1. Compute backoff delay using [retryStrategy]
+  /// 2. NACK delivery to broker (don't requeue directly)
+  /// 3. Publish new envelope with incremented attempt and `notBefore`
+  /// 4. Update backend state to `retried`
+  /// 5. Increment 'stem.tasks.retried' metric
+  /// 6. Emit retry event and signal
+  ///
+  /// ## Permanent Failure Flow
+  ///
+  /// 1. ACK delivery to broker (remove from queue)
+  /// 2. Update backend state to `failed`
+  /// 3. If in group, record group failure
+  /// 4. Increment 'stem.tasks.failed' metric
+  /// 5. Emit failed event and signal
+  ///
+  /// ## Parameters
+  ///
+  /// - [handler]: The task handler (for retry policy extraction)
+  /// - [delivery]: The broker delivery (for ACK/NACK)
+  /// - [envelope]: The task envelope (for metadata and republishing)
+  /// - [resultEncoder]: Encoder for result serialization
+  /// - [error]: The caught exception
+  /// - [stack]: The stack trace at error site
+  /// - [groupId]: Optional group ID for chord/group tracking
+  /// - [startedAtIso]: ISO timestamp when task started (for duration calc)
+  ///
+  /// ## Returns
+  ///
+  /// The resulting [TaskState]: either `retried` or `failed`.
   Future<TaskState> _handleFailure(
     TaskHandler<Object?> handler,
     Delivery delivery,
@@ -1468,6 +2110,7 @@ class Worker {
     }
   }
 
+  /// Handles explicit retry requests surfaced from task handlers.
   Future<TaskState> _handleRetryRequest(
     TaskHandler<Object?> handler,
     Delivery delivery,
@@ -1591,9 +2234,11 @@ class Worker {
     return TaskState.retried;
   }
 
+  /// Builds a rate-limit key based on task options and the envelope.
   String _rateLimitKey(TaskOptions options, Envelope envelope) =>
       '${envelope.name}:${envelope.headers['tenant'] ?? 'global'}';
 
+  /// Parses a rate limit string such as "10/m" into a spec.
   _RateSpec? _parseRate(String rate) {
     final parts = rate.split('/');
     if (parts.length != 2) return null;
@@ -1611,10 +2256,12 @@ class Worker {
     }
   }
 
+  /// Emits a heartbeat update for a running task.
   void _sendHeartbeat(String id) {
     _events.add(WorkerEvent(type: WorkerEventType.heartbeat, envelopeId: id));
   }
 
+  /// Tracks an in-flight delivery for lease renewal and metrics.
   void _trackDelivery(Delivery delivery) {
     final envelope = delivery.envelope;
     final id = envelope.id;
@@ -1631,6 +2278,7 @@ class Worker {
     _recordInflightGauge();
   }
 
+  /// Removes an in-flight delivery from tracking.
   _ActiveDelivery? _releaseDelivery(Envelope envelope) {
     final entry = _activeDeliveries.remove(envelope.id);
     if (entry != null) {
@@ -1654,6 +2302,7 @@ class Worker {
     return entry;
   }
 
+  /// Records the total in-flight task count metric.
   void _recordInflightGauge() {
     StemMetrics.instance.setGauge(
       'stem.worker.inflight',
@@ -1662,6 +2311,7 @@ class Worker {
     );
   }
 
+  /// Records the active concurrency metric.
   void _recordConcurrencyGauge() {
     StemMetrics.instance.setGauge(
       'stem.worker.concurrency',
@@ -1670,6 +2320,7 @@ class Worker {
     );
   }
 
+  /// Updates queue depth metrics when supported by the broker.
   Future<void> _recordQueueDepth() async {
     try {
       final depths = await _collectQueueDepths();
@@ -1695,6 +2346,7 @@ class Worker {
     }
   }
 
+  /// Collects pending counts for each subscribed queue.
   Future<Map<String, int>> _collectQueueDepths() async {
     final result = <String, int>{};
     for (final queueName in _effectiveQueues) {
@@ -1706,6 +2358,7 @@ class Worker {
     return result;
   }
 
+  /// Cancels broker subscriptions and clears tracking state.
   Future<void> _cancelAllSubscriptions() async {
     if (_subscriptions.isEmpty) return;
     final subs = List<StreamSubscription<Delivery>>.from(_subscriptions.values);
@@ -1722,6 +2375,7 @@ class Worker {
     }
   }
 
+  /// Cancels active timers used by the worker runtime.
   void _cancelTimers() {
     for (final timer in _leaseTimers.values) {
       timer.cancel();
@@ -1735,6 +2389,7 @@ class Worker {
     _workerHeartbeatTimer = null;
   }
 
+  /// Disposes the isolate pool if one is active.
   Future<void> _disposePool() async {
     final pool = _isolatePool;
     _isolatePool = null;
@@ -1744,6 +2399,7 @@ class Worker {
     }
   }
 
+  /// Forcibly stops active tasks, requeuing deliveries when possible.
   Future<void> _forceStopActiveTasks() async {
     final deliveries = List<_ActiveDelivery>.from(_activeDeliveries.values);
     if (deliveries.isEmpty) return;
@@ -1769,6 +2425,7 @@ class Worker {
     }
   }
 
+  /// Requests cooperative termination for all active tasks.
   void _requestTerminationForActiveTasks({required String reason}) {
     if (_activeDeliveries.isEmpty) return;
     final now = DateTime.now().toUtc();
@@ -1787,6 +2444,7 @@ class Worker {
     }
   }
 
+  /// Waits for in-flight tasks to drain, honoring the optional [timeout].
   Future<bool> _awaitDrainWithTimeout(Duration? timeout) async {
     if (_activeDeliveries.isEmpty) return true;
     final completer = _drainCompleter ??= Completer<void>();
@@ -1810,6 +2468,7 @@ class Worker {
     }
   }
 
+  /// Stops process signal subscriptions for shutdown handling.
   Future<void> _stopSignalWatchers() async {
     final futures = <Future<void>>[];
     if (_sigintSub != null) {
@@ -1829,6 +2488,7 @@ class Worker {
     }
   }
 
+  /// Records the last lease renewal timestamp for monitoring.
   void _recordLeaseRenewal(Delivery delivery) {
     final envelope = delivery.envelope;
     StemMetrics.instance.increment(
@@ -1841,12 +2501,14 @@ class Worker {
     );
   }
 
+  /// Adds standard worker metadata to a log context map.
   Map<String, Object> _logContext(Map<String, Object> base) {
     final traceFields = StemTracer.instance.traceFields();
     if (traceFields.isEmpty) return base;
     return {...base, ...traceFields};
   }
 
+  /// Starts periodic worker heartbeat publishing and metrics updates.
   void _startWorkerHeartbeatLoop() {
     _workerHeartbeatTimer?.cancel();
     if (workerHeartbeatInterval <= Duration.zero) return;
@@ -1858,6 +2520,7 @@ class Worker {
 
   bool get _autoscaleEnabled => autoscaleConfig.enabled;
 
+  /// Starts the autoscaling evaluation timer if enabled.
   void _startAutoscaler() {
     _autoscaleTimer?.cancel();
     if (!_autoscaleEnabled) return;
@@ -1867,6 +2530,7 @@ class Worker {
     );
   }
 
+  /// Evaluates autoscale rules and updates concurrency if needed.
   Future<void> _evaluateAutoscale() async {
     if (!_running || !_autoscaleEnabled) return;
     if (_autoscaleEvaluating) return;
@@ -1953,6 +2617,7 @@ class Worker {
     }
   }
 
+  /// Updates the isolate pool size and worker concurrency targets.
   Future<void> _updateConcurrency(
     int newConcurrency, {
     required String reason,
@@ -1988,12 +2653,14 @@ class Worker {
     );
   }
 
+  /// Returns true if the autoscale cooldown has elapsed.
   bool _cooldownElapsed(DateTime? last, Duration cooldown, DateTime clock) {
     if (cooldown <= Duration.zero) return true;
     if (last == null) return true;
     return clock.difference(last) >= cooldown;
   }
 
+  /// Handles isolate pool recycling events.
   void _handleIsolateRecycle(IsolateRecycleEvent event) {
     final ctx = Context(
       _logContext({
@@ -2013,6 +2680,7 @@ class Worker {
     }
   }
 
+  /// Installs process signal handlers for graceful shutdown.
   void _installSignalHandlers() {
     if (!lifecycleConfig.installSignalHandlers) return;
     _sigtermSub ??= _safeWatch(ProcessSignal.sigterm, () {
@@ -2032,6 +2700,7 @@ class Worker {
     });
   }
 
+  /// Wraps [ProcessSignal.watch] to guard against unsupported platforms.
   StreamSubscription<ProcessSignal>? _safeWatch(
     ProcessSignal signal,
     void Function() handler,
@@ -2043,6 +2712,7 @@ class Worker {
     }
   }
 
+  /// Parses a shutdown mode from a signal handler or environment value.
   WorkerShutdownMode _parseShutdownMode(String? value) {
     switch (value?.toLowerCase()) {
       case 'force':
@@ -2057,6 +2727,7 @@ class Worker {
     }
   }
 
+  /// Handles control-plane requests to shut down the worker.
   Future<Map<String, Object?>> _handleShutdownRequest(
     WorkerShutdownMode mode,
   ) async {
@@ -2075,6 +2746,7 @@ class Worker {
     };
   }
 
+  /// Publishes the current worker heartbeat to the backend.
   Future<void> _publishWorkerHeartbeat() async {
     if (!_running) return;
     await _recordQueueDepth();
@@ -2102,6 +2774,7 @@ class Worker {
     }
   }
 
+  /// Builds a worker heartbeat payload from current runtime state.
   WorkerHeartbeat _buildHeartbeat() {
     final now = DateTime.now().toUtc();
     final isolatePool = _isolatePool;
@@ -2162,6 +2835,13 @@ class Worker {
     );
   }
 
+  /// Reads the system load average from `/proc/loadavg` (Linux only).
+  ///
+  /// Returns a list of three values representing the 1, 5, and 15 minute
+  /// load averages. On non-Linux platforms or if the file is unreadable,
+  /// returns an empty list.
+  ///
+  /// Used in [_buildHeartbeat] for worker observability metrics.
   static List<double> _readLoadAverage() {
     if (!Platform.isLinux) {
       return const [];
@@ -2175,16 +2855,30 @@ class Worker {
         double.tryParse(parts[1]) ?? 0,
         double.tryParse(parts[2]) ?? 0,
       ];
-    } catch (_) {
+    } on Object catch (_) {
       return const [];
     }
   }
 
+  /// Calculates a percentage value from [current] and [max] values.
+  ///
+  /// Returns 0 if [max] is zero or negative to avoid division errors.
+  /// Result is rounded to the nearest integer.
+  ///
+  /// Used for memory usage percentage in heartbeat metrics.
   static int _calculatePercent(int current, int max) {
     if (max <= 0) return 0;
     return ((current / max) * 100).round();
   }
 
+  /// Formats an uptime duration as a human-readable string.
+  ///
+  /// Format examples:
+  /// - `5d 2h 30m` for durations >= 1 day
+  /// - `2h 30m` for durations >= 1 hour
+  /// - `30m` for durations < 1 hour
+  ///
+  /// Used in worker heartbeat payloads for human-readable uptime display.
   static String _formatUptime(Duration uptime) {
     final days = uptime.inDays;
     final hours = uptime.inHours % 24;
@@ -2198,17 +2892,29 @@ class Worker {
     return '${minutes}m';
   }
 
+  /// Unique identifier for this worker instance.
+  ///
+  /// Uses [consumerName] if provided, otherwise generates a default
+  /// identifier using the process ID: `stem-worker-<pid>`.
+  ///
+  /// Used for:
+  /// - Heartbeat identification
+  /// - Log context
+  /// - Metric tags
+  /// - Control plane commands
   String get _workerIdentifier =>
       consumerName != null && consumerName!.isNotEmpty
       ? consumerName!
       : 'stem-worker-$pid';
 
+  /// Snapshot of worker metadata used for signals and events.
   WorkerInfo get _workerInfoSnapshot => WorkerInfo(
     id: _workerIdentifier,
     queues: subscriptionQueues,
     broadcasts: subscriptionBroadcasts,
   );
 
+  /// Emits a progress update for a running task.
   void _reportProgress(
     Envelope envelope,
     double progress, {
@@ -2224,6 +2930,7 @@ class Worker {
     );
   }
 
+  /// Seeds the in-memory revocation cache from the revoke store.
   Future<void> _initializeRevocations() async {
     if (revokeStore == null) return;
     try {
@@ -2236,6 +2943,7 @@ class Worker {
     }
   }
 
+  /// Syncs revocation entries from the revoke store.
   Future<void> _syncRevocations() async {
     final store = revokeStore;
     if (store == null) return;
@@ -2255,6 +2963,7 @@ class Worker {
     }
   }
 
+  /// Drops expired revocations from the local cache.
   void _pruneExpiredLocalRevocations(DateTime now) {
     final remove = <String>[];
     _revocations.forEach((key, value) {
@@ -2275,6 +2984,7 @@ class Worker {
     return entry;
   }
 
+  /// Throws if the task has been revoked and should terminate.
   void _enforceTerminationIfRequested(String taskId) {
     final entry = _revocationFor(taskId);
     if (entry != null && entry.terminate) {
@@ -2286,6 +2996,7 @@ class Worker {
     }
   }
 
+  /// Applies a revocation entry to the local cache.
   void _applyRevocationEntry(RevokeEntry entry, {DateTime? clock}) {
     final now = clock ?? DateTime.now().toUtc();
     if (entry.isExpired(now)) {
@@ -2301,22 +3012,26 @@ class Worker {
     }
   }
 
+  /// Returns true if the task id is currently revoked.
   bool _isTaskRevoked(String taskId) {
     return _revocationFor(taskId) != null;
   }
 
+  /// Resolves the args encoder for a handler or falls back to defaults.
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
+  /// Resolves the result encoder for a handler or falls back to defaults.
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?>? handler) {
     final encoder = handler?.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
   }
 
+  /// Decodes task arguments from the envelope using an encoder.
   Map<String, Object?> _decodeArgs(
     Envelope envelope,
     TaskPayloadEncoder fallbackEncoder,
@@ -2331,6 +3046,7 @@ class Worker {
     return _castArgsMap(decoded, encoder);
   }
 
+  /// Normalizes decoded args into a safe map for handlers.
   Map<String, Object?> _castArgsMap(Object? value, TaskPayloadEncoder encoder) {
     if (value == null) return const {};
     if (value is Map<String, Object?>) {
@@ -2354,6 +3070,7 @@ class Worker {
     );
   }
 
+  /// Coerces untyped objects into a string-keyed map.
   Map<String, Object?> _castObjectMap(Object? value) {
     if (value == null) return const {};
     if (value is Map<String, Object?>) {
@@ -2371,6 +3088,7 @@ class Worker {
     return const {};
   }
 
+  /// Coerces untyped objects into a string-keyed string map.
   Map<String, String> _castStringMap(Object? value) {
     if (value == null) return const {};
     if (value is Map<String, String>) {
@@ -2419,6 +3137,7 @@ class Worker {
     return override ?? options.softTimeLimit;
   }
 
+  /// Returns true when a task result should not be persisted.
   bool _shouldIgnoreResult(Envelope envelope) {
     final value = envelope.meta['stem.ignoreResult'];
     if (value is bool) return value;
@@ -2435,6 +3154,7 @@ class Worker {
     return false;
   }
 
+  /// Resolves retry policy overrides from the envelope metadata.
   TaskRetryPolicy? _resolveRetryPolicy(
     Envelope envelope,
     TaskOptions handlerOptions,
@@ -2449,6 +3169,7 @@ class Worker {
     return handlerOptions.retryPolicy;
   }
 
+  /// Returns true when a failure should be retried automatically.
   bool _shouldAutoRetry(TaskRetryPolicy? policy, Object error) {
     if (policy == null) return true;
     final errorType = error.runtimeType.toString();
@@ -2492,6 +3213,7 @@ class Worker {
     return Duration(milliseconds: jittered);
   }
 
+  /// Builds status metadata for result backend writes.
   Map<String, Object?> _statusMeta(
     Envelope envelope,
     TaskPayloadEncoder resultEncoder, {
@@ -2500,6 +3222,7 @@ class Worker {
     return _withResultEncoderMeta({...envelope.meta, ...extra}, resultEncoder);
   }
 
+  /// Adds encoder metadata to a result status payload.
   Map<String, Object?> _withResultEncoderMeta(
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
@@ -2507,6 +3230,7 @@ class Worker {
     return {...meta, stemResultEncoderMetaKey: encoder.id};
   }
 
+  /// Marks revoked deliveries and ensures the broker is acknowledged.
   Future<void> _handleRevokedDelivery(
     Delivery delivery,
     Envelope envelope,
@@ -2577,6 +3301,7 @@ class Worker {
     _revocations.remove(envelope.id);
   }
 
+  /// Returns true when the delivery is past its expiration time.
   bool _isExpired(Envelope envelope) {
     final value = envelope.meta['stem.expiresAt'];
     if (value == null) return false;
@@ -2587,6 +3312,7 @@ class Worker {
     return DateTime.now().isAfter(expiresAt);
   }
 
+  /// Marks expired deliveries and acknowledges them.
   Future<void> _handleExpiredDelivery(
     Delivery delivery,
     Envelope envelope,
@@ -2615,6 +3341,7 @@ class Worker {
     );
   }
 
+  /// Processes control-plane revoke commands and updates the cache.
   Future<Map<String, Object?>> _processRevokeCommand(
     ControlCommandMessage command,
   ) async {
@@ -2681,6 +3408,7 @@ class Worker {
     return result;
   }
 
+  /// Applies revocation entries from a control-plane payload.
   Future<Map<String, Object?>> _applyRevocationEntries(
     List<RevokeEntry> entries,
   ) async {
@@ -2747,6 +3475,7 @@ class Worker {
     };
   }
 
+  /// Starts the control-plane subscription for revoke and shutdown commands.
   void _startControlPlane() {
     final controlQueues = <String>{
       ControlQueueNames.worker(namespace, _workerIdentifier),
@@ -2777,6 +3506,7 @@ class Worker {
     }
   }
 
+  /// Processes an incoming control command delivery.
   Future<void> _processControlCommandDelivery(Delivery delivery) async {
     try {
       final envelope = delivery.envelope;
@@ -2800,6 +3530,11 @@ class Worker {
     }
   }
 
+  /// Dispatches control command handlers based on message type.
+  ///
+  /// This method is the entry point for the control plane. It routes commands
+  /// like `revoke`, `inspect`, and `stats` to their respective implementations
+  /// and ensures a reply is sent back to the requester.
   Future<void> _handleControlCommand(ControlCommandMessage command) async {
     await _signals.controlCommandReceived(_workerInfoSnapshot, command);
 
@@ -2914,6 +3649,10 @@ class Worker {
     if (subscriptionBroadcasts.isNotEmpty) 'broadcasts': subscriptionBroadcasts,
   };
 
+  /// Internal helper to build a stats snapshot for the control plane.
+  ///
+  /// Collects metrics from the broker, active deliveries, and the isolate pool
+  /// to provide a comprehensive view of worker health.
   Map<String, Object?> _buildStatsSnapshot() {
     final now = DateTime.now().toUtc();
     final activeTasks = _activeDeliveries.entries.map((entry) {
@@ -3033,6 +3772,11 @@ class Worker {
     throw StateError('Unexpected execution outcome: $outcome');
   }
 
+  /// Returns a [TaskControlHandler] that manages signals from isolate tasks.
+  ///
+  /// The handler processes [HeartbeatSignal]s, [ExtendLeaseSignal]s,
+  /// [ProgressSignal]s, and [EnqueueTaskSignal]s by delegating back to the
+  /// worker's core components.
   TaskControlHandler _controlHandler(TaskContext context) {
     return (signal) async {
       if (signal is HeartbeatSignal) {
@@ -3084,6 +3828,10 @@ class Worker {
     return creation;
   }
 
+  /// Creates and configures the [TaskIsolatePool] for this worker.
+  ///
+  /// Connects the pool's lifecycle events to the worker's internal state
+  /// for metrics tracking and logging.
   Future<TaskIsolatePool> _createPool() async {
     final pool =
         TaskIsolatePool(
@@ -3254,7 +4002,10 @@ class TaskRevokedException implements Exception {
   String toString() => 'Task $taskId revoked';
 }
 
-/// Parsed rate limit specification.
+/// Parsed rate limit specification for a specific task or queue.
+///
+/// Encapsulates the token-bucket or sliding-window parameters used to
+/// enforce throughput constraints.
 class _RateSpec {
   /// Creates a rate spec.
   ///
@@ -3268,7 +4019,11 @@ class _RateSpec {
   final Duration period;
 }
 
-/// Tracks an active task delivery.
+/// Tracks an active task delivery during its lifecycle in the worker.
+///
+/// This internal structure links a [Delivery] with its execution [Future],
+/// start time, and any active lease timers. It is used to monitor in-flight
+/// work and handle graceful shutdown.
 class _ActiveDelivery {
   /// Creates an active delivery record.
   ///

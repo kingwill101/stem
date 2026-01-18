@@ -148,7 +148,8 @@ abstract class WorkflowStore {
     int offset = 0,
   });
 
-  /// Returns runnable run identifiers filtered by status and lease availability.
+  /// Returns runnable run identifiers filtered by status and lease
+  /// availability.
   Future<List<String>> listRunnableRuns({
     DateTime? now,
     int limit = 50,

@@ -1,3 +1,24 @@
+/// Astronomical calculation engine for solar events.
+///
+/// This library implements a simplified version of the NOAA Solar Position
+/// Algorithm (SPA) to compute sunrise, sunset, and solar noon times for
+/// any geographic location on Earth.
+///
+/// ## Algorithm Overview
+///
+/// The calculator uses the Julian day and Earth's orbital parameters to
+/// estimate the Sun's position. It accounts for:
+/// - Earth's eccentricity and axial tilt.
+/// - Atmospheric refraction (via a standard zenith of 90.833°).
+/// - Equation of Time (discrepancy between solar and clock time).
+///
+/// ## Precision
+///
+/// While suitable for task scheduling, this implementation is an approximation.
+/// Accuracy is typically within ±1-2 minutes for mid-latitudes but decreases
+/// near the poles or during extreme solar atmospheric conditions.
+library;
+
 import 'dart:math';
 
 import 'package:stem/src/scheduler/schedule_spec.dart';
@@ -9,9 +30,25 @@ class SolarCalculator {
   /// Creates a solar calculator instance.
   const SolarCalculator();
 
+  /// Standard zenith angle for sunrise/sunset (90° 50'), accounting for
+  /// the solar disk radius and typical atmospheric refraction.
   static const double _zenith = 90.8333; // degrees
 
   /// Computes the next solar event for the given [spec].
+  ///
+  /// ## Algorithm
+  ///
+  /// 1. Starts from the date of [fromUtc].
+  /// 2. Iterates forward day-by-day (up to 400 days) calculating the
+  ///    specific `spec.event` time for each day.
+  /// 3. Returns the first event time that is `>= fromUtc`.
+  /// 4. If [location] is provided, the result is correctly mapped to that
+  ///    timezone while remaining a UTC [DateTime].
+  ///
+  /// ## Throws
+  ///
+  /// - [StateError] if no such event can be computed within a year (e.g.,
+  ///   polar day/night).
   DateTime nextEvent(
     SolarScheduleSpec spec,
     DateTime fromUtc,
@@ -56,6 +93,29 @@ class SolarCalculator {
     throw StateError('Unable to compute solar event for ${spec.event}');
   }
 
+  /// Internal implementation of the solar position math.
+  ///
+  /// ## Implementation Details
+  ///
+  /// This method performs the heavy lifting of the orbital mechanics math.
+  /// It follows the standard astronomical procedure:
+  /// 1. Calculate the day of the year and approximate solar time.
+  /// 2. Compute the Sun's mean anomaly and true longitude.
+  /// 3. Determine the Sun's right ascension and declination.
+  /// 4. Calculate the local hour angle for the specified [event].
+  /// 5. Convert local mean time to UTC.
+  ///
+  /// ## Parameters
+  ///
+  /// - [date]: The target calendar date (midnight UTC).
+  /// - [latitude]: Observer latitude in degrees.
+  /// - [longitude]: Observer longitude in degrees.
+  /// - [event]: The specific celestial event to solve for.
+  ///
+  /// ## Returns
+  ///
+  /// A UTC [DateTime] for the event, or `null` if the event does not occur
+  /// on that date (common in arctic regions).
   DateTime? _calculate(
     DateTime date,
     double latitude,
@@ -93,6 +153,7 @@ class SolarCalculator {
         (cosDec * cos(_degToRad(latitude)));
 
     if (cosH.abs() > 1) {
+      // Event doesn't occur (Polar Day or Polar Night)
       return null;
     }
 
@@ -124,15 +185,19 @@ class SolarCalculator {
     );
   }
 
+  /// Returns the 1-based day of the year.
   int _dayOfYear(DateTime date) {
     final start = DateTime.utc(date.year);
     return date.difference(start).inDays + 1;
   }
 
+  /// Converts degrees to radians.
   double _degToRad(double deg) => deg * (pi / 180.0);
 
+  /// Converts radians to degrees.
   double _radToDeg(double rad) => rad * (180.0 / pi);
 
+  /// Keeps an angle within the [0, 360) range.
   double _normalizeAngle(double angle) {
     var result = angle % 360;
     if (result < 0) result += 360;
@@ -140,14 +205,14 @@ class SolarCalculator {
   }
 }
 
-/// Supported solar events.
+/// Supported solar events for scheduling.
 enum SolarEvent {
-  /// Sunrise event.
+  /// The moment when the top of the Sun appears on the horizon.
   sunrise,
 
-  /// Sunset event.
+  /// The moment when the top of the Sun disappears below the horizon.
   sunset,
 
-  /// Solar noon event.
+  /// The moment when the Sun is at its highest point in the sky.
   noon,
 }

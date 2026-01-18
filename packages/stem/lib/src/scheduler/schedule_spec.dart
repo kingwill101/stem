@@ -1,33 +1,78 @@
+/// Scheduler specification system for the `stem` package.
+///
+/// This library provides a polymorphic [ScheduleSpec] hierarchy for defining
+/// various types of recurring and one-off task schedules.
+///
+/// ## Schedule Types
+///
+/// - [IntervalScheduleSpec]: Fixed time intervals (e.g., every 5 minutes).
+/// - [CronScheduleSpec]: Standard 5-field cron expressions.
+/// - [SolarScheduleSpec]: Astronomical events (sunrise, sunset, noon).
+/// - [ClockedScheduleSpec]: Single-use or repeating specific timestamps.
+/// - [CalendarScheduleSpec]: Selective calendar matching (months, weekdays).
+///
+/// ## Configuration & Persistence
+///
+/// All specifications support JSON serialization via [ScheduleSpec.toJson]
+/// and can be reconstructed using [ScheduleSpec.fromPersisted].
+///
+/// See also:
+/// - `ScheduleCalculator` for runtime calculation of next run times.
+library;
+
 import 'dart:convert';
 
 import 'package:timezone/timezone.dart' as tz;
 
 /// Enumerates supported scheduler specification kinds.
+///
+/// These string constants are used in the JSON `kind` field to identify
+/// the polymorphic type of a schedule specification.
 class ScheduleSpecKind {
   ScheduleSpecKind._();
 
-  /// Interval-based schedule spec kind.
+  /// Interval-based schedule spec kind (`interval`).
   static const interval = 'interval';
 
-  /// Cron-based schedule spec kind.
+  /// Cron-based schedule spec kind (`cron`).
   static const cron = 'cron';
 
-  /// Solar-based schedule spec kind.
+  /// Solar-based schedule spec kind (`solar`).
   static const solar = 'solar';
 
-  /// Clocked (single timestamp) schedule spec kind.
+  /// Clocked (single timestamp) schedule spec kind (`clocked`).
   static const clocked = 'clocked';
 
-  /// Calendar-based schedule spec kind.
+  /// Calendar-based schedule spec kind (`calendar`).
   static const calendar = 'calendar';
 }
 
-/// Represents a parsed scheduler specification.
+/// Base class for all scheduler specifications.
+///
+/// A schedule specification defines *when* a task should repeat, but does
+/// not store state. State and execution history are managed by `ScheduleEntry`.
 sealed class ScheduleSpec {
-  /// Creates a schedule spec with the provided [kind].
+  /// Internal constructor for schedule specifications.
   const ScheduleSpec(this.kind);
 
-  /// Factory that accepts existing persisted representations.
+  /// Reconstructs a schedule specification from a persisted representation.
+  ///
+  /// ## Implementation Details
+  ///
+  /// This factory supports multiple input formats to ensure backward
+  /// compatibility and ease of use:
+  ///
+  /// 1. **Legacy Strings**:
+  ///    - Starts with `every:` → [IntervalScheduleSpec]
+  ///    - Otherwise → [CronScheduleSpec]
+  ///
+  /// 2. **JSON Maps**:
+  ///    - Dispatched based on the `kind` field to the appropriate subclass.
+  ///
+  /// 3. **Empty/Null**: Throws [FormatException].
+  ///
+  /// ## Throws
+  /// - [FormatException] if the kind is unknown or input is invalid.
   factory ScheduleSpec.fromPersisted(Object? raw) {
     if (raw == null) {
       throw const FormatException('schedule spec must not be null');
@@ -60,19 +105,23 @@ sealed class ScheduleSpec {
     return CronScheduleSpec(expression: raw.toString());
   }
 
-  /// Kind identifier for this spec.
+  /// The discriminator kind for this specification.
   final String kind;
 
-  /// Serializes this spec to JSON.
+  /// Serializes the specification into a JSON-compatible map.
   Map<String, Object?> toJson();
 
-  /// Returns a copy of the spec with updated values.
+  /// Creates a copy of this specification with optional overrides.
   ScheduleSpec copyWith();
 }
 
-/// Schedule specification for fixed intervals.
+/// Schedule specification for fixed time intervals.
+///
+/// Fires every time the specified [every] duration passes.
 class IntervalScheduleSpec extends ScheduleSpec {
-  /// Creates an interval schedule spec.
+  /// Creates an interval-based schedule.
+  ///
+  /// [every] must be greater than zero.
   IntervalScheduleSpec({required this.every, this.startAt, this.endAt})
     : super(ScheduleSpecKind.interval) {
     if (every <= Duration.zero) {
@@ -84,14 +133,16 @@ class IntervalScheduleSpec extends ScheduleSpec {
     }
   }
 
-  /// Parses a legacy `every:` expression into an interval spec.
+  /// Parses a legacy `every:` expression.
+  ///
+  /// Example: `every:5m`, `every:1h`
   factory IntervalScheduleSpec.fromLegacy(String legacy) {
     final expression = legacy.substring('every:'.length);
     final duration = _parseLegacyDuration(expression.trim());
     return IntervalScheduleSpec(every: duration);
   }
 
-  /// Parses an interval spec from JSON.
+  /// Reconstructs an interval spec from a JSON map.
   factory IntervalScheduleSpec.fromJson(Map<String, Object?> json) {
     final everyMs = json['everyMs'] ?? json['every_ms'] ?? json['every'];
     if (everyMs == null) {
@@ -108,16 +159,17 @@ class IntervalScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Interval duration between runs.
+  /// The duration between consecutive runs.
   final Duration every;
 
-  /// Optional start timestamp for the interval.
+  /// Optional absolute timestamp when this schedule starts being active.
+  /// If provided, calculation of intervals will be relative to this date.
   final DateTime? startAt;
 
-  /// Optional end timestamp for the interval.
+  /// Optional absolute timestamp after which this schedule ceases to fire.
   final DateTime? endAt;
 
-  /// Returns a copy of the interval spec with updated values.
+  /// Returns a copy of the specification with optional field overrides.
   @override
   IntervalScheduleSpec copyWith({
     Duration? every,
@@ -131,7 +183,6 @@ class IntervalScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Serializes the interval spec to JSON.
   @override
   Map<String, Object?> toJson() {
     final startAtValue = startAt;
@@ -145,9 +196,11 @@ class IntervalScheduleSpec extends ScheduleSpec {
   }
 }
 
-/// Schedule specification for cron expressions.
+/// Schedule specification for standard Cron expressions.
+///
+/// Supports standard 5-field cron strings (minute, hour, day, month, weekday).
 class CronScheduleSpec extends ScheduleSpec {
-  /// Creates a cron schedule spec.
+  /// Creates a cron-based schedule.
   CronScheduleSpec({
     required this.expression,
     this.description,
@@ -155,7 +208,7 @@ class CronScheduleSpec extends ScheduleSpec {
   }) : assert(expression.trim().isNotEmpty, 'Cron expression must be set.'),
        super(ScheduleSpecKind.cron);
 
-  /// Parses a cron spec from JSON.
+  /// Reconstructs a cron spec from a JSON map.
   factory CronScheduleSpec.fromJson(Map<String, Object?> json) {
     final expression = json['expression'] as String?;
     if (expression == null || expression.trim().isEmpty) {
@@ -169,16 +222,15 @@ class CronScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Cron expression in five-field format.
+  /// The raw cron expression (e.g., `0 12 * * *`).
   final String expression;
 
-  /// Optional human-readable description.
+  /// Optional user-provided description of the schedule.
   final String? description;
 
-  /// Optional seconds field for extended cron expressions.
+  /// Optional metadata field for expressions that include a seconds component.
   final String? secondField;
 
-  /// Returns a copy of the cron spec with updated values.
   @override
   CronScheduleSpec copyWith({
     String? expression,
@@ -196,8 +248,6 @@ class CronScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Serializes the cron spec to JSON.
-  /// Serializes the calendar spec to JSON.
   @override
   Map<String, Object?> toJson() => {
     'kind': kind,
@@ -207,9 +257,11 @@ class CronScheduleSpec extends ScheduleSpec {
   };
 }
 
-/// Schedule specification for solar events.
+/// Schedule specification based on celestial/solar events.
+///
+/// Computes schedule times using geographic coordinates and solar position.
 class SolarScheduleSpec extends ScheduleSpec {
-  /// Creates a solar schedule spec.
+  /// Creates a solar-based schedule.
   SolarScheduleSpec({
     required this.event,
     required this.latitude,
@@ -221,7 +273,7 @@ class SolarScheduleSpec extends ScheduleSpec {
        ),
        super(ScheduleSpecKind.solar);
 
-  /// Parses a solar spec from JSON.
+  /// Reconstructs a solar spec from a JSON map.
   factory SolarScheduleSpec.fromJson(Map<String, Object?> json) {
     final event = json['event'] as String?;
     final latitude = (json['latitude'] as num?)?.toDouble();
@@ -242,19 +294,20 @@ class SolarScheduleSpec extends ScheduleSpec {
 
   static const Set<String> _validEvents = {'sunrise', 'sunset', 'noon'};
 
-  /// Solar event name (e.g. sunrise, sunset).
+  /// The solar event to track (`sunrise`, `sunset`, or `noon`).
   final String event;
 
-  /// Latitude used to compute the solar event.
+  /// Latitude of the target location (-90 to 90).
   final double latitude;
 
-  /// Longitude used to compute the solar event.
+  /// Longitude of the target location (-180 to 180).
   final double longitude;
 
-  /// Optional offset applied to the computed event time.
+  /// Optional relative time offset from the computed event.
+  ///
+  /// Example: `Duration(minutes: -30)` for "30 minutes before sunrise".
   final Duration? offset;
 
-  /// Returns a copy of the solar spec with updated values.
   @override
   SolarScheduleSpec copyWith({
     String? event,
@@ -270,7 +323,6 @@ class SolarScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Serializes the solar spec to JSON.
   @override
   Map<String, Object?> toJson() {
     final offsetValue = offset;
@@ -284,13 +336,13 @@ class SolarScheduleSpec extends ScheduleSpec {
   }
 }
 
-/// Schedule specification for a fixed run timestamp.
+/// Schedule specification for a fixed, absolute run time.
 class ClockedScheduleSpec extends ScheduleSpec {
-  /// Creates a clocked schedule spec.
+  /// Creates a clocked schedule.
   ClockedScheduleSpec({required this.runAt, this.runOnce = true})
     : super(ScheduleSpecKind.clocked);
 
-  /// Parses a clocked spec from JSON.
+  /// Reconstructs a clocked spec from a JSON map.
   factory ClockedScheduleSpec.fromJson(Map<String, Object?> json) {
     final runAtRaw = json['runAt'] ?? json['run_at'];
     final runAt = _parseDate(runAtRaw);
@@ -303,13 +355,13 @@ class ClockedScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Timestamp when the schedule should fire.
+  /// The exact time when the task should fire.
   final DateTime runAt;
 
-  /// Whether the schedule should run only once.
+  /// Whether the task should only run exactly once.
+  /// If false, it acts like an interval with a single datum.
   final bool runOnce;
 
-  /// Returns a copy of the clocked spec with updated values.
   @override
   ClockedScheduleSpec copyWith({DateTime? runAt, bool? runOnce}) {
     return ClockedScheduleSpec(
@@ -318,7 +370,6 @@ class ClockedScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Serializes the clocked spec to JSON.
   @override
   Map<String, Object?> toJson() => {
     'kind': kind,
@@ -327,9 +378,11 @@ class ClockedScheduleSpec extends ScheduleSpec {
   };
 }
 
-/// Schedule specification for calendar fields (months, weekdays, etc.).
+/// Schedule specification that matches specific calendar attributes.
+///
+/// If a list is null, it acts as a wildcard (matches everything).
 class CalendarScheduleSpec extends ScheduleSpec {
-  /// Creates a calendar schedule spec.
+  /// Creates a calendar-attribute based schedule.
   CalendarScheduleSpec({
     this.months,
     this.weekdays,
@@ -338,7 +391,7 @@ class CalendarScheduleSpec extends ScheduleSpec {
     this.minutes,
   }) : super(ScheduleSpecKind.calendar);
 
-  /// Parses a calendar spec from JSON.
+  /// Reconstructs a calendar spec from a JSON map.
   factory CalendarScheduleSpec.fromJson(Map<String, Object?> json) {
     List<int>? parseIntList(String key) {
       final raw = json[key];
@@ -360,22 +413,21 @@ class CalendarScheduleSpec extends ScheduleSpec {
     );
   }
 
-  /// Optional month numbers (1-12).
+  /// Specific month numbers (1-12). Wildcard if null.
   final List<int>? months;
 
-  /// Optional weekday numbers (0-6 or 1-7 depending on locale).
+  /// Specific weekday numbers (0-6). Wildcard if null.
   final List<int>? weekdays;
 
-  /// Optional day-of-month values.
+  /// Specific days of the month (1-31). Wildcard if null.
   final List<int>? monthdays;
 
-  /// Optional hour values.
+  /// Specific hours of the day (0-23). Wildcard if null.
   final List<int>? hours;
 
-  /// Optional minute values.
+  /// Specific minutes of the hour (0-59). Wildcard if null.
   final List<int>? minutes;
 
-  /// Returns a copy of the calendar spec with updated values.
   @override
   CalendarScheduleSpec copyWith({
     List<int>? months,
@@ -404,16 +456,31 @@ class CalendarScheduleSpec extends ScheduleSpec {
   };
 }
 
-/// Lazily resolves timezone identifiers. Exposed for calculators.
+/// Lazily resolves timezone identifiers.
+///
+/// Used by schedule calculators to map schedule timezone names into
+/// [tz.Location] objects while providing fallbacks and handling aliases.
 class ScheduleTimezoneResolver {
-  /// Creates a resolver that uses [_provider] with a default timezone fallback.
+  /// Creates a resolver.
+  ///
+  /// [_provider] is typically `tz.getLocation`.
   ScheduleTimezoneResolver(this._provider, {String defaultTimezone = 'UTC'})
     : _defaultTimezone = defaultTimezone;
 
   final tz.Location Function(String name)? _provider;
   final String _defaultTimezone;
 
-  /// Resolves [name] into a timezone location, defaulting when absent.
+  /// Resolves [name] into a [tz.Location].
+  ///
+  /// ## Logic
+  ///
+  /// 1. Use the default timezone if [name] is empty or null.
+  /// 2. Attempt direct resolution via [_provider].
+  /// 3. If "UTC" fails, try "Etc/UTC" as an alias.
+  /// 4. If "Etc/UTC" fails, try "UTC" as an alias.
+  ///
+  /// ## Throws
+  /// - [StateError] if no timezone provider is configured.
   tz.Location resolve(String? name) {
     final id = (name == null || name.trim().isEmpty) ? _defaultTimezone : name;
     final resolver = _provider;
@@ -437,6 +504,7 @@ class ScheduleTimezoneResolver {
   }
 }
 
+/// Internal helper to parse flexible duration fields from JSON.
 Duration? _parseDurationField(Object? raw) {
   if (raw == null) return null;
   if (raw is num) return Duration(milliseconds: raw.toInt());
@@ -446,6 +514,7 @@ Duration? _parseDurationField(Object? raw) {
   return null;
 }
 
+/// Internal helper to parse absolute dates from JSON/Metadata.
 DateTime? _parseDate(Object? raw) {
   if (raw == null) return null;
   if (raw is DateTime) return raw;
@@ -455,6 +524,10 @@ DateTime? _parseDate(Object? raw) {
   throw FormatException('Invalid date value: ${jsonEncode(raw)}');
 }
 
+/// Logic for parsing shorthand duration strings.
+///
+/// Supported units: `ms`, `s`, `m`, `h`, `d`.
+/// Example: `30s`, `1h`, `500ms`.
 Duration _parseLegacyDuration(String expression) {
   final regex = RegExp(r'^(\d+)(ms|s|m|h|d)?$');
   final match = regex.firstMatch(expression);

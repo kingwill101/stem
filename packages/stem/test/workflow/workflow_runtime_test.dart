@@ -92,6 +92,33 @@ void main() {
     );
   });
 
+  test('throws when run lease is held by another runtime', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'lease.conflict.workflow',
+        build: (flow) {
+          flow.step('only', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('lease.conflict.workflow');
+    final claimed = await store.claimRun(
+      runId,
+      ownerId: 'other-runtime',
+    );
+    expect(claimed, isTrue);
+
+    await expectLater(
+      runtime.executeRun(runId),
+      throwsA(isA<StateError>()),
+    );
+
+    final state = await store.get(runId);
+    expect(state?.ownerId, 'other-runtime');
+    expect(state?.status, WorkflowStatus.running);
+  });
+
   test('suspends on sleep and resumes after delay', () async {
     runtime.registerWorkflow(
       Flow(

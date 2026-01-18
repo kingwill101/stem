@@ -95,8 +95,6 @@ class InMemoryWorkflowStore implements WorkflowStore {
       createdAt: now,
       updatedAt: now,
       suspensionData: const <String, Object?>{},
-      ownerId: null,
-      leaseExpiresAt: null,
       cancellationPolicy: cancellationPolicy,
     );
     _steps[id] = {};

@@ -1,3 +1,57 @@
+/// Main entry point for enqueuing and managing tasks in the Stem framework.
+///
+/// This library provides the [Stem] class, which acts as a high-level facade
+/// for producer applications. It coordinates task serialization, routing,
+/// signing, and persistence during the enqueuing process.
+///
+/// ## Architecture Overview
+///
+/// ```text
+/// ┌─────────────────────────────────────────────────────────┐
+/// │                         Stem                            │
+/// │  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐  │
+/// │  │  Broker  │  │ Registry │  │    Result Backend     │  │
+/// │  │(publish) │  │(metadata)│  │ (tracking/results)    │  │
+/// │  └────┬─────┘  └────┬─────┘  └───────────┬───────────┘  │
+/// │       │             │                    │              │
+/// │       ▼             ▼                    ▼              │
+/// │  ┌──────────────────────────────────────────────────┐   │
+/// │  │                Enqueue Pipeline                  │   │
+/// │  │  • Metadata mapping   • Payload encoding         │   │
+/// │  │  • Route resolution   • Signature generation     │   │
+/// │  │  • Uniqueness checks  • Result tracking          │   │
+/// │  └──────────────────────┬───────────────────────────┘   │
+/// │                         │                               │
+/// │                         ▼                               │
+/// │                  (Message Broker)                       │
+/// └─────────────────────────────────────────────────────────┘
+/// ```
+///
+/// ## Key Concepts
+///
+/// - **Enqueuer**: The core interface for adding tasks to the system.
+/// - **Broker**: Reusable interface for message delivery (e.g. Redis,
+///   Postgres).
+/// - **Result Backend**: Durable storage for task states and return values.
+/// - **Middleware**: Interceptor chain for enqueuing and execution events.
+///
+/// ## Payload Encoding
+///
+/// [Stem] uses a registry of [TaskPayloadEncoder]s to transform complex Dart
+/// objects into serializable formats for cross-isolate or cross-process
+/// communication. By default, it uses [JsonTaskPayloadEncoder].
+///
+/// ## Task Lineage
+///
+/// When enqueuing tasks from within an existing task (via [TaskContext]),
+/// [Stem] automatically tracks parent-child relationships and propagates
+/// trace identifiers for observability.
+///
+/// See also:
+/// - `Worker` for the consumption and execution side of the system.
+/// - `TaskDefinition` for defining strongly-typed task interfaces.
+library;
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -70,9 +124,13 @@ class Stem implements TaskEnqueuer {
 
   /// Registry of payload encoders used for args/results.
   final TaskPayloadEncoderRegistry payloadEncoders;
+
+  /// Shared signal emitter for lifecycle hooks.
   static const StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'stem',
   );
+
+  /// Random source used for retry jitter.
   static final math.Random _random = math.Random();
 
   /// Releases broker/backend resources used by this producer.
@@ -378,6 +436,7 @@ class Stem implements TaskEnqueuer {
     Envelope envelope,
     Future<void> Function() action,
   ) async {
+    /// Executes the enqueue middleware chain in order.
     Future<void> run(int index) async {
       if (index >= middleware.length) {
         await action();
@@ -393,6 +452,7 @@ class Stem implements TaskEnqueuer {
     DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   ) {
+    /// Resolves not-before scheduling from enqueue overrides.
     if (enqueueOptions == null) return notBefore;
     if (enqueueOptions.eta != null) {
       return enqueueOptions.eta;
@@ -408,6 +468,8 @@ class Stem implements TaskEnqueuer {
     TaskOptions handlerOptions,
     TaskEnqueueOptions? enqueueOptions,
   ) {
+    /// Determines max retries using enqueue overrides, task options, then
+    /// handler defaults.
     final policyMax = enqueueOptions?.retryPolicy?.maxRetries;
     if (policyMax != null) {
       return policyMax;
@@ -426,6 +488,7 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
   ) {
+    /// Maps enqueue-only settings into envelope metadata.
     final merged = Map<String, Object?>.from(meta);
     if (enqueueOptions == null) return merged;
     if (enqueueOptions.expires != null) {
@@ -474,6 +537,7 @@ class Stem implements TaskEnqueuer {
   List<Map<String, Object?>> _encodeTaskCalls(
     List<TaskCall<dynamic, dynamic>> calls,
   ) {
+    /// Serializes linked task calls for chain/retry metadata.
     return calls
         .map(
           (call) => {
@@ -493,6 +557,7 @@ class Stem implements TaskEnqueuer {
       options.toJson();
 
   Map<String, Object?> _publishMeta(TaskEnqueueOptions? enqueueOptions) {
+    /// Extracts publish-time metadata for broker adapters.
     if (enqueueOptions == null) return const {};
     final meta = <String, Object?>{};
     if (enqueueOptions.publishConnection != null) {
@@ -509,6 +574,7 @@ class Stem implements TaskEnqueuer {
     RoutingInfo? routing,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
+    /// Publishes a task with optional retry policy.
     if (enqueueOptions?.retry != true) {
       await broker.publish(envelope, routing: routing);
       return;
@@ -533,6 +599,7 @@ class Stem implements TaskEnqueuer {
   }
 
   Duration _computeRetryDelay(TaskRetryPolicy policy, int attempt) {
+    /// Computes the delay for a publish retry attempt.
     final base = policy.defaultDelay ?? Duration.zero;
     if (!policy.backoff) {
       return base;
@@ -554,6 +621,7 @@ class Stem implements TaskEnqueuer {
     String taskId,
     Envelope duplicate,
   ) async {
+    /// Records a deduplicated task attempt on the existing task metadata.
     if (backend == null) return;
     try {
       final status = await backend!.get(taskId);
@@ -599,12 +667,14 @@ class Stem implements TaskEnqueuer {
   }
 
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
+    /// Resolves the args encoder for a handler and registers it if needed.
     final encoder = handler.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
+    /// Resolves the result encoder for a handler and registers it if needed.
     final encoder = handler.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
@@ -614,6 +684,7 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> args,
     TaskPayloadEncoder encoder,
   ) {
+    /// Encodes args with the selected encoder and normalizes map typing.
     final encoded = encoder.encode(args);
     return _castArgsMap(encoded, encoder);
   }
@@ -622,6 +693,7 @@ class Stem implements TaskEnqueuer {
     Object? encoded,
     TaskPayloadEncoder encoder,
   ) {
+    /// Ensures encoded args are a string-keyed map with object values.
     if (encoded == null) return const {};
     if (encoded is Map<String, Object?>) {
       return Map<String, Object?>.from(encoded);
@@ -648,6 +720,7 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
   ) {
+    /// Adds the args encoder identifier into metadata.
     return {...meta, stemArgsEncoderMetaKey: encoder.id};
   }
 
@@ -655,6 +728,7 @@ class Stem implements TaskEnqueuer {
     Map<String, String> headers,
     TaskPayloadEncoder encoder,
   ) {
+    /// Adds the args encoder identifier into headers.
     return {...headers, stemArgsEncoderHeader: encoder.id};
   }
 
@@ -662,6 +736,7 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
   ) {
+    /// Adds the result encoder identifier into metadata.
     return {...meta, stemResultEncoderMetaKey: encoder.id};
   }
 
@@ -669,6 +744,7 @@ class Stem implements TaskEnqueuer {
     Object? payload,
     T Function(Object? payload)? decode,
   ) {
+    /// Decodes a task payload using the provided callback or a cast.
     if (payload == null) return null;
     if (decode != null) {
       return decode(payload);

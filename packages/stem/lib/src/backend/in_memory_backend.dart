@@ -22,14 +22,28 @@ class InMemoryResultBackend implements ResultBackend {
   /// Time-to-live applied to worker heartbeat entries.
   final Duration heartbeatTtl;
 
+  /// Task status entries keyed by task id.
   final Map<String, _Entry> _entries = {};
+
+  /// Per-task expiry timers used to evict stale entries.
   final Map<String, Timer> _expiryTimers = {};
+
+  /// Active watchers keyed by task id.
   final Map<String, StreamController<TaskStatus>> _watchers = {};
 
+  /// Group/chord state keyed by group id.
   final Map<String, _GroupEntry> _groups = {};
+
+  /// Per-group expiry timers used to remove stale groups.
   final Map<String, Timer> _groupExpiry = {};
+
+  /// Groups that have been claimed for chord dispatch.
   final Set<String> _claimedChords = {};
+
+  /// Latest worker heartbeats keyed by worker id.
   final Map<String, _HeartbeatEntry> _heartbeats = {};
+
+  /// Per-worker heartbeat expiry timers.
   final Map<String, Timer> _heartbeatExpiry = {};
 
   @override
@@ -100,7 +114,7 @@ class InMemoryResultBackend implements ResultBackend {
   ) async {
     _pruneExpired();
     if (request.limit <= 0) {
-      return const TaskStatusPage(items: [], nextOffset: null);
+      return const TaskStatusPage(items: []);
     }
     final matches = _entries.values.where((entry) {
       if (request.state != null && entry.status.state != request.state) {
@@ -116,9 +130,7 @@ class InMemoryResultBackend implements ResultBackend {
         return false;
       }
       return true;
-    }).toList();
-
-    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    }).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     final offset = request.offset;
     final limit = request.limit;
     final pageItems = matches
@@ -238,11 +250,13 @@ class InMemoryResultBackend implements ResultBackend {
         .toList(growable: false);
   }
 
+  /// Starts or resets the expiry timer for a task status entry.
   void _scheduleExpiry(String key, Duration ttl) {
     _expiryTimers[key]?.cancel();
     _expiryTimers[key] = Timer(ttl, () => _remove(key));
   }
 
+  /// Removes a task entry and any watchers associated with it.
   void _remove(String key) {
     _expiryTimers.remove(key)?.cancel();
     _entries.remove(key);
@@ -252,22 +266,26 @@ class InMemoryResultBackend implements ResultBackend {
     }
   }
 
+  /// Starts or resets the expiry timer for a group/chord entry.
   void _scheduleGroupExpiry(String key, Duration ttl) {
     _groupExpiry[key]?.cancel();
     _groupExpiry[key] = Timer(ttl, () => _removeGroup(key));
   }
 
+  /// Removes a group entry and related chord bookkeeping.
   void _removeGroup(String key) {
     _groupExpiry.remove(key)?.cancel();
     _groups.remove(key);
     _claimedChords.remove(key);
   }
 
+  /// Starts or resets the expiry timer for a worker heartbeat.
   void _scheduleHeartbeatExpiry(String key, Duration ttl) {
     _heartbeatExpiry[key]?.cancel();
     _heartbeatExpiry[key] = Timer(ttl, () => _removeHeartbeat(key));
   }
 
+  /// Removes a worker heartbeat entry.
   void _removeHeartbeat(String key) {
     _heartbeatExpiry.remove(key)?.cancel();
     _heartbeats.remove(key);
@@ -301,6 +319,7 @@ class InMemoryResultBackend implements ResultBackend {
   @override
   Future<void> close() => dispose();
 
+  /// Evicts expired worker heartbeats before listing.
   void _pruneExpiredHeartbeats() {
     final now = DateTime.now();
     _heartbeats.entries
@@ -310,17 +329,17 @@ class InMemoryResultBackend implements ResultBackend {
         .forEach(_removeHeartbeat);
   }
 
+  /// Evicts expired task status entries before listing.
   void _pruneExpired() {
     final now = DateTime.now();
-    final expired = _entries.entries
+    _entries.entries
         .where((entry) => entry.value.expiresAt.isBefore(now))
         .map((entry) => entry.key)
-        .toList(growable: false);
-    for (final key in expired) {
-      _remove(key);
-    }
+        .toList(growable: false)
+        .forEach(_remove);
   }
 
+  /// Checks that all key/value pairs in [filters] match [meta].
   bool _matchesMeta(
     Map<String, Object?> meta,
     Map<String, Object?> filters,
@@ -336,6 +355,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 }
 
+/// Internal record storing task status with timestamps.
 class _Entry {
   _Entry({
     required this.status,
@@ -344,25 +364,44 @@ class _Entry {
     required this.updatedAt,
   });
 
+  /// Task status snapshot.
   final TaskStatus status;
+
+  /// Expiration timestamp for this entry.
   DateTime expiresAt;
+
+  /// Timestamp when the entry was created.
   DateTime createdAt;
+
+  /// Timestamp of the most recent update.
   DateTime updatedAt;
 }
 
+/// Internal record storing group/chord metadata and results.
 class _GroupEntry {
   _GroupEntry({required this.descriptor, required this.expiresAt})
     : meta = Map<String, Object?>.from(descriptor.meta);
 
+  /// Group descriptor for expected results and metadata.
   final GroupDescriptor descriptor;
+
+  /// Mutable metadata for chord bookkeeping.
   final Map<String, Object?> meta;
+
+  /// Results collected for each task in the group.
   final Map<String, TaskStatus> results = {};
+
+  /// Expiration timestamp for the group.
   DateTime expiresAt;
 }
 
+/// Internal record storing worker heartbeat snapshots.
 class _HeartbeatEntry {
   _HeartbeatEntry({required this.heartbeat, required this.expiresAt});
 
+  /// Latest heartbeat snapshot.
   final WorkerHeartbeat heartbeat;
+
+  /// Expiration timestamp for the heartbeat.
   DateTime expiresAt;
 }

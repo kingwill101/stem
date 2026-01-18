@@ -1,9 +1,19 @@
+/// Volatile, in-memory implementation of a lock store.
+///
+/// This library provides [InMemoryLockStore], which is primarily intended for
+/// unit testing or single-process local development. It does not provide
+/// cross-process or cross-machine exclusion.
+library;
+
 import 'dart:async';
 import 'dart:math';
 
 import 'package:stem/src/core/contracts.dart';
 
 /// In-memory lock store used for tests and local scheduling.
+///
+/// Implements a simple TTL-based mutex map. Each key is associated with
+/// an owner and an expiration timestamp.
 class InMemoryLockStore implements LockStore {
   final Map<String, _InMemoryLock> _locks = {};
 
@@ -15,9 +25,12 @@ class InMemoryLockStore implements LockStore {
   }) async {
     final now = DateTime.now();
     final existing = _locks[key];
+
+    // Check if a non-expired lock already exists for this key.
     if (existing != null && !existing.isExpired(now)) {
       return null;
     }
+
     final resolvedOwner = owner ?? _InMemoryLock.generateOwner();
     final lock = _InMemoryLock(key, resolvedOwner, now.add(ttl), this);
     _locks[key] = lock;
@@ -65,25 +78,37 @@ class InMemoryLockStore implements LockStore {
     return true;
   }
 
-  /// Releases a lock regardless of owner (internal helper).
+  /// Internal helper to release a lock by key, bypassing owner checks.
+  ///
+  /// Usually called via [_InMemoryLock.release].
   void releaseLock(String key) {
     _locks.remove(key);
   }
 }
 
+/// Internal representation of an active or expired memory lock.
 class _InMemoryLock implements Lock {
   _InMemoryLock(this.key, this.owner, this.expiresAt, this.store);
 
+  /// Generates a unique owner identifier including current microsecond and
+  /// a random 32-bit integer to minimize collision probability.
   static String generateOwner() =>
       'owner-${DateTime.now().microsecondsSinceEpoch}-'
       '${Random().nextInt(1 << 32)}';
 
   @override
   final String key;
+
+  /// The unique identifier that "holds" this lock.
   final String owner;
+
+  /// The absolute point in time when this lock will automatically expire.
   DateTime expiresAt;
+
+  /// The store that created this lock.
   final InMemoryLockStore store;
 
+  /// Checks if the lock is expired relative to [now].
   bool isExpired(DateTime now) => now.isAfter(expiresAt);
 
   @override
