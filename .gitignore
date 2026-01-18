@@ -16,7 +16,6 @@ task.md
 *.iml
 .DS_Store
 .lh/
-# cloud/
-packages/cloud/coverage/
-packages/*/coverage/*
-!packages/*/coverage/coverage.json
+# Coverage
+coverage/
+**/coverage/
