@@ -547,7 +547,9 @@ class RedisStreamsBroker implements Broker {
         final cmd = await ensureConsumerCommand();
         return await cmd.send_object(command);
       } on Object catch (error) {
-        if (controller.isClosed || _shouldSuppressClosedError(error) || _closed) {
+        if (controller.isClosed ||
+            _shouldSuppressClosedError(error) ||
+            _closed) {
           return null;
         }
         if (attempt == 0) {
@@ -665,7 +667,7 @@ class RedisStreamsBroker implements Broker {
             }
             final cmd = await ensureBroadcastCommand();
             return await cmd.send_object(command);
-        } on Object catch (error) {
+          } on Object catch (error) {
             if (controller.isClosed ||
                 _shouldSuppressClosedError(error) ||
                 _closed) {

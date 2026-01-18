@@ -140,7 +140,7 @@ class RedisResultBackend implements ResultBackend {
     );
     final key = _taskKey(taskId);
     final now = DateTime.now().toUtc();
-    DateTime createdAt = now;
+    var createdAt = now;
     final existingRaw = await _send(['GET', key]);
     if (existingRaw is String) {
       final existing = jsonDecode(existingRaw) as Map<String, Object?>;
@@ -194,11 +194,11 @@ class RedisResultBackend implements ResultBackend {
     TaskStatusListRequest request,
   ) async {
     if (request.limit <= 0) {
-      return const TaskStatusPage(items: [], nextOffset: null);
+      return const TaskStatusPage(items: []);
     }
     final matches = <TaskStatusRecord>[];
     var cursor = '0';
-    final pattern = '${namespace}:result:*';
+    final pattern = '$namespace:result:*';
     do {
       final response = await _send([
         'SCAN',
