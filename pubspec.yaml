@@ -14,10 +14,8 @@ workspace:
   - packages/cloud/stem_cloud_gateway
   - packages/cloud/stem_cloud_worker
 dev_dependencies:
-  coverage: ^1.7.2
+  coverage: ^1.15.0
   very_good_analysis: ^10.0.0
 dependency_overrides:
-  crypto_keys:
-    path: tool/third_party/crypto_keys
   timezone: 0.11.0
-  pointycastle: 3.6.2
+  pointycastle: ^4.0.0
