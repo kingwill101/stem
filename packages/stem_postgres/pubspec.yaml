@@ -7,21 +7,19 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  artisanal: ^0.1.0-dev+4
-  collection: ^1.18.0
-  ormed: ^0.1.0-dev+6
-  ormed_postgres: ^0.1.0-dev+6
+  artisanal: ^0.1.2
+  collection: ^1.19.1
+  ormed: ^0.1.0-dev+10
+  ormed_postgres: ^0.1.0-dev+10
   path: ^1.9.1
   postgres: ^3.5.9
   stem: ^0.1.0-dev
-  uuid: ^4.5.1
+  uuid: ^4.5.2
 
 dev_dependencies:
-  build_runner: ^2.10.4
+  build_runner: ^2.10.5
   coverage: ^1.15.0
   lints: ^6.0.0
-  ormed_cli: ^0.1.0-dev+6
   stem_adapter_tests: ^0.1.0-dev
-  stem_cli: ^0.1.0-dev
-  test: ^1.26.3
+  test: ^1.29.0
   very_good_analysis: ^10.0.0

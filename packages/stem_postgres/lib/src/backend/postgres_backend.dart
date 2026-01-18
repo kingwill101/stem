@@ -236,7 +236,7 @@ class PostgresResultBackend implements ResultBackend {
     TaskStatusListRequest request,
   ) async {
     if (request.limit <= 0) {
-      return const TaskStatusPage(items: [], nextOffset: null);
+      return const TaskStatusPage(items: []);
     }
     final now = DateTime.now();
     final matches = <TaskStatusRecord>[];

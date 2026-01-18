@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
-import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_postgres/src/database/datasource.dart';
+import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
 import '../../support/postgres_test_harness.dart';
@@ -117,7 +117,6 @@ Future<void> main() async {
             queue: 'default',
             meta: {'kind': 'demo'},
             limit: 10,
-            offset: 0,
           ),
         );
 

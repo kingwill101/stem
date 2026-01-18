@@ -114,7 +114,8 @@ class PostgresBroker implements Broker {
     if (_closed) return;
     _closedStack = StackTrace.current;
     stemLogger.warning(
-      'Closing PostgresBroker (namespace=$namespace) stack=${_closedStack ?? ''}',
+      'Closing PostgresBroker (namespace=$namespace) '
+      'stack=${_closedStack ?? ''}',
     );
     _closed = true;
     _sweeperTimer?.cancel();
@@ -143,12 +144,12 @@ class PostgresBroker implements Broker {
       await _connections.ensureReady();
       try {
         return await action();
-      } on StateError catch (error) {
+      } on Exception catch (error) {
         final message = error.toString();
         if (message.contains('already been closed') ||
             message.contains('not been initialized')) {
           await _connections.ensureReady(forceReopen: true);
-          return await action();
+          return action();
         }
         rethrow;
       }
@@ -213,7 +214,8 @@ class PostgresBroker implements Broker {
     String? consumerName,
   }) {
     stemLogger.debug(
-      'Broker consume requested (namespace=$namespace, queues=${subscription.queues})',
+      'Broker consume requested (namespace=$namespace, '
+      'queues=${subscription.queues})',
     );
     if (subscription.queues.isEmpty) {
       throw ArgumentError(
@@ -263,7 +265,8 @@ class PostgresBroker implements Broker {
     _consumers.add(runner);
     if (_closed) {
       stemLogger.warning(
-        'Broker already closed; closing consumer stream. stack=${_closedStack ?? StackTrace.current}',
+        'Broker already closed; closing consumer stream. '
+        'stack=${_closedStack ?? StackTrace.current}',
       );
       scheduleMicrotask(() async {
         await controller.close();
@@ -799,12 +802,10 @@ class _ConsumerRunner {
   }
 
   Future<void> _loop() async {
-    while (
-      !_stopped &&
-      controller.hasListener &&
-      !controller.isClosed &&
-      !broker._closed
-    ) {
+    while (!_stopped &&
+        controller.hasListener &&
+        !controller.isClosed &&
+        !broker._closed) {
       try {
         final jobs = <_QueuedJob>[];
         for (var i = 0; i < prefetch; i++) {
@@ -837,7 +838,8 @@ class _ConsumerRunner {
         }
       } on Object catch (error, stack) {
         stemLogger.warning(
-          'Consumer loop error (queue=$queue, worker=$workerId): $error\n${stack.toString()}',
+          'Consumer loop error (queue=$queue, worker=$workerId): '
+          '$error\n$stack',
         );
         if (controller.isClosed) return;
         controller.addError(error, stack);

@@ -6,9 +6,6 @@ import 'package:stem_postgres/src/database/migrations.dart';
 
 /// Holds an active Postgres data source and query helpers.
 class PostgresConnections {
-  static final Expando<_TransactionQueue> _queuesByDataSource =
-      Expando<_TransactionQueue>();
-
   /// Wraps an existing data source without running migrations.
   ///
   /// The caller remains responsible for disposing [dataSource].
@@ -25,6 +22,9 @@ class PostgresConnections {
        _connectionString = connectionString,
        _transactionQueueRef = _queuesByDataSource[dataSource] ??=
            _TransactionQueue();
+
+  static final Expando<_TransactionQueue> _queuesByDataSource =
+      Expando<_TransactionQueue>();
 
   /// Wraps an existing data source and runs migrations before use.
   ///
@@ -71,13 +71,13 @@ class PostgresConnections {
       await ensureReady();
       try {
         return await connection.transaction(() => action(context));
-      } on StateError catch (error) {
+      } on Exception catch (error) {
         final message = error.toString();
         if (_ownsDataSource &&
             (message.contains('already been closed') ||
                 message.contains('not been initialized'))) {
           await ensureReady(forceReopen: true);
-          return await connection.transaction(() => action(context));
+          return connection.transaction(() => action(context));
         }
         rethrow;
       }
@@ -97,7 +97,7 @@ class PostgresConnections {
     if (_dataSource.isInitialized) return;
     try {
       await _dataSource.init();
-    } on StateError catch (error) {
+    } on Exception catch (error) {
       final message = error.toString();
       if (_ownsDataSource &&
           (message.contains('already been closed') ||
@@ -120,41 +120,13 @@ class PostgresConnections {
 Future<void> _disposeQuietly(DataSource dataSource) async {
   try {
     await dataSource.dispose();
-  } catch (_) {}
+  } on Object catch (_) {}
 }
 
 Future<DataSource> _openDataSource(String? connectionString) async {
   final dataSource = createDataSource(connectionString: connectionString);
   await dataSource.init();
   return dataSource;
-}
-
-Future<void> _runMigrations(String? connectionString) async {
-  ensurePostgresDriverRegistration();
-  final url = (connectionString != null && connectionString.isNotEmpty)
-      ? connectionString
-      : () {
-          final config = loadOrmConfig();
-          final options = config.driver.options as Map<String, dynamic>;
-          return options['url'] as String;
-        }();
-  final adapter = PostgresDriverAdapter.custom(
-    config: DatabaseConfig(driver: 'postgres', options: {'url': url}),
-  );
-
-  try {
-    final ledger = SqlMigrationLedger(adapter, tableName: 'orm_migrations');
-    await ledger.ensureInitialized();
-
-    final runner = MigrationRunner(
-      schemaDriver: adapter,
-      ledger: ledger,
-      migrations: buildMigrations(),
-    );
-    await runner.applyAll();
-  } finally {
-    await adapter.close();
-  }
 }
 
 Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
