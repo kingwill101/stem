@@ -55,7 +55,6 @@ void main() {
         queue: 'default',
         meta: {'kind': 'demo'},
         limit: 10,
-        offset: 0,
       ),
     );
     expect(page.items, hasLength(2));

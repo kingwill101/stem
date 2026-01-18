@@ -368,7 +368,7 @@ class _EchoTask extends TaskHandler<Map<String, Object?>> {
   String get name => 'property.echo';
 
   @override
-  TaskOptions get options => const TaskOptions(maxRetries: 0);
+  TaskOptions get options => const TaskOptions();
 
   @override
   TaskMetadata get metadata => const TaskMetadata();

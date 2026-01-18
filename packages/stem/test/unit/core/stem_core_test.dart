@@ -199,7 +199,7 @@ class _RecordingBackend implements ResultBackend {
   Future<TaskStatusPage> listTaskStatuses(
     TaskStatusListRequest request,
   ) async {
-    return const TaskStatusPage(items: [], nextOffset: null);
+    return const TaskStatusPage(items: []);
   }
 
   @override
