@@ -58,6 +58,27 @@ control-plane commands.
 
 ```
 
+## Workflow Introspection
+
+Workflow runtimes can emit step-level events (started/completed/failed/retrying)
+through a `WorkflowIntrospectionSink`. Use it to publish step telemetry or
+bridge to your own tracing/logging systems.
+
+```dart
+class LoggingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
+  @override
+  Future<void> recordStepEvent(WorkflowStepEvent event) async {
+    stemLogger.info('workflow.step', {
+      'run': event.runId,
+      'workflow': event.workflow,
+      'step': event.stepId,
+      'type': event.type.name,
+      'iteration': event.iteration,
+    });
+  }
+}
+```
+
 ## Logging
 
 Use `stemLogger` (Contextual logger) for structured logs.

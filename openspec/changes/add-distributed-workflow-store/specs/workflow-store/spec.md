@@ -49,3 +49,27 @@ The system SHALL expose workflow store operations via the API gateway so workers
 - **GIVEN** a worker connected to the API gateway
 - **WHEN** the worker requests runnable runs and claims a lease
 - **THEN** the gateway proxies the workflow store operations and enforces lease semantics
+
+### Configuration and operational guidance
+Implementations MUST document how lease durations are configured and how they
+interact with broker visibility timeouts to avoid stuck runs.
+
+#### Configuration: Run lease controls
+- **MUST** allow configuration of the workflow run lease duration (how long a
+  worker holds ownership before another worker can claim).
+- **MUST** allow configuration of the workflow lease renewal cadence or
+  extension duration (how often a worker renews its lease while executing).
+- **SHOULD** surface defaults that are safe for typical task durations (e.g.
+  lease duration >= broker visibility timeout).
+
+#### Operational guidance: Avoiding stalled runs
+- Workers **SHOULD** renew leases before the broker visibility timeout expires.
+- If a claim fails because another worker owns the lease, the workflow task
+  **SHOULD** be retried to allow takeover once the lease expires.
+- Operators **SHOULD** align system clocks (e.g., via NTP) because lease expiry
+  is time-based across workers and shared stores.
+
+#### Operational guidance: Failure recovery
+- If a worker crashes, another worker **SHALL** be able to claim the run once
+  the lease expires.
+- Stores **SHOULD** treat expired leases as unowned to enable recovery.

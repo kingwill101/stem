@@ -511,6 +511,11 @@ backend metadata under `stem.unique.duplicates`.
 - Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
   `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
   actively-owned runs from ones that need recovery.
+- Run execution is lease-based. The runtime claims each run with a lease
+  (`runLeaseDuration`) and renews it while work continues. If another worker
+  owns the lease, the task is retried so a takeover can occur once the lease
+  expires. Keep `runLeaseDuration` at least as long as the broker visibility
+  timeout and ensure `leaseExtension` renewals happen before either expires.
 - Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
   runtime skips re-suspending once the stored `resumeAt` is reached so loop
   handlers can simply call `sleep` without extra guards.

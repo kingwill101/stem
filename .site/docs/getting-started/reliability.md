@@ -24,6 +24,15 @@ import TabItem from '@theme/TabItem';
 - **Postgres** uses polling with `locked_until` leases; tasks become visible
   again after the lease expires.
 
+## Workflow lease notes
+
+- Workflow runs are lease-based. Workers must renew leases while executing, and
+  other workers can take over after the lease expires.
+- Keep `runLeaseDuration` **>=** broker visibility timeout to prevent
+  redelivered workflow tasks from being dropped before takeover is possible.
+- Keep `leaseExtension` renewals ahead of both the workflow lease expiry and the
+  broker visibility timeout.
+
 ## Poison-pill handling
 
 - If a task fails repeatedly for the same reason, treat it as a poison pill.
