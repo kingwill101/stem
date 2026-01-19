@@ -11,6 +11,7 @@ dependencies:
   collection: ^1.19.1
   redis: ^4.0.0
   stem: ^0.1.0-dev
+  uuid: ^4.5.2
 
 dev_dependencies:
   coverage: ^1.15.0

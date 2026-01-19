@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:redis/redis.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:stem/stem.dart';
 
@@ -491,8 +492,7 @@ class RedisStreamsBroker implements Broker {
       );
     }
     final queue = subscription.queues.first;
-    final consumer =
-        consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
+    final consumer = consumerName ?? const Uuid().v7();
     final group = consumerGroup ?? _groupKey(queue);
     final streamKeys = _priorityStreamKeys(queue);
     final broadcastChannels = subscription.broadcastChannels;

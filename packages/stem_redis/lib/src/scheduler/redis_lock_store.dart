@@ -1,21 +1,19 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:redis/redis.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:stem/stem.dart';
 
 /// Redis-backed implementation of [LockStore].
 class RedisLockStore implements LockStore {
-  RedisLockStore._(this._connection, this._command, {this.namespace = 'stem'})
-    : _random = Random();
+  RedisLockStore._(this._connection, this._command, {this.namespace = 'stem'});
 
   final RedisConnection _connection;
   final Command _command;
 
   /// Namespace used to scope lock keys.
   final String namespace;
-  final Random _random;
   bool _closed = false;
 
   /// Connects to Redis and returns a lock store instance.
@@ -80,10 +78,7 @@ class RedisLockStore implements LockStore {
   }
 
   String _key(String key) => '$namespace:lock:$key';
-  String _owner(String? owner) =>
-      owner ??
-      'owner-${DateTime.now().microsecondsSinceEpoch}-'
-          '${_random.nextInt(1 << 32)}';
+  String _owner(String? owner) => owner ?? const Uuid().v7();
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
 
@@ -166,6 +161,7 @@ class _RedisLock implements Lock {
   @override
   final String key;
   final String redisKey;
+  @override
   final String owner;
 
   @override
