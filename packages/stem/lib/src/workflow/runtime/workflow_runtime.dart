@@ -27,7 +27,6 @@
 library;
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
@@ -46,6 +45,7 @@ import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
+import 'package:uuid/uuid.dart';
 
 /// Task name used for workflow run execution tasks.
 const String workflowRunTaskName = 'stem.workflow.run';
@@ -770,11 +770,8 @@ class WorkflowRuntime {
     await _extendLease(context);
   }
 
-  static String _defaultRuntimeId() {
-    final now = DateTime.now().microsecondsSinceEpoch;
-    final suffix = Random().nextInt(1 << 31);
-    return 'workflow-runtime-$now-$suffix';
-  }
+  /// Generates a unique runtime identifier for workflow lease ownership.
+  static String _defaultRuntimeId() => 'workflow-runtime-${const Uuid().v7()}';
 
   /// Enqueues a workflow run execution task.
   Future<void> _enqueueRun(String runId, {String? workflow}) async {
@@ -791,6 +788,7 @@ class WorkflowRuntime {
     );
   }
 
+  /// Builds workflow metadata injected into step task enqueues.
   Map<String, Object?> _stepMeta({
     required RunState runState,
     required String stepName,
@@ -806,11 +804,11 @@ class WorkflowRuntime {
     });
   }
 
+  /// Returns an enqueuer that injects workflow metadata for step tasks.
   TaskEnqueuer _stepEnqueuer({
     required Map<String, Object?> baseMeta,
     TaskContext? taskContext,
   }) {
-    /// Builds an enqueuer that injects workflow metadata into step tasks.
     final delegate = taskContext ?? _stem;
     return _WorkflowStepEnqueuer(delegate: delegate, baseMeta: baseMeta);
   }
@@ -922,8 +920,8 @@ class _WorkflowRunTaskHandler implements TaskHandler<void> {
   TaskEntrypoint? get isolateEntrypoint => null;
 
   @override
+  /// Executes a workflow run based on the payload in the task args.
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    /// Executes a workflow run based on the payload in the task args.
     final runId = args['runId'] as String?;
     if (runId == null) {
       throw ArgumentError('workflow.run missing runId');
@@ -1290,8 +1288,8 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   }
 
   @override
+  /// Suspends the run until the sleep duration elapses.
   Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {
-    /// Suspends the run until the sleep duration elapses.
     final resume = _resumeData;
     if (resume is Map<String, Object?>) {
       final type = resume['type'];
@@ -1321,6 +1319,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   Object? get previousResult => execution.previousResult;
 
   @override
+  /// Returns and clears any resume payload supplied to this step.
   Object? takeResumeData() {
     final value = _resumeData;
     _resumeData = null;

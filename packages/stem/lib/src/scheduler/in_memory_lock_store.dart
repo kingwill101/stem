@@ -6,9 +6,9 @@
 library;
 
 import 'dart:async';
-import 'dart:math';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:uuid/uuid.dart';
 
 /// In-memory lock store used for tests and local scheduling.
 ///
@@ -38,6 +38,7 @@ class InMemoryLockStore implements LockStore {
   }
 
   @override
+  /// Returns the owner of the lock if it exists and has not expired.
   Future<String?> ownerOf(String key) async {
     final lock = _locks[key];
     if (lock == null) return null;
@@ -49,6 +50,7 @@ class InMemoryLockStore implements LockStore {
   }
 
   @override
+  /// Extends the lock TTL when the [owner] still holds it.
   Future<bool> renew(String key, String owner, Duration ttl) async {
     final lock = _locks[key];
     if (lock == null) {
@@ -66,6 +68,7 @@ class InMemoryLockStore implements LockStore {
   }
 
   @override
+  /// Releases the lock if the requesting [owner] matches.
   Future<bool> release(String key, String owner) async {
     final lock = _locks[key];
     if (lock == null) {
@@ -90,16 +93,14 @@ class InMemoryLockStore implements LockStore {
 class _InMemoryLock implements Lock {
   _InMemoryLock(this.key, this.owner, this.expiresAt, this.store);
 
-  /// Generates a unique owner identifier including current microsecond and
-  /// a random 32-bit integer to minimize collision probability.
-  static String generateOwner() =>
-      'owner-${DateTime.now().microsecondsSinceEpoch}-'
-      '${Random().nextInt(1 << 32)}';
+  /// Generates a unique owner identifier using UUID v7.
+  static String generateOwner() => const Uuid().v7();
 
   @override
   final String key;
 
   /// The unique identifier that "holds" this lock.
+  @override
   final String owner;
 
   /// The absolute point in time when this lock will automatically expire.
@@ -112,12 +113,14 @@ class _InMemoryLock implements Lock {
   bool isExpired(DateTime now) => now.isAfter(expiresAt);
 
   @override
+  /// Extends this in-memory lock's expiration timestamp.
   Future<bool> renew(Duration ttl) async {
     expiresAt = DateTime.now().add(ttl);
     return true;
   }
 
   @override
+  /// Releases this lock through the parent store.
   Future<void> release() async {
     store.releaseLock(key);
   }

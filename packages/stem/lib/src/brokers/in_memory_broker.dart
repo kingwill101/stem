@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:collection/collection.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:uuid/uuid.dart';
 
 /// In-memory broker for testing and local development.
 class InMemoryBroker implements Broker {
@@ -63,11 +64,13 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  /// Closes the broker and releases in-memory resources.
   Future<void> close() async {
     dispose();
   }
 
   @override
+  /// Enqueues a message into the in-memory queue or delay set.
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     final resolvedRoute =
         routing ??
@@ -91,6 +94,7 @@ class InMemoryBroker implements Broker {
     }
   }
 
+  /// Moves delayed messages that are due into the ready queue.
   Future<void> _drainDelayed(DateTime now) async {
     if (_disposed) return;
     for (final state in _queues.values) {
@@ -98,6 +102,7 @@ class InMemoryBroker implements Broker {
     }
   }
 
+  /// Reclaims expired in-flight deliveries back into the ready queue.
   Future<void> _reclaimExpired(DateTime now) async {
     if (_disposed) return;
     for (final state in _queues.values) {
@@ -129,8 +134,7 @@ class InMemoryBroker implements Broker {
     }
     final queue = subscription.queues.first;
     final state = _state(queue);
-    final consumer =
-        consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
+    final consumer = consumerName ?? const Uuid().v7();
 
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>.broadcast(
@@ -154,11 +158,13 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  /// Acknowledges a delivery, removing it from in-flight tracking.
   Future<void> ack(Delivery delivery) async {
     _state(delivery.envelope.queue).ack(delivery.receipt);
   }
 
   @override
+  /// Rejects a delivery, optionally requeuing it.
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
     final state = _state(delivery.envelope.queue);
     final envelope = state.ack(delivery.receipt);
@@ -179,6 +185,7 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  /// Extends the visibility lease for an in-flight delivery.
   Future<void> extendLease(Delivery delivery, Duration by) async {
     _state(delivery.envelope.queue).extendLease(delivery.receipt, by);
   }
@@ -210,6 +217,7 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  /// Fetches a single dead-letter entry by id.
   Future<DeadLetterEntry?> getDeadLetter(String queue, String id) async {
     final state = _state(queue);
     return state.deadLetters.firstWhereOrNull(
@@ -269,6 +277,7 @@ class InMemoryBroker implements Broker {
   }
 
   @override
+  /// Purges all messages from a queue.
   Future<void> purge(String queue) async {
     _state(queue).purge();
   }

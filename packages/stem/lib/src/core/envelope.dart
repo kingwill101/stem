@@ -31,7 +31,8 @@
 library;
 
 import 'dart:convert';
-import 'dart:math';
+
+import 'package:uuid/uuid.dart';
 
 /// Target classification for routing operations.
 enum RoutingTargetType {
@@ -168,11 +169,7 @@ class RoutingInfo {
 }
 
 /// Unique identifier generator used for task envelopes by default.
-String generateEnvelopeId() {
-  final micros = DateTime.now().microsecondsSinceEpoch;
-  final random = Random().nextInt(1 << 32);
-  return '$micros-$random';
-}
+String generateEnvelopeId() => const Uuid().v7();
 
 /// Task payload persisted inside a broker.
 /// Since: 0.1.0
@@ -302,6 +299,7 @@ class Envelope {
     'meta': meta,
   };
 
+  /// Returns the JSON representation of the envelope.
   @override
   String toString() => jsonEncode(toJson());
 }

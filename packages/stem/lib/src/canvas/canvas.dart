@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/core/chord_metadata.dart';
@@ -8,6 +7,7 @@ import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
+import 'package:uuid/uuid.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -161,8 +161,7 @@ class Canvas {
   /// Creates a [Canvas] that uses [broker] to publish messages and [backend]
   /// to persist task state and group metadata.
   ///
-  /// [registry] provides task lookups when needed. A custom [random] can be
-  /// supplied to influence ID generation in tests.
+  /// [registry] provides task lookups when needed.
   Canvas({
     required this.broker,
     required ResultBackend backend,
@@ -171,14 +170,12 @@ class Canvas {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-    Random? random,
   }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
          resultEncoder: resultEncoder,
          argsEncoder: argsEncoder,
          additionalEncoders: additionalEncoders,
-       ),
-       _random = random ?? Random() {
+       ) {
     this.backend = withTaskPayloadEncoder(backend, payloadEncoders);
   }
 
@@ -193,9 +190,6 @@ class Canvas {
 
   /// The task registry for resolving task metadata and handlers.
   final TaskRegistry registry;
-
-  /// Source of randomness for ID generation.
-  final Random _random;
 
   /// Publishes a single task described by [signature].
   ///
@@ -477,10 +471,8 @@ class Canvas {
     }
   }
 
-  /// Generates a unique id using [prefix], current time, and randomness.
-  String _generateId(String prefix) =>
-      '$prefix-${DateTime.now().microsecondsSinceEpoch}-'
-      '${_random.nextInt(1 << 32)}';
+  /// Generates a unique id using [prefix] and UUID v7.
+  String _generateId(String prefix) => '$prefix-${const Uuid().v7()}';
 
   Future<_ChordHandle> _startChord<T extends Object?>({
     required List<TaskSignature<T>> body,
