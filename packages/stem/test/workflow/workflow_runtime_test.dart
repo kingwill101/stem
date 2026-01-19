@@ -118,7 +118,7 @@ void main() {
 
     expect(retry, isNotNull);
     expect(retry!.countdown, runtime.runLeaseDuration);
-    expect(retry!.maxRetries, greaterThan(0));
+    expect(retry.maxRetries, greaterThan(0));
 
     final state = await store.get(runId);
     expect(state?.ownerId, 'other-runtime');
