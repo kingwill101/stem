@@ -61,11 +61,11 @@
   - [x] 1.20.4 Add tests for alert triggers
 
 ### 1.D Ops Tooling
-- [ ] 1.21 Add minimal ops tooling for tenant lifecycle + recovery
-  - [ ] 1.21.1 Add CLI commands for tenant list/update/disable
+- [x] 1.21 Add minimal ops tooling for tenant lifecycle + recovery
+  - [x] 1.21.1 Add CLI commands for tenant list/update/disable
   - [x] 1.21.2 Add queue purge + dead-letter replay utilities
   - [x] 1.21.3 Add recovery path for stuck assignments
-  - [ ] 1.21.4 Add tests for admin CLI commands
+  - [x] 1.21.4 Add tests for admin CLI commands
 
 ### 1.E Product Scope Docs
 - [x] 1.22 Document workflow v0 constraints (code-defined flows only)
