@@ -92,7 +92,7 @@ void main() {
     );
   });
 
-  test('throws when run lease is held by another runtime', () async {
+  test('retries when run lease is held by another runtime', () async {
     runtime.registerWorkflow(
       Flow(
         name: 'lease.conflict.workflow',
@@ -109,10 +109,16 @@ void main() {
     );
     expect(claimed, isTrue);
 
-    await expectLater(
-      runtime.executeRun(runId),
-      throwsA(isA<StateError>()),
-    );
+    TaskRetryRequest? retry;
+    try {
+      await runtime.executeRun(runId);
+    } on TaskRetryRequest catch (error) {
+      retry = error;
+    }
+
+    expect(retry, isNotNull);
+    expect(retry!.countdown, runtime.runLeaseDuration);
+    expect(retry!.maxRetries, greaterThan(0));
 
     final state = await store.get(runId);
     expect(state?.ownerId, 'other-runtime');

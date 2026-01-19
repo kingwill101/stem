@@ -49,6 +49,7 @@ import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Task name used for workflow run execution tasks.
 const String workflowRunTaskName = 'stem.workflow.run';
+const int _leaseConflictMaxRetries = 1000000;
 
 /// Coordinates execution of workflow runs by dequeuing tasks, invoking steps,
 /// and persisting progress via a [WorkflowStore].
@@ -257,7 +258,11 @@ class WorkflowRuntime {
       leaseDuration: runLeaseDuration,
     );
     if (!claimed) {
-      throw StateError('Workflow run $runId lease is held by another runtime');
+      // Reschedule the run so we don't ack and drop a redelivered task.
+      throw TaskRetryRequest(
+        countdown: runLeaseDuration,
+        maxRetries: _leaseConflictMaxRetries,
+      );
     }
     final now = _clock.now();
     if (await _maybeCancelForPolicy(runState, now: now)) {
