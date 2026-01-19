@@ -1,7 +1,6 @@
-import 'dart:math';
-
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/workflow_models.dart';
@@ -30,7 +29,6 @@ class PostgresLockStore implements LockStore {
   /// Namespace used to scope lock records.
   final String namespace;
   final PostgresConnections _connections;
-  final Random _random = Random();
 
   /// Connects to a PostgreSQL database and initializes the locks table.
   ///
@@ -58,10 +56,7 @@ class PostgresLockStore implements LockStore {
     await _connections.close();
   }
 
-  String _owner(String? owner) =>
-      owner ??
-      'owner-${DateTime.now().microsecondsSinceEpoch}-'
-          '${_random.nextInt(1 << 32)}';
+  String _owner(String? owner) => owner ?? const Uuid().v7();
 
   /// Attempts to acquire a lock for the provided [key].
   ///
@@ -191,6 +186,7 @@ class _PostgresLock implements Lock {
   final PostgresLockStore store;
   @override
   final String key;
+  @override
   final String owner;
 
   @override

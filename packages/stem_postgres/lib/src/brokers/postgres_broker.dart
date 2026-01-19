@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
@@ -17,7 +17,7 @@ class PostgresBroker implements Broker {
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
     this.deadLetterRetention = const Duration(days: 7),
-  }) : _random = Random() {
+  }) {
     stemLogger.info(
       'PostgresBroker created (namespace=$namespace)',
     );
@@ -102,7 +102,6 @@ class PostgresBroker implements Broker {
   Future<void> _dbLock = Future.value();
 
   final Set<_ConsumerRunner> _consumers = {};
-  final Random _random;
 
   Timer? _sweeperTimer;
   bool _closed = false;
@@ -231,10 +230,7 @@ class PostgresBroker implements Broker {
 
     final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
-    final consumer =
-        consumerName ??
-        'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-'
-            '${_random.nextInt(1 << 16)}';
+    final consumer = consumerName ?? const Uuid().v7();
     final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
 
@@ -757,9 +753,7 @@ class PostgresBroker implements Broker {
   }
 
   String _encodeLocker(String queue, String group, String consumer) {
-    final salt = _random.nextInt(1 << 32);
-    return '$queue::$group::$consumer::$salt::'
-        '${DateTime.now().microsecondsSinceEpoch}';
+    return '$queue::$group::$consumer::${const Uuid().v7()}';
   }
 }
 
