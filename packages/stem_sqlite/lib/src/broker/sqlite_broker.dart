@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:meta/meta.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-
 import 'package:stem_sqlite/src/connection.dart';
 import 'package:stem_sqlite/src/models/models.dart';
+import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [Broker].
 class SqliteBroker implements Broker {
@@ -161,10 +161,7 @@ class SqliteBroker implements Broker {
       );
     }
     final queue = subscription.queues.single;
-    final id =
-        consumerName ??
-        'sqlite-consumer-${DateTime.now().microsecondsSinceEpoch}-'
-            '${_consumers.length}';
+    final id = consumerName ?? const Uuid().v7();
     final controller = StreamController<Delivery>.broadcast();
     final consumer = _Consumer(
       broker: this,
