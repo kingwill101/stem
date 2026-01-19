@@ -184,6 +184,7 @@ class RunState {
   }
 }
 
+/// Parses a workflow status from loosely typed JSON values.
 WorkflowStatus _statusFromJson(Object? value) {
   final raw = value?.toString();
   if (raw == null || raw.isEmpty) return WorkflowStatus.running;
@@ -193,12 +194,14 @@ WorkflowStatus _statusFromJson(Object? value) {
   );
 }
 
+/// Parses an integer from JSON values with sane defaults.
 int _intFromJson(Object? value) {
   if (value is int) return value;
   if (value is num) return value.toInt();
   return int.tryParse(value?.toString() ?? '') ?? 0;
 }
 
+/// Parses an ISO timestamp or returns null for empty values.
 DateTime? _dateFromJson(Object? value) {
   if (value == null) return null;
   if (value is DateTime) return value;

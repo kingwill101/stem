@@ -49,6 +49,8 @@ import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Task name used for workflow run execution tasks.
 const String workflowRunTaskName = 'stem.workflow.run';
+
+/// Large retry budget to avoid dropping workflow run tasks on lease conflicts.
 const int _leaseConflictMaxRetries = 1000000;
 
 /// Coordinates execution of workflow runs by dequeuing tasks, invoking steps,

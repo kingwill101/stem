@@ -47,24 +47,29 @@ class InMemoryWorkflowStore implements WorkflowStore {
     return Map.unmodifiable(result);
   }
 
+  /// Returns an unmodifiable copy of stored metadata.
   Map<String, Object?> _freeze(Map<String, Object?> data) =>
       Map.unmodifiable(Map<String, Object?>.from(data));
 
+  /// Freezes optional metadata to prevent accidental mutation.
   Map<String, Object?>? _freezeNullable(Map<String, Object?>? data) =>
       data == null ? null : _freeze(data);
 
+  /// Strips iteration suffixes from step names (e.g., `step#2` -> `step`).
   String _baseStepName(String name) {
     final index = name.indexOf('#');
     if (index == -1) return name;
     return name.substring(0, index);
   }
 
+  /// Returns true when a run lease is missing or has expired.
   bool _leaseExpired(RunState state, DateTime now) {
     final expiresAt = state.leaseExpiresAt;
     if (expiresAt == null) return true;
     return !expiresAt.isAfter(now);
   }
 
+  /// Removes watcher bookkeeping for a run across run/topic maps.
   void _removeWatcherForRun(String runId) {
     final record = _watchersByRun.remove(runId);
     if (record == null) return;
@@ -605,6 +610,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 }
 
+/// Internal record used to index workflow watchers by run and topic.
 class _WatcherRecord {
   _WatcherRecord({
     required this.runId,

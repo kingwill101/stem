@@ -432,11 +432,11 @@ class Stem implements TaskEnqueuer {
     return completer.future;
   }
 
+  /// Executes the enqueue middleware chain in order.
   Future<void> _runEnqueueMiddleware(
     Envelope envelope,
     Future<void> Function() action,
   ) async {
-    /// Executes the enqueue middleware chain in order.
     Future<void> run(int index) async {
       if (index >= middleware.length) {
         await action();
@@ -448,11 +448,11 @@ class Stem implements TaskEnqueuer {
     await run(0);
   }
 
+  /// Resolves not-before scheduling from enqueue overrides.
   DateTime? _resolveNotBefore(
     DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   ) {
-    /// Resolves not-before scheduling from enqueue overrides.
     if (enqueueOptions == null) return notBefore;
     if (enqueueOptions.eta != null) {
       return enqueueOptions.eta;
@@ -463,13 +463,13 @@ class Stem implements TaskEnqueuer {
     return notBefore;
   }
 
+  /// Determines max retries using enqueue overrides, task options, then
+  /// handler defaults.
   int _resolveMaxRetries(
     TaskOptions options,
     TaskOptions handlerOptions,
     TaskEnqueueOptions? enqueueOptions,
   ) {
-    /// Determines max retries using enqueue overrides, task options, then
-    /// handler defaults.
     final policyMax = enqueueOptions?.retryPolicy?.maxRetries;
     if (policyMax != null) {
       return policyMax;
@@ -484,11 +484,11 @@ class Stem implements TaskEnqueuer {
     return handlerOptions.maxRetries;
   }
 
+  /// Maps enqueue-only settings into envelope metadata.
   Map<String, Object?> _applyEnqueueOptionsToMeta(
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
   ) {
-    /// Maps enqueue-only settings into envelope metadata.
     final merged = Map<String, Object?>.from(meta);
     if (enqueueOptions == null) return merged;
     if (enqueueOptions.expires != null) {
@@ -534,10 +534,10 @@ class Stem implements TaskEnqueuer {
     return merged;
   }
 
+  /// Serializes linked task calls for chain/retry metadata.
   List<Map<String, Object?>> _encodeTaskCalls(
     List<TaskCall<dynamic, dynamic>> calls,
   ) {
-    /// Serializes linked task calls for chain/retry metadata.
     return calls
         .map(
           (call) => {
@@ -556,8 +556,8 @@ class Stem implements TaskEnqueuer {
   Map<String, Object?> _encodeTaskOptions(TaskOptions options) =>
       options.toJson();
 
+  /// Extracts publish-time metadata for broker adapters.
   Map<String, Object?> _publishMeta(TaskEnqueueOptions? enqueueOptions) {
-    /// Extracts publish-time metadata for broker adapters.
     if (enqueueOptions == null) return const {};
     final meta = <String, Object?>{};
     if (enqueueOptions.publishConnection != null) {
@@ -569,12 +569,12 @@ class Stem implements TaskEnqueuer {
     return meta;
   }
 
+  /// Publishes a task with optional retry policy.
   Future<void> _publishWithRetry(
     Envelope envelope, {
     RoutingInfo? routing,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    /// Publishes a task with optional retry policy.
     if (enqueueOptions?.retry != true) {
       await broker.publish(envelope, routing: routing);
       return;
@@ -598,8 +598,8 @@ class Stem implements TaskEnqueuer {
     }
   }
 
+  /// Computes the delay for a publish retry attempt.
   Duration _computeRetryDelay(TaskRetryPolicy policy, int attempt) {
-    /// Computes the delay for a publish retry attempt.
     final base = policy.defaultDelay ?? Duration.zero;
     if (!policy.backoff) {
       return base;
@@ -617,11 +617,11 @@ class Stem implements TaskEnqueuer {
     return Duration(milliseconds: jittered);
   }
 
+  /// Records a deduplicated task attempt on the existing task metadata.
   Future<void> _recordDuplicateAttempt(
     String taskId,
     Envelope duplicate,
   ) async {
-    /// Records a deduplicated task attempt on the existing task metadata.
     if (backend == null) return;
     try {
       final status = await backend!.get(taskId);
@@ -666,34 +666,34 @@ class Stem implements TaskEnqueuer {
     }
   }
 
+  /// Resolves the args encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
-    /// Resolves the args encoder for a handler and registers it if needed.
     final encoder = handler.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
+  /// Resolves the result encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
-    /// Resolves the result encoder for a handler and registers it if needed.
     final encoder = handler.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
   }
 
+  /// Encodes args with the selected encoder and normalizes map typing.
   Map<String, Object?> _encodeArgs(
     Map<String, Object?> args,
     TaskPayloadEncoder encoder,
   ) {
-    /// Encodes args with the selected encoder and normalizes map typing.
     final encoded = encoder.encode(args);
     return _castArgsMap(encoded, encoder);
   }
 
+  /// Ensures encoded args are a string-keyed map with object values.
   Map<String, Object?> _castArgsMap(
     Object? encoded,
     TaskPayloadEncoder encoder,
   ) {
-    /// Ensures encoded args are a string-keyed map with object values.
     if (encoded == null) return const {};
     if (encoded is Map<String, Object?>) {
       return Map<String, Object?>.from(encoded);
@@ -716,35 +716,35 @@ class Stem implements TaskEnqueuer {
     );
   }
 
+  /// Adds the args encoder identifier into metadata.
   Map<String, Object?> _withArgsEncoderMeta(
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
   ) {
-    /// Adds the args encoder identifier into metadata.
     return {...meta, stemArgsEncoderMetaKey: encoder.id};
   }
 
+  /// Adds the args encoder identifier into headers.
   Map<String, String> _withArgsEncoderHeader(
     Map<String, String> headers,
     TaskPayloadEncoder encoder,
   ) {
-    /// Adds the args encoder identifier into headers.
     return {...headers, stemArgsEncoderHeader: encoder.id};
   }
 
+  /// Adds the result encoder identifier into metadata.
   Map<String, Object?> _withResultEncoderMeta(
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
   ) {
-    /// Adds the result encoder identifier into metadata.
     return {...meta, stemResultEncoderMetaKey: encoder.id};
   }
 
+  /// Decodes a task payload using the provided callback or a cast.
   T? _decodeTaskPayload<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
   ) {
-    /// Decodes a task payload using the provided callback or a cast.
     if (payload == null) return null;
     if (decode != null) {
       return decode(payload);

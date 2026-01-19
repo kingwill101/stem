@@ -280,6 +280,7 @@ class InMemoryBroker implements Broker {
   Future<int?> inflightCount(String queue) async => _state(queue).inflight;
 }
 
+/// Internal queue state for in-memory broker operations.
 class _QueueState {
   _QueueState(this.name);
 
@@ -296,6 +297,7 @@ class _QueueState {
 
   int _sequence = 0;
 
+  /// Completes outstanding waiters when the broker is shutting down.
   void dispose() {
     for (final completer in _waiters) {
       if (!completer.isCompleted) {
@@ -305,6 +307,7 @@ class _QueueState {
     _waiters.clear();
   }
 
+  /// Cancels pending waiters for a consumer and clears in-flight tracking.
   void cancelWaiters(String consumer) {
     _consumerInFlight.remove(consumer);
     for (final completer in _waiters) {
@@ -315,17 +318,20 @@ class _QueueState {
     _waiters.clear();
   }
 
+  /// Enqueues a ready-to-run envelope and wakes consumers.
   void enqueue(Envelope envelope) {
     _ready.add(envelope);
     _notify();
   }
 
+  /// Stores a delayed envelope until its scheduled time.
   void addDelayed(Envelope envelope) {
     _delayed.add(
       _DelayedEntry(envelope: envelope, availableAt: envelope.notBefore!),
     );
   }
 
+  /// Moves any due delayed entries into the ready queue.
   void moveDue(DateTime now) {
     var moved = false;
     while (_delayed.isNotEmpty) {
@@ -342,6 +348,7 @@ class _QueueState {
     }
   }
 
+  /// Returns the next delivery for a consumer, waiting if none available.
   Future<Delivery> nextDelivery({
     required String consumer,
     required int prefetch,
@@ -383,6 +390,7 @@ class _QueueState {
     }
   }
 
+  /// Acknowledges a delivery and frees a consumer slot.
   Envelope? ack(String receipt) {
     final entry = _pending.remove(receipt);
     if (entry == null) {
@@ -397,6 +405,7 @@ class _QueueState {
     return entry.delivery.envelope;
   }
 
+  /// Moves a delivery to the dead-letter list with optional metadata.
   void deadLetter(
     String receipt, {
     String? reason,
@@ -416,6 +425,7 @@ class _QueueState {
     );
   }
 
+  /// Re-queues expired leases back to the ready queue.
   void reclaimExpired(DateTime now) {
     final expired = _pending.entries
         .where(
@@ -442,12 +452,14 @@ class _QueueState {
     }
   }
 
+  /// Extends the lease for an in-flight delivery.
   void extendLease(String receipt, Duration by) {
     final entry = _pending[receipt];
     if (entry == null) return;
     entry.leaseExpiresAt = DateTime.now().add(by);
   }
 
+  /// Clears all queues, in-flight deliveries, and dead letters.
   void purge() {
     _ready.clear();
     _delayed.clear();
@@ -457,12 +469,16 @@ class _QueueState {
     _notify();
   }
 
+  /// Generates a monotonically increasing receipt identifier.
   String _nextReceipt() => '$name:${_sequence++}';
 
+  /// Count of ready + delayed items waiting for delivery.
   int get pending => _ready.length + _delayed.length;
 
+  /// Count of deliveries currently leased to consumers.
   int get inflight => _pending.length;
 
+  /// Wakes consumers waiting on the next delivery.
   void _notify() {
     if (_waiters.isEmpty) return;
     for (final completer in _waiters) {
@@ -474,6 +490,7 @@ class _QueueState {
   }
 }
 
+/// Delayed queue entry sorted by availability time.
 class _DelayedEntry {
   _DelayedEntry({required this.envelope, required this.availableAt});
 
@@ -481,6 +498,7 @@ class _DelayedEntry {
   final DateTime availableAt;
 }
 
+/// Tracks an in-flight delivery and its lease metadata.
 class _PendingEntry {
   _PendingEntry({
     required this.delivery,
