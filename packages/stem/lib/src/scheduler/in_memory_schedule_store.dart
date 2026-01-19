@@ -29,6 +29,7 @@ class InMemoryScheduleStore implements ScheduleStore {
   final Map<String, _ScheduleState> _entries = {};
 
   @override
+  /// Returns schedules that should run at or before [now].
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async {
     final due =
         _entries.values
@@ -54,6 +55,7 @@ class InMemoryScheduleStore implements ScheduleStore {
   }
 
   @override
+  /// Inserts or updates a schedule entry, recomputing its next run.
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now().toUtc();
     var next = entry.nextRunAt;
@@ -81,11 +83,13 @@ class InMemoryScheduleStore implements ScheduleStore {
   }
 
   @override
+  /// Removes the schedule entry with the given [id].
   Future<void> remove(String id) async {
     _entries.remove(id);
   }
 
   @override
+  /// Lists schedule entries ordered by next run time.
   Future<List<ScheduleEntry>> list({int? limit}) async {
     final values = _entries.values.toList()
       ..sort((a, b) => a.nextRun.compareTo(b.nextRun));

@@ -110,8 +110,7 @@ class FlowContext {
   /// Injects a payload that will be returned the next time [takeResumeData] is
   /// called. Primarily used by the runtime; tests may also leverage it to mock
   /// resumption data.
-  // Uses method form to stay consistent with other control helpers.
-  // ignore: use_setters_to_change_properties
+  /// Stores resume data to be consumed by [takeResumeData].
   void resumeWith(Object? payload) {
     _resumeData = payload;
   }

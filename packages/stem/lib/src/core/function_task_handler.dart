@@ -50,6 +50,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
   TaskEntrypoint? get isolateEntrypoint => runInIsolate ? _entrypoint : null;
 
   @override
+  /// Invokes the entrypoint with a normalized invocation context.
   Future<R> call(TaskContext context, Map<String, Object?> args) async {
     final invocationContext = TaskInvocationContext.local(
       id: context.id,

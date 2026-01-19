@@ -29,6 +29,7 @@ import 'package:timezone/timezone.dart' as tz;
 /// These string constants are used in the JSON `kind` field to identify
 /// the polymorphic type of a schedule specification.
 class ScheduleSpecKind {
+  /// Private constructor to prevent instantiation.
   ScheduleSpecKind._();
 
   /// Interval-based schedule spec kind (`interval`).
@@ -184,6 +185,7 @@ class IntervalScheduleSpec extends ScheduleSpec {
   }
 
   @override
+  /// Serializes this interval schedule to JSON-friendly data.
   Map<String, Object?> toJson() {
     final startAtValue = startAt;
     final endAtValue = endAt;
@@ -232,6 +234,7 @@ class CronScheduleSpec extends ScheduleSpec {
   final String? secondField;
 
   @override
+  /// Returns a copy of this cron schedule with optional overrides.
   CronScheduleSpec copyWith({
     String? expression,
     Object? description = _sentinel,
@@ -249,6 +252,7 @@ class CronScheduleSpec extends ScheduleSpec {
   }
 
   @override
+  /// Serializes this cron schedule to JSON-friendly data.
   Map<String, Object?> toJson() => {
     'kind': kind,
     'expression': expression,
@@ -309,6 +313,7 @@ class SolarScheduleSpec extends ScheduleSpec {
   final Duration? offset;
 
   @override
+  /// Returns a copy of this solar schedule with optional overrides.
   SolarScheduleSpec copyWith({
     String? event,
     double? latitude,
@@ -324,6 +329,7 @@ class SolarScheduleSpec extends ScheduleSpec {
   }
 
   @override
+  /// Serializes this solar schedule to JSON-friendly data.
   Map<String, Object?> toJson() {
     final offsetValue = offset;
     return {
@@ -363,6 +369,7 @@ class ClockedScheduleSpec extends ScheduleSpec {
   final bool runOnce;
 
   @override
+  /// Returns a copy of this clocked schedule with optional overrides.
   ClockedScheduleSpec copyWith({DateTime? runAt, bool? runOnce}) {
     return ClockedScheduleSpec(
       runAt: runAt ?? this.runAt,
@@ -371,6 +378,7 @@ class ClockedScheduleSpec extends ScheduleSpec {
   }
 
   @override
+  /// Serializes this clocked schedule to JSON-friendly data.
   Map<String, Object?> toJson() => {
     'kind': kind,
     'runAt': runAt.toIso8601String(),
@@ -429,6 +437,7 @@ class CalendarScheduleSpec extends ScheduleSpec {
   final List<int>? minutes;
 
   @override
+  /// Returns a copy of this calendar schedule with optional overrides.
   CalendarScheduleSpec copyWith({
     List<int>? months,
     List<int>? weekdays,
@@ -446,6 +455,7 @@ class CalendarScheduleSpec extends ScheduleSpec {
   }
 
   @override
+  /// Serializes this calendar schedule to JSON-friendly data.
   Map<String, Object?> toJson() => {
     'kind': kind,
     if (months != null) 'months': months,

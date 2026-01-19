@@ -79,6 +79,7 @@ enum WorkflowDefinitionKind {
 /// script facade. The definition captures the ordered steps that the runtime
 /// will execute along with optional script metadata used by the facade runner.
 class WorkflowDefinition<T extends Object?> {
+  /// Internal constructor used by builders and script facades.
   WorkflowDefinition._({
     required this.name,
     required WorkflowDefinitionKind kind,

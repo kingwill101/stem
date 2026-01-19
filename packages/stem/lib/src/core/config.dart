@@ -135,6 +135,7 @@ class StemConfig {
   /// short-lived debugging sessions.
   final TlsConfig tls;
 
+  /// Normalizes optional string input, returning null for empty values.
   static String? _optional(String? value) {
     if (value == null) return null;
     final trimmed = value.trim();
@@ -152,6 +153,7 @@ class StemConfig {
     return parsed;
   }
 
+  /// Splits a comma-delimited list into trimmed, de-duplicated values.
   static List<String> _parseList(String? input) {
     if (input == null || input.trim().isEmpty) return const [];
     final seen = <String>{};

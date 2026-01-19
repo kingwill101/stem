@@ -17,6 +17,7 @@ class InMemoryWorkflowRegistry implements WorkflowRegistry {
   final Map<String, WorkflowDefinition> _definitions = {};
 
   @override
+  /// Registers or replaces a workflow definition by name.
   void register(WorkflowDefinition definition) {
     _definitions[definition.name] = definition;
   }

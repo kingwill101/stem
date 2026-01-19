@@ -551,9 +551,11 @@ class Worker {
   late final List<String> subscriptionBroadcasts;
   late final StemSignalEmitter _signals;
 
+  /// Returns the queue list to subscribe to, falling back to [queue].
   List<String> get _effectiveQueues =>
       subscriptionQueues.isNotEmpty ? subscriptionQueues : [queue];
 
+  /// Returns broadcast channels this worker should receive.
   List<String> get _broadcastSubscriptions => subscriptionBroadcasts;
 
   /// Primary queue name resolved from the subscription.
@@ -3106,6 +3108,7 @@ class Worker {
     return const {};
   }
 
+  /// Parses a duration from envelope metadata values.
   Duration? _durationFromMeta(Object? value) {
     if (value == null) return null;
     if (value is Duration) return value;
@@ -3127,11 +3130,13 @@ class Worker {
     return null;
   }
 
+  /// Resolves the hard time limit from metadata overrides or options.
   Duration? _resolveHardTimeLimit(Envelope envelope, TaskOptions options) {
     final override = _durationFromMeta(envelope.meta['stem.timeLimitMs']);
     return override ?? options.hardTimeLimit;
   }
 
+  /// Resolves the soft time limit from metadata overrides or options.
   Duration? _resolveSoftTimeLimit(Envelope envelope, TaskOptions options) {
     final override = _durationFromMeta(envelope.meta['stem.softTimeLimitMs']);
     return override ?? options.softTimeLimit;
@@ -3632,6 +3637,7 @@ class Worker {
     );
   }
 
+  /// Publishes a control reply message to the control reply queue.
   Future<void> _sendControlReply(ControlReplyMessage reply) async {
     final queueName = ControlQueueNames.reply(namespace, reply.requestId);
     try {
@@ -3644,6 +3650,7 @@ class Worker {
     }
   }
 
+  /// Builds subscription metadata for control-plane snapshots.
   Map<String, Object?> _subscriptionMetadata() => {
     'queues': subscriptionQueues,
     if (subscriptionBroadcasts.isNotEmpty) 'broadcasts': subscriptionBroadcasts,
@@ -3692,6 +3699,7 @@ class Worker {
     };
   }
 
+  /// Builds a detailed inspect snapshot for control commands.
   Map<String, Object?> _buildInspectSnapshot({bool includeRevoked = true}) {
     final now = DateTime.now().toUtc();
     final active = _activeDeliveries.values.map((delivery) {
@@ -3818,6 +3826,7 @@ class Worker {
     };
   }
 
+  /// Lazily creates or returns the worker isolate pool.
   Future<TaskIsolatePool> _ensureIsolatePool() {
     final existing = _isolatePool;
     if (existing != null) return Future.value(existing);

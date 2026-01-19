@@ -82,6 +82,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Creates a new workflow run and returns its generated id.
   Future<String> createRun({
     required String workflow,
     required Map<String, Object?> params,
@@ -107,6 +108,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Returns the run state with an updated step cursor, if present.
   Future<RunState?> get(String runId) async {
     final state = _runs[runId];
     if (state == null) return null;
@@ -123,6 +125,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Reads a stored step value for the given run.
   Future<T?> readStep<T>(String runId, String stepName) async {
     final steps = _steps[runId];
     if (steps == null) return null;
@@ -130,6 +133,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Persists a step value and updates the run timestamp.
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     _steps[runId]?[stepName] = value;
     final state = _runs[runId];
@@ -222,6 +226,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Marks a run as actively executing at [stepName].
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -233,6 +238,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Marks a run as completed and stores the final result.
   Future<void> markCompleted(String runId, Object? result) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -271,6 +277,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Marks a run as resumed, optionally merging resume data.
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -296,6 +303,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Returns run ids that are due to execute at [now].
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
     final ids = <String>[];
     final toRemove = <DateTime>[];
@@ -360,6 +368,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Releases the workflow run lease if the owner matches.
   Future<void> releaseRun(String runId, {required String ownerId}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -372,6 +381,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists runs waiting on a specific event [topic].
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
     final watchers = _watchersByTopic[topic];
     if (watchers != null && watchers.isNotEmpty) {
@@ -462,6 +472,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Cancels a run and records an optional cancellation [reason].
   Future<void> cancel(String runId, {String? reason}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -495,6 +506,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Rewinds a run to the specified [stepName].
   Future<void> rewindToStep(String runId, String stepName) async {
     final steps = _steps[runId];
     if (steps == null) return;
@@ -540,6 +552,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists workflow runs ordered by creation time.
   Future<List<RunState>> listRuns({
     String? workflow,
     WorkflowStatus? status,
@@ -570,6 +583,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists runnable runs, excluding those already leased.
   Future<List<String>> listRunnableRuns({
     DateTime? now,
     int limit = 50,
@@ -595,6 +609,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists stored step entries for a run.
   Future<List<WorkflowStepEntry>> listSteps(String runId) async {
     final steps = _steps[runId];
     if (steps == null) return const [];

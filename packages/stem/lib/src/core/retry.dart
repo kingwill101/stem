@@ -34,6 +34,7 @@ class ExponentialJitterRetryStrategy implements RetryStrategy {
   final math.Random _random;
 
   @override
+  /// Computes the next retry delay using exponential backoff with jitter.
   Duration nextDelay(int attempt, Object error, StackTrace stackTrace) {
     final raw = (base.inMilliseconds * math.pow(2, attempt).toDouble()).toInt();
     final capped = math.min(raw, max.inMilliseconds);

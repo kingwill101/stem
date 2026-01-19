@@ -177,6 +177,8 @@ class TaskInvocationContext implements TaskEnqueuer {
         controlPort.send(ProgressSignal(percent, data: data)),
     enqueuer: _RemoteTaskEnqueuer(controlPort),
   );
+
+  /// Internal constructor shared by local and isolate contexts.
   TaskInvocationContext._({
     required this.id,
     required this.headers,

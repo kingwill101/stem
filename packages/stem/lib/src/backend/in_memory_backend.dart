@@ -80,6 +80,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Returns the latest task status if still within its TTL.
   Future<TaskStatus?> get(String taskId) async {
     final entry = _entries[taskId];
     if (entry == null) return null;
@@ -91,6 +92,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Watches updates for a task ID, emitting new statuses.
   Stream<TaskStatus> watch(String taskId) {
     final controller = _watchers.putIfAbsent(
       taskId,
@@ -152,6 +154,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Initializes a group/chord tracking entry.
   Future<void> initGroup(GroupDescriptor descriptor) async {
     _groups[descriptor.id] = _GroupEntry(
       descriptor: descriptor,
@@ -162,6 +165,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Adds a result to a group, returning the updated aggregate.
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status) async {
     final group = _groups[groupId];
     if (group == null) return null;
@@ -175,6 +179,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Returns the group status if it has not expired.
   Future<GroupStatus?> getGroup(String groupId) async {
     final group = _groups[groupId];
     if (group == null) return null;
@@ -191,6 +196,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Extends the TTL for a task status entry.
   Future<void> expire(String taskId, Duration ttl) async {
     final entry = _entries[taskId];
     if (entry == null) return;
@@ -222,6 +228,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Stores or refreshes a worker heartbeat entry.
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
     final expiresAt = DateTime.now().add(heartbeatTtl);
     _heartbeats[heartbeat.workerId] = _HeartbeatEntry(
@@ -232,6 +239,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Retrieves a worker heartbeat if still within its TTL.
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
     final entry = _heartbeats[workerId];
     if (entry == null) return null;
@@ -243,6 +251,7 @@ class InMemoryResultBackend implements ResultBackend {
   }
 
   @override
+  /// Lists all non-expired worker heartbeats.
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
     _pruneExpiredHeartbeats();
     return _heartbeats.values
