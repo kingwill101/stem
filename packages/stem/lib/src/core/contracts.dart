@@ -685,6 +685,7 @@ class ScheduleEntry {
   /// Optimistic locking version assigned by the underlying store.
   final int version;
 
+  /// Sentinel value used to distinguish "unset" from explicit null overrides.
   static const Object _sentinel = Object();
 
   /// Returns a copy of this entry with the provided overrides.
@@ -963,6 +964,7 @@ class TaskOptions {
     'retryPolicy': retryPolicy?.toJson(),
   };
 
+  /// Parses a duration from JSON-friendly representations.
   static Duration? _durationFromJson(Object? value) {
     if (value == null) return null;
     if (value is Duration) return value;
@@ -1301,6 +1303,7 @@ class TaskEnqueueOptions {
         .toList(),
   };
 
+  /// Decodes linked task definitions from JSON metadata.
   static List<TaskCall<dynamic, dynamic>> _decodeTaskCallList(Object? value) {
     if (value is! List) return const [];
     final calls = <TaskCall<dynamic, dynamic>>[];
@@ -1421,6 +1424,7 @@ abstract class TaskEnqueuer {
 class TaskEnqueueScope {
   const TaskEnqueueScope._();
 
+  /// Zone key used to store scoped enqueue metadata.
   static final Object _zoneKey = Object();
 
   /// Returns the current scoped metadata, if any.
@@ -2056,6 +2060,9 @@ abstract class LockStore {
 abstract class Lock {
   /// The key of this lock.
   String get key;
+
+  /// The owner identifier of this lock.
+  String get owner;
 
   /// Renews this lock with a new [ttl], returning whether successful.
   Future<bool> renew(Duration ttl);
