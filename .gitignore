@@ -24,9 +24,8 @@ storage/
 openspec/**/*cloud*
 openspec/**/*stem-cloud*
 openspec/**/*gateway*
-openspec/**/stem-client*
 openspec/**/task-status*
-openspec/**/task-registry*
+openspec/changes/add-task-status-listing/
 # Nested cloud repo
 packages/cloud/
 # Local test artifacts
