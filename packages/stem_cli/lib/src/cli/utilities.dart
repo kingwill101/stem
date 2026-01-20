@@ -98,7 +98,7 @@ Future<CliContext> createDefaultContext({
       config: config,
       namespace: 'stem',
       environment: env,
-      cloudApiKey: env[kStemCloudApiKeyEnv],
+      cloudApiKey: resolveStemCloudAuthToken(env),
       cloudNamespace: resolveStemCloudNamespace(env),
     );
     disposables.add(() => revokeStore!.close());

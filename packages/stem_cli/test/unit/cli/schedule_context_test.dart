@@ -11,7 +11,7 @@ void main() {
       err: StringBuffer(),
       environment: const {
         'STEM_SCHEDULE_STORE_URL': 'http://localhost:8080/v1',
-        'STEM_CLOUD_API_KEY': 'token',
+        'STEM_CLOUD_ACCESS_TOKEN': 'token',
       },
       scheduleFilePath: null,
       cliContextBuilder: () async => CliContext(

@@ -13,7 +13,7 @@ void main() {
 
       final store = await RevokeStoreFactory.create(
         config: config,
-        environment: const {'STEM_CLOUD_API_KEY': 'token'},
+        environment: const {'STEM_CLOUD_ACCESS_TOKEN': 'token'},
       );
 
       expect(store, isA<StemCloudRevokeStore>());

@@ -3,9 +3,9 @@
 - [x] 1.2 Add OAuth2 (GitHub) provider wiring and email/password auth flow
 - [x] 1.3 Implement session + JWT issuance with tenant/namespace scoping
 - [x] 1.4 Add tenant switch/token mint endpoints for multi-tenant users
-- [ ] 1.5 Enforce membership/roles/claims in HTTP + WebSocket auth
-- [ ] 1.6 Add tenant management pages (create/list) with owner role assignment
-- [ ] 1.7 Enforce admin/owner scopes for tenant management actions
-- [ ] 1.8 Update CLI/config to support new auth settings
-- [ ] 1.9 Add unit + integration tests for auth flows and claims enforcement
-- [ ] 1.10 Update docs + examples for login and multi-tenant usage
+- [x] 1.5 Enforce membership/roles/claims in HTTP + WebSocket auth
+- [x] 1.6 Add tenant management pages (create/list) with owner role assignment
+- [x] 1.7 Enforce admin/owner scopes for tenant management actions
+- [x] 1.8 Update CLI/config to support new auth settings
+- [x] 1.9 Add unit + integration tests for auth flows and claims enforcement
+- [x] 1.10 Update docs + examples for login and multi-tenant usage
