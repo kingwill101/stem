@@ -3,9 +3,7 @@ import 'package:build_test/build_test.dart';
 import 'package:stem_builder/stem_builder.dart';
 import 'package:test/test.dart';
 
-void main() {
-  test('generates workflow and task registry', () async {
-    const stubStem = '''
+const stubStem = '''
 library stem;
 
 class FlowContext {}
@@ -76,6 +74,8 @@ abstract class TaskRegistry {
 }
 ''';
 
+void main() {
+  test('generates workflow and task registry', () async {
     const input = '''
 import 'package:stem/stem.dart';
 
@@ -114,9 +114,88 @@ Future<void> sendEmail(
             contains('Flow('),
             contains('WorkflowScript('),
             contains('FunctionTaskHandler'),
+            contains("import 'package:stem_builder/workflows.dart' as stemLib0;"),
           ]),
         ),
       },
     );
+  });
+
+  test('rejects @workflow.run without script kind', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+@WorkflowDefn()
+class BadWorkflow {
+  @WorkflowRun()
+  Future<String> run(WorkflowScriptContext script) async => 'done';
+}
+''';
+
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('@workflow.run'));
+  });
+
+  test('rejects script workflow with steps', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class BadWorkflow {
+  @WorkflowRun()
+  Future<String> run(WorkflowScriptContext script) async => 'done';
+
+  @WorkflowStep()
+  Future<String> step(FlowContext ctx) async => 'ok';
+}
+''';
+
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('@workflow.step'));
+  });
+
+  test('rejects task args that are not Map<String, Object?>', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+@TaskDefn()
+Future<void> badTask(
+  TaskInvocationContext ctx,
+  Map<String, dynamic> args,
+) async {}
+''';
+
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('Map<String, Object?>'));
   });
 }

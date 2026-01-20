@@ -5,6 +5,8 @@ import 'dart:convert';
 
 import 'package:analyzer/dart/constant/value.dart';
 import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/nullability_suffix.dart';
+import 'package:analyzer/dart/element/type.dart';
 import 'package:build/build.dart';
 import 'package:dart_style/dart_style.dart';
 import 'package:glob/glob.dart';
@@ -53,12 +55,25 @@ class StemRegistryBuilder implements Builder {
 
     final workflows = <_WorkflowInfo>[];
     final tasks = <_TaskInfo>[];
-    final imports = <String>{};
+    final importAliases = <String, String>{};
+    var importIndex = 0;
 
+    String importAliasFor(String importPath) {
+      return importAliases.putIfAbsent(
+        importPath,
+        () => 'stemLib${importIndex++}',
+      );
+    }
+
+    final assets = <AssetId>[];
     await for (final input in buildStep.findAssets(Glob('lib/**.dart'))) {
       if (input.path.endsWith('.g.dart') || input.path.contains('.g.')) {
         continue;
       }
+      assets.add(input);
+    }
+    assets.sort((a, b) => a.path.compareTo(b.path));
+    for (final input in assets) {
       if (!await buildStep.resolver.isLibrary(input)) {
         continue;
       }
@@ -73,7 +88,8 @@ class StemRegistryBuilder implements Builder {
         continue;
       }
 
-      imports.add(_importForAsset(input));
+      final importPath = _importForAsset(input);
+      final importAlias = importAliasFor(importPath);
 
       for (final classElement in library.classes) {
         final annotation = workflowDefnChecker.firstAnnotationOfExact(
@@ -143,10 +159,16 @@ class StemRegistryBuilder implements Builder {
                 return aOffset.compareTo(bOffset);
               });
 
-        if (kind == WorkflowKind.script || runMethods.isNotEmpty) {
+        if (kind == WorkflowKind.script) {
           if (runMethods.isEmpty) {
             throw InvalidGenerationSourceError(
               'Workflow ${classElement.displayName} is marked as script but has no @workflow.run method.',
+              element: classElement,
+            );
+          }
+          if (stepMethods.isNotEmpty) {
+            throw InvalidGenerationSourceError(
+              'Workflow ${classElement.displayName} is marked as script but has @workflow.step methods.',
               element: classElement,
             );
           }
@@ -161,6 +183,7 @@ class StemRegistryBuilder implements Builder {
           workflows.add(
             _WorkflowInfo.script(
               name: workflowName,
+              importAlias: importAlias,
               className: classElement.displayName,
               runMethod: runMethod.displayName,
               version: version,
@@ -171,6 +194,12 @@ class StemRegistryBuilder implements Builder {
           continue;
         }
 
+        if (runMethods.isNotEmpty) {
+          throw InvalidGenerationSourceError(
+            'Workflow ${classElement.displayName} has @workflow.run but is not marked as script.',
+            element: classElement,
+          );
+        }
         if (stepMethods.isEmpty) {
           throw InvalidGenerationSourceError(
             'Workflow ${classElement.displayName} has no @workflow.step methods.',
@@ -213,6 +242,7 @@ class StemRegistryBuilder implements Builder {
         workflows.add(
           _WorkflowInfo.flow(
             name: workflowName,
+            importAlias: importAlias,
             className: classElement.displayName,
             steps: steps,
             version: version,
@@ -251,6 +281,7 @@ class StemRegistryBuilder implements Builder {
         tasks.add(
           _TaskInfo(
             name: taskName,
+            importAlias: importAlias,
             function: function.displayName,
             options: options,
             metadata: metadata,
@@ -264,7 +295,7 @@ class StemRegistryBuilder implements Builder {
     final registryCode = _RegistryEmitter(
       workflows: workflows,
       tasks: tasks,
-      imports: imports,
+      imports: importAliases,
     ).emit();
     final formatted = _format(registryCode);
     await buildStep.writeAsString(outputId, formatted);
@@ -363,6 +394,23 @@ class StemRegistryBuilder implements Builder {
         element: function,
       );
     }
+    if (!_isStringObjectMap(args.type)) {
+      throw InvalidGenerationSourceError(
+        '@TaskDefn function ${function.displayName} must accept Map<String, Object?> as second parameter.',
+        element: function,
+      );
+    }
+  }
+
+  static bool _isStringObjectMap(DartType type) {
+    if (type is! InterfaceType) return false;
+    if (!type.isDartCoreMap) return false;
+    if (type.typeArguments.length != 2) return false;
+    final keyType = type.typeArguments[0];
+    final valueType = type.typeArguments[1];
+    if (!keyType.isDartCoreString) return false;
+    if (!valueType.isDartCoreObject) return false;
+    return valueType.nullabilitySuffix == NullabilitySuffix.question;
   }
 
   static String? _stringOrNull(ConstantReader? reader) {
@@ -394,6 +442,7 @@ class StemRegistryBuilder implements Builder {
 class _WorkflowInfo {
   _WorkflowInfo.flow({
     required this.name,
+    required this.importAlias,
     required this.className,
     required this.steps,
     this.version,
@@ -404,6 +453,7 @@ class _WorkflowInfo {
 
   _WorkflowInfo.script({
     required this.name,
+    required this.importAlias,
     required this.className,
     required this.runMethod,
     this.version,
@@ -414,6 +464,7 @@ class _WorkflowInfo {
 
   final String name;
   final WorkflowKind kind;
+  final String importAlias;
   final String className;
   final List<_WorkflowStepInfo> steps;
   final String? runMethod;
@@ -445,6 +496,7 @@ class _WorkflowStepInfo {
 class _TaskInfo {
   const _TaskInfo({
     required this.name,
+    required this.importAlias,
     required this.function,
     required this.options,
     required this.metadata,
@@ -452,6 +504,7 @@ class _TaskInfo {
   });
 
   final String name;
+  final String importAlias;
   final String function;
   final DartObject? options;
   final DartObject? metadata;
@@ -467,7 +520,7 @@ class _RegistryEmitter {
 
   final List<_WorkflowInfo> workflows;
   final List<_TaskInfo> tasks;
-  final Set<String> imports;
+  final Map<String, String> imports;
 
   String emit() {
     final buffer = StringBuffer();
@@ -477,8 +530,10 @@ class _RegistryEmitter {
     );
     buffer.writeln();
     buffer.writeln("import 'package:stem/stem.dart';");
-    for (final import in imports..remove('package:stem/stem.dart')) {
-      buffer.writeln("import '$import';");
+    final sortedImports = imports.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final entry in sortedImports) {
+      buffer.writeln("import '${entry.key}' as ${entry.value};");
     }
     buffer.writeln();
 
@@ -521,7 +576,9 @@ class _RegistryEmitter {
         );
       }
       buffer.writeln('    build: (flow) {');
-      buffer.writeln('      final impl = ${workflow.className}();');
+      buffer.writeln(
+        '      final impl = ${workflow.importAlias}.${workflow.className}();',
+      );
       for (final step in workflow.steps) {
         buffer.writeln('      flow.step(');
         buffer.writeln('        ${_string(step.name)},');
@@ -573,7 +630,7 @@ class _RegistryEmitter {
         );
       }
       buffer.writeln(
-        '    run: (script) => ${workflow.className}().${workflow.runMethod}(script),',
+        '    run: (script) => ${workflow.importAlias}.${workflow.className}().${workflow.runMethod}(script),',
       );
       buffer.writeln('  ),');
     }
@@ -588,7 +645,7 @@ class _RegistryEmitter {
     for (final task in tasks) {
       buffer.writeln('  FunctionTaskHandler<Object?>(');
       buffer.writeln('    name: ${_string(task.name)},');
-      buffer.writeln('    entrypoint: ${task.function},');
+      buffer.writeln('    entrypoint: ${task.importAlias}.${task.function},');
       if (task.options != null) {
         buffer.writeln('    options: ${_dartObjectToCode(task.options!)},');
       }
