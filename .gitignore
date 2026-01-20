@@ -20,3 +20,9 @@ task.md
 coverage/
 **/coverage/
 storage/
+# OpenSpec (cloud-related)
+openspec/**/*cloud*
+openspec/**/*stem-cloud*
+openspec/**/*gateway*
+# Nested cloud repo
+packages/cloud/
