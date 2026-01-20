@@ -29,5 +29,5 @@ openspec/changes/add-task-status-listing/
 # Nested cloud repo
 packages/cloud/
 # Local test artifacts
-test/
-test_screenshots/
+/test/
+/test_screenshots/
