@@ -3,10 +3,9 @@ import 'dart:convert';
 
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-import 'package:uuid/uuid.dart';
-
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
+import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [Broker].
 class PostgresBroker implements Broker {

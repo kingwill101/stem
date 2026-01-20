@@ -1,9 +1,8 @@
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-import 'package:uuid/uuid.dart';
-
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/workflow_models.dart';
+import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
