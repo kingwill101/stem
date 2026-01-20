@@ -24,5 +24,11 @@ storage/
 openspec/**/*cloud*
 openspec/**/*stem-cloud*
 openspec/**/*gateway*
+openspec/**/stem-client*
+openspec/**/task-status*
+openspec/**/task-registry*
 # Nested cloud repo
 packages/cloud/
+# Local test artifacts
+test/
+test_screenshots/
