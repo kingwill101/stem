@@ -1,6 +1,6 @@
 ## 1. Implementation
 - [x] 1.1 Define user, identity, membership, and token models + migrations
-- [ ] 1.2 Add OAuth2 (GitHub) provider wiring and email/password auth flow
+- [x] 1.2 Add OAuth2 (GitHub) provider wiring and email/password auth flow
 - [x] 1.3 Implement session + JWT issuance with tenant/namespace scoping
 - [x] 1.4 Add tenant switch/token mint endpoints for multi-tenant users
 - [ ] 1.5 Enforce membership/roles/claims in HTTP + WebSocket auth
