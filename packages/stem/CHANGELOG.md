@@ -1,4 +1,16 @@
 
+## Unreleased
+
+- Added signals registry/configuration for worker, task, scheduler, and
+  workflow lifecycle events.
+- Improved worker runtime (isolate pool, config, heartbeats/autoscaling) plus
+  scheduler behavior (timezone alias handling, in-memory schedule store).
+- Exposed lock ownership in interfaces and migrated IDs to UUID v7.
+- Removed sqlite migrations from core and updated dependencies (collection,
+  contextual, crypto, cryptography, timezone, uuid).
+- Expanded internal docs and example suites, plus broader unit/property and
+  workflow store contract coverage.
+
 ## 0.1.0-dev
 
 - Added workflow run leasing APIs (`claimRun`, `renewRunLease`, `releaseRun`,
