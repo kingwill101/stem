@@ -1,3 +1,35 @@
+/// Core interfaces and data structures for the Stem framework.
+///
+/// This library defines the fundamental building blocks of Stem, including
+/// the [Broker], [ResultBackend], and [TaskRegistry] interfaces. It also
+/// contains common DTOs used throughout the system.
+///
+/// ## Key Interfaces
+///
+/// - **[Broker]**: Responsible for asynchronous task delivery. Implementations
+///   exist for Redis, Postgres, SQS, etc.
+/// - **[ResultBackend]**: Persists task state, results, and workflow progress.
+/// - **[TaskRegistry]**: Maps task names to their implementation handlers.
+/// - **[TaskHandler]**: The logic responsible for executing a specific task.
+///
+/// ## Data Structures
+///
+/// - **[Envelope]**: The physical unit of work sent between processes.
+/// - **[TaskStatus]**: A point-in-time record of a task's lifecycle state.
+/// - **[Delivery]**: A message received from a broker, including lease and
+///   routing information.
+///
+/// ## Lifecycle Enums
+///
+/// - **[TaskState]**: Represents the different stages of a task (queued,
+///   running, succeeded, failed, etc).
+/// - `WorkerShutdownMode`: Controls how the worker terminates.
+///
+/// See also:
+/// - `Stem` for the enqueuing facade.
+/// - `Worker` for the execution runtime.
+library;
+
 import 'dart:async';
 import 'dart:collection';
 
@@ -145,6 +177,9 @@ abstract class Broker {
   /// to the timestamp must be removed. When [limit] is set, at most that many
   /// entries are purged. Returns the number of entries removed.
   Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit});
+
+  /// Releases any resources held by the broker.
+  Future<void> close() async {}
 }
 
 /// Logical task status across enqueue, running, success, failure states.
@@ -233,6 +268,68 @@ class TaskStatus {
     'meta': meta,
     'attempt': attempt,
   };
+}
+
+/// Immutable record representing a persisted task status with timestamps.
+class TaskStatusRecord {
+  /// Creates a task status record.
+  const TaskStatusRecord({
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  /// Task status payload.
+  final TaskStatus status;
+
+  /// Timestamp when the task status was first persisted.
+  final DateTime createdAt;
+
+  /// Timestamp when the task status was last updated.
+  final DateTime updatedAt;
+}
+
+/// Query parameters used to list task status records.
+class TaskStatusListRequest {
+  /// Creates a task status list request.
+  const TaskStatusListRequest({
+    this.state,
+    this.queue,
+    this.meta = const {},
+    this.limit = 50,
+    this.offset = 0,
+  }) : assert(limit >= 0, 'limit must be >= 0'),
+       assert(offset >= 0, 'offset must be >= 0');
+
+  /// Optional task state filter.
+  final TaskState? state;
+
+  /// Optional queue filter (matches `meta["queue"]`).
+  final String? queue;
+
+  /// Metadata key/value filters (null values match key presence).
+  final Map<String, Object?> meta;
+
+  /// Maximum number of records to return.
+  final int limit;
+
+  /// Number of records to skip.
+  final int offset;
+}
+
+/// Paginated page of task status records.
+class TaskStatusPage {
+  /// Creates a task status page.
+  const TaskStatusPage({required this.items, this.nextOffset});
+
+  /// Records included in this page.
+  final List<TaskStatusRecord> items;
+
+  /// Offset to continue pagination, or `null` if no more results.
+  final int? nextOffset;
+
+  /// Whether additional records are available.
+  bool get hasMore => nextOffset != null;
 }
 
 /// Error metadata captured for failures.
@@ -411,6 +508,13 @@ abstract class ResultBackend {
   /// [taskId].
   Stream<TaskStatus> watch(String taskId);
 
+  /// Lists task status records using the provided [request] filters.
+  ///
+  /// Implementations SHOULD order results from newest to oldest.
+  Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request) async {
+    return const TaskStatusPage(items: []);
+  }
+
   /// Persist the latest [heartbeat] snapshot for a worker.
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
 
@@ -445,6 +549,9 @@ abstract class ResultBackend {
     String? callbackTaskId,
     DateTime? dispatchedAt,
   });
+
+  /// Releases any resources held by the backend.
+  Future<void> close() async {}
 }
 
 /// Schedule entry persisted by a Beat-like scheduler.
@@ -578,6 +685,7 @@ class ScheduleEntry {
   /// Optimistic locking version assigned by the underlying store.
   final int version;
 
+  /// Sentinel value used to distinguish "unset" from explicit null overrides.
   static const Object _sentinel = Object();
 
   /// Returns a copy of this entry with the provided overrides.
@@ -753,6 +861,32 @@ class TaskOptions {
     this.retryPolicy,
   });
 
+  /// Builds options from JSON-friendly data.
+  factory TaskOptions.fromJson(Map<String, Object?> json) {
+    TaskRetryPolicy? retryPolicy;
+    final retryValue = json['retryPolicy'];
+    if (retryValue is TaskRetryPolicy) {
+      retryPolicy = retryValue;
+    } else if (retryValue is Map) {
+      retryPolicy = TaskRetryPolicy.fromJson(
+        retryValue.cast<String, Object?>(),
+      );
+    }
+    return TaskOptions(
+      queue: json['queue'] as String? ?? 'default',
+      maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
+      softTimeLimit: _durationFromJson(json['softTimeLimitMs']),
+      hardTimeLimit: _durationFromJson(json['hardTimeLimitMs']),
+      rateLimit: json['rateLimit'] as String?,
+      unique: json['unique'] as bool? ?? false,
+      uniqueFor: _durationFromJson(json['uniqueForMs']),
+      priority: (json['priority'] as num?)?.toInt() ?? 0,
+      acksLate: json['acksLate'] as bool? ?? true,
+      visibilityTimeout: _durationFromJson(json['visibilityTimeoutMs']),
+      retryPolicy: retryPolicy,
+    );
+  }
+
   /// The queue to which tasks with these options should be sent.
   final String queue;
 
@@ -830,32 +964,7 @@ class TaskOptions {
     'retryPolicy': retryPolicy?.toJson(),
   };
 
-  /// Builds options from JSON-friendly data.
-  factory TaskOptions.fromJson(Map<String, Object?> json) {
-    TaskRetryPolicy? retryPolicy;
-    final retryValue = json['retryPolicy'];
-    if (retryValue is TaskRetryPolicy) {
-      retryPolicy = retryValue;
-    } else if (retryValue is Map) {
-      retryPolicy = TaskRetryPolicy.fromJson(
-        retryValue.cast<String, Object?>(),
-      );
-    }
-    return TaskOptions(
-      queue: json['queue'] as String? ?? 'default',
-      maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
-      softTimeLimit: _durationFromJson(json['softTimeLimitMs']),
-      hardTimeLimit: _durationFromJson(json['hardTimeLimitMs']),
-      rateLimit: json['rateLimit'] as String?,
-      unique: json['unique'] as bool? ?? false,
-      uniqueFor: _durationFromJson(json['uniqueForMs']),
-      priority: (json['priority'] as num?)?.toInt() ?? 0,
-      acksLate: json['acksLate'] as bool? ?? true,
-      visibilityTimeout: _durationFromJson(json['visibilityTimeoutMs']),
-      retryPolicy: retryPolicy,
-    );
-  }
-
+  /// Parses a duration from JSON-friendly representations.
   static Duration? _durationFromJson(Object? value) {
     if (value == null) return null;
     if (value is Duration) return value;
@@ -887,11 +996,40 @@ class TaskRetryPolicy {
     this.backoff = false,
     this.backoffMax,
     this.jitter = true,
-    this.defaultDelay = const Duration(seconds: 0),
+    this.defaultDelay = Duration.zero,
     this.maxRetries,
     this.autoRetryFor = const [],
     this.dontAutoRetryFor = const [],
   });
+
+  /// Builds a retry policy from JSON-friendly data.
+  factory TaskRetryPolicy.fromJson(Map<String, Object?> json) {
+    final auto =
+        (json['autoRetryFor'] as List?)?.map((e) => e.toString()).toList() ??
+        const <String>[];
+    final dont =
+        (json['dontAutoRetryFor'] as List?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    return TaskRetryPolicy(
+      backoff: json['backoff'] as bool? ?? false,
+      backoffMax: json['backoffMaxMs'] != null
+          ? Duration(
+              milliseconds: (json['backoffMaxMs']! as num).toInt(),
+            )
+          : null,
+      jitter: json['jitter'] as bool? ?? true,
+      defaultDelay: json['defaultDelayMs'] != null
+          ? Duration(
+              milliseconds: (json['defaultDelayMs']! as num).toInt(),
+            )
+          : null,
+      maxRetries: (json['maxRetries'] as num?)?.toInt(),
+      autoRetryFor: auto,
+      dontAutoRetryFor: dont,
+    );
+  }
 
   /// Whether to use exponential backoff.
   final bool backoff;
@@ -924,35 +1062,6 @@ class TaskRetryPolicy {
     'autoRetryFor': autoRetryFor.map((e) => e.toString()).toList(),
     'dontAutoRetryFor': dontAutoRetryFor.map((e) => e.toString()).toList(),
   };
-
-  /// Builds a retry policy from JSON-friendly data.
-  factory TaskRetryPolicy.fromJson(Map<String, Object?> json) {
-    final auto =
-        (json['autoRetryFor'] as List?)?.map((e) => e.toString()).toList() ??
-        const <String>[];
-    final dont =
-        (json['dontAutoRetryFor'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        const <String>[];
-    return TaskRetryPolicy(
-      backoff: json['backoff'] as bool? ?? false,
-      backoffMax: json['backoffMaxMs'] != null
-          ? Duration(
-              milliseconds: (json['backoffMaxMs'] as num).toInt(),
-            )
-          : null,
-      jitter: json['jitter'] as bool? ?? true,
-      defaultDelay: json['defaultDelayMs'] != null
-          ? Duration(
-              milliseconds: (json['defaultDelayMs'] as num).toInt(),
-            )
-          : null,
-      maxRetries: (json['maxRetries'] as num?)?.toInt(),
-      autoRetryFor: auto,
-      dontAutoRetryFor: dont,
-    );
-  }
 }
 
 /// Options that apply only to the enqueue operation.
@@ -985,6 +1094,47 @@ class TaskEnqueueOptions {
     this.link = const [],
     this.linkError = const [],
   });
+
+  /// Builds enqueue options from JSON-friendly data.
+  factory TaskEnqueueOptions.fromJson(Map<String, Object?> json) {
+    return TaskEnqueueOptions(
+      taskId: json['taskId'] as String?,
+      countdown: json['countdownMs'] != null
+          ? Duration(milliseconds: (json['countdownMs']! as num).toInt())
+          : null,
+      eta: json['eta'] != null ? DateTime.parse(json['eta']! as String) : null,
+      expires: json['expires'] != null
+          ? DateTime.parse(json['expires']! as String)
+          : null,
+      queue: json['queue'] as String?,
+      exchange: json['exchange'] as String?,
+      routingKey: json['routingKey'] as String?,
+      priority: (json['priority'] as num?)?.toInt(),
+      timeLimit: json['timeLimitMs'] != null
+          ? Duration(milliseconds: (json['timeLimitMs']! as num).toInt())
+          : null,
+      softTimeLimit: json['softTimeLimitMs'] != null
+          ? Duration(milliseconds: (json['softTimeLimitMs']! as num).toInt())
+          : null,
+      serializer: json['serializer'] as String?,
+      compression: json['compression'] as String?,
+      ignoreResult: json['ignoreResult'] as bool?,
+      shadow: json['shadow'] as String?,
+      replyTo: json['replyTo'] as String?,
+      addToParent: json['addToParent'] as bool? ?? true,
+      retry: json['retry'] as bool?,
+      retryPolicy: json['retryPolicy'] is Map
+          ? TaskRetryPolicy.fromJson(
+              (json['retryPolicy']! as Map).cast<String, Object?>(),
+            )
+          : null,
+      publishConnection: (json['publishConnection'] as Map?)
+          ?.cast<String, Object?>(),
+      producer: (json['producer'] as Map?)?.cast<String, Object?>(),
+      link: _decodeTaskCallList(json['link']),
+      linkError: _decodeTaskCallList(json['linkError']),
+    );
+  }
 
   /// Optional explicit task id override.
   final String? taskId;
@@ -1153,47 +1303,7 @@ class TaskEnqueueOptions {
         .toList(),
   };
 
-  /// Builds enqueue options from JSON-friendly data.
-  factory TaskEnqueueOptions.fromJson(Map<String, Object?> json) {
-    return TaskEnqueueOptions(
-      taskId: json['taskId'] as String?,
-      countdown: json['countdownMs'] != null
-          ? Duration(milliseconds: (json['countdownMs'] as num).toInt())
-          : null,
-      eta: json['eta'] != null ? DateTime.parse(json['eta'] as String) : null,
-      expires: json['expires'] != null
-          ? DateTime.parse(json['expires'] as String)
-          : null,
-      queue: json['queue'] as String?,
-      exchange: json['exchange'] as String?,
-      routingKey: json['routingKey'] as String?,
-      priority: (json['priority'] as num?)?.toInt(),
-      timeLimit: json['timeLimitMs'] != null
-          ? Duration(milliseconds: (json['timeLimitMs'] as num).toInt())
-          : null,
-      softTimeLimit: json['softTimeLimitMs'] != null
-          ? Duration(milliseconds: (json['softTimeLimitMs'] as num).toInt())
-          : null,
-      serializer: json['serializer'] as String?,
-      compression: json['compression'] as String?,
-      ignoreResult: json['ignoreResult'] as bool?,
-      shadow: json['shadow'] as String?,
-      replyTo: json['replyTo'] as String?,
-      addToParent: json['addToParent'] as bool? ?? true,
-      retry: json['retry'] as bool?,
-      retryPolicy: json['retryPolicy'] is Map
-          ? TaskRetryPolicy.fromJson(
-              (json['retryPolicy'] as Map).cast<String, Object?>(),
-            )
-          : null,
-      publishConnection: (json['publishConnection'] as Map?)
-          ?.cast<String, Object?>(),
-      producer: (json['producer'] as Map?)?.cast<String, Object?>(),
-      link: _decodeTaskCallList(json['link']),
-      linkError: _decodeTaskCallList(json['linkError']),
-    );
-  }
-
+  /// Decodes linked task definitions from JSON metadata.
   static List<TaskCall<dynamic, dynamic>> _decodeTaskCallList(Object? value) {
     if (value is! List) return const [];
     final calls = <TaskCall<dynamic, dynamic>>[];
@@ -1255,7 +1365,7 @@ class TaskEnqueueOptions {
       final meta = castMeta(map['meta']);
       final options = map['options'] is Map
           ? TaskOptions.fromJson(
-              (map['options'] as Map).cast<String, Object?>(),
+              (map['options']! as Map).cast<String, Object?>(),
             )
           : const TaskOptions();
       final notBefore = map['notBefore'] != null
@@ -1263,7 +1373,7 @@ class TaskEnqueueOptions {
           : null;
       final enqueueOptions = map['enqueueOptions'] is Map
           ? TaskEnqueueOptions.fromJson(
-              (map['enqueueOptions'] as Map).cast<String, Object?>(),
+              (map['enqueueOptions']! as Map).cast<String, Object?>(),
             )
           : null;
 
@@ -1288,7 +1398,7 @@ class TaskEnqueueOptions {
   }
 }
 
-/// Interface implemented by enqueuers like [Stem] and task contexts.
+/// Interface implemented by enqueuers like Stem and task contexts.
 abstract class TaskEnqueuer {
   /// Enqueue a task by name.
   Future<String> enqueue(
@@ -1305,6 +1415,31 @@ abstract class TaskEnqueuer {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   });
+}
+
+/// Provides ambient metadata for task enqueue operations.
+///
+/// Use [run] to scope workflow or tracing metadata so `Stem.enqueue` can
+/// enrich task metadata without requiring explicit plumbing.
+class TaskEnqueueScope {
+  const TaskEnqueueScope._();
+
+  /// Zone key used to store scoped enqueue metadata.
+  static final Object _zoneKey = Object();
+
+  /// Returns the current scoped metadata, if any.
+  static Map<String, Object?>? currentMeta() {
+    final value = Zone.current[_zoneKey];
+    if (value is Map<String, Object?>) return value;
+    if (value is Map) return value.cast<String, Object?>();
+    return null;
+  }
+
+  /// Runs [body] in a zone that provides [meta] to task enqueue operations.
+  static R run<R>(Map<String, Object?> meta, R Function() body) {
+    if (meta.isEmpty) return body();
+    return runZoned(body, zoneValues: {_zoneKey: meta});
+  }
 }
 
 /// Context passed to handler implementations during execution.
@@ -1354,6 +1489,7 @@ class TaskContext implements TaskEnqueuer {
   /// Headers and metadata from this context are merged into the enqueue
   /// request. Lineage is added to `meta` unless
   /// `enqueueOptions.addToParent` is `false`.
+  @override
   Future<String> enqueue(
     String name, {
     Map<String, Object?> args = const {},
@@ -1367,12 +1503,16 @@ class TaskContext implements TaskEnqueuer {
       throw StateError('TaskContext has no enqueuer configured');
     }
 
-    final mergedHeaders = Map<String, String>.from(this.headers);
-    mergedHeaders.addAll(headers);
-    final mergedMeta = Map<String, Object?>.from(this.meta);
-    mergedMeta.addAll(meta);
+    final mergedHeaders = Map<String, String>.from(this.headers)
+      ..addAll(headers);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...this.meta,
+      ...meta,
+    };
 
-    if ((enqueueOptions?.addToParent ?? true)) {
+    if (enqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
@@ -1392,6 +1532,7 @@ class TaskContext implements TaskEnqueuer {
   ///
   /// This merges headers/meta from the task call and applies lineage metadata
   /// unless `enqueueOptions.addToParent` is `false`.
+  @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
@@ -1402,12 +1543,16 @@ class TaskContext implements TaskEnqueuer {
     }
 
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
-    final mergedHeaders = Map<String, String>.from(headers);
-    mergedHeaders.addAll(call.headers);
-    final mergedMeta = Map<String, Object?>.from(meta);
-    mergedMeta.addAll(call.meta);
+    final mergedHeaders = Map<String, String>.from(headers)
+      ..addAll(call.headers);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...meta,
+      ...call.meta,
+    };
 
-    if ((resolvedEnqueueOptions?.addToParent ?? true)) {
+    if (resolvedEnqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
@@ -1894,6 +2039,12 @@ abstract class LockStore {
     String? owner,
   });
 
+  /// Renews the lock for [key] when held by [owner], extending by [ttl].
+  ///
+  /// Returns `true` when the lock was renewed, otherwise `false` (e.g. owner
+  /// mismatch or lock expired).
+  Future<bool> renew(String key, String owner, Duration ttl);
+
   /// Returns the owner currently holding the lock for [key], or null if
   /// unlocked.
   Future<String?> ownerOf(String key);
@@ -1909,6 +2060,9 @@ abstract class LockStore {
 abstract class Lock {
   /// The key of this lock.
   String get key;
+
+  /// The owner identifier of this lock.
+  String get owner;
 
   /// Renews this lock with a new [ttl], returning whether successful.
   Future<bool> renew(Duration ttl);

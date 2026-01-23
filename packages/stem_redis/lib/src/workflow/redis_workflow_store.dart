@@ -209,6 +209,83 @@ redis.call('ZREM', dueKey, runId)
 return 1
 ''';
 
+  static const _luaClaimRun = '''
+local runKey = KEYS[1]
+
+local nowMs = tonumber(ARGV[1])
+local ownerId = ARGV[2]
+local leaseMs = tonumber(ARGV[3])
+local runningStatus = ARGV[4]
+local nowIso = ARGV[5]
+
+local status = redis.call('HGET', runKey, 'status')
+if not status or status ~= runningStatus then
+  return 0
+end
+
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then
+  return 0
+end
+
+local currentOwner = redis.call('HGET', runKey, 'owner_id')
+local lease = redis.call('HGET', runKey, 'lease_expires_at')
+if currentOwner and currentOwner ~= '' and currentOwner ~= ownerId then
+  if lease and lease ~= '' and tonumber(lease) > nowMs then
+    return 0
+  end
+end
+
+redis.call('HSET', runKey,
+  'owner_id', ownerId,
+  'lease_expires_at', tostring(nowMs + leaseMs),
+  'updated_at', nowIso)
+return 1
+''';
+
+  static const _luaRenewRun = '''
+local runKey = KEYS[1]
+
+local nowMs = tonumber(ARGV[1])
+local ownerId = ARGV[2]
+local leaseMs = tonumber(ARGV[3])
+local runningStatus = ARGV[4]
+local nowIso = ARGV[5]
+
+local status = redis.call('HGET', runKey, 'status')
+if not status or status ~= runningStatus then
+  return 0
+end
+
+local currentOwner = redis.call('HGET', runKey, 'owner_id')
+if not currentOwner or currentOwner ~= ownerId then
+  return 0
+end
+
+redis.call('HSET', runKey,
+  'lease_expires_at', tostring(nowMs + leaseMs),
+  'updated_at', nowIso)
+return 1
+''';
+
+  static const _luaReleaseRun = '''
+local runKey = KEYS[1]
+
+local ownerId = ARGV[1]
+local nowIso = ARGV[2]
+
+local currentOwner = redis.call('HGET', runKey, 'owner_id')
+if not currentOwner or currentOwner ~= ownerId then
+  return 0
+end
+
+redis.call('HSET', runKey,
+  'owner_id', '',
+  'lease_expires_at', '',
+  'updated_at', nowIso)
+return 1
+''';
+
   String _baseStepName(String name) {
     final hashIndex = name.indexOf('#');
     if (hashIndex == -1) return name;
@@ -239,6 +316,10 @@ return 1
       nowIso,
       'updated_at',
       nowIso,
+      'owner_id',
+      '',
+      'lease_expires_at',
+      '',
     ];
     if (cancellationPolicy != null && !cancellationPolicy.isEmpty) {
       command
@@ -298,6 +379,8 @@ return 1
       updatedAt: updatedAt == DateTime.fromMillisecondsSinceEpoch(0)
           ? null
           : updatedAt,
+      ownerId: _normalizeString(map['owner_id']),
+      leaseExpiresAt: _decodeMillis(map['lease_expires_at']),
       cancellationPolicy: policy,
       cancellationData: cancellationData,
     );
@@ -484,6 +567,10 @@ return 1
       jsonEncode(result),
       'suspension_data',
       '',
+      'owner_id',
+      '',
+      'lease_expires_at',
+      '',
       'updated_at',
       now,
     ]);
@@ -511,6 +598,16 @@ return 1
       'updated_at',
       now,
     ]);
+    if (terminal) {
+      await _send([
+        'HSET',
+        _runKey(runId),
+        'owner_id',
+        '',
+        'lease_expires_at',
+        '',
+      ]);
+    }
   }
 
   @override
@@ -537,6 +634,65 @@ return 1
     if (waitTopic != null) {
       await _send(['SREM', _topicKey(waitTopic), runId]);
     }
+  }
+
+  @override
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now();
+    final nowMs = now.millisecondsSinceEpoch;
+    final nowIso = now.toIso8601String();
+    final result = await _send([
+      'EVAL',
+      _luaClaimRun,
+      '1',
+      _runKey(runId),
+      nowMs.toString(),
+      ownerId,
+      leaseDuration.inMilliseconds.toString(),
+      WorkflowStatus.running.name,
+      nowIso,
+    ]);
+    return result == 1 || result == '1';
+  }
+
+  @override
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now();
+    final nowMs = now.millisecondsSinceEpoch;
+    final nowIso = now.toIso8601String();
+    final result = await _send([
+      'EVAL',
+      _luaRenewRun,
+      '1',
+      _runKey(runId),
+      nowMs.toString(),
+      ownerId,
+      leaseDuration.inMilliseconds.toString(),
+      WorkflowStatus.running.name,
+      nowIso,
+    ]);
+    return result == 1 || result == '1';
+  }
+
+  @override
+  Future<void> releaseRun(String runId, {required String ownerId}) async {
+    final nowIso = _clock.now().toIso8601String();
+    await _send([
+      'EVAL',
+      _luaReleaseRun,
+      '1',
+      _runKey(runId),
+      ownerId,
+      nowIso,
+    ]);
   }
 
   @override
@@ -688,6 +844,10 @@ return 1
       '',
       'cancellation_data',
       jsonEncode(cancellationData),
+      'owner_id',
+      '',
+      'lease_expires_at',
+      '',
       'updated_at',
       now.toIso8601String(),
     ]);
@@ -756,6 +916,7 @@ return 1
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final ids = <String>[];
     var cursor = '0';
@@ -778,15 +939,70 @@ return 1
 
     final states = <RunState>[];
     ids.sort((a, b) => b.compareTo(a));
+    var skipped = 0;
     for (final id in ids) {
       final state = await get(id);
       if (state == null) continue;
       if (workflow != null && state.workflow != workflow) continue;
       if (status != null && state.status != status) continue;
+      if (skipped < offset) {
+        skipped += 1;
+        continue;
+      }
       states.add(state);
       if (states.length >= limit) break;
     }
     return states;
+  }
+
+  @override
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resolvedNow = now ?? _clock.now();
+    final ids = <String>[];
+    var cursor = '0';
+    final pattern = '$namespace:wf:wf-*';
+    do {
+      final result =
+          await _send(['SCAN', cursor, 'MATCH', pattern, 'COUNT', '100'])
+              as List;
+      cursor = result[0] as String;
+      final keys = (result[1] as List).cast<String>();
+      for (final key in keys) {
+        final parts = key.split(':');
+        if (parts.length != 3) continue;
+        final id = parts.last;
+        if (!ids.contains(id)) {
+          ids.add(id);
+        }
+      }
+    } while (cursor != '0' && ids.length < limit * 3);
+
+    ids.sort((a, b) => b.compareTo(a));
+    final runnable = <String>[];
+    var skipped = 0;
+    for (final id in ids) {
+      final state = await get(id);
+      if (state == null) continue;
+      if (state.status != WorkflowStatus.running) continue;
+      if (state.waitTopic != null) continue;
+      final lease = state.leaseExpiresAt;
+      if (lease != null && lease.isAfter(resolvedNow)) {
+        if (state.ownerId != null && state.ownerId!.isNotEmpty) {
+          continue;
+        }
+      }
+      if (skipped < offset) {
+        skipped += 1;
+        continue;
+      }
+      runnable.add(id);
+      if (runnable.length >= limit) break;
+    }
+    return runnable;
   }
 
   @override

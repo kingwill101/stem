@@ -31,7 +31,7 @@ Future<void> main() async {
     setUp(() async {
       // Create a unique namespace for this test to avoid conflicts
       testNamespace = 'test_sched_${DateTime.now().microsecondsSinceEpoch}';
-      store = PostgresScheduleStore.fromDataSource(
+      store = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: testNamespace,
       );
@@ -44,12 +44,12 @@ Future<void> main() async {
             .query<$StemScheduleEntry>()
             .whereEquals('namespace', testNamespace)
             .delete();
-      } catch (_) {
+      } on Object catch (_) {
         // Ignore cleanup errors
       }
       try {
         await store.close();
-      } catch (_) {
+      } on Object catch (_) {
         // Ignore connection close errors
       }
     });
@@ -178,7 +178,7 @@ Future<void> main() async {
 
     test('namespace isolates schedule entries', () async {
       final otherNamespace = '${testNamespace}_other';
-      final otherStore = PostgresScheduleStore.fromDataSource(
+      final otherStore = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: otherNamespace,
       );
@@ -188,7 +188,7 @@ Future<void> main() async {
               .query<$StemScheduleEntry>()
               .whereEquals('namespace', otherNamespace)
               .delete();
-        } catch (_) {}
+        } on Object catch (_) {}
         await otherStore.close();
       });
 

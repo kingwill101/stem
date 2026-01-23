@@ -5,8 +5,10 @@ import 'package:artisanal/artisanal.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/schedule.dart';
+import 'package:stem_cloud_worker/stem_cloud_worker.dart';
 import 'package:stem_redis/stem_redis.dart';
 
+import 'cloud_config.dart';
 import 'file_schedule_repository.dart';
 import 'utilities.dart';
 import 'workflow_context.dart';
@@ -85,6 +87,18 @@ Future<ScheduleCliContext> _createScheduleCliContext({
       final redisStore = await RedisScheduleStore.connect(url, tls: tls);
       store = redisStore;
       disposables.add(() => redisStore.close());
+      break;
+    case 'http':
+    case 'https':
+      final apiKey = resolveStemCloudApiKey(env);
+      final namespace = resolveStemCloudNamespace(env);
+      final cloudStore = StemCloudScheduleStore.connect(
+        apiBase: uri,
+        apiKey: apiKey,
+        namespace: namespace,
+      );
+      store = cloudStore;
+      disposables.add(() => cloudStore.close());
       break;
     case 'memory':
       store = InMemoryScheduleStore();

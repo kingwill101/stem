@@ -135,6 +135,6 @@ Future<void> main() async {
   logActiveSigningKey();
   await enqueueDuringRotation(stem);
 
-  broker.dispose();
-  await backend.dispose();
+  await broker.close();
+  await backend.close();
 }

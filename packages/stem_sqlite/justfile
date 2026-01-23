@@ -9,3 +9,11 @@ test:
       source "{{INIT_ENV}}"; \
       cd "{{PACKAGE_DIR}}"; \
       dart test --fail-fast
+
+coverage:
+    @set -euo pipefail; \
+      source "{{INIT_ENV}}"; \
+      cd "{{PACKAGE_DIR}}"; \
+      dart test --fail-fast --coverage=coverage; \
+      dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib; \
+      dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 80

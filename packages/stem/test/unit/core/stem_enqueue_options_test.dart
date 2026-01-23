@@ -41,7 +41,7 @@ void main() {
       final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
-      final eta = DateTime.utc(2026, 01, 03, 12, 30, 0);
+      final eta = DateTime.utc(2026, 01, 03, 12, 30);
       await stem.enqueue(
         'tasks.stub',
         enqueueOptions: TaskEnqueueOptions(eta: eta),
@@ -96,7 +96,7 @@ void main() {
       await stem.enqueue(
         'tasks.stub',
         enqueueOptions: TaskEnqueueOptions(
-          expires: DateTime.utc(2026, 01, 03, 12, 45, 0),
+          expires: DateTime.utc(2026, 01, 03, 12, 45),
           timeLimit: const Duration(seconds: 30),
           softTimeLimit: const Duration(seconds: 10),
           shadow: 'shadow.name',
@@ -125,13 +125,9 @@ void main() {
 
       await stem.enqueue(
         'tasks.stub',
-        enqueueOptions: TaskEnqueueOptions(
+        enqueueOptions: const TaskEnqueueOptions(
           retry: true,
-          retryPolicy: TaskRetryPolicy(
-            defaultDelay: Duration.zero,
-            backoff: false,
-            jitter: false,
-          ),
+          retryPolicy: TaskRetryPolicy(),
         ),
       );
 
@@ -236,6 +232,9 @@ class _RecordingBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  Future<void> close() async {}
 }
 
 class _FlakyPublishBroker extends _RecordingBroker {

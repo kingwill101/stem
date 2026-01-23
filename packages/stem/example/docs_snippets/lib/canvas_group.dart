@@ -43,7 +43,7 @@ Future<void> main() async {
   final values = groupStatus?.results.values.map((s) => s.payload).toList();
   print('Group results: $values');
 
-  await app.shutdown();
+  await app.close();
 }
 
 Future<void> _waitFor(

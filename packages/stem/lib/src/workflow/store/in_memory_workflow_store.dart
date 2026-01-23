@@ -47,18 +47,29 @@ class InMemoryWorkflowStore implements WorkflowStore {
     return Map.unmodifiable(result);
   }
 
+  /// Returns an unmodifiable copy of stored metadata.
   Map<String, Object?> _freeze(Map<String, Object?> data) =>
       Map.unmodifiable(Map<String, Object?>.from(data));
 
+  /// Freezes optional metadata to prevent accidental mutation.
   Map<String, Object?>? _freezeNullable(Map<String, Object?>? data) =>
       data == null ? null : _freeze(data);
 
+  /// Strips iteration suffixes from step names (e.g., `step#2` -> `step`).
   String _baseStepName(String name) {
     final index = name.indexOf('#');
     if (index == -1) return name;
     return name.substring(0, index);
   }
 
+  /// Returns true when a run lease is missing or has expired.
+  bool _leaseExpired(RunState state, DateTime now) {
+    final expiresAt = state.leaseExpiresAt;
+    if (expiresAt == null) return true;
+    return !expiresAt.isAfter(now);
+  }
+
+  /// Removes watcher bookkeeping for a run across run/topic maps.
   void _removeWatcherForRun(String runId) {
     final record = _watchersByRun.remove(runId);
     if (record == null) return;
@@ -71,6 +82,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Creates a new workflow run and returns its generated id.
   Future<String> createRun({
     required String workflow,
     required Map<String, Object?> params,
@@ -96,6 +108,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Returns the run state with an updated step cursor, if present.
   Future<RunState?> get(String runId) async {
     final state = _runs[runId];
     if (state == null) return null;
@@ -112,6 +125,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Reads a stored step value for the given run.
   Future<T?> readStep<T>(String runId, String stepName) async {
     final steps = _steps[runId];
     if (steps == null) return null;
@@ -119,6 +133,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Persists a step value and updates the run timestamp.
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     _steps[runId]?[stepName] = value;
     final state = _runs[runId];
@@ -211,6 +226,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Marks a run as actively executing at [stepName].
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -222,6 +238,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Marks a run as completed and stores the final result.
   Future<void> markCompleted(String runId, Object? result) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -232,6 +249,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: const <String, Object?>{},
+      ownerId: null,
+      leaseExpiresAt: null,
       updatedAt: _clock.now(),
     );
   }
@@ -251,11 +270,14 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
+      ownerId: terminal ? null : state.ownerId,
+      leaseExpiresAt: terminal ? null : state.leaseExpiresAt,
       updatedAt: _clock.now(),
     );
   }
 
   @override
+  /// Marks a run as resumed, optionally merging resume data.
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -281,6 +303,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Returns run ids that are due to execute at [now].
   Future<List<String>> dueRuns(DateTime now, {int limit = 256}) async {
     final ids = <String>[];
     final toRemove = <DateTime>[];
@@ -301,6 +324,64 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null) return false;
+    if (state.status != WorkflowStatus.running) return false;
+    if (state.waitTopic != null) return false;
+    final now = _clock.now();
+    final currentOwner = state.ownerId;
+    if (currentOwner != null &&
+        currentOwner.isNotEmpty &&
+        currentOwner != ownerId &&
+        !_leaseExpired(state, now)) {
+      return false;
+    }
+    _runs[runId] = state.copyWith(
+      ownerId: ownerId,
+      leaseExpiresAt: now.add(leaseDuration),
+      updatedAt: now,
+    );
+    return true;
+  }
+
+  @override
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null) return false;
+    if (state.status != WorkflowStatus.running) return false;
+    if (state.ownerId != ownerId) return false;
+    final now = _clock.now();
+    _runs[runId] = state.copyWith(
+      leaseExpiresAt: now.add(leaseDuration),
+      updatedAt: now,
+    );
+    return true;
+  }
+
+  @override
+  /// Releases the workflow run lease if the owner matches.
+  Future<void> releaseRun(String runId, {required String ownerId}) async {
+    final state = _runs[runId];
+    if (state == null) return;
+    if (state.ownerId != ownerId) return;
+    _runs[runId] = state.copyWith(
+      ownerId: null,
+      leaseExpiresAt: null,
+      updatedAt: _clock.now(),
+    );
+  }
+
+  @override
+  /// Lists runs waiting on a specific event [topic].
   Future<List<String>> runsWaitingOn(String topic, {int limit = 256}) async {
     final watchers = _watchersByTopic[topic];
     if (watchers != null && watchers.isNotEmpty) {
@@ -391,6 +472,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Cancels a run and records an optional cancellation [reason].
   Future<void> cancel(String runId, {String? reason}) async {
     final state = _runs[runId];
     if (state == null) return;
@@ -405,6 +487,8 @@ class InMemoryWorkflowStore implements WorkflowStore {
       waitTopic: null,
       resumeAt: null,
       suspensionData: const <String, Object?>{},
+      ownerId: null,
+      leaseExpiresAt: null,
       cancellationData: cancellationData,
       updatedAt: now,
     );
@@ -422,6 +506,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Rewinds a run to the specified [stepName].
   Future<void> rewindToStep(String runId, String stepName) async {
     final steps = _steps[runId];
     if (steps == null) return;
@@ -467,17 +552,20 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists workflow runs ordered by creation time.
   Future<List<RunState>> listRuns({
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     final candidates = _runs.values.where((state) {
       if (workflow != null && state.workflow != workflow) return false;
       if (status != null && state.status != status) return false;
       return true;
     }).toList()..sort((a, b) => b.id.compareTo(a.id));
-    final limited = candidates.take(limit);
+    final start = offset < 0 ? 0 : offset;
+    final limited = candidates.skip(start).take(limit);
     final results = <RunState>[];
     for (final state in limited) {
       final steps = _steps[state.id];
@@ -495,6 +583,33 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 
   @override
+  /// Lists runnable runs, excluding those already leased.
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resolvedNow = now ?? _clock.now();
+    final candidates = _runs.values.where((state) {
+      if (state.status != WorkflowStatus.running) return false;
+      if (state.waitTopic != null) return false;
+      if (!_leaseExpired(state, resolvedNow) &&
+          state.ownerId != null &&
+          state.ownerId!.isNotEmpty) {
+        return false;
+      }
+      return true;
+    }).toList()..sort((a, b) => b.id.compareTo(a.id));
+    final start = offset < 0 ? 0 : offset;
+    return candidates
+        .skip(start)
+        .take(limit)
+        .map((state) => state.id)
+        .toList(growable: false);
+  }
+
+  @override
+  /// Lists stored step entries for a run.
   Future<List<WorkflowStepEntry>> listSteps(String runId) async {
     final steps = _steps[runId];
     if (steps == null) return const [];
@@ -510,6 +625,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   }
 }
 
+/// Internal record used to index workflow watchers by run and topic.
 class _WatcherRecord {
   _WatcherRecord({
     required this.runId,

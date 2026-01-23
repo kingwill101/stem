@@ -9,6 +9,7 @@ void main() {
   late InMemoryWorkflowStore store;
   late WorkflowRuntime runtime;
   late FakeWorkflowClock clock;
+  late _RecordingWorkflowIntrospectionSink introspection;
 
   setUp(() {
     broker = InMemoryBroker();
@@ -17,6 +18,7 @@ void main() {
     stem = Stem(broker: broker, registry: registry, backend: backend);
     clock = FakeWorkflowClock(DateTime.utc(2024));
     store = InMemoryWorkflowStore(clock: clock);
+    introspection = _RecordingWorkflowIntrospectionSink();
     runtime = WorkflowRuntime(
       stem: stem,
       store: store,
@@ -24,6 +26,7 @@ void main() {
       clock: clock,
       pollInterval: const Duration(milliseconds: 25),
       leaseExtension: const Duration(seconds: 5),
+      introspectionSink: introspection,
     );
     registry.register(runtime.workflowRunnerHandler());
   });
@@ -87,6 +90,39 @@ void main() {
       extendCalls.every((duration) => duration == runtime.leaseExtension),
       isTrue,
     );
+  });
+
+  test('retries when run lease is held by another runtime', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'lease.conflict.workflow',
+        build: (flow) {
+          flow.step('only', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('lease.conflict.workflow');
+    final claimed = await store.claimRun(
+      runId,
+      ownerId: 'other-runtime',
+    );
+    expect(claimed, isTrue);
+
+    TaskRetryRequest? retry;
+    try {
+      await runtime.executeRun(runId);
+    } on TaskRetryRequest catch (error) {
+      retry = error;
+    }
+
+    expect(retry, isNotNull);
+    expect(retry!.countdown, runtime.runLeaseDuration);
+    expect(retry.maxRetries, greaterThan(0));
+
+    final state = await store.get(runId);
+    expect(state?.ownerId, 'other-runtime');
+    expect(state?.status, WorkflowStatus.running);
   });
 
   test('suspends on sleep and resumes after delay', () async {
@@ -393,6 +429,7 @@ void main() {
     await store.rewindToStep(runId, 'repeat');
     final rewoundState = await store.get(runId);
     expect(rewoundState?.status, WorkflowStatus.suspended);
+    await store.markRunning(runId);
     await runtime.executeRun(runId);
 
     steps = await store.listSteps(runId);
@@ -609,6 +646,35 @@ void main() {
     expect(state?.result, 3);
   });
 
+  test('emits step events to the introspection sink', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'introspection.workflow',
+        build: (flow) {
+          flow
+            ..step('first', (context) async => 'one')
+            ..step('second', (context) async => 'two');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('introspection.workflow');
+    await runtime.executeRun(runId);
+
+    final events = introspection.events
+        .where((event) => event.workflow == 'introspection.workflow')
+        .toList();
+
+    expect(
+      events.any((event) => event.type == WorkflowStepEventType.started),
+      isTrue,
+    );
+    expect(
+      events.any((event) => event.type == WorkflowStepEventType.completed),
+      isTrue,
+    );
+  });
+
   test('records failures and propagates errors', () async {
     runtime.registerWorkflow(
       Flow(
@@ -706,4 +772,155 @@ void main() {
     expect(state?.status, WorkflowStatus.cancelled);
     expect(state?.cancellationData?['reason'], 'maxSuspendDuration');
   });
+
+  test('enqueued tasks include workflow metadata', () async {
+    const taskName = 'tasks.meta';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            final enqueuer = context.enqueuer;
+            expect(enqueuer, isNotNull);
+            await enqueuer!.enqueue(
+              taskName,
+              meta: const {'custom': 'value'},
+            );
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['custom'], 'value');
+  });
+
+  test('stem enqueue in steps includes workflow metadata', () async {
+    const taskName = 'tasks.meta.direct';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.direct.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            await stem.enqueue(
+              taskName,
+              meta: const {'origin': 'direct'},
+            );
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.direct.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.direct.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['origin'], 'direct');
+  });
+
+  test('enqueue builder in steps includes workflow metadata', () async {
+    const taskName = 'tasks.meta.builder';
+    registry.register(
+      FunctionTaskHandler<void>.inline(
+        name: taskName,
+        entrypoint: (context, args) async => null,
+      ),
+    );
+
+    final definition = TaskDefinition<Map<String, Object?>, void>(
+      name: taskName,
+      encodeArgs: (args) => args,
+    );
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'meta.builder.workflow',
+        build: (flow) {
+          flow.step('dispatch', (context) async {
+            await TaskEnqueueBuilder(
+              definition: definition,
+              args: const <String, Object?>{},
+            ).meta('origin', 'builder').enqueueWith(stem);
+            return 'done';
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await store.createRun(
+      workflow: 'meta.builder.workflow',
+      params: const {},
+    );
+    await runtime.executeRun(runId);
+
+    final delivery = await broker
+        .consume(RoutingSubscription.singleQueue('default'))
+        .first
+        .timeout(const Duration(seconds: 1));
+
+    expect(delivery.envelope.name, taskName);
+    final meta = delivery.envelope.meta;
+    expect(meta['stem.workflow.runId'], runId);
+    expect(meta['stem.workflow.name'], 'meta.builder.workflow');
+    expect(meta['stem.workflow.step'], 'dispatch');
+    expect(meta['stem.workflow.stepIndex'], 0);
+    expect(meta['stem.workflow.iteration'], 0);
+    expect(meta['origin'], 'builder');
+  });
+}
+
+class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
+  final List<WorkflowStepEvent> events = [];
+
+  @override
+  Future<void> recordStepEvent(WorkflowStepEvent event) async {
+    events.add(event);
+  }
 }

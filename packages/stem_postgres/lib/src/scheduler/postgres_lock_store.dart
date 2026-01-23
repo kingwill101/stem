@@ -1,19 +1,33 @@
-import 'dart:math';
-
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/workflow_models.dart';
+import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [LockStore].
 class PostgresLockStore implements LockStore {
   /// Creates a lock store backed by PostgreSQL.
   PostgresLockStore._(this._connections, {required this.namespace});
 
-  final PostgresConnections _connections;
+  /// Creates a lock store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresLockStore> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+  }) async {
+    final resolvedNamespace = namespace.trim().isNotEmpty
+        ? namespace.trim()
+        : 'stem';
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    return PostgresLockStore._(connections, namespace: resolvedNamespace);
+  }
+
+  /// Namespace used to scope lock records.
   final String namespace;
-  final Random _random = Random();
+  final PostgresConnections _connections;
 
   /// Connects to a PostgreSQL database and initializes the locks table.
   ///
@@ -36,30 +50,17 @@ class PostgresLockStore implements LockStore {
     );
   }
 
-  /// Creates a lock store using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  static PostgresLockStore fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-  }) {
-    final resolvedNamespace = namespace.trim().isNotEmpty
-        ? namespace.trim()
-        : 'stem';
-    final connections = PostgresConnections.fromDataSource(dataSource);
-    return PostgresLockStore._(connections, namespace: resolvedNamespace);
-  }
-
   /// Closes the lock store and releases any database resources.
   Future<void> close() async {
     await _connections.close();
   }
 
-  String _owner(String? owner) =>
-      owner ??
-      'owner-${DateTime.now().microsecondsSinceEpoch}-'
-          '${_random.nextInt(1 << 32)}';
+  String _owner(String? owner) => owner ?? const Uuid().v7();
 
+  /// Attempts to acquire a lock for the provided [key].
+  ///
+  /// Returns a [_PostgresLock] handle when successful or `null` if the lock is
+  /// currently held by another owner.
   @override
   Future<Lock?> acquire(
     String key, {
@@ -134,6 +135,11 @@ class PostgresLockStore implements LockStore {
     return true;
   }
 
+  /// Renews the lock for [key] when held by [owner].
+  @override
+  Future<bool> renew(String key, String owner, Duration ttl) =>
+      _renew(key, owner, ttl);
+
   Future<bool> _release(String key, String owner) async {
     final ctx = _connections.context;
 
@@ -152,6 +158,7 @@ class PostgresLockStore implements LockStore {
     return true;
   }
 
+  /// Returns the current owner for the given [key] if the lock is active.
   @override
   Future<String?> ownerOf(String key) async {
     final ctx = _connections.context;
@@ -167,6 +174,7 @@ class PostgresLockStore implements LockStore {
     return locks.first.owner;
   }
 
+  /// Releases the lock for [key] when held by [owner].
   @override
   Future<bool> release(String key, String owner) => _release(key, owner);
 }
@@ -177,6 +185,7 @@ class _PostgresLock implements Lock {
   final PostgresLockStore store;
   @override
   final String key;
+  @override
   final String owner;
 
   @override

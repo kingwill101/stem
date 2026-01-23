@@ -1,3 +1,4 @@
+import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 
@@ -24,6 +25,7 @@ class FlowContext {
     this.iteration = 0,
     WorkflowClock clock = const SystemWorkflowClock(),
     Object? resumeData,
+    this.enqueuer,
   }) : _clock = clock,
        _resumeData = resumeData;
 
@@ -47,6 +49,9 @@ class FlowContext {
 
   /// Current iteration when auto-versioning is enabled.
   final int iteration;
+
+  /// Optional enqueuer for scheduling tasks with workflow metadata.
+  final TaskEnqueuer? enqueuer;
   final WorkflowClock _clock;
 
   FlowStepControl? _control;
@@ -105,8 +110,7 @@ class FlowContext {
   /// Injects a payload that will be returned the next time [takeResumeData] is
   /// called. Primarily used by the runtime; tests may also leverage it to mock
   /// resumption data.
-  // Uses method form to stay consistent with other control helpers.
-  // ignore: use_setters_to_change_properties
+  /// Stores resume data to be consumed by [takeResumeData].
   void resumeWith(Object? payload) {
     _resumeData = payload;
   }

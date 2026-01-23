@@ -149,6 +149,7 @@ class UniqueTaskCoordinator {
     return lockStore.release(_lockKey(uniqueKey), owner);
   }
 
+  /// Resolves the lock TTL from options, envelope overrides, or defaults.
   Duration _resolveTtl(TaskOptions options, Envelope envelope) {
     final ttl =
         options.uniqueFor ??
@@ -163,6 +164,7 @@ class UniqueTaskCoordinator {
 
   String _lockKey(String uniqueKey) => '$namespace:$uniqueKey';
 
+  /// Builds or extracts the unique key used for lock ownership.
   String _resolveUniqueKey(Envelope envelope) {
     final meta = envelope.meta;
     final override = meta[UniqueTaskMetadata.override];
@@ -186,6 +188,7 @@ class UniqueTaskCoordinator {
     return digest.toString();
   }
 
+  /// Filters metadata used in unique-key hashing.
   Map<String, Object?> _filterMeta(Map<String, Object?> meta) {
     final filtered = <String, Object?>{};
     meta.forEach((key, value) {
@@ -195,6 +198,7 @@ class UniqueTaskCoordinator {
     return filtered;
   }
 
+  /// Canonicalizes values to stable JSON for hashing.
   Object? _canonicalize(Object? value) {
     if (value is Map) {
       final entries =

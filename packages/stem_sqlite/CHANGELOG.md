@@ -1,5 +1,17 @@
+## Unreleased
+
+- Added workflow run lease migrations, runnable discovery, and offset support
+  for workflow listings.
+- Migrated IDs to UUID v7, regenerated ORM models, and refreshed datasource
+  factories/tests.
+- Added workflow store contract tests plus docs/dependency updates.
+
 ## 0.1.0-dev
 
+- Added workflow run lease tracking and claim/renew support so workflows can be
+  distributed safely across workers.
+- Added DataSource-based factory helpers that run SQLite migrations for
+  brokers, result backends, and workflow stores.
 - Hardened SQLite connection initialization with file locking/retry to avoid
   concurrent migration/WAL conflicts, and ensured lazy init before
   transactions.

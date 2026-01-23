@@ -144,7 +144,7 @@ Future<void> main(List<String> args) async {
     await beat.stop();
     await worker.shutdown();
     await server.close(force: true);
-    broker.dispose();
+    await broker.close();
     exit(0);
   }
 

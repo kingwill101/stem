@@ -35,8 +35,8 @@ Future<void> minimalProducer() async {
   );
 
   print('Enqueued $taskId');
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 // #endregion workers-producer-minimal
 
@@ -106,7 +106,7 @@ Future<void> signedProducer() async {
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
   );
-  await backend.dispose();
+  await backend.close();
   await broker.close();
 }
 // #endregion workers-producer-signed
@@ -242,10 +242,10 @@ class StemRuntime {
 
   Future<void> stop() async {
     await worker.shutdown();
-    await _workerBackend.dispose();
-    _workerBroker.dispose();
-    await _stemBackend.dispose();
-    _stemBroker.dispose();
+    await _workerBackend.close();
+    await _workerBroker.close();
+    await _stemBackend.close();
+    await _stemBroker.close();
   }
 }
 // #endregion workers-bootstrap

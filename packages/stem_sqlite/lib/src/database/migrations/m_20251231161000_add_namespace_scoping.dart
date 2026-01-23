@@ -52,39 +52,47 @@ class AddNamespaceScoping extends Migration {
   void down(SchemaBuilder schema) {
     schema
       ..table('stem_queue_jobs', (table) {
-        table.dropIndex('stem_queue_jobs_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('stem_queue_jobs_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('stem_dead_letters', (table) {
-        table.dropIndex('stem_dead_letters_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('stem_dead_letters_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('stem_task_results', (table) {
-        table.dropIndex('stem_task_results_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('stem_task_results_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('stem_groups', (table) {
-        table.dropIndex('stem_groups_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('stem_groups_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('stem_group_results', (table) {
-        table.dropIndex('stem_group_results_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('stem_group_results_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('stem_worker_heartbeats', (table) {
         table.dropIndex('stem_worker_heartbeats_namespace_idx');
       })
       ..table('wf_runs', (table) {
-        table.dropIndex('wf_runs_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('wf_runs_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('wf_steps', (table) {
-        table.dropIndex('wf_steps_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('wf_steps_namespace_idx')
+          ..dropColumn('namespace');
       })
       ..table('wf_watchers', (table) {
-        table.dropIndex('wf_watchers_namespace_idx');
-        table.dropColumn('namespace');
+        table
+          ..dropIndex('wf_watchers_namespace_idx')
+          ..dropColumn('namespace');
       });
   }
 }

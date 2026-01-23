@@ -169,6 +169,9 @@ class _RecordingBroker implements Broker {
     DateTime? since,
     int? limit,
   }) async => 0;
+
+  @override
+  Future<void> close() async {}
 }
 
 class _RecordingBackend implements ResultBackend {
@@ -190,6 +193,13 @@ class _RecordingBackend implements ResultBackend {
       StreamController<TaskStatus>.broadcast,
     );
     return controller.stream;
+  }
+
+  @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    return const TaskStatusPage(items: []);
   }
 
   @override
@@ -287,4 +297,7 @@ class _RecordingBackend implements ResultBackend {
 
   @override
   Future<void> expire(String taskId, Duration ttl) async {}
+
+  @override
+  Future<void> close() async {}
 }

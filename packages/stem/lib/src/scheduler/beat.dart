@@ -1,3 +1,17 @@
+/// Main scheduler execution loop and task dispatcher.
+///
+/// This library provides the [Beat] class, which is responsible for polling the
+/// [ScheduleStore], ensuring task uniqueness via [LockStore], and publishing
+/// due tasks to the [Broker].
+///
+/// ## Distributed Scheduling
+///
+/// When a [LockStore] is provided, multiple [Beat] instances can run in
+/// parallel. They will use distributed locks (keyed by schedule ID) to ensure
+/// that each schedule entry is dispatched exactly once per due interval,
+/// regardless of the number of scheduler nodes.
+library;
+
 import 'dart:async';
 import 'dart:math';
 
@@ -11,8 +25,20 @@ import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 
 /// Scheduler loop that dispatches due [ScheduleEntry] records.
+///
+/// The beat acts as a heartbeat for the scheduler system. It periodically
+/// checks for tasks that have reached their `nextRunAt` timestamp and handles
+/// the complexities of distributed locking, signing, and metric recording.
 class Beat {
-  /// Creates a scheduler instance with the provided dependencies.
+  /// Creates a scheduler instance.
+  ///
+  /// - [store]: Persistence for schedule definitions and execution state.
+  /// - [broker]: The transport layer for dispatching tasks.
+  /// - [lockStore]: (Optional) Shared lock provider for high-availability
+  ///   setups.
+  /// - [tickInterval]: How often to poll the store for due entries.
+  /// - [lockTtl]: Duration for which a dispatch lock is held.
+  /// - [signer]: (Optional) Signer to secure dispatched task envelopes.
   Beat({
     required this.store,
     required this.broker,
@@ -50,6 +76,8 @@ class Beat {
   bool _running = false;
 
   /// Starts the periodic scheduling loop.
+  ///
+  /// Initializes a [Timer.periodic] that fires [tickInterval].
   Future<void> start() async {
     if (_running) return;
     _running = true;
@@ -57,15 +85,25 @@ class Beat {
   }
 
   /// Stops the periodic scheduling loop.
+  ///
+  /// Cancels the active timer and stops all future ticks.
   Future<void> stop() async {
     _running = false;
     _timer?.cancel();
     _timer = null;
   }
 
-  /// Runs a single scheduling tick.
+  /// Runs a single scheduling tick immediately.
   Future<void> runOnce() => _tick();
 
+  /// Internal tick implementation.
+  ///
+  /// ## Logic
+  ///
+  /// 1. Fetches all `dueEntries` from the [store].
+  /// 2. Records metrics for due count and overdue lag.
+  /// 3. If the scheduler is lagging significantly, logs a warning.
+  /// 4. Dispatches each entry via [_dispatch].
   Future<void> _tick() async {
     if (!_running && _timer != null) return;
     final now = DateTime.now();
@@ -110,6 +148,27 @@ class Beat {
     }
   }
 
+  /// Handles the per-entry dispatch logic including locking and jitter.
+  ///
+  /// ## Distributed Locking
+  ///
+  /// If [lockStore] is present:
+  /// 1. Attempt to [LockStore.acquire] a lock for the schedule ID.
+  /// 2. If acquisition fails, another scheduler is already handling this tick.
+  /// 3. Start a background [Timer.periodic] to [Lock.renew] the lock until
+  ///    dispatch completes.
+  /// 4. Ensure [Lock.release] is called in the `finally` block.
+  ///
+  /// ## Jitter
+  ///
+  /// If the entry has a `jitter` duration, a random delay is applied *after*
+  /// the lock is acquired but *before* the task is published. This distributes
+  /// load when many tasks are scheduled for the same exact second.
+  ///
+  /// ## State Updates
+  ///
+  /// Upon successful publication, [ScheduleStore.markExecuted] is called
+  /// to update the entry's `lastRunAt` and calculate its `nextRunAt`.
   Future<void> _dispatch(ScheduleEntry entry, DateTime now) async {
     if (!entry.enabled) return;
 

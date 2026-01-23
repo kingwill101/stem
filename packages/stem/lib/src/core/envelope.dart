@@ -1,5 +1,38 @@
+/// Task envelopes and routing metadata.
+///
+/// This library defines the [Envelope], which is the serialized representation
+/// of a task as it travels from a producer to a consumer. It also contains
+/// [RoutingInfo] for describing how messages should be dispatched by brokers.
+///
+/// ## Envelopes
+///
+/// An [Envelope] contains:
+/// - **Identity**: Unique ID and fully qualified task name.
+/// - **Payload**: Arguments (`args`) and metadata (`headers`).
+/// - **Scheduling**: `enqueuedAt`, `notBefore`, and `priority`.
+/// - **Lifecycle**: `attempt` count and `maxRetries` limit.
+/// - **Routing**: Target `queue` and visibility settings.
+///
+/// ## Routing
+///
+/// [RoutingInfo] provides flexible dispatching options:
+/// - **Queue**: Point-to-point delivery with priority and exchange support.
+/// - **Broadcast**: Fan-out delivery to all active listeners on a channel.
+///
+/// ## IDs and Receipts
+///
+/// - [Envelope.id]: The logical ID that follows the task across retries.
+/// - [Delivery.receipt]: A broker-specific transient ID used for
+///   acknowledgment (ACK) or lease extensions.
+///
+/// See also:
+/// - `Broker` for the interface that consumes and publishes these types.
+/// - `Stem` for the facade that creates envelopes.
+library;
+
 import 'dart:convert';
-import 'dart:math';
+
+import 'package:uuid/uuid.dart';
 
 /// Target classification for routing operations.
 enum RoutingTargetType {
@@ -71,6 +104,30 @@ class RoutingInfo {
     );
   }
 
+  /// Parses routing metadata from JSON.
+  factory RoutingInfo.fromJson(Map<String, Object?> json) {
+    final type = json['type']?.toString();
+    if (type == RoutingTargetType.broadcast.name) {
+      final channel =
+          json['broadcastChannel']?.toString() ??
+          json['channel']?.toString() ??
+          '';
+      return RoutingInfo.broadcast(
+        channel: channel,
+        delivery: json['delivery']?.toString() ?? 'at-least-once',
+        meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+      );
+    }
+    final queue = json['queue']?.toString() ?? '';
+    return RoutingInfo.queue(
+      queue: queue,
+      exchange: json['exchange']?.toString(),
+      routingKey: json['routingKey']?.toString(),
+      priority: (json['priority'] as num?)?.toInt(),
+      meta: (json['meta'] as Map?)?.cast<String, Object?>(),
+    );
+  }
+
   /// The routing target type (queue or broadcast).
   final RoutingTargetType type;
 
@@ -97,14 +154,22 @@ class RoutingInfo {
 
   /// Whether this routing info targets a broadcast channel.
   bool get isBroadcast => type == RoutingTargetType.broadcast;
+
+  /// Serializes this routing descriptor to JSON.
+  Map<String, Object?> toJson() => {
+    'type': type.name,
+    'queue': queue,
+    'exchange': exchange,
+    'routingKey': routingKey,
+    'priority': priority,
+    'broadcastChannel': broadcastChannel,
+    'delivery': delivery,
+    'meta': meta,
+  };
 }
 
 /// Unique identifier generator used for task envelopes by default.
-String generateEnvelopeId() {
-  final micros = DateTime.now().microsecondsSinceEpoch;
-  final random = Random().nextInt(1 << 32);
-  return '$micros-$random';
-}
+String generateEnvelopeId() => const Uuid().v7();
 
 /// Task payload persisted inside a broker.
 /// Since: 0.1.0
@@ -234,6 +299,7 @@ class Envelope {
     'meta': meta,
   };
 
+  /// Returns the JSON representation of the envelope.
   @override
   String toString() => jsonEncode(toJson());
 }

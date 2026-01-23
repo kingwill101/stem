@@ -55,14 +55,14 @@ Future<void> main() async {
     test('namespace isolates queue data', () async {
       final namespaceA = 'broker-ns-a-${DateTime.now().microsecondsSinceEpoch}';
       final namespaceB = 'broker-ns-b-${DateTime.now().microsecondsSinceEpoch}';
-      final brokerA = PostgresBroker.fromDataSource(
+      final brokerA = await PostgresBroker.fromDataSource(
         dataSource,
         namespace: namespaceA,
         defaultVisibilityTimeout: const Duration(seconds: 1),
         pollInterval: const Duration(milliseconds: 50),
         sweeperInterval: const Duration(milliseconds: 200),
       );
-      final brokerB = PostgresBroker.fromDataSource(
+      final brokerB = await PostgresBroker.fromDataSource(
         dataSource,
         namespace: namespaceB,
         defaultVisibilityTimeout: const Duration(seconds: 1),

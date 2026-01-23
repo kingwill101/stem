@@ -51,5 +51,5 @@ Future<void> main() async {
   final result = await app.waitForCompletion<String>(runId);
   print('Workflow $runId resumed and completed with: ${result?.value}');
 
-  await app.shutdown();
+  await app.close();
 }

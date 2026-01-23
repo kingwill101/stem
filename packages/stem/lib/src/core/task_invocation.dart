@@ -1,3 +1,38 @@
+/// Task invocation abstraction and execution context.
+///
+/// This library defines the [TaskInvocationContext], which is the primary
+/// interface exposed to task handlers during execution. It abstracts away
+/// the differences between local (same isolate) and remote (pool isolate)
+/// execution.
+///
+/// ## Context Types
+///
+/// Tasks can be invoked in two main environments:
+///
+/// 1. **Local**: Used for in-process execution or testing. Communication
+///    with the framework happens via direct function calls.
+/// 2. **Remote**: Used by the `TaskIsolatePool`. Communication happens via
+///    `Isolate` ports using [TaskInvocationSignal]s.
+///
+/// ## Core Capabilities
+///
+/// - **Heartbeats**: Notify the worker that the task is still healthy.
+/// - **Lease Extension**: Request more time for long-running tasks.
+/// - **Progress Reporting**: Send telemetry back for monitoring.
+/// - **Sub-task Spawning**: Enqueue new tasks with automatic lineage tracking.
+/// - **Retry Control**: Declaratively request retries with policy overrides.
+///
+/// ## Message Protocol
+///
+/// When running in an isolate, the context uses [TaskInvocationSignal] and
+/// its subclasses ([HeartbeatSignal], [ProgressSignal], etc.) to communicate
+/// with the `Worker` or `TaskIsolatePool`.
+///
+/// See also:
+/// - `Worker` for the runtime that provides this context.
+/// - `TaskIsolatePool` for the isolate management layer.
+library;
+
 import 'dart:async';
 import 'dart:isolate';
 
@@ -142,6 +177,8 @@ class TaskInvocationContext implements TaskEnqueuer {
         controlPort.send(ProgressSignal(percent, data: data)),
     enqueuer: _RemoteTaskEnqueuer(controlPort),
   );
+
+  /// Internal constructor shared by local and isolate contexts.
   TaskInvocationContext._({
     required this.id,
     required this.headers,
@@ -180,6 +217,7 @@ class TaskInvocationContext implements TaskEnqueuer {
   })
   _progress;
 
+  /// Optional delegate used to enqueue tasks from within the invocation.
   final TaskEnqueuer? _enqueuer;
 
   /// Notify the worker that the task is still running.
@@ -211,12 +249,16 @@ class TaskInvocationContext implements TaskEnqueuer {
       throw StateError('TaskInvocationContext has no enqueuer configured');
     }
 
-    final mergedHeaders = Map<String, String>.from(this.headers);
-    mergedHeaders.addAll(headers);
-    final mergedMeta = Map<String, Object?>.from(this.meta);
-    mergedMeta.addAll(meta);
+    final mergedHeaders = Map<String, String>.from(this.headers)
+      ..addAll(headers);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...this.meta,
+      ...meta,
+    };
 
-    if ((enqueueOptions?.addToParent ?? true)) {
+    if (enqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
@@ -246,12 +288,16 @@ class TaskInvocationContext implements TaskEnqueuer {
       throw StateError('TaskInvocationContext has no enqueuer configured');
     }
     final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
-    final mergedHeaders = Map<String, String>.from(headers);
-    mergedHeaders.addAll(call.headers);
-    final mergedMeta = Map<String, Object?>.from(meta);
-    mergedMeta.addAll(call.meta);
+    final mergedHeaders = Map<String, String>.from(headers)
+      ..addAll(call.headers);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = <String, Object?>{
+      if (scopeMeta != null) ...scopeMeta,
+      ...meta,
+      ...call.meta,
+    };
 
-    if ((resolvedEnqueueOptions?.addToParent ?? true)) {
+    if (resolvedEnqueueOptions?.addToParent ?? true) {
       mergedMeta['stem.parentTaskId'] = id;
       mergedMeta['stem.parentAttempt'] = attempt;
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
@@ -321,8 +367,10 @@ class TaskInvocationContext implements TaskEnqueuer {
 }
 
 class _RemoteTaskEnqueuer implements TaskEnqueuer {
+  /// Enqueuer that proxies enqueue requests over the isolate control port.
   _RemoteTaskEnqueuer(this._controlPort);
 
+  /// Port to the worker isolate controller.
   final SendPort _controlPort;
 
   @override
@@ -334,6 +382,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
+    /// Sends the enqueue request to the worker isolate and waits for a reply.
     final responsePort = ReceivePort();
     _controlPort.send(
       EnqueueTaskSignal(
@@ -364,6 +413,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   }) {
+    /// Enqueues a typed task call via the remote enqueue path.
     return enqueue(
       call.name,
       args: call.encodeArgs(),

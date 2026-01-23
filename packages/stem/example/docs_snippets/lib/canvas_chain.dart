@@ -50,7 +50,7 @@ Future<void> main() async {
     'value=${chainResult.value}',
   );
 
-  await app.shutdown();
+  await app.close();
 }
 
 // #endregion canvas-chain

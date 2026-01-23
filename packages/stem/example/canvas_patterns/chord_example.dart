@@ -62,8 +62,8 @@ Future<void> main() async {
   print('Callback state: ${callbackStatus?.state}');
 
   await worker.shutdown();
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 
 Future<void> _waitFor(

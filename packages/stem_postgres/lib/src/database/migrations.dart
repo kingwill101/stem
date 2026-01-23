@@ -5,7 +5,8 @@ import 'package:ormed/migrations.dart';
 
 // <ORM-MIGRATION-IMPORTS>
 import 'package:stem_postgres/src/database/migrations/m_20251227071920_stem.dart';
-import 'package:stem_postgres/src/database/migrations/m_20251231160000_add_namespace_scoping.dart'; // </ORM-MIGRATION-IMPORTS>
+import 'package:stem_postgres/src/database/migrations/m_20251231160000_add_namespace_scoping.dart';
+import 'package:stem_postgres/src/database/migrations/m_20260116121000_add_workflow_run_leases.dart'; // </ORM-MIGRATION-IMPORTS>
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
@@ -15,10 +16,17 @@ final List<MigrationEntry> _entries = [
   ), // </ORM-MIGRATION-REGISTRY>
   MigrationEntry(
     id: MigrationId(
-      DateTime(2025, 12, 31, 16, 0, 0),
+      DateTime(2025, 12, 31, 16),
       'm_20251231160000_add_namespace_scoping',
     ),
     migration: const AddNamespaceScoping(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2026, 1, 16, 12, 10),
+      'm_20260116121000_add_workflow_run_leases',
+    ),
+    migration: const AddWorkflowRunLeases(),
   ),
 ];
 

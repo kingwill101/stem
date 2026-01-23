@@ -27,7 +27,7 @@ Future<void> enqueueInMemory() async {
   );
 
   print('Enqueued $taskId');
-  await app.shutdown();
+  await app.close();
 }
 // #endregion producer-in-memory
 
@@ -98,7 +98,7 @@ Future<void> enqueueWithSigning() async {
     args: {'customerId': 'cust_123', 'amount': 4200},
     notBefore: DateTime.now().add(const Duration(minutes: 5)),
   );
-  await backend.dispose();
+  await backend.close();
   await broker.close();
 }
 // #endregion producer-signed
@@ -142,7 +142,7 @@ Future<void> enqueueTyped() async {
   final taskId = await app.stem.enqueueCall(call);
   final result = await app.stem.waitForTask<String>(taskId);
   print(result?.value);
-  await app.shutdown();
+  await app.close();
 }
 // #endregion producer-typed
 
@@ -163,7 +163,7 @@ Future<void> configureProducerEncoders() async {
     additionalEncoders: const [CustomBinaryEncoder()],
   );
 
-  await app.shutdown();
+  await app.close();
 }
 // #endregion producer-encoders
 

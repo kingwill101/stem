@@ -1,3 +1,61 @@
+/// Isolate pool management for concurrent task execution.
+///
+/// This library provides a managed pool of isolates ([TaskIsolatePool]) that
+/// enables concurrent task execution with automatic scaling, recycling, and
+/// lifecycle management.
+///
+/// ## Architecture
+///
+/// The pool maintains a set of worker isolates that can execute tasks in
+/// parallel. When a task is submitted via [TaskIsolatePool.execute], it is
+/// either assigned to an idle isolate or queued until one becomes available.
+///
+/// ## Key Features
+///
+/// - **Dynamic Scaling**: Resize the pool at runtime with
+///   [TaskIsolatePool.resize]
+/// - **Automatic Recycling**: Isolates are recycled based on task count or
+///   memory
+/// - **Timeout Handling**: Hard timeouts terminate stuck tasks
+/// - **Control Signals**: Tasks can receive control signals during execution
+///
+/// ## Recycle Policies
+///
+/// Isolates can be recycled for several reasons (see [IsolateRecycleReason]):
+/// - [IsolateRecycleReason.maxTasks]: Exceeded max tasks per isolate
+/// - [IsolateRecycleReason.memory]: Exceeded memory threshold
+/// - [IsolateRecycleReason.scaleDown]: Pool is scaling down
+/// - [IsolateRecycleReason.shutdown]: Pool is being disposed
+///
+/// ## Example
+///
+/// ```dart
+/// final pool = TaskIsolatePool(size: 4);
+/// await pool.start();
+///
+/// final result = await pool.execute(
+///   myTaskEntrypoint,
+///   {'arg': 'value'},
+///   {'header': 'value'},
+///   {},
+///   1, // attempt
+///   (signal) => print('Control signal: $signal'),
+///   taskName: 'my_task',
+///   taskId: 'task-123',
+/// );
+///
+/// if (result is TaskExecutionSuccess) {
+///   print('Result: ${result.value}');
+/// }
+///
+/// await pool.dispose();
+/// ```
+///
+/// See also:
+/// - [Worker] for the high-level task consumer that uses this pool
+/// - [TaskRunRequest] for the message format sent to isolates
+library;
+
 import 'dart:async';
 import 'dart:collection';
 import 'dart:isolate';
@@ -6,6 +64,7 @@ import 'dart:math' as math;
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/worker/isolate_messages.dart';
+import 'package:stem/src/worker/worker.dart';
 
 /// A handler for task control signals.
 typedef TaskControlHandler =
@@ -50,8 +109,84 @@ class IsolateRecycleEvent {
 /// Manages a dynamic number of isolates, queuing jobs when all isolates are
 /// busy. The pool can scale up or down at runtime and enforces optional recycle
 /// policies such as max tasks or memory per isolate.
+///
+/// ## Lifecycle
+///
+/// 1. Create pool with initial size: `TaskIsolatePool(size: 4)`
+/// 2. Start pool to spawn isolates: `await pool.start()`
+/// 3. Execute tasks: `await pool.execute(...)`
+/// 4. Dispose when done: `await pool.dispose()`
+///
+/// ## Dynamic Scaling
+///
+/// The pool can be resized at runtime via [resize]:
+///
+/// ```dart
+/// // Scale up for high load
+/// await pool.resize(16);
+///
+/// // Scale down during quiet periods
+/// await pool.resize(2);
+/// ```
+///
+/// ## Recycling Policies
+///
+/// Configure isolate recycling via [updateRecyclePolicy]:
+///
+/// ```dart
+/// pool.updateRecyclePolicy(
+///   maxTasksPerIsolate: 1000,  // Recycle after 1000 tasks
+///   maxMemoryBytes: 256 * 1024 * 1024,  // Recycle at 256MB
+/// );
+/// ```
+///
+/// ## Callbacks
+///
+/// - [onSpawned]: Called when an isolate is created
+/// - [onRecycle]: Called when an isolate is recycled with reason
+/// - [onDisposed]: Called when an isolate is disposed
+///
+/// ## Example
+///
+/// ```dart
+/// final pool = TaskIsolatePool(
+///   size: 4,
+///   onRecycle: (event) {
+///     print('Recycled: ${event.reason}, tasks: ${event.tasksExecuted}');
+///   },
+/// );
+///
+/// await pool.start();
+///
+/// final result = await pool.execute(
+///   myHandler,
+///   {'key': 'value'},
+///   {},
+///   {},
+///   1,
+///   (signal) => print('Signal: $signal'),
+///   taskName: 'my_task',
+///   taskId: 'task-123',
+/// );
+///
+/// await pool.dispose();
+/// ```
+///
+/// ## See Also
+///
+/// - [Worker] for the high-level consumer that uses this pool
+/// - [IsolateRecycleReason] for recycling triggers
+/// - [TaskExecutionResult] for execution outcomes
 class TaskIsolatePool {
   /// Creates a pool with the provided initial [size].
+  ///
+  /// The pool will spawn [size] isolates when [start] is called.
+  /// Size is clamped to a minimum of 1.
+  ///
+  /// Optional callbacks:
+  /// - [onRecycle]: Called when an isolate is recycled
+  /// - [onSpawned]: Called after an isolate is spawned
+  /// - [onDisposed]: Called after an isolate is disposed
   TaskIsolatePool({
     required int size,
     this.onRecycle,
@@ -194,6 +329,15 @@ class TaskIsolatePool {
     return job.completer.future;
   }
 
+  /// The main event loop for the isolate pool.
+  ///
+  /// This method is responsible for:
+  /// 1. Mapping queued [_TaskJob]s to idle isolates.
+  /// 2. Spawning new isolates if capacity allows.
+  /// 3. Initiating recycling of isolates that have exceeded thresholds.
+  /// 4. Cleaning up results from disposed isolates.
+  ///
+  /// It runs after every state change (submit, result, spawn, dispose).
   void _pump() {
     if (_disposed) return;
     if (_idle.isEmpty && totalCount < _targetSize) {
@@ -294,6 +438,26 @@ class TaskIsolatePool {
     }
   }
 
+  /// Determines if an isolate should be recycled after completing a task.
+  ///
+  /// ## Implementation Details
+  ///
+  /// Checks three conditions in order:
+  ///
+  /// 1. **Draining flag**: If `entry.draining` is true, the isolate was
+  ///    marked for disposal during scale-down and should be recycled.
+  ///
+  /// 2. **Task count threshold**: If `_maxTasksPerIsolate` is set and
+  ///    `entry.tasksExecuted` >= threshold, the isolate has processed
+  ///    too many tasks and may have accumulated memory/state drift.
+  ///
+  /// 3. **Memory threshold**: If `_maxMemoryBytes` is set and
+  ///    `entry.lastRssBytes` >= threshold, the isolate is using too
+  ///    much memory and should be recycled to reclaim resources.
+  ///
+  /// ## Returns
+  ///
+  /// `true` if the isolate should be disposed and replaced.
   bool _shouldRecycle(_PoolEntry entry) {
     if (entry.draining) {
       return true;
@@ -310,6 +474,10 @@ class TaskIsolatePool {
     return false;
   }
 
+  /// Determines why an isolate should be recycled.
+  ///
+  /// Inspects the `maxTasks` and `maxMemory` thresholds against the isolate's
+  /// actual consumption.
   IsolateRecycleReason _determineRecycleReason(_PoolEntry entry) {
     if (entry.draining) {
       return IsolateRecycleReason.scaleDown;
@@ -343,6 +511,10 @@ class TaskIsolatePool {
     }
   }
 
+  /// Spawns new isolates if the current pool size is below [_targetSize].
+  ///
+  /// Uses [_IsolateWorker.spawn] to create the underlying isolate and
+  /// wraps it in a [_PoolEntry].
   Future<void> _ensureCapacity() async {
     if (_disposed) return;
     while (totalCount < _targetSize) {

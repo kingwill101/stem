@@ -8,6 +8,31 @@ import 'package:stem_sqlite/src/models/models.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore implements WorkflowStore {
+  SqliteWorkflowStore._(
+    this._connections,
+    this._clock, {
+    required this.namespace,
+  }) : _context = _connections.context;
+
+  /// Creates a workflow store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<SqliteWorkflowStore> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    WorkflowClock clock = const SystemWorkflowClock(),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await SqliteConnections.openWithDataSource(dataSource);
+    return SqliteWorkflowStore._(
+      connections,
+      clock,
+      namespace: resolvedNamespace,
+    );
+  }
+
   /// Opens a SQLite-backed workflow store using [file].
   static Future<SqliteWorkflowStore> open(
     File file, {
@@ -25,15 +50,11 @@ class SqliteWorkflowStore implements WorkflowStore {
     );
   }
 
-  SqliteWorkflowStore._(
-    this._connections,
-    this._clock, {
-    required this.namespace,
-  }) : _context = _connections.context;
-
   final SqliteConnections _connections;
   final QueryContext _context;
   final WorkflowClock _clock;
+
+  /// Namespace used to scope workflow data.
   final String namespace;
   int _idCounter = 0;
 
@@ -135,6 +156,8 @@ class SqliteWorkflowStore implements WorkflowStore {
       suspensionData: _decodeMap(run.suspensionData),
       createdAt: run.createdAt,
       updatedAt: run.updatedAt,
+      ownerId: run.ownerId,
+      leaseExpiresAt: run.leaseExpiresAt,
       cancellationPolicy: cancellationPolicyRaw.isNotEmpty
           ? WorkflowCancellationPolicy.fromJson(cancellationPolicyRaw)
           : null,
@@ -391,6 +414,8 @@ class SqliteWorkflowStore implements WorkflowStore {
           updates['result'] = null;
         }
         updates['suspension_data'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -428,6 +453,10 @@ class SqliteWorkflowStore implements WorkflowStore {
           }),
           updatedAt: now,
         ).toMap();
+        if (terminal) {
+          updates['owner_id'] = null;
+          updates['lease_expires_at'] = null;
+        }
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -465,6 +494,79 @@ class SqliteWorkflowStore implements WorkflowStore {
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
         );
       }
+    });
+  }
+
+  @override
+  Future<bool> claimRun(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final leaseExpiresAt = now.add(leaseDuration);
+    final updated = await _connections.runInTransaction((ctx) async {
+      final query = ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereNull('waitTopic')
+          .where((PredicateBuilder<StemWorkflowRun> q) {
+            q
+              ..whereNull('leaseExpiresAt')
+              ..orWhere(
+                'leaseExpiresAt',
+                now,
+                PredicateOperator.lessThanOrEqual,
+              );
+          });
+      return query.update({
+        'ownerId': ownerId,
+        'leaseExpiresAt': leaseExpiresAt,
+        'updatedAt': now,
+      });
+    });
+    return updated > 0;
+  }
+
+  @override
+  Future<bool> renewRunLease(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now().toUtc();
+    final leaseExpiresAt = now.add(leaseDuration);
+    final updated = await _connections.runInTransaction((ctx) async {
+      final query = ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('status', WorkflowStatus.running.name)
+          .whereEquals('ownerId', ownerId);
+      return query.update({
+        'leaseExpiresAt': leaseExpiresAt,
+        'updatedAt': now,
+      });
+    });
+    return updated > 0;
+  }
+
+  @override
+  Future<void> releaseRun(String runId, {required String ownerId}) async {
+    final now = _clock.now().toUtc();
+    await _connections.runInTransaction((ctx) async {
+      await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .whereEquals('ownerId', ownerId)
+          .update({
+            'ownerId': null,
+            'leaseExpiresAt': null,
+            'updatedAt': now,
+          });
     });
   }
 
@@ -656,6 +758,8 @@ class SqliteWorkflowStore implements WorkflowStore {
         updates['suspension_data'] = null;
         updates['wait_topic'] = null;
         updates['resume_at'] = null;
+        updates['owner_id'] = null;
+        updates['lease_expires_at'] = null;
         await ctx.repository<StemWorkflowRun>().update(
           updates,
           where: StemWorkflowRunPartial(id: runId, namespace: namespace),
@@ -741,6 +845,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     String? workflow,
     WorkflowStatus? status,
     int limit = 50,
+    int offset = 0,
   }) async {
     var query = _context.query<StemWorkflowRun>();
     query = query.whereEquals('namespace', namespace);
@@ -756,6 +861,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     final ids = await query
         .orderBy('updatedAt', descending: true)
         .orderBy('id', descending: true)
+        .offset(offset)
         .limit(limit)
         .get()
         .then((runs) => runs.map((run) => run.id).toList());
@@ -769,6 +875,34 @@ class SqliteWorkflowStore implements WorkflowStore {
     }
 
     return results;
+  }
+
+  @override
+  Future<List<String>> listRunnableRuns({
+    DateTime? now,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resolvedNow = (now ?? _clock.now()).toUtc();
+    final runs = await _context
+        .query<StemWorkflowRun>()
+        .whereEquals('namespace', namespace)
+        .whereEquals('status', WorkflowStatus.running.name)
+        .whereNull('waitTopic')
+        .where((PredicateBuilder<StemWorkflowRun> q) {
+          q
+            ..whereNull('leaseExpiresAt')
+            ..orWhere(
+              'leaseExpiresAt',
+              resolvedNow,
+              PredicateOperator.lessThanOrEqual,
+            );
+        })
+        .orderBy('updatedAt', descending: true)
+        .offset(offset)
+        .limit(limit)
+        .get();
+    return runs.map((run) => run.id).toList(growable: false);
   }
 
   @override

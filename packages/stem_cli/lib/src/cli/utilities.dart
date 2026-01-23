@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:artisanal/args.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
+import 'package:stem_cli/src/cli/cloud_config.dart';
 import 'package:stem_cli/src/cli/revoke_store_factory.dart';
 import 'package:stem_cli/src/cli/subscription_loader.dart';
 import 'package:stem_cli/src/cli/workflow_context.dart';
@@ -96,6 +97,9 @@ Future<CliContext> createDefaultContext({
     revokeStore = await RevokeStoreFactory.create(
       config: config,
       namespace: 'stem',
+      environment: env,
+      cloudApiKey: resolveStemCloudAuthToken(env),
+      cloudNamespace: resolveStemCloudNamespace(env),
     );
     disposables.add(() => revokeStore!.close());
   } catch (error) {

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:ormed/ormed.dart';
+import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
@@ -39,6 +41,38 @@ void main() {
       replayDelay: Duration(milliseconds: 250),
     ),
   );
+
+  test('fromDataSource runs migrations', () async {
+    ensureSqliteDriverRegistration();
+    final dataSource = DataSource(
+      DataSourceOptions(
+        driver: SqliteDriverAdapter.file(dbFile.path),
+        registry: buildOrmRegistry(),
+        database: dbFile.path,
+      ),
+    );
+    final broker = await SqliteBroker.fromDataSource(
+      dataSource,
+      defaultVisibilityTimeout: const Duration(milliseconds: 200),
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(milliseconds: 75),
+    );
+    try {
+      final queue = 'queue-${DateTime.now().microsecondsSinceEpoch}';
+      final envelope = Envelope(
+        name: 'sqlite.datasource',
+        args: const {'value': 1},
+        queue: queue,
+      );
+      await broker.publish(envelope);
+
+      final pending = await broker.pendingCount(queue);
+      expect(pending, 1);
+    } finally {
+      await broker.close();
+      await dataSource.dispose();
+    }
+  });
 
   test('namespace isolates queue data', () async {
     final namespaceA =

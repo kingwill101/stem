@@ -1,3 +1,35 @@
+/// Observability and lifecycle signals for the Stem framework.
+///
+/// This library defines the [StemSignals] registry, which contains all
+/// lifecycle events emitted by producers, workers, and workflows.
+///
+/// ## Signal Registry
+///
+/// [StemSignals] provides a central list of all available event types. These
+/// are divided into several areas:
+///
+/// - **Task Lifecycle**: `task-received`, `task-succeeded`, `task-failed`, etc.
+/// - **Worker Lifecycle**: `worker-ready`, `worker-shutdown`,
+///   `worker-heartbeat`.
+/// - **Scheduling**: `schedule-entry-due`, `schedule-entry-dispatched`.
+/// - **Workflows**: `workflow-run-started`, `workflow-step-succeeded`.
+///
+/// ## Configuration
+///
+/// [StemSignalConfiguration] allows users to selectively enable or disable
+/// signals to reduce overhead or noise.
+///
+/// ## Error Reporting
+///
+/// Signals are synchronous or semi-synchronous; to prevent listeners from
+/// crashing the core execution loop, errors in signal handlers are routed
+/// to a [SignalErrorReporter].
+///
+/// See also:
+/// - [Signal] for the underlying event mechanism.
+/// - `StemSignalEmitter` for the helper used to trigger these events.
+library;
+
 import 'package:contextual/contextual.dart';
 
 import 'package:stem/src/observability/logging.dart';

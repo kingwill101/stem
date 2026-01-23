@@ -19,6 +19,8 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
     this.resumeAt,
     this.lastError,
     this.suspensionData,
+    this.ownerId,
+    this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
   });
@@ -62,6 +64,14 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
   /// Serialized suspension data.
   @OrmField(columnName: 'suspension_data')
   final String? suspensionData;
+
+  /// Identifier of the worker/runtime holding the lease, if any.
+  @OrmField(columnName: 'owner_id')
+  final String? ownerId;
+
+  /// Timestamp when the current lease expires.
+  @OrmField(columnName: 'lease_expires_at')
+  final DateTime? leaseExpiresAt;
 
   /// Cancellation policy name.
   @OrmField(columnName: 'cancellation_policy')

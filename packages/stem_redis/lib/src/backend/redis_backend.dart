@@ -100,6 +100,7 @@ class RedisResultBackend implements ResultBackend {
   }
 
   /// Closes the backend and releases any Redis resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -137,8 +138,26 @@ class RedisResultBackend implements ResultBackend {
       attempt: attempt,
       meta: meta,
     );
-    final encoded = jsonEncode(status.toJson());
     final key = _taskKey(taskId);
+    final now = DateTime.now().toUtc();
+    var createdAt = now;
+    final existingRaw = await _send(['GET', key]);
+    if (existingRaw is String) {
+      final existing = jsonDecode(existingRaw) as Map<String, Object?>;
+      final existingCreated = existing['createdAt'];
+      if (existingCreated is String) {
+        final parsed = DateTime.tryParse(existingCreated);
+        if (parsed != null) {
+          createdAt = parsed;
+        }
+      }
+    }
+    final payloadMap = <String, Object?>{
+      ...status.toJson(),
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': now.toIso8601String(),
+    };
+    final encoded = jsonEncode(payloadMap);
     final expire = (ttl ?? defaultTtl).inMilliseconds;
     await _send(['SET', key, encoded, 'PX', expire.toString()]);
     _watchers[taskId]?.add(status);
@@ -168,6 +187,90 @@ class RedisResultBackend implements ResultBackend {
       ),
     );
     return controller.stream;
+  }
+
+  @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    if (request.limit <= 0) {
+      return const TaskStatusPage(items: []);
+    }
+    final matches = <TaskStatusRecord>[];
+    var cursor = '0';
+    final pattern = '$namespace:result:*';
+    do {
+      final response = await _send([
+        'SCAN',
+        cursor,
+        'MATCH',
+        pattern,
+        'COUNT',
+        '100',
+      ]);
+      if (response is! List || response.length < 2) break;
+      cursor = response[0].toString();
+      final keys = response[1] as List? ?? const [];
+      for (final key in keys) {
+        final raw = await _send(<Object>['GET', key.toString()]);
+        if (raw is! String) continue;
+        final map = jsonDecode(raw) as Map<String, Object?>;
+        final status = TaskStatus.fromJson(map);
+        if (request.state != null && status.state != request.state) {
+          continue;
+        }
+        if (request.queue != null) {
+          final queue = status.meta['queue']?.toString();
+          if (queue != request.queue) {
+            continue;
+          }
+        }
+        if (!_matchesMeta(status.meta, request.meta)) {
+          continue;
+        }
+        final createdAt = _parseTimestamp(map['createdAt']);
+        final updatedAt = _parseTimestamp(map['updatedAt']);
+        matches.add(
+          TaskStatusRecord(
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+      }
+    } while (cursor != '0');
+
+    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final offset = request.offset;
+    final limit = request.limit;
+    final pageItems = matches.skip(offset).take(limit).toList(growable: false);
+    final hasNext = matches.length > offset + limit;
+    return TaskStatusPage(
+      items: pageItems,
+      nextOffset: hasNext ? offset + limit : null,
+    );
+  }
+
+  DateTime _parseTimestamp(Object? raw) {
+    if (raw is String) {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  }
+
+  bool _matchesMeta(
+    Map<String, Object?> meta,
+    Map<String, Object?> filters,
+  ) {
+    if (filters.isEmpty) return true;
+    for (final entry in filters.entries) {
+      if (!meta.containsKey(entry.key)) return false;
+      final expected = entry.value;
+      if (expected == null) continue;
+      if (meta[entry.key] != expected) return false;
+    }
+    return true;
   }
 
   @override

@@ -37,6 +37,14 @@ dart analyze
 dart test --exclude-tags soak
 ```
 
+### Property-based testing
+
+Stem uses `property_testing` to exercise core invariants under randomized
+inputs. These cases are embedded alongside the related unit tests, so they run
+with the normal `dart test` suite. The helpers in
+`test/support/property_test_helpers.dart` define the default run counts and
+chaos configuration used across the suite.
+
 ### Redis-backed chaos runs
 
 By default the chaos test suite uses the in-memory broker/backend. To exercise

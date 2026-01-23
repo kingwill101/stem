@@ -163,6 +163,7 @@ class TaskPayloadEncoderRegistry {
   /// Returns all registered encoders.
   Iterable<TaskPayloadEncoder> get allEncoders => _encoders.values;
 
+  /// Registers an encoder implementation by its declared id.
   void _register(TaskPayloadEncoder encoder) {
     _encoders[encoder.id] = encoder;
   }

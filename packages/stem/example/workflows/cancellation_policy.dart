@@ -46,5 +46,5 @@ Future<void> main() async {
   print('Run status: ${state?.status}');
   print('Cancellation data: ${state?.cancellationData}');
 
-  await app.shutdown();
+  await app.close();
 }

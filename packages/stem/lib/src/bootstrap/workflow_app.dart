@@ -1,5 +1,6 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
+import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow.dart';
@@ -10,6 +11,8 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
@@ -201,6 +204,9 @@ class StemWorkflowApp {
     _started = false;
   }
 
+  /// Alias for [shutdown].
+  Future<void> close() => shutdown();
+
   /// Creates a workflow app with custom backends and factories.
   ///
   /// Useful for wiring Redis/Postgres adapters or sharing an existing
@@ -226,6 +232,8 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
@@ -256,6 +264,8 @@ class StemWorkflowApp {
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       queue: workerConfig.queue,
+      registry: workflowRegistry,
+      introspectionSink: introspectionSink,
     );
 
     appInstance.register(runtime.workflowRunnerHandler());
@@ -295,6 +305,8 @@ class StemWorkflowApp {
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
@@ -311,10 +323,44 @@ class StemWorkflowApp {
       workerConfig: workerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
+      workflowRegistry: workflowRegistry,
+      introspectionSink: introspectionSink,
       encoderRegistry: encoderRegistry,
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a workflow app backed by a shared [StemClient].
+  static Future<StemWorkflowApp> fromClient({
+    required StemClient client,
+    Iterable<WorkflowDefinition> workflows = const [],
+    Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
+    WorkflowStoreFactory? storeFactory,
+    WorkflowEventBusFactory? eventBusFactory,
+    StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowIntrospectionSink? introspectionSink,
+  }) async {
+    final appInstance = await StemApp.fromClient(
+      client,
+      workerConfig: workerConfig,
+    );
+    return StemWorkflowApp.create(
+      workflows: workflows,
+      flows: flows,
+      scripts: scripts,
+      stemApp: appInstance,
+      storeFactory: storeFactory,
+      eventBusFactory: eventBusFactory,
+      workerConfig: workerConfig,
+      pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
+      workflowRegistry: client.workflowRegistry,
+      introspectionSink: introspectionSink,
     );
   }
 }

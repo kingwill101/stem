@@ -5,6 +5,24 @@ import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
 
+/// Kinds of workflow steps exposed for introspection.
+enum WorkflowStepKind {
+  /// Step executes a task-like handler.
+  task,
+
+  /// Step represents a choice/branching decision.
+  choice,
+
+  /// Step represents parallel work.
+  parallel,
+
+  /// Step represents a wait/suspension.
+  wait,
+
+  /// Step has custom semantics not captured by the built-in kinds.
+  custom,
+}
+
 /// Node in a workflow [Flow].
 ///
 /// The [handler] may execute multiple times when a run resumes from a
@@ -19,16 +37,68 @@ class FlowStep {
     required this.name,
     required this.handler,
     this.autoVersion = false,
-  });
+    String? title,
+    this.kind = WorkflowStepKind.task,
+    Iterable<String> taskNames = const [],
+    Map<String, Object?>? metadata,
+  }) : title = title ?? name,
+       taskNames = List.unmodifiable(taskNames),
+       metadata = metadata == null ? null : Map.unmodifiable(metadata);
+
+  /// Rehydrates a flow step from serialized JSON.
+  factory FlowStep.fromJson(Map<String, Object?> json) {
+    return FlowStep(
+      name: json['name']?.toString() ?? '',
+      title: json['title']?.toString(),
+      kind: _kindFromJson(json['kind']),
+      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
+      autoVersion: json['autoVersion'] == true,
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+      handler: (_) async {},
+    );
+  }
 
   /// Step name used for checkpoints and scheduling.
   final String name;
+
+  /// Human-friendly step title exposed for introspection.
+  final String title;
+
+  /// Step kind classification.
+  final WorkflowStepKind kind;
+
+  /// Task names associated with this step (for UI introspection).
+  final List<String> taskNames;
+
+  /// Optional metadata associated with the step.
+  final Map<String, Object?>? metadata;
 
   /// Handler invoked when the step executes.
   final FutureOr<dynamic> Function(FlowContext context) handler;
 
   /// Whether to auto-version checkpoints across repeated executions.
   final bool autoVersion;
+
+  /// Serialize step metadata for workflow introspection.
+  Map<String, Object?> toJson() {
+    return {
+      'name': name,
+      'title': title,
+      'kind': kind.name,
+      'taskNames': taskNames,
+      'autoVersion': autoVersion,
+      if (metadata != null) 'metadata': metadata,
+    };
+  }
+}
+
+WorkflowStepKind _kindFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowStepKind.task;
+  return WorkflowStepKind.values.firstWhere(
+    (kind) => kind.name == raw,
+    orElse: () => WorkflowStepKind.task,
+  );
 }
 
 /// Control directive emitted by a workflow step to suspend execution.

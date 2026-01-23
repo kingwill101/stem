@@ -11,7 +11,28 @@ class PostgresScheduleStore implements ScheduleStore {
   /// Creates a schedule store backed by PostgreSQL.
   PostgresScheduleStore._(this._connections, {required this.namespace});
 
+  /// Creates a schedule store using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresScheduleStore> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+  }) async {
+    final resolvedNamespace = namespace.trim().isNotEmpty
+        ? namespace.trim()
+        : 'stem';
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    return PostgresScheduleStore._(
+      connections,
+      namespace: resolvedNamespace,
+    );
+  }
+
   final PostgresConnections _connections;
+
+  /// Namespace used to partition schedule entries.
   final String namespace;
 
   /// Connects to a PostgreSQL database and ensures schedule tables exist.
@@ -32,28 +53,13 @@ class PostgresScheduleStore implements ScheduleStore {
     );
   }
 
-  /// Creates a schedule store using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  static PostgresScheduleStore fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-  }) {
-    final resolvedNamespace = namespace.trim().isNotEmpty
-        ? namespace.trim()
-        : 'stem';
-    final connections = PostgresConnections.fromDataSource(dataSource);
-    return PostgresScheduleStore._(
-      connections,
-      namespace: resolvedNamespace,
-    );
-  }
-
   /// Closes the schedule store and releases database resources.
   Future<void> close() async {
     await _connections.close();
   }
 
+  /// Returns due schedule entries at [now], advancing their next run window to
+  /// avoid immediate reacquisition.
   @override
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async {
     final ctx = _connections.context;
@@ -112,6 +118,7 @@ class PostgresScheduleStore implements ScheduleStore {
     return dueEntries.map(_toDomain).toList();
   }
 
+  /// Inserts or updates a schedule [entry] within the configured namespace.
   @override
   Future<void> upsert(ScheduleEntry entry) async {
     final now = DateTime.now().toUtc();
@@ -156,6 +163,7 @@ class PostgresScheduleStore implements ScheduleStore {
     }
   }
 
+  /// Removes the schedule entry identified by [id] if it exists.
   @override
   Future<void> remove(String id) async {
     final ctx = _connections.context;
@@ -170,6 +178,7 @@ class PostgresScheduleStore implements ScheduleStore {
     }
   }
 
+  /// Lists schedule entries, optionally constrained by [limit].
   @override
   Future<List<ScheduleEntry>> list({int? limit}) async {
     final ctx = _connections.context;
@@ -184,6 +193,7 @@ class PostgresScheduleStore implements ScheduleStore {
     return entries.map(_toDomain).toList();
   }
 
+  /// Fetches a schedule entry by [id] for the configured namespace.
   @override
   Future<ScheduleEntry?> get(String id) async {
     final ctx = _connections.context;
@@ -196,6 +206,7 @@ class PostgresScheduleStore implements ScheduleStore {
     return entry == null ? null : _toDomain(entry);
   }
 
+  /// Marks a schedule execution outcome and advances counters/metadata.
   @override
   Future<void> markExecuted(
     String id, {

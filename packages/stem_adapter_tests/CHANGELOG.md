@@ -1,5 +1,13 @@
+## Unreleased
+
+- Split lock/workflow store contract suites and expanded runnable discovery
+  coverage.
+- Updated dependencies and analysis options.
+
 ## 0.1.0-dev
 
+- Added workflow store contract coverage for run leasing and runnable run
+  discovery.
 - Expanded contract coverage for typed result encoders and payload encoders
   (including TaskResultEncoder) used by adapters.
 

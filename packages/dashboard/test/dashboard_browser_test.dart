@@ -116,7 +116,9 @@ void _dashboardBrowserTest(
     final type = TestBootstrap.browserTypes[config.browserName];
     if (type == null) {
       throw ArgumentError(
-        'Could not find BrowserType for ${config.browserName}. Ensure testBootstrap is configured correctly and the browser name is supported.',
+        'Could not find BrowserType for ${config.browserName}. '
+        'Ensure testBootstrap is configured correctly and the browser name is '
+        'supported.',
       );
     }
 
@@ -127,7 +129,7 @@ void _dashboardBrowserTest(
     );
 
     await _withPrintFilter(() async {
-      final browser = await type.launch(launchOptions, useAsync: true);
+      final browser = await type.launch(launchOptions);
       try {
         await callback(browser);
       } finally {

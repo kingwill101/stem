@@ -54,6 +54,7 @@ class EncodingResultBackend implements ResultBackend {
   }
 
   @override
+  /// Fetches a task status and decodes its payload if needed.
   Future<TaskStatus?> get(String taskId) async {
     final status = await _inner.get(taskId);
     if (status == null) return null;
@@ -61,8 +62,27 @@ class EncodingResultBackend implements ResultBackend {
   }
 
   @override
+  /// Streams task status updates with decoded payloads.
   Stream<TaskStatus> watch(String taskId) {
     return _inner.watch(taskId).map(_decodeStatus);
+  }
+
+  @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    final page = await _inner.listTaskStatuses(request);
+    if (page.items.isEmpty) return page;
+    final decodedItems = page.items
+        .map((record) {
+          return TaskStatusRecord(
+            status: _decodeStatus(record.status),
+            createdAt: record.createdAt,
+            updatedAt: record.updatedAt,
+          );
+        })
+        .toList(growable: false);
+    return TaskStatusPage(items: decodedItems, nextOffset: page.nextOffset);
   }
 
   @override
@@ -82,6 +102,7 @@ class EncodingResultBackend implements ResultBackend {
       _inner.initGroup(descriptor);
 
   @override
+  /// Adds a group result after encoding the payload for storage.
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status) async {
     final encoded = _encodeStatus(status);
     final updated = await _inner.addGroupResult(groupId, encoded);
@@ -89,6 +110,7 @@ class EncodingResultBackend implements ResultBackend {
   }
 
   @override
+  /// Loads a group status and decodes any stored payloads.
   Future<GroupStatus?> getGroup(String groupId) async {
     final status = await _inner.getGroup(groupId);
     return _decodeGroupStatus(status);
@@ -109,6 +131,10 @@ class EncodingResultBackend implements ResultBackend {
     dispatchedAt: dispatchedAt,
   );
 
+  @override
+  Future<void> close() => _inner.close();
+
+  /// Encodes a status payload for persistence in the inner backend.
   TaskStatus _encodeStatus(TaskStatus status) {
     final encoderId = status.meta[stemResultEncoderMetaKey] as String?;
     final encoder = registry.resolveResult(encoderId);
@@ -126,6 +152,7 @@ class EncodingResultBackend implements ResultBackend {
     );
   }
 
+  /// Decodes a status payload using the configured encoder registry.
   TaskStatus _decodeStatus(TaskStatus status) {
     final encoderId = status.meta[stemResultEncoderMetaKey] as String?;
     final encoder = registry.resolveResult(encoderId);
@@ -143,6 +170,7 @@ class EncodingResultBackend implements ResultBackend {
     );
   }
 
+  /// Decodes payloads within a group status, if necessary.
   GroupStatus? _decodeGroupStatus(GroupStatus? status) {
     if (status == null) return null;
     if (status.results.isEmpty) return status;

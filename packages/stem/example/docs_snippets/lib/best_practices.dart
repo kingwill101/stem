@@ -51,6 +51,6 @@ Future<void> main() async {
   await enqueueTyped(stem);
   await Future<void>.delayed(const Duration(milliseconds: 200));
   await worker.shutdown();
-  broker.dispose();
-  await backend.dispose();
+  await broker.close();
+  await backend.close();
 }

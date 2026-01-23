@@ -1,3 +1,57 @@
+/// Main entry point for enqueuing and managing tasks in the Stem framework.
+///
+/// This library provides the [Stem] class, which acts as a high-level facade
+/// for producer applications. It coordinates task serialization, routing,
+/// signing, and persistence during the enqueuing process.
+///
+/// ## Architecture Overview
+///
+/// ```text
+/// ┌─────────────────────────────────────────────────────────┐
+/// │                         Stem                            │
+/// │  ┌──────────┐  ┌──────────┐  ┌───────────────────────┐  │
+/// │  │  Broker  │  │ Registry │  │    Result Backend     │  │
+/// │  │(publish) │  │(metadata)│  │ (tracking/results)    │  │
+/// │  └────┬─────┘  └────┬─────┘  └───────────┬───────────┘  │
+/// │       │             │                    │              │
+/// │       ▼             ▼                    ▼              │
+/// │  ┌──────────────────────────────────────────────────┐   │
+/// │  │                Enqueue Pipeline                  │   │
+/// │  │  • Metadata mapping   • Payload encoding         │   │
+/// │  │  • Route resolution   • Signature generation     │   │
+/// │  │  • Uniqueness checks  • Result tracking          │   │
+/// │  └──────────────────────┬───────────────────────────┘   │
+/// │                         │                               │
+/// │                         ▼                               │
+/// │                  (Message Broker)                       │
+/// └─────────────────────────────────────────────────────────┘
+/// ```
+///
+/// ## Key Concepts
+///
+/// - **Enqueuer**: The core interface for adding tasks to the system.
+/// - **Broker**: Reusable interface for message delivery (e.g. Redis,
+///   Postgres).
+/// - **Result Backend**: Durable storage for task states and return values.
+/// - **Middleware**: Interceptor chain for enqueuing and execution events.
+///
+/// ## Payload Encoding
+///
+/// [Stem] uses a registry of [TaskPayloadEncoder]s to transform complex Dart
+/// objects into serializable formats for cross-isolate or cross-process
+/// communication. By default, it uses [JsonTaskPayloadEncoder].
+///
+/// ## Task Lineage
+///
+/// When enqueuing tasks from within an existing task (via [TaskContext]),
+/// [Stem] automatically tracks parent-child relationships and propagates
+/// trace identifiers for observability.
+///
+/// See also:
+/// - `Worker` for the consumption and execution side of the system.
+/// - `TaskDefinition` for defining strongly-typed task interfaces.
+library;
+
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -70,13 +124,27 @@ class Stem implements TaskEnqueuer {
 
   /// Registry of payload encoders used for args/results.
   final TaskPayloadEncoderRegistry payloadEncoders;
+
+  /// Shared signal emitter for lifecycle hooks.
   static const StemSignalEmitter _signals = StemSignalEmitter(
     defaultSender: 'stem',
   );
+
+  /// Random source used for retry jitter.
   static final math.Random _random = math.Random();
+
+  /// Releases broker/backend resources used by this producer.
+  Future<void> close() async {
+    await broker.close();
+    final resolved = backend;
+    if (resolved != null) {
+      await resolved.close();
+    }
+  }
 
   /// Enqueue a typed task using a [TaskCall] wrapper produced by a
   /// [TaskDefinition].
+  @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
@@ -93,6 +161,7 @@ class Stem implements TaskEnqueuer {
   }
 
   /// Enqueue a task by name.
+  @override
   Future<String> enqueue(
     String name, {
     Map<String, Object?> args = const {},
@@ -142,10 +211,20 @@ class Stem implements TaskEnqueuer {
           argsEncoder,
         );
         final encodedArgs = _encodeArgs(args, argsEncoder);
+        final scopeMeta = TaskEnqueueScope.currentMeta();
+        final mergedMeta = scopeMeta == null
+            ? meta
+            : <String, Object?>{
+                ...scopeMeta,
+                ...meta,
+              };
         final enrichedMeta = _applyEnqueueOptionsToMeta(
-          meta,
+          mergedMeta,
           enqueueOptions,
         );
+        if (!enrichedMeta.containsKey('stem.task')) {
+          enrichedMeta['stem.task'] = name;
+        }
         if (options.retryPolicy != null &&
             !enrichedMeta.containsKey('stem.retryPolicy')) {
           enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
@@ -353,6 +432,7 @@ class Stem implements TaskEnqueuer {
     return completer.future;
   }
 
+  /// Executes the enqueue middleware chain in order.
   Future<void> _runEnqueueMiddleware(
     Envelope envelope,
     Future<void> Function() action,
@@ -368,6 +448,7 @@ class Stem implements TaskEnqueuer {
     await run(0);
   }
 
+  /// Resolves not-before scheduling from enqueue overrides.
   DateTime? _resolveNotBefore(
     DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
@@ -382,6 +463,8 @@ class Stem implements TaskEnqueuer {
     return notBefore;
   }
 
+  /// Determines max retries using enqueue overrides, task options, then
+  /// handler defaults.
   int _resolveMaxRetries(
     TaskOptions options,
     TaskOptions handlerOptions,
@@ -401,6 +484,7 @@ class Stem implements TaskEnqueuer {
     return handlerOptions.maxRetries;
   }
 
+  /// Maps enqueue-only settings into envelope metadata.
   Map<String, Object?> _applyEnqueueOptionsToMeta(
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
@@ -418,19 +502,19 @@ class Stem implements TaskEnqueuer {
           enqueueOptions.softTimeLimit!.inMilliseconds;
     }
     if (enqueueOptions.serializer != null) {
-      merged['stem.serializer'] = enqueueOptions.serializer!;
+      merged['stem.serializer'] = enqueueOptions.serializer;
     }
     if (enqueueOptions.compression != null) {
-      merged['stem.compression'] = enqueueOptions.compression!;
+      merged['stem.compression'] = enqueueOptions.compression;
     }
     if (enqueueOptions.ignoreResult != null) {
       merged['stem.ignoreResult'] = enqueueOptions.ignoreResult;
     }
     if (enqueueOptions.shadow != null) {
-      merged['stem.shadow'] = enqueueOptions.shadow!;
+      merged['stem.shadow'] = enqueueOptions.shadow;
     }
     if (enqueueOptions.replyTo != null) {
-      merged['stem.replyTo'] = enqueueOptions.replyTo!;
+      merged['stem.replyTo'] = enqueueOptions.replyTo;
     }
     if (enqueueOptions.retryPolicy != null) {
       merged['stem.retryPolicy'] = enqueueOptions.retryPolicy!.toJson();
@@ -450,6 +534,7 @@ class Stem implements TaskEnqueuer {
     return merged;
   }
 
+  /// Serializes linked task calls for chain/retry metadata.
   List<Map<String, Object?>> _encodeTaskCalls(
     List<TaskCall<dynamic, dynamic>> calls,
   ) {
@@ -471,6 +556,7 @@ class Stem implements TaskEnqueuer {
   Map<String, Object?> _encodeTaskOptions(TaskOptions options) =>
       options.toJson();
 
+  /// Extracts publish-time metadata for broker adapters.
   Map<String, Object?> _publishMeta(TaskEnqueueOptions? enqueueOptions) {
     if (enqueueOptions == null) return const {};
     final meta = <String, Object?>{};
@@ -483,6 +569,7 @@ class Stem implements TaskEnqueuer {
     return meta;
   }
 
+  /// Publishes a task with optional retry policy.
   Future<void> _publishWithRetry(
     Envelope envelope, {
     RoutingInfo? routing,
@@ -511,6 +598,7 @@ class Stem implements TaskEnqueuer {
     }
   }
 
+  /// Computes the delay for a publish retry attempt.
   Duration _computeRetryDelay(TaskRetryPolicy policy, int attempt) {
     final base = policy.defaultDelay ?? Duration.zero;
     if (!policy.backoff) {
@@ -529,6 +617,7 @@ class Stem implements TaskEnqueuer {
     return Duration(milliseconds: jittered);
   }
 
+  /// Records a deduplicated task attempt on the existing task metadata.
   Future<void> _recordDuplicateAttempt(
     String taskId,
     Envelope duplicate,
@@ -577,18 +666,21 @@ class Stem implements TaskEnqueuer {
     }
   }
 
+  /// Resolves the args encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
     final encoder = handler.metadata.argsEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultArgsEncoder;
   }
 
+  /// Resolves the result encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
     final encoder = handler.metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
   }
 
+  /// Encodes args with the selected encoder and normalizes map typing.
   Map<String, Object?> _encodeArgs(
     Map<String, Object?> args,
     TaskPayloadEncoder encoder,
@@ -597,6 +689,7 @@ class Stem implements TaskEnqueuer {
     return _castArgsMap(encoded, encoder);
   }
 
+  /// Ensures encoded args are a string-keyed map with object values.
   Map<String, Object?> _castArgsMap(
     Object? encoded,
     TaskPayloadEncoder encoder,
@@ -623,6 +716,7 @@ class Stem implements TaskEnqueuer {
     );
   }
 
+  /// Adds the args encoder identifier into metadata.
   Map<String, Object?> _withArgsEncoderMeta(
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
@@ -630,6 +724,7 @@ class Stem implements TaskEnqueuer {
     return {...meta, stemArgsEncoderMetaKey: encoder.id};
   }
 
+  /// Adds the args encoder identifier into headers.
   Map<String, String> _withArgsEncoderHeader(
     Map<String, String> headers,
     TaskPayloadEncoder encoder,
@@ -637,6 +732,7 @@ class Stem implements TaskEnqueuer {
     return {...headers, stemArgsEncoderHeader: encoder.id};
   }
 
+  /// Adds the result encoder identifier into metadata.
   Map<String, Object?> _withResultEncoderMeta(
     Map<String, Object?> meta,
     TaskPayloadEncoder encoder,
@@ -644,6 +740,7 @@ class Stem implements TaskEnqueuer {
     return {...meta, stemResultEncoderMetaKey: encoder.id};
   }
 
+  /// Decodes a task payload using the provided callback or a cast.
   T? _decodeTaskPayload<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
@@ -660,6 +757,15 @@ class Stem implements TaskEnqueuer {
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
   /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueueWith(TaskEnqueuer enqueuer) =>
-      enqueuer.enqueueCall(build());
+  Future<String> enqueueWith(TaskEnqueuer enqueuer) {
+    final call = build();
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    if (scopeMeta == null || scopeMeta.isEmpty) {
+      return enqueuer.enqueueCall(call);
+    }
+    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+    return enqueuer.enqueueCall(
+      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+    );
+  }
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:redis/redis.dart';
+import 'package:uuid/uuid.dart';
 
 import 'package:stem/stem.dart';
 
@@ -159,6 +160,7 @@ class RedisStreamsBroker implements Broker {
   }
 
   /// Closes the broker and releases Redis resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -490,8 +492,7 @@ class RedisStreamsBroker implements Broker {
       );
     }
     final queue = subscription.queues.first;
-    final consumer =
-        consumerName ?? 'consumer-${DateTime.now().microsecondsSinceEpoch}';
+    final consumer = consumerName ?? const Uuid().v7();
     final group = consumerGroup ?? _groupKey(queue);
     final streamKeys = _priorityStreamKeys(queue);
     final broadcastChannels = subscription.broadcastChannels;
@@ -546,7 +547,9 @@ class RedisStreamsBroker implements Broker {
         final cmd = await ensureConsumerCommand();
         return await cmd.send_object(command);
       } on Object catch (error) {
-        if (_shouldSuppressClosedError(error) || _closed) {
+        if (controller.isClosed ||
+            _shouldSuppressClosedError(error) ||
+            _closed) {
           return null;
         }
         if (attempt == 0) {
@@ -665,7 +668,9 @@ class RedisStreamsBroker implements Broker {
             final cmd = await ensureBroadcastCommand();
             return await cmd.send_object(command);
           } on Object catch (error) {
-            if (_shouldSuppressClosedError(error) || _closed) {
+            if (controller.isClosed ||
+                _shouldSuppressClosedError(error) ||
+                _closed) {
               return null;
             }
             if (attempt == 0) {

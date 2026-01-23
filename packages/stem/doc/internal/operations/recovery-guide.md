@@ -8,6 +8,25 @@ slug: /operations/recovery
 This guide covers day-to-day diagnostics for Stem deployments: how to inspect
 running workflows, surface failures, and replay work safely.
 
+## Workflow lease recovery
+
+Workflow runs are protected by leases so only one worker executes a run at a
+time. If a worker crashes, another worker can take over once the lease expires.
+
+Operational checks:
+
+- Ensure `runLeaseDuration` is **>=** your broker visibility timeout so a
+  redelivered task does not get dropped before the lease expires.
+- Ensure workers renew leases (`leaseExtension`) before the lease or visibility
+  timeout expires.
+- Keep system clocks in sync (NTP) so lease expiry is consistent across nodes.
+
+If runs appear stuck:
+
+1. Confirm the lease expiry is advancing in the workflow store.
+2. Verify workers are renewing leases (or failing fast and retrying).
+3. Restart workers to allow a fresh lease claim.
+
 ## Inspecting groups and chords
 
 Each group or chord stores its state in the result backend.

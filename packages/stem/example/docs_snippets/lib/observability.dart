@@ -92,6 +92,6 @@ Future<void> main() async {
     ),
   );
   await stem.enqueue('demo.trace', args: const {});
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }

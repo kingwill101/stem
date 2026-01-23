@@ -13,10 +13,36 @@ class PostgresResultBackend implements ResultBackend {
     this.defaultTtl = const Duration(days: 1),
     this.groupDefaultTtl = const Duration(days: 1),
     this.heartbeatTtl = const Duration(seconds: 60),
-  }) : _context = _connections.context;
+  });
+
+  /// Creates a backend using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresResultBackend> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultTtl = const Duration(days: 1),
+    Duration groupDefaultTtl = const Duration(days: 1),
+    Duration heartbeatTtl = const Duration(seconds: 60),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    final backend = PostgresResultBackend._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultTtl: defaultTtl,
+      groupDefaultTtl: groupDefaultTtl,
+      heartbeatTtl: heartbeatTtl,
+    ).._startCleanupTimer();
+    return backend;
+  }
 
   final PostgresConnections _connections;
-  final QueryContext _context;
+  QueryContext get _context => _connections.context;
 
   /// Namespace used to scope backend data.
   final String namespace;
@@ -71,30 +97,6 @@ class PostgresResultBackend implements ResultBackend {
     return backend;
   }
 
-  /// Creates a backend using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  static PostgresResultBackend fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-    Duration defaultTtl = const Duration(days: 1),
-    Duration groupDefaultTtl = const Duration(days: 1),
-    Duration heartbeatTtl = const Duration(seconds: 60),
-  }) {
-    final resolvedNamespace = namespace.trim().isEmpty
-        ? 'stem'
-        : namespace.trim();
-    final connections = PostgresConnections.fromDataSource(dataSource);
-    final backend = PostgresResultBackend._(
-      connections,
-      namespace: resolvedNamespace,
-      defaultTtl: defaultTtl,
-      groupDefaultTtl: groupDefaultTtl,
-      heartbeatTtl: heartbeatTtl,
-    ).._startCleanupTimer();
-    return backend;
-  }
-
   void _startCleanupTimer() {
     // Run cleanup every minute to remove expired records
     _cleanupTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -129,6 +131,7 @@ class PostgresResultBackend implements ResultBackend {
   }
 
   /// Closes the backend and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -184,12 +187,16 @@ class PostgresResultBackend implements ResultBackend {
   @override
   Future<TaskStatus?> get(String taskId) async {
     final now = DateTime.now();
-    final row = await _context
-        .query<StemTaskResult>()
-        .whereEquals('id', taskId)
-        .whereEquals('namespace', namespace)
-        .where('expiresAt', now, PredicateOperator.greaterThan)
-        .firstOrNull();
+    final row = await _connections.runInTransaction(
+      (context) async {
+        return context
+            .query<StemTaskResult>()
+            .whereEquals('id', taskId)
+            .whereEquals('namespace', namespace)
+            .where('expiresAt', now, PredicateOperator.greaterThan)
+            .firstOrNull();
+      },
+    );
     if (row == null) return null;
     final error = row.error is Map<Object?, Object?>
         ? TaskError.fromJson(
@@ -222,6 +229,70 @@ class PostgresResultBackend implements ResultBackend {
       ),
     );
     return controller.stream;
+  }
+
+  @override
+  Future<TaskStatusPage> listTaskStatuses(
+    TaskStatusListRequest request,
+  ) async {
+    if (request.limit <= 0) {
+      return const TaskStatusPage(items: []);
+    }
+    final now = DateTime.now();
+    final matches = <TaskStatusRecord>[];
+    var scanOffset = 0;
+    final target = request.offset + request.limit;
+    const batchSize = 200;
+
+    while (matches.length < target) {
+      var query = _context
+          .query<StemTaskResult>()
+          .whereEquals('namespace', namespace)
+          .where('expiresAt', now, PredicateOperator.greaterThan)
+          .orderBy('updatedAt', descending: true)
+          .offset(scanOffset)
+          .limit(batchSize);
+      if (request.state != null) {
+        query = query.whereEquals('state', request.state!.name);
+      }
+      final rows = await query.get();
+      if (rows.isEmpty) break;
+      for (final row in rows) {
+        final status = _taskStatusFromRow(row);
+        if (request.queue != null) {
+          final queue = status.meta['queue']?.toString();
+          if (queue != request.queue) {
+            continue;
+          }
+        }
+        if (!_matchesMeta(status.meta, request.meta)) {
+          continue;
+        }
+        final createdAt =
+            row.createdAt?.toDateTime() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+        final updatedAt = row.updatedAt?.toDateTime() ?? createdAt;
+        matches.add(
+          TaskStatusRecord(
+            status: status,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+        );
+      }
+      scanOffset += rows.length;
+      if (rows.length < batchSize) break;
+    }
+
+    matches.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final offset = request.offset;
+    final limit = request.limit;
+    final pageItems = matches.skip(offset).take(limit).toList(growable: false);
+    final hasNext = matches.length > offset + limit;
+    return TaskStatusPage(
+      items: pageItems,
+      nextOffset: hasNext ? offset + limit : null,
+    );
   }
 
   @override
@@ -316,6 +387,12 @@ class PostgresResultBackend implements ResultBackend {
       await txn.repository<StemWorkerHeartbeat>().upsert(
         model,
         uniqueBy: ['workerId'],
+      );
+      await txn.repository<StemWorkerHeartbeat>().restore(
+        StemWorkerHeartbeatPartial(
+          workerId: heartbeat.workerId,
+          namespace: namespace,
+        ),
       );
     });
   }
@@ -423,6 +500,34 @@ class PostgresResultBackend implements ResultBackend {
       results: results,
       meta: groupRow.meta,
     );
+  }
+
+  TaskStatus _taskStatusFromRow(StemTaskResult row) {
+    final error = row.error is Map
+        ? TaskError.fromJson((row.error! as Map).cast<String, Object?>())
+        : null;
+    return TaskStatus(
+      id: row.id,
+      state: TaskState.values.firstWhere((s) => s.name == row.state),
+      payload: row.payload,
+      error: error,
+      meta: row.meta,
+      attempt: row.attempt,
+    );
+  }
+
+  bool _matchesMeta(
+    Map<String, Object?> meta,
+    Map<String, Object?> filters,
+  ) {
+    if (filters.isEmpty) return true;
+    for (final entry in filters.entries) {
+      if (!meta.containsKey(entry.key)) return false;
+      final expected = entry.value;
+      if (expected == null) continue;
+      if (meta[entry.key] != expected) return false;
+    }
+    return true;
   }
 
   WorkerHeartbeat _heartbeatFromRow(StemWorkerHeartbeat row) {

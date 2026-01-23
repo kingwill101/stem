@@ -1,3 +1,15 @@
+/// Runtime calculation engine for the scheduler subsystem.
+///
+/// This library provides the logic to compute the next occurrence of a task
+/// based on its [ScheduleSpec] and [ScheduleEntry] state.
+///
+/// It handles complex temporal logic including:
+/// - Timezone-aware cron parsing.
+/// - Solar event calculation (via [SolarCalculator]).
+/// - Interval drift prevention.
+/// - Random jitter application.
+library;
+
 import 'dart:math';
 
 import 'package:stem/src/core/contracts.dart';
@@ -6,8 +18,16 @@ import 'package:stem/src/scheduler/solar_calculator.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 /// Computes the next run time for schedule entries.
+///
+/// The calculator uses the specification defined in the [ScheduleEntry]
+/// and applies temporal logic to find the first candidate timestamp that
+/// is strictly after the provided reference time.
 class ScheduleCalculator {
-  /// Creates a calculator with optional randomness and timezone resolution.
+  /// Creates a schedule calculator.
+  ///
+  /// - [random]: Used for generating jitter delays.
+  /// - [timezoneResolver]: Used to map timezone names to [tz.Location].
+  /// - [solarCalculator]: Used to compute astronomical events.
   ScheduleCalculator({
     Random? random,
     ScheduleTimezoneResolver? timezoneResolver,
@@ -20,7 +40,21 @@ class ScheduleCalculator {
   final ScheduleTimezoneResolver? _timezoneResolver;
   final SolarCalculator _solar;
 
-  /// Calculates the next run time for a schedule [entry].
+  /// Calculates the next run time for a schedule [entry] relative to [now].
+  ///
+  /// ## Algorithm
+  ///
+  /// 1. Resolve the target `timezone` using [_timezoneResolver].
+  /// 2. Determine the `base` reference time (either `lastRunAt` or `now`).
+  /// 3. Dispatch to the specific calculation method based on the spec type.
+  /// 4. If [includeJitter] is true, add a random delay between 0 and
+  ///    `entry.jitter`.
+  ///
+  /// ## Parameters
+  ///
+  /// - [entry]: The schedule record containing spec and state.
+  /// - [now]: The current wall-clock time.
+  /// - [includeJitter]: Whether to apply the configured jitter.
   DateTime nextRun(
     ScheduleEntry entry,
     DateTime now, {
@@ -52,6 +86,10 @@ class ScheduleCalculator {
     return next;
   }
 
+  /// Logic for fixed-interval schedules.
+  ///
+  /// Prevents backlog accumulation by "ticking" forward from the reference
+  /// until the candidate is >= now.
   DateTime _nextInterval(
     IntervalScheduleSpec spec,
     DateTime reference,
@@ -77,6 +115,7 @@ class ScheduleCalculator {
     return candidate;
   }
 
+  /// Logic for one-time absolute timestamps.
   DateTime _nextClocked(
     ClockedScheduleSpec spec,
     DateTime reference,
@@ -87,6 +126,8 @@ class ScheduleCalculator {
       if (spec.runOnce) {
         return runAt;
       }
+      // If not run-once but in the past, return now + 1ms to trigger
+      // immediate (but strictly forward) execution.
       return runAt.add(
         Duration(milliseconds: now.difference(runAt).inMilliseconds + 1),
       );
@@ -94,6 +135,11 @@ class ScheduleCalculator {
     return runAt;
   }
 
+  /// logic for standard 5-field cron expressions.
+  ///
+  /// Parses the expression and iterates forward minute-by-minute until
+  /// a match is found across all fields (months, days, weekdays, hours,
+  /// minutes).
   DateTime _nextCron(
     CronScheduleSpec spec,
     DateTime reference,
@@ -126,6 +172,8 @@ class ScheduleCalculator {
       reference.minute,
     ).add(const Duration(minutes: 1));
 
+    // Limit search to 1 year forward to prevent infinite loops on
+    // unreachable crons.
     for (var i = 0; i < 525600; i++) {
       if (!_matches(monthField, candidate.month)) {
         candidate = DateTime.utc(candidate.year, candidate.month + 1);
@@ -173,6 +221,10 @@ class ScheduleCalculator {
     );
   }
 
+  /// Timezone-aware cron calculation.
+  ///
+  /// Uses [tz.TZDateTime] for all intermediate candidates to ensure
+  /// correct handling of DST transitions.
   tz.TZDateTime _nextCronTz(
     CronScheduleSpec spec,
     tz.TZDateTime reference,
@@ -256,6 +308,10 @@ class ScheduleCalculator {
     );
   }
 
+  /// Logic for calendar property matching.
+  ///
+  /// Internally maps the calendar properties to an equivalent cron
+  /// expression and uses the cron calculation logic.
   DateTime _nextCalendar(
     CalendarScheduleSpec spec,
     DateTime reference,
@@ -265,6 +321,7 @@ class ScheduleCalculator {
     return _nextCron(cron, reference, location);
   }
 
+  /// Logic for celestial event scheduling.
   DateTime _nextSolar(
     SolarScheduleSpec spec,
     DateTime reference,
@@ -278,19 +335,26 @@ class ScheduleCalculator {
     return candidate;
   }
 
+  /// Internal helper to check if a numeric value matches a cron field.
   bool _matches(_CronField field, int value) {
     return field.values == null || field.values!.contains(value);
   }
 
+  /// Weekday matching logic (Standard Cron behavior).
+  ///
+  /// Note: If both Day-of-Month and Day-of-Week are restricted, standard
+  /// cron behavior is to union them (fire if EITHER matches).
   bool _matchesWeekday(_CronField field, int weekday, _CronField dayField) {
     if (field.values == null) return true;
     if (dayField.values == null) {
       return field.values!.contains(weekday);
     }
+    // Union behavior
     return field.values!.contains(weekday) ||
         dayField.values!.contains(weekday);
   }
 
+  /// Sanitizes cron expressions by extracting only the first 5 fields.
   String _cronExpression(CronScheduleSpec spec) {
     if (spec.secondField != null && spec.secondField!.trim().isNotEmpty) {
       final pieces = spec.expression.trim().split(RegExp(r'\s+'));
@@ -302,6 +366,7 @@ class ScheduleCalculator {
     return spec.expression;
   }
 
+  /// Converts a [CalendarScheduleSpec] to its equivalent Cron string.
   String _calendarToCron(CalendarScheduleSpec spec) {
     String serialize(List<int>? values) {
       if (values == null || values.isEmpty) return '*';
@@ -317,9 +382,20 @@ class ScheduleCalculator {
   }
 }
 
+/// Represents a set of permitted values for a single cron field.
 class _CronField {
+  /// Internal constructor.
   _CronField(this.values);
 
+  /// Parses a cron field token into a set of allowed integers.
+  ///
+  /// Supports:
+  /// - `*`: Wildcard (all values in range).
+  /// - `,`: Value lists (`1,5,10`).
+  /// - `-`: Ranges (`1-5`).
+  /// - `/`: Step values (`*/5`, `1-10/2`).
+  ///
+  /// [sundayValue] can be used to treat multiple values as 0 (Sunday).
   factory _CronField.parse(
     String token,
     int min,
@@ -336,8 +412,10 @@ class _CronField {
     return _CronField(result);
   }
 
+  /// Allowed values for this field. Null means wildcard (`*`).
   final Set<int>? values;
 
+  /// Recursively expands a cron field part into permitted values.
   static void _expandPart(
     String part,
     int min,
@@ -378,12 +456,13 @@ class _CronField {
       range = [value];
     }
 
-    final values = range.toList();
-    for (var i = 0; i < values.length; i += step) {
-      target.add(values[i]);
+    final valuesArr = range.toList();
+    for (var i = 0; i < valuesArr.length; i += step) {
+      target.add(valuesArr[i]);
     }
   }
 
+  /// Parses an individual numeric value within a cron field.
   static int _parseValue(
     String value,
     int min,

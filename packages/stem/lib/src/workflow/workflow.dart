@@ -1,3 +1,4 @@
+export 'annotations.dart';
 export 'core/event_bus.dart';
 export 'core/flow.dart';
 export 'core/flow_context.dart';
@@ -14,6 +15,7 @@ export 'core/workflow_step_entry.dart';
 export 'core/workflow_store.dart';
 export 'core/workflow_watcher.dart';
 export 'event_bus/in_memory_event_bus.dart';
+export 'runtime/workflow_introspection.dart';
 export 'runtime/workflow_registry.dart';
 export 'runtime/workflow_runtime.dart';
 export 'store/in_memory_workflow_store.dart';

@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:meta/meta.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-
 import 'package:stem_sqlite/src/connection.dart';
 import 'package:stem_sqlite/src/models/models.dart';
+import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [Broker].
 class SqliteBroker implements Broker {
@@ -19,6 +19,31 @@ class SqliteBroker implements Broker {
     required this.deadLetterRetention,
   }) : _context = _connections.context {
     _startSweeper();
+  }
+
+  /// Creates a broker using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<SqliteBroker> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration pollInterval = const Duration(milliseconds: 250),
+    Duration sweeperInterval = const Duration(seconds: 10),
+    Duration deadLetterRetention = const Duration(days: 7),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await SqliteConnections.openWithDataSource(dataSource);
+    return SqliteBroker._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      pollInterval: pollInterval,
+      sweeperInterval: sweeperInterval,
+      deadLetterRetention: deadLetterRetention,
+    );
   }
 
   /// Opens a broker backed by the provided SQLite [file].
@@ -73,6 +98,7 @@ class SqliteBroker implements Broker {
   bool get supportsPriority => true;
 
   /// Closes the broker and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
@@ -135,10 +161,7 @@ class SqliteBroker implements Broker {
       );
     }
     final queue = subscription.queues.single;
-    final id =
-        consumerName ??
-        'sqlite-consumer-${DateTime.now().microsecondsSinceEpoch}-'
-            '${_consumers.length}';
+    final id = consumerName ?? const Uuid().v7();
     final controller = StreamController<Delivery>.broadcast();
     final consumer = _Consumer(
       broker: this,

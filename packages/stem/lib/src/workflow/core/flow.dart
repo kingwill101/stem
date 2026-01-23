@@ -12,7 +12,16 @@ class Flow<T extends Object?> {
   Flow({
     required String name,
     required void Function(FlowBuilder builder) build,
-  }) : definition = WorkflowDefinition<T>.flow(name: name, build: build);
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) : definition = WorkflowDefinition<T>.flow(
+         name: name,
+         build: build,
+         version: version,
+         description: description,
+         metadata: metadata,
+       );
 
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;

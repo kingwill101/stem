@@ -1,4 +1,73 @@
+/// Configuration classes for worker behavior and lifecycle.
+///
+/// This library provides configuration options for:
+/// - **Autoscaling**: Dynamically adjust worker concurrency based on load
+/// - **Lifecycle**: Control shutdown behavior and isolate recycling
+///
+/// ## Autoscaling Configuration
+///
+/// [WorkerAutoscaleConfig] allows the worker to automatically scale its
+/// isolate pool based on queue backlog and idle time:
+///
+/// ```dart
+/// final worker = Worker(
+///   // ... other params
+///   autoscale: WorkerAutoscaleConfig(
+///     enabled: true,
+///     minConcurrency: 2,
+///     maxConcurrency: 16,
+///     backlogPerIsolate: 2.0,  // Scale up when backlog > 2 per isolate
+///     idlePeriod: Duration(seconds: 60),  // Scale down after 60s idle
+///   ),
+/// );
+/// ```
+///
+/// ## Lifecycle Configuration
+///
+/// [WorkerLifecycleConfig] controls shutdown behavior and isolate recycling:
+///
+/// ```dart
+/// final worker = Worker(
+///   // ... other params
+///   lifecycle: WorkerLifecycleConfig(
+///     installSignalHandlers: true,  // Handle SIGTERM/SIGINT
+///     softGracePeriod: Duration(seconds: 30),
+///     maxTasksPerIsolate: 1000,  // Recycle after 1000 tasks
+///     maxMemoryPerIsolateBytes: 256 * 1024 * 1024,  // 256MB limit
+///   ),
+/// );
+/// ```
+///
+/// See also:
+/// - `Worker` for the main worker class that uses these configurations
+/// - `TaskIsolatePool` for the isolate pool that implements recycling
+library;
+
 /// Autoscaling configuration for worker concurrency.
+///
+/// Controls how the worker dynamically adjusts its isolate pool size based
+/// on queue backlog and idle time. When enabled, the worker will:
+///
+/// 1. **Scale Up**: When queue backlog exceeds [backlogPerIsolate] per isolate
+/// 2. **Scale Down**: When idle for longer than [idlePeriod]
+///
+/// Cooldown periods ([scaleUpCooldown], [scaleDownCooldown]) prevent rapid
+/// oscillation between sizes.
+///
+/// ## Example
+///
+/// ```dart
+/// // Aggressive scaling for bursty workloads
+/// WorkerAutoscaleConfig(
+///   enabled: true,
+///   minConcurrency: 1,
+///   maxConcurrency: 32,
+///   scaleUpStep: 4,
+///   scaleDownStep: 2,
+///   backlogPerIsolate: 1.0,
+///   scaleUpCooldown: Duration(seconds: 2),
+/// )
+/// ```
 class WorkerAutoscaleConfig {
   /// Creates an autoscaling configuration.
   const WorkerAutoscaleConfig({
@@ -89,6 +158,46 @@ class WorkerAutoscaleConfig {
 }
 
 /// Lifecycle guard configuration for worker isolates and shutdown semantics.
+///
+/// Controls how the worker handles:
+/// - **Process Signals**: SIGTERM, SIGINT, SIGQUIT handling
+/// - **Shutdown Behavior**: Grace periods and forced termination
+/// - **Isolate Recycling**: When to recycle isolates based on usage
+///
+/// ## Shutdown Modes
+///
+/// When [installSignalHandlers] is `true` (default), the worker installs
+/// signal handlers that trigger graceful shutdown:
+///
+/// | Signal | Default Behavior |
+/// |--------|-----------------|
+/// | SIGTERM | Soft shutdown |
+/// | SIGINT | Soft shutdown |
+/// | SIGQUIT | Hard shutdown |
+///
+/// ## Isolate Recycling
+///
+/// Isolates can be recycled to prevent memory leaks or reset state:
+///
+/// - [maxTasksPerIsolate]: Recycle after N tasks (prevents memory growth)
+/// - [maxMemoryPerIsolateBytes]: Recycle when RSS exceeds threshold
+///
+/// ## Example
+///
+/// ```dart
+/// // Production configuration with aggressive recycling
+/// WorkerLifecycleConfig(
+///   installSignalHandlers: true,
+///   softGracePeriod: Duration(seconds: 60),
+///   forceShutdownAfter: Duration(seconds: 30),
+///   maxTasksPerIsolate: 500,
+///   maxMemoryPerIsolateBytes: 128 * 1024 * 1024, // 128MB
+/// )
+/// ```
+///
+/// See also:
+/// - `WorkerShutdownMode` for shutdown mode semantics
+/// - `IsolateRecycleReason` for recycling triggers
 class WorkerLifecycleConfig {
   /// Creates lifecycle guard configuration for worker shutdown.
   const WorkerLifecycleConfig({

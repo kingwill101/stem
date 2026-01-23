@@ -25,7 +25,7 @@ Future<void> main() async {
     final result = await app.waitForCompletion<String>(runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {
-    await app.shutdown();
+    await app.close();
     if (databaseFile.existsSync()) {
       databaseFile.deleteSync();
     }

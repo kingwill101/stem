@@ -2,6 +2,7 @@
 [![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.0-blue.svg)](https://dart.dev/)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 [![Build Status](https://github.com/kingwill101/stem/workflows/ci/badge.svg)](https://github.com/kingwill101/stem/actions)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kingwill101/stem/main/packages/stem/coverage/coverage.json)](https://github.com/kingwill101/stem/actions/workflows/stem.yaml)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
 <p align="center">
@@ -32,6 +33,47 @@ stem --help
 ```
 
 ## Quick Start
+
+### StemClient entrypoint
+
+Use a single entrypoint to share broker/backend/config between workers and
+workflow apps.
+
+```dart
+import 'dart:async';
+import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+
+class HelloTask implements TaskHandler<void> {
+  @override
+  String get name => 'demo.hello';
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: 'default');
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    print('Hello from StemClient');
+  }
+}
+
+Future<void> main() async {
+  final client = await StemClient.create(
+    broker: StemBrokerFactory.redis(url: 'redis://localhost:6379'),
+    backend: StemBackendFactory.redis(url: 'redis://localhost:6379/1'),
+    tasks: [HelloTask()],
+  );
+
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  await client.stem.enqueue('demo.hello');
+  await Future<void>.delayed(const Duration(seconds: 1));
+
+  await worker.shutdown();
+  await client.close();
+}
+```
 
 ### Direct enqueue (map-based)
 
@@ -469,6 +511,11 @@ backend metadata under `stem.unique.duplicates`.
 - Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
   `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
   actively-owned runs from ones that need recovery.
+- Run execution is lease-based. The runtime claims each run with a lease
+  (`runLeaseDuration`) and renews it while work continues. If another worker
+  owns the lease, the task is retried so a takeover can occur once the lease
+  expires. Keep `runLeaseDuration` at least as long as the broker visibility
+  timeout and ensure `leaseExtension` renewals happen before either expires.
 - Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
   runtime skips re-suspending once the stored `resumeAt` is reached so loop
   handlers can simply call `sleep` without extra guards.

@@ -1,3 +1,48 @@
+/// Message types for isolate-based task execution.
+///
+/// This library defines the communication protocol between the main isolate
+/// and worker isolates in the `TaskIsolatePool`.
+///
+/// ## Message Flow
+///
+/// ```text
+/// Main Isolate                     Worker Isolate
+///      │                                 │
+///      │──── TaskRunRequest ────────────>│
+///      │                                 │ (execute task)
+///      │<─── TaskRunResponse ────────────│
+///      │                                 │
+///      │──── TaskWorkerShutdown ────────>│
+///      │                                 │ (cleanup & exit)
+/// ```
+///
+/// ## Request Types
+///
+/// - [TaskRunRequest]: Sent to execute a task with arguments and metadata
+/// - [TaskWorkerShutdown]: Sent to gracefully terminate the worker isolate
+///
+/// ## Response Types (sealed by [TaskRunResponse])
+///
+/// - [TaskRunSuccess]: Task completed successfully with a result
+/// - [TaskRunFailure]: Task failed with an error
+/// - [TaskRunRetry]: Task requested a retry with optional policy overrides
+///
+/// ## Control Signals
+///
+/// During execution, tasks can send control signals back via the
+/// [TaskRunRequest.controlPort]. These are received by the pool and
+/// forwarded to the `TaskControlHandler`.
+///
+/// ## Worker Isolate Entry Point
+///
+/// The [taskWorkerIsolate] function is the entry point for worker isolates.
+/// It handles the handshake, listens for requests, and sends responses.
+///
+/// See also:
+/// - `TaskIsolatePool` for the pool that manages worker isolates
+/// - [TaskInvocationContext] for the context available inside tasks
+library;
+
 import 'dart:io';
 import 'dart:isolate';
 

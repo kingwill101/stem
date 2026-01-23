@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
+import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
 
@@ -51,14 +52,14 @@ Future<void> main() async {
           'backend-ns-a-${DateTime.now().microsecondsSinceEpoch}';
       final namespaceB =
           'backend-ns-b-${DateTime.now().microsecondsSinceEpoch}';
-      final backendA = PostgresResultBackend.fromDataSource(
+      final backendA = await PostgresResultBackend.fromDataSource(
         dataSource,
         namespace: namespaceA,
         defaultTtl: const Duration(seconds: 2),
         groupDefaultTtl: const Duration(seconds: 2),
         heartbeatTtl: const Duration(seconds: 2),
       );
-      final backendB = PostgresResultBackend.fromDataSource(
+      final backendB = await PostgresResultBackend.fromDataSource(
         dataSource,
         namespace: namespaceB,
         defaultTtl: const Duration(seconds: 2),
@@ -83,5 +84,86 @@ Future<void> main() async {
         await backendB.close();
       }
     });
+
+    test('listTaskStatuses returns filtered task records', () async {
+      final namespace = 'backend-list-${DateTime.now().microsecondsSinceEpoch}';
+      final backend = await PostgresResultBackend.fromDataSource(
+        dataSource,
+        namespace: namespace,
+        defaultTtl: const Duration(seconds: 2),
+        groupDefaultTtl: const Duration(seconds: 2),
+        heartbeatTtl: const Duration(seconds: 2),
+      );
+      try {
+        await backend.set(
+          'task-1',
+          TaskState.queued,
+          meta: const {'queue': 'default', 'kind': 'demo'},
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+        await backend.set(
+          'task-2',
+          TaskState.succeeded,
+          meta: const {'queue': 'default', 'kind': 'demo'},
+        );
+        await backend.set(
+          'task-3',
+          TaskState.running,
+          meta: const {'queue': 'other', 'kind': 'demo'},
+        );
+
+        final page = await backend.listTaskStatuses(
+          const TaskStatusListRequest(
+            queue: 'default',
+            meta: {'kind': 'demo'},
+            limit: 10,
+          ),
+        );
+
+        expect(page.items, hasLength(2));
+        expect(page.items.first.status.id, 'task-2');
+        expect(page.items.first.updatedAt, isA<DateTime>());
+      } finally {
+        await backend.close();
+      }
+    });
+
+    test('fromDataSource initializes lazy data sources', () async {
+      final schema = dataSource.options.defaultSchema;
+      if (schema == null || schema.isEmpty) {
+        return;
+      }
+
+      final schemaUrl = _withSearchPath(connectionString, schema);
+      final lazyDataSource = createDataSource(connectionString: schemaUrl);
+      final backend = await PostgresResultBackend.fromDataSource(
+        lazyDataSource,
+        namespace: 'lazy-init',
+        defaultTtl: const Duration(seconds: 1),
+        groupDefaultTtl: const Duration(seconds: 1),
+        heartbeatTtl: const Duration(seconds: 1),
+      );
+
+      try {
+        await backend.set(
+          'lazy-init-task',
+          TaskState.succeeded,
+          payload: const {'ok': true},
+        );
+        final status = await backend.get('lazy-init-task');
+        expect(status, isNotNull);
+      } finally {
+        await backend.close();
+        await lazyDataSource.dispose();
+      }
+    });
   }, config: harness.config);
+}
+
+String _withSearchPath(String url, String schema) {
+  final uri = Uri.parse(url);
+  final optionsValue = '-c search_path=$schema,public';
+  final params = Map<String, String>.from(uri.queryParameters);
+  params['options'] = optionsValue;
+  return uri.replace(queryParameters: params).toString();
 }

@@ -95,7 +95,7 @@ Engine buildDashboardEngine({
     TurboStreamSocketHandler(
       hub: state.hub,
       topicResolver: (context) =>
-          context.initialContext.request.uri.queryParametersAll['topic'] ??
+          context.initialContext.uri.queryParametersAll['topic'] ??
           const ['stem-dashboard:events'],
     ),
   );
@@ -145,10 +145,10 @@ Future<Response> _renderPage(
         ? await service.fetchWorkerStatuses()
         : const <WorkerStatus>[];
     final tasksOptions = page == DashboardPage.tasks
-        ? _parseTasksOptions(ctx.request.uri.queryParameters)
+        ? _parseTasksOptions(ctx.uri.queryParameters)
         : const TasksPageOptions();
     final workersOptions = page == DashboardPage.workers
-        ? _parseWorkersOptions(ctx.request.uri.queryParameters)
+        ? _parseWorkersOptions(ctx.uri.queryParameters)
         : const WorkersPageOptions();
 
     final content = buildPageContent(

@@ -211,8 +211,7 @@ class StemWorkflowStepModelFactory {
 
   static ModelFactoryBuilder<StemWorkflowStep> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemWorkflowStep>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemWorkflowStep>(
     generatorProvider: generatorProvider,
   );
 }

@@ -6,5 +6,5 @@
 - [x] 1.5 Ensure failures halt the run with clear errors.
 
 ## 2. Validation
-- [ ] 2.1 Run dart format on the repo.
-- [ ] 2.2 Run a dry-run publish flow to confirm output.
+- [x] 2.1 Run dart format on the repo.
+- [x] 2.2 Run a dry-run publish flow to confirm output.

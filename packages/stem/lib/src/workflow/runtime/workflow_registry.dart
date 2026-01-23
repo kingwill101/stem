@@ -1,18 +1,30 @@
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 
 /// Registry for workflow definitions keyed by name.
-class WorkflowRegistry {
+abstract class WorkflowRegistry {
+  /// Registers a workflow [definition] in the registry.
+  void register(WorkflowDefinition definition);
+
+  /// Resolves a workflow definition by [name].
+  WorkflowDefinition? lookup(String name);
+
+  /// Returns all registered workflow definitions.
+  List<WorkflowDefinition> get all;
+}
+
+/// In-memory [WorkflowRegistry] implementation for local runs and tests.
+class InMemoryWorkflowRegistry implements WorkflowRegistry {
   final Map<String, WorkflowDefinition> _definitions = {};
 
-  /// Registers a workflow [definition] in the registry.
+  @override
+  /// Registers or replaces a workflow definition by name.
   void register(WorkflowDefinition definition) {
     _definitions[definition.name] = definition;
   }
 
-  /// Resolves a workflow definition by [name].
+  @override
   WorkflowDefinition? lookup(String name) => _definitions[name];
 
-  /// Returns all registered workflow definitions.
-  List<WorkflowDefinition> get all =>
-      _definitions.values.toList(growable: false);
+  @override
+  List<WorkflowDefinition> get all => List.unmodifiable(_definitions.values);
 }

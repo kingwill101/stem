@@ -12,6 +12,8 @@ behavior before touching production.
 
 - Queueing and retries with `Stem.enqueue`, `TaskOptions`, and retry
   strategies.
+- `StemClient` entrypoint to share broker/backend configuration across workers
+  and workflow apps.
 - Worker lifecycle management, concurrency controls, and graceful shutdown.
 - Beat scheduler for interval/cron/solar/clocked jobs.
 - Canvas primitives (chains, groups, chords) for task composition.

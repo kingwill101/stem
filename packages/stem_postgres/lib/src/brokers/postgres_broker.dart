@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
-
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
+import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [Broker].
 class PostgresBroker implements Broker {
@@ -17,9 +16,38 @@ class PostgresBroker implements Broker {
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
     this.deadLetterRetention = const Duration(days: 7),
-  }) : _context = _connections.context,
-       _random = Random() {
+  }) {
+    stemLogger.info(
+      'PostgresBroker created (namespace=$namespace)',
+    );
     _startSweeper();
+  }
+
+  /// Creates a broker using an existing [DataSource].
+  ///
+  /// The caller remains responsible for disposing the [DataSource].
+  static Future<PostgresBroker> fromDataSource(
+    DataSource dataSource, {
+    String namespace = 'stem',
+    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration sweeperInterval = const Duration(seconds: 10),
+    Duration deadLetterRetention = const Duration(days: 7),
+  }) async {
+    final resolvedNamespace = namespace.trim().isEmpty
+        ? 'stem'
+        : namespace.trim();
+    final connections = await PostgresConnections.openWithDataSource(
+      dataSource,
+    );
+    return PostgresBroker._(
+      connections,
+      namespace: resolvedNamespace,
+      defaultVisibilityTimeout: defaultVisibilityTimeout,
+      pollInterval: pollInterval,
+      sweeperInterval: sweeperInterval,
+      deadLetterRetention: deadLetterRetention,
+    );
   }
 
   /// Connects to PostgreSQL and returns a broker instance.
@@ -49,33 +77,8 @@ class PostgresBroker implements Broker {
     );
   }
 
-  /// Creates a broker using an existing [DataSource].
-  ///
-  /// The caller remains responsible for disposing the [DataSource].
-  static PostgresBroker fromDataSource(
-    DataSource dataSource, {
-    String namespace = 'stem',
-    Duration defaultVisibilityTimeout = const Duration(seconds: 30),
-    Duration pollInterval = const Duration(milliseconds: 500),
-    Duration sweeperInterval = const Duration(seconds: 10),
-    Duration deadLetterRetention = const Duration(days: 7),
-  }) {
-    final resolvedNamespace = namespace.trim().isEmpty
-        ? 'stem'
-        : namespace.trim();
-    final connections = PostgresConnections.fromDataSource(dataSource);
-    return PostgresBroker._(
-      connections,
-      namespace: resolvedNamespace,
-      defaultVisibilityTimeout: defaultVisibilityTimeout,
-      pollInterval: pollInterval,
-      sweeperInterval: sweeperInterval,
-      deadLetterRetention: deadLetterRetention,
-    );
-  }
-
   final PostgresConnections _connections;
-  final QueryContext _context;
+  QueryContext get _context => _connections.context;
 
   /// Namespace used to scope broker data.
   final String namespace;
@@ -98,20 +101,30 @@ class PostgresBroker implements Broker {
   Future<void> _dbLock = Future.value();
 
   final Set<_ConsumerRunner> _consumers = {};
-  final Random _random;
 
   Timer? _sweeperTimer;
   bool _closed = false;
+  StackTrace? _closedStack;
 
   /// Closes the broker and releases any database resources.
+  @override
   Future<void> close() async {
     if (_closed) return;
+    _closedStack = StackTrace.current;
+    stemLogger.warning(
+      'Closing PostgresBroker (namespace=$namespace) '
+      'stack=${_closedStack ?? ''}',
+    );
     _closed = true;
     _sweeperTimer?.cancel();
     _sweeperTimer = null;
     for (final runner in List<_ConsumerRunner>.of(_consumers)) {
       runner.stop();
-      await runner.controller.close();
+      if (runner.controller.hasListener) {
+        await runner.controller.close();
+      } else {
+        unawaited(runner.controller.close());
+      }
     }
     _consumers.clear();
     await _dbLock.catchError((_, _) {});
@@ -125,7 +138,20 @@ class PostgresBroker implements Broker {
   bool get supportsPriority => true;
 
   Future<T> _withDb<T>(Future<T> Function() action) {
-    final run = _dbLock.then((_) => action());
+    final run = _dbLock.then((_) async {
+      await _connections.ensureReady();
+      try {
+        return await action();
+      } on Exception catch (error) {
+        final message = error.toString();
+        if (message.contains('already been closed') ||
+            message.contains('not been initialized')) {
+          await _connections.ensureReady(forceReopen: true);
+          return action();
+        }
+        rethrow;
+      }
+    });
     // Swallow errors on the lock chain so it continues for later callers.
     _dbLock = run.then<void>((_) {}).catchError((_, _) {});
     return run;
@@ -185,6 +211,10 @@ class PostgresBroker implements Broker {
     String? consumerGroup,
     String? consumerName,
   }) {
+    stemLogger.debug(
+      'Broker consume requested (namespace=$namespace, '
+      'queues=${subscription.queues})',
+    );
     if (subscription.queues.isEmpty) {
       throw ArgumentError(
         'RoutingSubscription must specify at least one queue.',
@@ -199,19 +229,23 @@ class PostgresBroker implements Broker {
 
     final queue = subscription.queues.first;
     final group = consumerGroup ?? 'default';
-    final consumer =
-        consumerName ??
-        'pg-consumer-${DateTime.now().microsecondsSinceEpoch}-'
-            '${_random.nextInt(1 << 16)}';
+    final consumer = consumerName ?? const Uuid().v7();
     final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
 
     late _ConsumerRunner runner;
-    final controller = StreamController<Delivery>.broadcast(
+    late StreamController<Delivery> controller;
+    controller = StreamController<Delivery>(
       onListen: () => runner.start(),
       onCancel: () {
+        stemLogger.debug(
+          'Consumer stream canceled (queue=$queue, worker=$consumer)',
+        );
         runner.stop();
         _consumers.remove(runner);
+        if (!controller.isClosed) {
+          unawaited(controller.close());
+        }
       },
     );
     runner = _ConsumerRunner(
@@ -225,6 +259,10 @@ class PostgresBroker implements Broker {
     );
     _consumers.add(runner);
     if (_closed) {
+      stemLogger.warning(
+        'Broker already closed; closing consumer stream. '
+        'stack=${_closedStack ?? StackTrace.current}',
+      );
       scheduleMicrotask(() async {
         await controller.close();
       });
@@ -239,6 +277,7 @@ class PostgresBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
+    stemLogger.debug('Ack queue job $jobId (${delivery.envelope.queue})');
     await _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -259,6 +298,7 @@ class PostgresBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
+    stemLogger.debug('Nack queue job $jobId (${delivery.envelope.queue})');
     final now = DateTime.now().toUtc();
     await _withDb(() {
       return _context
@@ -575,6 +615,9 @@ class PostgresBroker implements Broker {
               'updatedAt': now,
             });
         if (updated == 0) return null;
+        stemLogger.debug(
+          'Claimed queue job ${candidate.id} ($queue) by $consumerId',
+        );
         return _QueuedJob.fromModel(candidate);
       });
     });
@@ -709,9 +752,7 @@ class PostgresBroker implements Broker {
   }
 
   String _encodeLocker(String queue, String group, String consumer) {
-    final salt = _random.nextInt(1 << 32);
-    return '$queue::$group::$consumer::$salt::'
-        '${DateTime.now().microsecondsSinceEpoch}';
+    return '$queue::$group::$consumer::${const Uuid().v7()}';
   }
 }
 
@@ -740,15 +781,24 @@ class _ConsumerRunner {
   void start() {
     if (_started) return;
     _started = true;
+    stemLogger.debug(
+      'Consumer runner started (queue=$queue, worker=$workerId)',
+    );
     unawaited(_loop());
   }
 
   void stop() {
+    stemLogger.debug(
+      'Consumer runner stopped (queue=$queue, worker=$workerId)',
+    );
     _stopped = true;
   }
 
   Future<void> _loop() async {
-    while (!_stopped && !controller.isClosed && !broker._closed) {
+    while (!_stopped &&
+        controller.hasListener &&
+        !controller.isClosed &&
+        !broker._closed) {
       try {
         final jobs = <_QueuedJob>[];
         for (var i = 0; i < prefetch; i++) {
@@ -780,6 +830,10 @@ class _ConsumerRunner {
           controller.add(delivery);
         }
       } on Object catch (error, stack) {
+        stemLogger.warning(
+          'Consumer loop error (queue=$queue, worker=$workerId): '
+          '$error\n$stack',
+        );
         if (controller.isClosed) return;
         controller.addError(error, stack);
         await Future<void>.delayed(broker.pollInterval);

@@ -49,7 +49,7 @@ Future<void> main() async {
   await beat.start();
   await Future<void>.delayed(const Duration(seconds: 6));
   await beat.stop();
-  broker.dispose();
+  await broker.close();
 }
 
 class DemoTask extends TaskHandler<void> {

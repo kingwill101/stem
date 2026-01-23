@@ -301,8 +301,7 @@ class StemTaskResultModelFactory {
 
   static ModelFactoryBuilder<StemTaskResult> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemTaskResult>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemTaskResult>(
     generatorProvider: generatorProvider,
   );
 }

@@ -23,9 +23,36 @@ class RunState {
     this.lastError,
     this.suspensionData,
     this.updatedAt,
+    this.ownerId,
+    this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
   });
+
+  /// Rehydrates a run state from serialized JSON.
+  factory RunState.fromJson(Map<String, Object?> json) {
+    return RunState(
+      id: json['id']?.toString() ?? '',
+      workflow: json['workflow']?.toString() ?? '',
+      status: _statusFromJson(json['status']),
+      cursor: _intFromJson(json['cursor']),
+      params: (json['params'] as Map?)?.cast<String, Object?>() ?? const {},
+      createdAt: _dateFromJson(json['createdAt']) ?? DateTime.now().toUtc(),
+      result: json['result'],
+      waitTopic: json['waitTopic'] as String?,
+      resumeAt: _dateFromJson(json['resumeAt']),
+      lastError: (json['lastError'] as Map?)?.cast<String, Object?>(),
+      suspensionData: (json['suspensionData'] as Map?)?.cast<String, Object?>(),
+      updatedAt: _dateFromJson(json['updatedAt']),
+      ownerId: json['ownerId']?.toString(),
+      leaseExpiresAt: _dateFromJson(json['leaseExpiresAt']),
+      cancellationPolicy: WorkflowCancellationPolicy.fromJson(
+        json['cancellationPolicy'],
+      ),
+      cancellationData: (json['cancellationData'] as Map?)
+          ?.cast<String, Object?>(),
+    );
+  }
 
   /// Unique run identifier.
   final String id;
@@ -63,6 +90,12 @@ class RunState {
   /// Timestamp of the most recent state mutation / heartbeat, if any.
   final DateTime? updatedAt;
 
+  /// Identifier of the worker/runtime currently leasing this run, if any.
+  final String? ownerId;
+
+  /// Timestamp when the current lease expires, if any.
+  final DateTime? leaseExpiresAt;
+
   /// Cancellation policy that was configured when the run started, if any.
   final WorkflowCancellationPolicy? cancellationPolicy;
 
@@ -87,6 +120,8 @@ class RunState {
     Map<String, Object?>? lastError,
     Object? suspensionData = _unset,
     DateTime? updatedAt,
+    Object? ownerId = _unset,
+    Object? leaseExpiresAt = _unset,
     WorkflowCancellationPolicy? cancellationPolicy,
     Map<String, Object?>? cancellationData,
   }) {
@@ -100,6 +135,12 @@ class RunState {
     final resolvedSuspensionData = suspensionData == _unset
         ? this.suspensionData
         : suspensionData as Map<String, Object?>?;
+    final resolvedOwnerId = ownerId == _unset
+        ? this.ownerId
+        : ownerId as String?;
+    final resolvedLeaseExpiresAt = leaseExpiresAt == _unset
+        ? this.leaseExpiresAt
+        : leaseExpiresAt as DateTime?;
     return RunState(
       id: id,
       workflow: workflow,
@@ -113,8 +154,56 @@ class RunState {
       suspensionData: resolvedSuspensionData,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      ownerId: resolvedOwnerId,
+      leaseExpiresAt: resolvedLeaseExpiresAt,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       cancellationData: cancellationData ?? this.cancellationData,
     );
   }
+
+  /// Converts this run state into a JSON-compatible map.
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'workflow': workflow,
+      'status': status.name,
+      'cursor': cursor,
+      'params': params,
+      'createdAt': createdAt.toIso8601String(),
+      'result': result,
+      'waitTopic': waitTopic,
+      'resumeAt': resumeAt?.toIso8601String(),
+      'lastError': lastError,
+      'suspensionData': suspensionData,
+      'updatedAt': updatedAt?.toIso8601String(),
+      'ownerId': ownerId,
+      'leaseExpiresAt': leaseExpiresAt?.toIso8601String(),
+      'cancellationPolicy': cancellationPolicy?.toJson(),
+      'cancellationData': cancellationData,
+    };
+  }
+}
+
+/// Parses a workflow status from loosely typed JSON values.
+WorkflowStatus _statusFromJson(Object? value) {
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return WorkflowStatus.running;
+  return WorkflowStatus.values.firstWhere(
+    (status) => status.name == raw,
+    orElse: () => WorkflowStatus.running,
+  );
+}
+
+/// Parses an integer from JSON values with sane defaults.
+int _intFromJson(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+/// Parses an ISO timestamp or returns null for empty values.
+DateTime? _dateFromJson(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  return DateTime.tryParse(value.toString());
 }

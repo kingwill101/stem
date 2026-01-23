@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:property_testing/property_testing.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
+
+import '../../support/property_test_helpers.dart';
 
 const _expiredMetaKey = 'stem.expired';
 
@@ -25,7 +28,8 @@ void main() {
           FunctionTaskHandler<void>.inline(
             name: _childDefinition.name,
             entrypoint: (context, args) async {
-              childCompleted.complete(args['value'] as String);
+              childCompleted.complete(args['value']! as String);
+              return null;
             },
           ),
         )
@@ -54,6 +58,39 @@ void main() {
     });
   });
 
+  test('enqueue + execute round-trip is stable', () async {
+    final broker = InMemoryBroker();
+    final backend = InMemoryResultBackend();
+    final registry = SimpleTaskRegistry()..register(_EchoTask());
+    final worker = Worker(broker: broker, registry: registry, backend: backend);
+    await worker.start();
+
+    final stem = Stem(broker: broker, registry: registry, backend: backend);
+
+    final runner = PropertyTestRunner<Map<String, Object?>>(
+      _payloadGen(),
+      (payload) async {
+        final taskId = await stem.enqueue(_EchoTask().name, args: payload);
+        final result = await stem.waitForTask<Map<String, Object?>>(
+          taskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.isSucceeded, isTrue);
+        expect(result?.value, equals(payload));
+      },
+      fastPropertyConfig,
+    );
+
+    await expectProperty(
+      runner,
+      description: 'enqueue/execute round-trip',
+    );
+
+    await worker.shutdown();
+    await backend.close();
+    await broker.close();
+  });
+
   group('link/linkError callbacks', () {
     test('enqueues link callback on success', () async {
       final broker = InMemoryBroker(
@@ -72,7 +109,9 @@ void main() {
         ..register(
           FunctionTaskHandler<void>.inline(
             name: 'tasks.primary.success',
-            entrypoint: (context, args) async {},
+            entrypoint: (context, args) async {
+              return null;
+            },
           ),
         )
         ..register(
@@ -80,6 +119,7 @@ void main() {
             name: linkDefinition.name,
             entrypoint: (context, args) async {
               linked.complete();
+              return null;
             },
           ),
         );
@@ -129,7 +169,6 @@ void main() {
             entrypoint: (context, args) async {
               throw StateError('fail');
             },
-            options: const TaskOptions(maxRetries: 0),
           ),
         )
         ..register(
@@ -137,6 +176,7 @@ void main() {
             name: linkDefinition.name,
             entrypoint: (context, args) async {
               linked.complete();
+              return null;
             },
           ),
         );
@@ -226,6 +266,7 @@ void main() {
             name: 'tasks.expiring',
             entrypoint: (context, args) async {
               executed = true;
+              return null;
             },
           ),
         );
@@ -320,6 +361,48 @@ void main() {
       broker.dispose();
     });
   });
+}
+
+class _EchoTask extends TaskHandler<Map<String, Object?>> {
+  @override
+  String get name => 'property.echo';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<Map<String, Object?>> call(
+    TaskContext context,
+    Map<String, Object?> args,
+  ) async {
+    return args;
+  }
+}
+
+Generator<Map<String, Object?>> _payloadGen() {
+  final entryGen = Gen.string(minLength: 1, maxLength: 8).flatMap(
+    (key) => Gen.string(minLength: 0, maxLength: 24).map(
+      (value) => MapEntry<String, Object?>(key, value),
+    ),
+  );
+  return Gen.containerOf<Map<String, Object?>, MapEntry<String, Object?>>(
+    entryGen,
+    (entries) {
+      final map = <String, Object?>{};
+      for (final entry in entries) {
+        map[entry.key] = entry.value;
+      }
+      return map;
+    },
+    minLength: 0,
+    maxLength: 5,
+  );
 }
 
 Future<void> _waitFor(

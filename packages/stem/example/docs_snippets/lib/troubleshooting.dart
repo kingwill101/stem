@@ -48,7 +48,7 @@ Future<void> runTroubleshootingDemo() async {
   print('Result: ${result?.payload}');
   // #endregion troubleshooting-results
 
-  await app.shutdown();
+  await app.close();
 }
 
 Future<void> main() async {

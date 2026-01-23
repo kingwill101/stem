@@ -89,8 +89,8 @@ Future<void> runTypedDefinitionExample() async {
   if (result?.isSucceeded == true) {
     print('Invoice published');
   }
-  await backend.dispose();
-  broker.dispose();
+  await backend.close();
+  await broker.close();
 }
 // #endregion tasks-typed-definition
 
@@ -179,7 +179,7 @@ Future<void> configureEncoders() async {
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [MyOtherEncoder()],
   );
-  await app.shutdown();
+  await app.close();
 }
 // #endregion tasks-encoders-global
 
@@ -235,5 +235,5 @@ Future<void> main() async {
   );
   print('Email task state: ${result?.status.state}');
 
-  await app.shutdown();
+  await app.close();
 }

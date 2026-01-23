@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:ormed/ormed.dart';
-import 'package:ormed/migrations.dart';
 import 'package:ormed_postgres/ormed_postgres.dart';
 import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:stem_postgres/src/database/migrations.dart';
@@ -48,7 +47,6 @@ Future<StemPostgresTestHarness> createStemPostgresTestHarness({
   final config = setUpOrmed(
     dataSource: dataSource,
     runMigrations: _runTestMigrations,
-    strategy: DatabaseIsolationStrategy.migrateWithTransactions,
     adapterFactory: (dbName) {
       final schemaUrl = _withSearchPath(connectionString, dbName);
       return PostgresDriverAdapter.custom(
