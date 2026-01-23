@@ -1,11 +1,10 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
-import 'package:stem_cloud_worker/stem_cloud_worker.dart';
+// import 'package:stem_cloud_worker/stem_cloud_worker.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 
-import 'cloud_config.dart';
 
 /// Creates a [RevokeStore] based on configuration and URL overrides.
 class RevokeStoreFactory {
@@ -25,7 +24,7 @@ class RevokeStoreFactory {
       return FileRevokeStore.open(path);
     }
 
-    final env = environment ?? const <String, String>{};
+    final _ = environment ?? const <String, String>{};
     final uri = Uri.parse(candidate);
     switch (uri.scheme) {
       case 'memory':
@@ -55,13 +54,13 @@ class RevokeStoreFactory {
           applicationName: 'stem-revoke-store',
           tls: config.tls,
         );
-      case 'http':
-      case 'https':
-        return StemCloudRevokeStore.connect(
-          apiBase: uri,
-          apiKey: resolveStemCloudApiKey(env, override: cloudApiKey),
-          namespace: cloudNamespace ?? resolveStemCloudNamespace(env),
-        );
+      // case 'http':
+      // case 'https':
+      //   return StemCloudRevokeStore.connect(
+      //     apiBase: uri,
+      //     apiKey: resolveStemCloudApiKey(env, override: cloudApiKey),
+      //     namespace: cloudNamespace ?? resolveStemCloudNamespace(env),
+      //   );
       default:
         throw StateError('Unsupported revoke store scheme: ${uri.scheme}');
     }

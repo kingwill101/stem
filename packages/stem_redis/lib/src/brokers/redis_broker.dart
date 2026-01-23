@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:redis/redis.dart';
-import 'package:uuid/uuid.dart';
-
 import 'package:stem/stem.dart';
+import 'package:uuid/uuid.dart';
 
 /// Redis streams-backed implementation of [Broker].
 class RedisStreamsBroker implements Broker {

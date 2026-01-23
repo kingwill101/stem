@@ -1,9 +1,8 @@
 import 'dart:io';
 
 import 'package:redis/redis.dart';
-import 'package:uuid/uuid.dart';
-
 import 'package:stem/stem.dart';
+import 'package:uuid/uuid.dart';
 
 /// Redis-backed implementation of [LockStore].
 class RedisLockStore implements LockStore {
