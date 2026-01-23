@@ -1,5 +1,0 @@
-- [x] Extend workflow runtime/store APIs to expose watcher and lease metadata needed by CLI.
-- [x] Implement `stem wf waiters` command (topic filter, JSON output option) with tests.
-- [x] Enhance `stem wf show` (or add a dedicated command) to display lease expiry, cancellation policy, and suspension metadata.
-- [x] Update CLI documentation and examples.
-- [x] Run CLI tests, `dart analyze`, `dart format`, and `openspec validate add-workflow-cli-inspection --strict`.

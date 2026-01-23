@@ -1,5 +1,0 @@
-- [x] Implement `FlowContext.idempotencyKey([scope])`, ensuring auto-versioned steps include iteration data in the default scope.
-- [x] Update workflow runtime to pass iteration information when constructing `FlowContext` for versioned steps.
-- [x] Add unit tests covering stable key generation across retries and iterations.
-- [x] Update documentation/examples (README, sleep/event example) to demonstrate using the helper with external APIs.
-- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-workflow-idempotency-helpers --strict`.

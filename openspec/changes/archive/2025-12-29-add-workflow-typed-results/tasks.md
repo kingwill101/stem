@@ -1,5 +1,0 @@
-- [x] Add generic parameters to workflow definitions and helper APIs (e.g. `Flow<T>`, `WorkflowScript<T>`, `StemWorkflowApp.waitForCompletion<T>`) so typed results flow through the existing surface without new entrypoints.
-- [x] Support optional decoders so callers can transform `Object?` payloads into domain objects with centralized validation/throwable errors while using the generic APIs.
-- [x] Update examples/tests to cover typed success, failure, and timeout cases across both Flow and `WorkflowScript` definitions (using the in-memory store/runtime).
-- [x] Document the generic usage in `packages/stem/README.md` (or workflow docs) and contrast it with raw `Object?` access for backward compatibility.
-- [x] Run `dart format`, `dart analyze`, targeted workflow tests, and `openspec validate add-workflow-typed-results --strict`.

@@ -1,5 +1,0 @@
-- [x] Add generic result wrappers for core task helpers (e.g. `Stem.waitForTask<T>`, typed `TaskStatusView<T>`) with decoder hooks mirroring the workflow API.
-- [x] Update canvas primitives (task signatures, `Canvas.chain/group/chord`) so they accept typed signatures, propagate typed payloads, and expose typed callback helpers.
-- [x] Extend chord/group callbacks and result backend watchers with optional decoders plus compile-time typing for `TaskCall`, `TaskEnqueueBuilder`, and chord metadata.
-- [x] Document typed task/chord usage in the README and task/canvas guides, including upgrade notes for existing callers.
-- [x] Add regression tests covering typed single-task waits, chains, groups, and chords across in-memory broker/backend plus run `dart format`, `dart analyze`, targeted tests, and `openspec validate add-stem-typed-results --strict`.

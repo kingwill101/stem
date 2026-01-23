@@ -1,6 +1,0 @@
-- [x] Extend workflow start APIs (runtime + helpers) to accept optional cancellation policy parameters.
-- [x] Update `WorkflowStore` implementations to persist policy metadata and surface it in `RunState`.
-- [x] Add periodic checks in the runtime to enforce `maxRunDuration` and `maxSuspendDuration`, including signal/CLI integration for cancellation reason.
-- [x] Update CLI and documentation to display policy configuration and auto-cancel status.
-- [x] Add tests covering auto-cancellation scenarios across in-memory and adapter stores.
-- [x] Run `dart format`, `dart analyze`, relevant `dart test`, and `openspec validate add-workflow-cancellation-policy --strict`.
