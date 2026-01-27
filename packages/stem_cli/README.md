@@ -5,13 +5,13 @@
 # stem_cli
 
 [![pub package](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli)
-[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.0-blue.svg)](https://dart.dev)
+[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.2-blue.svg)](https://dart.dev)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/kingwill101/stem/blob/main/LICENSE)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kingwill101/stem/main/packages/stem_cli/coverage/coverage.json)](https://github.com/kingwill101/stem/actions/workflows/stem_cli.yaml)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
 Command-line tooling for the Stem runtime. The CLI depends on the core package
-plus adapter plug-ins (`stem_redis`, `stem_postgres`).
+plus adapter plug-ins (`stem_redis`, `stem_postgres`, `stem_sqlite`).
 
 ## Install
 
@@ -28,9 +28,10 @@ stem --help
 
 ## Adapter Support
 
-Out of the box the CLI knows how to talk to the Redis and Postgres adapters
-provided by `stem_redis` and `stem_postgres`. Custom adapters can be supported by
-wrapping the CLI context builders (see `src/cli/utilities.dart`).
+Out of the box the CLI knows how to talk to the Redis, Postgres, and SQLite
+adapters provided by `stem_redis`, `stem_postgres`, and `stem_sqlite`. Custom
+adapters can be supported by wrapping the CLI context builders
+(see `src/cli/utilities.dart`).
 
 ## Task Registry Introspection
 

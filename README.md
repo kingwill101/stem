@@ -236,14 +236,14 @@ final beat = BeatScheduler(
 stem worker --queue default --concurrency 8
 
 # Run the beat scheduler
-stem schedule
+stem schedule list
 
 # Inspect dead-letter queue
 stem dlq list
 stem dlq retry <task-id>
 
 # List registered tasks
-stem tasks
+stem tasks ls
 
 # Health check
 stem health
@@ -255,7 +255,7 @@ stem health
 
 ### Prerequisites
 
-- Dart 3.9+
+- Dart 3.9.2+
 - Docker (for adapter integration tests)
 
 ### Setup

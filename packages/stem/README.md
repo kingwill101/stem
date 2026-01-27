@@ -1,5 +1,5 @@
 [![pub package](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem)
-[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.0-blue.svg)](https://dart.dev/)
+[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.2-blue.svg)](https://dart.dev/)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 [![Build Status](https://github.com/kingwill101/stem/workflows/ci/badge.svg)](https://github.com/kingwill101/stem/actions)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kingwill101/stem/main/packages/stem/coverage/coverage.json)](https://github.com/kingwill101/stem/actions/workflows/stem.yaml)
@@ -22,6 +22,8 @@ ecosystem.
 dart pub add stem           # core runtime APIs
 dart pub add stem_redis     # Redis broker + result backend
 dart pub add stem_postgres  # (optional) Postgres broker + backend
+dart pub add stem_sqlite    # (optional) SQLite broker + backend
+dart pub add -d stem_builder # (optional) registry builder
 dart pub global activate stem_cli
 ```
 
