@@ -1,10 +1,13 @@
 import 'package:stem/src/backend/in_memory_backend.dart';
 import 'package:stem/src/brokers/in_memory_broker.dart';
+import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/observability/config.dart';
 import 'package:stem/src/observability/heartbeat_transport.dart';
+import 'package:stem/src/scheduler/in_memory_lock_store.dart';
+import 'package:stem/src/scheduler/in_memory_schedule_store.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/worker/worker_config.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -103,6 +106,39 @@ class WorkflowEventBusFactory {
     if (disposer != null) {
       await disposer(bus);
     }
+  }
+}
+
+/// Factory for building [ScheduleStore] instances.
+class ScheduleStoreFactory extends StemResourceFactory<ScheduleStore> {
+  /// Creates a schedule store factory from create/dispose hooks.
+  ScheduleStoreFactory({required super.create, super.dispose});
+
+  /// Creates an in-memory schedule store factory.
+  factory ScheduleStoreFactory.inMemory() {
+    return ScheduleStoreFactory(create: () async => InMemoryScheduleStore());
+  }
+}
+
+/// Factory for building [LockStore] instances.
+class LockStoreFactory extends StemResourceFactory<LockStore> {
+  /// Creates a lock store factory from create/dispose hooks.
+  LockStoreFactory({required super.create, super.dispose});
+
+  /// Creates an in-memory lock store factory.
+  factory LockStoreFactory.inMemory() {
+    return LockStoreFactory(create: () async => InMemoryLockStore());
+  }
+}
+
+/// Factory for building [RevokeStore] instances.
+class RevokeStoreFactory extends StemResourceFactory<RevokeStore> {
+  /// Creates a revoke store factory from create/dispose hooks.
+  RevokeStoreFactory({required super.create, super.dispose});
+
+  /// Creates an in-memory revoke store factory.
+  factory RevokeStoreFactory.inMemory() {
+    return RevokeStoreFactory(create: () async => InMemoryRevokeStore());
   }
 }
 

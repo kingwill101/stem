@@ -1,4 +1,4 @@
-import 'package:stem/stem.dart';
+import 'package:stem/stem.dart' hide RevokeStoreFactory;
 import 'package:stem_cli/src/cli/revoke_store_factory.dart';
 // import 'package:stem_cloud_worker/stem_cloud_worker.dart';
 import 'package:test/test.dart';

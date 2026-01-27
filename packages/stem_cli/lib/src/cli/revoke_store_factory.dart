@@ -5,7 +5,6 @@ import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 
-
 /// Creates a [RevokeStore] based on configuration and URL overrides.
 class RevokeStoreFactory {
   const RevokeStoreFactory._();

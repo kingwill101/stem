@@ -4,7 +4,7 @@
   coverage.
 - Updated dependencies and analysis options.
 
-## 0.1.0-dev
+## 0.1.0
 
 - Added workflow store contract coverage for run leasing and runnable run
   discovery.

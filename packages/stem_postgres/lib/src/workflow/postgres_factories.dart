@@ -27,6 +27,7 @@ StemBrokerFactory postgresBrokerFactory(
 
 /// Creates a [StemBackendFactory] backed by PostgreSQL.
 StemBackendFactory postgresResultBackendFactory({
+  String? connectionString,
   String namespace = 'stem',
   Duration defaultTtl = const Duration(days: 1),
   Duration groupDefaultTtl = const Duration(days: 1),
@@ -34,6 +35,7 @@ StemBackendFactory postgresResultBackendFactory({
 }) {
   return StemBackendFactory(
     create: () async => PostgresResultBackend.connect(
+      connectionString: connectionString,
       namespace: namespace,
       defaultTtl: defaultTtl,
       groupDefaultTtl: groupDefaultTtl,

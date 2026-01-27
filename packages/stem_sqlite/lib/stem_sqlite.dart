@@ -7,6 +7,7 @@ export 'src/connection.dart' show SqliteConnections;
 export 'src/database.dart' show StemSqliteDatabase;
 export 'src/database/datasource.dart' show createDataSource;
 export 'src/models/models.dart';
+export 'src/stack/sqlite_adapter.dart' show StemSqliteAdapter;
 export 'src/workflow/sqlite_factories.dart'
     show
         sqliteBrokerFactory,

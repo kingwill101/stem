@@ -11,7 +11,7 @@
 - Expanded internal docs and example suites, plus broader unit/property and
   workflow store contract coverage.
 
-## 0.1.0-dev
+## 0.1.0
 
 - Added workflow run leasing APIs (`claimRun`, `renewRunLease`, `releaseRun`,
   `listRunnableRuns`) and runtime ownership tracking to safely spread workflows

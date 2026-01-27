@@ -3,6 +3,12 @@ export 'src/brokers/postgres_broker.dart' show PostgresBroker;
 export 'src/control/postgres_revoke_store.dart' show PostgresRevokeStore;
 export 'src/scheduler/postgres_lock_store.dart' show PostgresLockStore;
 export 'src/scheduler/postgres_schedule_store.dart' show PostgresScheduleStore;
+export 'src/stack/postgres_adapter.dart'
+    show
+        StemPostgresAdapter,
+        postgresLockStoreFactory,
+        postgresRevokeStoreFactory,
+        postgresScheduleStoreFactory;
 export 'src/workflow/postgres_factories.dart'
     show
         postgresBrokerFactory,

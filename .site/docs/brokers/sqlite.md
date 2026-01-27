@@ -26,7 +26,7 @@ Add the adapter package:
 
 ```yaml
 dependencies:
-  stem_sqlite: ^0.1.0-dev
+  stem_sqlite: ^0.1.0
 ```
 
 ## Quick start (broker)

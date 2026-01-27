@@ -89,16 +89,16 @@ Future<ScheduleCliContext> _createScheduleCliContext({
       break;
     case 'http':
     case 'https':
-      // final apiKey = resolveStemCloudApiKey(env);
-      // final namespace = resolveStemCloudNamespace(env);
-      // final cloudStore = StemCloudScheduleStore.connect(
-      //   apiBase: uri,
-      //   apiKey: apiKey,
-      //   namespace: namespace,
-      // );
-      // store = cloudStore;
-      // disposables.add(() => cloudStore.close());
-      // break;
+    // final apiKey = resolveStemCloudApiKey(env);
+    // final namespace = resolveStemCloudNamespace(env);
+    // final cloudStore = StemCloudScheduleStore.connect(
+    //   apiBase: uri,
+    //   apiKey: apiKey,
+    //   namespace: namespace,
+    // );
+    // store = cloudStore;
+    // disposables.add(() => cloudStore.close());
+    // break;
     case 'memory':
       store = InMemoryScheduleStore();
       break;
