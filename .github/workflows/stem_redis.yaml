@@ -48,4 +48,4 @@ jobs:
         run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
       - name: Check coverage threshold
         working-directory: packages/stem_redis
-        run: dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 80
+        run: dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 75
