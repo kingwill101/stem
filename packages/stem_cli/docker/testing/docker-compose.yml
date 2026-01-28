@@ -43,6 +43,50 @@ services:
     labels:
       description: "PostgreSQL for Stem testing (broker, backend, scheduler)"
 
+  # PostgreSQL with TLS on a dedicated port
+  postgres_tls:
+    build:
+      context: ../..
+      dockerfile: docker/testing/postgres/Dockerfile
+    restart: unless-stopped
+    container_name: stem-postgres-tls-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stem_test_tls
+    command:
+      - "postgres"
+      - "-c"
+      - "ssl=on"
+      - "-c"
+      - "ssl_cert_file=/etc/postgres/certs/server.crt"
+      - "-c"
+      - "ssl_key_file=/etc/postgres/certs/server.key"
+      - "-c"
+      - "ssl_ca_file=/etc/postgres/certs/root.crt"
+      - "-c"
+      - "log_statement=all"
+      - "-c"
+      - "log_duration=on"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "max_connections=200"
+    ports:
+      - "65433:5432"
+    volumes:
+      - postgres-tls-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "PostgreSQL TLS for Stem testing"
+
   # Redis for Stem broker and locks
   redis:
     image: redis:7-alpine
@@ -70,6 +114,112 @@ services:
       - stem-testing
     labels:
       description: "Redis for Stem testing (broker, locks, schedules)"
+
+  # Redis with TLS enabled (server-auth only)
+  redis_tls:
+    image: redis:7-alpine
+    restart: unless-stopped
+    container_name: stem-redis-tls-test
+    command:
+      - "redis-server"
+      - "--port"
+      - "0"
+      - "--tls-port"
+      - "6379"
+      - "--tls-cert-file"
+      - "/etc/redis/certs/server.crt"
+      - "--tls-key-file"
+      - "/etc/redis/certs/server.key"
+      - "--tls-ca-cert-file"
+      - "/etc/redis/certs/ca.crt"
+      - "--tls-auth-clients"
+      - "no"
+      - "--loglevel"
+      - "notice"
+      - "--databases"
+      - "16"
+      - "--appendonly"
+      - "no"
+    ports:
+      - "56380:6379"
+    volumes:
+      - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
+      - redis-tls-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--tls",
+          "--cacert",
+          "/etc/redis/certs/ca.crt",
+          "-p",
+          "6379",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "Redis TLS for Stem testing (server-auth)"
+
+  # Redis with TLS enabled (client-auth required)
+  redis_mtls:
+    image: redis:7-alpine
+    restart: unless-stopped
+    container_name: stem-redis-mtls-test
+    command:
+      - "redis-server"
+      - "--port"
+      - "0"
+      - "--tls-port"
+      - "6379"
+      - "--tls-cert-file"
+      - "/etc/redis/certs/server.crt"
+      - "--tls-key-file"
+      - "/etc/redis/certs/server.key"
+      - "--tls-ca-cert-file"
+      - "/etc/redis/certs/ca.crt"
+      - "--tls-auth-clients"
+      - "yes"
+      - "--loglevel"
+      - "notice"
+      - "--databases"
+      - "16"
+      - "--appendonly"
+      - "no"
+    ports:
+      - "56381:6379"
+    volumes:
+      - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
+      - redis-mtls-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "--tls",
+          "--cacert",
+          "/etc/redis/certs/ca.crt",
+          "--cert",
+          "/etc/redis/certs/client.crt",
+          "--key",
+          "/etc/redis/certs/client.key",
+          "-p",
+          "6379",
+          "ping"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - stem-testing
+    labels:
+      description: "Redis TLS for Stem testing (mTLS)"
 
   # Prometheus for observability testing (optional)
   prometheus:
@@ -161,7 +311,13 @@ services:
 volumes:
   postgres-data:
     driver: local
+  postgres-tls-data:
+    driver: local
   redis-data:
+    driver: local
+  redis-tls-data:
+    driver: local
+  redis-mtls-data:
     driver: local
   prometheus-data:
     driver: local

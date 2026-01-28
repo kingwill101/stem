@@ -138,7 +138,10 @@ class RevokeStoreFactory extends StemResourceFactory<RevokeStore> {
 
   /// Creates an in-memory revoke store factory.
   factory RevokeStoreFactory.inMemory() {
-    return RevokeStoreFactory(create: () async => InMemoryRevokeStore());
+    return RevokeStoreFactory(
+      create: () async => InMemoryRevokeStore(),
+      dispose: (store) => store.close(),
+    );
   }
 }
 

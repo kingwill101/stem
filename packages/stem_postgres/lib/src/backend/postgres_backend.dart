@@ -24,12 +24,14 @@ class PostgresResultBackend implements ResultBackend {
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     final backend = PostgresResultBackend._(
       connections,

@@ -176,7 +176,11 @@ Future<WorkflowStore> _connectWorkflowStore(
   switch (uri.scheme) {
     case 'redis':
     case 'rediss':
-      return RedisWorkflowStore.connect(trimmed, namespace: namespace);
+      return RedisWorkflowStore.connect(
+        trimmed,
+        namespace: namespace,
+        tls: tls,
+      );
     case 'postgres':
     case 'postgresql':
     case 'postgresql+ssl':

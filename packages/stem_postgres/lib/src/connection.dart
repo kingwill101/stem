@@ -30,10 +30,13 @@ class PostgresConnections {
   ///
   /// The caller remains responsible for disposing [dataSource].
   static Future<PostgresConnections> openWithDataSource(
-    DataSource dataSource,
-  ) async {
+    DataSource dataSource, {
+    bool runMigrations = true,
+  }) async {
     await dataSource.init();
-    await _runMigrationsForDataSource(dataSource);
+    if (runMigrations) {
+      await _runMigrationsForDataSource(dataSource);
+    }
     return PostgresConnections._(dataSource, ownsDataSource: false);
   }
 

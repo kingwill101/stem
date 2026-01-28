@@ -121,6 +121,7 @@ class StemRedisAdapter implements StemStoreAdapter {
     return redisWorkflowStoreFactory(
       uri.toString(),
       namespace: namespace,
+      tls: tls,
     );
   }
 

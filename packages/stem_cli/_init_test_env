@@ -21,17 +21,29 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "Starting Redis/Postgres test services (docker compose)..."
-docker compose -f "$COMPOSE_FILE" up -d postgres redis
+docker compose -f "$COMPOSE_FILE" up -d postgres postgres_tls redis redis_tls redis_mtls
 
 REDIS_URL="redis://127.0.0.1:56379"
 POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
 CA_CERT_PATH="$SCRIPT_DIR/docker/testing/certs/postgres-root.crt"
+REDIS_TLS_CA_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/ca.crt"
+REDIS_MTLS_CLIENT_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.crt"
+REDIS_MTLS_CLIENT_KEY_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.key"
+POSTGRES_TLS_URL="postgresql://postgres:postgres@localhost:65433/stem_test_tls?sslmode=verify-ca&sslrootcert=${CA_CERT_PATH}"
+REDIS_TLS_URL="rediss://localhost:56380/0"
+REDIS_MTLS_URL="rediss://localhost:56381/0"
 
 if [ "$SOURCED" -eq 1 ]; then
   export STEM_TEST_REDIS_URL="$REDIS_URL"
   export STEM_TEST_POSTGRES_URL="$POSTGRES_URL"
-  export STEM_TEST_POSTGRES_TLS_URL="$POSTGRES_URL"
+  export STEM_TEST_POSTGRES_TLS_URL="$POSTGRES_TLS_URL"
   export STEM_TEST_POSTGRES_TLS_CA_CERT="$CA_CERT_PATH"
+  export STEM_TEST_REDIS_TLS_URL="$REDIS_TLS_URL"
+  export STEM_TEST_REDIS_TLS_CA_CERT="$REDIS_TLS_CA_CERT_PATH"
+  export STEM_TEST_REDIS_MTLS_URL="$REDIS_MTLS_URL"
+  export STEM_TEST_REDIS_MTLS_CA_CERT="$REDIS_TLS_CA_CERT_PATH"
+  export STEM_TEST_REDIS_MTLS_CLIENT_CERT="$REDIS_MTLS_CLIENT_CERT_PATH"
+  export STEM_TEST_REDIS_MTLS_CLIENT_KEY="$REDIS_MTLS_CLIENT_KEY_PATH"
   echo "Exported STEM_TEST_* variables into current shell."
 else
   cat <<EOF
@@ -43,7 +55,13 @@ To export the test environment variables into your shell, run:
 Variables:
   STEM_TEST_REDIS_URL=$REDIS_URL
   STEM_TEST_POSTGRES_URL=$POSTGRES_URL
-  STEM_TEST_POSTGRES_TLS_URL=$POSTGRES_URL
+  STEM_TEST_POSTGRES_TLS_URL=$POSTGRES_TLS_URL
   STEM_TEST_POSTGRES_TLS_CA_CERT=$CA_CERT_PATH
+  STEM_TEST_REDIS_TLS_URL=$REDIS_TLS_URL
+  STEM_TEST_REDIS_TLS_CA_CERT=$REDIS_TLS_CA_CERT_PATH
+  STEM_TEST_REDIS_MTLS_URL=$REDIS_MTLS_URL
+  STEM_TEST_REDIS_MTLS_CA_CERT=$REDIS_TLS_CA_CERT_PATH
+  STEM_TEST_REDIS_MTLS_CLIENT_CERT=$REDIS_MTLS_CLIENT_CERT_PATH
+  STEM_TEST_REDIS_MTLS_CLIENT_KEY=$REDIS_MTLS_CLIENT_KEY_PATH
 EOF
 fi

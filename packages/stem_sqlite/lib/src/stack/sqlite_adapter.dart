@@ -88,11 +88,19 @@ File _fileFromUri(Uri uri) {
   if (uri.scheme == 'file') {
     return File.fromUri(uri);
   }
-  final path = uri.path.isNotEmpty ? uri.path : uri.host;
-  if (path.isEmpty) {
+  String combinedPath;
+  if (uri.path.isEmpty) {
+    combinedPath = uri.host;
+  } else if (uri.host.isEmpty) {
+    combinedPath = uri.path;
+  } else {
+    final trimmed = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+    combinedPath = trimmed.isEmpty ? uri.host : '${uri.host}/$trimmed';
+  }
+  if (combinedPath.isEmpty) {
     throw StateError(
       'SQLite URL must include a file path (e.g. sqlite:///tmp/stem.db).',
     );
   }
-  return File(path);
+  return File(combinedPath);
 }

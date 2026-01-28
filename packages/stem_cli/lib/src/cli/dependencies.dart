@@ -89,16 +89,10 @@ Future<ScheduleCliContext> _createScheduleCliContext({
       break;
     case 'http':
     case 'https':
-    // final apiKey = resolveStemCloudApiKey(env);
-    // final namespace = resolveStemCloudNamespace(env);
-    // final cloudStore = StemCloudScheduleStore.connect(
-    //   apiBase: uri,
-    //   apiKey: apiKey,
-    //   namespace: namespace,
-    // );
-    // store = cloudStore;
-    // disposables.add(() => cloudStore.close());
-    // break;
+      throw StateError(
+        'HTTP schedule stores are not supported yet. '
+        'Use redis://, memory://, or omit STEM_SCHEDULE_STORE_URL.',
+      );
     case 'memory':
       store = InMemoryScheduleStore();
       break;

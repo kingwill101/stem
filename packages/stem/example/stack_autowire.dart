@@ -29,10 +29,28 @@ Future<void> main() async {
     requireRevokeStore: true,
   );
 
+  final scheduleFactory = stack.scheduleStore;
+  if (scheduleFactory == null) {
+    throw StateError('Scheduling enabled but schedule store factory missing.');
+  }
+  final lockFactory = stack.lockStore;
+  if (lockFactory == null) {
+    throw StateError('Unique tasks enabled but lock store factory missing.');
+  }
+  final revokeFactory = stack.revokeStore;
+  if (revokeFactory == null) {
+    throw StateError('Revoke store required but factory missing.');
+  }
+
+  final scheduleStore = await scheduleFactory.create();
+  final lockStore = await lockFactory.create();
+  final revokeStore = await revokeFactory.create();
+
   final app = await StemApp.create(
     tasks: [PingTask()],
     broker: stack.broker,
     backend: stack.backend,
+    revokeStore: revokeStore,
   );
 
   final workflowApp = await StemWorkflowApp.create(
@@ -40,11 +58,6 @@ Future<void> main() async {
     backend: stack.backend,
     storeFactory: stack.workflowStore,
   );
-
-  final scheduleFactory = stack.scheduleStore!;
-  final scheduleStore = await scheduleFactory.create();
-  final lockFactory = stack.lockStore!;
-  final lockStore = await lockFactory.create();
 
   final beat = Beat(
     store: scheduleStore,
@@ -65,5 +78,6 @@ Future<void> main() async {
     await app.shutdown();
     await scheduleFactory.dispose(scheduleStore);
     await lockFactory.dispose(lockStore);
+    await revokeFactory.dispose(revokeStore);
   }
 }
