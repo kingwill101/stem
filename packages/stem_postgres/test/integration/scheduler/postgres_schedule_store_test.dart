@@ -34,6 +34,7 @@ Future<void> main() async {
       store = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: testNamespace,
+        runMigrations: false,
       );
     });
 
@@ -181,6 +182,7 @@ Future<void> main() async {
       final otherStore = await PostgresScheduleStore.fromDataSource(
         dataSource,
         namespace: otherNamespace,
+        runMigrations: false,
       );
       addTearDown(() async {
         try {

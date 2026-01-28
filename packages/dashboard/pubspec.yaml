@@ -8,14 +8,14 @@ environment:
 dependencies:
   intl: ^0.20.2
   meta: ^1.18.0
-  ormed: ^0.1.0-dev+10
+  ormed: ^0.1.0
   routed: ^0.3.2
   routed_hotwire: ^0.1.2
-  stem: ^0.1.0-dev
-  stem_cli: ^0.1.0-dev
-  stem_postgres: ^0.1.0-dev
-  stem_redis: ^0.1.0-dev
-  stem_sqlite: ^0.1.0-dev
+  stem: ^0.1.0
+  stem_cli: ^0.1.0
+  stem_postgres: ^0.1.0
+  stem_redis: ^0.1.0
+  stem_sqlite: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0
@@ -31,10 +31,6 @@ dependency_overrides:
     path: ../stem
   stem_cli:
     path: ../stem_cli
-  stem_cloud_protocol:
-    path: ../cloud/stem_cloud_protocol
-  stem_cloud_worker:
-    path: ../cloud/stem_cloud_worker
   stem_postgres:
     path: ../stem_postgres
   stem_redis:

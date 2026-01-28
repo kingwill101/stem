@@ -35,6 +35,7 @@ Future<void> main() async {
           defaultVisibilityTimeout: const Duration(seconds: 1),
           pollInterval: const Duration(milliseconds: 50),
           sweeperInterval: const Duration(milliseconds: 200),
+          runMigrations: false,
         ),
         dispose: (broker) => (broker as PostgresBroker).close(),
         additionalBrokerFactory: () async => PostgresBroker.fromDataSource(
@@ -42,6 +43,7 @@ Future<void> main() async {
           defaultVisibilityTimeout: const Duration(seconds: 1),
           pollInterval: const Duration(milliseconds: 50),
           sweeperInterval: const Duration(milliseconds: 200),
+          runMigrations: false,
         ),
       ),
       settings: const BrokerContractSettings(
@@ -61,6 +63,7 @@ Future<void> main() async {
         defaultVisibilityTimeout: const Duration(seconds: 1),
         pollInterval: const Duration(milliseconds: 50),
         sweeperInterval: const Duration(milliseconds: 200),
+        runMigrations: false,
       );
       final brokerB = await PostgresBroker.fromDataSource(
         dataSource,
@@ -68,6 +71,7 @@ Future<void> main() async {
         defaultVisibilityTimeout: const Duration(seconds: 1),
         pollInterval: const Duration(milliseconds: 50),
         sweeperInterval: const Duration(milliseconds: 200),
+        runMigrations: false,
       );
 
       try {

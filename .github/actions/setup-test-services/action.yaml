@@ -6,7 +6,21 @@ runs:
   steps:
     - name: Start Redis/Postgres containers
       shell: bash
-      run: docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d
+      run: |
+        set -euo pipefail
+        export STEM_TEST_REDIS_TLS_PORT="${STEM_TEST_REDIS_TLS_PORT:-0}"
+        export STEM_TEST_REDIS_MTLS_PORT="${STEM_TEST_REDIS_MTLS_PORT:-0}"
+        for attempt in 1 2 3; do
+          if docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d; then
+            break
+          fi
+          echo "docker compose up failed (attempt ${attempt}). Retrying..."
+          docker compose -f packages/stem_cli/docker/testing/docker-compose.yml down --remove-orphans || true
+          sleep 5
+          if [ "$attempt" -eq 3 ]; then
+            exit 1
+          fi
+        done
     - name: Wait for services to be ready
       shell: bash
       run: |
@@ -17,16 +31,38 @@ runs:
           fi
           sleep 1
         done
+        # Wait for Postgres TLS to be ready
+        for i in {1..30}; do
+          if pg_isready -h 127.0.0.1 -p 65433 -U postgres 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
         # Reset test database to clean state
         PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65432 -d postgres -c "DROP DATABASE IF EXISTS stem_test;" 2>/dev/null || true
         PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65432 -d postgres -c "CREATE DATABASE stem_test;" 2>/dev/null || true
+        # Reset TLS test database to clean state
+        PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65433 -d postgres -c "DROP DATABASE IF EXISTS stem_test_tls;" 2>/dev/null || true
+        PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -p 65433 -d postgres -c "CREATE DATABASE stem_test_tls;" 2>/dev/null || true
     - name: Export STEM_TEST_* environment variables
       shell: bash
       run: |
+        redis_tls_mapping=$(docker compose -f packages/stem_cli/docker/testing/docker-compose.yml port redis_tls 6379)
+        redis_tls_port=${redis_tls_mapping##*:}
+        redis_mtls_mapping=$(docker compose -f packages/stem_cli/docker/testing/docker-compose.yml port redis_mtls 6379)
+        redis_mtls_port=${redis_mtls_mapping##*:}
+        echo "STEM_TEST_REDIS_TLS_PORT=${redis_tls_port}" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_MTLS_PORT=${redis_mtls_port}" >> "$GITHUB_ENV"
         echo "STEM_TEST_REDIS_URL=redis://127.0.0.1:56379" >> "$GITHUB_ENV"
         echo "STEM_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
-        echo "STEM_TEST_POSTGRES_TLS_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"
-        echo "STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/certs/postgres-root.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_POSTGRES_TLS_URL=postgresql://postgres:postgres@localhost:65433/stem_test_tls?sslmode=verify-ca&sslrootcert=$GITHUB_WORKSPACE/packages/stem_cli/docker/testing/certs/postgres-root.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_POSTGRES_TLS_CA_CERT=$GITHUB_WORKSPACE/packages/stem_cli/docker/testing/certs/postgres-root.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_TLS_URL=rediss://localhost:${redis_tls_port}/0" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_TLS_CA_CERT=$GITHUB_WORKSPACE/packages/stem/example/microservice/certs/ca.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_MTLS_URL=rediss://localhost:${redis_mtls_port}/0" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_MTLS_CA_CERT=$GITHUB_WORKSPACE/packages/stem/example/microservice/certs/ca.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_MTLS_CLIENT_CERT=$GITHUB_WORKSPACE/packages/stem/example/microservice/certs/client.crt" >> "$GITHUB_ENV"
+        echo "STEM_TEST_REDIS_MTLS_CLIENT_KEY=$GITHUB_WORKSPACE/packages/stem/example/microservice/certs/client.key" >> "$GITHUB_ENV"
         echo "STEM_CHAOS_REDIS_URL=redis://127.0.0.1:56379/15" >> "$GITHUB_ENV"
         # Also set generic POSTGRES_URL and REDIS_URL for compatibility with different tests
         echo "POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test" >> "$GITHUB_ENV"

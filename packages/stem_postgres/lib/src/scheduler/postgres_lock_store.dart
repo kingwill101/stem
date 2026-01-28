@@ -15,12 +15,14 @@ class PostgresLockStore implements LockStore {
   static Future<PostgresLockStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     return PostgresLockStore._(connections, namespace: resolvedNamespace);
   }

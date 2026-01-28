@@ -1,12 +1,4 @@
-## Unreleased
-
-- Added workflow run lease migrations, runnable discovery, and offset support
-  for workflow listings.
-- Migrated IDs to UUID v7, regenerated ORM models, and refreshed datasource
-  factories/tests.
-- Added workflow store contract tests plus docs/dependency updates.
-
-## 0.1.0-dev
+## 0.1.0
 
 - Added workflow run lease tracking and claim/renew support so workflows can be
   distributed safely across workers.
@@ -17,7 +9,12 @@
   transactions.
 - Migrated the SQLite adapter to Ormed and added a local seed runtime that
   runs seeders without requiring ormed_cli.
-- Updated Ormed dependencies to 0.1.0-dev+6.
+- Updated Ormed dependencies to 0.1.0.
+- Added workflow run lease migrations, runnable discovery, and offset support
+  for workflow listings.
+- Migrated IDs to UUID v7, regenerated ORM models, and refreshed datasource
+  factories/tests.
+- Added workflow store contract tests plus docs/dependency updates.
 
 ## 0.1.0-alpha.4
 

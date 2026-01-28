@@ -61,9 +61,14 @@ StemBackendFactory redisResultBackendFactory(
 WorkflowStoreFactory redisWorkflowStoreFactory(
   String uri, {
   String namespace = 'stem',
+  TlsConfig? tls,
 }) {
   return WorkflowStoreFactory(
-    create: () async => RedisWorkflowStore.connect(uri, namespace: namespace),
+    create: () async => RedisWorkflowStore.connect(
+      uri,
+      namespace: namespace,
+      tls: tls,
+    ),
     dispose: (store) async {
       if (store is RedisWorkflowStore) {
         await store.close();

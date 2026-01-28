@@ -1,17 +1,4 @@
-
-## Unreleased
-
-- Added signals registry/configuration for worker, task, scheduler, and
-  workflow lifecycle events.
-- Improved worker runtime (isolate pool, config, heartbeats/autoscaling) plus
-  scheduler behavior (timezone alias handling, in-memory schedule store).
-- Exposed lock ownership in interfaces and migrated IDs to UUID v7.
-- Removed sqlite migrations from core and updated dependencies (collection,
-  contextual, crypto, cryptography, timezone, uuid).
-- Expanded internal docs and example suites, plus broader unit/property and
-  workflow store contract coverage.
-
-## 0.1.0-dev
+## 0.1.0
 
 - Added workflow run leasing APIs (`claimRun`, `renewRunLease`, `releaseRun`,
   `listRunnableRuns`) and runtime ownership tracking to safely spread workflows
@@ -32,6 +19,15 @@
   (TaskResultEncoder and payload encoders).
 - Added new example suites (progress heartbeat, worker control lab, and the
   feature-complete set) plus refreshed docs/Justfiles for running them.
+- Added signals registry/configuration for worker, task, scheduler, and
+  workflow lifecycle events.
+- Improved worker runtime (isolate pool, config, heartbeats/autoscaling) plus
+  scheduler behavior (timezone alias handling, in-memory schedule store).
+- Exposed lock ownership in interfaces and migrated IDs to UUID v7.
+- Removed sqlite migrations from core and updated dependencies (collection,
+  contextual, crypto, cryptography, timezone, uuid).
+- Expanded internal docs and example suites, plus broader unit/property and
+  workflow store contract coverage.
 
 ## 0.1.0-alpha.4
 

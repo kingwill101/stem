@@ -26,12 +26,14 @@ class PostgresWorkflowStore implements WorkflowStore {
     String namespace = 'stem',
     Uuid? uuid,
     WorkflowClock clock = const SystemWorkflowClock(),
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     return PostgresWorkflowStore._(
       connections,

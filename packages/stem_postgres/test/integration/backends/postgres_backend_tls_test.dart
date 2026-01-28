@@ -50,6 +50,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 5),
         groupDefaultTtl: const Duration(seconds: 5),
         heartbeatTtl: const Duration(seconds: 5),
+        runMigrations: false,
       );
     });
 
@@ -109,6 +110,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 5),
         groupDefaultTtl: const Duration(seconds: 5),
         heartbeatTtl: const Duration(seconds: 5),
+        runMigrations: false,
       );
 
       try {

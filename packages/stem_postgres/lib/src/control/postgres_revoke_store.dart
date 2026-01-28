@@ -16,12 +16,14 @@ class PostgresRevokeStore implements RevokeStore {
   static Future<PostgresRevokeStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     return PostgresRevokeStore._(connections, namespace: resolvedNamespace);
   }

@@ -1,14 +1,11 @@
-## Unreleased
-
-- Added cloud configuration helpers and revoke-store factory wiring.
-- Improved auth token handling in CLI utilities and expanded tests.
-- Updated README/Justfile guidance and refreshed dependencies.
-
-## 0.1.0-dev
+## 0.1.0
 
 - Updated CLI adapter wiring and docker test stack to the Ormed-backed
   integrations.
 - Added workflow agent help output to document required configuration.
+- Added cloud configuration helpers and revoke-store factory wiring.
+- Improved auth token handling in CLI utilities and expanded tests.
+- Updated README/Justfile guidance and refreshed dependencies.
 
 ## 0.1.0-alpha.4
 

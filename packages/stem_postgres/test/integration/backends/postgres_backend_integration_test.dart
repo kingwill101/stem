@@ -38,6 +38,7 @@ Future<void> main() async {
             defaultTtl: const Duration(seconds: 1),
             groupDefaultTtl: const Duration(seconds: 1),
             heartbeatTtl: const Duration(seconds: 1),
+            runMigrations: false,
           );
         },
         dispose: (backend) => (backend as PostgresResultBackend).close(),
@@ -58,6 +59,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 2),
         groupDefaultTtl: const Duration(seconds: 2),
         heartbeatTtl: const Duration(seconds: 2),
+        runMigrations: false,
       );
       final backendB = await PostgresResultBackend.fromDataSource(
         dataSource,
@@ -65,6 +67,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 2),
         groupDefaultTtl: const Duration(seconds: 2),
         heartbeatTtl: const Duration(seconds: 2),
+        runMigrations: false,
       );
       try {
         const taskId = 'namespace-task';
@@ -93,6 +96,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 2),
         groupDefaultTtl: const Duration(seconds: 2),
         heartbeatTtl: const Duration(seconds: 2),
+        runMigrations: false,
       );
       try {
         await backend.set(
@@ -142,6 +146,7 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 1),
         groupDefaultTtl: const Duration(seconds: 1),
         heartbeatTtl: const Duration(seconds: 1),
+        runMigrations: true,
       );
 
       try {

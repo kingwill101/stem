@@ -5,6 +5,12 @@ export 'src/observability/redis_heartbeat_transport.dart'
     show RedisHeartbeatCommandFactory, RedisHeartbeatTransport;
 export 'src/scheduler/redis_lock_store.dart' show RedisLockStore;
 export 'src/scheduler/redis_schedule_store.dart' show RedisScheduleStore;
+export 'src/stack/redis_adapter.dart'
+    show
+        StemRedisAdapter,
+        redisLockStoreFactory,
+        redisRevokeStoreFactory,
+        redisScheduleStoreFactory;
 export 'src/workflow/redis_factories.dart'
     show
         redisBrokerFactory,

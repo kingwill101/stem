@@ -114,7 +114,9 @@ Future<void> sendEmail(
             contains('Flow('),
             contains('WorkflowScript('),
             contains('FunctionTaskHandler'),
-            contains("import 'package:stem_builder/workflows.dart' as stemLib0;"),
+            contains(
+              "import 'package:stem_builder/workflows.dart' as stemLib0;",
+            ),
           ]),
         ),
       },

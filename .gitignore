@@ -19,6 +19,8 @@ task.md
 # Coverage
 coverage/
 **/coverage/
+!tool/coverage/
+!tool/coverage/**
 storage/
 # OpenSpec (cloud-related)
 openspec/**/*cloud*

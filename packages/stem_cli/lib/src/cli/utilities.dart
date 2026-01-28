@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
-import 'package:stem/stem.dart';
+import 'package:stem/stem.dart' hide RevokeStoreFactory;
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/cloud_config.dart';
 import 'package:stem_cli/src/cli/revoke_store_factory.dart';
@@ -176,7 +176,11 @@ Future<WorkflowStore> _connectWorkflowStore(
   switch (uri.scheme) {
     case 'redis':
     case 'rediss':
-      return RedisWorkflowStore.connect(trimmed, namespace: namespace);
+      return RedisWorkflowStore.connect(
+        trimmed,
+        namespace: namespace,
+        tls: tls,
+      );
     case 'postgres':
     case 'postgresql':
     case 'postgresql+ssl':

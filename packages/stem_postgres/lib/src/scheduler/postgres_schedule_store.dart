@@ -17,12 +17,14 @@ class PostgresScheduleStore implements ScheduleStore {
   static Future<PostgresScheduleStore> fromDataSource(
     DataSource dataSource, {
     String namespace = 'stem',
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isNotEmpty
         ? namespace.trim()
         : 'stem';
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     return PostgresScheduleStore._(
       connections,

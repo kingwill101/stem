@@ -13,17 +13,13 @@ them to the browser via Turbo Streams while we wire the full signal bus.
 
 ## Getting Started
 
-1. Ensure the routed ecosystem checkout exists alongside this repo (the
-   dependency overrides point at `../routed_ecosystem` relative to
-   `packages/dashboard`). This gives us local copies of `routed`,
-   `routed_hotwire`, `server_testing`, and related tooling.
-2. From the repository root install dependencies for both Stem and the
+1. From the repository root install dependencies for both Stem and the
    dashboard:
 
    ```bash
    dart pub get          # stem core workspace
-   cd dashboard
-   dart pub get          # dashboard package with overrides
+   cd packages/dashboard
+   dart pub get          # dashboard package
    ```
 
 3. Launch the dashboard server:
@@ -51,10 +47,9 @@ pages use Turbo Frames for navigation and sorting.
 
 ### Local dependency overrides
 
-`pubspec.yaml` contains overrides pointing at the routed workspace as well as a
-stub `third_party/dartastic_opentelemetry_sdk` package. The stub keeps tests
-green while routed finishes its OpenTelemetry migration. When the upstream
-packages are published the overrides can be removed.
+`pubspec.yaml` contains overrides pointing at the local Stem packages so the
+dashboard always runs against the workspace versions during development. Remove
+the overrides if you want to consume published packages only.
 
 ### Current Features
 

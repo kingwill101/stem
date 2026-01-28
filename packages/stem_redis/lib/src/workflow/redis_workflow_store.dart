@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:redis/redis.dart';
 import 'package:stem/stem.dart';
@@ -25,12 +26,39 @@ class RedisWorkflowStore implements WorkflowStore {
     String uri, {
     String namespace = 'stem',
     WorkflowClock clock = const SystemWorkflowClock(),
+    TlsConfig? tls,
   }) async {
     final parsed = Uri.parse(uri);
     final host = parsed.host.isEmpty ? 'localhost' : parsed.host;
     final port = parsed.hasPort ? parsed.port : 6379;
     final connection = RedisConnection();
-    final command = await connection.connect(host, port);
+    final scheme = parsed.scheme.isEmpty ? 'redis' : parsed.scheme;
+    Command command;
+    if (scheme == 'rediss') {
+      final securityContext = tls?.toSecurityContext();
+      try {
+        final socket = await SecureSocket.connect(
+          host,
+          port,
+          context: securityContext,
+          onBadCertificate: tls?.allowInsecure ?? false ? (_) => true : null,
+        );
+        command = await connection.connectWithSocket(socket);
+      } on HandshakeException catch (error, stack) {
+        logTlsHandshakeFailure(
+          component: 'redis workflow store',
+          host: host,
+          port: port,
+          config: tls,
+          error: error,
+          stack: stack,
+        );
+        await connection.close();
+        rethrow;
+      }
+    } else {
+      command = await connection.connect(host, port);
+    }
     if (parsed.userInfo.isNotEmpty) {
       final parts = parsed.userInfo.split(':');
       final password = parts.length == 2 ? parts[1] : parts[0];

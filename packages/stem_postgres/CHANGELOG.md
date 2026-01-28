@@ -1,12 +1,4 @@
-## Unreleased
-
-- Added workflow run lease migrations plus runnable discovery and metadata
-  paging updates in the workflow store.
-- Migrated IDs to UUID v7 and simplified datasource/connection handling.
-- Added workflow store contract coverage and refreshed adapter docs/tests.
-- Updated dependencies.
-
-## 0.1.0-dev
+## 0.1.0
 
 - Added workflow run lease tracking and claim/renew helpers to distribute
   workflow execution safely across workers.
@@ -20,7 +12,12 @@
 - Added a local seed runtime to run Postgres seeders without requiring
   ormed_cli.
 - Hardened lock-store timing/TTL evaluation for more reliable coordination.
-- Updated Ormed dependencies to 0.1.0-dev+6.
+- Updated Ormed dependencies to 0.1.0.
+- Added workflow run lease migrations plus runnable discovery and metadata
+  paging updates in the workflow store.
+- Migrated IDs to UUID v7 and simplified datasource/connection handling.
+- Added workflow store contract coverage and refreshed adapter docs/tests.
+- Updated dependencies.
 
 ## 0.1.0-alpha.4
 
