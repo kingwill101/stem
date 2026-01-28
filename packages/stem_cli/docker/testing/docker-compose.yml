@@ -141,7 +141,7 @@ services:
       - "--appendonly"
       - "no"
     ports:
-      - "56380:6379"
+      - "${STEM_TEST_REDIS_TLS_PORT:-56380}:6379"
     volumes:
       - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
       - redis-tls-data:/data
@@ -192,7 +192,7 @@ services:
       - "--appendonly"
       - "no"
     ports:
-      - "56381:6379"
+      - "${STEM_TEST_REDIS_MTLS_PORT:-56381}:6379"
     volumes:
       - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
       - redis-mtls-data:/data

@@ -21,6 +21,9 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "Starting Redis/Postgres test services (docker compose)..."
+STEM_TEST_REDIS_TLS_PORT="${STEM_TEST_REDIS_TLS_PORT:-56380}"
+STEM_TEST_REDIS_MTLS_PORT="${STEM_TEST_REDIS_MTLS_PORT:-56381}"
+export STEM_TEST_REDIS_TLS_PORT STEM_TEST_REDIS_MTLS_PORT
 docker compose -f "$COMPOSE_FILE" up -d postgres postgres_tls redis redis_tls redis_mtls
 
 REDIS_URL="redis://127.0.0.1:56379"
@@ -30,8 +33,15 @@ REDIS_TLS_CA_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/ca.crt"
 REDIS_MTLS_CLIENT_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.crt"
 REDIS_MTLS_CLIENT_KEY_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.key"
 POSTGRES_TLS_URL="postgresql://postgres:postgres@localhost:65433/stem_test_tls?sslmode=verify-ca&sslrootcert=${CA_CERT_PATH}"
-REDIS_TLS_URL="rediss://localhost:56380/0"
-REDIS_MTLS_URL="rediss://localhost:56381/0"
+REDIS_TLS_MAPPING="$(docker compose -f "$COMPOSE_FILE" port redis_tls 6379)"
+REDIS_TLS_PORT="${REDIS_TLS_MAPPING##*:}"
+REDIS_MTLS_MAPPING="$(docker compose -f "$COMPOSE_FILE" port redis_mtls 6379)"
+REDIS_MTLS_PORT="${REDIS_MTLS_MAPPING##*:}"
+STEM_TEST_REDIS_TLS_PORT="$REDIS_TLS_PORT"
+STEM_TEST_REDIS_MTLS_PORT="$REDIS_MTLS_PORT"
+export STEM_TEST_REDIS_TLS_PORT STEM_TEST_REDIS_MTLS_PORT
+REDIS_TLS_URL="rediss://localhost:${REDIS_TLS_PORT}/0"
+REDIS_MTLS_URL="rediss://localhost:${REDIS_MTLS_PORT}/0"
 
 if [ "$SOURCED" -eq 1 ]; then
   export STEM_TEST_REDIS_URL="$REDIS_URL"
