@@ -650,11 +650,17 @@ class StemSignals {
     }
     stemLogger.warning(
       'Signal {signal} handler failed: {error}',
-      Context({
-        'signal': signalName,
-        'error': error.toString(),
-        'stack': stackTrace.toString(),
-      }),
+      Context(
+        stemContextFields(
+          component: 'stem',
+          subsystem: 'signals',
+          fields: {
+            'signal': signalName,
+            'error': error.toString(),
+            'stack': stackTrace.toString(),
+          },
+        ),
+      ),
     );
   }
 }

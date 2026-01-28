@@ -17,4 +17,16 @@ void main() {
 
     setStemLogger(original);
   });
+
+  test('stemContextFields includes component and subsystem', () {
+    final context = stemContextFields(
+      component: 'stem',
+      subsystem: 'worker',
+      fields: const {'queue': 'default'},
+    );
+
+    expect(context['component'], 'stem');
+    expect(context['subsystem'], 'worker');
+    expect(context['queue'], 'default');
+  });
 }

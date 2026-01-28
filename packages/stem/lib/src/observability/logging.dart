@@ -23,6 +23,34 @@ void setStemLogger(Logger logger) {
   _stemLogger = logger;
 }
 
+/// Builds a shared context payload for Stem log entries.
+Map<String, Object?> stemContextFields({
+  required String component,
+  required String subsystem,
+  Map<String, Object?>? fields,
+}) {
+  return {
+    'component': component,
+    'subsystem': subsystem,
+    ...?fields,
+  };
+}
+
+/// Creates a [Context] for the shared Stem logger.
+Context stemLogContext({
+  required String component,
+  required String subsystem,
+  Map<String, Object?>? fields,
+}) {
+  return Context(
+    stemContextFields(
+      component: component,
+      subsystem: subsystem,
+      fields: fields,
+    ),
+  );
+}
+
 /// Sets the minimum log [level] for the shared [stemLogger].
 void configureStemLogging({Level level = Level.info}) {
   stemLogger.setLevel(level);

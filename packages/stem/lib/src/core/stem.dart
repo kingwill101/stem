@@ -272,12 +272,14 @@ class Stem implements TaskEnqueuer {
             if (existingId != null) {
               stemLogger.info(
                 'Unique task deduplicated',
-                Context({
-                  'task': name,
-                  'queue': targetName,
-                  'existingId': existingId,
-                  'attemptedId': envelope.id,
-                }),
+                Context(
+                  _logContext({
+                    'task': name,
+                    'queue': targetName,
+                    'existingId': existingId,
+                    'attemptedId': envelope.id,
+                  }),
+                ),
               );
               StemMetrics.instance.increment(
                 'stem.tasks.deduplicated',
@@ -288,11 +290,13 @@ class Stem implements TaskEnqueuer {
             }
             stemLogger.warning(
               'Unique task deduplication failed to resolve existing task id',
-              Context({
-                'task': name,
-                'queue': targetName,
-                'attemptedId': envelope.id,
-              }),
+              Context(
+                _logContext({
+                  'task': name,
+                  'queue': targetName,
+                  'attemptedId': envelope.id,
+                }),
+              ),
             );
             return envelope.id;
           }
@@ -656,14 +660,24 @@ class Stem implements TaskEnqueuer {
     } on Exception catch (error, stack) {
       stemLogger.warning(
         'Failed recording unique task duplicate',
-        Context({
-          'taskId': taskId,
-          'duplicateId': duplicate.id,
-          'error': error.toString(),
-          'stack': stack.toString(),
-        }),
+        Context(
+          _logContext({
+            'taskId': taskId,
+            'duplicateId': duplicate.id,
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+        ),
       );
     }
+  }
+
+  Map<String, Object?> _logContext(Map<String, Object?> fields) {
+    return stemContextFields(
+      component: 'stem',
+      subsystem: 'core',
+      fields: fields,
+    );
   }
 
   /// Resolves the args encoder for a handler and registers it if needed.
