@@ -135,11 +135,13 @@ class Beat {
     if (overdueCount > 0) {
       stemLogger.warning(
         'Scheduler lag detected for {count} schedule(s)',
-        Context({
-          'count': overdueCount.toString(),
-          if (maxOverdue != null)
-            'maxOverdueMs': maxOverdue.inMilliseconds.toString(),
-        }),
+        Context(
+          _logContext({
+            'count': overdueCount.toString(),
+            if (maxOverdue != null)
+              'maxOverdueMs': maxOverdue.inMilliseconds.toString(),
+          }),
+        ),
       );
     }
     for (final entry in dueEntries) {
@@ -265,10 +267,12 @@ class Beat {
       if (drift.inMilliseconds.abs() > 0) {
         stemLogger.info(
           'Schedule {schedule} drift recorded',
-          Context({
-            'schedule': entry.id,
-            'driftMs': drift.inMilliseconds.toString(),
-          }),
+          Context(
+            _logContext({
+              'schedule': entry.id,
+              'driftMs': drift.inMilliseconds.toString(),
+            }),
+          ),
         );
       }
       await _signals.scheduleEntryDispatched(
@@ -280,11 +284,13 @@ class Beat {
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Beat dispatch failed for {schedule}: {error}',
-        Context({
-          'schedule': entry.id,
-          'error': error.toString(),
-          'stack': stack.toString(),
-        }),
+        Context(
+          _logContext({
+            'schedule': entry.id,
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
+        ),
       );
       try {
         final executedAt = DateTime.now();
@@ -304,11 +310,13 @@ class Beat {
       } on Exception catch (storeError, storeStack) {
         stemLogger.warning(
           'Failed to update schedule metadata for {schedule}',
-          Context({
-            'schedule': entry.id,
-            'error': storeError.toString(),
-            'stack': storeStack.toString(),
-          }),
+          Context(
+            _logContext({
+              'schedule': entry.id,
+              'error': storeError.toString(),
+              'stack': storeStack.toString(),
+            }),
+          ),
         );
       }
       await _signals.scheduleEntryFailed(
@@ -321,5 +329,13 @@ class Beat {
       renewalTimer?.cancel();
       await lock?.release();
     }
+  }
+
+  Map<String, Object?> _logContext(Map<String, Object?> fields) {
+    return stemContextFields(
+      component: 'stem',
+      subsystem: 'beat',
+      fields: fields,
+    );
   }
 }
