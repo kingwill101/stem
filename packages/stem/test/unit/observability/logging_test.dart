@@ -7,4 +7,14 @@ void main() {
     configureStemLogging(level: Level.debug);
     configureStemLogging(level: Level.warning);
   });
+
+  test('setStemLogger replaces the shared logger', () {
+    final original = stemLogger;
+    final replacement = Logger();
+
+    setStemLogger(replacement);
+    expect(identical(stemLogger, replacement), isTrue);
+
+    setStemLogger(original);
+  });
 }

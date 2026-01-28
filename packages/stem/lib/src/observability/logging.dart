@@ -1,9 +1,7 @@
 import 'package:contextual/contextual.dart';
 
-/// Shared logger configured with console output suitable for worker
-/// diagnostics.
-final stemLogger = Logger()
-  ..addChannel(
+Logger _buildStemLogger() {
+  return Logger()..addChannel(
     'console',
     ConsoleLogDriver(),
     formatter: PlainTextLogFormatter(
@@ -12,6 +10,18 @@ final stemLogger = Logger()
       ),
     ),
   );
+}
+
+Logger _stemLogger = _buildStemLogger();
+
+/// Shared logger configured with console output suitable for worker
+/// diagnostics.
+Logger get stemLogger => _stemLogger;
+
+/// Replaces the shared [stemLogger] instance used across Stem packages.
+void setStemLogger(Logger logger) {
+  _stemLogger = logger;
+}
 
 /// Sets the minimum log [level] for the shared [stemLogger].
 void configureStemLogging({Level level = Level.info}) {
