@@ -33,12 +33,14 @@ class PostgresBroker implements Broker {
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration sweeperInterval = const Duration(seconds: 10),
     Duration deadLetterRetention = const Duration(days: 7),
+    bool runMigrations = true,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
+      runMigrations: runMigrations,
     );
     return PostgresBroker._(
       connections,

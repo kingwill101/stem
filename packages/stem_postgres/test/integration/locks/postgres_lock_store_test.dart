@@ -32,6 +32,7 @@ Future<void> main() async {
         create: () async => PostgresLockStore.fromDataSource(
           dataSource,
           namespace: 'stem_lock_contract',
+          runMigrations: false,
         ),
         dispose: (store) => (store as PostgresLockStore).close(),
       ),
