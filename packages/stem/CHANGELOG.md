@@ -19,9 +19,6 @@
   (TaskResultEncoder and payload encoders).
 - Added new example suites (progress heartbeat, worker control lab, and the
   feature-complete set) plus refreshed docs/Justfiles for running them.
-
-## Unreleased
-
 - Added signals registry/configuration for worker, task, scheduler, and
   workflow lifecycle events.
 - Improved worker runtime (isolate pool, config, heartbeats/autoscaling) plus

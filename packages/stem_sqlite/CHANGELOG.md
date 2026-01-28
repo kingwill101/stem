@@ -10,9 +10,6 @@
 - Migrated the SQLite adapter to Ormed and added a local seed runtime that
   runs seeders without requiring ormed_cli.
 - Updated Ormed dependencies to 0.1.0.
-
-## Unreleased
-
 - Added workflow run lease migrations, runnable discovery, and offset support
   for workflow listings.
 - Migrated IDs to UUID v7, regenerated ORM models, and refreshed datasource

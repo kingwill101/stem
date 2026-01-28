@@ -4,9 +4,6 @@
   discovery.
 - Expanded contract coverage for typed result encoders and payload encoders
   (including TaskResultEncoder) used by adapters.
-
-## Unreleased
-
 - Split lock/workflow store contract suites and expanded runnable discovery
   coverage.
 - Updated dependencies and analysis options.

@@ -13,9 +13,6 @@
   ormed_cli.
 - Hardened lock-store timing/TTL evaluation for more reliable coordination.
 - Updated Ormed dependencies to 0.1.0.
-
-## Unreleased
-
 - Added workflow run lease migrations plus runnable discovery and metadata
   paging updates in the workflow store.
 - Migrated IDs to UUID v7 and simplified datasource/connection handling.

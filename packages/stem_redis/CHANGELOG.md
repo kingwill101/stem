@@ -3,9 +3,6 @@
 - Added workflow run lease tracking and claim/renew helpers to distribute
   workflow execution safely across workers.
 - Maintenance updates to adapter tooling and formatting (no runtime changes).
-
-## Unreleased
-
 - Added Redis workflow store support with runnable discovery and metadata
   paging improvements.
 - Migrated IDs to UUID v7 and updated datasource handling.
