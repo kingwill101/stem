@@ -18,6 +18,10 @@
 - Migrated IDs to UUID v7 and simplified datasource/connection handling.
 - Added workflow store contract coverage and refreshed adapter docs/tests.
 - Updated dependencies.
+- Wired DataSource and seed runtime initialization to use the shared
+  `stemLogger` by default, while still allowing explicit logger injection.
+- Hardened datasource/seed configuration overrides to safely merge nullable
+  driver options.
 
 ## 0.1.0-alpha.4
 
