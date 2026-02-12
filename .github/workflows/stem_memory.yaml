@@ -37,7 +37,7 @@ jobs:
         run: dart pub get
       - name: Run stem_memory tests
         working-directory: packages/stem_memory
-        run: dart test --coverage=coverage
+        run: dart test --coverage=coverage --fail-fast
       - name: Format coverage
         working-directory: packages/stem_memory
         run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib

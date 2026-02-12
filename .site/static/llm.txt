@@ -1,5 +1,4 @@
 Intentional alias for plugin-generated LLM indexes.
 
-Primary files:
+Primary file:
 - https://kingwill101.github.io/stem/llms.txt
-- https://kingwill101.github.io/stem/llms-full.txt
