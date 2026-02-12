@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:meta/meta.dart';
@@ -88,6 +89,7 @@ class SqliteBroker implements Broker {
   final Duration deadLetterRetention;
 
   final Set<_Consumer> _consumers = {};
+  static final Map<String, Set<_Consumer>> _broadcastConsumersByChannel = {};
   Timer? _sweeperTimer;
   bool _closed = false;
 
@@ -121,7 +123,15 @@ class SqliteBroker implements Broker {
         routing ??
         RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
     if (route.isBroadcast) {
-      throw UnsupportedError('SqliteBroker does not support broadcast routes');
+      final channel = (route.broadcastChannel ?? envelope.queue).trim();
+      if (channel.isEmpty) {
+        throw ArgumentError('Broadcast channel must not be empty');
+      }
+      _fanOutBroadcast(
+        channel: channel,
+        envelope: envelope.copyWith(queue: channel),
+      );
+      return;
     }
     final queue = (route.queue ?? envelope.queue).trim();
     if (queue.isEmpty) {
@@ -152,20 +162,26 @@ class SqliteBroker implements Broker {
     String? consumerGroup,
     String? consumerName,
   }) {
-    if (subscription.queues.isEmpty) {
-      throw ArgumentError('SqliteBroker requires at least one queue');
-    }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'SqliteBroker currently supports one queue per subscription.',
       );
     }
-    final queue = subscription.queues.single;
+    final queue = subscription.queues.isEmpty
+        ? null
+        : subscription.queues.single;
+    final broadcastChannels = subscription.broadcastChannels;
+    if (queue == null && broadcastChannels.isEmpty) {
+      throw ArgumentError(
+        'SqliteBroker requires at least one queue or broadcast channel.',
+      );
+    }
     final id = consumerName ?? const Uuid().v7();
     final controller = StreamController<Delivery>.broadcast();
     final consumer = _Consumer(
       broker: this,
       queue: queue,
+      broadcastChannels: broadcastChannels,
       consumerId: id,
       controller: controller,
       prefetch: prefetch.clamp(1, 50),
@@ -182,6 +198,9 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> ack(Delivery delivery) async {
+    if (_isBroadcastReceipt(delivery.receipt)) {
+      return;
+    }
     final jobId = _parseReceipt(delivery.receipt);
     await _context
         .query<StemQueueJob>()
@@ -192,6 +211,9 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
+    if (_isBroadcastReceipt(delivery.receipt)) {
+      return;
+    }
     if (!requeue) {
       await deadLetter(delivery, reason: 'nack');
       return;
@@ -218,6 +240,9 @@ class SqliteBroker implements Broker {
     String? reason,
     Map<String, Object?>? meta,
   }) async {
+    if (_isBroadcastReceipt(delivery.receipt)) {
+      return;
+    }
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
 
@@ -248,6 +273,9 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
+    if (_isBroadcastReceipt(delivery.receipt)) {
+      return;
+    }
     final jobId = _parseReceipt(delivery.receipt);
     final now = DateTime.now();
     await _context.repository<StemQueueJob>().update(
@@ -499,7 +527,69 @@ class SqliteBroker implements Broker {
     });
   }
 
+  static const String _broadcastReceiptPrefix = 'broadcast:';
+
   String _parseReceipt(String receipt) => receipt;
+
+  bool _isBroadcastReceipt(String receipt) =>
+      receipt.startsWith(_broadcastReceiptPrefix);
+
+  String _broadcastReceipt(String envelopeId, String consumerId) =>
+      '$_broadcastReceiptPrefix$envelopeId:$consumerId:${DateTime.now().microsecondsSinceEpoch}';
+
+  String _broadcastKey(String channel) => '$namespace:$channel';
+
+  void _registerBroadcastConsumer(_Consumer consumer) {
+    for (final channel in consumer.broadcastChannels) {
+      final key = _broadcastKey(channel);
+      final consumersForChannel = _broadcastConsumersByChannel.putIfAbsent(
+        key,
+        () => <_Consumer>{},
+      );
+      consumersForChannel.add(consumer);
+    }
+  }
+
+  void _unregisterBroadcastConsumer(_Consumer consumer) {
+    for (final channel in consumer.broadcastChannels) {
+      final key = _broadcastKey(channel);
+      final consumersForChannel = _broadcastConsumersByChannel[key];
+      if (consumersForChannel == null) {
+        continue;
+      }
+      consumersForChannel.remove(consumer);
+      if (consumersForChannel.isEmpty) {
+        _broadcastConsumersByChannel.remove(key);
+      }
+    }
+  }
+
+  void _fanOutBroadcast({
+    required String channel,
+    required Envelope envelope,
+  }) {
+    final consumers = List<_Consumer>.from(
+      _broadcastConsumersByChannel[_broadcastKey(channel)] ??
+          const <_Consumer>[],
+    );
+    if (consumers.isEmpty) {
+      return;
+    }
+    final leaseExpiresAt = DateTime.now().add(defaultVisibilityTimeout);
+    for (final consumer in consumers) {
+      if (!consumer.isActive) {
+        continue;
+      }
+      consumer.enqueueBroadcast(
+        Delivery(
+          envelope: envelope,
+          receipt: _broadcastReceipt(envelope.id, consumer.consumerId),
+          leaseExpiresAt: leaseExpiresAt,
+          route: RoutingInfo.broadcast(channel: channel),
+        ),
+      );
+    }
+  }
 
   Future<void> _insertJob(
     QueryContext db, {
@@ -537,23 +627,33 @@ class _Consumer {
   _Consumer({
     required this.broker,
     required this.queue,
+    required this.broadcastChannels,
     required this.consumerId,
     required this.controller,
     required this.prefetch,
   });
 
   final SqliteBroker broker;
-  final String queue;
+  final String? queue;
+  final List<String> broadcastChannels;
   final String consumerId;
   final StreamController<Delivery> controller;
   final int prefetch;
+  final Queue<Delivery> _pendingBroadcast = Queue<Delivery>();
 
   bool _running = false;
   bool _loopActive = false;
+  bool _broadcastRegistered = false;
+
+  bool get isActive => _running && !controller.isClosed;
 
   void start() {
     if (_running) return;
     _running = true;
+    if (!_broadcastRegistered && broadcastChannels.isNotEmpty) {
+      broker._registerBroadcastConsumer(this);
+      _broadcastRegistered = true;
+    }
     if (!_loopActive) {
       _loopActive = true;
       unawaited(_loop());
@@ -562,30 +662,56 @@ class _Consumer {
 
   void dispose() {
     _running = false;
+    if (_broadcastRegistered) {
+      broker._unregisterBroadcastConsumer(this);
+      _broadcastRegistered = false;
+    }
+    _pendingBroadcast.clear();
     if (!controller.isClosed) {
       unawaited(controller.close());
     }
   }
 
+  void enqueueBroadcast(Delivery delivery) {
+    if (!_running || controller.isClosed) return;
+    _pendingBroadcast.addLast(delivery);
+  }
+
+  bool _drainBroadcast() {
+    var emitted = false;
+    while (_pendingBroadcast.isNotEmpty && _running && !controller.isClosed) {
+      controller.add(_pendingBroadcast.removeFirst());
+      emitted = true;
+    }
+    return emitted;
+  }
+
   Future<void> _loop() async {
     while (_running && !controller.isClosed && !broker._closed) {
       try {
-        final jobs = <_QueuedJob>[];
-        for (var i = 0; i < prefetch; i++) {
-          final job = await broker._claimNextJob(queue, consumerId);
-          if (job == null) break;
-          jobs.add(job);
+        var emitted = _drainBroadcast();
+        final boundQueue = queue;
+        if (boundQueue != null) {
+          final jobs = <_QueuedJob>[];
+          for (var i = 0; i < prefetch; i++) {
+            final job = await broker._claimNextJob(boundQueue, consumerId);
+            if (job == null) break;
+            jobs.add(job);
+          }
+          if (jobs.isNotEmpty) {
+            emitted = true;
+            final leaseExpiresAt = DateTime.now().add(
+              broker.defaultVisibilityTimeout,
+            );
+            for (final job in jobs) {
+              if (!_running || controller.isClosed) break;
+              controller.add(job.toDelivery(leaseExpiresAt: leaseExpiresAt));
+            }
+          }
         }
-        if (jobs.isEmpty) {
+        if (!emitted) {
           await Future<void>.delayed(broker.pollInterval);
           continue;
-        }
-        final leaseExpiresAt = DateTime.now().add(
-          broker.defaultVisibilityTimeout,
-        );
-        for (final job in jobs) {
-          if (!_running || controller.isClosed) break;
-          controller.add(job.toDelivery(leaseExpiresAt: leaseExpiresAt));
         }
       } on Object {
         if (!_running || controller.isClosed) break;

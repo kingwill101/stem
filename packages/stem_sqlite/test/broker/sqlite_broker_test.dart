@@ -33,12 +33,21 @@ void main() {
         sweeperInterval: const Duration(milliseconds: 75),
       ),
       dispose: (broker) => (broker as SqliteBroker).close(),
+      additionalBrokerFactory: () async => SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(milliseconds: 200),
+        pollInterval: const Duration(milliseconds: 25),
+        sweeperInterval: const Duration(milliseconds: 75),
+      ),
     ),
     settings: const BrokerContractSettings(
       visibilityTimeout: Duration(milliseconds: 300),
       leaseExtension: Duration(milliseconds: 300),
       queueSettleDelay: Duration(milliseconds: 250),
       replayDelay: Duration(milliseconds: 250),
+      capabilities: BrokerContractCapabilities(
+        verifyBroadcastFanout: true,
+      ),
     ),
   );
 
