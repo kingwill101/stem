@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:artisanal/args.dart';
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
+import 'package:stem/stem.dart' show stemLogger;
 
 /// Runs the registered seeders using an existing ORM connection.
 Future<void> runSeedRegistryOnConnection(
@@ -103,7 +104,7 @@ Future<void> runSeedRegistryEntrypoint({
   }
 
   ensureSqliteDriverRegistration();
-  final dataSource = DataSource.fromConfig(config);
+  final dataSource = DataSource.fromConfig(config, logger: stemLogger);
   await dataSource.init();
   try {
     final requested =
