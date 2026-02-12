@@ -1,3 +1,9 @@
+## 0.1.1
+
+- Added broker broadcast fan-out support for SQLite routing subscriptions with
+  broadcast channels.
+- Enabled broadcast fan-out broker contract coverage for the SQLite adapter.
+
 ## 0.1.0
 
 - Added workflow run lease tracking and claim/renew support so workflows can be

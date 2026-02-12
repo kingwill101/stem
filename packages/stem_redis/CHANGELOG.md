@@ -1,3 +1,10 @@
+<!-- markdownlint-disable MD041 -->
+
+## 0.1.1
+
+- Enabled broadcast fan-out broker contract coverage in Redis integration tests
+  by wiring additional broker instances for shared-namespace fan-out checks.
+
 ## 0.1.0
 
 - Added workflow run lease tracking and claim/renew helpers to distribute

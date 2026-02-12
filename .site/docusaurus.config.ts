@@ -4,6 +4,10 @@ import type * as Preset from '@docusaurus/preset-classic';
 import remarkCodeRegion from './plugins/remark-code-region.mjs';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+const siteUrl = 'https://kingwill101.github.io';
+const siteBaseUrl = '/stem/';
+const llmsTxtUrl = `${siteUrl}${siteBaseUrl}llms.txt`;
+const llmsFullTxtUrl = `${siteUrl}${siteBaseUrl}llms-full.txt`;
 
 const config: Config = {
   title: 'Stem Documentation',
@@ -16,10 +20,10 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://kingwill101.github.io',
+  url: siteUrl,
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/stem/',
+  baseUrl: siteBaseUrl,
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -65,6 +69,22 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      'docusaurus-plugin-llms',
+      {
+        docsDir: 'docs',
+        includeBlog: false,
+        excludeImports: true,
+        removeDuplicateHeadings: true,
+        pathTransformation: {
+          ignorePaths: ['docs'],
+          addPaths: ['stem'],
+        },
+      },
+    ],
+  ],
+
   themeConfig: {
     metadata: [
       {name: 'keywords', content: 'dart, background-jobs, stem, task-queue, spec-driven'},
@@ -95,6 +115,20 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
         },
+        {
+          label: 'LLMs',
+          position: 'right',
+          items: [
+            {
+              label: 'llms.txt',
+              href: llmsTxtUrl,
+            },
+            {
+              label: 'llms-full.txt',
+              href: llmsFullTxtUrl,
+            },
+          ],
+        },
       ],
     },
     footer: {
@@ -123,6 +157,14 @@ const config: Config = {
             {
               label: 'GitHub',
               href: 'https://github.com/kingwill101/stem',
+            },
+            {
+              label: 'llms.txt',
+              href: llmsTxtUrl,
+            },
+            {
+              label: 'llms-full.txt',
+              href: llmsFullTxtUrl,
             },
           ],
         },

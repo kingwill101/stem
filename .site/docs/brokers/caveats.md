@@ -13,13 +13,14 @@ implementations.
 
 - **No priority buckets**: `supportsPriority` is false, so priorities are not
   enforced.
-- **No broadcast channels**: broadcast routing and subscriptions are rejected.
 - **Single-queue consumption**: only one queue can be consumed per subscription.
 - **Not durable**: data is lost when the process exits.
 
 ## SQLite broker
 
-- **No broadcast channels**: worker control commands are not supported.
+- **Broadcast scope is in-process**: fan-out works for subscribers running in
+  the same process, but cross-process worker control broadcasts are not
+  supported.
 - **Single-queue consumption**: only one queue can be consumed per subscription.
 - **Polling-based delivery**: tasks are polled on `pollInterval` and claimed
   via row locks; latency depends on the poll interval.

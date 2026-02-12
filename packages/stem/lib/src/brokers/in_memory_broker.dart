@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -15,6 +16,7 @@ class InMemoryBroker implements Broker {
     this.claimInterval = const Duration(seconds: 5),
     this.defaultVisibilityTimeout = const Duration(seconds: 30),
   }) {
+    _namespaceRefs[namespace] = (_namespaceRefs[namespace] ?? 0) + 1;
     _delayedTimer = Timer.periodic(
       delayedInterval,
       (_) => _drainDelayed(DateTime.now()),
@@ -37,7 +39,16 @@ class InMemoryBroker implements Broker {
   /// Default visibility timeout for claimed deliveries.
   final Duration defaultVisibilityTimeout;
 
+  /// Shared namespace registries enable cross-instance broadcast fan-out.
+  ///
+  /// Because `_broadcastHubs` and `_namespaceRefs` are static, brokers using
+  /// the same namespace in parallel tests will interfere. Use unique
+  /// namespaces when test isolation is required.
+  static final Map<String, _BroadcastHub> _broadcastHubs = {};
+  static final Map<String, int> _namespaceRefs = {};
+
   final Map<String, _QueueState> _queues = {};
+  final Set<_BroadcastSubscription> _activeBroadcastSubscriptions = {};
 
   Timer? _delayedTimer;
   Timer? _claimTimer;
@@ -45,6 +56,9 @@ class InMemoryBroker implements Broker {
 
   _QueueState _state(String queue) =>
       _queues.putIfAbsent(queue, () => _QueueState(queue));
+
+  _BroadcastHub get _broadcastHub =>
+      _broadcastHubs.putIfAbsent(namespace, () => _BroadcastHub(namespace));
 
   @override
   bool get supportsDelayed => true;
@@ -61,6 +75,17 @@ class InMemoryBroker implements Broker {
     for (final q in _queues.values) {
       q.dispose();
     }
+    for (final subscription in _activeBroadcastSubscriptions.toList()) {
+      subscription.close();
+    }
+    _activeBroadcastSubscriptions.clear();
+    final remaining = (_namespaceRefs[namespace] ?? 1) - 1;
+    if (remaining <= 0) {
+      _namespaceRefs.remove(namespace);
+      _broadcastHubs.remove(namespace);
+    } else {
+      _namespaceRefs[namespace] = remaining;
+    }
   }
 
   @override
@@ -76,9 +101,14 @@ class InMemoryBroker implements Broker {
         routing ??
         RoutingInfo.queue(queue: envelope.queue, priority: envelope.priority);
     if (resolvedRoute.isBroadcast) {
-      throw UnsupportedError(
-        'InMemoryBroker does not support broadcast routing.',
+      final channel = resolvedRoute.broadcastChannel ?? envelope.queue;
+      final message = envelope.copyWith(queue: channel);
+      _broadcastHub.publish(
+        channel: channel,
+        envelope: message,
+        delivery: resolvedRoute.delivery ?? 'at-least-once',
       );
+      return;
     }
     final targetQueue = resolvedRoute.queue ?? envelope.queue;
     final state = _state(targetQueue);
@@ -117,41 +147,63 @@ class InMemoryBroker implements Broker {
     String? consumerGroup,
     String? consumerName,
   }) {
-    if (subscription.broadcastChannels.isNotEmpty) {
-      throw UnsupportedError(
-        'InMemoryBroker does not support broadcast subscriptions.',
-      );
-    }
-    if (subscription.queues.isEmpty) {
-      throw ArgumentError(
-        'RoutingSubscription must specify at least one queue.',
-      );
-    }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'InMemoryBroker currently supports consuming a single queue at a time.',
       );
     }
-    final queue = subscription.queues.first;
-    final state = _state(queue);
+    final queue = subscription.queues.firstOrNull;
+    final state = queue == null ? null : _state(queue);
     final consumer = consumerName ?? const Uuid().v7();
+    final consumerKey = '${consumerGroup ?? 'default'}::$consumer';
+    _BroadcastSubscription? broadcastSubscription;
+    var active = true;
 
     late StreamController<Delivery> controller;
-    controller = StreamController<Delivery>.broadcast(
+    controller = StreamController<Delivery>(
       onListen: () async {
-        while (!controller.isClosed) {
-          final delivery = await state.nextDelivery(
-            consumer: consumer,
-            prefetch: prefetch,
-            defaultVisibilityTimeout: defaultVisibilityTimeout,
+        if (subscription.broadcastChannels.isNotEmpty) {
+          broadcastSubscription = _broadcastHub.subscribe(
+            consumer: consumerKey,
+            channels: subscription.broadcastChannels,
+            onDelivery: (delivery) {
+              if (controller.isClosed) return;
+              controller.add(delivery);
+            },
           );
-          if (controller.isClosed) break;
-          controller.add(delivery);
+          _activeBroadcastSubscriptions.add(broadcastSubscription!);
+        }
+
+        if (state == null) {
+          return;
+        }
+
+        state.resumeConsumer(consumer);
+        try {
+          while (active && !controller.isClosed) {
+            final delivery = await state.nextDelivery(
+              consumer: consumer,
+              prefetch: prefetch,
+              defaultVisibilityTimeout: defaultVisibilityTimeout,
+            );
+            if (!active || controller.isClosed || !controller.hasListener) {
+              state.requeue(delivery.receipt);
+              break;
+            }
+            controller.add(delivery);
+          }
+        } on _ConsumerCancelled {
+          return;
         }
       },
       onCancel: () {
-        state.cancelWaiters(consumer);
-        unawaited(controller.close());
+        active = false;
+        state?.cancelWaiters(consumer);
+        final broadcastSub = broadcastSubscription;
+        if (broadcastSub != null) {
+          broadcastSub.close();
+          _activeBroadcastSubscriptions.remove(broadcastSub);
+        }
       },
     );
     return controller.stream;
@@ -160,12 +212,23 @@ class InMemoryBroker implements Broker {
   @override
   /// Acknowledges a delivery, removing it from in-flight tracking.
   Future<void> ack(Delivery delivery) async {
+    if (delivery.route.isBroadcast) {
+      _broadcastHub.ack(delivery.receipt);
+      return;
+    }
     _state(delivery.envelope.queue).ack(delivery.receipt);
   }
 
   @override
   /// Rejects a delivery, optionally requeuing it.
+  ///
+  /// Broadcast deliveries are fire-and-forget in this broker. For broadcast
+  /// routes, `nack` records an ack in the broadcast hub and ignores `requeue`.
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
+    if (delivery.route.isBroadcast) {
+      _broadcastHub.ack(delivery.receipt);
+      return;
+    }
     final state = _state(delivery.envelope.queue);
     final envelope = state.ack(delivery.receipt);
     if (envelope != null && requeue) {
@@ -179,6 +242,10 @@ class InMemoryBroker implements Broker {
     String? reason,
     Map<String, Object?>? meta,
   }) async {
+    if (delivery.route.isBroadcast) {
+      _broadcastHub.ack(delivery.receipt);
+      return;
+    }
     _state(
       delivery.envelope.queue,
     ).deadLetter(delivery.receipt, reason: reason, meta: meta);
@@ -187,6 +254,9 @@ class InMemoryBroker implements Broker {
   @override
   /// Extends the visibility lease for an in-flight delivery.
   Future<void> extendLease(Delivery delivery, Duration by) async {
+    if (delivery.route.isBroadcast) {
+      return;
+    }
     _state(delivery.envelope.queue).extendLease(delivery.receipt, by);
   }
 
@@ -302,6 +372,7 @@ class _QueueState {
   final Map<String, _PendingEntry> _pending = {};
   final List<DeadLetterEntry> deadLetters = [];
   final Map<String, int> _consumerInFlight = {};
+  final Set<String> _cancelledConsumers = {};
   final List<Completer<void>> _waiters = [];
 
   int _sequence = 0;
@@ -318,6 +389,7 @@ class _QueueState {
 
   /// Cancels pending waiters for a consumer and clears in-flight tracking.
   void cancelWaiters(String consumer) {
+    _cancelledConsumers.add(consumer);
     _consumerInFlight.remove(consumer);
     for (final completer in _waiters) {
       if (!completer.isCompleted) {
@@ -325,6 +397,11 @@ class _QueueState {
       }
     }
     _waiters.clear();
+  }
+
+  /// Clears cancellation state when a consumer re-subscribes.
+  void resumeConsumer(String consumer) {
+    _cancelledConsumers.remove(consumer);
   }
 
   /// Enqueues a ready-to-run envelope and wakes consumers.
@@ -364,6 +441,9 @@ class _QueueState {
     required Duration defaultVisibilityTimeout,
   }) async {
     while (true) {
+      if (_cancelledConsumers.contains(consumer)) {
+        throw _ConsumerCancelled(consumer);
+      }
       moveDue(DateTime.now());
 
       final inFlight = _consumerInFlight[consumer] ?? 0;
@@ -481,8 +561,8 @@ class _QueueState {
   /// Generates a monotonically increasing receipt identifier.
   String _nextReceipt() => '$name:${_sequence++}';
 
-  /// Count of ready + delayed items waiting for delivery.
-  int get pending => _ready.length + _delayed.length;
+  /// Count of ready items waiting for delivery.
+  int get pending => _ready.length;
 
   /// Count of deliveries currently leased to consumers.
   int get inflight => _pending.length;
@@ -496,6 +576,21 @@ class _QueueState {
       }
     }
     _waiters.clear();
+  }
+
+  /// Requeues an in-flight delivery back onto the ready queue.
+  void requeue(String receipt) {
+    final entry = _pending.remove(receipt);
+    if (entry == null) {
+      return;
+    }
+    final consumer = entry.consumer;
+    final count = _consumerInFlight[consumer] ?? 0;
+    if (count > 0) {
+      _consumerInFlight[consumer] = count - 1;
+    }
+    _ready.addFirst(entry.delivery.envelope);
+    _notify();
   }
 }
 
@@ -518,4 +613,184 @@ class _PendingEntry {
   final Delivery delivery;
   final String consumer;
   DateTime? leaseExpiresAt;
+}
+
+class _ConsumerCancelled implements Exception {
+  _ConsumerCancelled(this.consumer);
+
+  final String consumer;
+}
+
+class _BroadcastHub {
+  _BroadcastHub(this.namespace);
+
+  final String namespace;
+  static const int _maxHistory = 10000;
+  final Map<String, Map<String, _BroadcastListener>> _listenersByChannel = {};
+  final ListQueue<String> _messageOrder = ListQueue();
+  final Map<String, _BroadcastMessage> _messagesByKey = {};
+  final Map<String, Set<String>> _ackedByConsumer = {};
+
+  _BroadcastSubscription subscribe({
+    required String consumer,
+    required List<String> channels,
+    required void Function(Delivery delivery) onDelivery,
+  }) {
+    final listener = _BroadcastListener(
+      id: const Uuid().v7(),
+      consumer: consumer,
+      onDelivery: onDelivery,
+    );
+    final uniqueChannels = channels.toSet();
+    for (final channel in uniqueChannels) {
+      final listeners = _listenersByChannel.putIfAbsent(channel, () => {});
+      listeners[listener.id] = listener;
+    }
+    _deliverBacklog(listener: listener, channels: uniqueChannels);
+    return _BroadcastSubscription(() {
+      for (final channel in uniqueChannels) {
+        final listeners = _listenersByChannel[channel];
+        listeners?.remove(listener.id);
+        if (listeners == null || listeners.isNotEmpty) {
+          continue;
+        }
+        _listenersByChannel.remove(channel);
+      }
+    });
+  }
+
+  void publish({
+    required String channel,
+    required Envelope envelope,
+    required String delivery,
+  }) {
+    final message = _BroadcastMessage(
+      key: const Uuid().v7(),
+      channel: channel,
+      envelope: envelope.copyWith(),
+      delivery: delivery,
+    );
+    _messagesByKey[message.key] = message;
+    _messageOrder.addLast(message.key);
+    _trimHistory();
+
+    final listeners = _listenersByChannel[channel];
+    if (listeners == null || listeners.isEmpty) {
+      return;
+    }
+    final snapshot = listeners.values.toList(growable: false);
+    for (final listener in snapshot) {
+      if (_isAcked(listener.consumer, message.key)) continue;
+      listener.onDelivery(_toDelivery(message, listener.consumer));
+    }
+  }
+
+  void ack(String receipt) {
+    try {
+      final payload = jsonDecode(receipt);
+      if (payload is! Map<String, dynamic>) {
+        return;
+      }
+      final messageKey = payload['messageKey'] as String?;
+      final consumer = payload['consumer'] as String?;
+      if (messageKey == null || consumer == null) {
+        return;
+      }
+      _ackedByConsumer.putIfAbsent(consumer, () => <String>{}).add(messageKey);
+    } on FormatException {
+      return;
+    } on TypeError {
+      return;
+    }
+  }
+
+  void _deliverBacklog({
+    required _BroadcastListener listener,
+    required Set<String> channels,
+  }) {
+    for (final messageKey in _messageOrder) {
+      final message = _messagesByKey[messageKey];
+      if (message == null) continue;
+      if (!channels.contains(message.channel)) continue;
+      if (_isAcked(listener.consumer, message.key)) continue;
+      listener.onDelivery(_toDelivery(message, listener.consumer));
+    }
+  }
+
+  Delivery _toDelivery(_BroadcastMessage message, String consumer) {
+    return Delivery(
+      envelope: message.envelope.copyWith(),
+      receipt: jsonEncode({
+        'messageKey': message.key,
+        'consumer': consumer,
+      }),
+      leaseExpiresAt: null,
+      route: RoutingInfo.broadcast(
+        channel: message.channel,
+        delivery: message.delivery,
+      ),
+    );
+  }
+
+  bool _isAcked(String consumer, String messageId) {
+    final acked = _ackedByConsumer[consumer];
+    if (acked == null) return false;
+    return acked.contains(messageId);
+  }
+
+  void _trimHistory() {
+    while (_messageOrder.length > _maxHistory) {
+      final oldest = _messageOrder.removeFirst();
+      _messagesByKey.remove(oldest);
+      final emptyConsumers = <String>[];
+      _ackedByConsumer.forEach((consumer, acked) {
+        acked.remove(oldest);
+        if (acked.isEmpty) {
+          emptyConsumers.add(consumer);
+        }
+      });
+      for (final consumer in emptyConsumers) {
+        _ackedByConsumer.remove(consumer);
+      }
+    }
+  }
+}
+
+class _BroadcastListener {
+  _BroadcastListener({
+    required this.id,
+    required this.consumer,
+    required this.onDelivery,
+  });
+
+  final String id;
+  final String consumer;
+  final void Function(Delivery delivery) onDelivery;
+}
+
+class _BroadcastSubscription {
+  _BroadcastSubscription(this._onClose);
+
+  final void Function() _onClose;
+  bool _closed = false;
+
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _onClose();
+  }
+}
+
+class _BroadcastMessage {
+  _BroadcastMessage({
+    required this.key,
+    required this.channel,
+    required this.envelope,
+    required this.delivery,
+  });
+
+  final String key;
+  final String channel;
+  final Envelope envelope;
+  final String delivery;
 }

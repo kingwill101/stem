@@ -1,0 +1,7 @@
+version: "3"
+
+tasks:
+  test:
+    desc: Run stem_adapter_tests package tests.
+    cmds:
+      - dart test --fail-fast

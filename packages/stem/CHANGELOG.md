@@ -1,3 +1,9 @@
+## 0.1.1
+
+- Aligned in-memory broker and result backend semantics with shared adapter
+  contracts, including broadcast fan-out behavior for in-memory broker tests.
+- Added Taskfile support for package-scoped test orchestration.
+
 ## 0.1.0
 
 - Added workflow run leasing APIs (`claimRun`, `renewRunLease`, `releaseRun`,

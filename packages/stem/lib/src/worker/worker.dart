@@ -2504,10 +2504,18 @@ class Worker {
   }
 
   /// Adds standard worker metadata to a log context map.
-  Map<String, Object> _logContext(Map<String, Object> base) {
+  Map<String, Object?> _logContext(Map<String, Object> base) {
+    final context = stemContextFields(
+      component: 'stem',
+      subsystem: 'worker',
+      fields: {
+        'worker': _workerIdentifier,
+        ...base,
+      },
+    );
     final traceFields = StemTracer.instance.traceFields();
-    if (traceFields.isEmpty) return base;
-    return {...base, ...traceFields};
+    if (traceFields.isEmpty) return context;
+    return {...context, ...traceFields};
   }
 
   /// Starts periodic worker heartbeat publishing and metrics updates.

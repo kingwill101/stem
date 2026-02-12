@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:contextual/contextual.dart';
 import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/src/connection.dart';
@@ -19,6 +20,7 @@ class PostgresBroker implements Broker {
   }) {
     stemLogger.info(
       'PostgresBroker created (namespace=$namespace)',
+      _logContext(),
     );
     _startSweeper();
   }
@@ -116,6 +118,7 @@ class PostgresBroker implements Broker {
     stemLogger.warning(
       'Closing PostgresBroker (namespace=$namespace) '
       'stack=${_closedStack ?? ''}',
+      _logContext({'stack': _closedStack.toString()}),
     );
     _closed = true;
     _sweeperTimer?.cancel();
@@ -216,6 +219,7 @@ class PostgresBroker implements Broker {
     stemLogger.debug(
       'Broker consume requested (namespace=$namespace, '
       'queues=${subscription.queues})',
+      _logContext({'queues': subscription.queues}),
     );
     if (subscription.queues.isEmpty) {
       throw ArgumentError(
@@ -242,6 +246,10 @@ class PostgresBroker implements Broker {
       onCancel: () {
         stemLogger.debug(
           'Consumer stream canceled (queue=$queue, worker=$consumer)',
+          _logContext({
+            'queue': queue,
+            'worker': consumer,
+          }),
         );
         runner.stop();
         _consumers.remove(runner);
@@ -264,6 +272,7 @@ class PostgresBroker implements Broker {
       stemLogger.warning(
         'Broker already closed; closing consumer stream. '
         'stack=${_closedStack ?? StackTrace.current}',
+        _logContext({'stack': (_closedStack ?? StackTrace.current).toString()}),
       );
       scheduleMicrotask(() async {
         await controller.close();
@@ -279,7 +288,13 @@ class PostgresBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    stemLogger.debug('Ack queue job $jobId (${delivery.envelope.queue})');
+    stemLogger.debug(
+      'Ack queue job $jobId (${delivery.envelope.queue})',
+      _logContext({
+        'jobId': jobId,
+        'queue': delivery.envelope.queue,
+      }),
+    );
     await _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -300,7 +315,13 @@ class PostgresBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    stemLogger.debug('Nack queue job $jobId (${delivery.envelope.queue})');
+    stemLogger.debug(
+      'Nack queue job $jobId (${delivery.envelope.queue})',
+      _logContext({
+        'jobId': jobId,
+        'queue': delivery.envelope.queue,
+      }),
+    );
     final now = DateTime.now().toUtc();
     await _withDb(() {
       return _context
@@ -619,6 +640,11 @@ class PostgresBroker implements Broker {
         if (updated == 0) return null;
         stemLogger.debug(
           'Claimed queue job ${candidate.id} ($queue) by $consumerId',
+          _logContext({
+            'jobId': candidate.id,
+            'queue': queue,
+            'worker': consumerId,
+          }),
         );
         return _QueuedJob.fromModel(candidate);
       });
@@ -720,6 +746,15 @@ class PostgresBroker implements Broker {
     });
   }
 
+  Context _logContext([Map<String, Object?> fields = const {}]) {
+    return Context({
+      'component': 'stem_postgres',
+      'subsystem': 'broker',
+      'namespace': namespace,
+      ...fields,
+    });
+  }
+
   String _parseReceipt(String receipt) => receipt;
 
   Future<void> _insertJob(
@@ -785,6 +820,7 @@ class _ConsumerRunner {
     _started = true;
     stemLogger.debug(
       'Consumer runner started (queue=$queue, worker=$workerId)',
+      broker._logContext({'queue': queue, 'worker': workerId}),
     );
     unawaited(_loop());
   }
@@ -792,6 +828,7 @@ class _ConsumerRunner {
   void stop() {
     stemLogger.debug(
       'Consumer runner stopped (queue=$queue, worker=$workerId)',
+      broker._logContext({'queue': queue, 'worker': workerId}),
     );
     _stopped = true;
   }
@@ -835,6 +872,12 @@ class _ConsumerRunner {
         stemLogger.warning(
           'Consumer loop error (queue=$queue, worker=$workerId): '
           '$error\n$stack',
+          broker._logContext({
+            'queue': queue,
+            'worker': workerId,
+            'error': error.toString(),
+            'stack': stack.toString(),
+          }),
         );
         if (controller.isClosed) return;
         controller.addError(error, stack);

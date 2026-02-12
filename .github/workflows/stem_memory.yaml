@@ -1,0 +1,49 @@
+name: stem_memory
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'packages/stem_memory/**'
+      - 'packages/stem/**'
+      - 'packages/stem_adapter_tests/**'
+      - 'pubspec.yaml'
+  pull_request:
+    paths:
+      - 'packages/stem_memory/**'
+      - 'packages/stem/**'
+      - 'packages/stem_adapter_tests/**'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Get Dart packages cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+      - name: Install dependencies
+        run: dart pub get
+      - name: Run stem_memory tests
+        working-directory: packages/stem_memory
+        run: dart test --coverage=coverage --fail-fast
+      - name: Format coverage
+        working-directory: packages/stem_memory
+        run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
+      - name: Check coverage threshold
+        working-directory: packages/stem_memory
+        # Coverage currently reports 0% for stem_memory due report-on mismatch.
+        # Track raising this floor once coverage reporting is corrected.
+        # See: https://github.com/kingwill101/stem/issues/14
+        run: dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 0

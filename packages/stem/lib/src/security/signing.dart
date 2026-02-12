@@ -419,10 +419,16 @@ class PayloadSigner {
     _warnedMisconfiguration = true;
     stemLogger.warning(
       'Signing configuration incomplete: $message',
-      Context({
-        'algorithm': config.algorithm.label,
-        'keyId': ?keyId,
-      }),
+      Context(
+        stemContextFields(
+          component: 'stem',
+          subsystem: 'signing',
+          fields: {
+            'algorithm': config.algorithm.label,
+            'keyId': keyId,
+          },
+        ),
+      ),
     );
   }
 

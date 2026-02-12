@@ -124,6 +124,7 @@ void logTlsHandshakeFailure({
 }) {
   final context = Context({
     'component': component,
+    'subsystem': 'tls',
     'host': host,
     'port': port,
     'caCertificate': config?.caCertificateFile ?? 'system',

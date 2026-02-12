@@ -1,0 +1,73 @@
+version: "3"
+
+includes:
+  dashboard:
+    taskfile: ./packages/dashboard/Taskfile.yml
+    dir: ./packages/dashboard
+  stem:
+    taskfile: ./packages/stem/Taskfile.yml
+    dir: ./packages/stem
+  stem_adapter_tests:
+    taskfile: ./packages/stem_adapter_tests/Taskfile.yml
+    dir: ./packages/stem_adapter_tests
+  stem_builder:
+    taskfile: ./packages/stem_builder/Taskfile.yml
+    dir: ./packages/stem_builder
+  stem_cli:
+    taskfile: ./packages/stem_cli/Taskfile.yml
+    dir: ./packages/stem_cli
+  stem_memory:
+    taskfile: ./packages/stem_memory/Taskfile.yml
+    dir: ./packages/stem_memory
+  stem_postgres:
+    taskfile: ./packages/stem_postgres/Taskfile.yml
+    dir: ./packages/stem_postgres
+  stem_redis:
+    taskfile: ./packages/stem_redis/Taskfile.yml
+    dir: ./packages/stem_redis
+  stem_sqlite:
+    taskfile: ./packages/stem_sqlite/Taskfile.yml
+    dir: ./packages/stem_sqlite
+
+tasks:
+  test:
+    desc: Run all workspace package tests with integration test env bootstrapped.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          source ./packages/stem_cli/_init_test_env
+          task test:no-env
+        '
+
+  test:no-env:
+    desc: Run all workspace package tests without bootstrapping integration env.
+    cmds:
+      - task: dashboard:test
+      - task: stem:test
+      - task: stem_adapter_tests:test
+      - task: stem_builder:test
+      - task: stem_cli:test-multi
+      - task: stem_memory:test
+      - task: stem_postgres:test
+      - task: stem_redis:test
+      - task: stem_sqlite:test
+
+  coverage:
+    desc: Run coverage workflow with integration test env bootstrapped.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          source ./packages/stem_cli/_init_test_env
+          task coverage:no-env
+        '
+
+  coverage:no-env:
+    desc: Run coverage workflow for core packages (no env bootstrap).
+    cmds:
+      - task: stem:coverage
+      - task: stem_cli:coverage
+      - task: stem_postgres:coverage
+      - task: stem_redis:coverage
+      - task: stem_sqlite:coverage

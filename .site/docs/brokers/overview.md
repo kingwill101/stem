@@ -52,7 +52,7 @@ Planned adapters may not support full control-plane tooling until release.
 | ----------------- | ------------ | -------- | ------ | -------- | ----------------- | ----- |
 | Redis Streams     | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Lowest latency, great default. |
 | Postgres          | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Durable, SQL-friendly; higher latency than Redis. |
-| SQLite            | ✅ Supported | At-least-once | ✅ | ✅ | ❌ | Single-host file broker; no broadcast/control. |
+| SQLite            | ✅ Supported | At-least-once | ✅ | ✅ | ⚠️ | Single-host file broker; broadcast fan-out is in-process only. |
 | In-memory         | ✅ Supported | At-least-once | ✅ | ✅ | ✅ | Single-process only; testing/dev. |
 | RabbitMQ          | 🔜 Planned   | AMQP acks | ✅ | ✅ | ✅ | Mature routing; requires AMQP infra. |
 | Amazon SQS        | 🔜 Planned   | Visibility timeout | ✅ | Limited | ⚠️ | Fully managed; no native fanout. |
@@ -73,10 +73,11 @@ aligned with worker concurrency.
 
 ### SQLite
 
-Best for single-host development and demos. The SQLite broker does not support
-broadcast control channels and uses polling-based delivery. Use separate
-SQLite files for broker vs. backend to avoid WAL contention. See the
-[SQLite adapter guide](./sqlite.md) for setup and operational notes.
+Best for single-host development and demos. The SQLite broker uses polling-
+based delivery and supports broadcast fan-out only for subscribers in the same
+process. Use separate SQLite files for broker vs. backend to avoid WAL
+contention. See the [SQLite adapter guide](./sqlite.md) for setup and
+operational notes.
 
 ### In-memory
 

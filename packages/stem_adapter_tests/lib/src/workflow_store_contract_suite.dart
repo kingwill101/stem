@@ -1,7 +1,19 @@
 import 'dart:async';
 
 import 'package:stem/stem.dart';
+import 'package:stem_adapter_tests/src/contract_capabilities.dart';
 import 'package:test/test.dart';
+
+/// Settings that tune the workflow store contract suite.
+class WorkflowStoreContractSettings {
+  /// Creates workflow store contract settings.
+  const WorkflowStoreContractSettings({
+    this.capabilities = const WorkflowStoreContractCapabilities(),
+  });
+
+  /// Feature capability flags for optional contract assertions.
+  final WorkflowStoreContractCapabilities capabilities;
+}
 
 /// Factory hooks used by the workflow store contract test suite.
 class WorkflowStoreContractFactory {
@@ -19,6 +31,8 @@ class WorkflowStoreContractFactory {
 void runWorkflowStoreContractTests({
   required String adapterName,
   required WorkflowStoreContractFactory factory,
+  WorkflowStoreContractSettings settings =
+      const WorkflowStoreContractSettings(),
 }) {
   group('$adapterName workflow store contract', () {
     WorkflowStore? store;
@@ -131,37 +145,48 @@ void runWorkflowStoreContractTests({
         expect(state?.suspensionData?['iteration'], 0);
         expect(state?.suspensionData?['iterationStep'], 'repeat');
       },
+      skip: _skipUnless(
+        settings.capabilities.verifyVersionedCheckpoints,
+        'Adapter disabled versioned-checkpoint capability checks.',
+      ),
     );
 
-    test('listRuns reports logical cursor for versioned checkpoints', () async {
-      final current = store!;
-      final runId = await current.createRun(
-        workflow: 'contract.workflow',
-        params: const {},
-      );
+    test(
+      'listRuns reports logical cursor for versioned checkpoints',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
 
-      await current.saveStep(runId, 'repeat#0', 'first');
-      await current.saveStep(runId, 'repeat#1', 'second');
-      await current.saveStep(runId, 'tail', 'done');
+        await current.saveStep(runId, 'repeat#0', 'first');
+        await current.saveStep(runId, 'repeat#1', 'second');
+        await current.saveStep(runId, 'tail', 'done');
 
-      final active = await current.listRuns(
-        workflow: 'contract.workflow',
-        limit: 5,
-      );
-      expect(active, isNotEmpty);
-      final run = active.firstWhere((state) => state.id == runId);
-      expect(run.cursor, 2); // repeat + tail
+        final active = await current.listRuns(
+          workflow: 'contract.workflow',
+          limit: 5,
+        );
+        expect(active, isNotEmpty);
+        final run = active.firstWhere((state) => state.id == runId);
+        expect(run.cursor, 2); // repeat + tail
 
-      await current.rewindToStep(runId, 'repeat');
-      final rewound = await current.listRuns(
-        workflow: 'contract.workflow',
-        limit: 5,
-      );
-      final updated = rewound.firstWhere((state) => state.id == runId);
-      expect(updated.cursor, 0);
-      expect(updated.status, WorkflowStatus.suspended);
-      expect(updated.suspensionData?['iteration'], 0);
-    });
+        await current.rewindToStep(runId, 'repeat');
+        final rewound = await current.listRuns(
+          workflow: 'contract.workflow',
+          limit: 5,
+        );
+        final updated = rewound.firstWhere((state) => state.id == runId);
+        expect(updated.cursor, 0);
+        expect(updated.status, WorkflowStatus.suspended);
+        expect(updated.suspensionData?['iteration'], 0);
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyVersionedCheckpoints,
+        'Adapter disabled versioned-checkpoint capability checks.',
+      ),
+    );
 
     test('suspendUntil/dueRuns/markResumed workflow lifecycle', () async {
       final current = store!;
@@ -253,6 +278,10 @@ void runWorkflowStoreContractTests({
         final released = await current.listRunnableRuns(now: clock.now());
         expect(released, contains(runId));
       },
+      skip: _skipUnless(
+        settings.capabilities.verifyRunLeases,
+        'Adapter disabled run-lease capability checks.',
+      ),
     );
 
     test('listRunnableRuns excludes suspended runs', () async {
@@ -300,142 +329,170 @@ void runWorkflowStoreContractTests({
       expect(combined, runIds.toSet());
     });
 
-    test('suspendOnTopic/runsWaitingOn/cancel workflow lifecycle', () async {
-      final current = store!;
-      final runId = await current.createRun(
-        workflow: 'contract.workflow',
-        params: const {},
-      );
-
-      await current.suspendOnTopic(
-        runId,
-        'step-b',
-        'user.updated',
-        deadline: clock.now().add(const Duration(hours: 1)),
-        data: const {'topic': true},
-      );
-
-      final waiting = await current.runsWaitingOn('user.updated');
-      expect(waiting, contains(runId));
-
-      await current.cancel(runId);
-      final state = await current.get(runId);
-      expect(state?.status, WorkflowStatus.cancelled);
-      expect(state?.waitTopic, isNull);
-    });
-
-    test('runsWaitingOn returns all workflows suspended on a topic', () async {
-      final current = store!;
-      final runIds = <String>[];
-      for (var i = 0; i < 3; i++) {
+    test(
+      'suspendOnTopic/runsWaitingOn/cancel workflow lifecycle',
+      () async {
+        final current = store!;
         final runId = await current.createRun(
-          workflow: 'contract.workflow.$i',
+          workflow: 'contract.workflow',
           params: const {},
         );
+
         await current.suspendOnTopic(
           runId,
-          'group-step',
-          'group.topic',
-          data: {'index': i},
+          'step-b',
+          'user.updated',
+          deadline: clock.now().add(const Duration(hours: 1)),
+          data: const {'topic': true},
         );
-        runIds.add(runId);
-      }
 
-      final waiting = await current.runsWaitingOn('group.topic');
-      expect(waiting.toSet(), runIds.toSet());
+        final waiting = await current.runsWaitingOn('user.updated');
+        expect(waiting, contains(runId));
 
-      for (final runId in runIds) {
-        await current.markResumed(runId, data: {'payload': 'resume-$runId'});
-      }
-
-      final after = await current.runsWaitingOn('group.topic');
-      expect(after, isEmpty);
-
-      for (final runId in runIds) {
+        await current.cancel(runId);
         final state = await current.get(runId);
-        expect(state?.status, WorkflowStatus.running);
-        expect(state?.suspensionData?['payload'], 'resume-$runId');
+        expect(state?.status, WorkflowStatus.cancelled);
         expect(state?.waitTopic, isNull);
-      }
-    });
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyRunsWaitingOn,
+        'Adapter disabled runs-waiting-on capability checks.',
+      ),
+    );
 
-    test('registerWatcher resolves payload exactly once', () async {
-      final current = store!;
-      final runId = await current.createRun(
-        workflow: 'contract.workflow',
-        params: const {},
-      );
+    test(
+      'runsWaitingOn returns all workflows suspended on a topic',
+      () async {
+        final current = store!;
+        final runIds = <String>[];
+        for (var i = 0; i < 3; i++) {
+          final runId = await current.createRun(
+            workflow: 'contract.workflow.$i',
+            params: const {},
+          );
+          await current.suspendOnTopic(
+            runId,
+            'group-step',
+            'group.topic',
+            data: {'index': i},
+          );
+          runIds.add(runId);
+        }
 
-      await current.registerWatcher(
-        runId,
-        'event-step',
-        'contract.topic',
-        data: const <String, Object?>{
-          'step': 'event-step',
-          'iteration': 0,
-          'iterationStep': 'event-step',
-        },
-      );
+        final waiting = await current.runsWaitingOn('group.topic');
+        expect(waiting.toSet(), runIds.toSet());
 
-      final waiting = await current.runsWaitingOn('contract.topic');
-      expect(waiting, contains(runId));
+        for (final runId in runIds) {
+          await current.markResumed(runId, data: {'payload': 'resume-$runId'});
+        }
 
-      final watchers = await current.listWatchers('contract.topic');
-      expect(watchers, isNotEmpty);
-      expect(watchers.first.runId, runId);
-      expect(watchers.first.stepName, 'event-step');
+        final after = await current.runsWaitingOn('group.topic');
+        expect(after, isEmpty);
 
-      final resolutions = await current.resolveWatchers(
-        'contract.topic',
-        const <String, Object?>{'value': 42},
-      );
-      expect(resolutions, hasLength(1));
-      final resolution = resolutions.first;
-      expect(resolution.runId, runId);
-      expect(resolution.stepName, 'event-step');
-      expect(resolution.topic, 'contract.topic');
-      expect(resolution.resumeData['payload'], {'value': 42});
-      expect(resolution.resumeData['topic'], 'contract.topic');
+        for (final runId in runIds) {
+          final state = await current.get(runId);
+          expect(state?.status, WorkflowStatus.running);
+          expect(state?.suspensionData?['payload'], 'resume-$runId');
+          expect(state?.waitTopic, isNull);
+        }
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyRunsWaitingOn,
+        'Adapter disabled runs-waiting-on capability checks.',
+      ),
+    );
 
-      expect(await current.listWatchers('contract.topic'), isEmpty);
+    test(
+      'registerWatcher resolves payload exactly once',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
 
-      final after = await current.runsWaitingOn('contract.topic');
-      expect(after, isEmpty);
+        await current.registerWatcher(
+          runId,
+          'event-step',
+          'contract.topic',
+          data: const <String, Object?>{
+            'step': 'event-step',
+            'iteration': 0,
+            'iterationStep': 'event-step',
+          },
+        );
 
-      final state = await current.get(runId);
-      expect(state, isNotNull);
-      expect(state!.suspensionData?['payload'], {'value': 42});
-    });
+        final waiting = await current.runsWaitingOn('contract.topic');
+        expect(waiting, contains(runId));
 
-    test('listWatchers exposes metadata including deadlines', () async {
-      final current = store!;
-      final runId = await current.createRun(
-        workflow: 'contract.workflow',
-        params: const {},
-      );
-      final deadline = clock.now().add(const Duration(minutes: 5));
+        final watchers = await current.listWatchers('contract.topic');
+        expect(watchers, isNotEmpty);
+        expect(watchers.first.runId, runId);
+        expect(watchers.first.stepName, 'event-step');
 
-      await current.registerWatcher(
-        runId,
-        'inspect-step',
-        'contract.inspect',
-        deadline: deadline,
-        data: const <String, Object?>{'note': 'contract-test'},
-      );
+        final resolutions = await current.resolveWatchers(
+          'contract.topic',
+          const <String, Object?>{'value': 42},
+        );
+        expect(resolutions, hasLength(1));
+        final resolution = resolutions.first;
+        expect(resolution.runId, runId);
+        expect(resolution.stepName, 'event-step');
+        expect(resolution.topic, 'contract.topic');
+        expect(resolution.resumeData['payload'], {'value': 42});
+        expect(resolution.resumeData['topic'], 'contract.topic');
 
-      final watchers = await current.listWatchers('contract.inspect');
-      expect(watchers, hasLength(1));
-      final watcher = watchers.first;
-      expect(watcher.runId, runId);
-      expect(watcher.stepName, 'inspect-step');
-      expect(watcher.topic, 'contract.inspect');
-      expect(watcher.data['note'], 'contract-test');
-      expect(watcher.deadline, isNotNull);
-      if (watcher.deadline != null) {
-        final delta = watcher.deadline!.difference(deadline).abs();
-        expect(delta.inSeconds < 5, isTrue);
-      }
-    });
+        expect(await current.listWatchers('contract.topic'), isEmpty);
+
+        final after = await current.runsWaitingOn('contract.topic');
+        expect(after, isEmpty);
+
+        final state = await current.get(runId);
+        expect(state, isNotNull);
+        expect(state!.suspensionData?['payload'], {'value': 42});
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyWatcherRegistry,
+        'Adapter disabled watcher-registry capability checks.',
+      ),
+    );
+
+    test(
+      'listWatchers exposes metadata including deadlines',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
+        final deadline = clock.now().add(const Duration(minutes: 5));
+
+        await current.registerWatcher(
+          runId,
+          'inspect-step',
+          'contract.inspect',
+          deadline: deadline,
+          data: const <String, Object?>{'note': 'contract-test'},
+        );
+
+        final watchers = await current.listWatchers('contract.inspect');
+        expect(watchers, hasLength(1));
+        final watcher = watchers.first;
+        expect(watcher.runId, runId);
+        expect(watcher.stepName, 'inspect-step');
+        expect(watcher.topic, 'contract.inspect');
+        expect(watcher.data['note'], 'contract-test');
+        expect(watcher.deadline, isNotNull);
+        if (watcher.deadline != null) {
+          final delta = watcher.deadline!.difference(deadline).abs();
+          expect(delta.inSeconds < 5, isTrue);
+        }
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyWatcherRegistry,
+        'Adapter disabled watcher-registry capability checks.',
+      ),
+    );
 
     test('markCompleted stores result and clears suspension data', () async {
       final current = store!;
@@ -481,33 +538,40 @@ void runWorkflowStoreContractTests({
       expect(failed?.status, WorkflowStatus.failed);
     });
 
-    test('listRuns supports workflow/status filters', () async {
-      final current = store!;
-      final first = await current.createRun(
-        workflow: 'contract.a',
-        params: const {},
-      );
-      final second = await current.createRun(
-        workflow: 'contract.b',
-        params: const {},
-      );
-      await current.markCompleted(first, null);
+    test(
+      'listRuns supports workflow/status filters',
+      () async {
+        final current = store!;
+        final first = await current.createRun(
+          workflow: 'contract.a',
+          params: const {},
+        );
+        final second = await current.createRun(
+          workflow: 'contract.b',
+          params: const {},
+        );
+        await current.markCompleted(first, null);
 
-      final all = await current.listRuns(limit: 10);
-      final ids = all.map((state) => state.id).toList();
-      expect(ids, containsAll([first, second]));
+        final all = await current.listRuns(limit: 10);
+        final ids = all.map((state) => state.id).toList();
+        expect(ids, containsAll([first, second]));
 
-      final onlyA = await current.listRuns(workflow: 'contract.a', limit: 10);
-      expect(onlyA, hasLength(1));
-      expect(onlyA.first.workflow, 'contract.a');
-      expect(onlyA.first.status, WorkflowStatus.completed);
+        final onlyA = await current.listRuns(workflow: 'contract.a', limit: 10);
+        expect(onlyA, hasLength(1));
+        expect(onlyA.first.workflow, 'contract.a');
+        expect(onlyA.first.status, WorkflowStatus.completed);
 
-      final completed = await current.listRuns(
-        status: WorkflowStatus.completed,
-        limit: 10,
-      );
-      expect(completed.map((s) => s.id), contains(first));
-    });
+        final completed = await current.listRuns(
+          status: WorkflowStatus.completed,
+          limit: 10,
+        );
+        expect(completed.map((s) => s.id), contains(first));
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyFilteredRunListing,
+        'Adapter disabled filtered-run-listing capability checks.',
+      ),
+    );
 
     test('listSteps returns checkpoints in execution order', () async {
       final current = store!;
@@ -524,19 +588,26 @@ void runWorkflowStoreContractTests({
       expect(steps.map((s) => s.value), [1, 2, 3]);
     });
 
-    test('listSteps includes versioned checkpoints in order', () async {
-      final current = store!;
-      final runId = await current.createRun(
-        workflow: 'contract.workflow',
-        params: const {},
-      );
-      await current.saveStep(runId, 'repeat#0', 'first');
-      await current.saveStep(runId, 'repeat#1', 'second');
-      await current.saveStep(runId, 'tail', 'done');
+    test(
+      'listSteps includes versioned checkpoints in order',
+      () async {
+        final current = store!;
+        final runId = await current.createRun(
+          workflow: 'contract.workflow',
+          params: const {},
+        );
+        await current.saveStep(runId, 'repeat#0', 'first');
+        await current.saveStep(runId, 'repeat#1', 'second');
+        await current.saveStep(runId, 'tail', 'done');
 
-      final steps = await current.listSteps(runId);
-      expect(steps.map((s) => s.name), ['repeat#0', 'repeat#1', 'tail']);
-    });
+        final steps = await current.listSteps(runId);
+        expect(steps.map((s) => s.name), ['repeat#0', 'repeat#1', 'tail']);
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyVersionedCheckpoints,
+        'Adapter disabled versioned-checkpoint capability checks.',
+      ),
+    );
 
     test('createRun persists cancellation policy metadata', () async {
       final current = store!;
@@ -575,3 +646,5 @@ void runWorkflowStoreContractTests({
     });
   });
 }
+
+Object _skipUnless(bool enabled, String reason) => enabled ? false : reason;
