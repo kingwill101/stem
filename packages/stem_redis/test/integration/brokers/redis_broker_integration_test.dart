@@ -19,22 +19,51 @@ void main() {
     return;
   }
 
+  String? contractNamespace;
   runBrokerContractTests(
     adapterName: 'Redis',
     factory: BrokerContractFactory(
-      create: () async => RedisStreamsBroker.connect(
-        redisUrl,
-        namespace: _uniqueNamespace(),
-        defaultVisibilityTimeout: const Duration(seconds: 1),
-        claimInterval: const Duration(milliseconds: 200),
-        blockTime: const Duration(milliseconds: 100),
-      ),
-      dispose: (broker) => _safeCloseRedisBroker(broker as RedisStreamsBroker),
+      create: () async {
+        final namespace = _uniqueNamespace();
+        contractNamespace = namespace;
+        return RedisStreamsBroker.connect(
+          redisUrl,
+          namespace: namespace,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          claimInterval: const Duration(milliseconds: 200),
+          blockTime: const Duration(milliseconds: 100),
+        );
+      },
+      dispose: (broker) async {
+        if (broker is _NoCloseBroker) {
+          return;
+        }
+        await _safeCloseRedisBroker(broker as RedisStreamsBroker);
+      },
+      additionalBrokerFactory: () async {
+        final namespace = contractNamespace;
+        if (namespace == null || namespace.isEmpty) {
+          throw StateError(
+            'Redis broadcast contract requires primary broker namespace.',
+          );
+        }
+        final broker = await RedisStreamsBroker.connect(
+          redisUrl,
+          namespace: namespace,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          claimInterval: const Duration(milliseconds: 200),
+          blockTime: const Duration(milliseconds: 100),
+        );
+        return _NoCloseBroker(broker);
+      },
     ),
     settings: const BrokerContractSettings(
       leaseExtension: Duration(seconds: 1),
       queueSettleDelay: Duration(milliseconds: 200),
       requeueTimeout: Duration(seconds: 10),
+      capabilities: BrokerContractCapabilities(
+        verifyBroadcastFanout: true,
+      ),
     ),
   );
 
@@ -320,4 +349,93 @@ Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
   } on Object {
     // Ignore broker shutdown errors in cleanup.
   }
+}
+
+class _NoCloseBroker implements Broker {
+  _NoCloseBroker(this._inner);
+
+  final RedisStreamsBroker _inner;
+
+  @override
+  Future<void> ack(Delivery delivery) => _inner.ack(delivery);
+
+  @override
+  Future<void> deadLetter(
+    Delivery delivery, {
+    String? reason,
+    Map<String, Object?>? meta,
+  }) => _inner.deadLetter(delivery, reason: reason, meta: meta);
+
+  @override
+  Future<void> extendLease(Delivery delivery, Duration by) =>
+      _inner.extendLease(delivery, by);
+
+  @override
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) =>
+      _inner.getDeadLetter(queue, id);
+
+  @override
+  Future<int?> inflightCount(String queue) => _inner.inflightCount(queue);
+
+  @override
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  }) => _inner.listDeadLetters(queue, limit: limit, offset: offset);
+
+  @override
+  Future<void> nack(Delivery delivery, {bool requeue = true}) =>
+      _inner.nack(delivery, requeue: requeue);
+
+  @override
+  Future<int?> pendingCount(String queue) => _inner.pendingCount(queue);
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) =>
+      _inner.publish(envelope, routing: routing);
+
+  @override
+  Future<void> purge(String queue) => _inner.purge(queue);
+
+  @override
+  Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit}) =>
+      _inner.purgeDeadLetters(queue, since: since, limit: limit);
+
+  @override
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  }) => _inner.replayDeadLetters(
+    queue,
+    limit: limit,
+    since: since,
+    delay: delay,
+    dryRun: dryRun,
+  );
+
+  @override
+  bool get supportsDelayed => _inner.supportsDelayed;
+
+  @override
+  bool get supportsPriority => _inner.supportsPriority;
+
+  @override
+  Stream<Delivery> consume(
+    RoutingSubscription subscription, {
+    int prefetch = 1,
+    String? consumerGroup,
+    String? consumerName,
+  }) => _inner.consume(
+    subscription,
+    prefetch: prefetch,
+    consumerGroup: consumerGroup,
+    consumerName: consumerName,
+  );
+
+  @override
+  Future<void> close() async {}
 }
