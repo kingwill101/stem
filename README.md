@@ -271,7 +271,7 @@ dart pub get
 # Run quality gates
 dart format --output=none --set-exit-if-changed .
 dart analyze
-dart test packages/stem
+task test:no-env
 ```
 
 ### Adapter Tests
@@ -279,14 +279,11 @@ dart test packages/stem
 Integration tests require the Docker test stack:
 
 ```bash
-# Start test infrastructure
-source packages/stem_cli/_init_test_env
+# Run all package tests with Docker-backed integration env
+task test
 
-# Run adapter tests
-dart test packages/stem_redis
-dart test packages/stem_postgres
-dart test packages/stem_sqlite
-dart test packages/stem_cli
+# Run coverage workflow for core adapters/runtime packages
+task coverage
 ```
 
 ---

@@ -331,7 +331,7 @@ class Beat {
     }
   }
 
-  Map<String, Object?> _logContext(Map<String, Object?> fields) {
+  static Map<String, Object?> _logContext(Map<String, Object?> fields) {
     return stemContextFields(
       component: 'stem',
       subsystem: 'beat',

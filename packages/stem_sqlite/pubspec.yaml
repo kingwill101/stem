@@ -1,6 +1,6 @@
 name: stem_sqlite
 description: SQLite broker and result backend for Stem.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
@@ -9,6 +9,7 @@ environment:
 dependencies:
   artisanal: ^0.1.2
   collection: ^1.19.1
+  contextual: ^2.2.0
   meta: ^1.18.0
   ormed: ^0.1.0
   ormed_sqlite: ^0.1.0
