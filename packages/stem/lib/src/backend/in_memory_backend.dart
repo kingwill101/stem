@@ -191,7 +191,7 @@ class InMemoryResultBackend implements ResultBackend {
       id: groupId,
       expected: group.descriptor.expected,
       results: Map.unmodifiable(group.results),
-      meta: group.descriptor.meta,
+      meta: group.meta,
     );
   }
 

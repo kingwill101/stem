@@ -115,8 +115,7 @@ class _InMemoryLock implements Lock {
   @override
   /// Extends this in-memory lock's expiration timestamp.
   Future<bool> renew(Duration ttl) async {
-    expiresAt = DateTime.now().add(ttl);
-    return true;
+    return store.renew(key, owner, ttl);
   }
 
   @override
