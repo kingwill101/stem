@@ -1,0 +1,45 @@
+# Stem Documentation
+
+> Spec-driven background jobs for Dart
+
+This file contains links to documentation sections following the llmstxt.org standard.
+
+## Table of Contents
+
+- [Broker Caveats](https://kingwill101.github.io/stem/brokers/caveats): This page highlights broker-specific constraints that affect routing, priorities,
+- [Broker Comparison](https://kingwill101.github.io/stem/brokers/overview): Stem ships with multiple broker adapters and planned integrations. This page
+- [SQLite Adapter](https://kingwill101.github.io/stem/brokers/sqlite): Stem ships a SQLite adapter in `stem_sqlite` that implements both the broker
+- [Canvas Patterns](https://kingwill101.github.io/stem/core-concepts/canvas): This guide walks through Stem's task composition primitives—chains, groups, and
+- [CLI & Control Plane](https://kingwill101.github.io/stem/core-concepts/cli-control): The `stem` CLI complements the programmatic APIs—use it to inspect state,
+- [Dashboard](https://kingwill101.github.io/stem/core-concepts/dashboard): Stem ships an experimental Hotwire + Routed dashboard that surfaces live queue,
+- [Core Concepts](https://kingwill101.github.io/stem/core-concepts): Understand the building blocks that power Stem. These pages explain how tasks,
+- [Namespaces](https://kingwill101.github.io/stem/core-concepts/namespaces): Namespaces provide logical isolation between environments (dev/staging/prod) or
+- [Observability](https://kingwill101.github.io/stem/core-concepts/observability): Instrument Stem applications with built-in metrics, traces, and lifecycle
+- [Persistence & Stores](https://kingwill101.github.io/stem/core-concepts/persistence): Use persistence when you need durable task state, shared schedules, or
+- [Producer API](https://kingwill101.github.io/stem/core-concepts/producer): Enqueue tasks from your Dart services using `Stem.enqueue`. Start with the
+- [Rate Limiting](https://kingwill101.github.io/stem/core-concepts/rate-limiting): Stem supports per-task rate limits via `TaskOptions.rateLimit` and a pluggable
+- [Routing Configuration](https://kingwill101.github.io/stem/core-concepts/routing): Stem workers and publishers resolve queue and broadcast targets from the routing
+- [Stem Signals](https://kingwill101.github.io/stem/core-concepts/signals): import Tabs from '@theme/Tabs';
+- [Payload Signing](https://kingwill101.github.io/stem/core-concepts/signing): Stem can sign every task envelope so workers can detect tampering or untrusted
+- [Tasks & Retries](https://kingwill101.github.io/stem/core-concepts/tasks): import Tabs from '@theme/Tabs';
+- [Uniqueness & Deduplication](https://kingwill101.github.io/stem/core-concepts/uniqueness): import Tabs from '@theme/Tabs';
+- [Workflows](https://kingwill101.github.io/stem/core-concepts/workflows): Stem Workflows let you orchestrate multi-step business processes with durable
+- [Best Practices](https://kingwill101.github.io/stem/getting-started/best-practices): import Tabs from '@theme/Tabs';
+- [Connect to Infrastructure](https://kingwill101.github.io/stem/getting-started/developer-environment): Graduate from the in-memory demo to a multi-process setup backed by Redis or
+- [First Steps](https://kingwill101.github.io/stem/getting-started/first-steps): This walkthrough stays in-memory so you can learn the pipeline without running
+- [Getting Started](https://kingwill101.github.io/stem/getting-started): import Tabs from '@theme/Tabs';
+- [Welcome to Stem](https://kingwill101.github.io/stem/getting-started/intro): import Tabs from '@theme/Tabs';
+- [Monitoring Guide](https://kingwill101.github.io/stem/getting-started/monitoring): This guide focuses on visibility: dashboards, metrics, and signals that help
+- [Next Steps](https://kingwill101.github.io/stem/getting-started/next-steps): import Tabs from '@theme/Tabs';
+- [Observe & Operate](https://kingwill101.github.io/stem/getting-started/observability-and-ops): With Redis/Postgres in place, it’s time to watch the system run. This guide
+- [Prepare for Production](https://kingwill101.github.io/stem/getting-started/production-checklist): import Tabs from '@theme/Tabs';
+- [Quick Start](https://kingwill101.github.io/stem/getting-started/quick-start): Spin up Stem in minutes with nothing but Dart installed. This walkthrough stays
+- [Reliability Guide](https://kingwill101.github.io/stem/getting-started/reliability): This guide summarizes reliability practices for task systems using Stem.
+- [Retry & Backoff](https://kingwill101.github.io/stem/getting-started/retry-backoff): import Tabs from '@theme/Tabs';
+- [Troubleshooting](https://kingwill101.github.io/stem/getting-started/troubleshooting): import Tabs from '@theme/Tabs';
+- [Beat Scheduler Guide](https://kingwill101.github.io/stem/scheduler/beat-guide): Stem Beat enqueues periodic tasks so you can keep background jobs on schedule.
+- [Scheduler](https://kingwill101.github.io/stem/scheduler): Stem Beat coordinates periodic work across your cluster. Explore the scheduler
+- [Daemonization Guide](https://kingwill101.github.io/stem/workers/daemonization): import Tabs from '@theme/Tabs';
+- [Workers](https://kingwill101.github.io/stem/workers): Workers pull tasks, manage concurrency, and publish lifecycle signals. Use these
+- [Programmatic Workers & Enqueuers](https://kingwill101.github.io/stem/workers/programmatic-integration): Use Stem's Dart APIs to embed task production and processing inside your
+- [Worker Control](https://kingwill101.github.io/stem/workers/worker-control): Stem exposes a broker-backed control plane so operators can inspect, revoke, and
