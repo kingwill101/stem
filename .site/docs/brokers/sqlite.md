@@ -17,8 +17,8 @@ Use SQLite when you:
 - Want a **zero-infrastructure** dev/test broker + backend.
 - Prefer a local file-backed queue for demos or smoke tests.
 
-Avoid SQLite when you need multi-host scaling, broadcast control channels, or
-high-throughput workloads. Redis or Postgres are better fits in production.
+Avoid SQLite when you need multi-host scaling, cross-process broadcast control,
+or high-throughput workloads. Redis or Postgres are better fits in production.
 
 ## Install
 
@@ -26,7 +26,7 @@ Add the adapter package:
 
 ```yaml
 dependencies:
-  stem_sqlite: ^0.1.0
+  stem_sqlite: ^0.1.1
 ```
 
 ## Quick start (broker)
@@ -105,12 +105,14 @@ build/enqueue/bundle/bin/enqueue
 
 SQLite brokers are intentionally minimal:
 
-- **No broadcast channels** (worker control commands won’t work).
+- **Broadcast fan-out is in-process only** (worker control commands across
+  processes are not supported).
 - **Single-queue subscriptions only** (one queue per worker subscription).
 - **Polling-based delivery** (latency depends on `pollInterval`).
 - **Single-writer constraint** (plan your processes and DB files accordingly).
 
-If you need broadcast control, multi-queue consumption, or multi-host scaling,
+If you need cross-process broadcast control, multi-queue consumption, or
+multi-host scaling,
 use Redis or Postgres instead.
 
 ## Examples

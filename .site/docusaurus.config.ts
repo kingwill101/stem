@@ -65,6 +65,22 @@ const config: Config = {
     ],
   ],
 
+  plugins: [
+    [
+      'docusaurus-plugin-llms',
+      {
+        docsDir: 'docs',
+        includeBlog: false,
+        excludeImports: true,
+        removeDuplicateHeadings: true,
+        pathTransformation: {
+          ignorePaths: ['docs'],
+          addPaths: ['stem'],
+        },
+      },
+    ],
+  ],
+
   themeConfig: {
     metadata: [
       {name: 'keywords', content: 'dart, background-jobs, stem, task-queue, spec-driven'},
@@ -95,6 +111,20 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
         },
+        {
+          label: 'LLMs',
+          position: 'right',
+          items: [
+            {
+              label: 'llms.txt',
+              href: 'https://kingwill101.github.io/stem/llms.txt',
+            },
+            {
+              label: 'llms-full.txt',
+              href: 'https://kingwill101.github.io/stem/llms-full.txt',
+            },
+          ],
+        },
       ],
     },
     footer: {
@@ -123,6 +153,14 @@ const config: Config = {
             {
               label: 'GitHub',
               href: 'https://github.com/kingwill101/stem',
+            },
+            {
+              label: 'llms.txt',
+              href: 'https://kingwill101.github.io/stem/llms.txt',
+            },
+            {
+              label: 'llms-full.txt',
+              href: 'https://kingwill101.github.io/stem/llms-full.txt',
             },
           ],
         },
