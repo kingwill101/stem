@@ -3,6 +3,10 @@
 - Added broker broadcast fan-out support for SQLite routing subscriptions with
   broadcast channels.
 - Enabled broadcast fan-out broker contract coverage for the SQLite adapter.
+- Wired DataSource and seed runtime initialization to use the shared
+  `stemLogger` by default, while still allowing explicit logger injection.
+- Hardened datasource/seed configuration overrides to safely merge nullable
+  driver options.
 
 ## 0.1.0
 
