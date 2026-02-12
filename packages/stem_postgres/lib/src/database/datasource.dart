@@ -44,7 +44,7 @@ DataSource createDataSource({
     if (logging) {
       config = config.updateActiveConnection(
         driver: config.driver.copyWith(
-          options: {...config.driver.options, 'logging': true},
+          options: {...?config.driver.options, 'logging': true},
         ),
       );
     }

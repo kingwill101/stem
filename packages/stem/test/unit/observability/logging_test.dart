@@ -10,12 +10,11 @@ void main() {
 
   test('setStemLogger replaces the shared logger', () {
     final original = stemLogger;
+    addTearDown(() => setStemLogger(original));
     final replacement = Logger();
 
     setStemLogger(replacement);
     expect(identical(stemLogger, replacement), isTrue);
-
-    setStemLogger(original);
   });
 
   test('stemContextFields includes component and subsystem', () {

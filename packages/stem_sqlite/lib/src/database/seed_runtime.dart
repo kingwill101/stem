@@ -97,7 +97,7 @@ Future<void> runSeedRegistryEntrypoint({
   if (databaseArg != null && databaseArg.trim().isNotEmpty) {
     config = config.updateActiveConnection(
       driver: config.driver.copyWith(
-        options: {...config.driver.options, 'database': databaseArg.trim()},
+        options: {...?config.driver.options, 'database': databaseArg.trim()},
       ),
     );
   }

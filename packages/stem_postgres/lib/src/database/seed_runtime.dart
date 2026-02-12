@@ -97,7 +97,7 @@ Future<void> runSeedRegistryEntrypoint({
   if (url != null && url.trim().isNotEmpty) {
     config = config.updateActiveConnection(
       driver: config.driver.copyWith(
-        options: {...config.driver.options, 'url': url.trim()},
+        options: {...?config.driver.options, 'url': url.trim()},
       ),
     );
   }
