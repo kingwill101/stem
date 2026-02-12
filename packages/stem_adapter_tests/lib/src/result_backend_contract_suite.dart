@@ -571,8 +571,8 @@ void runResultBackendContractTests({
           expect(list.any((hb) => hb.workerId == workerId), isFalse);
         },
         skip: _skipUnless(
-          settings.capabilities.verifyWorkerHeartbeats,
-          'Adapter disabled worker-heartbeat capability checks.',
+          settings.capabilities.verifyHeartbeatExpiry,
+          'Adapter disabled worker-heartbeat expiry capability checks.',
         ),
       );
 

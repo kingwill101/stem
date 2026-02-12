@@ -21,6 +21,7 @@ class ResultBackendContractCapabilities {
     this.verifyGroupExpiry = true,
     this.verifyChordClaiming = true,
     this.verifyWorkerHeartbeats = true,
+    this.verifyHeartbeatExpiry = true,
   });
 
   /// Whether task status expiration behavior should be verified.
@@ -34,6 +35,9 @@ class ResultBackendContractCapabilities {
 
   /// Whether worker heartbeat persistence/expiry should be verified.
   final bool verifyWorkerHeartbeats;
+
+  /// Whether worker heartbeat expiry behavior should be verified.
+  final bool verifyHeartbeatExpiry;
 }
 
 /// Feature capability flags for workflow store contract tests.
