@@ -198,7 +198,7 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> ack(Delivery delivery) async {
-    if (_isBroadcastReceipt(delivery.receipt)) {
+    if (delivery.route.isBroadcast) {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
@@ -211,7 +211,7 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
-    if (_isBroadcastReceipt(delivery.receipt)) {
+    if (delivery.route.isBroadcast) {
       return;
     }
     if (!requeue) {
@@ -240,7 +240,7 @@ class SqliteBroker implements Broker {
     String? reason,
     Map<String, Object?>? meta,
   }) async {
-    if (_isBroadcastReceipt(delivery.receipt)) {
+    if (delivery.route.isBroadcast) {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
@@ -273,7 +273,7 @@ class SqliteBroker implements Broker {
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
-    if (_isBroadcastReceipt(delivery.receipt)) {
+    if (delivery.route.isBroadcast) {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
@@ -530,9 +530,6 @@ class SqliteBroker implements Broker {
   static const String _broadcastReceiptPrefix = 'broadcast:';
 
   String _parseReceipt(String receipt) => receipt;
-
-  bool _isBroadcastReceipt(String receipt) =>
-      receipt.startsWith(_broadcastReceiptPrefix);
 
   String _broadcastReceipt(String envelopeId, String consumerId) =>
       '$_broadcastReceiptPrefix$envelopeId:$consumerId:${DateTime.now().microsecondsSinceEpoch}';

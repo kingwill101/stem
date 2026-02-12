@@ -599,7 +599,7 @@ class _BroadcastHub {
   static const int _maxHistory = 10000;
   final Map<String, Map<String, _BroadcastListener>> _listenersByChannel = {};
   final ListQueue<String> _messageOrder = ListQueue();
-  final Map<String, _BroadcastMessage> _messagesById = {};
+  final Map<String, _BroadcastMessage> _messagesByKey = {};
   final Map<String, Set<String>> _ackedByConsumer = {};
 
   _BroadcastSubscription subscribe({
@@ -636,18 +636,14 @@ class _BroadcastHub {
     required String delivery,
   }) {
     final message = _BroadcastMessage(
-      id: envelope.id,
+      key: const Uuid().v7(),
       channel: channel,
       envelope: envelope.copyWith(),
       delivery: delivery,
     );
-    if (_messagesById.containsKey(message.id)) {
-      _messagesById[message.id] = message;
-    } else {
-      _messagesById[message.id] = message;
-      _messageOrder.addLast(message.id);
-      _trimHistory();
-    }
+    _messagesByKey[message.key] = message;
+    _messageOrder.addLast(message.key);
+    _trimHistory();
 
     final listeners = _listenersByChannel[channel];
     if (listeners == null || listeners.isEmpty) {
@@ -655,7 +651,7 @@ class _BroadcastHub {
     }
     final snapshot = listeners.values.toList(growable: false);
     for (final listener in snapshot) {
-      if (_isAcked(listener.consumer, message.id)) continue;
+      if (_isAcked(listener.consumer, message.key)) continue;
       listener.onDelivery(_toDelivery(message, listener.consumer));
     }
   }
@@ -666,12 +662,12 @@ class _BroadcastHub {
       if (payload is! Map<String, dynamic>) {
         return;
       }
-      final messageId = payload['messageId'] as String?;
+      final messageKey = payload['messageKey'] as String?;
       final consumer = payload['consumer'] as String?;
-      if (messageId == null || consumer == null) {
+      if (messageKey == null || consumer == null) {
         return;
       }
-      _ackedByConsumer.putIfAbsent(consumer, () => <String>{}).add(messageId);
+      _ackedByConsumer.putIfAbsent(consumer, () => <String>{}).add(messageKey);
     } on Object {
       return;
     }
@@ -681,11 +677,11 @@ class _BroadcastHub {
     required _BroadcastListener listener,
     required Set<String> channels,
   }) {
-    for (final messageId in _messageOrder) {
-      final message = _messagesById[messageId];
+    for (final messageKey in _messageOrder) {
+      final message = _messagesByKey[messageKey];
       if (message == null) continue;
       if (!channels.contains(message.channel)) continue;
-      if (_isAcked(listener.consumer, message.id)) continue;
+      if (_isAcked(listener.consumer, message.key)) continue;
       listener.onDelivery(_toDelivery(message, listener.consumer));
     }
   }
@@ -694,7 +690,7 @@ class _BroadcastHub {
     return Delivery(
       envelope: message.envelope.copyWith(),
       receipt: jsonEncode({
-        'messageId': message.id,
+        'messageKey': message.key,
         'consumer': consumer,
       }),
       leaseExpiresAt: null,
@@ -714,7 +710,7 @@ class _BroadcastHub {
   void _trimHistory() {
     while (_messageOrder.length > _maxHistory) {
       final oldest = _messageOrder.removeFirst();
-      _messagesById.remove(oldest);
+      _messagesByKey.remove(oldest);
       for (final acked in _ackedByConsumer.values) {
         acked.remove(oldest);
       }
@@ -749,13 +745,13 @@ class _BroadcastSubscription {
 
 class _BroadcastMessage {
   _BroadcastMessage({
-    required this.id,
+    required this.key,
     required this.channel,
     required this.envelope,
     required this.delivery,
   });
 
-  final String id;
+  final String key;
   final String channel;
   final Envelope envelope;
   final String delivery;

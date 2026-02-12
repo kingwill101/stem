@@ -197,6 +197,55 @@ void main() {
       consumerA.dispose();
       consumerB.dispose();
     });
+
+    test('broadcast publishes with reused envelope id are delivered', () async {
+      final namespace =
+          'broadcast-duplicate-id-${DateTime.now().microsecondsSinceEpoch}';
+      final publisher = InMemoryBroker(namespace: namespace);
+      final consumer = InMemoryBroker(namespace: namespace);
+      final subscription = RoutingSubscription(
+        queues: const [],
+        broadcastChannels: const ['ops'],
+      );
+      final iterator = StreamIterator(
+        consumer.consume(subscription, consumerName: 'worker-a'),
+      );
+      try {
+        await publisher.publish(
+          Envelope(
+            id: 'custom-broadcast-id',
+            name: 'broadcast.duplicate',
+            args: const {'value': 1},
+          ),
+          routing: RoutingInfo.broadcast(channel: 'ops'),
+        );
+        expect(
+          await iterator.moveNext().timeout(const Duration(seconds: 1)),
+          isTrue,
+        );
+        expect(iterator.current.envelope.args['value'], 1);
+        await consumer.ack(iterator.current);
+
+        await publisher.publish(
+          Envelope(
+            id: 'custom-broadcast-id',
+            name: 'broadcast.duplicate',
+            args: const {'value': 2},
+          ),
+          routing: RoutingInfo.broadcast(channel: 'ops'),
+        );
+        expect(
+          await iterator.moveNext().timeout(const Duration(seconds: 1)),
+          isTrue,
+        );
+        expect(iterator.current.envelope.args['value'], 2);
+        await consumer.ack(iterator.current);
+      } finally {
+        await iterator.cancel();
+        publisher.dispose();
+        consumer.dispose();
+      }
+    });
   });
 
   group('InMemoryResultBackend', () {

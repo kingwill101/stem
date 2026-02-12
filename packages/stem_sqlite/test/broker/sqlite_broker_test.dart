@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ormed/ormed.dart';
@@ -121,4 +122,108 @@ void main() {
       await brokerB.close();
     }
   });
+
+  test(
+    'queue receipts with broadcast prefix are treated as queue jobs',
+    () async {
+      final publisher = await SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(milliseconds: 200),
+        pollInterval: const Duration(milliseconds: 25),
+        sweeperInterval: const Duration(milliseconds: 75),
+      );
+      final worker = await SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(milliseconds: 200),
+        pollInterval: const Duration(milliseconds: 25),
+        sweeperInterval: const Duration(milliseconds: 75),
+      );
+      try {
+        final queue = 'queue-${DateTime.now().microsecondsSinceEpoch}';
+        final deliveries = StreamIterator(
+          worker.consume(
+            RoutingSubscription.singleQueue(queue),
+            consumerName: 'worker-a',
+          ),
+        );
+        Future<Delivery> nextDelivery() async {
+          final moved = await deliveries.moveNext().timeout(
+            const Duration(seconds: 1),
+          );
+          expect(moved, isTrue);
+          return deliveries.current;
+        }
+
+        await publisher.publish(
+          Envelope(
+            id: 'broadcast:lease',
+            name: 'sqlite.prefix.lease',
+            args: const {},
+            queue: queue,
+          ),
+        );
+        final leaseDelivery = await nextDelivery();
+        await worker.extendLease(
+          leaseDelivery,
+          const Duration(milliseconds: 300),
+        );
+        expect(await worker.inflightCount(queue), 1);
+        await worker.ack(leaseDelivery);
+        expect(await worker.pendingCount(queue), 0);
+
+        await publisher.publish(
+          Envelope(
+            id: 'broadcast:nack',
+            name: 'sqlite.prefix.nack',
+            args: const {},
+            queue: queue,
+          ),
+        );
+        final nackDelivery = await nextDelivery();
+        await worker.nack(nackDelivery, requeue: true);
+        final redelivered = await nextDelivery();
+        expect(redelivered.envelope.id, 'broadcast:nack');
+        await worker.ack(redelivered);
+
+        await publisher.publish(
+          Envelope(
+            id: 'broadcast:deadletter',
+            name: 'sqlite.prefix.deadletter',
+            args: const {},
+            queue: queue,
+          ),
+        );
+        final deadLetterDelivery = await nextDelivery();
+        await worker.deadLetter(deadLetterDelivery, reason: 'manual');
+        final deadLetters = await worker.listDeadLetters(queue, limit: 20);
+        expect(
+          deadLetters.entries.map((entry) => entry.envelope.id),
+          contains('broadcast:deadletter'),
+        );
+
+        await publisher.publish(
+          Envelope(
+            id: 'broadcast:nack-no-requeue',
+            name: 'sqlite.prefix.nack.dead',
+            args: const {},
+            queue: queue,
+          ),
+        );
+        final nackNoRequeue = await nextDelivery();
+        await worker.nack(nackNoRequeue, requeue: false);
+        final deadLettersAfterNack = await worker.listDeadLetters(
+          queue,
+          limit: 20,
+        );
+        expect(
+          deadLettersAfterNack.entries.map((entry) => entry.envelope.id),
+          contains('broadcast:nack-no-requeue'),
+        );
+        await deliveries.cancel();
+      } finally {
+        await worker.close();
+        await publisher.close();
+      }
+    },
+  );
 }
