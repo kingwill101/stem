@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD041 -->
+
 ## 0.1.1
 
 - Enabled broadcast fan-out broker contract coverage in Redis integration tests

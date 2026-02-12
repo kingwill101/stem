@@ -11,7 +11,6 @@ dependencies:
 
 dev_dependencies:
   coverage: ^1.15.0
-  lints: ^6.0.0
   stem_adapter_tests: ^0.1.0
   test: ^1.29.0
   very_good_analysis: ^10.0.0

@@ -1,5 +1,8 @@
 version: "3"
 
+vars:
+  COVERAGE_BADGE: ../../tool/coverage/coverage_badge.dart
+
 tasks:
   test:
     desc: Run stem_cli package tests.
@@ -8,12 +11,16 @@ tasks:
 
   test-multi:
     desc: Run stem_cli tests with multi-worker coverage enabled.
+    env:
+      STEM_CLI_RUN_MULTI: "true"
     cmds:
-      - STEM_CLI_RUN_MULTI=true dart test --fail-fast
+      - dart test --fail-fast
 
   coverage:
     desc: Run stem_cli package coverage workflow.
+    env:
+      STEM_CLI_RUN_MULTI: "true"
     cmds:
-      - STEM_CLI_RUN_MULTI=true dart test --fail-fast --coverage=coverage
+      - dart test --fail-fast --coverage=coverage
       - dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
-      - dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 80
+      - dart run {{.COVERAGE_BADGE}} --lcov coverage/lcov.info --out coverage/coverage.json --min 80

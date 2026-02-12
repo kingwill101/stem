@@ -89,6 +89,8 @@ class SqliteBroker implements Broker {
   final Duration deadLetterRetention;
 
   final Set<_Consumer> _consumers = {};
+  // Shared per-isolate to enable in-process fan-out across broker handles
+  // using the same namespace.
   static final Map<String, Set<_Consumer>> _broadcastConsumersByChannel = {};
   Timer? _sweeperTimer;
   bool _closed = false;
@@ -110,6 +112,7 @@ class SqliteBroker implements Broker {
       consumer.dispose();
       _consumers.remove(consumer);
     }
+    _cleanupBroadcastRegistry();
     await _connections.close();
   }
 
@@ -118,6 +121,11 @@ class SqliteBroker implements Broker {
   Future<void> runMaintenance() => _runSweeperCycle();
 
   @override
+  /// Publishes a queued or broadcast envelope.
+  ///
+  /// Queue routes are persisted to SQLite. Broadcast routes are ephemeral and
+  /// are delivered only to active in-process subscribers; if none are active,
+  /// the message is dropped.
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
     final route =
         routing ??
@@ -531,19 +539,21 @@ class SqliteBroker implements Broker {
 
   String _parseReceipt(String receipt) => receipt;
 
-  String _broadcastReceipt(String envelopeId, String consumerId) =>
-      '$_broadcastReceiptPrefix$envelopeId:$consumerId:${DateTime.now().microsecondsSinceEpoch}';
+  String _broadcastReceipt(String envelopeId, String consumerId) {
+    final nowMicros = DateTime.now().microsecondsSinceEpoch;
+    return '$_broadcastReceiptPrefix$envelopeId:$consumerId:$nowMicros';
+  }
 
   String _broadcastKey(String channel) => '$namespace:$channel';
 
   void _registerBroadcastConsumer(_Consumer consumer) {
     for (final channel in consumer.broadcastChannels) {
       final key = _broadcastKey(channel);
-      final consumersForChannel = _broadcastConsumersByChannel.putIfAbsent(
-        key,
-        () => <_Consumer>{},
-      );
-      consumersForChannel.add(consumer);
+      _broadcastConsumersByChannel
+          .putIfAbsent(key, () => <_Consumer>{})
+          .add(
+            consumer,
+          );
     }
   }
 
@@ -585,6 +595,20 @@ class SqliteBroker implements Broker {
           route: RoutingInfo.broadcast(channel: channel),
         ),
       );
+    }
+  }
+
+  void _cleanupBroadcastRegistry() {
+    final keys = _broadcastConsumersByChannel.keys.toList(growable: false);
+    for (final key in keys) {
+      final consumers = _broadcastConsumersByChannel[key];
+      if (consumers == null) {
+        continue;
+      }
+      consumers.removeWhere((consumer) => identical(consumer.broker, this));
+      if (consumers.isEmpty) {
+        _broadcastConsumersByChannel.remove(key);
+      }
     }
   }
 
@@ -637,6 +661,7 @@ class _Consumer {
   final StreamController<Delivery> controller;
   final int prefetch;
   final Queue<Delivery> _pendingBroadcast = Queue<Delivery>();
+  static const int _maxPendingBroadcast = 1000;
 
   bool _running = false;
   bool _loopActive = false;
@@ -672,6 +697,9 @@ class _Consumer {
   void enqueueBroadcast(Delivery delivery) {
     if (!_running || controller.isClosed) return;
     _pendingBroadcast.addLast(delivery);
+    while (_pendingBroadcast.length > _maxPendingBroadcast) {
+      _pendingBroadcast.removeFirst();
+    }
   }
 
   bool _drainBroadcast() {

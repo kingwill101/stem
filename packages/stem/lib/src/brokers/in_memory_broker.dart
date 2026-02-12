@@ -173,17 +173,22 @@ class InMemoryBroker implements Broker {
           return;
         }
 
-        while (active && !controller.isClosed) {
-          final delivery = await state.nextDelivery(
-            consumer: consumer,
-            prefetch: prefetch,
-            defaultVisibilityTimeout: defaultVisibilityTimeout,
-          );
-          if (!active || controller.isClosed || !controller.hasListener) {
-            state.requeue(delivery.receipt);
-            break;
+        state.resumeConsumer(consumer);
+        try {
+          while (active && !controller.isClosed) {
+            final delivery = await state.nextDelivery(
+              consumer: consumer,
+              prefetch: prefetch,
+              defaultVisibilityTimeout: defaultVisibilityTimeout,
+            );
+            if (!active || controller.isClosed || !controller.hasListener) {
+              state.requeue(delivery.receipt);
+              break;
+            }
+            controller.add(delivery);
           }
-          controller.add(delivery);
+        } on _ConsumerCancelled {
+          return;
         }
       },
       onCancel: () {
@@ -211,6 +216,9 @@ class InMemoryBroker implements Broker {
 
   @override
   /// Rejects a delivery, optionally requeuing it.
+  ///
+  /// Broadcast deliveries are fire-and-forget in this broker. For broadcast
+  /// routes, `nack` records an ack in the broadcast hub and ignores `requeue`.
   Future<void> nack(Delivery delivery, {bool requeue = true}) async {
     if (delivery.route.isBroadcast) {
       _broadcastHub.ack(delivery.receipt);
@@ -359,6 +367,7 @@ class _QueueState {
   final Map<String, _PendingEntry> _pending = {};
   final List<DeadLetterEntry> deadLetters = [];
   final Map<String, int> _consumerInFlight = {};
+  final Set<String> _cancelledConsumers = {};
   final List<Completer<void>> _waiters = [];
 
   int _sequence = 0;
@@ -375,6 +384,7 @@ class _QueueState {
 
   /// Cancels pending waiters for a consumer and clears in-flight tracking.
   void cancelWaiters(String consumer) {
+    _cancelledConsumers.add(consumer);
     _consumerInFlight.remove(consumer);
     for (final completer in _waiters) {
       if (!completer.isCompleted) {
@@ -382,6 +392,11 @@ class _QueueState {
       }
     }
     _waiters.clear();
+  }
+
+  /// Clears cancellation state when a consumer re-subscribes.
+  void resumeConsumer(String consumer) {
+    _cancelledConsumers.remove(consumer);
   }
 
   /// Enqueues a ready-to-run envelope and wakes consumers.
@@ -421,6 +436,9 @@ class _QueueState {
     required Duration defaultVisibilityTimeout,
   }) async {
     while (true) {
+      if (_cancelledConsumers.contains(consumer)) {
+        throw _ConsumerCancelled(consumer);
+      }
       moveDue(DateTime.now());
 
       final inFlight = _consumerInFlight[consumer] ?? 0;
@@ -538,7 +556,7 @@ class _QueueState {
   /// Generates a monotonically increasing receipt identifier.
   String _nextReceipt() => '$name:${_sequence++}';
 
-  /// Count of ready + delayed items waiting for delivery.
+  /// Count of ready items waiting for delivery.
   int get pending => _ready.length;
 
   /// Count of deliveries currently leased to consumers.
@@ -590,6 +608,12 @@ class _PendingEntry {
   final Delivery delivery;
   final String consumer;
   DateTime? leaseExpiresAt;
+}
+
+class _ConsumerCancelled implements Exception {
+  _ConsumerCancelled(this.consumer);
+
+  final String consumer;
 }
 
 class _BroadcastHub {

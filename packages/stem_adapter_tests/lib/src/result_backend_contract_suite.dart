@@ -102,7 +102,7 @@ void runResultBackendContractTests({
       });
 
       test(
-        'set/get/watch/expire task statuses',
+        'set/get/watch task statuses',
         () async {
           final currentBackend = backend!;
           const taskId = 'contract-task';
@@ -140,7 +140,22 @@ void runResultBackendContractTests({
           final streamed = await updates.timeout(const Duration(seconds: 5));
           expect(streamed.id, taskId);
           expect(streamed.state, TaskState.succeeded);
+        },
+      );
 
+      test(
+        'expire removes task statuses after ttl',
+        () async {
+          final currentBackend = backend!;
+          const taskId = 'contract-task-expire';
+          await currentBackend.set(
+            taskId,
+            TaskState.succeeded,
+            payload: const {'value': 'done'},
+            meta: _metaWithEncoder(encoder, const {'origin': 'contract'}),
+          );
+
+          await Future<void>.delayed(settings.settleDelay);
           await currentBackend.expire(taskId, settings.statusTtl);
           await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
           if (factory.beforeStatusExpiryCheck != null) {

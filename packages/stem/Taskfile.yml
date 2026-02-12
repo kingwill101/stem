@@ -1,5 +1,8 @@
 version: "3"
 
+vars:
+  COVERAGE_BADGE: ../../tool/coverage/coverage_badge.dart
+
 tasks:
   test:
     desc: Run stem package tests.
@@ -11,4 +14,4 @@ tasks:
     cmds:
       - dart test --exclude-tags soak --fail-fast --coverage=coverage
       - dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
-      - dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 80
+      - dart run {{.COVERAGE_BADGE}} --lcov coverage/lcov.info --out coverage/coverage.json --min 80

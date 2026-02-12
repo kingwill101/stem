@@ -180,7 +180,7 @@ void main() {
           ),
         );
         final nackDelivery = await nextDelivery();
-        await worker.nack(nackDelivery, requeue: true);
+        await worker.nack(nackDelivery);
         final redelivered = await nextDelivery();
         expect(redelivered.envelope.id, 'broadcast:nack');
         await worker.ack(redelivered);
