@@ -9,6 +9,7 @@ environment:
 dependencies:
   artisanal: ^0.1.2
   collection: ^1.19.1
+  contextual: ^2.2.0
   ormed: ^0.1.0
   ormed_postgres: ^0.1.0
   path: ^1.9.1
