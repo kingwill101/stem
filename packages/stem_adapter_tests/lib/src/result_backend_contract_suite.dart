@@ -561,9 +561,8 @@ void runResultBackendContractTests({
         ),
       );
 
-      test(
-        'custom encoder round-trips binary payloads',
-        () async {
+      if (encoder is _Base64ContractEncoder) {
+        test('custom encoder round-trips binary payloads', () async {
           final currentBackend = backend!;
           final bytes = Uint8List.fromList([1, 2, 3, 4]);
           await currentBackend.set(
@@ -575,12 +574,8 @@ void runResultBackendContractTests({
           );
           final status = await currentBackend.get('binary-task');
           expect(status?.payload, bytes);
-        },
-        skip: _skipUnless(
-          encoder is _Base64ContractEncoder,
-          'Requires _Base64ContractEncoder.',
-        ),
-      );
+        });
+      }
 
       test('encoder metadata survives status and group storage', () async {
         final currentBackend = backend!;
