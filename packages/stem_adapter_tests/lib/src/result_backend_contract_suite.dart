@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:stem/stem.dart';
+import 'package:stem_adapter_tests/src/contract_capabilities.dart';
 import 'package:test/test.dart';
 
 /// Settings that tune the result backend contract test suite.
@@ -14,6 +15,7 @@ class ResultBackendContractSettings {
     this.heartbeatTtl = const Duration(seconds: 1),
     this.settleDelay = const Duration(milliseconds: 150),
     this.encoders = const [JsonTaskPayloadEncoder(), _Base64ContractEncoder()],
+    this.capabilities = const ResultBackendContractCapabilities(),
   });
 
   /// Time-to-live used when asserting task status expiration.
@@ -30,6 +32,9 @@ class ResultBackendContractSettings {
 
   /// List of encoders used when executing the contract.
   final List<TaskPayloadEncoder> encoders;
+
+  /// Feature capability flags for optional contract assertions.
+  final ResultBackendContractCapabilities capabilities;
 }
 
 /// Factory hooks used by the result backend contract test suite.
@@ -96,74 +101,88 @@ void runResultBackendContractTests({
         backend = null;
       });
 
-      test('set/get/watch/expire task statuses', () async {
-        final currentBackend = backend!;
-        const taskId = 'contract-task';
-        final updates = currentBackend.watch(taskId).first;
+      test(
+        'set/get/watch/expire task statuses',
+        () async {
+          final currentBackend = backend!;
+          const taskId = 'contract-task';
+          final updates = currentBackend.watch(taskId).first;
 
-        const error = TaskError(
-          type: 'ContractError',
-          message: 'boom',
-          retryable: true,
-          meta: {'code': 42},
-        );
-
-        final statusMeta = _metaWithEncoder(encoder, const {
-          'origin': 'contract',
-        });
-        await currentBackend.set(
-          taskId,
-          TaskState.succeeded,
-          payload: const {'value': 'done'},
-          error: error,
-          attempt: 3,
-          meta: statusMeta,
-        );
-
-        await Future<void>.delayed(settings.settleDelay);
-
-        final status = await currentBackend.get(taskId);
-        expect(status, isNotNull);
-        expect(status!.state, TaskState.succeeded);
-        expect(status.payload, {'value': 'done'});
-        expect(status.error?.type, 'ContractError');
-        expect(status.attempt, 3);
-        expect(status.meta['origin'], 'contract');
-
-        final streamed = await updates.timeout(const Duration(seconds: 5));
-        expect(streamed.id, taskId);
-        expect(streamed.state, TaskState.succeeded);
-
-        await currentBackend.expire(taskId, settings.statusTtl);
-        await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
-        if (factory.beforeStatusExpiryCheck != null) {
-          await factory.beforeStatusExpiryCheck!(
-            _unwrapBackend(currentBackend),
+          const error = TaskError(
+            type: 'ContractError',
+            message: 'boom',
+            retryable: true,
+            meta: {'code': 42},
           );
-        }
-        expect(await currentBackend.get(taskId), isNull);
-      });
 
-      test('set honors the provided ttl', () async {
-        final currentBackend = backend!;
-        const taskId = 'contract-task-ttl';
-        await currentBackend.set(
-          taskId,
-          TaskState.succeeded,
-          payload: const {'value': 'expire'},
-          attempt: 0,
-          meta: _metaWithEncoder(encoder, const {'ttl': true}),
-          ttl: settings.statusTtl,
-        );
-
-        await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
-        if (factory.beforeStatusExpiryCheck != null) {
-          await factory.beforeStatusExpiryCheck!(
-            _unwrapBackend(currentBackend),
+          final statusMeta = _metaWithEncoder(encoder, const {
+            'origin': 'contract',
+          });
+          await currentBackend.set(
+            taskId,
+            TaskState.succeeded,
+            payload: const {'value': 'done'},
+            error: error,
+            attempt: 3,
+            meta: statusMeta,
           );
-        }
-        expect(await currentBackend.get(taskId), isNull);
-      });
+
+          await Future<void>.delayed(settings.settleDelay);
+
+          final status = await currentBackend.get(taskId);
+          expect(status, isNotNull);
+          expect(status!.state, TaskState.succeeded);
+          expect(status.payload, {'value': 'done'});
+          expect(status.error?.type, 'ContractError');
+          expect(status.attempt, 3);
+          expect(status.meta['origin'], 'contract');
+
+          final streamed = await updates.timeout(const Duration(seconds: 5));
+          expect(streamed.id, taskId);
+          expect(streamed.state, TaskState.succeeded);
+
+          await currentBackend.expire(taskId, settings.statusTtl);
+          await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
+          if (factory.beforeStatusExpiryCheck != null) {
+            await factory.beforeStatusExpiryCheck!(
+              _unwrapBackend(currentBackend),
+            );
+          }
+          expect(await currentBackend.get(taskId), isNull);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyTaskStatusExpiry,
+          'Adapter disabled task-status expiry capability checks.',
+        ),
+      );
+
+      test(
+        'set honors the provided ttl',
+        () async {
+          final currentBackend = backend!;
+          const taskId = 'contract-task-ttl';
+          await currentBackend.set(
+            taskId,
+            TaskState.succeeded,
+            payload: const {'value': 'expire'},
+            attempt: 0,
+            meta: _metaWithEncoder(encoder, const {'ttl': true}),
+            ttl: settings.statusTtl,
+          );
+
+          await Future<void>.delayed(settings.statusTtl + settings.settleDelay);
+          if (factory.beforeStatusExpiryCheck != null) {
+            await factory.beforeStatusExpiryCheck!(
+              _unwrapBackend(currentBackend),
+            );
+          }
+          expect(await currentBackend.get(taskId), isNull);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyTaskStatusExpiry,
+          'Adapter disabled task-status expiry capability checks.',
+        ),
+      );
 
       test('set overwrites existing status and clears error state', () async {
         final currentBackend = backend!;
@@ -336,177 +355,215 @@ void runResultBackendContractTests({
         expect(afterReset.meta['init'], isFalse);
       });
 
-      test('group data expires after ttl', () async {
-        final currentBackend = backend!;
-        final groupId =
-            'contract-expiring-group-${DateTime.now().microsecondsSinceEpoch}';
-        await currentBackend.initGroup(
-          GroupDescriptor(
-            id: groupId,
-            expected: 1,
-            ttl: settings.groupTtl,
-            meta: const {'expires': true},
-          ),
-        );
+      test(
+        'group data expires after ttl',
+        () async {
+          final currentBackend = backend!;
+          final timestamp = DateTime.now().microsecondsSinceEpoch;
+          final groupId = 'contract-expiring-group-$timestamp';
+          await currentBackend.initGroup(
+            GroupDescriptor(
+              id: groupId,
+              expected: 1,
+              ttl: settings.groupTtl,
+              meta: const {'expires': true},
+            ),
+          );
 
-        await currentBackend.addGroupResult(
-          groupId,
-          TaskStatus(
-            id: 'child-expiring',
-            state: TaskState.succeeded,
-            payload: {'ok': true},
-            attempt: 0,
-            meta: _metaWithEncoder(encoder, const {}),
-          ),
-        );
+          await currentBackend.addGroupResult(
+            groupId,
+            TaskStatus(
+              id: 'child-expiring',
+              state: TaskState.succeeded,
+              payload: {'ok': true},
+              attempt: 0,
+              meta: _metaWithEncoder(encoder, const {}),
+            ),
+          );
 
-        await Future<void>.delayed(settings.groupTtl + settings.settleDelay);
-        if (factory.beforeGroupExpiryCheck != null) {
-          await factory.beforeGroupExpiryCheck!(_unwrapBackend(currentBackend));
-        }
+          await Future<void>.delayed(settings.groupTtl + settings.settleDelay);
+          if (factory.beforeGroupExpiryCheck != null) {
+            await factory.beforeGroupExpiryCheck!(
+              _unwrapBackend(currentBackend),
+            );
+          }
 
-        expect(await currentBackend.getGroup(groupId), isNull);
-        final lateAdd = await currentBackend.addGroupResult(
-          groupId,
-          TaskStatus(
-            id: 'child-late',
-            state: TaskState.succeeded,
-            payload: {'ok': false},
-            attempt: 0,
-            meta: _metaWithEncoder(encoder, const {}),
-          ),
-        );
-        expect(lateAdd, isNull);
-      });
+          expect(await currentBackend.getGroup(groupId), isNull);
+          final lateAdd = await currentBackend.addGroupResult(
+            groupId,
+            TaskStatus(
+              id: 'child-late',
+              state: TaskState.succeeded,
+              payload: {'ok': false},
+              attempt: 0,
+              meta: _metaWithEncoder(encoder, const {}),
+            ),
+          );
+          expect(lateAdd, isNull);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyGroupExpiry,
+          'Adapter disabled group-expiry capability checks.',
+        ),
+      );
 
-      test('claimChord allows only a single claimant', () async {
-        final currentBackend = backend!;
-        const groupId = 'contract-chord';
-        await currentBackend.initGroup(
-          GroupDescriptor(
-            id: groupId,
-            expected: 1,
-            ttl: settings.groupTtl,
-            meta: const {},
-          ),
-        );
+      test(
+        'claimChord allows only a single claimant',
+        () async {
+          final currentBackend = backend!;
+          const groupId = 'contract-chord';
+          await currentBackend.initGroup(
+            GroupDescriptor(
+              id: groupId,
+              expected: 1,
+              ttl: settings.groupTtl,
+              meta: const {},
+            ),
+          );
 
-        final dispatchedAt = DateTime.now().toUtc();
-        final first = await currentBackend.claimChord(
-          groupId,
-          callbackTaskId: 'cb-task',
-          dispatchedAt: dispatchedAt,
-        );
-        expect(first, isTrue);
+          final dispatchedAt = DateTime.now().toUtc();
+          final first = await currentBackend.claimChord(
+            groupId,
+            callbackTaskId: 'cb-task',
+            dispatchedAt: dispatchedAt,
+          );
+          expect(first, isTrue);
 
-        final second = await currentBackend.claimChord(groupId);
-        expect(second, isFalse);
+          final second = await currentBackend.claimChord(groupId);
+          expect(second, isFalse);
 
-        final status = await currentBackend.getGroup(groupId);
-        expect(status?.meta[ChordMetadata.callbackTaskId], 'cb-task');
-        expect(
-          status?.meta[ChordMetadata.dispatchedAt],
-          dispatchedAt.toIso8601String(),
-        );
-      });
+          final status = await currentBackend.getGroup(groupId);
+          expect(status?.meta[ChordMetadata.callbackTaskId], 'cb-task');
+          expect(
+            status?.meta[ChordMetadata.dispatchedAt],
+            dispatchedAt.toIso8601String(),
+          );
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyChordClaiming,
+          'Adapter disabled chord-claim capability checks.',
+        ),
+      );
 
-      test('worker heartbeats stored and listed', () async {
-        final currentBackend = backend!;
-        const workerId = 'contract-worker';
-        final heartbeat = WorkerHeartbeat(
-          workerId: workerId,
-          namespace: 'contract',
-          timestamp: DateTime.now(),
-          isolateCount: 1,
-          inflight: 0,
-          queues: [QueueHeartbeat(name: 'default', inflight: 0)],
-          extras: const {'key': 'value'},
-        );
-
-        await currentBackend.setWorkerHeartbeat(heartbeat);
-        await Future<void>.delayed(settings.settleDelay);
-
-        final stored = await currentBackend.getWorkerHeartbeat(workerId);
-        expect(stored, isNotNull);
-        expect(stored!.workerId, workerId);
-        expect(stored.queues.single.name, 'default');
-        expect(stored.extras['key'], 'value');
-
-        final heartbeats = await currentBackend.listWorkerHeartbeats();
-        expect(heartbeats.any((hb) => hb.workerId == workerId), isTrue);
-      });
-
-      test('worker heartbeats update existing entries', () async {
-        final currentBackend = backend!;
-        const workerId = 'contract-worker-update';
-        await currentBackend.setWorkerHeartbeat(
-          WorkerHeartbeat(
+      test(
+        'worker heartbeats stored and listed',
+        () async {
+          final currentBackend = backend!;
+          const workerId = 'contract-worker';
+          final heartbeat = WorkerHeartbeat(
             workerId: workerId,
             namespace: 'contract',
             timestamp: DateTime.now(),
             isolateCount: 1,
-            inflight: 1,
-            queues: [QueueHeartbeat(name: 'default', inflight: 1)],
-            extras: const {'version': 1},
-          ),
-        );
+            inflight: 0,
+            queues: [QueueHeartbeat(name: 'default', inflight: 0)],
+            extras: const {'key': 'value'},
+          );
 
-        await Future<void>.delayed(settings.settleDelay);
+          await currentBackend.setWorkerHeartbeat(heartbeat);
+          await Future<void>.delayed(settings.settleDelay);
 
-        await currentBackend.setWorkerHeartbeat(
-          WorkerHeartbeat(
+          final stored = await currentBackend.getWorkerHeartbeat(workerId);
+          expect(stored, isNotNull);
+          expect(stored!.workerId, workerId);
+          expect(stored.queues.single.name, 'default');
+          expect(stored.extras['key'], 'value');
+
+          final heartbeats = await currentBackend.listWorkerHeartbeats();
+          expect(heartbeats.any((hb) => hb.workerId == workerId), isTrue);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyWorkerHeartbeats,
+          'Adapter disabled worker-heartbeat capability checks.',
+        ),
+      );
+
+      test(
+        'worker heartbeats update existing entries',
+        () async {
+          final currentBackend = backend!;
+          const workerId = 'contract-worker-update';
+          await currentBackend.setWorkerHeartbeat(
+            WorkerHeartbeat(
+              workerId: workerId,
+              namespace: 'contract',
+              timestamp: DateTime.now(),
+              isolateCount: 1,
+              inflight: 1,
+              queues: [QueueHeartbeat(name: 'default', inflight: 1)],
+              extras: const {'version': 1},
+            ),
+          );
+
+          await Future<void>.delayed(settings.settleDelay);
+
+          await currentBackend.setWorkerHeartbeat(
+            WorkerHeartbeat(
+              workerId: workerId,
+              namespace: 'contract',
+              timestamp: DateTime.now(),
+              isolateCount: 2,
+              inflight: 3,
+              queues: [QueueHeartbeat(name: 'default', inflight: 3)],
+              extras: const {'version': 2},
+            ),
+          );
+
+          await Future<void>.delayed(settings.settleDelay);
+
+          final stored = await currentBackend.getWorkerHeartbeat(workerId);
+          expect(stored, isNotNull);
+          expect(stored!.inflight, 3);
+          expect(stored.extras['version'], 2);
+
+          final list = await currentBackend.listWorkerHeartbeats();
+          expect(list.where((hb) => hb.workerId == workerId).length, 1);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyWorkerHeartbeats,
+          'Adapter disabled worker-heartbeat capability checks.',
+        ),
+      );
+
+      test(
+        'worker heartbeats expire after ttl',
+        () async {
+          final currentBackend = backend!;
+          final workerId =
+              'contract-worker-${DateTime.now().microsecondsSinceEpoch}';
+          final heartbeat = WorkerHeartbeat(
             workerId: workerId,
             namespace: 'contract',
             timestamp: DateTime.now(),
-            isolateCount: 2,
-            inflight: 3,
-            queues: [QueueHeartbeat(name: 'default', inflight: 3)],
-            extras: const {'version': 2},
-          ),
-        );
-
-        await Future<void>.delayed(settings.settleDelay);
-
-        final stored = await currentBackend.getWorkerHeartbeat(workerId);
-        expect(stored, isNotNull);
-        expect(stored!.inflight, 3);
-        expect(stored.extras['version'], 2);
-
-        final list = await currentBackend.listWorkerHeartbeats();
-        expect(list.where((hb) => hb.workerId == workerId).length, 1);
-      });
-
-      test('worker heartbeats expire after ttl', () async {
-        final currentBackend = backend!;
-        final workerId =
-            'contract-worker-${DateTime.now().microsecondsSinceEpoch}';
-        final heartbeat = WorkerHeartbeat(
-          workerId: workerId,
-          namespace: 'contract',
-          timestamp: DateTime.now(),
-          isolateCount: 1,
-          inflight: 0,
-          queues: [QueueHeartbeat(name: 'default', inflight: 0)],
-          extras: const {'key': 'value'},
-        );
-
-        await currentBackend.setWorkerHeartbeat(heartbeat);
-        await Future<void>.delayed(
-          settings.heartbeatTtl + settings.settleDelay,
-        );
-        if (factory.beforeHeartbeatExpiryCheck != null) {
-          await factory.beforeHeartbeatExpiryCheck!(
-            _unwrapBackend(currentBackend),
+            isolateCount: 1,
+            inflight: 0,
+            queues: [QueueHeartbeat(name: 'default', inflight: 0)],
+            extras: const {'key': 'value'},
           );
-        }
 
-        expect(await currentBackend.getWorkerHeartbeat(workerId), isNull);
-        final list = await currentBackend.listWorkerHeartbeats();
-        expect(list.any((hb) => hb.workerId == workerId), isFalse);
-      });
+          await currentBackend.setWorkerHeartbeat(heartbeat);
+          await Future<void>.delayed(
+            settings.heartbeatTtl + settings.settleDelay,
+          );
+          if (factory.beforeHeartbeatExpiryCheck != null) {
+            await factory.beforeHeartbeatExpiryCheck!(
+              _unwrapBackend(currentBackend),
+            );
+          }
 
-      if (encoder is _Base64ContractEncoder) {
-        test('custom encoder round-trips binary payloads', () async {
+          expect(await currentBackend.getWorkerHeartbeat(workerId), isNull);
+          final list = await currentBackend.listWorkerHeartbeats();
+          expect(list.any((hb) => hb.workerId == workerId), isFalse);
+        },
+        skip: _skipUnless(
+          settings.capabilities.verifyWorkerHeartbeats,
+          'Adapter disabled worker-heartbeat capability checks.',
+        ),
+      );
+
+      test(
+        'custom encoder round-trips binary payloads',
+        () async {
           final currentBackend = backend!;
           final bytes = Uint8List.fromList([1, 2, 3, 4]);
           await currentBackend.set(
@@ -518,8 +575,12 @@ void runResultBackendContractTests({
           );
           final status = await currentBackend.get('binary-task');
           expect(status?.payload, bytes);
-        });
-      }
+        },
+        skip: _skipUnless(
+          encoder is _Base64ContractEncoder,
+          'Requires _Base64ContractEncoder.',
+        ),
+      );
 
       test('encoder metadata survives status and group storage', () async {
         final currentBackend = backend!;
@@ -628,6 +689,8 @@ Map<String, Object?> _metaWithEncoder(
 ) {
   return {...meta, stemResultEncoderMetaKey: encoder.id};
 }
+
+Object _skipUnless(bool enabled, String reason) => enabled ? false : reason;
 
 class _Base64ContractEncoder extends TaskPayloadEncoder {
   const _Base64ContractEncoder();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:stem/stem.dart';
+import 'package:stem_adapter_tests/src/contract_capabilities.dart';
 import 'package:test/test.dart';
 
 /// Settings that tune the broker contract test suite.
@@ -11,11 +12,10 @@ class BrokerContractSettings {
     this.leaseExtension = const Duration(milliseconds: 750),
     this.queueSettleDelay = const Duration(milliseconds: 150),
     this.replayDelay = const Duration(milliseconds: 200),
-    this.verifyPriorityOrdering = true,
-    this.verifyBroadcastFanout = false,
     this.requeueTimeout = const Duration(seconds: 5),
     this.concurrentPublishTimeout = const Duration(seconds: 1),
     this.concurrentDeliveryTimeout = const Duration(seconds: 5),
+    this.capabilities = const BrokerContractCapabilities(),
   });
 
   /// Expected default visibility timeout used by the adapter under test.
@@ -31,12 +31,8 @@ class BrokerContractSettings {
   /// again.
   final Duration replayDelay;
 
-  /// Whether to verify priority ordering when the adapter reports support.
-  final bool verifyPriorityOrdering;
-
-  /// Whether to run the broadcast fan-out scenario (requires additional
-  /// broker instances supplied through the factory).
-  final bool verifyBroadcastFanout;
+  /// Feature capability flags for optional broker contract assertions.
+  final BrokerContractCapabilities capabilities;
 
   /// Maximum time to wait for a requeued delivery to appear.
   final Duration requeueTimeout;
@@ -697,8 +693,9 @@ void runBrokerContractTests({
 
       await _purgeAll(currentBroker, queue);
     });
-    if (settings.verifyPriorityOrdering) {
-      test('priority ordering surfaces higher priority jobs first', () async {
+    test(
+      'priority ordering surfaces higher priority jobs first',
+      () async {
         final currentBroker = broker!;
         if (!currentBroker.supportsPriority) {
           return;
@@ -756,15 +753,25 @@ void runBrokerContractTests({
         await iterator.cancel();
 
         await _purgeAll(currentBroker, queue);
-      });
-    }
+      },
+      skip: _skipUnless(
+        settings.capabilities.verifyPriorityOrdering,
+        'Adapter disabled priority ordering capability checks.',
+      ),
+    );
 
-    if (settings.verifyBroadcastFanout &&
-        factory.additionalBrokerFactory != null) {
-      test('broadcast fan-out delivers to all subscribers', () async {
+    final broadcastSkip = !settings.capabilities.verifyBroadcastFanout
+        ? 'Adapter disabled broadcast fan-out capability checks.'
+        : factory.additionalBrokerFactory == null
+        ? 'additionalBrokerFactory is required for broadcast fan-out checks.'
+        : false;
+    test(
+      'broadcast fan-out delivers to all subscribers',
+      () async {
         final publisher = broker!;
-        final workerOne = await factory.additionalBrokerFactory!();
-        final workerTwo = await factory.additionalBrokerFactory!();
+        final createAdditional = factory.additionalBrokerFactory!;
+        final workerOne = await createAdditional();
+        final workerTwo = await createAdditional();
 
         try {
           final queue = _queueName('broadcast');
@@ -804,8 +811,9 @@ void runBrokerContractTests({
             await factory.dispose!(workerTwo);
           }
         }
-      });
-    }
+      },
+      skip: broadcastSkip,
+    );
   });
 }
 
@@ -844,6 +852,8 @@ Future<T> _waitFor<T>({
     await Future<void>.delayed(pollInterval);
   }
 }
+
+Object _skipUnless(bool enabled, String reason) => enabled ? false : reason;
 
 Future<Delivery?> _nextIteratorDelivery({
   required StreamIterator<Delivery> iterator,

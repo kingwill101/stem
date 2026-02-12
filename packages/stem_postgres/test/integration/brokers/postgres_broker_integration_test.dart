@@ -50,7 +50,9 @@ Future<void> main() async {
         leaseExtension: Duration(seconds: 1),
         queueSettleDelay: Duration(milliseconds: 250),
         replayDelay: Duration(milliseconds: 250),
-        verifyBroadcastFanout: true,
+        capabilities: BrokerContractCapabilities(
+          verifyBroadcastFanout: true,
+        ),
       ),
     );
 
