@@ -88,34 +88,36 @@ void main() {
       final workerOne = InMemoryBroker(namespace: namespace);
       final workerTwo = InMemoryBroker(namespace: namespace);
 
-      final subscription = RoutingSubscription(
-        queues: const ['default'],
-        broadcastChannels: const ['ops'],
-      );
-      final deliveryOne = workerOne.consume(subscription).first;
-      final deliveryTwo = workerTwo.consume(subscription).first;
+      try {
+        final subscription = RoutingSubscription(
+          queues: const ['default'],
+          broadcastChannels: const ['ops'],
+        );
+        final deliveryOne = workerOne.consume(subscription).first;
+        final deliveryTwo = workerTwo.consume(subscription).first;
 
-      await publisher.publish(
-        Envelope(name: 'broadcast.task', args: const {'value': 'fanout'}),
-        routing: RoutingInfo.broadcast(channel: 'ops'),
-      );
+        await publisher.publish(
+          Envelope(name: 'broadcast.task', args: const {'value': 'fanout'}),
+          routing: RoutingInfo.broadcast(channel: 'ops'),
+        );
 
-      final first = await deliveryOne.timeout(const Duration(seconds: 1));
-      final second = await deliveryTwo.timeout(const Duration(seconds: 1));
+        final first = await deliveryOne.timeout(const Duration(seconds: 1));
+        final second = await deliveryTwo.timeout(const Duration(seconds: 1));
 
-      expect(first.envelope.name, 'broadcast.task');
-      expect(first.route.isBroadcast, isTrue);
-      expect(first.route.broadcastChannel, 'ops');
-      expect(second.envelope.name, 'broadcast.task');
-      expect(second.route.isBroadcast, isTrue);
-      expect(second.route.broadcastChannel, 'ops');
+        expect(first.envelope.name, 'broadcast.task');
+        expect(first.route.isBroadcast, isTrue);
+        expect(first.route.broadcastChannel, 'ops');
+        expect(second.envelope.name, 'broadcast.task');
+        expect(second.route.isBroadcast, isTrue);
+        expect(second.route.broadcastChannel, 'ops');
 
-      await workerOne.ack(first);
-      await workerTwo.ack(second);
-
-      publisher.dispose();
-      workerOne.dispose();
-      workerTwo.dispose();
+        await workerOne.ack(first);
+        await workerTwo.ack(second);
+      } finally {
+        publisher.dispose();
+        workerOne.dispose();
+        workerTwo.dispose();
+      }
     });
 
     test('supports broadcast-only subscriptions', () async {
@@ -123,26 +125,31 @@ void main() {
           'broadcast-only-${DateTime.now().microsecondsSinceEpoch}';
       final publisher = InMemoryBroker(namespace: namespace);
       final consumer = InMemoryBroker(namespace: namespace);
-      final subscription = RoutingSubscription(
-        queues: const [],
-        broadcastChannels: const ['ops'],
-      );
+      try {
+        final subscription = RoutingSubscription(
+          queues: const [],
+          broadcastChannels: const ['ops'],
+        );
 
-      final deliveryFuture = consumer.consume(subscription).first;
+        final deliveryFuture = consumer.consume(subscription).first;
 
-      await publisher.publish(
-        Envelope(name: 'broadcast.only', args: const {'value': 1}),
-        routing: RoutingInfo.broadcast(channel: 'ops'),
-      );
+        await publisher.publish(
+          Envelope(name: 'broadcast.only', args: const {'value': 1}),
+          routing: RoutingInfo.broadcast(channel: 'ops'),
+        );
 
-      final delivery = await deliveryFuture.timeout(const Duration(seconds: 1));
-      expect(delivery.route.isBroadcast, isTrue);
-      expect(delivery.route.broadcastChannel, 'ops');
-      expect(delivery.envelope.name, 'broadcast.only');
+        final delivery = await deliveryFuture.timeout(
+          const Duration(seconds: 1),
+        );
+        expect(delivery.route.isBroadcast, isTrue);
+        expect(delivery.route.broadcastChannel, 'ops');
+        expect(delivery.envelope.name, 'broadcast.only');
 
-      await consumer.ack(delivery);
-      publisher.dispose();
-      consumer.dispose();
+        await consumer.ack(delivery);
+      } finally {
+        publisher.dispose();
+        consumer.dispose();
+      }
     });
 
     test('broadcast catch-up replays unacked history per consumer', () async {
@@ -151,51 +158,53 @@ void main() {
       final publisher = InMemoryBroker(namespace: namespace);
       final consumerA = InMemoryBroker(namespace: namespace);
       final consumerB = InMemoryBroker(namespace: namespace);
-      final subscription = RoutingSubscription(
-        queues: const [],
-        broadcastChannels: const ['ops'],
-      );
+      try {
+        final subscription = RoutingSubscription(
+          queues: const [],
+          broadcastChannels: const ['ops'],
+        );
 
-      await publisher.publish(
-        Envelope(name: 'broadcast.replay', args: const {'value': 1}),
-        routing: RoutingInfo.broadcast(channel: 'ops'),
-      );
+        await publisher.publish(
+          Envelope(name: 'broadcast.replay', args: const {'value': 1}),
+          routing: RoutingInfo.broadcast(channel: 'ops'),
+        );
 
-      final firstPass = StreamIterator(
-        consumerA.consume(subscription, consumerName: 'worker-a'),
-      );
-      expect(
-        await firstPass.moveNext().timeout(const Duration(seconds: 1)),
-        isTrue,
-      );
-      expect(firstPass.current.envelope.name, 'broadcast.replay');
-      await consumerA.ack(firstPass.current);
-      await firstPass.cancel();
+        final firstPass = StreamIterator(
+          consumerA.consume(subscription, consumerName: 'worker-a'),
+        );
+        expect(
+          await firstPass.moveNext().timeout(const Duration(seconds: 1)),
+          isTrue,
+        );
+        expect(firstPass.current.envelope.name, 'broadcast.replay');
+        await consumerA.ack(firstPass.current);
+        await firstPass.cancel();
 
-      final replayCheck = StreamIterator(
-        consumerA.consume(subscription, consumerName: 'worker-a'),
-      );
-      final replayed = await replayCheck.moveNext().timeout(
-        const Duration(milliseconds: 200),
-        onTimeout: () => false,
-      );
-      expect(replayed, isFalse);
-      await replayCheck.cancel();
+        final replayCheck = StreamIterator(
+          consumerA.consume(subscription, consumerName: 'worker-a'),
+        );
+        final replayed = await replayCheck.moveNext().timeout(
+          const Duration(milliseconds: 200),
+          onTimeout: () => false,
+        );
+        expect(replayed, isFalse);
+        await replayCheck.cancel();
 
-      final secondPass = StreamIterator(
-        consumerB.consume(subscription, consumerName: 'worker-b'),
-      );
-      expect(
-        await secondPass.moveNext().timeout(const Duration(seconds: 1)),
-        isTrue,
-      );
-      expect(secondPass.current.envelope.name, 'broadcast.replay');
-      await consumerB.ack(secondPass.current);
-      await secondPass.cancel();
-
-      publisher.dispose();
-      consumerA.dispose();
-      consumerB.dispose();
+        final secondPass = StreamIterator(
+          consumerB.consume(subscription, consumerName: 'worker-b'),
+        );
+        expect(
+          await secondPass.moveNext().timeout(const Duration(seconds: 1)),
+          isTrue,
+        );
+        expect(secondPass.current.envelope.name, 'broadcast.replay');
+        await consumerB.ack(secondPass.current);
+        await secondPass.cancel();
+      } finally {
+        publisher.dispose();
+        consumerA.dispose();
+        consumerB.dispose();
+      }
     });
 
     test('broadcast publishes with reused envelope id are delivered', () async {

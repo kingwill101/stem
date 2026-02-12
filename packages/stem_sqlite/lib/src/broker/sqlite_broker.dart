@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:meta/meta.dart';
@@ -535,13 +536,38 @@ class SqliteBroker implements Broker {
     });
   }
 
-  static const String _broadcastReceiptPrefix = 'broadcast:';
+  static const String _broadcastReceiptPrefix =
+      'stem:broadcast:receipt:v1:1f5fd66d-73f7-4b4b-ae4c-36058f6844c7:';
 
-  String _parseReceipt(String receipt) => receipt;
+  String _parseReceipt(String receipt) {
+    if (!receipt.startsWith(_broadcastReceiptPrefix)) {
+      return receipt;
+    }
+
+    final encodedPayload = receipt.substring(_broadcastReceiptPrefix.length);
+    try {
+      final payload = jsonDecode(utf8.decode(base64Url.decode(encodedPayload)));
+      if (payload is! Map<String, dynamic>) {
+        return receipt;
+      }
+      final envelopeId = payload['envelopeId'];
+      if (envelopeId is! String || envelopeId.isEmpty) {
+        return receipt;
+      }
+      return envelopeId;
+    } on FormatException {
+      return receipt;
+    }
+  }
 
   String _broadcastReceipt(String envelopeId, String consumerId) {
-    final nowMicros = DateTime.now().microsecondsSinceEpoch;
-    return '$_broadcastReceiptPrefix$envelopeId:$consumerId:$nowMicros';
+    final payload = jsonEncode({
+      'envelopeId': envelopeId,
+      'consumerId': consumerId,
+      'issuedAtMicros': DateTime.now().microsecondsSinceEpoch,
+    });
+    final encodedPayload = base64Url.encode(utf8.encode(payload));
+    return '$_broadcastReceiptPrefix$encodedPayload';
   }
 
   String _broadcastKey(String channel) => '$namespace:$channel';

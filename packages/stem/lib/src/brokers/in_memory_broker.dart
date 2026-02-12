@@ -39,6 +39,11 @@ class InMemoryBroker implements Broker {
   /// Default visibility timeout for claimed deliveries.
   final Duration defaultVisibilityTimeout;
 
+  /// Shared namespace registries enable cross-instance broadcast fan-out.
+  ///
+  /// Because `_broadcastHubs` and `_namespaceRefs` are static, brokers using
+  /// the same namespace in parallel tests will interfere. Use unique
+  /// namespaces when test isolation is required.
   static final Map<String, _BroadcastHub> _broadcastHubs = {};
   static final Map<String, int> _namespaceRefs = {};
 
@@ -194,10 +199,10 @@ class InMemoryBroker implements Broker {
       onCancel: () {
         active = false;
         state?.cancelWaiters(consumer);
-        final subscription = broadcastSubscription;
-        if (subscription != null) {
-          subscription.close();
-          _activeBroadcastSubscriptions.remove(subscription);
+        final broadcastSub = broadcastSubscription;
+        if (broadcastSub != null) {
+          broadcastSub.close();
+          _activeBroadcastSubscriptions.remove(broadcastSub);
         }
       },
     );
@@ -692,7 +697,9 @@ class _BroadcastHub {
         return;
       }
       _ackedByConsumer.putIfAbsent(consumer, () => <String>{}).add(messageKey);
-    } on Object {
+    } on FormatException {
+      return;
+    } on TypeError {
       return;
     }
   }
@@ -735,8 +742,15 @@ class _BroadcastHub {
     while (_messageOrder.length > _maxHistory) {
       final oldest = _messageOrder.removeFirst();
       _messagesByKey.remove(oldest);
-      for (final acked in _ackedByConsumer.values) {
+      final emptyConsumers = <String>[];
+      _ackedByConsumer.forEach((consumer, acked) {
         acked.remove(oldest);
+        if (acked.isEmpty) {
+          emptyConsumers.add(consumer);
+        }
+      });
+      for (final consumer in emptyConsumers) {
+        _ackedByConsumer.remove(consumer);
       }
     }
   }
