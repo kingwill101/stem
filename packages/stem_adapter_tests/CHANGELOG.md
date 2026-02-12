@@ -1,3 +1,8 @@
+## 0.1.1
+
+- Scoped the binary payload round-trip contract test to the Base64 encoder
+  suite so JSON encoder runs no longer report intentional skips.
+
 ## 0.1.0
 
 - Added workflow store contract coverage for run leasing and runnable run
