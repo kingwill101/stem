@@ -26,7 +26,7 @@ dart run bin/enqueue.dart
 ```
 
 For best results with `sqlite3` native assets, build the CLI binaries first
-(`dart build cli`). The included `justfile` does this automatically.
+(`dart build cli`). The included `Taskfile.yml` does this automatically.
 
 Optional flags:
 
@@ -63,13 +63,11 @@ separate SQLite files for the broker and backend to avoid WAL contention and
 keeps the producer disconnected from the backend (so only the worker writes
 result state).
 
-### Local build + just
+### Local build + task
 
 ```bash
-just build
+task build
 # In separate terminals:
-just run-worker
-just run-enqueue
-# Or:
-just tmux
+task run-worker
+task run-enqueue
 ```

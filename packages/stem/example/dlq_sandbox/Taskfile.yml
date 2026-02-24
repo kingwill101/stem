@@ -1,0 +1,70 @@
+version: "3"
+
+tasks:
+  deps-up:
+    desc: Start Redis dependency.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up -d redis
+
+  deps-down:
+    desc: Stop docker-compose services.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  build-worker:
+    desc: Compile worker binary.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; cd "{{.TASKFILE_DIR}}"; dart pub get; dart build cli -t bin/worker.dart -o build/worker'
+
+  build-producer:
+    desc: Compile producer binary.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; cd "{{.TASKFILE_DIR}}"; dart pub get; dart build cli -t bin/producer.dart -o build/producer'
+
+  build:
+    desc: Compile worker and producer binaries.
+    deps: [build-worker, build-producer]
+
+  run-worker:
+    desc: Run worker binary.
+    deps: [build-worker]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          "$root/build/worker/bundle/bin/"*
+        '
+
+  run-producer:
+    desc: Run producer binary.
+    deps: [build-producer]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          "$root/build/producer/bundle/bin/"*
+        '
+
+  run:
+    desc: Run worker flow.
+    cmds:
+      - task: run-worker
+
+  clean:
+    desc: Remove build artifacts.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/build"

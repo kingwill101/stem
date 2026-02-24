@@ -29,48 +29,35 @@
 ## Quick Start
 
 ```dart
+import 'dart:async';
+
 import 'package:stem/stem.dart';
 
-// 1. Define a task
 class EmailTask extends TaskHandler<String> {
   @override
   String get name => 'email.send';
 
   @override
-  TaskOptions get options => const TaskOptions(maxRetries: 3);
-
-  @override
   Future<String> call(TaskContext ctx, Map<String, Object?> args) async {
     final to = args['to'] as String;
-    // ... send email logic ...
     return 'sent to $to';
   }
 }
 
-// 2. Bootstrap and run
 Future<void> main() async {
-  final app = await StemApp.inMemory(
-    tasks: [EmailTask()],
-    workerConfig: const StemWorkerConfig(
-      queue: 'default',
-      consumerName: 'my-worker',
-      concurrency: 4,
-    ),
-  );
-  
-  await app.start();
+  final client = await StemClient.inMemory(tasks: [EmailTask()]);
+  final worker = await client.createWorker();
+  unawaited(worker.start());
 
-  // 3. Enqueue work
-  final taskId = await app.stem.enqueue(
+  final taskId = await client.stem.enqueue(
     'email.send',
     args: {'to': 'hello@example.com'},
   );
+  final result = await client.stem.waitForTask<String>(taskId);
+  print('Result: ${result?.value}');
 
-  // 4. Wait for result
-  final result = await app.stem.waitForTask<String>(taskId);
-  print('Result: ${result?.value}'); // "sent to hello@example.com"
-
-  await app.close();
+  await worker.shutdown();
+  await client.close();
 }
 ```
 
@@ -154,6 +141,7 @@ Future<void> main() async {
 | [`stem_sqlite`](./packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_builder`](./packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
 | [`stem_adapter_tests`](./packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
+| [`stem_memory`](./packages/stem_memory) | In-memory adapter package (broker/backend/workflow/scheduler factories) | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
 | [`stem_dashboard`](./packages/dashboard) | Hotwire-based operations dashboard (experimental) | — |
 
 ---
@@ -284,7 +272,22 @@ task test
 
 # Run coverage workflow for core adapters/runtime packages
 task coverage
+
+# Run targeted adapter suites (auto-bootstraps integration env)
+task test:contract
+task test:redis
+task test:postgres
 ```
+
+Targeted adapter tasks now bootstrap integration environment automatically.
+If bootstrap still fails (for example Docker unavailable), run:
+
+```bash
+source ./packages/stem_cli/_init_test_env
+```
+
+Capability flags and skip behavior for adapter contract suites are documented in
+[`packages/stem_adapter_tests/README.md`](./packages/stem_adapter_tests/README.md).
 
 ---
 

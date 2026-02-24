@@ -8,14 +8,15 @@ import 'package:stem_redis/stem_redis.dart';
 // #region workflows-runtime
 Future<void> bootstrapWorkflowRuntime() async {
   // #region workflows-app-create
-  final workflowApp = await StemWorkflowApp.create(
+  final workflowApp = await StemWorkflowApp.fromUrl(
+    'redis://127.0.0.1:56379',
+    adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://127.0.0.1:56379/1',
+      workflow: 'postgresql://<user>:<password>@127.0.0.1:65432/stem',
+    ),
     flows: [ApprovalsFlow.flow],
     scripts: [retryScript],
-    broker: redisBrokerFactory('redis://127.0.0.1:56379'),
-    backend: redisResultBackendFactory('redis://127.0.0.1:56379/1'),
-    storeFactory: postgresWorkflowStoreFactory(
-      'postgresql://postgres:postgres@127.0.0.1:65432/stem',
-    ),
     eventBusFactory: WorkflowEventBusFactory.inMemory(),
     workerConfig: const StemWorkerConfig(queue: 'workflow'),
   );
@@ -29,7 +30,7 @@ Future<void> bootstrapWorkflowRuntime() async {
 
 // #region workflows-client
 Future<void> bootstrapWorkflowClient() async {
-  final client = await StemClient.inMemory();
+  final client = await StemClient.fromUrl('memory://');
   final app = await client.createWorkflowApp(flows: [ApprovalsFlow.flow]);
   await app.start();
   await app.close();
@@ -127,7 +128,8 @@ final encoders = TaskPayloadEncoderRegistry(
 );
 
 Future<void> configureWorkflowEncoders() async {
-  final app = await StemWorkflowApp.create(
+  final app = await StemWorkflowApp.fromUrl(
+    'memory://',
     flows: [ApprovalsFlow.flow],
     encoderRegistry: encoders,
     additionalEncoders: const [GzipPayloadEncoder()],

@@ -38,17 +38,18 @@ Generate a fresh signing secret before production use:
 
 ```bash
 openssl rand -base64 32
-# or ./scripts/security/generate_tls_assets.sh to create TLS assets as well (optional)
+# or run `task tls:certs` to create TLS assets as well (optional)
 ```
+
 Replace the placeholder secret in `.env` with the generated value and update `STEM_SIGNING_ACTIVE_KEY` when rotating keys.
 
 To migrate to Ed25519 signing (public/private), run:
 
 ```bash
-dart run ../../scripts/security/generate_ed25519_keys.dart
+task keys:ed25519
 ```
 
-and copy the printed environment variables into your `.env` file.
+The task updates `.env` in place.
 
 ### Optional: Enabling TLS for Redis
 
@@ -150,27 +151,28 @@ dart pub get
 dart run bin/beat.dart
 ```
 
-## Local build + Docker deps (just)
+## Local build + Docker deps (task)
 
-Pick an environment profile and set `ENV_FILE` (or copy one to `.env`):
+Pick an environment profile and initialize `.env`:
 
 ```bash
-cp .env.hmac .env
-# or: ENV_FILE=.env.hmac just tmux
+task init:hmac
+# or:
+# task init:hmac-tls
+# task init:ed25519-tls
 ```
 
-Start dependencies, build binaries, and run in tmux:
+Start dependencies, build binaries, and run services locally:
 
 ```bash
-just deps-up
-just build
-just tmux
+task deps-up
+task build
 ```
 
 If you prefer separate terminals:
 
 ```bash
-just run-worker
-just run-enqueuer
-just run-beat
+task run:worker
+task run:enqueuer
+task run:beat
 ```

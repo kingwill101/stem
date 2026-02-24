@@ -1,0 +1,100 @@
+version: "3"
+
+tasks:
+  build-worker:
+    desc: Compile worker binary.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; cd "{{.TASKFILE_DIR}}"; dart pub get; dart build cli -t bin/worker.dart -o build/worker'
+
+  build-enqueue:
+    desc: Compile enqueue binary.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; cd "{{.TASKFILE_DIR}}"; dart pub get; dart build cli -t bin/enqueue.dart -o build/enqueue'
+
+  build:
+    desc: Compile worker and enqueue binaries.
+    deps: [build-worker, build-enqueue]
+
+  run-worker:
+    desc: Run worker (compiled binary when available).
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
+          export STEM_SQLITE_BACKEND_PATH="${STEM_SQLITE_BACKEND_PATH:-task_context_mixed_backend.sqlite}"
+          if [[ -d "$root/build/worker/bundle/bin" ]]; then
+            shopt -s nullglob
+            bin_candidates=( "$root/build/worker/bundle/bin/"* )
+            shopt -u nullglob
+            if (( ${#bin_candidates[@]} != 1 )); then
+              echo "Expected exactly one worker binary in $root/build/worker/bundle/bin, found ${#bin_candidates[@]}." >&2
+              exit 1
+            fi
+            "${bin_candidates[0]}"
+          else
+            cd "$root"
+            dart run bin/worker.dart
+          fi
+        '
+
+  _run-enqueue:
+    internal: true
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
+          if [[ -d "$root/build/enqueue/bundle/bin" ]]; then
+            shopt -s nullglob
+            bin_candidates=( "$root/build/enqueue/bundle/bin/"* )
+            shopt -u nullglob
+            if (( ${#bin_candidates[@]} != 1 )); then
+              echo "Expected exactly one enqueue binary in $root/build/enqueue/bundle/bin, found ${#bin_candidates[@]}." >&2
+              exit 1
+            fi
+            "${bin_candidates[0]}" {{.CLI_ARGS}}
+          else
+            cd "$root"
+            dart run bin/enqueue.dart {{.CLI_ARGS}}
+          fi
+        '
+
+  run-enqueue:
+    desc: Run enqueue command (compiled binary when available).
+    cmds:
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: ""
+
+  run-fail:
+    desc: Enqueue failing payload path.
+    cmds:
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: --fail
+
+  run-overwrite:
+    desc: Enqueue overwrite path.
+    cmds:
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: --overwrite
+
+  run:
+    desc: Run enqueue flow.
+    cmds:
+      - task: run-enqueue
+
+  clean:
+    desc: Remove build artifacts.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/build"

@@ -107,16 +107,17 @@ docker run --network host \
   container_mixed_encrypted
 ```
 
-### Local build + Docker deps (just)
+### Local build + Docker deps (task)
 
-By default the Justfile loads `.env`. To use the sample settings, either copy `.env.example` to `.env` or pass `ENV_FILE=.env.example` and update hostnames to `localhost` for local runs.
+Initialize a local `.env` (including a fresh payload secret), start Redis, and compile binaries:
 
 ```bash
-just deps-up
-just build
+task init
+task deps-up
+task build
 # In separate terminals:
-just run-worker
-just run-enqueuer
+task run:worker
+task run:enqueuer
 # Or:
-just tmux
+task compose-up
 ```

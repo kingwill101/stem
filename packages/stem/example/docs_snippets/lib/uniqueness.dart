@@ -97,13 +97,12 @@ Future<void> enqueueWithOverride(Stem stem) async {
 // #endregion uniqueness-override-key
 
 Future<void> main() async {
-  final coordinator = buildInMemoryCoordinator();
   // #region uniqueness-stem-worker
-  final app = await StemApp.create(
+  final app = await StemApp.fromUrl(
+    'memory://',
     tasks: [SendDigestTask()],
-    broker: StemBrokerFactory.inMemory(),
-    backend: StemBackendFactory.inMemory(),
-    uniqueTaskCoordinator: coordinator,
+    uniqueTasks: true,
+    uniqueTaskDefaultTtl: const Duration(minutes: 5),
     workerConfig: const StemWorkerConfig(
       queue: 'email',
       consumerName: 'unique-worker',

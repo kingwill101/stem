@@ -1,0 +1,31 @@
+version: "3"
+
+tasks:
+  build:
+    desc: No build required for daemonized worker demo.
+    cmds:
+      - echo "No build step required."
+
+  run-worker:
+    desc: Run daemonized worker demo.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../.."
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          cd "$stem_root"
+          dart run example/daemonized_worker/bin/worker.dart
+        '
+
+  run:
+    desc: Run daemonized worker.
+    cmds:
+      - task: run-worker
+
+  clean:
+    desc: No artifacts to clean.
+    cmds:
+      - echo "No build artifacts to clean."

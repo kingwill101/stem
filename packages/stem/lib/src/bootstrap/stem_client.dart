@@ -1,5 +1,6 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
+import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/bootstrap/workflow_app.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
@@ -67,6 +68,52 @@ abstract class StemClient {
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
+      defaultWorkerConfig: defaultWorkerConfig,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a client from a single backend URL plus adapter wiring.
+  ///
+  /// This resolves broker/backend factories via [StemStack.fromUrl] so callers
+  /// can avoid manual factory wiring for common Redis/Postgres/SQLite setups.
+  static Future<StemClient> fromUrl(
+    String url, {
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? taskRegistry,
+    WorkflowRegistry? workflowRegistry,
+    Iterable<StemStoreAdapter> adapters = const [],
+    StemStoreOverrides overrides = const StemStoreOverrides(),
+    RoutingRegistry? routing,
+    RetryStrategy? retryStrategy,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) {
+    final stack = StemStack.fromUrl(
+      url,
+      adapters: adapters,
+      overrides: overrides,
+    );
+    return create(
+      tasks: tasks,
+      taskRegistry: taskRegistry,
+      workflowRegistry: workflowRegistry,
+      broker: stack.broker,
+      backend: stack.backend,
+      routing: routing,
+      retryStrategy: retryStrategy,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      middleware: middleware,
+      signer: signer,
       defaultWorkerConfig: defaultWorkerConfig,
       encoderRegistry: encoderRegistry,
       resultEncoder: resultEncoder,

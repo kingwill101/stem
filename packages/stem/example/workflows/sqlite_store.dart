@@ -8,7 +8,9 @@ import 'package:stem_sqlite/stem_sqlite.dart';
 
 Future<void> main() async {
   final databaseFile = File('workflow.sqlite');
-  final app = await StemWorkflowApp.create(
+  final app = await StemWorkflowApp.fromUrl(
+    'sqlite://${databaseFile.path}',
+    adapters: const [StemSqliteAdapter()],
     flows: [
       Flow(
         name: 'sqlite.example',
@@ -17,7 +19,6 @@ Future<void> main() async {
         },
       ),
     ],
-    storeFactory: sqliteWorkflowStoreFactory(databaseFile),
   );
 
   try {

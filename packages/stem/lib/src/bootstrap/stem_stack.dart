@@ -154,6 +154,64 @@ class StemStack {
     final lockUri = _resolveUri(overrides.lock, baseUri);
     final revokeUri = _resolveUri(overrides.revoke, backendUri);
 
+    final resolvedWorkflowStore = workflows
+        ? _optionalFactory<WorkflowStoreFactory>(
+            registered,
+            StemStoreKind.workflow,
+            workflowUri,
+            (adapter) => adapter.workflowStoreFactory(workflowUri),
+          )
+        : null;
+    final resolvedScheduleStore = scheduling
+        ? _optionalFactory<ScheduleStoreFactory>(
+            registered,
+            StemStoreKind.schedule,
+            scheduleUri,
+            (adapter) => adapter.scheduleStoreFactory(scheduleUri),
+          )
+        : null;
+    final resolvedLockStore = _optionalFactory<LockStoreFactory>(
+      registered,
+      StemStoreKind.lock,
+      lockUri,
+      (adapter) => adapter.lockStoreFactory(lockUri),
+    );
+    final resolvedRevokeStore = _optionalFactory<RevokeStoreFactory>(
+      registered,
+      StemStoreKind.revoke,
+      revokeUri,
+      (adapter) => adapter.revokeStoreFactory(revokeUri),
+    );
+
+    if (workflows && resolvedWorkflowStore == null) {
+      _failIfSqliteStoreUnsupported(
+        kind: StemStoreKind.workflow,
+        uri: workflowUri,
+        toggle: 'workflows',
+      );
+    }
+    if (scheduling && resolvedScheduleStore == null) {
+      _failIfSqliteStoreUnsupported(
+        kind: StemStoreKind.schedule,
+        uri: scheduleUri,
+        toggle: 'scheduling',
+      );
+    }
+    if (uniqueTasks && resolvedLockStore == null) {
+      _failIfSqliteStoreUnsupported(
+        kind: StemStoreKind.lock,
+        uri: lockUri,
+        toggle: 'uniqueTasks',
+      );
+    }
+    if (requireRevokeStore && resolvedRevokeStore == null) {
+      _failIfSqliteStoreUnsupported(
+        kind: StemStoreKind.revoke,
+        uri: revokeUri,
+        toggle: 'requireRevokeStore',
+      );
+    }
+
     final broker = _requireFactory<StemBrokerFactory>(
       registered,
       StemStoreKind.broker,
@@ -174,6 +232,8 @@ class StemStack {
             StemStoreKind.workflow,
             workflowUri,
             (adapter) => adapter.workflowStoreFactory(workflowUri),
+            preResolved: resolvedWorkflowStore,
+            toggle: 'workflows',
           )
         : WorkflowStoreFactory.inMemory();
 
@@ -183,6 +243,8 @@ class StemStack {
             StemStoreKind.schedule,
             scheduleUri,
             (adapter) => adapter.scheduleStoreFactory(scheduleUri),
+            preResolved: resolvedScheduleStore,
+            toggle: 'scheduling',
           )
         : null;
 
@@ -192,13 +254,10 @@ class StemStack {
             StemStoreKind.lock,
             lockUri,
             (adapter) => adapter.lockStoreFactory(lockUri),
+            preResolved: resolvedLockStore,
+            toggle: 'uniqueTasks',
           )
-        : _optionalFactory<LockStoreFactory>(
-            registered,
-            StemStoreKind.lock,
-            lockUri,
-            (adapter) => adapter.lockStoreFactory(lockUri),
-          );
+        : resolvedLockStore;
 
     final revokeStore = requireRevokeStore
         ? _requireFactory<RevokeStoreFactory>(
@@ -206,13 +265,10 @@ class StemStack {
             StemStoreKind.revoke,
             revokeUri,
             (adapter) => adapter.revokeStoreFactory(revokeUri),
+            preResolved: resolvedRevokeStore,
+            toggle: 'requireRevokeStore',
           )
-        : _optionalFactory<RevokeStoreFactory>(
-            registered,
-            StemStoreKind.revoke,
-            revokeUri,
-            (adapter) => adapter.revokeStoreFactory(revokeUri),
-          );
+        : resolvedRevokeStore;
 
     return StemStack._(
       broker: broker,
@@ -285,15 +341,31 @@ T _requireFactory<T>(
   Iterable<StemStoreAdapter> adapters,
   StemStoreKind kind,
   Uri uri,
-  T? Function(StemStoreAdapter adapter) resolver,
-) {
+  T? Function(StemStoreAdapter adapter) resolver, {
+  String? toggle,
+  T? preResolved,
+}) {
+  if (preResolved != null) return preResolved;
+  final matched = <StemStoreAdapter>[];
   for (final adapter in adapters) {
     if (!adapter.supports(uri, kind)) continue;
+    matched.add(adapter);
     final factory = resolver(adapter);
     if (factory != null) return factory;
   }
+  if (matched.isNotEmpty) {
+    final adapterList = matched.map((adapter) => adapter.name).join(', ');
+    final toggleHint = toggle == null
+        ? 'Use a URL/adapter that provides `${kind.name}`.'
+        : 'Disable `$toggle` or configure a URL override for `${kind.name}`.';
+    throw StateError(
+      'Adapter(s) [$adapterList] support $uri but do not provide a '
+      '${kind.name} store. $toggleHint',
+    );
+  }
   throw StateError(
-    'No adapter registered for ${kind.name} at ${uri.scheme} ($uri).',
+    'No adapter registered for ${kind.name} at ${uri.scheme} ($uri). '
+    'Register an adapter for `${uri.scheme}` or use a supported URL.',
   );
 }
 
@@ -309,4 +381,18 @@ T? _optionalFactory<T>(
     if (factory != null) return factory;
   }
   return null;
+}
+
+void _failIfSqliteStoreUnsupported({
+  required StemStoreKind kind,
+  required Uri uri,
+  required String toggle,
+}) {
+  final isSqlite = uri.scheme == 'sqlite' || uri.scheme == 'file';
+  if (!isSqlite) return;
+  throw StateError(
+    'sqlite URLs do not provide a ${kind.name} store in default stack '
+    'resolution. '
+    'Disable `$toggle` or configure a URL override for `${kind.name}`.',
+  );
 }

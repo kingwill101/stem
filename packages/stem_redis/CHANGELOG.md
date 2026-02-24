@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD041 -->
+# Changelog
 
 ## 0.1.1
 

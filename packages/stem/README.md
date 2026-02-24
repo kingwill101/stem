@@ -44,7 +44,6 @@ workflow apps.
 ```dart
 import 'dart:async';
 import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
 
 class HelloTask implements TaskHandler<void> {
   @override
@@ -60,11 +59,7 @@ class HelloTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
-  final client = await StemClient.create(
-    broker: StemBrokerFactory.redis(url: 'redis://localhost:6379'),
-    backend: StemBackendFactory.redis(url: 'redis://localhost:6379/1'),
-    tasks: [HelloTask()],
-  );
+  final client = await StemClient.inMemory(tasks: [HelloTask()]);
 
   final worker = await client.createWorker();
   unawaited(worker.start());
@@ -75,6 +70,36 @@ Future<void> main() async {
   await worker.shutdown();
   await client.close();
 }
+```
+
+For persistent adapters, keep `StemClient` as the entrypoint and resolve
+broker/backend wiring from a URL:
+
+```dart
+import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+
+final client = await StemClient.create(
+  broker: redisBrokerFactory('redis://localhost:6379'),
+  backend: redisResultBackendFactory('redis://localhost:6379/1'),
+  tasks: [HelloTask()],
+);
+```
+
+or use the lower-boilerplate URL helper:
+
+```dart
+import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
+
+final client = await StemClient.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  overrides: const StemStoreOverrides(
+    backend: 'redis://localhost:6379/1',
+  ),
+  tasks: [HelloTask()],
+);
 ```
 
 ### Direct enqueue (map-based)
@@ -382,9 +407,10 @@ print('Body results: ${chordResult.values}');
 ### Task payload encoders
 
 By default Stem stores handler arguments/results exactly as provided (JSON-friendly
-structures). Configure default `TaskPayloadEncoder`s when bootstrapping `StemApp`,
-`StemWorkflowApp`, or `Canvas` to plug in custom serialization (encryption,
-compression, base64 wrappers, etc.) for both task arguments and persisted results:
+structures). Configure default `TaskPayloadEncoder`s when bootstrapping
+`StemClient`, `StemApp`, `StemWorkflowApp`, or `Canvas` to plug in custom
+serialization (encryption, compression, base64 wrappers, etc.) for both task
+arguments and persisted results:
 
 ```dart
 import 'dart:convert';
@@ -409,7 +435,7 @@ class Base64ResultEncoder extends TaskPayloadEncoder {
   }
 }
 
-final app = await StemApp.inMemory(
+final client = await StemClient.inMemory(
   tasks: [...],
   resultEncoder: const Base64ResultEncoder(),
   argsEncoder: const Base64ResultEncoder(),

@@ -101,7 +101,16 @@ void main() {
           adapters: [adapter],
           uniqueTasks: true,
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a lock store'),
+              contains('Disable `uniqueTasks`'),
+            ),
+          ),
+        ),
       );
 
       final stack = StemStack.fromUrl(
@@ -127,7 +136,67 @@ void main() {
           adapters: [adapter],
           requireRevokeStore: true,
         ),
-        throwsA(isA<StateError>()),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a revoke store'),
+              contains('Disable `requireRevokeStore`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fails clearly when workflow store is missing', () {
+      final adapter = _TestAdapter(
+        scheme: 'test',
+        brokerFactory: StemBrokerFactory(create: () async => InMemoryBroker()),
+        backendFactory: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+      );
+
+      expect(
+        () => StemStack.fromUrl(
+          'test://localhost',
+          adapters: [adapter],
+          workflows: true,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a workflow store'),
+              contains('Disable `workflows`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fails clearly when broker is missing for a supported scheme', () {
+      final adapter = _TestAdapter(
+        scheme: 'test',
+        backendFactory: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+      );
+
+      expect(
+        () => StemStack.fromUrl(
+          'test://localhost',
+          adapters: [adapter],
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('do not provide a broker store'),
+          ),
+        ),
       );
     });
 
@@ -151,6 +220,117 @@ void main() {
 
       expect(stack.broker, same(customBroker));
     });
+
+    test('fails fast for sqlite scheduling store requests', () {
+      expect(
+        () => StemStack.fromUrl('sqlite:///tmp/stem.db', scheduling: true),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a schedule store'),
+              contains('Disable `scheduling`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fails fast for sqlite workflow store requests', () {
+      expect(
+        () => StemStack.fromUrl('sqlite:///tmp/stem.db', workflows: true),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a workflow store'),
+              contains('Disable `workflows`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fails fast for sqlite lock store requests', () {
+      expect(
+        () => StemStack.fromUrl('sqlite:///tmp/stem.db', uniqueTasks: true),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a lock store'),
+              contains('Disable `uniqueTasks`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test('fails fast for sqlite revoke store requests', () {
+      expect(
+        () => StemStack.fromUrl(
+          'sqlite:///tmp/stem.db',
+          requireRevokeStore: true,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a revoke store'),
+              contains('Disable `requireRevokeStore`'),
+            ),
+          ),
+        ),
+      );
+    });
+
+    test(
+      'accepts sqlite stores when custom adapters provide toggle factories',
+      () {
+        final brokerFactory = StemBrokerFactory(
+          create: () async => InMemoryBroker(),
+        );
+        final backendFactory = StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        );
+        final scheduleFactory = ScheduleStoreFactory(
+          create: () async => InMemoryScheduleStore(),
+        );
+        final lockFactory = LockStoreFactory(
+          create: () async => InMemoryLockStore(),
+        );
+        final revokeFactory = RevokeStoreFactory(
+          create: () async => InMemoryRevokeStore(),
+        );
+
+        final adapter = _TestAdapter(
+          scheme: 'sqlite',
+          brokerFactory: brokerFactory,
+          backendFactory: backendFactory,
+          scheduleStoreFactory: scheduleFactory,
+          lockStoreFactory: lockFactory,
+          revokeStoreFactory: revokeFactory,
+        );
+
+        final stack = StemStack.fromUrl(
+          'sqlite:///tmp/stem.db',
+          adapters: [adapter],
+          scheduling: true,
+          uniqueTasks: true,
+          requireRevokeStore: true,
+        );
+
+        expect(stack.broker, same(brokerFactory));
+        expect(stack.backend, same(backendFactory));
+        expect(stack.scheduleStore, same(scheduleFactory));
+        expect(stack.lockStore, same(lockFactory));
+        expect(stack.revokeStore, same(revokeFactory));
+      },
+    );
   });
 }
 

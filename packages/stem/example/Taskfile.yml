@@ -1,0 +1,188 @@
+version: "3"
+
+includes:
+  autoscaling_demo:
+    taskfile: ./autoscaling_demo/Taskfile.yml
+    dir: ./autoscaling_demo
+  canvas_patterns:
+    taskfile: ./canvas_patterns/Taskfile.yml
+    dir: ./canvas_patterns
+  daemonized_worker:
+    taskfile: ./daemonized_worker/Taskfile.yml
+    dir: ./daemonized_worker
+  dlq_sandbox:
+    taskfile: ./dlq_sandbox/Taskfile.yml
+    dir: ./dlq_sandbox
+  encrypted_payload:
+    taskfile: ./encrypted_payload/Taskfile.yml
+    dir: ./encrypted_payload
+  microservice:
+    taskfile: ./microservice/Taskfile.yml
+    dir: ./microservice
+  monolith_service:
+    taskfile: ./monolith_service/Taskfile.yml
+    dir: ./monolith_service
+  ops_health_suite:
+    taskfile: ./ops_health_suite/Taskfile.yml
+    dir: ./ops_health_suite
+  postgres_tls:
+    taskfile: ./postgres_tls/Taskfile.yml
+    dir: ./postgres_tls
+  progress_heartbeat:
+    taskfile: ./progress_heartbeat/Taskfile.yml
+    dir: ./progress_heartbeat
+  rate_limit_delay:
+    taskfile: ./rate_limit_delay/Taskfile.yml
+    dir: ./rate_limit_delay
+  retry_task:
+    taskfile: ./retry_task/Taskfile.yml
+    dir: ./retry_task
+  security_ed25519_tls:
+    taskfile: ./security/ed25519_tls/Taskfile.yml
+    dir: ./security/ed25519_tls
+  security_hmac:
+    taskfile: ./security/hmac/Taskfile.yml
+    dir: ./security/hmac
+  security_hmac_tls:
+    taskfile: ./security/hmac_tls/Taskfile.yml
+    dir: ./security/hmac_tls
+  signals_demo:
+    taskfile: ./signals_demo/Taskfile.yml
+    dir: ./signals_demo
+  signing_key_rotation:
+    taskfile: ./signing_key_rotation/Taskfile.yml
+    dir: ./signing_key_rotation
+  task_context_mixed:
+    taskfile: ./task_context_mixed/Taskfile.yml
+    dir: ./task_context_mixed
+  unique_tasks:
+    taskfile: ./unique_tasks/Taskfile.yml
+    dir: ./unique_tasks
+  worker_control_lab:
+    taskfile: ./worker_control_lab/Taskfile.yml
+    dir: ./worker_control_lab
+  workflows:
+    taskfile: ./workflows/Taskfile.yml
+    dir: ./workflows
+
+tasks:
+  all:build:
+    desc: Compile binaries for all migrated examples.
+    cmds:
+      - task: autoscaling_demo:build
+      - task: canvas_patterns:build
+      - task: daemonized_worker:build
+      - task: dlq_sandbox:build
+      - task: encrypted_payload:build
+      - task: microservice:build
+      - task: monolith_service:build
+      - task: ops_health_suite:build
+      - task: postgres_tls:build
+      - task: progress_heartbeat:build
+      - task: rate_limit_delay:build
+      - task: retry_task:build
+      - task: security_ed25519_tls:build
+      - task: security_hmac:build
+      - task: security_hmac_tls:build
+      - task: signals_demo:build
+      - task: signing_key_rotation:build
+      - task: task_context_mixed:build
+      - task: unique_tasks:build
+      - task: worker_control_lab:build
+      - task: workflows:build
+
+  all:deps-up:
+    desc: Start dependency stacks for all migrated examples that define them.
+    cmds:
+      - task: autoscaling_demo:deps-up
+      - task: dlq_sandbox:deps-up
+      - task: encrypted_payload:deps-up
+      - task: microservice:deps-up
+      - task: ops_health_suite:deps-up
+      - task: postgres_tls:deps-up
+      - task: progress_heartbeat:deps-up
+      - task: rate_limit_delay:deps-up
+      - task: retry_task:deps-up
+      - task: security_ed25519_tls:deps-up
+      - task: security_hmac:deps-up
+      - task: security_hmac_tls:deps-up
+      - task: signals_demo:deps-up
+      - task: signing_key_rotation:deps-up
+      - task: worker_control_lab:deps-up
+
+  all:deps-down:
+    desc: Stop dependency stacks for all migrated examples that define them.
+    cmds:
+      - task: autoscaling_demo:deps-down
+      - task: dlq_sandbox:deps-down
+      - task: encrypted_payload:deps-down
+      - task: microservice:deps-down
+      - task: ops_health_suite:deps-down
+      - task: postgres_tls:deps-down
+      - task: progress_heartbeat:deps-down
+      - task: rate_limit_delay:deps-down
+      - task: retry_task:deps-down
+      - task: security_ed25519_tls:deps-down
+      - task: security_hmac:deps-down
+      - task: security_hmac_tls:deps-down
+      - task: signals_demo:deps-down
+      - task: signing_key_rotation:deps-down
+      - task: worker_control_lab:deps-down
+
+  all:clean:
+    desc: Remove build artifacts for all migrated examples.
+    cmds:
+      - task: autoscaling_demo:clean
+      - task: canvas_patterns:clean
+      - task: daemonized_worker:clean
+      - task: dlq_sandbox:clean
+      - task: encrypted_payload:clean
+      - task: microservice:clean
+      - task: monolith_service:clean
+      - task: ops_health_suite:clean
+      - task: postgres_tls:clean
+      - task: progress_heartbeat:clean
+      - task: rate_limit_delay:clean
+      - task: retry_task:clean
+      - task: security_ed25519_tls:clean
+      - task: security_hmac:clean
+      - task: security_hmac_tls:clean
+      - task: signals_demo:clean
+      - task: signing_key_rotation:clean
+      - task: task_context_mixed:clean
+      - task: unique_tasks:clean
+      - task: worker_control_lab:clean
+      - task: workflows:clean
+
+  complex:build:
+    desc: Compile binaries for all complex/containerized examples.
+    cmds:
+      - task: encrypted_payload:build
+      - task: signing_key_rotation:build
+      - task: microservice:build
+      - task: postgres_tls:build
+
+  complex:deps-up:
+    desc: Start dependency stacks for complex examples.
+    cmds:
+      - task: encrypted_payload:deps-up
+      - task: signing_key_rotation:deps-up
+      - task: microservice:deps-up
+      - task: postgres_tls:deps-up
+
+  complex:deps-down:
+    desc: Stop dependency stacks for complex examples.
+    cmds:
+      - task: encrypted_payload:deps-down
+      - task: signing_key_rotation:deps-down
+      - task: microservice:deps-down
+      - task: postgres_tls:deps-down
+
+  security:init:
+    desc: Bootstrap local security profiles (TLS certs + key rotation).
+    cmds:
+      - task: security_hmac:keys:rotate
+      - task: security_hmac_tls:tls:certs
+      - task: security_hmac_tls:keys:rotate
+      - task: security_ed25519_tls:tls:certs
+      - task: security_ed25519_tls:keys:ed25519

@@ -21,7 +21,7 @@ StemBrokerFactory memoryBrokerFactory({
 }
 
 /// Creates a [StemBackendFactory] backed by [InMemoryResultBackend].
-StemBackendFactory memoryBackendFactory({
+StemBackendFactory memoryResultBackendFactory({
   Duration defaultTtl = const Duration(days: 1),
   Duration groupDefaultTtl = const Duration(days: 1),
   Duration heartbeatTtl = const Duration(minutes: 1),

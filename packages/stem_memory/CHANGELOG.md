@@ -1,5 +1,11 @@
+# Changelog
+
 ## 0.1.0
 
+- Renamed `memoryBackendFactory` to `memoryResultBackendFactory` for adapter
+  factory naming consistency.
+- Updated docs and exports to use `StemClient`-first examples and the renamed
+  result backend factory.
 - Added `stem_memory` package with in-memory adapter exports and factory
   helpers.
 - Added shared adapter contract coverage (broker/backend/workflow/lock) for the

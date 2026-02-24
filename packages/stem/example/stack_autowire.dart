@@ -8,6 +8,9 @@ class PingTask implements TaskHandler<void> {
   String get name => 'demo.ping';
 
   @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
   TaskOptions get options => const TaskOptions(maxRetries: 0);
 
   @override
@@ -20,13 +23,12 @@ class PingTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
+  const redisAdapters = [StemRedisAdapter()];
   final stack = StemStack.fromUrl(
     'redis://localhost:6379/0',
-    adapters: const [StemRedisAdapter()],
-    workflows: true,
+    adapters: redisAdapters,
     scheduling: true,
     uniqueTasks: true,
-    requireRevokeStore: true,
   );
 
   final scheduleFactory = stack.scheduleStore;
@@ -37,26 +39,19 @@ Future<void> main() async {
   if (lockFactory == null) {
     throw StateError('Unique tasks enabled but lock store factory missing.');
   }
-  final revokeFactory = stack.revokeStore;
-  if (revokeFactory == null) {
-    throw StateError('Revoke store required but factory missing.');
-  }
-
   final scheduleStore = await scheduleFactory.create();
   final lockStore = await lockFactory.create();
-  final revokeStore = await revokeFactory.create();
-
-  final app = await StemApp.create(
+  final app = await StemApp.fromUrl(
+    'redis://localhost:6379/0',
     tasks: [PingTask()],
-    broker: stack.broker,
-    backend: stack.backend,
-    revokeStore: revokeStore,
+    adapters: redisAdapters,
+    uniqueTasks: true,
+    requireRevokeStore: true,
   );
 
-  final workflowApp = await StemWorkflowApp.create(
-    broker: stack.broker,
-    backend: stack.backend,
-    storeFactory: stack.workflowStore,
+  final workflowApp = await StemWorkflowApp.fromUrl(
+    'redis://localhost:6379/0',
+    adapters: redisAdapters,
   );
 
   final beat = Beat(
@@ -78,6 +73,5 @@ Future<void> main() async {
     await app.shutdown();
     await scheduleFactory.dispose(scheduleStore);
     await lockFactory.dispose(lockStore);
-    await revokeFactory.dispose(revokeStore);
   }
 }

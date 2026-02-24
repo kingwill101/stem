@@ -5,7 +5,13 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.create(
+  final app = await StemWorkflowApp.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://localhost:6379/1',
+      workflow: 'redis://localhost:6379/2',
+    ),
     flows: [
       Flow(
         name: 'redis.workflow',
@@ -14,9 +20,6 @@ Future<void> main() async {
         },
       ),
     ],
-    broker: redisBrokerFactory('redis://localhost:6379'),
-    backend: redisResultBackendFactory('redis://localhost:6379/1'),
-    storeFactory: redisWorkflowStoreFactory('redis://localhost:6379/2'),
   );
 
   try {

@@ -1,5 +1,10 @@
+# Changelog
+
 ## 0.1.0
 
+- Normalized `postgresResultBackendFactory` to accept a positional `uri`
+  argument, matching the adapter factory style used across packages.
+- Updated Postgres adapter wiring to use the new factory signature.
 - Added workflow run lease tracking and claim/renew helpers to distribute
   workflow execution safely across workers.
 - Fixed worker heartbeat lookups by restoring soft-deleted heartbeat rows on

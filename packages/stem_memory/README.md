@@ -11,22 +11,34 @@ dart pub add stem_memory
 ## Usage
 
 ```dart
+import 'dart:async';
+
 import 'package:stem/stem.dart';
 import 'package:stem_memory/stem_memory.dart';
 
 Future<void> main() async {
-  final stem = Stem(
-    broker: InMemoryBroker(),
-    registry: SimpleTaskRegistry(),
-    backend: InMemoryResultBackend(),
+  final client = await StemClient.inMemory(
+    tasks: [
+      FunctionTaskHandler(
+        name: 'demo.memory',
+        entrypoint: (context, args) async => 'ok',
+      ),
+    ],
   );
+  final worker = await client.createWorker();
+  unawaited(worker.start());
 
-  await stem.close();
+  final taskId = await client.stem.enqueue('demo.memory');
+  print((await client.stem.waitForTask<String>(taskId))?.value);
+
+  await worker.shutdown();
+  await client.close();
 }
 ```
 
 ## Factories
 
-Use `memoryBrokerFactory`, `memoryBackendFactory`, `memoryWorkflowStoreFactory`,
-`memoryEventBusFactory`, `memoryScheduleStoreFactory`, `memoryLockStoreFactory`,
-and `memoryRevokeStoreFactory` to integrate with bootstrap helpers.
+Use `memoryBrokerFactory`, `memoryResultBackendFactory`,
+`memoryWorkflowStoreFactory`, `memoryEventBusFactory`,
+`memoryScheduleStoreFactory`, `memoryLockStoreFactory`, and
+`memoryRevokeStoreFactory` to integrate with bootstrap helpers.

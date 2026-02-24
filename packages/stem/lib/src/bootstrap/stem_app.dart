@@ -1,6 +1,7 @@
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
+import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
@@ -55,6 +56,16 @@ class StemApp {
 
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
+
+  void _insertAutoDisposers(
+    List<Future<void> Function()> autoDisposers,
+  ) {
+    if (autoDisposers.isEmpty) return;
+    final insertionIndex = _disposers.length >= 2
+        ? _disposers.length - 2
+        : _disposers.length;
+    _disposers.insertAll(insertionIndex, autoDisposers);
+  }
 
   /// Starts the managed worker if it is not already running.
   Future<void> start() async {
@@ -200,6 +211,121 @@ class StemApp {
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
     );
+  }
+
+  /// Creates an app from a single backend URL plus adapter wiring.
+  ///
+  /// This helper resolves broker/backend factories via [StemStack.fromUrl] and
+  /// can optionally auto-wire revoke and unique-task coordination stores.
+  static Future<StemApp> fromUrl(
+    String url, {
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? registry,
+    Iterable<StemStoreAdapter> adapters = const [],
+    StemStoreOverrides overrides = const StemStoreOverrides(),
+    StemWorkerConfig workerConfig = const StemWorkerConfig(),
+    RevokeStore? revokeStore,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    bool uniqueTasks = false,
+    Duration uniqueTaskDefaultTtl = const Duration(minutes: 5),
+    String uniqueTaskNamespace = 'stem:unique',
+    bool requireRevokeStore = false,
+    RetryStrategy? retryStrategy,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    RoutingRegistry? routing,
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    StemStack? stack,
+  }) async {
+    final needsUniqueLockStore =
+        uniqueTasks &&
+        uniqueTaskCoordinator == null &&
+        workerConfig.uniqueTaskCoordinator == null;
+    final needsRevokeStore =
+        requireRevokeStore &&
+        revokeStore == null &&
+        workerConfig.revokeStore == null;
+
+    final resolvedStack =
+        stack ??
+        StemStack.fromUrl(
+          url,
+          adapters: adapters,
+          overrides: overrides,
+          uniqueTasks: needsUniqueLockStore,
+          requireRevokeStore: needsRevokeStore,
+        );
+
+    final autoDisposers = <Future<void> Function()>[];
+
+    var resolvedUniqueTaskCoordinator =
+        uniqueTaskCoordinator ?? workerConfig.uniqueTaskCoordinator;
+    if (needsUniqueLockStore) {
+      final lockFactory = resolvedStack.lockStore;
+      if (lockFactory == null) {
+        throw StateError(
+          'Unique task coordination requested but lock store factory missing.',
+        );
+      }
+      final lockStore = await lockFactory.create();
+      resolvedUniqueTaskCoordinator = UniqueTaskCoordinator(
+        lockStore: lockStore,
+        defaultTtl: uniqueTaskDefaultTtl,
+        namespace: uniqueTaskNamespace,
+      );
+      autoDisposers.add(() async => lockFactory.dispose(lockStore));
+    }
+
+    var resolvedRevokeStore = revokeStore ?? workerConfig.revokeStore;
+    if (needsRevokeStore) {
+      final revokeFactory = resolvedStack.revokeStore;
+      if (revokeFactory == null) {
+        throw StateError('Revoke store required but no revoke factory found.');
+      }
+      final createdRevokeStore = await revokeFactory.create();
+      resolvedRevokeStore = createdRevokeStore;
+      autoDisposers.add(() async => revokeFactory.dispose(createdRevokeStore));
+    }
+
+    try {
+      final app = await create(
+        tasks: tasks,
+        registry: registry,
+        broker: resolvedStack.broker,
+        backend: resolvedStack.backend,
+        workerConfig: workerConfig,
+        revokeStore: resolvedRevokeStore,
+        uniqueTaskCoordinator: resolvedUniqueTaskCoordinator,
+        retryStrategy: retryStrategy,
+        middleware: middleware,
+        signer: signer,
+        routing: routing,
+        encoderRegistry: encoderRegistry,
+        resultEncoder: resultEncoder,
+        argsEncoder: argsEncoder,
+        additionalEncoders: additionalEncoders,
+      );
+
+      // Dispose auto-provisioned lock/revoke stores after worker shutdown and
+      // before backend/broker factories are disposed.
+      app._insertAutoDisposers(autoDisposers);
+
+      return app;
+    } on Object catch (error, stackTrace) {
+      // If app creation fails, release any auto-provisioned stores now to avoid
+      // leaking startup resources.
+      for (final disposer in autoDisposers.reversed) {
+        try {
+          await disposer();
+        } on Object {
+          // Keep the original startup error as the primary failure.
+        }
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   /// Creates a Stem app using a shared [StemClient].

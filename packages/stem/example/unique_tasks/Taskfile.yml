@@ -1,0 +1,34 @@
+version: "3"
+
+tasks:
+  build:
+    desc: No build required for unique task demo.
+    cmds:
+      - echo "No build step required."
+
+  run:
+    desc: Run unique task demo.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../.."
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          fi
+          cd "$stem_root"
+          dart run example/unique_tasks/unique_task_example.dart
+        '
+
+  clean:
+    desc: No artifacts to clean.
+    cmds:
+      - echo "No build artifacts to clean."

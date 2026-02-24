@@ -1,0 +1,34 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Fetch dependencies for monolith service.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; cd "{{.TASKFILE_DIR}}"; dart pub get'
+
+  run:
+    desc: Run monolith service.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          fi
+          cd "$root"
+          dart run bin/service.dart
+        '
+
+  clean:
+    desc: Remove local Dart tool state.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/.dart_tool"
