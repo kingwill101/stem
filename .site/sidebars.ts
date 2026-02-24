@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Guides",
       items: [
+        "comparisons/stem-vs-bullmq",
         "getting-started/observability-and-ops",
         "getting-started/production-checklist",
         "getting-started/troubleshooting",

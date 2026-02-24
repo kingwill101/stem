@@ -18,6 +18,7 @@ want to explore further.
 - **[Observe & Operate](./observability-and-ops.md)** – Enable OpenTelemetry export, inspect workers/queues/DLQ via CLI, and wire lifecycle signals.
 - **[Prepare for Production](./production-checklist.md)** – Apply signing/TLS, deploy with systemd or CLI multi-process tooling, and run quality gates before launch.
 - **[Troubleshooting](./troubleshooting.md)** – Common errors and quick fixes while onboarding.
+- **[Stem vs BullMQ](../comparisons/stem-vs-bullmq.md)** – Canonical feature mapping with `✓/~ /✗` parity semantics.
 
 Once you complete the journey, continue with the in-depth material under
 [Core Concepts](../core-concepts/index.md) and [Workers](../workers/index.md).
