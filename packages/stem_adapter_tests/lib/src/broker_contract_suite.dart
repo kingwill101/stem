@@ -785,6 +785,9 @@ void runBrokerContractTests({
           final iteratorTwo = StreamIterator(workerTwo.consume(subscription));
 
           try {
+            final nextOne = iteratorOne.moveNext();
+            final nextTwo = iteratorTwo.moveNext();
+            await Future<void>.delayed(settings.queueSettleDelay);
             await publisher.publish(
               Envelope(
                 name: 'contract.broadcast',
@@ -795,11 +798,11 @@ void runBrokerContractTests({
             );
 
             expect(
-              await iteratorOne.moveNext().timeout(const Duration(seconds: 5)),
+              await nextOne.timeout(const Duration(seconds: 5)),
               isTrue,
             );
             expect(
-              await iteratorTwo.moveNext().timeout(const Duration(seconds: 5)),
+              await nextTwo.timeout(const Duration(seconds: 5)),
               isTrue,
             );
             final deliveryOne = iteratorOne.current;
