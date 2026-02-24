@@ -7,6 +7,7 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as dotel_api;
 import 'package:meta/meta.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Known metric aggregation types supported by the exporters.
 enum MetricType {
@@ -31,7 +32,7 @@ class MetricEvent {
     DateTime? timestamp,
     this.unit,
   }) : tags = Map.unmodifiable(tags),
-       timestamp = (timestamp ?? DateTime.now()).toUtc(),
+       timestamp = (timestamp ?? stemNow()).toUtc(),
        attributes = tags.isEmpty
            ? dotel.Attributes.of(const {})
            : dotel.Attributes.of(Map<String, Object>.from(tags));
@@ -285,12 +286,12 @@ class _GaugeState {
   double value = 0;
 
   /// Timestamp when [value] was last updated.
-  DateTime updatedAt = DateTime.now().toUtc();
+  DateTime updatedAt = stemNow().toUtc();
 
   /// Sets the gauge [value] to [newValue].
   void update(double newValue) {
     value = newValue;
-    updatedAt = DateTime.now().toUtc();
+    updatedAt = stemNow().toUtc();
   }
 
   /// Serializes the gauge aggregate.

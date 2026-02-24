@@ -71,6 +71,7 @@ import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem implements TaskEnqueuer {
@@ -300,7 +301,7 @@ class Stem implements TaskEnqueuer {
             );
             return envelope.id;
           }
-          final expiresAt = claim.computeExpiry(DateTime.now());
+          final expiresAt = claim.computeExpiry(stemNow());
           envelope = envelope.copyWith(
             meta: {
               ...envelope.meta,
@@ -462,7 +463,7 @@ class Stem implements TaskEnqueuer {
       return enqueueOptions.eta;
     }
     if (enqueueOptions.countdown != null) {
-      return DateTime.now().add(enqueueOptions.countdown!);
+      return stemNow().add(enqueueOptions.countdown!);
     }
     return notBefore;
   }
@@ -641,7 +642,7 @@ class Stem implements TaskEnqueuer {
       }
       duplicates.add({
         'taskId': duplicate.id,
-        'timestamp': DateTime.now().toIso8601String(),
+        'timestamp': stemNow().toIso8601String(),
         'headers': duplicate.headers,
         'meta': duplicate.meta,
       });

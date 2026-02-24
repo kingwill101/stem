@@ -8,6 +8,7 @@ import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
 import 'package:uuid/uuid.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -453,7 +454,7 @@ class Canvas {
       );
     }
 
-    final createdAt = DateTime.now().toUtc().toIso8601String();
+    final createdAt = stemNow().toUtc().toIso8601String();
     await backend.initGroup(
       GroupDescriptor(
         id: id,

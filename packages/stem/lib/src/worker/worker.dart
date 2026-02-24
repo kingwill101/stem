@@ -124,6 +124,7 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Shutdown modes for workers.
 ///
@@ -621,7 +622,7 @@ class Worker {
     _lastScaleUp = null;
     _lastScaleDown = null;
     _drainCompleter = null;
-    _startedAt ??= DateTime.now().toUtc();
+    _startedAt ??= stemNow().toUtc();
     _startedCount = 0;
     _completedCount = 0;
     _failedCount = 0;
@@ -919,7 +920,7 @@ class Worker {
         _startedCount += 1;
 
         String? startedAtIso;
-        final startedAt = DateTime.now().toUtc();
+        final startedAt = stemNow().toUtc();
         final runningMeta = _statusMeta(
           envelope,
           resultEncoder,
@@ -1000,7 +1001,7 @@ class Worker {
             extra: {
               'queue': envelope.queue,
               'worker': consumerName,
-              'completedAt': DateTime.now().toIso8601String(),
+              'completedAt': stemNow().toIso8601String(),
               'startedAt': startedAtIso,
             },
           );
@@ -1097,7 +1098,7 @@ class Worker {
           softTimer?.cancel();
           final completed = _releaseDelivery(envelope);
           if (completed != null) {
-            final duration = DateTime.now().toUtc().difference(
+            final duration = stemNow().toUtc().difference(
               completed.startedAt,
             );
             StemMetrics.instance.recordDuration(
@@ -1212,9 +1213,9 @@ class Worker {
   ///
   /// ```dart
   /// // TimingMiddleware.onExecute:
-  /// final start = DateTime.now();
+  /// final start = stemNow();
   /// await next();  // Inner middleware and handler run here
-  /// final duration = DateTime.now().difference(start);
+  /// final duration = stemNow().difference(start);
   /// log('Task took $duration');
   /// ```
   ///
@@ -1346,7 +1347,7 @@ class Worker {
   void _scheduleLeaseRenewal(Delivery delivery) {
     final expiresAt = delivery.leaseExpiresAt;
     if (expiresAt == null) return;
-    final remainingMs = expiresAt.difference(DateTime.now()).inMilliseconds;
+    final remainingMs = expiresAt.difference(stemNow()).inMilliseconds;
     if (remainingMs <= 0) return;
     final interval = Duration(
       milliseconds: (remainingMs ~/ 2).clamp(1000, 30000),
@@ -1451,7 +1452,7 @@ class Worker {
   /// - This method: updates timestamps for observability
   /// - [_recordLeaseRenewal]: emits metrics to the metrics backend
   void _noteLeaseRenewal(Delivery delivery) {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     _lastLeaseRenewal = now;
     final active = _activeDeliveries[delivery.envelope.id];
     if (active != null) {
@@ -1583,7 +1584,7 @@ class Worker {
     }
 
     final resultsPayload = status.results.values.map((s) => s.payload).toList();
-    final dispatchedAt = DateTime.now().toUtc();
+    final dispatchedAt = stemNow().toUtc();
     final callbackTaskId =
         (callbackData['id'] as String?) ?? generateEnvelopeId();
 
@@ -1889,7 +1890,7 @@ class Worker {
       extra: {
         'queue': envelope.queue,
         'worker': consumerName,
-        'failedAt': DateTime.now().toIso8601String(),
+        'failedAt': stemNow().toIso8601String(),
         'security': 'signature-invalid',
       },
     );
@@ -2025,13 +2026,13 @@ class Worker {
         stack,
         retryPolicy,
       );
-      final nextRunAt = DateTime.now().add(delay);
+      final nextRunAt = stemNow().add(delay);
       await broker.nack(delivery, requeue: false);
       await broker.publish(
         envelope.copyWith(
           attempt: envelope.attempt + 1,
           maxRetries: maxRetries,
-          notBefore: DateTime.now().add(delay),
+          notBefore: stemNow().add(delay),
         ),
       );
       final retriedMeta = _statusMeta(
@@ -2078,7 +2079,7 @@ class Worker {
         extra: {
           'queue': envelope.queue,
           'worker': consumerName,
-          'failedAt': DateTime.now().toIso8601String(),
+          'failedAt': stemNow().toIso8601String(),
           'startedAt': startedAtIso,
         },
       );
@@ -2166,7 +2167,7 @@ class Worker {
         extra: {
           'queue': envelope.queue,
           'worker': consumerName,
-          'failedAt': DateTime.now().toIso8601String(),
+          'failedAt': stemNow().toIso8601String(),
           'retryExhausted': true,
         },
       );
@@ -2202,18 +2203,16 @@ class Worker {
 
     final scheduledAt =
         request.eta ??
-        (request.countdown != null
-            ? DateTime.now().add(request.countdown!)
-            : null);
+        (request.countdown != null ? stemNow().add(request.countdown!) : null);
     final delay = scheduledAt != null
-        ? scheduledAt.difference(DateTime.now())
+        ? scheduledAt.difference(stemNow())
         : _computeRetryDelay(
             envelope.attempt,
             request,
             StackTrace.current,
             policy,
           );
-    final notBefore = scheduledAt ?? DateTime.now().add(delay);
+    final notBefore = scheduledAt ?? stemNow().add(delay);
 
     final updatedMeta = Map<String, Object?>.from(envelope.meta);
     if (request.timeLimit != null) {
@@ -2299,7 +2298,7 @@ class Worker {
   }) async {
     await broker.nack(delivery, requeue: false);
     await broker.publish(
-      envelope.copyWith(notBefore: DateTime.now().add(backoff)),
+      envelope.copyWith(notBefore: stemNow().add(backoff)),
     );
     final data = <String, Object?>{
       ...extra,
@@ -2365,7 +2364,7 @@ class Worker {
     final envelope = delivery.envelope;
     final id = envelope.id;
     final queueName = envelope.queue;
-    final startedAt = DateTime.now().toUtc();
+    final startedAt = stemNow().toUtc();
     _activeDeliveries[id] = _ActiveDelivery(
       queue: queueName,
       startedAt: startedAt,
@@ -2611,7 +2610,7 @@ class Worker {
   /// Requests cooperative termination for all active tasks.
   void _requestTerminationForActiveTasks({required String reason}) {
     if (_activeDeliveries.isEmpty) return;
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     var version = generateRevokeVersion();
     for (final active in _activeDeliveries.values) {
       final entry = RevokeEntry(
@@ -2735,7 +2734,7 @@ class Worker {
         _lastQueueDepth = depth;
       }
       final inflight = _inflight;
-      final now = DateTime.now();
+      final now = stemNow();
       final configuredMax = autoscaleConfig.maxConcurrency ?? _maxConcurrency;
       final maxAllowed = configuredMax < _maxConcurrency
           ? configuredMax
@@ -2967,7 +2966,7 @@ class Worker {
 
   /// Builds a worker heartbeat payload from current runtime state.
   WorkerHeartbeat _buildHeartbeat() {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final isolatePool = _isolatePool;
     final activeIsolates =
         isolatePool?.activeCount ?? math.min(_inflight, _currentConcurrency);
@@ -3138,7 +3137,7 @@ class Worker {
   Future<void> _syncRevocations() async {
     final store = revokeStore;
     if (store == null) return;
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     try {
       final fetched = await store.list(namespace);
       for (final entry in fetched) {
@@ -3195,7 +3194,7 @@ class Worker {
   void _applyQueuePauseEntry(RevokeEntry entry, {DateTime? clock}) {
     final queueName = _queueNameFromPauseTaskId(entry.taskId);
     if (queueName == null) return;
-    final now = clock ?? DateTime.now().toUtc();
+    final now = clock ?? stemNow().toUtc();
     if (entry.isExpired(now)) {
       _queuePauses.remove(queueName);
       return;
@@ -3209,7 +3208,7 @@ class Worker {
   bool _isQueuePaused(String queueName) {
     final entry = _queuePauses[queueName];
     if (entry == null) return false;
-    if (entry.isExpired(DateTime.now().toUtc())) {
+    if (entry.isExpired(stemNow().toUtc())) {
       _queuePauses.remove(queueName);
       return false;
     }
@@ -3217,7 +3216,7 @@ class Worker {
   }
 
   List<String> _pausedQueueNames() {
-    _pruneExpiredQueuePauses(DateTime.now().toUtc());
+    _pruneExpiredQueuePauses(stemNow().toUtc());
     final queues = _queuePauses.keys.toList()..sort();
     return queues;
   }
@@ -3225,7 +3224,7 @@ class Worker {
   RevokeEntry? _revocationFor(String taskId) {
     final entry = _revocations[taskId];
     if (entry == null) return null;
-    if (entry.isExpired(DateTime.now().toUtc())) {
+    if (entry.isExpired(stemNow().toUtc())) {
       _revocations.remove(taskId);
       return null;
     }
@@ -3246,7 +3245,7 @@ class Worker {
 
   /// Applies a revocation entry to the local cache.
   void _applyRevocationEntry(RevokeEntry entry, {DateTime? clock}) {
-    final now = clock ?? DateTime.now().toUtc();
+    final now = clock ?? stemNow().toUtc();
     if (entry.isExpired(now)) {
       _revocations.remove(entry.taskId);
       return;
@@ -3560,7 +3559,7 @@ class Worker {
         ? value
         : DateTime.tryParse(value.toString());
     if (expiresAt == null) return false;
-    return DateTime.now().isAfter(expiresAt);
+    return stemNow().isAfter(expiresAt);
   }
 
   /// Marks expired deliveries and acknowledges them.
@@ -3576,7 +3575,7 @@ class Worker {
       extra: {
         'queue': envelope.queue,
         'worker': consumerName,
-        'expiredAt': DateTime.now().toIso8601String(),
+        'expiredAt': stemNow().toIso8601String(),
         'stem.expired': true,
       },
     );
@@ -3604,7 +3603,7 @@ class Worker {
         : namespace;
     final rawRevocations = (payload['revocations'] as List?) ?? const [];
     final requester = (payload['requester'] as String?)?.trim();
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
 
     final entries = <RevokeEntry>[];
     for (final raw in rawRevocations) {
@@ -3671,7 +3670,7 @@ class Worker {
       };
     }
 
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final applied = <String>[];
     final inflight = <String>[];
     final ignored = <String>[];
@@ -3765,7 +3764,7 @@ class Worker {
       throw StateError('Queue control command requires at least one queue.');
     }
 
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final requester = (payload['requester'] as String?)?.trim();
     final reason = (payload['reason'] as String?)?.trim();
     final baseVersion = generateRevokeVersion();
@@ -3886,7 +3885,7 @@ class Worker {
             workerId: _workerIdentifier,
             status: 'ok',
             payload: {
-              'timestamp': DateTime.now().toUtc().toIso8601String(),
+              'timestamp': stemNow().toUtc().toIso8601String(),
               'queue': primaryQueue,
               'inflight': _inflight,
               'subscriptions': _subscriptionMetadata(),
@@ -4028,7 +4027,7 @@ class Worker {
   /// Collects metrics from the broker, active deliveries, and the isolate pool
   /// to provide a comprehensive view of worker health.
   Map<String, Object?> _buildStatsSnapshot() {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final activeTasks = _activeDeliveries.entries.map((entry) {
       final delivery = entry.value;
       final envelope = delivery.envelope;
@@ -4069,7 +4068,7 @@ class Worker {
 
   /// Builds a detailed inspect snapshot for control commands.
   Map<String, Object?> _buildInspectSnapshot({bool includeRevoked = true}) {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final active = _activeDeliveries.values.map((delivery) {
       final envelope = delivery.envelope;
       final runtime = now.difference(delivery.startedAt);
@@ -4312,7 +4311,7 @@ class WorkerEvent implements StemEvent {
     this.stackTrace,
     this.progress,
     this.data,
-  }) : timestamp = timestamp ?? DateTime.now();
+  }) : timestamp = timestamp ?? stemNow();
 
   /// The type of event.
   final WorkerEventType type;

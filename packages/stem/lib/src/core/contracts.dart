@@ -38,6 +38,7 @@ import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -2002,7 +2003,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 
   /// Sets a relative delay before execution.
   TaskEnqueueBuilder<TArgs, TResult> delay(Duration duration) {
-    _notBefore = DateTime.now().add(duration);
+    _notBefore = stemNow().add(duration);
     return this;
   }
 

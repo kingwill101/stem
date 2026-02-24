@@ -6,6 +6,7 @@ import 'package:collection/collection.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:uuid/uuid.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// In-memory broker for testing and local development.
 class InMemoryBroker implements Broker {
@@ -19,11 +20,11 @@ class InMemoryBroker implements Broker {
     _namespaceRefs[namespace] = (_namespaceRefs[namespace] ?? 0) + 1;
     _delayedTimer = Timer.periodic(
       delayedInterval,
-      (_) => _drainDelayed(DateTime.now()),
+      (_) => _drainDelayed(stemNow()),
     );
     _claimTimer = Timer.periodic(
       claimInterval,
-      (_) => _reclaimExpired(DateTime.now()),
+      (_) => _reclaimExpired(stemNow()),
     );
   }
 
@@ -117,7 +118,7 @@ class InMemoryBroker implements Broker {
       priority: resolvedRoute.priority ?? envelope.priority,
     );
 
-    if (msg.notBefore != null && msg.notBefore!.isAfter(DateTime.now())) {
+    if (msg.notBefore != null && msg.notBefore!.isAfter(stemNow())) {
       state.addDelayed(msg);
     } else {
       state.enqueue(msg);
@@ -315,7 +316,7 @@ class InMemoryBroker implements Broker {
     if (dryRun || selected.isEmpty) {
       return DeadLetterReplayResult(entries: selected, dryRun: true);
     }
-    final now = DateTime.now();
+    final now = stemNow();
     for (final entry in selected) {
       state.deadLetters.remove(entry);
       final replayEnvelope = entry.envelope.copyWith(
@@ -444,7 +445,7 @@ class _QueueState {
       if (_cancelledConsumers.contains(consumer)) {
         throw _ConsumerCancelled(consumer);
       }
-      moveDue(DateTime.now());
+      moveDue(stemNow());
 
       final inFlight = _consumerInFlight[consumer] ?? 0;
       if (inFlight < prefetch && _ready.isNotEmpty) {
@@ -454,7 +455,7 @@ class _QueueState {
             envelope.visibilityTimeout ?? defaultVisibilityTimeout;
         final expiresAt = visibility == Duration.zero
             ? null
-            : DateTime.now().add(visibility);
+            : stemNow().add(visibility);
         final delivery = Delivery(
           envelope: envelope,
           receipt: receipt,
@@ -509,7 +510,7 @@ class _QueueState {
         envelope: envelope,
         reason: reason,
         meta: meta ?? const {},
-        deadAt: DateTime.now(),
+        deadAt: stemNow(),
       ),
     );
   }
@@ -545,7 +546,7 @@ class _QueueState {
   void extendLease(String receipt, Duration by) {
     final entry = _pending[receipt];
     if (entry == null) return;
-    entry.leaseExpiresAt = DateTime.now().add(by);
+    entry.leaseExpiresAt = stemNow().add(by);
   }
 
   /// Clears all queues, in-flight deliveries, and dead letters.

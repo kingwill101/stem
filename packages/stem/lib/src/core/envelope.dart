@@ -33,6 +33,7 @@ library;
 import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Target classification for routing operations.
 enum RoutingTargetType {
@@ -190,7 +191,7 @@ class Envelope {
     Map<String, Object?>? meta,
   }) : id = id ?? generateEnvelopeId(),
        headers = Map.unmodifiable(headers ?? const {}),
-       enqueuedAt = enqueuedAt ?? DateTime.now(),
+       enqueuedAt = enqueuedAt ?? stemNow(),
        meta = Map.unmodifiable(meta ?? const {});
 
   /// Builds an envelope from persisted JSON.

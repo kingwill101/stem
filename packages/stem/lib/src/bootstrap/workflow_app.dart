@@ -17,6 +17,7 @@ import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
 ///
@@ -146,7 +147,7 @@ class StemWorkflowApp {
     Duration? timeout,
     T Function(Object? payload)? decode,
   }) async {
-    final startedAt = DateTime.now();
+    final startedAt = stemNow();
     while (true) {
       final state = await store.get(runId);
       if (state == null) {
@@ -155,7 +156,7 @@ class StemWorkflowApp {
       if (state.isTerminal) {
         return _buildResult(state, decode, timedOut: false);
       }
-      if (timeout != null && DateTime.now().difference(startedAt) >= timeout) {
+      if (timeout != null && stemNow().difference(startedAt) >= timeout) {
         return _buildResult(state, decode, timedOut: true);
       }
       await Future<void>.delayed(pollInterval);

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:stem/src/core/clock.dart';
 
 /// Represents a persisted revoke entry for a task.
 class RevokeEntry {
@@ -120,4 +121,4 @@ abstract class RevokeStore {
 /// Generates a monotonically increasing revoke version based on UTC time.
 ///
 /// Useful for ordering revocation updates across distributed callers.
-int generateRevokeVersion() => DateTime.now().toUtc().microsecondsSinceEpoch;
+int generateRevokeVersion() => stemNow().toUtc().microsecondsSinceEpoch;

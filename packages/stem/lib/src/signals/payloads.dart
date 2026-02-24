@@ -2,6 +2,7 @@ import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/stem_event.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Status of a workflow run emitted via signals.
 enum WorkflowRunStatus {
@@ -238,7 +239,7 @@ class TaskRetryPayload implements StemEvent {
     required this.reason,
     required this.nextRetryAt,
     DateTime? emittedAt,
-  }) : emittedAt = (emittedAt ?? DateTime.now()).toUtc();
+  }) : emittedAt = (emittedAt ?? stemNow()).toUtc();
 
   /// The task envelope to be retried.
   final Envelope envelope;
@@ -417,7 +418,7 @@ class WorkerLifecyclePayload implements StemEvent {
     this.reason,
     this.signalName = 'worker-lifecycle',
     DateTime? timestamp,
-  }) : _occurredAt = (timestamp ?? DateTime.now()).toUtc();
+  }) : _occurredAt = (timestamp ?? stemNow()).toUtc();
 
   /// The worker involved in the lifecycle event.
   final WorkerInfo worker;
@@ -479,7 +480,7 @@ class WorkerChildLifecyclePayload implements StemEvent {
     required this.isolateId,
     this.signalName = 'worker-child-lifecycle',
     DateTime? timestamp,
-  }) : _occurredAt = (timestamp ?? DateTime.now()).toUtc();
+  }) : _occurredAt = (timestamp ?? stemNow()).toUtc();
 
   /// The parent worker managing the child isolate.
   final WorkerInfo worker;
@@ -516,7 +517,7 @@ class WorkflowRunPayload implements StemEvent {
     this.metadata = const {},
     this.signalName,
     DateTime? occurredAt,
-  }) : _occurredAt = (occurredAt ?? DateTime.now()).toUtc();
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The unique identifier for the workflow run.
   final String runId;
@@ -681,7 +682,7 @@ class ControlCommandReceivedPayload implements StemEvent {
   String get eventName => 'control-command-received';
 
   @override
-  DateTime get occurredAt => DateTime.now().toUtc();
+  DateTime get occurredAt => stemNow().toUtc();
 
   @override
   Map<String, Object?> get attributes => {
@@ -724,7 +725,7 @@ class ControlCommandCompletedPayload implements StemEvent {
   String get eventName => 'control-command-completed';
 
   @override
-  DateTime get occurredAt => DateTime.now().toUtc();
+  DateTime get occurredAt => stemNow().toUtc();
 
   @override
   Map<String, Object?> get attributes => {

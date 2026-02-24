@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:uuid/uuid.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// In-memory lock store used for tests and local scheduling.
 ///
@@ -23,7 +24,7 @@ class InMemoryLockStore implements LockStore {
     Duration ttl = const Duration(seconds: 30),
     String? owner,
   }) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final existing = _locks[key];
 
     // Check if a non-expired lock already exists for this key.
@@ -42,7 +43,7 @@ class InMemoryLockStore implements LockStore {
   Future<String?> ownerOf(String key) async {
     final lock = _locks[key];
     if (lock == null) return null;
-    if (lock.isExpired(DateTime.now())) {
+    if (lock.isExpired(stemNow())) {
       _locks.remove(key);
       return null;
     }
@@ -59,11 +60,11 @@ class InMemoryLockStore implements LockStore {
     if (lock.owner != owner) {
       return false;
     }
-    if (lock.isExpired(DateTime.now())) {
+    if (lock.isExpired(stemNow())) {
       _locks.remove(key);
       return false;
     }
-    lock.expiresAt = DateTime.now().add(ttl);
+    lock.expiresAt = stemNow().add(ttl);
     return true;
   }
 

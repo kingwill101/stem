@@ -1,3 +1,5 @@
+import 'package:stem/src/core/clock.dart';
+
 /// Describes a workflow event watcher registered by the runtime.
 class WorkflowWatcher {
   /// Creates a watcher entry for a suspended workflow run.
@@ -16,7 +18,7 @@ class WorkflowWatcher {
       runId: json['runId']?.toString() ?? '',
       stepName: json['stepName']?.toString() ?? '',
       topic: json['topic']?.toString() ?? '',
-      createdAt: _dateFromJson(json['createdAt']) ?? DateTime.now().toUtc(),
+      createdAt: _dateFromJson(json['createdAt']) ?? stemNow().toUtc(),
       deadline: _dateFromJson(json['deadline']),
       data: (json['data'] as Map?)?.cast<String, Object?>() ?? const {},
     );

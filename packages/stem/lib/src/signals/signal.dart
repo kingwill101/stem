@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:stem/src/core/stem_event.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Signature for signal handlers.
 typedef SignalHandler<T extends StemEvent> =
@@ -18,7 +19,7 @@ class SignalContext {
     this.sender,
     DateTime? timestamp,
     this.event,
-  }) : timestamp = timestamp ?? DateTime.now();
+  }) : timestamp = timestamp ?? stemNow();
 
   /// Signal identifier.
   final String name;

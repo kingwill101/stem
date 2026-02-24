@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:stem/src/core/chord_metadata.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/observability/heartbeat.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Simple in-memory result backend used for tests and local development.
 class InMemoryResultBackend implements ResultBackend {
@@ -56,7 +57,7 @@ class InMemoryResultBackend implements ResultBackend {
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final existing = _entries[taskId];
     final createdAt = existing?.createdAt ?? now;
     final status = TaskStatus(
@@ -70,7 +71,7 @@ class InMemoryResultBackend implements ResultBackend {
 
     _entries[taskId] = _Entry(
       status: status,
-      expiresAt: DateTime.now().add(ttl ?? defaultTtl),
+      expiresAt: stemNow().add(ttl ?? defaultTtl),
       createdAt: createdAt,
       updatedAt: now,
     );
@@ -84,7 +85,7 @@ class InMemoryResultBackend implements ResultBackend {
   Future<TaskStatus?> get(String taskId) async {
     final entry = _entries[taskId];
     if (entry == null) return null;
-    if (entry.expiresAt.isBefore(DateTime.now())) {
+    if (entry.expiresAt.isBefore(stemNow())) {
       _remove(taskId);
       return null;
     }
@@ -158,7 +159,7 @@ class InMemoryResultBackend implements ResultBackend {
   Future<void> initGroup(GroupDescriptor descriptor) async {
     _groups[descriptor.id] = _GroupEntry(
       descriptor: descriptor,
-      expiresAt: DateTime.now().add(descriptor.ttl ?? groupDefaultTtl),
+      expiresAt: stemNow().add(descriptor.ttl ?? groupDefaultTtl),
     );
     _claimedChords.remove(descriptor.id);
     _scheduleGroupExpiry(descriptor.id, descriptor.ttl ?? groupDefaultTtl);
@@ -183,7 +184,7 @@ class InMemoryResultBackend implements ResultBackend {
   Future<GroupStatus?> getGroup(String groupId) async {
     final group = _groups[groupId];
     if (group == null) return null;
-    if (group.expiresAt.isBefore(DateTime.now())) {
+    if (group.expiresAt.isBefore(stemNow())) {
       _removeGroup(groupId);
       return null;
     }
@@ -200,7 +201,7 @@ class InMemoryResultBackend implements ResultBackend {
   Future<void> expire(String taskId, Duration ttl) async {
     final entry = _entries[taskId];
     if (entry == null) return;
-    entry.expiresAt = DateTime.now().add(ttl);
+    entry.expiresAt = stemNow().add(ttl);
     _scheduleExpiry(taskId, ttl);
   }
 
@@ -230,7 +231,7 @@ class InMemoryResultBackend implements ResultBackend {
   @override
   /// Stores or refreshes a worker heartbeat entry.
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
-    final expiresAt = DateTime.now().add(heartbeatTtl);
+    final expiresAt = stemNow().add(heartbeatTtl);
     _heartbeats[heartbeat.workerId] = _HeartbeatEntry(
       heartbeat: heartbeat,
       expiresAt: expiresAt,
@@ -243,7 +244,7 @@ class InMemoryResultBackend implements ResultBackend {
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
     final entry = _heartbeats[workerId];
     if (entry == null) return null;
-    if (entry.expiresAt.isBefore(DateTime.now())) {
+    if (entry.expiresAt.isBefore(stemNow())) {
       _removeHeartbeat(workerId);
       return null;
     }
@@ -330,7 +331,7 @@ class InMemoryResultBackend implements ResultBackend {
 
   /// Evicts expired worker heartbeats before listing.
   void _pruneExpiredHeartbeats() {
-    final now = DateTime.now();
+    final now = stemNow();
     _heartbeats.entries
         .where((entry) => entry.value.expiresAt.isBefore(now))
         .map((entry) => entry.key)
@@ -340,7 +341,7 @@ class InMemoryResultBackend implements ResultBackend {
 
   /// Evicts expired task status entries before listing.
   void _pruneExpired() {
-    final now = DateTime.now();
+    final now = stemNow();
     _entries.entries
         .where((entry) => entry.value.expiresAt.isBefore(now))
         .map((entry) => entry.key)

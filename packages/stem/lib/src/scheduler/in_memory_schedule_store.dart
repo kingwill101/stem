@@ -8,6 +8,7 @@ library;
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Simple in-memory schedule store implementation used in tests.
 ///
@@ -57,7 +58,7 @@ class InMemoryScheduleStore implements ScheduleStore {
   @override
   /// Inserts or updates a schedule entry, recomputing its next run.
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     var next = entry.nextRunAt;
     if (entry.enabled) {
       next ??= _calculator.nextRun(
