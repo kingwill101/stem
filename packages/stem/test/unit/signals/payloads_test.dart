@@ -1,5 +1,7 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:test/test.dart';
 
@@ -65,5 +67,36 @@ void main() {
       retry.attributes['nextRetryAt'],
       equals(DateTime.utc(2025).toIso8601String()),
     );
+  });
+
+  test('control command payload timestamps are frozen at creation', () {
+    const worker = WorkerInfo(
+      id: 'worker-1',
+      queues: ['default'],
+      broadcasts: [],
+    );
+    final command = ControlCommandMessage(
+      requestId: 'req-1',
+      type: 'pause',
+      targets: const ['*'],
+    );
+    final clock = FakeStemClock(DateTime.utc(2025, 1, 1, 0, 0, 0));
+
+    withStemClock(clock, () {
+      final received = ControlCommandReceivedPayload(
+        worker: worker,
+        command: command,
+      );
+      clock.advance(const Duration(minutes: 1));
+      final completed = ControlCommandCompletedPayload(
+        worker: worker,
+        command: command,
+        status: 'ok',
+      );
+      clock.advance(const Duration(minutes: 1));
+
+      expect(received.occurredAt, DateTime.utc(2025, 1, 1, 0, 0, 0));
+      expect(completed.occurredAt, DateTime.utc(2025, 1, 1, 0, 1, 0));
+    });
   });
 }

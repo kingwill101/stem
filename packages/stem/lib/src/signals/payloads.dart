@@ -688,10 +688,11 @@ class ScheduleEntryFailedPayload implements StemEvent {
 /// Payload emitted when a control command is received by a worker.
 class ControlCommandReceivedPayload implements StemEvent {
   /// Creates a new [ControlCommandReceivedPayload] instance.
-  const ControlCommandReceivedPayload({
+  ControlCommandReceivedPayload({
     required this.worker,
     required this.command,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The worker that received the command.
   final WorkerInfo worker;
@@ -699,11 +700,13 @@ class ControlCommandReceivedPayload implements StemEvent {
   /// The control command that was received.
   final ControlCommandMessage command;
 
+  final DateTime _occurredAt;
+
   @override
   String get eventName => 'control-command-received';
 
   @override
-  DateTime get occurredAt => stemNow().toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -719,13 +722,14 @@ class ControlCommandReceivedPayload implements StemEvent {
 /// Payload emitted when a control command completes execution.
 class ControlCommandCompletedPayload implements StemEvent {
   /// Creates a new [ControlCommandCompletedPayload] instance.
-  const ControlCommandCompletedPayload({
+  ControlCommandCompletedPayload({
     required this.worker,
     required this.command,
     required this.status,
     this.response,
     this.error,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The worker that executed the command.
   final WorkerInfo worker;
@@ -742,11 +746,13 @@ class ControlCommandCompletedPayload implements StemEvent {
   /// Error information if the command failed, if any.
   final Map<String, Object?>? error;
 
+  final DateTime _occurredAt;
+
   @override
   String get eventName => 'control-command-completed';
 
   @override
-  DateTime get occurredAt => stemNow().toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {

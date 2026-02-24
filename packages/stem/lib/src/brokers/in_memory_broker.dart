@@ -340,9 +340,9 @@ class InMemoryBroker implements Broker {
       return !entry.deadAt.isBefore(since);
     }).toList()..sort((a, b) => b.deadAt.compareTo(a.deadAt));
     final toRemove =
-        limit != null && limit >= 0
+        (limit != null && limit >= 0
               ? candidates.take(limit).toList()
-              : candidates
+              : candidates)
           ..forEach(state.deadLetters.remove);
     return toRemove.length;
   }

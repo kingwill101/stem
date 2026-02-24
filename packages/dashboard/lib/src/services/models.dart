@@ -1,4 +1,4 @@
-import 'package:stem/stem.dart' show QueueHeartbeat, WorkerHeartbeat;
+import 'package:stem/stem.dart' show QueueHeartbeat, WorkerHeartbeat, stemNow;
 
 /// Aggregate counts for a queue at a point in time.
 class QueueSummary {
