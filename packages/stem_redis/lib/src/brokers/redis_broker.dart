@@ -327,9 +327,8 @@ class RedisStreamsBroker implements Broker {
     _groupsCreated.add(key);
   }
 
-  Future<void> _ensureBroadcastGroup(String channel, String consumer) async {
+  Future<void> _ensureBroadcastGroup(String channel, String group) async {
     final stream = _broadcastStreamKey(channel);
-    final group = _broadcastGroupKey(channel, consumer);
     final key = '$stream|$group';
     if (_groupsCreated.contains(key)) return;
     try {
@@ -494,8 +493,9 @@ class RedisStreamsBroker implements Broker {
         'RedisStreamsBroker requires at least one queue or broadcast channel.',
       );
     }
-    final group =
-        consumerGroup ?? (queue == null ? '__broadcast__' : _groupKey(queue));
+    final queueGroup = queue == null
+        ? null
+        : (consumerGroup ?? _groupKey(queue));
     final streamKeys = queue == null
         ? const <String>[]
         : _priorityStreamKeys(queue);
@@ -583,7 +583,7 @@ class RedisStreamsBroker implements Broker {
           result = await sendConsumerCommand([
             'XREADGROUP',
             'GROUP',
-            group,
+            queueGroup!,
             consumer,
             'BLOCK',
             blockTime.inMilliseconds.toString(),
@@ -609,7 +609,12 @@ class RedisStreamsBroker implements Broker {
         if (result == null) {
           continue;
         }
-        final deliveries = _parseDeliveries(queue, group, consumer, result);
+        final deliveries = _parseDeliveries(
+          queue,
+          queueGroup!,
+          consumer,
+          result,
+        );
         for (final delivery in deliveries) {
           if (controller.isClosed) {
             break;
@@ -621,15 +626,16 @@ class RedisStreamsBroker implements Broker {
 
     unawaited(loop());
     for (final stream in streamKeys) {
-      final key = _scheduleClaim(stream, group, consumer, controller);
+      final key = _scheduleClaim(stream, queueGroup!, consumer, controller);
       claimTimerKeys.add(key);
     }
 
     for (final channel in broadcastChannels) {
-      _listenBroadcast(channel, consumer, prefetch, controller);
+      final group = consumerGroup ?? _broadcastGroupKey(channel, consumer);
+      _listenBroadcast(channel, group, consumer, prefetch, controller);
       final key = _scheduleClaim(
         _broadcastStreamKey(channel),
-        _broadcastGroupKey(channel, consumer),
+        group,
         consumer,
         controller,
       );
@@ -640,6 +646,7 @@ class RedisStreamsBroker implements Broker {
 
   void _listenBroadcast(
     String channel,
+    String group,
     String consumer,
     int prefetch,
     StreamController<Delivery> controller,
@@ -647,7 +654,6 @@ class RedisStreamsBroker implements Broker {
     unawaited(
       Future<void>(() async {
         final streamKey = _broadcastStreamKey(channel);
-        final group = _broadcastGroupKey(channel, consumer);
         RedisConnection? broadcastConnection;
         Command? broadcastCommand;
 
@@ -694,7 +700,7 @@ class RedisStreamsBroker implements Broker {
         }
 
         while (!controller.isClosed && !_closed) {
-          await _ensureBroadcastGroup(channel, consumer);
+          await _ensureBroadcastGroup(channel, group);
           dynamic result;
           try {
             result = await sendBroadcastCommand([
