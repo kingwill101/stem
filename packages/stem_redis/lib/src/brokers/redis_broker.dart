@@ -727,7 +727,7 @@ class RedisStreamsBroker implements Broker {
             }
             if ('$error'.contains('NOGROUP')) {
               _groupsCreated.remove('$streamKey|$group');
-              await _ensureBroadcastGroup(channel, consumer);
+              await _ensureBroadcastGroup(channel, group);
               continue;
             }
             rethrow;
