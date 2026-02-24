@@ -43,7 +43,4 @@ jobs:
         run: dart run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --report-on=lib
       - name: Check coverage threshold
         working-directory: packages/stem_memory
-        # Coverage currently reports 0% for stem_memory due report-on mismatch.
-        # Track raising this floor once coverage reporting is corrected.
-        # See: https://github.com/kingwill101/stem/issues/14
-        run: dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 0
+        run: dart run ../../tool/coverage/coverage_badge.dart --lcov coverage/lcov.info --out coverage/coverage.json --min 80
