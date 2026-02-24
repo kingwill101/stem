@@ -57,6 +57,7 @@ import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
@@ -71,7 +72,6 @@ import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem implements TaskEnqueuer {

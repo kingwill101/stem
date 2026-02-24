@@ -7,9 +7,9 @@ library;
 
 import 'dart:async';
 
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:uuid/uuid.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// In-memory lock store used for tests and local scheduling.
 ///

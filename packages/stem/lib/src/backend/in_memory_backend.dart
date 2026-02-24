@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/observability/heartbeat.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Simple in-memory result backend used for tests and local development.
 class InMemoryResultBackend implements ResultBackend {

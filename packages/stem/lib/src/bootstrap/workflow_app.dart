@@ -3,6 +3,7 @@ import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -17,7 +18,6 @@ import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
 ///

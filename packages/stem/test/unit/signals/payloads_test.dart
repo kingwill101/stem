@@ -1,7 +1,7 @@
-import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/core/clock.dart';
-import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/control/control_messages.dart';
+import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:test/test.dart';
 
@@ -80,7 +80,7 @@ void main() {
       type: 'pause',
       targets: const ['*'],
     );
-    final clock = FakeStemClock(DateTime.utc(2025, 1, 1, 0, 0, 0));
+    final clock = FakeStemClock(DateTime.utc(2025));
 
     withStemClock(clock, () {
       final received = ControlCommandReceivedPayload(
@@ -95,8 +95,8 @@ void main() {
       );
       clock.advance(const Duration(minutes: 1));
 
-      expect(received.occurredAt, DateTime.utc(2025, 1, 1, 0, 0, 0));
-      expect(completed.occurredAt, DateTime.utc(2025, 1, 1, 0, 1, 0));
+      expect(received.occurredAt, DateTime.utc(2025));
+      expect(completed.occurredAt, DateTime.utc(2025, 1, 1, 0, 1));
     });
   });
 }

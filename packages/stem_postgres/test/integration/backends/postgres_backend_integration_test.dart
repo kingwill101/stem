@@ -146,7 +146,6 @@ Future<void> main() async {
         defaultTtl: const Duration(seconds: 1),
         groupDefaultTtl: const Duration(seconds: 1),
         heartbeatTtl: const Duration(seconds: 1),
-        runMigrations: true,
       );
 
       try {

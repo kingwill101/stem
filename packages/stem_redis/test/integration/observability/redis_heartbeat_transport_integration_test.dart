@@ -66,8 +66,8 @@ void main() {
       skip: 'CA certificate not found at $tlsCa.',
     );
   } else {
-    final resolvedTlsUrl = tlsUrl!;
-    final resolvedTlsCa = tlsCa!;
+    final resolvedTlsUrl = tlsUrl;
+    final resolvedTlsCa = tlsCa;
     test('heartbeat transport publishes over TLS', () async {
       final transport = await RedisHeartbeatTransport.connect(
         resolvedTlsUrl,

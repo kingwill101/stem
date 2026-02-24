@@ -2,11 +2,10 @@ import 'dart:async';
 
 import 'package:meta/meta.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
-
+import 'package:stem/stem.dart' show stemNow;
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
 import 'package:stem_dashboard/src/ui/event_templates.dart';
-import 'package:stem/stem.dart' show stemNow;
 
 /// Manages polling, state, and event streaming for the dashboard.
 class DashboardState {

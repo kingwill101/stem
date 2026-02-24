@@ -104,6 +104,7 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
@@ -124,7 +125,6 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Shutdown modes for workers.
 ///
@@ -3779,7 +3779,6 @@ class Worker {
           taskId: _queuePauseTaskId(queues[i]),
           version: baseVersion + i,
           issuedAt: now,
-          terminate: false,
           reason: reason,
           requestedBy: requester,
           expiresAt: paused ? null : now,

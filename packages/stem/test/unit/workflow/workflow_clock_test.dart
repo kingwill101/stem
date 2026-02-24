@@ -1,6 +1,5 @@
 import 'package:stem/stem.dart';
 import 'package:stem/testing.dart';
-import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:test/test.dart';
 
 void main() {

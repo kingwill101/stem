@@ -32,8 +32,8 @@ library;
 
 import 'dart:convert';
 
-import 'package:uuid/uuid.dart';
 import 'package:stem/src/core/clock.dart';
+import 'package:uuid/uuid.dart';
 
 /// Target classification for routing operations.
 enum RoutingTargetType {

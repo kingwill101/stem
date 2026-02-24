@@ -1,8 +1,8 @@
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/stem.dart' show Stem;
 import 'package:stem/stem.dart' show Stem;
-import 'package:stem/src/core/clock.dart';
 
 /// Record describing an enqueued task captured by [FakeStem].
 class RecordedEnqueue {

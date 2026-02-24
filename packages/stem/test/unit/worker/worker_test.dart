@@ -1309,7 +1309,6 @@ void main() {
             name: 'tasks.group.a',
             options: const TaskOptions(
               groupRateLimit: '1/s',
-              groupRateKeyHeader: 'tenant',
             ),
             entrypoint: (context, args) async => null,
           ),
@@ -1319,7 +1318,6 @@ void main() {
             name: 'tasks.group.b',
             options: const TaskOptions(
               groupRateLimit: '1/s',
-              groupRateKeyHeader: 'tenant',
             ),
             entrypoint: (context, args) async => null,
           ),
@@ -1393,8 +1391,6 @@ void main() {
               name: 'tasks.group.failopen',
               options: const TaskOptions(
                 groupRateLimit: '10/m',
-                groupRateKeyHeader: 'tenant',
-                groupRateLimiterFailureMode: RateLimiterFailureMode.failOpen,
               ),
               entrypoint: (context, args) async => null,
             ),
@@ -1442,7 +1438,6 @@ void main() {
               name: 'tasks.group.failclosed',
               options: const TaskOptions(
                 groupRateLimit: '10/m',
-                groupRateKeyHeader: 'tenant',
                 groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
                 maxRetries: 5,
               ),
@@ -1750,7 +1745,7 @@ Future<void> _assertTaskRemainsQueued(
   await _waitFor(() async {
     final status = await backend.get(taskId);
     return status?.state != null;
-  }, timeout: const Duration(seconds: 2));
+  });
   final deadline = DateTime.now().add(holdFor);
   while (DateTime.now().isBefore(deadline)) {
     final status = await backend.get(taskId);
@@ -1779,7 +1774,6 @@ Future<ControlReplyMessage> _sendControlCommand({
   subscription = broker
       .consume(
         RoutingSubscription.singleQueue(replyQueue),
-        prefetch: 1,
         consumerName: 'worker-test-control-$requestId',
       )
       .listen((delivery) async {

@@ -5,10 +5,10 @@
 /// for unit tests or transient local scheduling.
 library;
 
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/scheduler/schedule_calculator.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Simple in-memory schedule store implementation used in tests.
 ///

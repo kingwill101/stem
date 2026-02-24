@@ -3,10 +3,10 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:collection/collection.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:uuid/uuid.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// In-memory broker for testing and local development.
 class InMemoryBroker implements Broker {
@@ -750,9 +750,7 @@ class _BroadcastHub {
           emptyConsumers.add(consumer);
         }
       });
-      for (final consumer in emptyConsumers) {
-        _ackedByConsumer.remove(consumer);
-      }
+      emptyConsumers.forEach(_ackedByConsumer.remove);
     }
   }
 }

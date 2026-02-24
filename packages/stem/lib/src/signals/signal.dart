@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:stem/src/core/stem_event.dart';
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/stem_event.dart';
 
 /// Signature for signal handlers.
 typedef SignalHandler<T extends StemEvent> =

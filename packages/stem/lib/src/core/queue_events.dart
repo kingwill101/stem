@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/stem_event.dart';
-import 'package:stem/src/core/clock.dart';
 
 const String _queueEventEnvelopeName = '__stem.queue.event__';
 const String _queueEventChannelPrefix = 'stem:events';

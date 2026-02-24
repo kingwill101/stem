@@ -1,9 +1,9 @@
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart' show WorkflowStore;
 import 'package:stem/src/workflow/workflow.dart' show WorkflowStore;
 import 'package:stem/stem.dart' show WorkflowStore;
-import 'package:stem/src/core/clock.dart';
 
 /// Snapshot of a workflow run persisted by a [WorkflowStore].
 ///

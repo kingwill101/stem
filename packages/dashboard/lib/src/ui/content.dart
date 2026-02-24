@@ -1,12 +1,11 @@
 import 'package:intl/intl.dart';
-
+import 'package:stem/stem.dart' show stemNow;
 // HTML template strings are kept on single lines for readability.
 // ignore_for_file: lines_longer_than_80_chars
 
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/ui/event_templates.dart';
 import 'package:stem_dashboard/src/ui/layout.dart';
-import 'package:stem/stem.dart' show stemNow;
 
 final _numberFormat = NumberFormat.decimalPattern();
 

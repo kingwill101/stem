@@ -40,7 +40,7 @@ void main() {
   });
 
   test('memoryWorkflowStoreFactory creates a workflow store', () async {
-    final clock = _FixedWorkflowClock(DateTime.utc(2025, 1, 1));
+    final clock = _FixedWorkflowClock(DateTime.utc(2025));
     final factory = memoryWorkflowStoreFactory(clock: clock);
 
     final store = await factory.create();

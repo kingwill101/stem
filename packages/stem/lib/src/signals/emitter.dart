@@ -1,9 +1,9 @@
 import 'package:stem/src/control/control_messages.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/signals/stem_signals.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Helper used by coordinators, workers, and middleware to emit strongly
 /// typed Stem signals without duplicating payload construction.

@@ -16,14 +16,13 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:contextual/contextual.dart';
-
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/observability/logging.dart';
 import 'package:stem/src/observability/metrics.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Scheduler loop that dispatches due [ScheduleEntry] records.
 ///

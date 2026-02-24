@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
 import 'package:uuid/uuid.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -498,7 +498,7 @@ class Canvas {
     } finally {
       completer.complete();
       if (identical(_batchSubmissionLocks[batchId], completer.future)) {
-        _batchSubmissionLocks.remove(batchId);
+        await _batchSubmissionLocks.remove(batchId);
       }
     }
   }

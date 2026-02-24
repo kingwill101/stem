@@ -91,8 +91,8 @@ void _runRedisTlsSuite({
     clientKeyPath = trimmedClientKey;
   }
 
-  final resolvedUrl = trimmedUrl!;
-  final resolvedCa = trimmedCa!;
+  final resolvedUrl = trimmedUrl;
+  final resolvedCa = trimmedCa;
   final resolvedClientCert = clientCertPath;
   final resolvedClientKey = clientKeyPath;
   final tls = TlsConfig(

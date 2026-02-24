@@ -33,12 +33,12 @@ library;
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
-import 'package:stem/src/core/clock.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
