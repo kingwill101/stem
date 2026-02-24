@@ -570,9 +570,10 @@ class RedisStreamsBroker implements Broker {
     }
 
     Future<void> loop() async {
-      if (queue == null) {
+      if (queue == null || queueGroup == null) {
         return;
       }
+      final group = queueGroup;
       while (!controller.isClosed && !_closed) {
         for (final stream in streamKeys) {
           await _ensureGroupForStream(queue, stream);
@@ -583,7 +584,7 @@ class RedisStreamsBroker implements Broker {
           result = await sendConsumerCommand([
             'XREADGROUP',
             'GROUP',
-            queueGroup!,
+            group,
             consumer,
             'BLOCK',
             blockTime.inMilliseconds.toString(),
@@ -611,7 +612,7 @@ class RedisStreamsBroker implements Broker {
         }
         final deliveries = _parseDeliveries(
           queue,
-          queueGroup!,
+          group,
           consumer,
           result,
         );
@@ -626,8 +627,10 @@ class RedisStreamsBroker implements Broker {
 
     unawaited(loop());
     for (final stream in streamKeys) {
-      final key = _scheduleClaim(stream, queueGroup!, consumer, controller);
-      claimTimerKeys.add(key);
+      if (queueGroup != null) {
+        final key = _scheduleClaim(stream, queueGroup, consumer, controller);
+        claimTimerKeys.add(key);
+      }
     }
 
     for (final channel in broadcastChannels) {
