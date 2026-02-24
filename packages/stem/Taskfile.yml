@@ -3,6 +3,11 @@ version: "3"
 vars:
   COVERAGE_BADGE: ../../tool/coverage/coverage_badge.dart
 
+includes:
+  examples:
+    taskfile: ./example/Taskfile.yml
+    dir: ./example
+
 tasks:
   test:
     desc: Run stem package tests.

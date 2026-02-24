@@ -1,0 +1,107 @@
+version: "3"
+
+tasks:
+  deps-up:
+    desc: Start Redis + Postgres(TLS) dependencies.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up -d redis postgres
+
+  deps-down:
+    desc: Stop Redis + Postgres(TLS) dependencies.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-up:
+    desc: Start dependency stack for the TLS demo.
+    cmds:
+      - task: deps-up
+
+  compose-down:
+    desc: Stop dependency stack for the TLS demo.
+    cmds:
+      - task: deps-down
+
+  build:worker:
+    desc: Compile the Postgres TLS worker binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          stem_root="{{.TASKFILE_DIR}}/../.."
+          cd "$stem_root"
+          dart pub get
+          dart build cli -t example/postgres_tls/bin/worker.dart -o example/postgres_tls/build/worker
+        '
+
+  build:enqueue:
+    desc: Compile the Postgres TLS enqueue binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          stem_root="{{.TASKFILE_DIR}}/../.."
+          cd "$stem_root"
+          dart pub get
+          dart build cli -t example/postgres_tls/bin/enqueue.dart -o example/postgres_tls/build/enqueue
+        '
+
+  build:
+    desc: Compile worker and enqueue binaries.
+    deps: [build:worker, build:enqueue]
+
+  run:worker:
+    desc: Run the compiled worker binary.
+    deps: [build:worker]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://127.0.0.1:${REDIS_PORT}}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT}/stem_test}"
+          export STEM_TLS_CA_CERT="${STEM_TLS_CA_CERT:-$root/../../../stem_cli/docker/testing/certs/postgres-root.crt}"
+          "$root/build/worker/bundle/bin/"*
+        '
+
+  run:enqueue:
+    desc: Run the compiled enqueue binary.
+    deps: [build:enqueue]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://127.0.0.1:${REDIS_PORT}}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT}/stem_test}"
+          export STEM_TLS_CA_CERT="${STEM_TLS_CA_CERT:-$root/../../../stem_cli/docker/testing/certs/postgres-root.crt}"
+          "$root/build/enqueue/bundle/bin/"*
+        '
+
+  clean:
+    desc: Remove compiled artifacts.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/build"

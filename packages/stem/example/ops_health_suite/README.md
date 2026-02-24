@@ -16,32 +16,32 @@ cd example/ops_health_suite
 # or from repo root:
 # cd packages/stem/example/ops_health_suite
 
-just deps-up
-just build
+task deps-up
+task build
 
 # In separate terminals:
-just run-worker
-just run-producer
+task run-worker
+task run-producer
 
 # Or use tmux:
-just tmux
+task tmux
 ```
 
 ## CLI Health Checks
 
 ```bash
-just build-cli
+task build-cli
 
 # Connectivity checks
-just stem health
+task stem health
 
 # Queue + worker snapshots
-just stem observe queues
-just stem observe workers
+task stem observe queues
+task stem observe workers
 
 # Worker control plane
-just stem worker ping --worker ops-worker
-just stem worker stats --worker ops-worker
+task stem worker ping --worker ops-worker
+task stem worker stats --worker ops-worker
 ```
 
 The worker heartbeats are persisted in Redis and surfaced in `stem observe

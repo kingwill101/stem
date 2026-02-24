@@ -1,7 +1,10 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
+import 'package:stem/src/bootstrap/stem_stack.dart';
+import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
@@ -320,6 +323,77 @@ class StemWorkflowApp {
       backend: StemBackendFactory.inMemory(),
       storeFactory: WorkflowStoreFactory.inMemory(),
       eventBusFactory: WorkflowEventBusFactory.inMemory(),
+      workerConfig: workerConfig,
+      pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
+      workflowRegistry: workflowRegistry,
+      introspectionSink: introspectionSink,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a workflow app from a single backend URL plus adapter wiring.
+  ///
+  /// This wires broker/backend and workflow-store factories from one URL and
+  /// optional per-store overrides via [StemStack.fromUrl].
+  static Future<StemWorkflowApp> fromUrl(
+    String url, {
+    Iterable<WorkflowDefinition> workflows = const [],
+    Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
+    Iterable<StemStoreAdapter> adapters = const [],
+    StemStoreOverrides overrides = const StemStoreOverrides(),
+    StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    bool uniqueTasks = false,
+    Duration uniqueTaskDefaultTtl = const Duration(minutes: 5),
+    String uniqueTaskNamespace = 'stem:unique',
+    bool requireRevokeStore = false,
+    RevokeStore? revokeStore,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
+    WorkflowEventBusFactory? eventBusFactory,
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) async {
+    final stack = StemStack.fromUrl(
+      url,
+      adapters: adapters,
+      overrides: overrides,
+      workflows: true,
+    );
+
+    final app = await StemApp.fromUrl(
+      url,
+      adapters: adapters,
+      overrides: overrides,
+      workerConfig: workerConfig,
+      uniqueTasks: uniqueTasks,
+      uniqueTaskDefaultTtl: uniqueTaskDefaultTtl,
+      uniqueTaskNamespace: uniqueTaskNamespace,
+      requireRevokeStore: requireRevokeStore,
+      revokeStore: revokeStore,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+
+    return create(
+      workflows: workflows,
+      flows: flows,
+      scripts: scripts,
+      stemApp: app,
+      storeFactory: stack.workflowStore,
+      eventBusFactory: eventBusFactory,
       workerConfig: workerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,

@@ -1,0 +1,53 @@
+version: "3"
+
+tasks:
+  build:
+    desc: No build required for workflow script demos.
+    cmds:
+      - echo "No build step required."
+
+  run-basic:
+    desc: Run basic in-memory workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/basic_in_memory.dart'
+
+  run-cancel:
+    desc: Run cancellation policy workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/cancellation_policy.dart'
+
+  run-custom:
+    desc: Run custom factory workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/custom_factories.dart'
+
+  run-sleep:
+    desc: Run sleep and event workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/sleep_and_event.dart'
+
+  run-sqlite:
+    desc: Run sqlite workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/sqlite_store.dart'
+
+  run-versioned:
+    desc: Run versioned rewind workflow example.
+    cmds:
+      - |
+        bash -lc 'set -euo pipefail; root="{{.TASKFILE_DIR}}"; stem_root="$root/../.."; env_file="${ENV_FILE:-.env}"; if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi; cd "$stem_root"; dart run example/workflows/versioned_rewind.dart'
+
+  run:
+    desc: Run basic workflow demo.
+    cmds:
+      - task: run-basic
+
+  clean:
+    desc: No artifacts to clean.
+    cmds:
+      - echo "No build artifacts to clean."

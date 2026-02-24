@@ -1,5 +1,7 @@
-## 0.1.1
+## Unreleased
 
+- Expanded adapter contract documentation with a capability matrix, explicit
+  skip semantics, and recipe-style setup examples.
 - Scoped the binary payload round-trip contract test to the Base64 encoder
   suite so JSON encoder runs no longer report intentional skips.
 

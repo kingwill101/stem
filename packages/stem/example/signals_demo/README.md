@@ -29,14 +29,14 @@ Stop the demo with `Ctrl+C`. The worker and producer trap TERM signals and
 shut down gracefully. To rebuild after editing the example, run
 `docker compose build`.
 
-### Local build + Docker deps (just)
+### Local build + Docker deps (task)
 
 ```bash
-just deps-up
-just build
+task deps-up
+task build
 # In separate terminals:
-just run-worker
-just run-producer
+task run-worker
+task run-producer
 # Or:
-just tmux
+task tmux
 ```

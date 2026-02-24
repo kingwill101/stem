@@ -1,6 +1,6 @@
 <!-- markdownlint-disable MD041 -->
 
-## 0.1.1
+## Unreleased
 
 - Enabled broadcast fan-out broker contract coverage in Redis integration tests
   by wiring additional broker instances for shared-namespace fan-out checks.

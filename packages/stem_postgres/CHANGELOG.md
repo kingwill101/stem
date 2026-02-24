@@ -1,3 +1,9 @@
+## Unreleased
+
+- Normalized `postgresResultBackendFactory` to accept a positional `uri`
+  argument, matching the adapter factory style used across packages.
+- Updated Postgres adapter wiring to use the new factory signature.
+
 ## 0.1.0
 
 - Added workflow run lease tracking and claim/renew helpers to distribute

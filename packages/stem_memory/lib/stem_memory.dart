@@ -13,10 +13,10 @@ export 'package:stem/stem.dart'
         StemMemoryAdapter;
 export 'src/memory_factories.dart'
     show
-        memoryBackendFactory,
         memoryBrokerFactory,
         memoryEventBusFactory,
         memoryLockStoreFactory,
+        memoryResultBackendFactory,
         memoryRevokeStoreFactory,
         memoryScheduleStoreFactory,
         memoryWorkflowStoreFactory;

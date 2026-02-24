@@ -1,0 +1,86 @@
+version: "3"
+
+tasks:
+  tls:certs:
+    desc: Generate TLS assets for Redis into `certs/`.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../../.."
+          "$stem_root/scripts/security/generate_tls_assets.sh" "$root/certs" "redis" "redis,localhost,127.0.0.1"
+        '
+
+  keys:ed25519:
+    desc: Generate and apply Ed25519 key material to `.env` and `.env.local`.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../../.."
+          key_lines="$(cd "$stem_root" && dart run scripts/security/generate_ed25519_keys.dart)"
+          for env_file in "$root/.env" "$root/.env.local"; do
+            [[ -f "$env_file" ]] || continue
+            while IFS= read -r line; do
+              [[ -z "$line" ]] && continue
+              key="${line%%=*}"
+              value="${line#*=}"
+              escaped_value="$(printf "%s" "$value" | sed -e "s/[&|]/\\\\&/g")"
+              if grep -q "^${key}=" "$env_file"; then
+                sed -i -E "s|^${key}=.*|${key}=${escaped_value}|" "$env_file"
+              else
+                echo "${key}=${value}" >> "$env_file"
+              fi
+            done <<<"$key_lines"
+          done
+          echo "Updated Ed25519 keys for ed25519_tls profile."
+        '
+
+  deps-up:
+    desc: Start TLS Redis dependency for this profile.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up -d redis
+
+  deps-down:
+    desc: Stop docker-compose services for this profile.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-up:
+    desc: Start profile containers (worker + enqueuer + redis).
+    cmds:
+      - task: tls:certs
+      - task: keys:ed25519
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up --build
+
+  compose-down:
+    desc: Stop profile containers.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-logs:
+    desc: Tail profile container logs.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" logs -f --tail=200 worker enqueuer redis
+
+  build:
+    desc: Compile microservice worker/enqueuer/beat binaries used by local profile runs.
+    cmds:
+      - task -t "{{.TASKFILE_DIR}}/../../microservice/Taskfile.yml" build
+
+  run:worker:
+    desc: Run worker locally with this profile's `.env.local`.
+    cmds:
+      - ENV_FILE="{{.TASKFILE_DIR}}/.env.local" task -t "{{.TASKFILE_DIR}}/../../microservice/Taskfile.yml" run:worker
+
+  run:enqueuer:
+    desc: Run enqueuer locally with this profile's `.env.local`.
+    cmds:
+      - ENV_FILE="{{.TASKFILE_DIR}}/.env.local" task -t "{{.TASKFILE_DIR}}/../../microservice/Taskfile.yml" run:enqueuer
+
+  clean:
+    desc: Remove compiled microservice artifacts.
+    cmds:
+      - task -t "{{.TASKFILE_DIR}}/../../microservice/Taskfile.yml" clean

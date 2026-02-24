@@ -131,7 +131,7 @@ class StemPostgresAdapter implements StemStoreAdapter {
   @override
   StemBackendFactory? backendFactory(Uri uri) {
     return postgresResultBackendFactory(
-      connectionString: uri.toString(),
+      uri.toString(),
       namespace: namespace,
       defaultTtl: backendDefaultTtl,
       groupDefaultTtl: backendGroupDefaultTtl,

@@ -34,28 +34,28 @@ export STEM_REVOKE_STORE_URL=redis://localhost:6379/2
 
 # Ping both workers
 
-just build-cli
-just stem worker ping \
+task build-cli
+task stem worker ping \
   --worker control-alpha --worker control-bravo
 
 # Inspect worker stats
 
-just stem worker stats --worker control-alpha
+task stem worker stats --worker control-alpha
 
 # Inspect active tasks and revocations
 
-just stem worker inspect --worker control-alpha
+task stem worker inspect --worker control-alpha
 
 # Revoke a long-running task (terminate it if already running)
 
-just stem worker revoke \
+task stem worker revoke \
   --task <TASK_ID> \
   --terminate \
   --reason "demo revoke"
 
 # Request a warm shutdown for one worker
 
-just stem worker shutdown \
+task stem worker shutdown \
   --worker control-bravo \
   --mode warm
 ```
@@ -66,18 +66,18 @@ Stop the stack with:
 docker compose down
 ```
 
-## Local build + Docker deps (just)
+## Local build + Docker deps (task)
 
 ```bash
-just deps-up
-just build
-just build-cli
+task deps-up
+task build
+task build-cli
 # In separate terminals:
-WORKER_NAME=control-alpha just run-worker
-WORKER_NAME=control-bravo just run-worker
-just run-producer
+WORKER_NAME=control-alpha task run-worker
+WORKER_NAME=control-bravo task run-worker
+task run-producer
 # Or:
-just tmux
+task tmux
 ```
 
 When running locally, export the same `STEM_*` variables before using the CLI:

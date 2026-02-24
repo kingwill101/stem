@@ -119,6 +119,78 @@ void main() {
         await app.shutdown();
       }
     });
+
+    test('fromUrl resolves adapter-backed broker/backend', () async {
+      final handler = FunctionTaskHandler<void>(
+        name: 'test.from-url',
+        entrypoint: (context, args) async => null,
+      );
+      final adapter = _BootstrapAdapter(
+        scheme: 'test',
+        broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+        backend: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+      );
+
+      final app = await StemApp.fromUrl(
+        'test://localhost',
+        adapters: [adapter],
+        tasks: [handler],
+      );
+      try {
+        await app.start();
+        final taskId = await app.stem.enqueue('test.from-url');
+        final completed = await app.backend
+            .watch(taskId)
+            .firstWhere((status) => status.state == TaskState.succeeded)
+            .timeout(const Duration(seconds: 1));
+        expect(completed.state, TaskState.succeeded);
+      } finally {
+        await app.shutdown();
+      }
+    });
+
+    test(
+      'fromUrl auto-wires unique/revoke stores and disposes them on shutdown',
+      () async {
+        final createdLockStore = InMemoryLockStore();
+        final createdRevokeStore = InMemoryRevokeStore();
+        var lockDisposed = false;
+        var revokeDisposed = false;
+        final adapter = _BootstrapAdapter(
+          scheme: 'test',
+          broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+          backend: StemBackendFactory(
+            create: () async => InMemoryResultBackend(),
+          ),
+          lock: LockStoreFactory(
+            create: () async => createdLockStore,
+            dispose: (store) async => lockDisposed = true,
+          ),
+          revoke: RevokeStoreFactory(
+            create: () async => createdRevokeStore,
+            dispose: (store) async => revokeDisposed = true,
+          ),
+        );
+
+        final app = await StemApp.fromUrl(
+          'test://localhost',
+          adapters: [adapter],
+          uniqueTasks: true,
+          requireRevokeStore: true,
+        );
+        try {
+          expect(app.worker.uniqueTaskCoordinator, isNotNull);
+          expect(app.worker.revokeStore, same(createdRevokeStore));
+        } finally {
+          await app.shutdown();
+        }
+
+        expect(lockDisposed, isTrue);
+        expect(revokeDisposed, isTrue);
+      },
+    );
   });
 
   group('StemWorkflowApp', () {
@@ -239,6 +311,41 @@ void main() {
         await workflowApp.shutdown();
       }
     });
+
+    test('fromUrl runs workflow to completion', () async {
+      final flow = Flow<String>(
+        name: 'workflow.from-url',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'from-url');
+        },
+      );
+      final adapter = _BootstrapAdapter(
+        scheme: 'test',
+        broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+        backend: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+        workflow: WorkflowStoreFactory(
+          create: () async => InMemoryWorkflowStore(),
+        ),
+      );
+
+      final workflowApp = await StemWorkflowApp.fromUrl(
+        'test://localhost',
+        adapters: [adapter],
+        flows: [flow],
+      );
+      try {
+        final runId = await workflowApp.startWorkflow('workflow.from-url');
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'from-url');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
   });
 }
 
@@ -288,4 +395,46 @@ class _TestMiddleware implements Middleware {
   @override
   Future<void> onExecute(TaskContext context, Future<void> Function() next) =>
       next();
+}
+
+class _BootstrapAdapter implements StemStoreAdapter {
+  _BootstrapAdapter({
+    required this.scheme,
+    this.broker,
+    this.backend,
+    this.workflow,
+    this.lock,
+    this.revoke,
+  });
+
+  final String scheme;
+  final StemBrokerFactory? broker;
+  final StemBackendFactory? backend;
+  final WorkflowStoreFactory? workflow;
+  final LockStoreFactory? lock;
+  final RevokeStoreFactory? revoke;
+
+  @override
+  String get name => 'bootstrap-test-adapter';
+
+  @override
+  bool supports(Uri uri, StemStoreKind kind) => uri.scheme == scheme;
+
+  @override
+  StemBrokerFactory? brokerFactory(Uri uri) => broker;
+
+  @override
+  StemBackendFactory? backendFactory(Uri uri) => backend;
+
+  @override
+  WorkflowStoreFactory? workflowStoreFactory(Uri uri) => workflow;
+
+  @override
+  ScheduleStoreFactory? scheduleStoreFactory(Uri uri) => null;
+
+  @override
+  LockStoreFactory? lockStoreFactory(Uri uri) => lock;
+
+  @override
+  RevokeStoreFactory? revokeStoreFactory(Uri uri) => revoke;
 }

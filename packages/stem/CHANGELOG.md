@@ -1,8 +1,17 @@
-## 0.1.1
+## Unreleased
 
+- Improved bootstrap DX with explicit fail-fast errors across broker/backend/
+  workflow/schedule/lock/revoke resolution paths in `StemStack.fromUrl`,
+  including actionable hints when adapters support a URL but do not implement
+  the requested store kind.
+- Refreshed docs to lead with `StemClient` and document adapter-focused Task
+  workflows.
 - Aligned in-memory broker and result backend semantics with shared adapter
   contracts, including broadcast fan-out behavior for in-memory broker tests.
 - Added Taskfile support for package-scoped test orchestration.
+- Added Taskfile-based workflows for complex examples (microservice, encrypted
+  payloads, signing key rotation, security profiles, and Postgres TLS),
+  including secret/certificate bootstrap and binary build/run helpers.
 - Added shared logger injection via `setStemLogger` and reusable structured
   context helpers for consistent logging metadata across core components.
 
@@ -26,7 +35,7 @@
 - Added typed workflow, task, and canvas result APIs with customizable encoders
   (TaskResultEncoder and payload encoders).
 - Added new example suites (progress heartbeat, worker control lab, and the
-  feature-complete set) plus refreshed docs/Justfiles for running them.
+  feature-complete set) plus refreshed docs/Taskfiles for running them.
 - Added signals registry/configuration for worker, task, scheduler, and
   workflow lifecycle events.
 - Improved worker runtime (isolate pool, config, heartbeats/autoscaling) plus

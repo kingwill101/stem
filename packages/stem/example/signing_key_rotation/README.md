@@ -17,17 +17,18 @@ cd example/signing_key_rotation
 # or from repo root:
 # cd packages/stem/example/signing_key_rotation
 
-just deps-up
-just build
+task deps-up
+task build
+task keys:rotate
 
 # Terminal 1: start the worker (uses .env with both keys)
-just run-worker
+task run:worker
 
 # Terminal 2: enqueue with the primary key
-just run-producer-primary
+task run:producer-primary
 
 # Rotate: enqueue again with the rotated key
-just run-producer-rotated
+task run:producer-rotated
 ```
 
 The worker should process tasks from both runs without error, proving the
@@ -43,4 +44,4 @@ rotation overlap works.
 
 - If you remove a key from `STEM_SIGNING_KEYS`, any tasks signed with that key
   will be rejected and sent to the DLQ (`reason=signature-invalid`).
-- You can verify DLQ contents with `just build-cli` and `just stem dlq list`.
+- You can verify DLQ contents with the `stem` CLI (`stem dlq list`).

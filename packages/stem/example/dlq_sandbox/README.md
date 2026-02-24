@@ -101,14 +101,14 @@ Repeat the CLI command with `dlq replay ... --yes` to requeue entries.
 - The CLI updates result backend metadata with `replayCount`, providing a simple
   way for the handler to detect a replay.
 
-### Local build + Docker deps (just)
+### Local build + Docker deps (task)
 
 ```bash
-just deps-up
-just build
+task deps-up
+task build
 # In separate terminals:
-just run-worker
-just run-producer
+task run-worker
+task run-producer
 # Or:
-just tmux
+task tmux
 ```

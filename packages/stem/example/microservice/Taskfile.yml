@@ -1,0 +1,266 @@
+version: "3"
+
+tasks:
+  init:hmac:
+    desc: Initialize `.env` from the HMAC profile and rotate the signing secret.
+    cmds:
+      - cp "{{.TASKFILE_DIR}}/.env.hmac" "{{.TASKFILE_DIR}}/.env"
+      - task: secrets:hmac
+
+  init:hmac-tls:
+    desc: Initialize `.env` from the HMAC+TLS profile, generate certs, and rotate the signing secret.
+    cmds:
+      - cp "{{.TASKFILE_DIR}}/.env.hmac_tls" "{{.TASKFILE_DIR}}/.env"
+      - task: tls:certs
+      - task: secrets:hmac
+
+  init:ed25519-tls:
+    desc: Initialize `.env` from the Ed25519+TLS profile, generate certs, and refresh keys.
+    cmds:
+      - cp "{{.TASKFILE_DIR}}/.env.ed25519_tls" "{{.TASKFILE_DIR}}/.env"
+      - task: tls:certs
+      - task: keys:ed25519
+
+  secrets:hmac:
+    desc: Rotate `STEM_SIGNING_KEYS` in `.env` using a fresh random key.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="$root/.env"
+          if [[ ! -f "$env_file" ]]; then
+            echo ".env not found. Run: task init:hmac (or init:hmac-tls/init:ed25519-tls)"
+            exit 1
+          fi
+          secret="$(openssl rand -base64 32)"
+          escaped_secret="$(printf "%s" "$secret" | sed -e "s/[&|]/\\\\&/g")"
+          if grep -q "^STEM_SIGNING_KEYS=" "$env_file"; then
+            sed -i -E "s|^STEM_SIGNING_KEYS=.*|STEM_SIGNING_KEYS=primary:${escaped_secret}|" "$env_file"
+          else
+            echo "STEM_SIGNING_KEYS=primary:${secret}" >> "$env_file"
+          fi
+          if grep -q "^STEM_SIGNING_ACTIVE_KEY=" "$env_file"; then
+            sed -i -E "s|^STEM_SIGNING_ACTIVE_KEY=.*|STEM_SIGNING_ACTIVE_KEY=primary|" "$env_file"
+          else
+            echo "STEM_SIGNING_ACTIVE_KEY=primary" >> "$env_file"
+          fi
+          echo "Rotated STEM_SIGNING_KEYS in $env_file"
+        '
+
+  keys:ed25519:
+    desc: Generate and apply fresh Ed25519 signing keys into `.env`.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../.."
+          env_file="$root/.env"
+          if [[ ! -f "$env_file" ]]; then
+            echo ".env not found. Run: task init:ed25519-tls first."
+            exit 1
+          fi
+          key_lines="$(cd "$stem_root" && dart run scripts/security/generate_ed25519_keys.dart)"
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            key="${line%%=*}"
+            value="${line#*=}"
+            escaped_value="$(printf "%s" "$value" | sed -e "s/[&|]/\\\\&/g")"
+            if grep -q "^${key}=" "$env_file"; then
+              sed -i -E "s|^${key}=.*|${key}=${escaped_value}|" "$env_file"
+            else
+              echo "$key=$value" >> "$env_file"
+            fi
+          done <<<"$key_lines"
+          echo "Updated Ed25519 key material in $env_file"
+        '
+
+  tls:certs:
+    desc: Generate local TLS certs for Redis profiles into `certs/`.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          stem_root="$root/../.."
+          "$stem_root/scripts/security/generate_tls_assets.sh" "$root/certs" "redis" "redis,localhost,127.0.0.1"
+        '
+
+  deps-up:
+    desc: Start dependency services (Redis + observability stack).
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up -d redis otel-collector jaeger prometheus grafana
+
+  deps-down:
+    desc: Stop dependency services.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-up:
+    desc: Start the full containerized microservice stack.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up --build
+
+  compose-down:
+    desc: Stop the full containerized microservice stack.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-logs:
+    desc: Tail logs for core services.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" logs -f --tail=200 worker enqueuer beat dashboard redis
+
+  build:worker:
+    desc: Compile the worker binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/worker"
+          dart pub get
+          dart build cli -o build
+        '
+
+  build:enqueuer:
+    desc: Compile the enqueuer API binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/enqueuer"
+          dart pub get
+          dart build cli -o build
+        '
+
+  build:beat:
+    desc: Compile the beat binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/beat"
+          dart pub get
+          dart build cli -o build
+        '
+
+  build:dashboard:
+    desc: Compile the dashboard binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/../../../dashboard"
+          dart pub get
+          dart build cli -t bin/dashboard.dart -o build
+        '
+
+  build:
+    desc: Compile worker, enqueuer, and beat binaries.
+    deps: [build:worker, build:enqueuer, build:beat]
+
+  run:worker:
+    desc: Run the compiled worker binary.
+    deps: [build:worker]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          "$root/worker/build/bundle/bin/"*
+        '
+
+  run:enqueuer:
+    desc: Run the compiled enqueuer binary.
+    deps: [build:enqueuer]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          "$root/enqueuer/build/bundle/bin/"*
+        '
+
+  run:beat:
+    desc: Run the compiled beat binary.
+    deps: [build:beat]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_SCHEDULE_STORE_URL="${STEM_SCHEDULE_STORE_URL:-redis://localhost:${REDIS_PORT}/2}"
+          export STEM_SCHEDULE_FILE="${STEM_SCHEDULE_FILE:-$root/schedules.example.yaml}"
+          "$root/beat/build/bundle/bin/"*
+        '
+
+  run:dashboard:
+    desc: Run the compiled dashboard binary.
+    deps: [build:dashboard]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          dashboard_root="$root/../../../dashboard"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          export DASHBOARD_HOST="${DASHBOARD_HOST:-127.0.0.1}"
+          export DASHBOARD_PORT="${DASHBOARD_PORT:-3080}"
+          "$dashboard_root/build/bundle/bin/"*
+        '
+
+  clean:
+    desc: Remove compiled build artifacts.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/worker/build" "{{.TASKFILE_DIR}}/enqueuer/build" "{{.TASKFILE_DIR}}/beat/build" "{{.TASKFILE_DIR}}/../../../dashboard/build"

@@ -1,4 +1,4 @@
-## 0.1.1
+## Unreleased
 
 - Added broker broadcast fan-out support for SQLite routing subscriptions with
   broadcast channels.

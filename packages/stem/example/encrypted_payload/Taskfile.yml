@@ -1,0 +1,170 @@
+version: "3"
+
+tasks:
+  init:
+    desc: Create `.env` from `.env.example` (if needed) and rotate `PAYLOAD_SECRET`.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="$root/.env"
+          if [[ ! -f "$env_file" ]]; then
+            cp "$root/.env.example" "$env_file"
+            echo "Created $env_file from .env.example"
+          fi
+          secret="$(openssl rand -base64 32)"
+          escaped_secret="$(printf "%s" "$secret" | sed -e "s/[&|]/\\\\&/g")"
+          if grep -q "^PAYLOAD_SECRET=" "$env_file"; then
+            sed -i -E "s|^PAYLOAD_SECRET=.*|PAYLOAD_SECRET=${escaped_secret}|" "$env_file"
+          else
+            echo "PAYLOAD_SECRET=${secret}" >> "$env_file"
+          fi
+          echo "Rotated PAYLOAD_SECRET in $env_file"
+        '
+
+  deps-up:
+    desc: Start Redis dependency only.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up -d redis
+
+  deps-down:
+    desc: Stop docker-compose services.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-up:
+    desc: Start worker + enqueuer containers with Redis.
+    cmds:
+      - task: init
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up --build worker enqueuer
+
+  compose-down:
+    desc: Stop worker + enqueuer containers.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" down
+
+  compose-logs:
+    desc: Tail container logs.
+    cmds:
+      - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" logs -f --tail=200 worker enqueuer redis
+
+  build:worker:
+    desc: Compile encrypted worker binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/worker"
+          dart pub get
+          dart build cli -o build
+        '
+
+  build:enqueuer:
+    desc: Compile encrypted enqueuer binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/enqueuer"
+          dart pub get
+          dart build cli -o build
+        '
+
+  build:container-client:
+    desc: Compile the standalone containerized encrypted client binary.
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          cd "{{.TASKFILE_DIR}}/../.."
+          dart pub get
+          dart compile exe example/encrypted_payload/docker/main.dart -o example/encrypted_payload/build/container_mixed_encrypted
+        '
+
+  build:
+    desc: Compile worker, enqueuer, and container client binaries.
+    deps: [build:worker, build:enqueuer, build:container-client]
+
+  run:worker:
+    desc: Run compiled encrypted worker locally.
+    deps: [build:worker]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
+          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
+          "$root/worker/build/bundle/bin/"*
+        '
+
+  run:enqueuer:
+    desc: Run compiled encrypted enqueuer locally.
+    deps: [build:enqueuer]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
+          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
+          "$root/enqueuer/build/bundle/bin/"*
+        '
+
+  run:container-client:
+    desc: Run compiled standalone encrypted container client locally.
+    deps: [build:container-client]
+    cmds:
+      - |
+        bash -lc '
+          set -euo pipefail
+          root="{{.TASKFILE_DIR}}"
+          env_file="${ENV_FILE:-.env}"
+          if [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          elif [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          fi
+          export REDIS_PORT="${REDIS_PORT:-6379}"
+          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
+          export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
+          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
+          "$root/build/container_mixed_encrypted"
+        '
+
+  clean:
+    desc: Remove compiled artifacts.
+    cmds:
+      - rm -rf "{{.TASKFILE_DIR}}/worker/build" "{{.TASKFILE_DIR}}/enqueuer/build" "{{.TASKFILE_DIR}}/build"
