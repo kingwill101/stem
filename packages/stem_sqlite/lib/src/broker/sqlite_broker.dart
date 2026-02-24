@@ -228,7 +228,7 @@ class SqliteBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now();
+    final now = stemNow();
     await _context
         .query<StemQueueJob>()
         .whereEquals('id', jobId)
@@ -253,7 +253,7 @@ class SqliteBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now();
+    final now = stemNow();
 
     final row = await _context
         .query<StemQueueJob>()
@@ -286,7 +286,7 @@ class SqliteBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    final now = DateTime.now();
+    final now = stemNow();
     await _context.repository<StemQueueJob>().update(
       StemQueueJobUpdateDto(lockedUntil: now.add(by)),
       where: StemQueueJobPartial(id: jobId, namespace: namespace),
@@ -304,7 +304,7 @@ class SqliteBroker implements Broker {
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final now = DateTime.now();
+    final now = stemNow();
     return _context
         .query<StemQueueJob>()
         .whereEquals('queue', queue)
@@ -324,7 +324,7 @@ class SqliteBroker implements Broker {
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final now = DateTime.now();
+    final now = stemNow();
     return _context
         .query<StemQueueJob>()
         .whereEquals('queue', queue)
@@ -399,7 +399,7 @@ class SqliteBroker implements Broker {
       for (final entry in entries) {
         final updatedEnvelope = delay == null
             ? entry.envelope
-            : entry.envelope.copyWith(notBefore: DateTime.now().add(delay));
+            : entry.envelope.copyWith(notBefore: stemNow().add(delay));
         await _insertJob(
           txn,
           envelope: updatedEnvelope,
@@ -457,7 +457,7 @@ class SqliteBroker implements Broker {
   }
 
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final visibilityUntil = now.add(defaultVisibilityTimeout);
 
     return _connections.runInTransaction((txn) async {
@@ -515,7 +515,7 @@ class SqliteBroker implements Broker {
   }
 
   Future<void> _runSweeperCycle() async {
-    final now = DateTime.now();
+    final now = stemNow();
     await _connections.runInTransaction((txn) async {
       await txn
           .query<StemQueueJob>()
@@ -564,7 +564,7 @@ class SqliteBroker implements Broker {
     final payload = jsonEncode({
       'envelopeId': envelopeId,
       'consumerId': consumerId,
-      'issuedAtMicros': DateTime.now().microsecondsSinceEpoch,
+      'issuedAtMicros': stemNow().microsecondsSinceEpoch,
     });
     final encodedPayload = base64Url.encode(utf8.encode(payload));
     return '$_broadcastReceiptPrefix$encodedPayload';
@@ -608,7 +608,7 @@ class SqliteBroker implements Broker {
     if (consumers.isEmpty) {
       return;
     }
-    final leaseExpiresAt = DateTime.now().add(defaultVisibilityTimeout);
+    final leaseExpiresAt = stemNow().add(defaultVisibilityTimeout);
     for (final consumer in consumers) {
       if (!consumer.isActive) {
         continue;
@@ -751,7 +751,7 @@ class _Consumer {
           }
           if (jobs.isNotEmpty) {
             emitted = true;
-            final leaseExpiresAt = DateTime.now().add(
+            final leaseExpiresAt = stemNow().add(
               broker.defaultVisibilityTimeout,
             );
             for (final job in jobs) {

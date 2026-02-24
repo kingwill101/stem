@@ -128,7 +128,7 @@ class PostgresRevokeStore implements RevokeStore {
             issuedAt: entry.issuedAt,
             expiresAt: entry.expiresAt,
             version: existing != null ? entry.version : entry.version,
-            updatedAt: DateTime.now(),
+            updatedAt: stemNow(),
           );
 
           if (existing != null) {

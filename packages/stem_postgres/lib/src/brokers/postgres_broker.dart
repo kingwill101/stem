@@ -325,7 +325,7 @@ class PostgresBroker implements Broker {
         'queue': delivery.envelope.queue,
       }),
     );
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     await _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -356,7 +356,7 @@ class PostgresBroker implements Broker {
     final entryReason = (reason == null || reason.trim().isEmpty)
         ? 'unknown'
         : reason.trim();
-    final deadAt = DateTime.now().toUtc();
+    final deadAt = stemNow().toUtc();
 
     await _withDb(() async {
       await _connections.runInTransaction((txn) async {
@@ -403,7 +403,7 @@ class PostgresBroker implements Broker {
   Future<void> extendLease(Delivery delivery, Duration by) async {
     if (by <= Duration.zero) return;
     final jobId = _parseReceipt(delivery.receipt);
-    final leaseUntil = DateTime.now().toUtc().add(by);
+    final leaseUntil = stemNow().toUtc().add(by);
     await _withDb(() {
       return _context.repository<StemQueueJob>().update(
         StemQueueJobUpdateDto(lockedUntil: leaseUntil),
@@ -414,7 +414,7 @@ class PostgresBroker implements Broker {
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     return _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -436,7 +436,7 @@ class PostgresBroker implements Broker {
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     return _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -523,7 +523,7 @@ class PostgresBroker implements Broker {
           final updatedEnvelope = delay == null
               ? entry.envelope
               : entry.envelope.copyWith(
-                  notBefore: DateTime.now().toUtc().add(delay),
+                  notBefore: stemNow().toUtc().add(delay),
                 );
           await _insertJob(
             txn,
@@ -587,7 +587,7 @@ class PostgresBroker implements Broker {
   }
 
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final visibilityUntil = now.add(defaultVisibilityTimeout);
 
     return _withDb(() {
@@ -707,7 +707,7 @@ class PostgresBroker implements Broker {
       messageId: messageId,
       workerId: workerId,
       namespace: namespace,
-      acknowledgedAt: DateTime.now().toUtc(),
+      acknowledgedAt: stemNow().toUtc(),
     ).toTracked();
     await _withDb(() {
       return _context.repository<StemBroadcastAck>().upsert(
@@ -726,7 +726,7 @@ class PostgresBroker implements Broker {
   }
 
   Future<void> _runSweeperCycle() async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     await _withDb(() async {
       await _connections.runInTransaction((txn) async {
         await txn
@@ -863,7 +863,7 @@ class _ConsumerRunner {
           await Future<void>.delayed(broker.pollInterval);
           continue;
         }
-        final leaseExpiresAt = DateTime.now().toUtc().add(
+        final leaseExpiresAt = stemNow().toUtc().add(
           broker.defaultVisibilityTimeout,
         );
         for (final delivery in [

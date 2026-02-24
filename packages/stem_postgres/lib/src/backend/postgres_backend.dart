@@ -109,7 +109,7 @@ class PostgresResultBackend implements ResultBackend {
   Future<void> _cleanup() async {
     if (_closed) return;
     try {
-      final now = DateTime.now();
+      final now = stemNow();
       await _connections.runInTransaction((txn) async {
         await txn
             .query<StemTaskResult>()
@@ -168,7 +168,7 @@ class PostgresResultBackend implements ResultBackend {
       meta: meta,
     );
 
-    final expiresAt = DateTime.now().add(ttl ?? defaultTtl);
+    final expiresAt = stemNow().add(ttl ?? defaultTtl);
     await _connections.runInTransaction((txn) async {
       final model = $StemTaskResult(
         id: taskId,
@@ -188,7 +188,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<TaskStatus?> get(String taskId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final row = await _connections.runInTransaction(
       (context) async {
         return context
@@ -240,7 +240,7 @@ class PostgresResultBackend implements ResultBackend {
     if (request.limit <= 0) {
       return const TaskStatusPage(items: []);
     }
-    final now = DateTime.now();
+    final now = stemNow();
     final matches = <TaskStatusRecord>[];
     var scanOffset = 0;
     final target = request.offset + request.limit;
@@ -299,7 +299,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<void> initGroup(GroupDescriptor descriptor) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
     await _connections.runInTransaction((txn) async {
       final repository = txn.repository<StemGroup>();
@@ -362,7 +362,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<void> expire(String taskId, Duration ttl) async {
-    final expiresAt = DateTime.now().add(ttl);
+    final expiresAt = stemNow().add(ttl);
 
     await _context.repository<StemTaskResult>().update(
       StemTaskResultUpdateDto(expiresAt: expiresAt),
@@ -372,7 +372,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
-    final expiresAt = DateTime.now().add(heartbeatTtl);
+    final expiresAt = stemNow().add(heartbeatTtl);
     await _connections.runInTransaction((txn) async {
       final model = StemWorkerHeartbeat(
         workerId: heartbeat.workerId,
@@ -401,7 +401,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final row = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('workerId', workerId)
@@ -414,7 +414,7 @@ class PostgresResultBackend implements ResultBackend {
 
   @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
-    final now = DateTime.now();
+    final now = stemNow();
     final rows = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('namespace', namespace)
@@ -457,7 +457,7 @@ class PostgresResultBackend implements ResultBackend {
   // Removed legacy JSON decoder (not needed with Ormed models)
 
   Future<bool> _groupExists(String groupId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     return _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
@@ -467,7 +467,7 @@ class PostgresResultBackend implements ResultBackend {
   }
 
   Future<GroupStatus?> _readGroup(String groupId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final groupRow = await _context
         .query<StemGroup>()
         .whereEquals('id', groupId)

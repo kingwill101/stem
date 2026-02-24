@@ -364,8 +364,7 @@ class RedisStreamsBroker implements Broker {
       queue: target,
       priority: resolvedRoute.priority ?? envelope.priority,
     );
-    if (message.notBefore != null &&
-        message.notBefore!.isAfter(DateTime.now())) {
+    if (message.notBefore != null && message.notBefore!.isAfter(stemNow())) {
       await _send([
         'ZADD',
         _delayedKey(target),
@@ -428,7 +427,7 @@ class RedisStreamsBroker implements Broker {
   }
 
   Future<void> _drainDelayed(String queue) async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final nowMs = stemNow().millisecondsSinceEpoch;
     dynamic result;
     try {
       result = await _send([
@@ -789,7 +788,7 @@ class RedisStreamsBroker implements Broker {
             receipt: receipt,
             leaseExpiresAt: lease == Duration.zero
                 ? null
-                : DateTime.now().add(lease),
+                : stemNow().add(lease),
             route: route,
           ),
         );
@@ -837,9 +836,7 @@ class RedisStreamsBroker implements Broker {
         Delivery(
           envelope: envelope,
           receipt: receipt,
-          leaseExpiresAt: lease == Duration.zero
-              ? null
-              : DateTime.now().add(lease),
+          leaseExpiresAt: lease == Duration.zero ? null : stemNow().add(lease),
           route: route,
         ),
       );
@@ -855,7 +852,7 @@ class RedisStreamsBroker implements Broker {
       headers: (jsonDecode(map['headers'] ?? '{}') as Map)
           .cast<String, String>(),
       enqueuedAt: DateTime.parse(
-        map['enqueuedAt'] ?? DateTime.now().toIso8601String(),
+        map['enqueuedAt'] ?? stemNow().toIso8601String(),
       ),
       notBefore: (map['notBefore']?.isEmpty ?? true)
           ? null
@@ -965,7 +962,7 @@ class RedisStreamsBroker implements Broker {
         'envelope': delivery.envelope.toJson(),
         'reason': reason,
         'meta': meta,
-        'deadAt': DateTime.now().toIso8601String(),
+        'deadAt': stemNow().toIso8601String(),
       }),
     ]);
   }
@@ -1033,7 +1030,7 @@ class RedisStreamsBroker implements Broker {
         dryRun: true,
       );
     }
-    final now = DateTime.now();
+    final now = stemNow();
     for (final candidate in selected) {
       await _send(['LREM', _deadKey(queue), '1', candidate.raw]);
       final replayEnvelope = candidate.entry.envelope.copyWith(
@@ -1091,7 +1088,7 @@ class RedisStreamsBroker implements Broker {
   Future<void> extendLease(Delivery delivery, Duration by) async {
     final info = _parseReceipt(delivery.receipt);
     await _send(['XACK', info.stream, info.group, info.id]);
-    final nextVisibleAt = DateTime.now().add(by);
+    final nextVisibleAt = stemNow().add(by);
     final delayedEnvelope = delivery.envelope.copyWith(
       notBefore: nextVisibleAt,
     );
