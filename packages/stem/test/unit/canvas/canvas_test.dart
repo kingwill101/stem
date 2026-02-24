@@ -160,17 +160,17 @@ Future<TaskStatus> _waitForSuccess(
   String taskId, {
   Duration timeout = const Duration(seconds: 2),
 }) async {
-  final start = DateTime.now();
-  while (true) {
-    final status = await backend.get(taskId);
-    if (status != null && status.state == TaskState.succeeded) {
-      return status;
-    }
-    if (DateTime.now().difference(start) > timeout) {
-      throw TimeoutException('Task $taskId did not succeed in time');
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 50));
-  }
+  return _waitForNonNull<TaskStatus>(
+    () async {
+      final status = await backend.get(taskId);
+      if (status?.state == TaskState.succeeded) {
+        return status;
+      }
+      return null;
+    },
+    timeout: timeout,
+    errorMessage: 'Task $taskId did not succeed in time',
+  );
 }
 
 Future<BatchStatus> _waitForBatchTerminal(
@@ -178,14 +178,32 @@ Future<BatchStatus> _waitForBatchTerminal(
   String batchId, {
   Duration timeout = const Duration(seconds: 2),
 }) async {
+  return _waitForNonNull<BatchStatus>(
+    () async {
+      final status = await canvas.inspectBatch(batchId);
+      if (status != null && status.isTerminal) {
+        return status;
+      }
+      return null;
+    },
+    timeout: timeout,
+    errorMessage: 'Batch $batchId did not complete in time',
+  );
+}
+
+Future<T> _waitForNonNull<T>(
+  Future<T?> Function() read, {
+  required Duration timeout,
+  required String errorMessage,
+}) async {
   final start = DateTime.now();
   while (true) {
-    final status = await canvas.inspectBatch(batchId);
-    if (status != null && status.isTerminal) {
-      return status;
+    final value = await read();
+    if (value != null) {
+      return value;
     }
     if (DateTime.now().difference(start) > timeout) {
-      throw TimeoutException('Batch $batchId did not complete in time');
+      throw TimeoutException(errorMessage);
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }

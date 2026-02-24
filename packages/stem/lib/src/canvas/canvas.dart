@@ -285,6 +285,9 @@ class Canvas {
   /// The task registry for resolving task metadata and handlers.
   final TaskRegistry registry;
 
+  final Map<String, Future<void>> _batchSubmissionLocks =
+      <String, Future<void>>{};
+
   /// Publishes a single task described by [signature].
   ///
   /// The task is published to its configured queue and recorded as
@@ -425,59 +428,79 @@ class Canvas {
       throw ArgumentError('Batch must include at least one task');
     }
     final id = batchId ?? _generateId('batch');
-    final existing = await backend.getGroup(id);
-    if (existing != null) {
-      if (existing.meta['stem.batch'] != true) {
-        throw StateError('Group "$id" already exists and is not a batch');
+    return _withBatchSubmissionLock(id, () async {
+      final existing = await backend.getGroup(id);
+      if (existing != null) {
+        if (existing.meta['stem.batch'] != true) {
+          throw StateError('Group "$id" already exists and is not a batch');
+        }
+        return BatchSubmission(
+          batchId: id,
+          taskIds: _batchTaskIdsFromGroup(existing),
+        );
       }
-      return BatchSubmission(
-        batchId: id,
-        taskIds: _batchTaskIdsFromGroup(existing),
-      );
-    }
 
-    final normalizedSignatures = <TaskSignature<T>>[];
-    final taskIds = <String>[];
-    for (final signature in signatures) {
-      final raw = signature();
-      final grouped = raw.copyWith(
-        headers: {...raw.headers, 'stem-group-id': id},
-        meta: {...raw.meta, 'groupId': id},
-      );
-      taskIds.add(grouped.id);
-      normalizedSignatures.add(
-        TaskSignature.custom(
-          signature.name,
-          () => grouped,
-          decode: signature.decode,
+      final normalizedSignatures = <TaskSignature<T>>[];
+      final taskIds = <String>[];
+      for (final signature in signatures) {
+        final raw = signature();
+        final grouped = raw.copyWith(
+          headers: {...raw.headers, 'stem-group-id': id},
+          meta: {...raw.meta, 'groupId': id},
+        );
+        taskIds.add(grouped.id);
+        normalizedSignatures.add(
+          TaskSignature.custom(
+            signature.name,
+            () => grouped,
+            decode: signature.decode,
+          ),
+        );
+      }
+
+      final createdAt = stemNow().toUtc().toIso8601String();
+      await backend.initGroup(
+        GroupDescriptor(
+          id: id,
+          expected: signatures.length,
+          ttl: ttl,
+          meta: {
+            'stem.batch': true,
+            'stem.batch.createdAt': createdAt,
+            'stem.batch.taskCount': signatures.length,
+            'stem.batch.taskIds': taskIds,
+          },
         ),
       );
-    }
-
-    final createdAt = stemNow().toUtc().toIso8601String();
-    await backend.initGroup(
-      GroupDescriptor(
-        id: id,
-        expected: signatures.length,
-        ttl: ttl,
-        meta: {
-          'stem.batch': true,
-          'stem.batch.createdAt': createdAt,
-          'stem.batch.taskCount': signatures.length,
-          'stem.batch.taskIds': taskIds,
-        },
-      ),
-    );
-    final dispatch = await group(normalizedSignatures, groupId: id);
-    await dispatch.dispose();
-    return BatchSubmission(batchId: id, taskIds: taskIds);
+      final dispatch = await group(normalizedSignatures, groupId: id);
+      await dispatch.dispose();
+      return BatchSubmission(batchId: id, taskIds: taskIds);
+    });
   }
 
   /// Reads durable lifecycle status for a submitted [batchId].
   Future<BatchStatus?> inspectBatch(String batchId) async {
     final status = await backend.getGroup(batchId);
-    if (status == null) return null;
+    if (status == null || status.meta['stem.batch'] != true) return null;
     return _buildBatchStatus(status);
+  }
+
+  Future<T> _withBatchSubmissionLock<T>(
+    String batchId,
+    Future<T> Function() operation,
+  ) async {
+    final previous = _batchSubmissionLocks[batchId] ?? Future<void>.value();
+    final completer = Completer<void>();
+    _batchSubmissionLocks[batchId] = completer.future;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      completer.complete();
+      if (identical(_batchSubmissionLocks[batchId], completer.future)) {
+        _batchSubmissionLocks.remove(batchId);
+      }
+    }
   }
 
   /// Runs tasks sequentially, passing each result to the next.
