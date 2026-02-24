@@ -1026,6 +1026,9 @@ class TaskOptions {
   }
 
   static RateLimiterFailureMode? _parseFailureMode(Object? value) {
+    if (value is RateLimiterFailureMode) {
+      return value;
+    }
     final raw = value?.toString().trim().toLowerCase();
     if (raw == null || raw.isEmpty) return null;
     for (final mode in RateLimiterFailureMode.values) {

@@ -60,11 +60,12 @@ class InMemoryLockStore implements LockStore {
     if (lock.owner != owner) {
       return false;
     }
-    if (lock.isExpired(stemNow())) {
+    final now = stemNow();
+    if (lock.isExpired(now)) {
       _locks.remove(key);
       return false;
     }
-    lock.expiresAt = stemNow().add(ttl);
+    lock.expiresAt = now.add(ttl);
     return true;
   }
 

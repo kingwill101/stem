@@ -2,7 +2,6 @@ import 'package:stem/src/core/clock.dart';
 
 /// Abstraction over time sources used by the workflow runtime and stores.
 // Intentionally interface-like for injection and testing.
-// ignore: one_member_abstracts
 abstract class WorkflowClock extends StemClock {
   /// Creates a workflow clock implementation.
   const WorkflowClock();

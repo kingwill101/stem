@@ -87,7 +87,7 @@ export 'src/control/file_revoke_store.dart';
 export 'src/control/in_memory_revoke_store.dart';
 export 'src/control/revoke_store.dart';
 export 'src/core/chord_metadata.dart';
-export 'src/core/clock.dart';
+export 'src/core/clock.dart' hide FakeStemClock;
 export 'src/core/config.dart';
 export 'src/core/contracts.dart';
 export 'src/core/encoder_keys.dart';

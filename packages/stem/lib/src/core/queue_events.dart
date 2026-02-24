@@ -54,6 +54,7 @@ class QueueCustomEvent implements StemEvent {
   Map<String, Object?> get attributes => {
     'id': id,
     'queue': queue,
+    'name': name,
     'payload': payload,
     'headers': headers,
     'meta': meta,
@@ -131,7 +132,7 @@ class QueueEvents {
     required String queue,
     String? consumerName,
     this.prefetch = 10,
-  }) : queue = queue.trim(),
+  }) : queue = _normalizeQueue(queue),
        consumerName =
            consumerName ??
            'stem-queue-events-${generateEnvelopeId().replaceAll('-', '')}';
@@ -178,14 +179,6 @@ class QueueEvents {
     if (_started) {
       return;
     }
-    if (queue.isEmpty) {
-      throw ArgumentError.value(
-        queue,
-        'queue',
-        'Queue name must not be empty',
-      );
-    }
-
     _started = true;
     _subscription = broker
         .consume(
@@ -201,7 +194,7 @@ class QueueEvents {
         .listen(
           _onDelivery,
           onError: (Object error, StackTrace stackTrace) {
-            _events.addError(error, stackTrace);
+            _emitError(error, stackTrace);
           },
         );
   }
@@ -220,11 +213,11 @@ class QueueEvents {
   Future<void> _onDelivery(Delivery delivery) async {
     try {
       final event = _eventFromEnvelope(delivery.envelope);
-      if (event != null && event.queue == queue) {
+      if (!_closed && event != null && event.queue == queue) {
         _events.add(event);
       }
     } on Object catch (error, stackTrace) {
-      _events.addError(error, stackTrace);
+      _emitError(error, stackTrace);
     } finally {
       try {
         await broker.ack(delivery);
@@ -233,6 +226,21 @@ class QueueEvents {
       }
     }
   }
+
+  void _emitError(Object error, StackTrace stackTrace) {
+    if (_closed || _events.isClosed) {
+      return;
+    }
+    _events.addError(error, stackTrace);
+  }
+}
+
+String _normalizeQueue(String queue) {
+  final normalized = queue.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(queue, 'queue', 'Queue name must not be empty');
+  }
+  return normalized;
 }
 
 QueueCustomEvent? _eventFromEnvelope(Envelope envelope) {

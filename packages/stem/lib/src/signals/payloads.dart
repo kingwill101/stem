@@ -106,13 +106,19 @@ class AfterTaskPublishPayload implements StemEvent {
 /// Payload emitted when a task is received by a worker.
 class TaskReceivedPayload implements StemEvent {
   /// Creates a new [TaskReceivedPayload] instance.
-  const TaskReceivedPayload({required this.envelope, required this.worker});
+  TaskReceivedPayload({
+    required this.envelope,
+    required this.worker,
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was received.
   final Envelope envelope;
 
   /// The worker that received the task.
   final WorkerInfo worker;
+
+  final DateTime _occurredAt;
 
   /// The unique identifier for the task.
   String get taskId => envelope.id;
@@ -124,7 +130,7 @@ class TaskReceivedPayload implements StemEvent {
   String get eventName => 'task-received';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -138,11 +144,12 @@ class TaskReceivedPayload implements StemEvent {
 /// Payload emitted before a task begins execution.
 class TaskPrerunPayload implements StemEvent {
   /// Creates a new [TaskPrerunPayload] instance.
-  const TaskPrerunPayload({
+  TaskPrerunPayload({
     required this.envelope,
     required this.worker,
     required this.context,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope to be executed.
   final Envelope envelope;
@@ -152,6 +159,8 @@ class TaskPrerunPayload implements StemEvent {
 
   /// The execution context for the task.
   final TaskContext context;
+
+  final DateTime _occurredAt;
 
   /// The unique identifier for the task.
   String get taskId => envelope.id;
@@ -166,7 +175,7 @@ class TaskPrerunPayload implements StemEvent {
   String get eventName => 'task-prerun';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -181,13 +190,14 @@ class TaskPrerunPayload implements StemEvent {
 /// Payload emitted after a task finishes execution.
 class TaskPostrunPayload implements StemEvent {
   /// Creates a new [TaskPostrunPayload] instance.
-  const TaskPostrunPayload({
+  TaskPostrunPayload({
     required this.envelope,
     required this.worker,
     required this.context,
     required this.result,
     required this.state,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was executed.
   final Envelope envelope;
@@ -204,6 +214,8 @@ class TaskPostrunPayload implements StemEvent {
   /// The final state of the task.
   final TaskState state;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -217,7 +229,7 @@ class TaskPostrunPayload implements StemEvent {
   String get eventName => 'task-postrun';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -287,11 +299,12 @@ class TaskRetryPayload implements StemEvent {
 /// Payload emitted when a task completes successfully.
 class TaskSuccessPayload implements StemEvent {
   /// Creates a new [TaskSuccessPayload] instance.
-  const TaskSuccessPayload({
+  TaskSuccessPayload({
     required this.envelope,
     required this.worker,
     required this.result,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that completed successfully.
   final Envelope envelope;
@@ -301,6 +314,8 @@ class TaskSuccessPayload implements StemEvent {
 
   /// The result returned by the successful task.
   final Object? result;
+
+  final DateTime _occurredAt;
 
   /// The unique identifier for the task.
   String get taskId => envelope.id;
@@ -315,7 +330,7 @@ class TaskSuccessPayload implements StemEvent {
   String get eventName => 'task-succeeded';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -330,12 +345,13 @@ class TaskSuccessPayload implements StemEvent {
 /// Payload emitted when a task fails.
 class TaskFailurePayload implements StemEvent {
   /// Creates a new [TaskFailurePayload] instance.
-  const TaskFailurePayload({
+  TaskFailurePayload({
     required this.envelope,
     required this.worker,
     required this.error,
     required this.stackTrace,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that failed.
   final Envelope envelope;
@@ -348,6 +364,8 @@ class TaskFailurePayload implements StemEvent {
 
   /// The stack trace associated with the failure, if available.
   final StackTrace? stackTrace;
+
+  final DateTime _occurredAt;
 
   /// The unique identifier for the task.
   String get taskId => envelope.id;
@@ -362,7 +380,7 @@ class TaskFailurePayload implements StemEvent {
   String get eventName => 'task-failed';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -379,11 +397,12 @@ class TaskFailurePayload implements StemEvent {
 /// Payload emitted when a task is revoked.
 class TaskRevokedPayload implements StemEvent {
   /// Creates a new [TaskRevokedPayload] instance.
-  const TaskRevokedPayload({
+  TaskRevokedPayload({
     required this.envelope,
     required this.worker,
     required this.reason,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was revoked.
   final Envelope envelope;
@@ -394,11 +413,13 @@ class TaskRevokedPayload implements StemEvent {
   /// The reason for revoking the task.
   final String reason;
 
+  final DateTime _occurredAt;
+
   @override
   String get eventName => 'task-revoked';
 
   @override
-  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+  DateTime get occurredAt => _occurredAt;
 
   @override
   Map<String, Object?> get attributes => {

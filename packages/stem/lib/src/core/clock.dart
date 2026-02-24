@@ -14,8 +14,9 @@ class SystemStemClock extends StemClock {
   /// Creates a system clock wrapper.
   const SystemStemClock();
 
+  /// Returns the current UTC instant.
   @override
-  DateTime now() => DateTime.now();
+  DateTime now() => DateTime.now().toUtc();
 }
 
 /// Controllable clock for deterministic testing.
