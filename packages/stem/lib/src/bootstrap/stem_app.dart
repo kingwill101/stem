@@ -277,31 +277,44 @@ class StemApp {
       autoDisposers.add(() async => revokeFactory.dispose(createdRevokeStore));
     }
 
-    final app = await create(
-      tasks: tasks,
-      registry: registry,
-      broker: stack.broker,
-      backend: stack.backend,
-      workerConfig: workerConfig,
-      revokeStore: resolvedRevokeStore,
-      uniqueTaskCoordinator: resolvedUniqueTaskCoordinator,
-      retryStrategy: retryStrategy,
-      middleware: middleware,
-      signer: signer,
-      routing: routing,
-      encoderRegistry: encoderRegistry,
-      resultEncoder: resultEncoder,
-      argsEncoder: argsEncoder,
-      additionalEncoders: additionalEncoders,
-    );
+    try {
+      final app = await create(
+        tasks: tasks,
+        registry: registry,
+        broker: stack.broker,
+        backend: stack.backend,
+        workerConfig: workerConfig,
+        revokeStore: resolvedRevokeStore,
+        uniqueTaskCoordinator: resolvedUniqueTaskCoordinator,
+        retryStrategy: retryStrategy,
+        middleware: middleware,
+        signer: signer,
+        routing: routing,
+        encoderRegistry: encoderRegistry,
+        resultEncoder: resultEncoder,
+        argsEncoder: argsEncoder,
+        additionalEncoders: additionalEncoders,
+      );
 
-    if (autoDisposers.isNotEmpty) {
-      // Dispose auto-provisioned lock/revoke stores after worker shutdown and
-      // before backend/broker factories are disposed.
-      app._disposers.insertAll(1, autoDisposers);
+      if (autoDisposers.isNotEmpty) {
+        // Dispose auto-provisioned lock/revoke stores after worker shutdown and
+        // before backend/broker factories are disposed.
+        app._disposers.insertAll(1, autoDisposers);
+      }
+
+      return app;
+    } on Object catch (error, stack) {
+      // If app creation fails, release any auto-provisioned stores now to avoid
+      // leaking startup resources.
+      for (final disposer in autoDisposers.reversed) {
+        try {
+          await disposer();
+        } on Object {
+          // Keep the original startup error as the primary failure.
+        }
+      }
+      Error.throwWithStackTrace(error, stack);
     }
-
-    return app;
   }
 
   /// Creates a Stem app using a shared [StemClient].

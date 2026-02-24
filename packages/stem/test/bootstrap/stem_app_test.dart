@@ -191,6 +191,51 @@ void main() {
         expect(revokeDisposed, isTrue);
       },
     );
+
+    test(
+      'fromUrl disposes auto-wired stores when app bootstrap fails',
+      () async {
+      final createdLockStore = InMemoryLockStore();
+      final createdRevokeStore = InMemoryRevokeStore();
+      var lockDisposed = false;
+      var revokeDisposed = false;
+      final adapter = _BootstrapAdapter(
+        scheme: 'test',
+        broker: StemBrokerFactory(
+          create: () async => throw StateError('broker bootstrap failure'),
+        ),
+        backend: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+        lock: LockStoreFactory(
+          create: () async => createdLockStore,
+          dispose: (store) async => lockDisposed = true,
+        ),
+        revoke: RevokeStoreFactory(
+          create: () async => createdRevokeStore,
+          dispose: (store) async => revokeDisposed = true,
+        ),
+      );
+
+      await expectLater(
+        () => StemApp.fromUrl(
+          'test://localhost',
+          adapters: [adapter],
+          uniqueTasks: true,
+          requireRevokeStore: true,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('broker bootstrap failure'),
+          ),
+        ),
+      );
+
+      expect(lockDisposed, isTrue);
+      expect(revokeDisposed, isTrue);
+    });
   });
 
   group('StemWorkflowApp', () {
@@ -345,6 +390,54 @@ void main() {
       } finally {
         await workflowApp.shutdown();
       }
+    });
+
+    test('fromUrl shuts down app when workflow bootstrap fails', () async {
+      final createdLockStore = InMemoryLockStore();
+      final createdRevokeStore = InMemoryRevokeStore();
+      var lockDisposed = false;
+      var revokeDisposed = false;
+      final adapter = _BootstrapAdapter(
+        scheme: 'test',
+        broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+        backend: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+        workflow: WorkflowStoreFactory(
+          create: () async => InMemoryWorkflowStore(),
+        ),
+        lock: LockStoreFactory(
+          create: () async => createdLockStore,
+          dispose: (store) async => lockDisposed = true,
+        ),
+        revoke: RevokeStoreFactory(
+          create: () async => createdRevokeStore,
+          dispose: (store) async => revokeDisposed = true,
+        ),
+      );
+
+      await expectLater(
+        () => StemWorkflowApp.fromUrl(
+          'test://localhost',
+          adapters: [adapter],
+          uniqueTasks: true,
+          requireRevokeStore: true,
+          eventBusFactory: WorkflowEventBusFactory(
+            create: (store) async =>
+                throw StateError('event bus bootstrap failure'),
+          ),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('event bus bootstrap failure'),
+          ),
+        ),
+      );
+
+      expect(lockDisposed, isTrue);
+      expect(revokeDisposed, isTrue);
     });
   });
 }

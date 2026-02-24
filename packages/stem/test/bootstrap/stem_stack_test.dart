@@ -271,6 +271,50 @@ void main() {
         ),
       );
     });
+
+    test(
+      'accepts sqlite stores when custom adapters provide toggle factories',
+      () {
+      final brokerFactory = StemBrokerFactory(
+        create: () async => InMemoryBroker(),
+      );
+      final backendFactory = StemBackendFactory(
+        create: () async => InMemoryResultBackend(),
+      );
+      final scheduleFactory = ScheduleStoreFactory(
+        create: () async => InMemoryScheduleStore(),
+      );
+      final lockFactory = LockStoreFactory(
+        create: () async => InMemoryLockStore(),
+      );
+      final revokeFactory = RevokeStoreFactory(
+        create: () async => InMemoryRevokeStore(),
+      );
+
+      final adapter = _TestAdapter(
+        scheme: 'sqlite',
+        brokerFactory: brokerFactory,
+        backendFactory: backendFactory,
+        scheduleStoreFactory: scheduleFactory,
+        lockStoreFactory: lockFactory,
+        revokeStoreFactory: revokeFactory,
+      );
+
+      final stack = StemStack.fromUrl(
+        'sqlite:///tmp/stem.db',
+        adapters: [adapter],
+        scheduling: true,
+        uniqueTasks: true,
+        requireRevokeStore: true,
+      );
+
+      expect(stack.broker, same(brokerFactory));
+      expect(stack.backend, same(backendFactory));
+      expect(stack.scheduleStore, same(scheduleFactory));
+      expect(stack.lockStore, same(lockFactory));
+        expect(stack.revokeStore, same(revokeFactory));
+      },
+    );
   });
 }
 

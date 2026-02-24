@@ -387,23 +387,34 @@ class StemWorkflowApp {
       additionalEncoders: additionalEncoders,
     );
 
-    return create(
-      workflows: workflows,
-      flows: flows,
-      scripts: scripts,
-      stemApp: app,
-      storeFactory: stack.workflowStore,
-      eventBusFactory: eventBusFactory,
-      workerConfig: workerConfig,
-      pollInterval: pollInterval,
-      leaseExtension: leaseExtension,
-      workflowRegistry: workflowRegistry,
-      introspectionSink: introspectionSink,
-      encoderRegistry: encoderRegistry,
-      resultEncoder: resultEncoder,
-      argsEncoder: argsEncoder,
-      additionalEncoders: additionalEncoders,
-    );
+    try {
+      return await create(
+        workflows: workflows,
+        flows: flows,
+        scripts: scripts,
+        stemApp: app,
+        storeFactory: stack.workflowStore,
+        eventBusFactory: eventBusFactory,
+        workerConfig: workerConfig,
+        pollInterval: pollInterval,
+        leaseExtension: leaseExtension,
+        workflowRegistry: workflowRegistry,
+        introspectionSink: introspectionSink,
+        encoderRegistry: encoderRegistry,
+        resultEncoder: resultEncoder,
+        argsEncoder: argsEncoder,
+        additionalEncoders: additionalEncoders,
+      );
+    } on Object catch (error, stack) {
+      // fromUrl owns the app instance; clean it up when workflow bootstrap
+      // fails.
+      try {
+        await app.shutdown();
+      } on Object {
+        // Keep the original bootstrap failure as the primary error.
+      }
+      Error.throwWithStackTrace(error, stack);
+    }
   }
 
   /// Creates a workflow app backed by a shared [StemClient].

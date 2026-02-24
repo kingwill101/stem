@@ -154,21 +154,39 @@ class StemStack {
     final lockUri = _resolveUri(overrides.lock, baseUri);
     final revokeUri = _resolveUri(overrides.revoke, backendUri);
 
-    if (scheduling) {
+    if (scheduling &&
+        !_hasResolvedFactory<ScheduleStoreFactory>(
+          registered,
+          StemStoreKind.schedule,
+          scheduleUri,
+          (adapter) => adapter.scheduleStoreFactory(scheduleUri),
+        )) {
       _failIfSqliteStoreUnsupported(
         kind: StemStoreKind.schedule,
         uri: scheduleUri,
         toggle: 'scheduling',
       );
     }
-    if (uniqueTasks) {
+    if (uniqueTasks &&
+        !_hasResolvedFactory<LockStoreFactory>(
+          registered,
+          StemStoreKind.lock,
+          lockUri,
+          (adapter) => adapter.lockStoreFactory(lockUri),
+        )) {
       _failIfSqliteStoreUnsupported(
         kind: StemStoreKind.lock,
         uri: lockUri,
         toggle: 'uniqueTasks',
       );
     }
-    if (requireRevokeStore) {
+    if (requireRevokeStore &&
+        !_hasResolvedFactory<RevokeStoreFactory>(
+          registered,
+          StemStoreKind.revoke,
+          revokeUri,
+          (adapter) => adapter.revokeStoreFactory(revokeUri),
+        )) {
       _failIfSqliteStoreUnsupported(
         kind: StemStoreKind.revoke,
         uri: revokeUri,
@@ -349,6 +367,15 @@ T? _optionalFactory<T>(
     if (factory != null) return factory;
   }
   return null;
+}
+
+bool _hasResolvedFactory<T>(
+  Iterable<StemStoreAdapter> adapters,
+  StemStoreKind kind,
+  Uri uri,
+  T? Function(StemStoreAdapter adapter) resolver,
+) {
+  return _optionalFactory<T>(adapters, kind, uri, resolver) != null;
 }
 
 void _failIfSqliteStoreUnsupported({
