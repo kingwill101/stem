@@ -1,4 +1,17 @@
-import 'package:stem/stem.dart';
+// This package depends on Stem's core internals while avoiding `stem.dart`
+// import cycles created by the compatibility re-exports.
+// ignore_for_file: implementation_imports
+import 'package:stem/src/bootstrap/factories.dart';
+import 'package:stem/src/scheduler/schedule_calculator.dart';
+import 'package:stem/src/workflow/core/workflow_clock.dart';
+
+import 'package:stem_memory/src/backend/in_memory_backend.dart';
+import 'package:stem_memory/src/brokers/in_memory_broker.dart';
+import 'package:stem_memory/src/control/in_memory_revoke_store.dart';
+import 'package:stem_memory/src/scheduler/in_memory_lock_store.dart';
+import 'package:stem_memory/src/scheduler/in_memory_schedule_store.dart';
+import 'package:stem_memory/src/workflow/event_bus/in_memory_event_bus.dart';
+import 'package:stem_memory/src/workflow/store/in_memory_workflow_store.dart';
 
 /// Creates a [StemBrokerFactory] backed by [InMemoryBroker].
 StemBrokerFactory memoryBrokerFactory({

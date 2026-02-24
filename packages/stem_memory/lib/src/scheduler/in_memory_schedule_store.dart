@@ -1,0 +1,176 @@
+/// Volatile, in-memory implementation of a schedule store.
+///
+/// This library provides [InMemoryScheduleStore], which maintains schedule
+/// definitions and their execution state in process memory. It is suitable
+/// for unit tests or transient local scheduling.
+library;
+
+import 'package:stem/stem.dart';
+
+/// Simple in-memory schedule store implementation used in tests.
+///
+/// The store maintains a map of IDs to [_ScheduleState] objects. It uses
+/// [ScheduleCalculator] to automatically compute future run times during
+/// upserts and execution marking.
+///
+/// ## Concurrency Control
+///
+/// This implementation uses optimistic concurrency control via the `version`
+/// property on [ScheduleEntry]. If a version mismatch is detected during
+/// [upsert], a [ScheduleConflictException] is thrown.
+class InMemoryScheduleStore implements ScheduleStore {
+  /// Creates an in-memory schedule store.
+  InMemoryScheduleStore({ScheduleCalculator? calculator})
+    : _calculator = calculator ?? ScheduleCalculator();
+
+  final ScheduleCalculator _calculator;
+  final Map<String, _ScheduleState> _entries = {};
+
+  @override
+  /// Returns schedules that should run at or before [now].
+  Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async {
+    final due =
+        _entries.values
+            .where(
+              (state) =>
+                  !state.locked &&
+                  state.entry.enabled &&
+                  (state.entry.expireAt == null ||
+                      state.entry.expireAt!.isAfter(now)) &&
+                  !(state.entry.nextRunAt ?? state.nextRun).isAfter(now),
+            )
+            .toList()
+          ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
+
+    final selected = <ScheduleEntry>[];
+    for (final state in due.take(limit)) {
+      state
+        ..locked = true
+        ..entry = state.entry.copyWith(nextRunAt: state.nextRun);
+      selected.add(state.entry);
+    }
+    return selected;
+  }
+
+  @override
+  /// Inserts or updates a schedule entry, recomputing its next run.
+  Future<void> upsert(ScheduleEntry entry) async {
+    final now = stemNow().toUtc();
+    var next = entry.nextRunAt;
+    if (entry.enabled) {
+      next ??= _calculator.nextRun(
+        entry,
+        entry.lastRunAt ?? now,
+        includeJitter: false,
+      );
+    } else {
+      next ??= entry.lastRunAt ?? now;
+    }
+    final existing = _entries[entry.id];
+    final currentVersion = existing?.entry.version ?? 0;
+    if (existing != null && entry.version != currentVersion) {
+      throw ScheduleConflictException(
+        entry.id,
+        expectedVersion: entry.version,
+        actualVersion: currentVersion,
+      );
+    }
+    final nextVersion = existing == null ? 1 : currentVersion + 1;
+    final updated = entry.copyWith(nextRunAt: next, version: nextVersion);
+    _entries[entry.id] = _ScheduleState(updated, next, locked: false);
+  }
+
+  @override
+  /// Removes the schedule entry with the given [id].
+  Future<void> remove(String id) async {
+    _entries.remove(id);
+  }
+
+  @override
+  /// Lists schedule entries ordered by next run time.
+  Future<List<ScheduleEntry>> list({int? limit}) async {
+    final values = _entries.values.toList()
+      ..sort((a, b) => a.nextRun.compareTo(b.nextRun));
+    final subset = limit != null ? values.take(limit).toList() : values;
+    return subset.map((state) => state.entry).toList();
+  }
+
+  @override
+  Future<ScheduleEntry?> get(String id) async => _entries[id]?.entry;
+
+  @override
+  Future<void> markExecuted(
+    String id, {
+    required DateTime scheduledFor,
+    required DateTime executedAt,
+    Duration? jitter,
+    String? lastError,
+    bool success = true,
+    Duration? runDuration,
+    DateTime? nextRunAt,
+    Duration? drift,
+  }) async {
+    final state = _entries[id];
+    if (state == null) return;
+    final resolvedSuccess = success && lastError == null;
+    final updatedEntry = state.entry.copyWith(
+      lastRunAt: executedAt,
+      lastError: lastError,
+      lastJitter: jitter,
+      lastSuccessAt: resolvedSuccess ? executedAt : state.entry.lastSuccessAt,
+      lastErrorAt: resolvedSuccess ? state.entry.lastErrorAt : executedAt,
+      totalRunCount: state.entry.totalRunCount + 1,
+      drift: drift ?? state.entry.drift,
+    );
+    var next = nextRunAt;
+    var enabled = updatedEntry.enabled;
+    if (next == null && enabled) {
+      try {
+        next = _calculator.nextRun(
+          updatedEntry,
+          executedAt,
+          includeJitter: false,
+        );
+      } on Exception {
+        next = executedAt;
+      }
+    }
+    if (updatedEntry.expireAt != null &&
+        !executedAt.isBefore(updatedEntry.expireAt!)) {
+      enabled = false;
+    }
+    if (updatedEntry.spec is ClockedScheduleSpec) {
+      final spec = updatedEntry.spec as ClockedScheduleSpec;
+      if (spec.runOnce && !executedAt.isBefore(spec.runAt)) {
+        enabled = false;
+      }
+    }
+    next ??= executedAt;
+    final nextVersion = state.entry.version + 1;
+    state
+      ..entry = updatedEntry.copyWith(
+        nextRunAt: next,
+        enabled: enabled,
+        version: nextVersion,
+      )
+      ..nextRun = next
+      ..locked = false;
+  }
+}
+
+/// Internal wrapper for schedule records within the memory store.
+///
+/// Tracks ephemeral locking and high-frequency calculation fields
+/// that aren't persisted in the primary record.
+class _ScheduleState {
+  _ScheduleState(this.entry, this.nextRun, {required this.locked});
+
+  /// The public schedule entry object.
+  ScheduleEntry entry;
+
+  /// Cached next run time to avoid repeated calculation during filtering.
+  DateTime nextRun;
+
+  /// Ephemeral bit to prevent double-dispatch within a single poll tick.
+  bool locked;
+}
