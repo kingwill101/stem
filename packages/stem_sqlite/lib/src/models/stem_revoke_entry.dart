@@ -31,7 +31,7 @@ class StemRevokeEntry extends Model<StemRevokeEntry> with TimestampsTZ {
   @OrmField(columnName: 'issued_at')
   final DateTime issuedAt;
 
-  /// Integer flag representing terminate intent (`1` means true).
+  /// Integer flag representing terminate intent (`1` means true, `0` false).
   final int terminate;
 
   /// Optional human-readable reason.

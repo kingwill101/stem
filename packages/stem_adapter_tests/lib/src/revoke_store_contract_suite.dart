@@ -164,6 +164,12 @@ void runRevokeStoreContractTests({
             expiresAt: now.add(const Duration(minutes: 5)),
           ),
           RevokeEntry(
+            namespace: namespaceA,
+            taskId: 'no-expiry',
+            version: 4,
+            issuedAt: now,
+          ),
+          RevokeEntry(
             namespace: namespaceB,
             taskId: 'other-namespace',
             version: 3,
@@ -176,7 +182,10 @@ void runRevokeStoreContractTests({
         expect(pruned, 1);
 
         final listedA = await current.list(namespaceA);
-        expect(listedA.map((entry) => entry.taskId), equals(['active']));
+        expect(
+          listedA.map((entry) => entry.taskId),
+          equals(['active', 'no-expiry']),
+        );
         final listedB = await current.list(namespaceB);
         expect(
           listedB.map((entry) => entry.taskId),

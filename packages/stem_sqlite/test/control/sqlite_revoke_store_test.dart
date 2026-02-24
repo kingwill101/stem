@@ -17,9 +17,6 @@ void main() {
   });
 
   tearDown(() async {
-    if (dbFile.existsSync()) {
-      await dbFile.delete();
-    }
     await tempDir.delete(recursive: true);
   });
 
@@ -27,7 +24,7 @@ void main() {
     adapterName: 'SQLite',
     factory: RevokeStoreContractFactory(
       create: () async => SqliteRevokeStore.open(dbFile),
-      dispose: (store) => (store as SqliteRevokeStore).close(),
+      dispose: (store) => store.close(),
     ),
   );
 

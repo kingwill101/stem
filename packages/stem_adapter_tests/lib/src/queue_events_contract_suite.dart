@@ -244,8 +244,6 @@ void runQueueEventsContractTests({
 
 String _queueName(String suffix) =>
     'contract-queue-events-$suffix-'
-    '${DateTime.now().microsecondsSinceEpoch}-${_counter++}';
-
-int _counter = 0;
+    '${DateTime.now().microsecondsSinceEpoch}-${generateEnvelopeId()}';
 
 Object _skipUnless(bool enabled, String reason) => enabled ? false : reason;

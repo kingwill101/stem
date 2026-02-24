@@ -12,11 +12,11 @@ class AddRevokeStore extends Migration {
         ..text('namespace')
         ..text('task_id')
         ..integer('version')
-        ..timestamp('issued_at');
+        ..timestampTz('issued_at');
       table.integer('terminate').defaultValue(0);
       table.text('reason').nullable();
       table.text('requested_by').nullable();
-      table.timestamp('expires_at').nullable();
+      table.timestampTz('expires_at').nullable();
       table
         ..timestampsTz()
         ..primary([
