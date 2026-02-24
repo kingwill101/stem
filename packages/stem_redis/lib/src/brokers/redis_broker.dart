@@ -617,10 +617,9 @@ class RedisStreamsBroker implements Broker {
           result,
         );
         for (final delivery in deliveries) {
-          if (controller.isClosed) {
+          if (!_tryAddDelivery(controller, delivery)) {
             break;
           }
-          controller.add(delivery);
         }
       }
     }
@@ -737,10 +736,9 @@ class RedisStreamsBroker implements Broker {
           }
           final deliveries = _parseDeliveries(channel, group, consumer, result);
           for (final delivery in deliveries) {
-            if (controller.isClosed) {
+            if (!_tryAddDelivery(controller, delivery)) {
               break;
             }
-            controller.add(delivery);
           }
         }
         if (broadcastConnection != null &&
@@ -753,6 +751,24 @@ class RedisStreamsBroker implements Broker {
         }
       }),
     );
+  }
+
+  bool _tryAddDelivery(
+    StreamController<Delivery> controller,
+    Delivery delivery,
+  ) {
+    if (controller.isClosed) {
+      return false;
+    }
+    try {
+      controller.add(delivery);
+      return true;
+    } on Object catch (error) {
+      if (error is StateError && '$error'.contains('stream is closed')) {
+        return false;
+      }
+      rethrow;
+    }
   }
 
   List<Delivery> _parseDeliveries(
