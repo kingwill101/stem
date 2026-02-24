@@ -424,6 +424,35 @@ class Canvas {
       throw ArgumentError('Batch must include at least one task');
     }
     final id = batchId ?? _generateId('batch');
+    final existing = await backend.getGroup(id);
+    if (existing != null) {
+      if (existing.meta['stem.batch'] != true) {
+        throw StateError('Group "$id" already exists and is not a batch');
+      }
+      return BatchSubmission(
+        batchId: id,
+        taskIds: _batchTaskIdsFromGroup(existing),
+      );
+    }
+
+    final normalizedSignatures = <TaskSignature<T>>[];
+    final taskIds = <String>[];
+    for (final signature in signatures) {
+      final raw = signature();
+      final grouped = raw.copyWith(
+        headers: {...raw.headers, 'stem-group-id': id},
+        meta: {...raw.meta, 'groupId': id},
+      );
+      taskIds.add(grouped.id);
+      normalizedSignatures.add(
+        TaskSignature.custom(
+          signature.name,
+          () => grouped,
+          decode: signature.decode,
+        ),
+      );
+    }
+
     final createdAt = DateTime.now().toUtc().toIso8601String();
     await backend.initGroup(
       GroupDescriptor(
@@ -434,11 +463,11 @@ class Canvas {
           'stem.batch': true,
           'stem.batch.createdAt': createdAt,
           'stem.batch.taskCount': signatures.length,
+          'stem.batch.taskIds': taskIds,
         },
       ),
     );
-    final dispatch = await group(signatures, groupId: id);
-    final taskIds = List<String>.from(dispatch.taskIds);
+    final dispatch = await group(normalizedSignatures, groupId: id);
     await dispatch.dispose();
     return BatchSubmission(batchId: id, taskIds: taskIds);
   }
@@ -683,7 +712,9 @@ class Canvas {
   }
 
   BatchStatus _buildBatchStatus(GroupStatus status) {
-    final entries = status.results.entries.toList(growable: false);
+    final entries = status.results.entries
+        .where((entry) => entry.value.state.isTerminal)
+        .toList(growable: false);
     final succeeded = entries
         .where((entry) => entry.value.state == TaskState.succeeded)
         .length;
@@ -702,11 +733,11 @@ class Canvas {
       state = BatchLifecycleState.pending;
     } else if (completed < status.expected) {
       state = BatchLifecycleState.running;
-    } else if (failed == 0 && cancelled == 0) {
+    } else if (succeeded == completed) {
       state = BatchLifecycleState.succeeded;
-    } else if (succeeded == 0 && cancelled == 0) {
+    } else if (failed == completed) {
       state = BatchLifecycleState.failed;
-    } else if (succeeded == 0 && failed == 0) {
+    } else if (cancelled == completed) {
       state = BatchLifecycleState.cancelled;
     } else {
       state = BatchLifecycleState.partial;
@@ -724,6 +755,26 @@ class Canvas {
       cancelledTaskIds: cancelledEntries.map((entry) => entry.key).toList(),
       meta: status.meta,
     );
+  }
+
+  List<String> _batchTaskIdsFromGroup(GroupStatus status) {
+    final taskIds = <String>{};
+    final rawTaskIds = status.meta['stem.batch.taskIds'];
+    if (rawTaskIds is List) {
+      for (final rawTaskId in rawTaskIds) {
+        if (rawTaskId is! String) {
+          continue;
+        }
+        final trimmed = rawTaskId.trim();
+        if (trimmed.isNotEmpty) {
+          taskIds.add(trimmed);
+        }
+      }
+    }
+    if (taskIds.isEmpty) {
+      taskIds.addAll(status.results.keys.where((id) => id.trim().isNotEmpty));
+    }
+    return taskIds.toList(growable: false)..sort();
   }
 
   (Envelope, TaskPayloadEncoder) _prepareEnvelope(Envelope envelope) {

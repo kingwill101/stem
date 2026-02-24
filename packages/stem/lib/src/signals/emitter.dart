@@ -101,12 +101,14 @@ class StemSignalEmitter {
     required DateTime nextRetryAt,
     String? sender,
   }) {
+    final emittedAt = DateTime.now().toUtc();
     return StemSignals.taskRetry.emit(
       TaskRetryPayload(
         envelope: envelope,
         worker: worker,
         reason: reason,
         nextRetryAt: nextRetryAt,
+        emittedAt: emittedAt,
       ),
       sender: _senderOverride(sender),
     );

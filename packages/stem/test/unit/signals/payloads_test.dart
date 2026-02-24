@@ -55,9 +55,15 @@ void main() {
       worker: worker,
       reason: 'boom',
       nextRetryAt: DateTime.utc(2025),
+      emittedAt: DateTime.utc(2024),
     );
     expect(retry.taskId, equals('task-1'));
     expect(retry.taskName, equals('demo.task'));
     expect(retry.attempt, equals(2));
+    expect(retry.occurredAt, equals(DateTime.utc(2024)));
+    expect(
+      retry.attributes['nextRetryAt'],
+      equals(DateTime.utc(2025).toIso8601String()),
+    );
   });
 }

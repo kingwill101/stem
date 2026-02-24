@@ -102,6 +102,56 @@ void main() {
         expect(status.meta['stem.batch'], isTrue);
       },
     );
+
+    test('submitBatch with an existing batchId is idempotent', () async {
+      const batchId = 'batch-fixed';
+      final first = await canvas.submitBatch<int>([
+        task<int>('echo', args: {'value': 1}),
+        task<int>('echo', args: {'value': 2}),
+      ], batchId: batchId);
+      final second = await canvas.submitBatch<int>([
+        task<int>('echo', args: {'value': 99}),
+      ], batchId: batchId);
+
+      expect(second.batchId, equals(first.batchId));
+      expect(second.taskIds, equals(first.taskIds));
+
+      final status = await _waitForBatchTerminal(canvas, batchId);
+      expect(status.expected, equals(2));
+      expect(status.meta['stem.batch.taskCount'], equals(2));
+    });
+
+    test(
+      'inspectBatch counts only terminal group entries as completed',
+      () async {
+        const batchId = 'batch-non-terminal';
+        await backend.initGroup(
+          GroupDescriptor(
+            id: batchId,
+            expected: 2,
+            meta: const {'stem.batch': true},
+          ),
+        );
+        await backend.addGroupResult(
+          batchId,
+          TaskStatus(id: 'task-queued', state: TaskState.queued, attempt: 0),
+        );
+        await backend.addGroupResult(
+          batchId,
+          TaskStatus(
+            id: 'task-succeeded',
+            state: TaskState.succeeded,
+            attempt: 0,
+          ),
+        );
+
+        final status = await canvas.inspectBatch(batchId);
+        expect(status, isNotNull);
+        expect(status!.completed, equals(1));
+        expect(status.succeededCount, equals(1));
+        expect(status.state, equals(BatchLifecycleState.running));
+      },
+    );
   });
 }
 

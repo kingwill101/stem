@@ -112,7 +112,10 @@ void main() {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
       final revokeStore = InMemoryRevokeStore();
-      final registry = SimpleTaskRegistry()..register(_FastTask());
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final registry = SimpleTaskRegistry()
+        ..register(_BlockingTask(started, release));
 
       final worker = Worker(
         broker: broker,
@@ -125,53 +128,65 @@ void main() {
         revokeStore: revokeStore,
       );
       await worker.start();
+      try {
+        final pauseOut = StringBuffer();
+        final pauseErr = StringBuffer();
+        final pauseCode = await runStemCli(
+          ['worker', 'pause', '--worker', 'worker-pause', '--queue', 'default'],
+          out: pauseOut,
+          err: pauseErr,
+          contextBuilder: () async => CliContext(
+            broker: broker,
+            backend: backend,
+            revokeStore: revokeStore,
+            routing: RoutingRegistry(RoutingConfig.legacy()),
+            dispose: () async {},
+            registry: registry,
+          ),
+        );
+        expect(pauseCode, equals(0));
 
-      final pauseOut = StringBuffer();
-      final pauseErr = StringBuffer();
-      final pauseCode = await runStemCli(
-        ['worker', 'pause', '--worker', 'worker-pause', '--queue', 'default'],
-        out: pauseOut,
-        err: pauseErr,
-        contextBuilder: () async => CliContext(
-          broker: broker,
-          backend: backend,
-          revokeStore: revokeStore,
-          routing: RoutingRegistry(RoutingConfig.legacy()),
-          dispose: () async {},
-          registry: registry,
-        ),
-      );
-      expect(pauseCode, equals(0));
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue('tasks.blocking');
+        await _assertTaskRemainsQueued(backend, taskId);
+        expect(started.isCompleted, isFalse);
 
-      final stem = Stem(broker: broker, registry: registry, backend: backend);
-      final taskId = await stem.enqueue('tasks.fast');
-      await Future<void>.delayed(const Duration(milliseconds: 180));
-      final pausedStatus = await backend.get(taskId);
-      expect(pausedStatus?.state, TaskState.queued);
+        final resumeOut = StringBuffer();
+        final resumeErr = StringBuffer();
+        final resumeCode = await runStemCli(
+          [
+            'worker',
+            'resume',
+            '--worker',
+            'worker-pause',
+            '--queue',
+            'default',
+          ],
+          out: resumeOut,
+          err: resumeErr,
+          contextBuilder: () async => CliContext(
+            broker: broker,
+            backend: backend,
+            revokeStore: revokeStore,
+            routing: RoutingRegistry(RoutingConfig.legacy()),
+            dispose: () async {},
+            registry: registry,
+          ),
+        );
+        expect(resumeCode, equals(0));
 
-      final resumeOut = StringBuffer();
-      final resumeErr = StringBuffer();
-      final resumeCode = await runStemCli(
-        ['worker', 'resume', '--worker', 'worker-pause', '--queue', 'default'],
-        out: resumeOut,
-        err: resumeErr,
-        contextBuilder: () async => CliContext(
-          broker: broker,
-          backend: backend,
-          revokeStore: revokeStore,
-          routing: RoutingRegistry(RoutingConfig.legacy()),
-          dispose: () async {},
-          registry: registry,
-        ),
-      );
-      expect(resumeCode, equals(0));
-
-      await _waitFor(
-        () async => (await backend.get(taskId))?.state == TaskState.succeeded,
-      );
-
-      await worker.shutdown();
-      broker.dispose();
+        await _waitFor(() async => started.isCompleted);
+        release.complete();
+        await _waitFor(
+          () async => (await backend.get(taskId))?.state == TaskState.succeeded,
+        );
+      } finally {
+        if (!release.isCompleted) {
+          release.complete();
+        }
+        await worker.shutdown();
+        broker.dispose();
+      }
     });
 
     test('includes active task metadata', () async {
@@ -471,6 +486,25 @@ Future<void> _waitFor(
       throw TimeoutException('Condition not met within $timeout');
     }
     await Future<void>.delayed(pollInterval);
+  }
+}
+
+Future<void> _assertTaskRemainsQueued(
+  ResultBackend backend,
+  String taskId, {
+  Duration holdFor = const Duration(milliseconds: 180),
+}) async {
+  await _waitFor(() async => (await backend.get(taskId))?.state != null);
+  final deadline = DateTime.now().add(holdFor);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await backend.get(taskId);
+    if (status?.state != TaskState.queued) {
+      throw StateError(
+        'Expected task $taskId to remain queued while paused. '
+        'Found ${status?.state}.',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 }
 

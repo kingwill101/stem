@@ -571,7 +571,7 @@ class RedisStreamsBroker implements Broker {
     }
 
     Future<void> loop() async {
-      if (queue == null || streamKeys.isEmpty) {
+      if (queue == null) {
         return;
       }
       while (!controller.isClosed && !_closed) {

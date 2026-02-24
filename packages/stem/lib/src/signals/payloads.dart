@@ -232,12 +232,13 @@ class TaskPostrunPayload implements StemEvent {
 /// Payload emitted when a task is scheduled for retry.
 class TaskRetryPayload implements StemEvent {
   /// Creates a new [TaskRetryPayload] instance.
-  const TaskRetryPayload({
+  TaskRetryPayload({
     required this.envelope,
     required this.worker,
     required this.reason,
     required this.nextRetryAt,
-  });
+    DateTime? emittedAt,
+  }) : emittedAt = (emittedAt ?? DateTime.now()).toUtc();
 
   /// The task envelope to be retried.
   final Envelope envelope;
@@ -250,6 +251,9 @@ class TaskRetryPayload implements StemEvent {
 
   /// The scheduled time for the next retry attempt.
   final DateTime nextRetryAt;
+
+  /// The timestamp when the retry signal was emitted.
+  final DateTime emittedAt;
 
   /// The unique identifier for the task.
   String get taskId => envelope.id;
@@ -264,7 +268,7 @@ class TaskRetryPayload implements StemEvent {
   String get eventName => 'task-retry';
 
   @override
-  DateTime get occurredAt => nextRetryAt.toUtc();
+  DateTime get occurredAt => emittedAt;
 
   @override
   Map<String, Object?> get attributes => {
@@ -274,6 +278,7 @@ class TaskRetryPayload implements StemEvent {
     'attempt': attempt,
     'workerId': worker.id,
     'reason': reason.toString(),
+    'emittedAt': emittedAt.toIso8601String(),
     'nextRetryAt': nextRetryAt.toUtc().toIso8601String(),
   };
 }
