@@ -3,7 +3,6 @@ import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/canvas/canvas.dart';
-import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
@@ -13,6 +12,7 @@ import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/worker/worker.dart';
+import 'package:stem_memory/stem_memory.dart' show InMemoryRevokeStore;
 
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
 class StemApp {

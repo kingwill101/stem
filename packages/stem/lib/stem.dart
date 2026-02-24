@@ -73,18 +73,22 @@ import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/scheduler/beat.dart';
 import 'package:stem/src/worker/worker.dart';
 
+export 'package:stem_memory/stem_memory.dart'
+    show
+        InMemoryBroker,
+        InMemoryLockStore,
+        InMemoryResultBackend,
+        InMemoryRevokeStore,
+        InMemoryScheduleStore;
 export 'src/backend/encoding_result_backend.dart';
-export 'src/backend/in_memory_backend.dart';
 export 'src/bootstrap/factories.dart';
 export 'src/bootstrap/stem_app.dart';
 export 'src/bootstrap/stem_client.dart';
 export 'src/bootstrap/stem_stack.dart';
 export 'src/bootstrap/workflow_app.dart';
-export 'src/brokers/in_memory_broker.dart';
 export 'src/canvas/canvas.dart';
 export 'src/control/control_messages.dart';
 export 'src/control/file_revoke_store.dart';
-export 'src/control/in_memory_revoke_store.dart';
 export 'src/control/revoke_store.dart';
 export 'src/core/chord_metadata.dart';
 export 'src/core/clock.dart' hide FakeStemClock;
@@ -111,8 +115,6 @@ export 'src/observability/tracing.dart';
 export 'src/routing/routing_config.dart';
 export 'src/routing/routing_registry.dart';
 export 'src/scheduler/beat.dart';
-export 'src/scheduler/in_memory_lock_store.dart';
-export 'src/scheduler/in_memory_schedule_store.dart';
 export 'src/scheduler/schedule_calculator.dart';
 export 'src/scheduler/schedule_spec.dart';
 export 'src/security/signing.dart';

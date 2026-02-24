@@ -916,7 +916,8 @@ class TaskOptions {
   /// The rate limit for tasks with these options.
   final String? rateLimit;
 
-  /// Group-scoped rate limit shared by tasks that resolve to the same group key.
+  /// Group-scoped rate limit shared by tasks that resolve to 
+  /// the same group key.
   final String? groupRateLimit;
 
   /// Optional static group key used for group-scoped rate limiting.

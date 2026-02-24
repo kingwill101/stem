@@ -703,8 +703,6 @@ class _BroadcastHub {
       _ackedByConsumer.putIfAbsent(consumer, () => <String>{}).add(messageKey);
     } on FormatException {
       return;
-    } on TypeError {
-      return;
     }
   }
 

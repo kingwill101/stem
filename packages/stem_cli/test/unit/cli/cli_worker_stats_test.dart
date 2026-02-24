@@ -511,19 +511,3 @@ Future<void> _assertTaskRemainsQueued(
   }
 }
 
-class _FastTask implements TaskHandler<void> {
-  @override
-  String get name => 'tasks.fast';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 0);
-
-  @override
-  TaskMetadata get metadata => const TaskMetadata();
-
-  @override
-  TaskEntrypoint? get isolateEntrypoint => null;
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {}
-}

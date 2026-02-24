@@ -1,8 +1,6 @@
 import 'dart:async';
 
-import 'package:stem/src/backend/in_memory_backend.dart';
-import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/observability/heartbeat.dart';
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {

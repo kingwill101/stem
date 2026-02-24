@@ -1,19 +1,21 @@
-import 'package:stem/src/backend/in_memory_backend.dart';
-import 'package:stem/src/brokers/in_memory_broker.dart';
-import 'package:stem/src/control/in_memory_revoke_store.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/observability/config.dart';
 import 'package:stem/src/observability/heartbeat_transport.dart';
-import 'package:stem/src/scheduler/in_memory_lock_store.dart';
-import 'package:stem/src/scheduler/in_memory_schedule_store.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/worker/worker_config.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
-import 'package:stem/src/workflow/event_bus/in_memory_event_bus.dart';
-import 'package:stem/src/workflow/store/in_memory_workflow_store.dart';
+import 'package:stem_memory/stem_memory.dart'
+    show
+        InMemoryBroker,
+        InMemoryEventBus,
+        InMemoryLockStore,
+        InMemoryResultBackend,
+        InMemoryRevokeStore,
+        InMemoryScheduleStore,
+        InMemoryWorkflowStore;
 
 /// Wrapper for constructing and disposing Stem resources lazily.
 class StemResourceFactory<T> {
