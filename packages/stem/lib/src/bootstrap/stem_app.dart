@@ -57,6 +57,16 @@ class StemApp {
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
 
+  void _insertAutoDisposers(
+    List<Future<void> Function()> autoDisposers,
+  ) {
+    if (autoDisposers.isEmpty) return;
+    final insertionIndex = _disposers.length >= 2
+        ? _disposers.length - 2
+        : _disposers.length;
+    _disposers.insertAll(insertionIndex, autoDisposers);
+  }
+
   /// Starts the managed worker if it is not already running.
   Future<void> start() async {
     if (_started) return;
@@ -228,6 +238,7 @@ class StemApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    StemStack? stack,
   }) async {
     final needsUniqueLockStore =
         uniqueTasks &&
@@ -238,20 +249,22 @@ class StemApp {
         revokeStore == null &&
         workerConfig.revokeStore == null;
 
-    final stack = StemStack.fromUrl(
-      url,
-      adapters: adapters,
-      overrides: overrides,
-      uniqueTasks: needsUniqueLockStore,
-      requireRevokeStore: needsRevokeStore,
-    );
+    final resolvedStack =
+        stack ??
+        StemStack.fromUrl(
+          url,
+          adapters: adapters,
+          overrides: overrides,
+          uniqueTasks: needsUniqueLockStore,
+          requireRevokeStore: needsRevokeStore,
+        );
 
     final autoDisposers = <Future<void> Function()>[];
 
     var resolvedUniqueTaskCoordinator =
         uniqueTaskCoordinator ?? workerConfig.uniqueTaskCoordinator;
     if (needsUniqueLockStore) {
-      final lockFactory = stack.lockStore;
+      final lockFactory = resolvedStack.lockStore;
       if (lockFactory == null) {
         throw StateError(
           'Unique task coordination requested but lock store factory missing.',
@@ -268,7 +281,7 @@ class StemApp {
 
     var resolvedRevokeStore = revokeStore ?? workerConfig.revokeStore;
     if (needsRevokeStore) {
-      final revokeFactory = stack.revokeStore;
+      final revokeFactory = resolvedStack.revokeStore;
       if (revokeFactory == null) {
         throw StateError('Revoke store required but no revoke factory found.');
       }
@@ -281,8 +294,8 @@ class StemApp {
       final app = await create(
         tasks: tasks,
         registry: registry,
-        broker: stack.broker,
-        backend: stack.backend,
+        broker: resolvedStack.broker,
+        backend: resolvedStack.backend,
         workerConfig: workerConfig,
         revokeStore: resolvedRevokeStore,
         uniqueTaskCoordinator: resolvedUniqueTaskCoordinator,
@@ -296,14 +309,12 @@ class StemApp {
         additionalEncoders: additionalEncoders,
       );
 
-      if (autoDisposers.isNotEmpty) {
-        // Dispose auto-provisioned lock/revoke stores after worker shutdown and
-        // before backend/broker factories are disposed.
-        app._disposers.insertAll(1, autoDisposers);
-      }
+      // Dispose auto-provisioned lock/revoke stores after worker shutdown and
+      // before backend/broker factories are disposed.
+      app._insertAutoDisposers(autoDisposers);
 
       return app;
-    } on Object catch (error, stack) {
+    } on Object catch (error, stackTrace) {
       // If app creation fails, release any auto-provisioned stores now to avoid
       // leaking startup resources.
       for (final disposer in autoDisposers.reversed) {
@@ -313,7 +324,7 @@ class StemApp {
           // Keep the original startup error as the primary failure.
         }
       }
-      Error.throwWithStackTrace(error, stack);
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 

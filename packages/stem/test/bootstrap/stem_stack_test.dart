@@ -237,6 +237,22 @@ void main() {
       );
     });
 
+    test('fails fast for sqlite workflow store requests', () {
+      expect(
+        () => StemStack.fromUrl('sqlite:///tmp/stem.db', workflows: true),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            allOf(
+              contains('do not provide a workflow store'),
+              contains('Disable `workflows`'),
+            ),
+          ),
+        ),
+      );
+    });
+
     test('fails fast for sqlite lock store requests', () {
       expect(
         () => StemStack.fromUrl('sqlite:///tmp/stem.db', uniqueTasks: true),
@@ -275,43 +291,43 @@ void main() {
     test(
       'accepts sqlite stores when custom adapters provide toggle factories',
       () {
-      final brokerFactory = StemBrokerFactory(
-        create: () async => InMemoryBroker(),
-      );
-      final backendFactory = StemBackendFactory(
-        create: () async => InMemoryResultBackend(),
-      );
-      final scheduleFactory = ScheduleStoreFactory(
-        create: () async => InMemoryScheduleStore(),
-      );
-      final lockFactory = LockStoreFactory(
-        create: () async => InMemoryLockStore(),
-      );
-      final revokeFactory = RevokeStoreFactory(
-        create: () async => InMemoryRevokeStore(),
-      );
+        final brokerFactory = StemBrokerFactory(
+          create: () async => InMemoryBroker(),
+        );
+        final backendFactory = StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        );
+        final scheduleFactory = ScheduleStoreFactory(
+          create: () async => InMemoryScheduleStore(),
+        );
+        final lockFactory = LockStoreFactory(
+          create: () async => InMemoryLockStore(),
+        );
+        final revokeFactory = RevokeStoreFactory(
+          create: () async => InMemoryRevokeStore(),
+        );
 
-      final adapter = _TestAdapter(
-        scheme: 'sqlite',
-        brokerFactory: brokerFactory,
-        backendFactory: backendFactory,
-        scheduleStoreFactory: scheduleFactory,
-        lockStoreFactory: lockFactory,
-        revokeStoreFactory: revokeFactory,
-      );
+        final adapter = _TestAdapter(
+          scheme: 'sqlite',
+          brokerFactory: brokerFactory,
+          backendFactory: backendFactory,
+          scheduleStoreFactory: scheduleFactory,
+          lockStoreFactory: lockFactory,
+          revokeStoreFactory: revokeFactory,
+        );
 
-      final stack = StemStack.fromUrl(
-        'sqlite:///tmp/stem.db',
-        adapters: [adapter],
-        scheduling: true,
-        uniqueTasks: true,
-        requireRevokeStore: true,
-      );
+        final stack = StemStack.fromUrl(
+          'sqlite:///tmp/stem.db',
+          adapters: [adapter],
+          scheduling: true,
+          uniqueTasks: true,
+          requireRevokeStore: true,
+        );
 
-      expect(stack.broker, same(brokerFactory));
-      expect(stack.backend, same(backendFactory));
-      expect(stack.scheduleStore, same(scheduleFactory));
-      expect(stack.lockStore, same(lockFactory));
+        expect(stack.broker, same(brokerFactory));
+        expect(stack.backend, same(backendFactory));
+        expect(stack.scheduleStore, same(scheduleFactory));
+        expect(stack.lockStore, same(lockFactory));
         expect(stack.revokeStore, same(revokeFactory));
       },
     );

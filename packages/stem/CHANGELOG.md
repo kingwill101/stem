@@ -1,4 +1,6 @@
-## Unreleased
+# Changelog
+
+## 0.1.1
 
 - Improved bootstrap DX with explicit fail-fast errors across broker/backend/
   workflow/schedule/lock/revoke resolution paths in `StemStack.fromUrl`,

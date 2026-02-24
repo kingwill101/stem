@@ -70,6 +70,4 @@ task build
 # In separate terminals:
 task run-worker
 task run-enqueue
-# Or:
-task tmux
 ```

@@ -13,7 +13,7 @@ Future<void> bootstrapWorkflowRuntime() async {
     adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
     overrides: const StemStoreOverrides(
       backend: 'redis://127.0.0.1:56379/1',
-      workflow: 'postgresql://postgres:postgres@127.0.0.1:65432/stem',
+      workflow: 'postgresql://<user>:<password>@127.0.0.1:65432/stem',
     ),
     flows: [ApprovalsFlow.flow],
     scripts: [retryScript],

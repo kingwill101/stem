@@ -23,7 +23,9 @@ tasks:
 
           for file in "${files[@]}"; do
             if grep -q "^STEM_SIGNING_KEYS=" "$file"; then
-              sed -i -E "s|^STEM_SIGNING_KEYS=.*|STEM_SIGNING_KEYS=${escaped_keys}|" "$file"
+              tmp_file="$(mktemp)"
+              sed -E "s|^STEM_SIGNING_KEYS=.*|STEM_SIGNING_KEYS=${escaped_keys}|" "$file" > "$tmp_file"
+              mv "$tmp_file" "$file"
             else
               echo "STEM_SIGNING_KEYS=${keys_value}" >> "$file"
             fi
@@ -33,7 +35,9 @@ tasks:
               active="rotated"
             fi
             if grep -q "^STEM_SIGNING_ACTIVE_KEY=" "$file"; then
-              sed -i -E "s|^STEM_SIGNING_ACTIVE_KEY=.*|STEM_SIGNING_ACTIVE_KEY=${active}|" "$file"
+              tmp_file="$(mktemp)"
+              sed -E "s|^STEM_SIGNING_ACTIVE_KEY=.*|STEM_SIGNING_ACTIVE_KEY=${active}|" "$file" > "$tmp_file"
+              mv "$tmp_file" "$file"
             else
               echo "STEM_SIGNING_ACTIVE_KEY=${active}" >> "$file"
             fi

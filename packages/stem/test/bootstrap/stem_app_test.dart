@@ -1,6 +1,8 @@
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+import 'test_store_adapter.dart';
+
 void main() {
   group('StemApp', () {
     test('inMemory executes tasks', () async {
@@ -125,8 +127,9 @@ void main() {
         name: 'test.from-url',
         entrypoint: (context, args) async => null,
       );
-      final adapter = _BootstrapAdapter(
+      final adapter = TestStoreAdapter(
         scheme: 'test',
+        adapterName: 'bootstrap-test-adapter',
         broker: StemBrokerFactory(create: () async => InMemoryBroker()),
         backend: StemBackendFactory(
           create: () async => InMemoryResultBackend(),
@@ -158,8 +161,9 @@ void main() {
         final createdRevokeStore = InMemoryRevokeStore();
         var lockDisposed = false;
         var revokeDisposed = false;
-        final adapter = _BootstrapAdapter(
+        final adapter = TestStoreAdapter(
           scheme: 'test',
+          adapterName: 'bootstrap-test-adapter',
           broker: StemBrokerFactory(create: () async => InMemoryBroker()),
           backend: StemBackendFactory(
             create: () async => InMemoryResultBackend(),
@@ -195,47 +199,49 @@ void main() {
     test(
       'fromUrl disposes auto-wired stores when app bootstrap fails',
       () async {
-      final createdLockStore = InMemoryLockStore();
-      final createdRevokeStore = InMemoryRevokeStore();
-      var lockDisposed = false;
-      var revokeDisposed = false;
-      final adapter = _BootstrapAdapter(
-        scheme: 'test',
-        broker: StemBrokerFactory(
-          create: () async => throw StateError('broker bootstrap failure'),
-        ),
-        backend: StemBackendFactory(
-          create: () async => InMemoryResultBackend(),
-        ),
-        lock: LockStoreFactory(
-          create: () async => createdLockStore,
-          dispose: (store) async => lockDisposed = true,
-        ),
-        revoke: RevokeStoreFactory(
-          create: () async => createdRevokeStore,
-          dispose: (store) async => revokeDisposed = true,
-        ),
-      );
-
-      await expectLater(
-        () => StemApp.fromUrl(
-          'test://localhost',
-          adapters: [adapter],
-          uniqueTasks: true,
-          requireRevokeStore: true,
-        ),
-        throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            contains('broker bootstrap failure'),
+        final createdLockStore = InMemoryLockStore();
+        final createdRevokeStore = InMemoryRevokeStore();
+        var lockDisposed = false;
+        var revokeDisposed = false;
+        final adapter = TestStoreAdapter(
+          scheme: 'test',
+          adapterName: 'bootstrap-test-adapter',
+          broker: StemBrokerFactory(
+            create: () async => throw StateError('broker bootstrap failure'),
           ),
-        ),
-      );
+          backend: StemBackendFactory(
+            create: () async => InMemoryResultBackend(),
+          ),
+          lock: LockStoreFactory(
+            create: () async => createdLockStore,
+            dispose: (store) async => lockDisposed = true,
+          ),
+          revoke: RevokeStoreFactory(
+            create: () async => createdRevokeStore,
+            dispose: (store) async => revokeDisposed = true,
+          ),
+        );
 
-      expect(lockDisposed, isTrue);
-      expect(revokeDisposed, isTrue);
-    });
+        await expectLater(
+          () => StemApp.fromUrl(
+            'test://localhost',
+            adapters: [adapter],
+            uniqueTasks: true,
+            requireRevokeStore: true,
+          ),
+          throwsA(
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              contains('broker bootstrap failure'),
+            ),
+          ),
+        );
+
+        expect(lockDisposed, isTrue);
+        expect(revokeDisposed, isTrue);
+      },
+    );
   });
 
   group('StemWorkflowApp', () {
@@ -364,8 +370,9 @@ void main() {
           builder.step('hello', (ctx) async => 'from-url');
         },
       );
-      final adapter = _BootstrapAdapter(
+      final adapter = TestStoreAdapter(
         scheme: 'test',
+        adapterName: 'bootstrap-test-adapter',
         broker: StemBrokerFactory(create: () async => InMemoryBroker()),
         backend: StemBackendFactory(
           create: () async => InMemoryResultBackend(),
@@ -397,8 +404,9 @@ void main() {
       final createdRevokeStore = InMemoryRevokeStore();
       var lockDisposed = false;
       var revokeDisposed = false;
-      final adapter = _BootstrapAdapter(
+      final adapter = TestStoreAdapter(
         scheme: 'test',
+        adapterName: 'bootstrap-test-adapter',
         broker: StemBrokerFactory(create: () async => InMemoryBroker()),
         backend: StemBackendFactory(
           create: () async => InMemoryResultBackend(),
@@ -488,46 +496,4 @@ class _TestMiddleware implements Middleware {
   @override
   Future<void> onExecute(TaskContext context, Future<void> Function() next) =>
       next();
-}
-
-class _BootstrapAdapter implements StemStoreAdapter {
-  _BootstrapAdapter({
-    required this.scheme,
-    this.broker,
-    this.backend,
-    this.workflow,
-    this.lock,
-    this.revoke,
-  });
-
-  final String scheme;
-  final StemBrokerFactory? broker;
-  final StemBackendFactory? backend;
-  final WorkflowStoreFactory? workflow;
-  final LockStoreFactory? lock;
-  final RevokeStoreFactory? revoke;
-
-  @override
-  String get name => 'bootstrap-test-adapter';
-
-  @override
-  bool supports(Uri uri, StemStoreKind kind) => uri.scheme == scheme;
-
-  @override
-  StemBrokerFactory? brokerFactory(Uri uri) => broker;
-
-  @override
-  StemBackendFactory? backendFactory(Uri uri) => backend;
-
-  @override
-  WorkflowStoreFactory? workflowStoreFactory(Uri uri) => workflow;
-
-  @override
-  ScheduleStoreFactory? scheduleStoreFactory(Uri uri) => null;
-
-  @override
-  LockStoreFactory? lockStoreFactory(Uri uri) => lock;
-
-  @override
-  RevokeStoreFactory? revokeStoreFactory(Uri uri) => revoke;
 }

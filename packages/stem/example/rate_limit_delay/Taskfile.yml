@@ -41,7 +41,14 @@ tasks:
           export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
           export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
           export STEM_RATE_LIMIT_URL="${STEM_RATE_LIMIT_URL:-redis://localhost:${REDIS_PORT}/2}"
-          "$root/build/worker/bundle/bin/"*
+          shopt -s nullglob
+          bin_candidates=( "$root/build/worker/bundle/bin/"* )
+          shopt -u nullglob
+          if (( ${#bin_candidates[@]} != 1 )); then
+            echo "Expected exactly one worker binary in $root/build/worker/bundle/bin, found ${#bin_candidates[@]}." >&2
+            exit 1
+          fi
+          "${bin_candidates[0]}"
         '
 
   run-producer:
@@ -57,7 +64,14 @@ tasks:
           export REDIS_PORT="${REDIS_PORT:-6379}"
           export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
           export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
-          "$root/build/producer/bundle/bin/"*
+          shopt -s nullglob
+          bin_candidates=( "$root/build/producer/bundle/bin/"* )
+          shopt -u nullglob
+          if (( ${#bin_candidates[@]} != 1 )); then
+            echo "Expected exactly one producer binary in $root/build/producer/bundle/bin, found ${#bin_candidates[@]}." >&2
+            exit 1
+          fi
+          "${bin_candidates[0]}"
         '
 
   run:

@@ -29,15 +29,22 @@ tasks:
           export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
           export STEM_SQLITE_BACKEND_PATH="${STEM_SQLITE_BACKEND_PATH:-task_context_mixed_backend.sqlite}"
           if [[ -d "$root/build/worker/bundle/bin" ]]; then
-            "$root/build/worker/bundle/bin/"*
+            shopt -s nullglob
+            bin_candidates=( "$root/build/worker/bundle/bin/"* )
+            shopt -u nullglob
+            if (( ${#bin_candidates[@]} != 1 )); then
+              echo "Expected exactly one worker binary in $root/build/worker/bundle/bin, found ${#bin_candidates[@]}." >&2
+              exit 1
+            fi
+            "${bin_candidates[0]}"
           else
             cd "$root"
             dart run bin/worker.dart
           fi
         '
 
-  run-enqueue:
-    desc: Run enqueue command (compiled binary when available).
+  _run-enqueue:
+    internal: true
     cmds:
       - |
         bash -lc '
@@ -47,48 +54,40 @@ tasks:
           if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
           export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
           if [[ -d "$root/build/enqueue/bundle/bin" ]]; then
-            "$root/build/enqueue/bundle/bin/"*
+            shopt -s nullglob
+            bin_candidates=( "$root/build/enqueue/bundle/bin/"* )
+            shopt -u nullglob
+            if (( ${#bin_candidates[@]} != 1 )); then
+              echo "Expected exactly one enqueue binary in $root/build/enqueue/bundle/bin, found ${#bin_candidates[@]}." >&2
+              exit 1
+            fi
+            "${bin_candidates[0]}" {{.CLI_ARGS}}
           else
             cd "$root"
-            dart run bin/enqueue.dart
+            dart run bin/enqueue.dart {{.CLI_ARGS}}
           fi
         '
+
+  run-enqueue:
+    desc: Run enqueue command (compiled binary when available).
+    cmds:
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: ""
 
   run-fail:
     desc: Enqueue failing payload path.
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
-          export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
-          if [[ -d "$root/build/enqueue/bundle/bin" ]]; then
-            "$root/build/enqueue/bundle/bin/"* --fail
-          else
-            cd "$root"
-            dart run bin/enqueue.dart --fail
-          fi
-        '
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: --fail
 
   run-overwrite:
     desc: Enqueue overwrite path.
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
-          export STEM_SQLITE_BROKER_PATH="${STEM_SQLITE_BROKER_PATH:-task_context_mixed_broker.sqlite}"
-          if [[ -d "$root/build/enqueue/bundle/bin" ]]; then
-            "$root/build/enqueue/bundle/bin/"* --overwrite
-          else
-            cd "$root"
-            dart run bin/enqueue.dart --overwrite
-          fi
-        '
+      - task: _run-enqueue
+        vars:
+          CLI_ARGS: --overwrite
 
   run:
     desc: Run enqueue flow.

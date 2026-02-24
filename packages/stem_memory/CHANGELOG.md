@@ -1,4 +1,6 @@
-## Unreleased
+# Changelog
+
+## 0.1.0
 
 - Renamed `memoryBackendFactory` to `memoryResultBackendFactory` for adapter
   factory naming consistency.

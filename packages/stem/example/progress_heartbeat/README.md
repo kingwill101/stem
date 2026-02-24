@@ -36,8 +36,7 @@ From the host, point the CLI at Redis and query worker snapshots:
 export STEM_BROKER_URL=redis://localhost:6379/0
 export STEM_RESULT_BACKEND_URL=redis://localhost:6379/1
 
-task build-cli
-task stem observe workers
+stem observe workers
 ```
 
 The output includes the worker ID, active count, and the last heartbeat time.
@@ -47,12 +46,9 @@ The output includes the worker ID, active count, and the last heartbeat time.
 ```bash
 task deps-up
 task build
-task build-cli
 # In separate terminals:
 task run-worker
 task run-producer
-# Or:
-task tmux
 ```
 
 ## Notes

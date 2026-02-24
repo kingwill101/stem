@@ -1,6 +1,8 @@
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+import 'test_store_adapter.dart';
+
 void main() {
   test('StemClient inMemory runs workflow end-to-end', () async {
     final client = await StemClient.inMemory();
@@ -34,8 +36,9 @@ void main() {
     final client = await StemClient.fromUrl(
       'test://localhost',
       adapters: [
-        _ClientAdapter(
+        TestStoreAdapter(
           scheme: 'test',
+          adapterName: 'client-test-adapter',
           broker: StemBrokerFactory(create: () async => InMemoryBroker()),
           backend: StemBackendFactory(
             create: () async => InMemoryResultBackend(),
@@ -59,40 +62,4 @@ void main() {
       await client.close();
     }
   });
-}
-
-class _ClientAdapter implements StemStoreAdapter {
-  _ClientAdapter({
-    required this.scheme,
-    this.broker,
-    this.backend,
-  });
-
-  final String scheme;
-  final StemBrokerFactory? broker;
-  final StemBackendFactory? backend;
-
-  @override
-  String get name => 'client-test-adapter';
-
-  @override
-  bool supports(Uri uri, StemStoreKind kind) => uri.scheme == scheme;
-
-  @override
-  StemBrokerFactory? brokerFactory(Uri uri) => broker;
-
-  @override
-  StemBackendFactory? backendFactory(Uri uri) => backend;
-
-  @override
-  WorkflowStoreFactory? workflowStoreFactory(Uri uri) => null;
-
-  @override
-  ScheduleStoreFactory? scheduleStoreFactory(Uri uri) => null;
-
-  @override
-  LockStoreFactory? lockStoreFactory(Uri uri) => null;
-
-  @override
-  RevokeStoreFactory? revokeStoreFactory(Uri uri) => null;
 }

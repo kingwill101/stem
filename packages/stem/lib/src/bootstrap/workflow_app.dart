@@ -374,6 +374,7 @@ class StemWorkflowApp {
       url,
       adapters: adapters,
       overrides: overrides,
+      stack: stack,
       workerConfig: workerConfig,
       uniqueTasks: uniqueTasks,
       uniqueTaskDefaultTtl: uniqueTaskDefaultTtl,
@@ -400,12 +401,8 @@ class StemWorkflowApp {
         leaseExtension: leaseExtension,
         workflowRegistry: workflowRegistry,
         introspectionSink: introspectionSink,
-        encoderRegistry: encoderRegistry,
-        resultEncoder: resultEncoder,
-        argsEncoder: argsEncoder,
-        additionalEncoders: additionalEncoders,
       );
-    } on Object catch (error, stack) {
+    } on Object catch (error, stackTrace) {
       // fromUrl owns the app instance; clean it up when workflow bootstrap
       // fails.
       try {
@@ -413,7 +410,7 @@ class StemWorkflowApp {
       } on Object {
         // Keep the original bootstrap failure as the primary error.
       }
-      Error.throwWithStackTrace(error, stack);
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 

@@ -15,7 +15,15 @@ tasks:
           root="{{.TASKFILE_DIR}}"
           stem_root="$root/../.."
           env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          if [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          fi
           cd "$stem_root"
           dart run example/unique_tasks/unique_task_example.dart
         '

@@ -16,7 +16,9 @@ tasks:
           secret="$(openssl rand -base64 32)"
           escaped_secret="$(printf "%s" "$secret" | sed -e "s/[&|]/\\\\&/g")"
           if grep -q "^PAYLOAD_SECRET=" "$env_file"; then
-            sed -i -E "s|^PAYLOAD_SECRET=.*|PAYLOAD_SECRET=${escaped_secret}|" "$env_file"
+            tmp_file="$(mktemp)"
+            sed -E "s|^PAYLOAD_SECRET=.*|PAYLOAD_SECRET=${escaped_secret}|" "$env_file" > "$tmp_file"
+            mv "$tmp_file" "$env_file"
           else
             echo "PAYLOAD_SECRET=${secret}" >> "$env_file"
           fi
@@ -86,83 +88,74 @@ tasks:
     desc: Compile worker, enqueuer, and container client binaries.
     deps: [build:worker, build:enqueuer, build:container-client]
 
-  run:worker:
-    desc: Run compiled encrypted worker locally.
-    deps: [build:worker]
+  _run:local:
+    internal: true
     cmds:
       - |
         bash -lc '
           set -euo pipefail
           root="{{.TASKFILE_DIR}}"
           env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then
-            set -a
-            source "$env_file"
-            set +a
-          elif [[ -f "$root/$env_file" ]]; then
+          if [[ -f "$root/$env_file" ]]; then
             set -a
             source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
             set +a
           fi
           export REDIS_PORT="${REDIS_PORT:-6379}"
           export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
           export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
           export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
-          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
-          "$root/worker/build/bundle/bin/"*
+          if [[ -z "${PAYLOAD_SECRET:-}" ]]; then
+            echo "PAYLOAD_SECRET is not set. Run: task init" >&2
+            exit 1
+          fi
+
+          if [[ -n "{{.BINARY_FILE}}" ]]; then
+            "$root/{{.BINARY_FILE}}"
+            exit 0
+          fi
+
+          shopt -s nullglob
+          bin_pattern="$root/{{.BINARY_GLOB}}"
+          bin_candidates=( $bin_pattern )
+          shopt -u nullglob
+          if (( ${#bin_candidates[@]} != 1 )); then
+            echo "Expected exactly one binary matching $root/{{.BINARY_GLOB}}, found ${#bin_candidates[@]}." >&2
+            exit 1
+          fi
+          "${bin_candidates[0]}"
         '
+
+  run:worker:
+    desc: Run compiled encrypted worker locally.
+    deps: [build:worker]
+    cmds:
+      - task: _run:local
+        vars:
+          BINARY_GLOB: worker/build/bundle/bin/*
+          BINARY_FILE: ""
 
   run:enqueuer:
     desc: Run compiled encrypted enqueuer locally.
     deps: [build:enqueuer]
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then
-            set -a
-            source "$env_file"
-            set +a
-          elif [[ -f "$root/$env_file" ]]; then
-            set -a
-            source "$root/$env_file"
-            set +a
-          fi
-          export REDIS_PORT="${REDIS_PORT:-6379}"
-          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
-          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
-          export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
-          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
-          "$root/enqueuer/build/bundle/bin/"*
-        '
+      - task: _run:local
+        vars:
+          BINARY_GLOB: enqueuer/build/bundle/bin/*
+          BINARY_FILE: ""
 
   run:container-client:
     desc: Run compiled standalone encrypted container client locally.
     deps: [build:container-client]
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then
-            set -a
-            source "$env_file"
-            set +a
-          elif [[ -f "$root/$env_file" ]]; then
-            set -a
-            source "$root/$env_file"
-            set +a
-          fi
-          export REDIS_PORT="${REDIS_PORT:-6379}"
-          export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://localhost:${REDIS_PORT}/0}"
-          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-redis://localhost:${REDIS_PORT}/1}"
-          export STEM_DEFAULT_QUEUE="${STEM_DEFAULT_QUEUE:-secure}"
-          export PAYLOAD_SECRET="${PAYLOAD_SECRET:-kMsrVb6yQZ1w3+MCb8n2kgP0hYt1M6n1n1VQpFaFQZ8=}"
-          "$root/build/container_mixed_encrypted"
-        '
+      - task: _run:local
+        vars:
+          BINARY_GLOB: ""
+          BINARY_FILE: build/container_mixed_encrypted
 
   clean:
     desc: Remove compiled artifacts.

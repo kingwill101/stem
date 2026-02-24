@@ -40,6 +40,7 @@ Generate a fresh signing secret before production use:
 openssl rand -base64 32
 # or run `task tls:certs` to create TLS assets as well (optional)
 ```
+
 Replace the placeholder secret in `.env` with the generated value and update `STEM_SIGNING_ACTIVE_KEY` when rotating keys.
 
 To migrate to Ed25519 signing (public/private), run:

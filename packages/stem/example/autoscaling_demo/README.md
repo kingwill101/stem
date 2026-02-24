@@ -23,9 +23,6 @@ task build
 # In separate terminals:
 task run-worker
 task run-producer
-
-# Or use tmux:
-task tmux
 ```
 
 You should see log lines like:

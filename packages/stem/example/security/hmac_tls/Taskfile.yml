@@ -26,12 +26,16 @@ tasks:
               continue
             fi
             if grep -q "^STEM_SIGNING_KEYS=" "$env_file"; then
-              sed -i -E "s|^STEM_SIGNING_KEYS=.*|STEM_SIGNING_KEYS=primary:${escaped_secret}|" "$env_file"
+              tmp_file="$(mktemp)"
+              sed -E "s|^STEM_SIGNING_KEYS=.*|STEM_SIGNING_KEYS=primary:${escaped_secret}|" "$env_file" > "$tmp_file"
+              mv "$tmp_file" "$env_file"
             else
               echo "STEM_SIGNING_KEYS=primary:${secret}" >> "$env_file"
             fi
             if grep -q "^STEM_SIGNING_ACTIVE_KEY=" "$env_file"; then
-              sed -i -E "s|^STEM_SIGNING_ACTIVE_KEY=.*|STEM_SIGNING_ACTIVE_KEY=primary|" "$env_file"
+              tmp_file="$(mktemp)"
+              sed -E "s|^STEM_SIGNING_ACTIVE_KEY=.*|STEM_SIGNING_ACTIVE_KEY=primary|" "$env_file" > "$tmp_file"
+              mv "$tmp_file" "$env_file"
             else
               echo "STEM_SIGNING_ACTIVE_KEY=primary" >> "$env_file"
             fi
@@ -53,6 +57,7 @@ tasks:
     desc: Start profile containers (worker + enqueuer + redis).
     cmds:
       - task: tls:certs
+      - task: keys:rotate
       - docker compose -f "{{.TASKFILE_DIR}}/docker-compose.yml" up --build
 
   compose-down:

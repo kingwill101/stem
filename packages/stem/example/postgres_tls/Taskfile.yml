@@ -69,8 +69,10 @@ tasks:
           fi
           export REDIS_PORT="${REDIS_PORT:-6379}"
           export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+          export POSTGRES_USER="${POSTGRES_USER:-postgres}"
+          export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
           export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://127.0.0.1:${REDIS_PORT}}"
-          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT}/stem_test}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/stem_test}"
           export STEM_TLS_CA_CERT="${STEM_TLS_CA_CERT:-$root/../../../stem_cli/docker/testing/certs/postgres-root.crt}"
           "$root/build/worker/bundle/bin/"*
         '
@@ -95,8 +97,10 @@ tasks:
           fi
           export REDIS_PORT="${REDIS_PORT:-6379}"
           export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+          export POSTGRES_USER="${POSTGRES_USER:-postgres}"
+          export POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
           export STEM_BROKER_URL="${STEM_BROKER_URL:-redis://127.0.0.1:${REDIS_PORT}}"
-          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT}/stem_test}"
+          export STEM_RESULT_BACKEND_URL="${STEM_RESULT_BACKEND_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/stem_test}"
           export STEM_TLS_CA_CERT="${STEM_TLS_CA_CERT:-$root/../../../stem_cli/docker/testing/certs/postgres-root.crt}"
           "$root/build/enqueue/bundle/bin/"*
         '

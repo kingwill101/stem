@@ -1,4 +1,6 @@
-## Unreleased
+# Changelog
+
+## 0.1.1
 
 - Expanded adapter contract documentation with a capability matrix, explicit
   skip semantics, and recipe-style setup examples.

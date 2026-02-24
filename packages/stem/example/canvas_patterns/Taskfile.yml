@@ -6,8 +6,8 @@ tasks:
     cmds:
       - echo "No build step required."
 
-  run-chain:
-    desc: Run chain canvas demo.
+  _run-demo:
+    internal: true
     cmds:
       - |
         bash -lc '
@@ -15,38 +15,39 @@ tasks:
           root="{{.TASKFILE_DIR}}"
           stem_root="$root/../.."
           env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          if [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          fi
           cd "$stem_root"
-          dart run example/canvas_patterns/chain_example.dart
+          dart run "{{.DEMO_FILE}}"
         '
+
+  run-chain:
+    desc: Run chain canvas demo.
+    cmds:
+      - task: _run-demo
+        vars:
+          DEMO_FILE: example/canvas_patterns/chain_example.dart
 
   run-chord:
     desc: Run chord canvas demo.
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          stem_root="$root/../.."
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
-          cd "$stem_root"
-          dart run example/canvas_patterns/chord_example.dart
-        '
+      - task: _run-demo
+        vars:
+          DEMO_FILE: example/canvas_patterns/chord_example.dart
 
   run-group:
     desc: Run group canvas demo.
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-          root="{{.TASKFILE_DIR}}"
-          stem_root="$root/../.."
-          env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
-          cd "$stem_root"
-          dart run example/canvas_patterns/group_example.dart
-        '
+      - task: _run-demo
+        vars:
+          DEMO_FILE: example/canvas_patterns/group_example.dart
 
   run:
     desc: Run chain demo.

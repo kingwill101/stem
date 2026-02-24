@@ -1,4 +1,6 @@
-## Unreleased
+# Changelog
+
+## 0.1.0
 
 - Initial builder for annotated Stem workflow/task registries.
 - Expanded the registry builder implementation and hardened generation output.

@@ -29,7 +29,9 @@ tasks:
               value="${line#*=}"
               escaped_value="$(printf "%s" "$value" | sed -e "s/[&|]/\\\\&/g")"
               if grep -q "^${key}=" "$env_file"; then
-                sed -i -E "s|^${key}=.*|${key}=${escaped_value}|" "$env_file"
+                tmp_file="$(mktemp)"
+                sed -E "s|^${key}=.*|${key}=${escaped_value}|" "$env_file" > "$tmp_file"
+                mv "$tmp_file" "$env_file"
               else
                 echo "${key}=${value}" >> "$env_file"
               fi

@@ -15,7 +15,15 @@ tasks:
           set -euo pipefail
           root="{{.TASKFILE_DIR}}"
           env_file="${ENV_FILE:-.env}"
-          if [[ -f "$env_file" ]]; then set -a; source "$env_file"; set +a; elif [[ -f "$root/$env_file" ]]; then set -a; source "$root/$env_file"; set +a; fi
+          if [[ -f "$root/$env_file" ]]; then
+            set -a
+            source "$root/$env_file"
+            set +a
+          elif [[ -f "$env_file" ]]; then
+            set -a
+            source "$env_file"
+            set +a
+          fi
           cd "$root"
           dart run bin/service.dart
         '
