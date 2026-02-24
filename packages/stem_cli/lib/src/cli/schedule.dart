@@ -59,7 +59,7 @@ class ScheduleListCommand extends Command<int> {
         return 0;
       }
       final calculator = ScheduleCalculator();
-      final now = DateTime.now();
+      final now = stemNow();
       dependencies.out.writeln(
         'ID        | Task           | Queue    | Spec             | Next Run                | Last Run                | Jitter  | Enabled',
       );
@@ -374,7 +374,7 @@ class ScheduleApplyCommand extends Command<int> {
   void _validateScheduleEntry(ScheduleEntry entry) {
     final calculator = ScheduleCalculator();
     try {
-      final base = entry.lastRunAt ?? DateTime.now();
+      final base = entry.lastRunAt ?? stemNow();
       final next = calculator.nextRun(entry, base, includeJitter: false);
       final interval = next.difference(base);
       if (interval <= Duration.zero) {
@@ -703,7 +703,7 @@ class ScheduleDryRunCommand extends Command<int> {
           return 64;
         }
       } else {
-        start = DateTime.now();
+        start = stemNow();
       }
 
       ScheduleEntry? entry;

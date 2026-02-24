@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/ui/event_templates.dart';
 import 'package:stem_dashboard/src/ui/layout.dart';
+import 'package:stem/stem.dart' show stemNow;
 
 final _numberFormat = NumberFormat.decimalPattern();
 
@@ -578,7 +579,7 @@ int _totalIsolates(List<WorkerStatus> workers) {
 String _formatInt(int value) => _numberFormat.format(value);
 
 String _formatRelative(DateTime timestamp) {
-  final now = DateTime.now().toUtc();
+  final now = stemNow().toUtc();
   final diff = now.difference(timestamp.toUtc());
   if (diff < const Duration(seconds: 30)) return 'just now';
   if (diff < const Duration(minutes: 1)) {

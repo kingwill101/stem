@@ -674,7 +674,7 @@ class WorkerRevokeCommand extends Command<int> {
         return 70;
       }
 
-      final now = DateTime.now().toUtc();
+      final now = stemNow().toUtc();
       final baseVersion = generateRevokeVersion();
       final entries = <RevokeEntry>[];
       for (var i = 0; i < tasks.length; i += 1) {
@@ -1449,7 +1449,7 @@ class WorkerStatusCommand extends Command<int> {
       out.writeln(jsonEncode(heartbeat.toJson()));
       return;
     }
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final age = now.difference(heartbeat.timestamp);
     final isStale = expectedInterval != null && expectedInterval > Duration.zero
         ? age > expectedInterval
@@ -1882,7 +1882,7 @@ class WorkerMultiCommand extends Command<int> {
       environment: baseEnv,
     );
 
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -1924,7 +1924,7 @@ class WorkerMultiCommand extends Command<int> {
     );
 
     final host = _hostname;
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -1967,7 +1967,7 @@ class WorkerMultiCommand extends Command<int> {
     );
 
     final host = _hostname;
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -2094,9 +2094,7 @@ class WorkerHealthcheckCommand extends Command<int> {
     }
 
     final since = _pidFileTimestamp(pidfile);
-    final uptime = since != null
-        ? DateTime.now().toUtc().difference(since)
-        : null;
+    final uptime = since != null ? stemNow().toUtc().difference(since) : null;
 
     final payload = <String, Object?>{
       'status': running ? 'ok' : 'error',
@@ -2422,7 +2420,7 @@ String _describeUptime(String pidfile) {
   if (since == null) {
     return 'uptime unknown';
   }
-  final duration = DateTime.now().toUtc().difference(since);
+  final duration = stemNow().toUtc().difference(since);
   return 'uptime ${formatReadableDuration(duration)}';
 }
 
@@ -2677,9 +2675,9 @@ Future<bool> _waitForExit(int pid, Duration timeout) async {
   if (timeout.isNegative) {
     return false;
   }
-  final deadline = DateTime.now().add(timeout);
+  final deadline = stemNow().add(timeout);
   while (await _isPidRunning(pid)) {
-    if (DateTime.now().isAfter(deadline)) {
+    if (stemNow().isAfter(deadline)) {
       return false;
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));

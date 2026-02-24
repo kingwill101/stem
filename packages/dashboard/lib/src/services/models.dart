@@ -155,7 +155,7 @@ class WorkerStatus {
   final Map<String, Object?> extras;
 
   /// Age of the last heartbeat.
-  Duration get age => DateTime.now().toUtc().difference(timestamp);
+  Duration get age => stemNow().toUtc().difference(timestamp);
 }
 
 /// Event captured for the dashboard activity log.
