@@ -42,7 +42,7 @@ Multiple listeners on the same queue receive each emitted event.
 - `headers` and `meta` round-trip to listeners.
 - Event names and queue names must be non-empty.
 - Delivery follows the underlying broker's broadcast behavior for active
-  listeners (no historical replay API is built in to `QueueEvents`).
+  listeners (no historical replay API is built into `QueueEvents`).
 
 ## When to Use Queue Events vs Signals
 

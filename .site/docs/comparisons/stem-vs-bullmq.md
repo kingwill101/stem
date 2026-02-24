@@ -45,6 +45,12 @@ It focuses on capability parity, not API-level compatibility.
 
 ## Update policy
 
+When this matrix changes:
+
+1. Update the **As of** date.
+2. Keep row names aligned with BullMQ terminology.
+3. Update rationale links so every status remains auditable.
+
 ## BullMQ events parity notes
 
 Stem supports the two common BullMQ event-listening styles:
@@ -54,9 +60,3 @@ Stem supports the two common BullMQ event-listening styles:
 | `QueueEvents` listeners | `QueueEvents` + `QueueEventsProducer` (queue-scoped custom events) |
 | Custom queue events | `producer.emit(queue, eventName, payload, headers, meta)` |
 | Worker-specific event listeners | `StemSignals` convenience APIs with `workerId` filters (`onWorkerReady`, `onWorkerInit`, `onTaskFailure`, `onControlCommandCompleted`, etc.) |
-
-When this matrix changes:
-
-1. Update the **As of** date.
-2. Keep row names aligned with BullMQ terminology.
-3. Update rationale links so every status remains auditable.

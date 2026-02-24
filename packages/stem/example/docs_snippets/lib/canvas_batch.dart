@@ -29,7 +29,15 @@ Future<void> main() async {
     task('batch.double', args: {'value': 3}),
   ]);
 
-  final status = await app.canvas.inspectBatch(submission.batchId);
+  // Batches may still be running immediately after submission.
+  BatchStatus? status;
+  for (var i = 0; i < 20; i += 1) {
+    status = await app.canvas.inspectBatch(submission.batchId);
+    if (status?.isTerminal == true) {
+      break;
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
   print(
     'Batch ${submission.batchId} state=${status?.state} '
     'completed=${status?.completed}/${status?.expected}',

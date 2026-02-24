@@ -33,8 +33,9 @@ All signal payloads implement `StemEvent` and dispatch through
 
 - `beforeTaskPublish` fires immediately before broker IO; `afterTaskPublish`
   runs once persistence succeeds.
-- `taskReceived` is emitted before handler execution.
-- `taskPrerun` precedes handler execution; `taskPostrun` runs after completion.
+- `taskReceived` is emitted when a worker claims/dequeues a task.
+- `taskPrerun` fires immediately before handler invocation.
+- Execution ordering is `taskReceived` -> `taskPrerun` -> handler -> `taskPostrun`.
 - Worker lifecycle follows `workerInit` -> `workerReady` -> optional
   `workerStopping` -> `workerShutdown`.
 - Scheduler signals emit due -> dispatched/failed.

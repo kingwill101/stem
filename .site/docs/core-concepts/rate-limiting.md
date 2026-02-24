@@ -147,7 +147,7 @@ Group rate limits share a limiter bucket across related tasks.
 - `groupRateKey`: optional static key (if omitted, Stem resolves from header)
 - `groupRateKeyHeader`: header used when `groupRateKey` is not set
   (default: `tenant`)
-- `groupRateLimiterFailureMode`:
+- `groupRateLimiterFailureMode` (default: `failOpen`):
   - `failOpen`: continue execution if limiter backend fails
   - `failClosed`: requeue/retry when limiter backend fails
 

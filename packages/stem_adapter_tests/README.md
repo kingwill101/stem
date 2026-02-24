@@ -92,6 +92,12 @@ all other contract assertions active.
 | `verifyOwnerLookup` | `true` | `ownerOf` tests | Verifies lock owner lookup behavior. |
 | `verifyRenewSemantics` | `true` | Renew and expiry tests | Verifies renewal/TTL semantics for active locks. |
 
+### RevokeStoreContractCapabilities
+
+| Flag | Default | Affects | Behavior when enabled |
+|---|---|---|---|
+| `verifyPruneExpired` | `true` | Revoke expiry pruning tests | Verifies `pruneExpired` removes only expired revocations in the target namespace. |
+
 ## Skip Behavior
 
 Each flagged test uses explicit `skip` values (instead of implicit omission) so
@@ -135,6 +141,20 @@ runResultBackendContractTests(
     capabilities: ResultBackendContractCapabilities(
       verifyWorkerHeartbeats: true,
       verifyHeartbeatExpiry: false,
+    ),
+  ),
+);
+```
+
+### Adapter without queue-event fan-out
+
+```dart
+runQueueEventsContractTests(
+  adapterName: 'single-listener-adapter',
+  factory: QueueEventsContractFactory(create: createBroker),
+  settings: const QueueEventsContractSettings(
+    capabilities: QueueEventsContractCapabilities(
+      verifyFanout: false,
     ),
   ),
 );
