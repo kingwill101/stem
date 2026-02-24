@@ -1356,7 +1356,6 @@ void main() {
         timeout: const Duration(seconds: 3),
       );
 
-      expect(await backend.get(firstId), isNotNull);
       expect((await backend.get(firstId))?.state, TaskState.succeeded);
       expect((await backend.get(secondId))?.state, TaskState.succeeded);
       expect(
@@ -1445,6 +1444,7 @@ void main() {
                 groupRateLimit: '10/m',
                 groupRateKeyHeader: 'tenant',
                 groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
+                maxRetries: 5,
               ),
               entrypoint: (context, args) async {
                 executed += 1;
@@ -1472,9 +1472,7 @@ void main() {
           headers: const {'tenant': 'acme'},
         );
 
-        await Future<void>.delayed(const Duration(milliseconds: 220));
-        final status = await backend.get(taskId);
-        expect(status?.state, TaskState.retried);
+        await _waitForTaskState(backend, taskId, TaskState.retried);
         expect(executed, equals(0));
 
         await worker.shutdown();
@@ -1532,9 +1530,7 @@ void main() {
 
       final stem = Stem(broker: broker, registry: registry, backend: backend);
       final taskId = await stem.enqueue('tasks.success');
-      await Future<void>.delayed(const Duration(milliseconds: 180));
-      final pausedStatus = await backend.get(taskId);
-      expect(pausedStatus?.state, TaskState.queued);
+      await _assertTaskRemainsQueued(backend, taskId);
 
       final resumeReply = await _sendControlCommand(
         broker: broker,
@@ -1696,14 +1692,17 @@ class _ChordCallbackTask implements TaskHandler<int> {
 }
 
 Future<void> _waitFor(
-  bool Function() predicate, {
+  FutureOr<bool> Function() predicate, {
   Duration timeout = const Duration(seconds: 2),
   Duration pollInterval = const Duration(milliseconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
-  while (!predicate()) {
+  while (true) {
     if (DateTime.now().isAfter(deadline)) {
       throw TimeoutException('Condition not met within $timeout');
+    }
+    if (await predicate()) {
+      return;
     }
     await Future<void>.delayed(pollInterval);
   }
@@ -1714,19 +1713,12 @@ Future<void> _waitForCallbackSuccess(
   String taskId, {
   Duration timeout = const Duration(seconds: 3),
 }) async {
-  final deadline = DateTime.now().add(timeout);
-  while (true) {
-    final status = await backend.get(taskId);
-    if (status?.state == TaskState.succeeded) {
-      return;
-    }
-    if (DateTime.now().isAfter(deadline)) {
-      throw TimeoutException(
-        'Callback $taskId did not succeed within $timeout',
-      );
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 25));
-  }
+  return _waitForTaskState(
+    backend,
+    taskId,
+    TaskState.succeeded,
+    timeout: timeout,
+  );
 }
 
 Future<void> _waitForTaskState(
@@ -1744,6 +1736,28 @@ Future<void> _waitForTaskState(
     if (DateTime.now().isAfter(deadline)) {
       throw TimeoutException(
         'Task $taskId did not reach state ${expected.name}',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+Future<void> _assertTaskRemainsQueued(
+  ResultBackend backend,
+  String taskId, {
+  Duration holdFor = const Duration(milliseconds: 180),
+}) async {
+  await _waitFor(() async {
+    final status = await backend.get(taskId);
+    return status?.state != null;
+  }, timeout: const Duration(seconds: 2));
+  final deadline = DateTime.now().add(holdFor);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await backend.get(taskId);
+    if (status?.state != TaskState.queued) {
+      throw StateError(
+        'Expected task $taskId to remain queued while paused. '
+        'Found ${status?.state}.',
       );
     }
     await Future<void>.delayed(const Duration(milliseconds: 20));

@@ -3734,7 +3734,10 @@ class Worker {
     final rawQueues = payload['queues'];
     if (rawQueues is List) {
       for (final value in rawQueues) {
-        final queueName = value.toString().trim();
+        if (value is! String) {
+          continue;
+        }
+        final queueName = value.trim();
         if (queueName.isNotEmpty) {
           queues.add(queueName);
         }

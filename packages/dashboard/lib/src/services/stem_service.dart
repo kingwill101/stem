@@ -192,8 +192,12 @@ class StemDashboardService implements DashboardDataSource {
     final deadline = stemNow().add(timeout);
 
     try {
-      while (stemNow().isBefore(deadline)) {
-        final remaining = deadline.difference(stemNow());
+      while (true) {
+        final now = stemNow();
+        final remaining = deadline.difference(now);
+        if (remaining <= Duration.zero) {
+          break;
+        }
         bool hasNext;
         try {
           hasNext = await iterator.moveNext().timeout(remaining);

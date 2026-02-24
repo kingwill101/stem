@@ -1078,9 +1078,11 @@ abstract class _WorkerQueueControlCommand extends Command<int> {
           );
           return 70;
         }
-        dependencies.out.writeln('Worker        | Status | Updated | Paused');
         dependencies.out.writeln(
-          '--------------+--------+---------+----------------',
+          'Worker        | Status | Updated | Paused queues (after)',
+        );
+        dependencies.out.writeln(
+          '--------------+--------+---------+----------------------',
         );
         final ordered = [...replies]
           ..sort((a, b) => a.workerId.compareTo(b.workerId));
@@ -1096,7 +1098,8 @@ abstract class _WorkerQueueControlCommand extends Command<int> {
         }
       }
 
-      return replies.isEmpty ? 70 : 0;
+      final hasError = replies.any((reply) => reply.status != 'ok');
+      return (replies.isEmpty || hasError) ? 70 : 0;
     } finally {
       await ctx.dispose();
     }

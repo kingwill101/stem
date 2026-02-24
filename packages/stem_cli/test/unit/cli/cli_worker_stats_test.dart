@@ -481,9 +481,12 @@ Future<void> _waitFor(
   Duration pollInterval = const Duration(milliseconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
-  while (!await predicate()) {
+  while (true) {
     if (DateTime.now().isAfter(deadline)) {
       throw TimeoutException('Condition not met within $timeout');
+    }
+    if (await predicate()) {
+      return;
     }
     await Future<void>.delayed(pollInterval);
   }
