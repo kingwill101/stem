@@ -758,7 +758,8 @@ class Canvas {
   }
 
   List<String> _batchTaskIdsFromGroup(GroupStatus status) {
-    final taskIds = <String>{};
+    final taskIds = <String>[];
+    final seen = <String>{};
     final rawTaskIds = status.meta['stem.batch.taskIds'];
     if (rawTaskIds is List) {
       for (final rawTaskId in rawTaskIds) {
@@ -767,14 +768,24 @@ class Canvas {
         }
         final trimmed = rawTaskId.trim();
         if (trimmed.isNotEmpty) {
-          taskIds.add(trimmed);
+          if (seen.add(trimmed)) {
+            taskIds.add(trimmed);
+          }
         }
       }
     }
     if (taskIds.isEmpty) {
-      taskIds.addAll(status.results.keys.where((id) => id.trim().isNotEmpty));
+      for (final taskId in status.results.keys) {
+        final trimmed = taskId.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        if (seen.add(trimmed)) {
+          taskIds.add(trimmed);
+        }
+      }
     }
-    return taskIds.toList(growable: false)..sort();
+    return List<String>.unmodifiable(taskIds);
   }
 
   (Envelope, TaskPayloadEncoder) _prepareEnvelope(Envelope envelope) {
