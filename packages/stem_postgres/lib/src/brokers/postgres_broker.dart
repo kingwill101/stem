@@ -221,11 +221,6 @@ class PostgresBroker implements Broker {
       'queues=${subscription.queues})',
       _logContext({'queues': subscription.queues}),
     );
-    if (subscription.queues.isEmpty) {
-      throw ArgumentError(
-        'RoutingSubscription must specify at least one queue.',
-      );
-    }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'PostgresBroker currently supports consuming a single queue per '
@@ -233,21 +228,29 @@ class PostgresBroker implements Broker {
       );
     }
 
-    final queue = subscription.queues.first;
+    final queue = subscription.queues.isEmpty
+        ? null
+        : subscription.queues.single;
     final group = consumerGroup ?? 'default';
     final consumer = consumerName ?? const Uuid().v7();
-    final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
+    if (queue == null && broadcastChannels.isEmpty) {
+      throw ArgumentError(
+        'PostgresBroker requires at least one queue or broadcast channel.',
+      );
+    }
+    final locker = _encodeLocker(queue ?? '__broadcast__', group, consumer);
 
     late _ConsumerRunner runner;
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>(
       onListen: () => runner.start(),
       onCancel: () {
+        final queueLabel = queue ?? '<broadcast-only>';
         stemLogger.debug(
-          'Consumer stream canceled (queue=$queue, worker=$consumer)',
+          'Consumer stream canceled (queue=$queueLabel, worker=$consumer)',
           _logContext({
-            'queue': queue,
+            'queue': queueLabel,
             'worker': consumer,
           }),
         );
@@ -806,7 +809,7 @@ class _ConsumerRunner {
 
   final PostgresBroker broker;
   final StreamController<Delivery> controller;
-  final String queue;
+  final String? queue;
   final String locker;
   final int prefetch;
   final List<String> broadcastChannels;
@@ -818,17 +821,19 @@ class _ConsumerRunner {
   void start() {
     if (_started) return;
     _started = true;
+    final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
-      'Consumer runner started (queue=$queue, worker=$workerId)',
-      broker._logContext({'queue': queue, 'worker': workerId}),
+      'Consumer runner started (queue=$queueLabel, worker=$workerId)',
+      broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     unawaited(_loop());
   }
 
   void stop() {
+    final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
-      'Consumer runner stopped (queue=$queue, worker=$workerId)',
-      broker._logContext({'queue': queue, 'worker': workerId}),
+      'Consumer runner stopped (queue=$queueLabel, worker=$workerId)',
+      broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     _stopped = true;
   }
@@ -840,10 +845,12 @@ class _ConsumerRunner {
         !broker._closed) {
       try {
         final jobs = <_QueuedJob>[];
-        for (var i = 0; i < prefetch; i++) {
-          final job = await broker._claimNextJob(queue, locker);
-          if (job == null) break;
-          jobs.add(job);
+        if (queue != null) {
+          for (var i = 0; i < prefetch; i++) {
+            final job = await broker._claimNextJob(queue!, locker);
+            if (job == null) break;
+            jobs.add(job);
+          }
         }
         final broadcasts = broadcastChannels.isEmpty
             ? const <Delivery>[]
@@ -869,11 +876,12 @@ class _ConsumerRunner {
           controller.add(delivery);
         }
       } on Object catch (error, stack) {
+        final queueLabel = queue ?? '<broadcast-only>';
         stemLogger.warning(
-          'Consumer loop error (queue=$queue, worker=$workerId): '
+          'Consumer loop error (queue=$queueLabel, worker=$workerId): '
           '$error\n$stack',
           broker._logContext({
-            'queue': queue,
+            'queue': queueLabel,
             'worker': workerId,
             'error': error.toString(),
             'stack': stack.toString(),

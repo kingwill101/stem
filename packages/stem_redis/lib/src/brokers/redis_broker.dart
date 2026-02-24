@@ -479,22 +479,27 @@ class RedisStreamsBroker implements Broker {
     String? consumerGroup,
     String? consumerName,
   }) {
-    if (subscription.queues.isEmpty) {
-      throw ArgumentError(
-        'RoutingSubscription must specify at least one queue.',
-      );
-    }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'RedisStreamsBroker currently supports consuming a single queue '
         'per subscription.',
       );
     }
-    final queue = subscription.queues.first;
+    final queue = subscription.queues.isEmpty
+        ? null
+        : subscription.queues.single;
     final consumer = consumerName ?? const Uuid().v7();
-    final group = consumerGroup ?? _groupKey(queue);
-    final streamKeys = _priorityStreamKeys(queue);
     final broadcastChannels = subscription.broadcastChannels;
+    if (queue == null && broadcastChannels.isEmpty) {
+      throw ArgumentError(
+        'RedisStreamsBroker requires at least one queue or broadcast channel.',
+      );
+    }
+    final group =
+        consumerGroup ?? (queue == null ? '__broadcast__' : _groupKey(queue));
+    final streamKeys = queue == null
+        ? const <String>[]
+        : _priorityStreamKeys(queue);
     final claimTimerKeys = <String>{};
     RedisConnection? consumerConnection;
     Command? consumerCommand;
@@ -566,6 +571,9 @@ class RedisStreamsBroker implements Broker {
     }
 
     Future<void> loop() async {
+      if (queue == null || streamKeys.isEmpty) {
+        return;
+      }
       while (!controller.isClosed && !_closed) {
         for (final stream in streamKeys) {
           await _ensureGroupForStream(queue, stream);
