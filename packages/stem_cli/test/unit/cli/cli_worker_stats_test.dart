@@ -108,6 +108,72 @@ void main() {
       broker.dispose();
     });
 
+    test('pause/resume commands stop and restart queue consumption', () async {
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final revokeStore = InMemoryRevokeStore();
+      final registry = SimpleTaskRegistry()..register(_FastTask());
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-pause',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        revokeStore: revokeStore,
+      );
+      await worker.start();
+
+      final pauseOut = StringBuffer();
+      final pauseErr = StringBuffer();
+      final pauseCode = await runStemCli(
+        ['worker', 'pause', '--worker', 'worker-pause', '--queue', 'default'],
+        out: pauseOut,
+        err: pauseErr,
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          revokeStore: revokeStore,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+          registry: registry,
+        ),
+      );
+      expect(pauseCode, equals(0));
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final taskId = await stem.enqueue('tasks.fast');
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      final pausedStatus = await backend.get(taskId);
+      expect(pausedStatus?.state, TaskState.queued);
+
+      final resumeOut = StringBuffer();
+      final resumeErr = StringBuffer();
+      final resumeCode = await runStemCli(
+        ['worker', 'resume', '--worker', 'worker-pause', '--queue', 'default'],
+        out: resumeOut,
+        err: resumeErr,
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          revokeStore: revokeStore,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+          registry: registry,
+        ),
+      );
+      expect(resumeCode, equals(0));
+
+      await _waitFor(
+        () async => (await backend.get(taskId))?.state == TaskState.succeeded,
+      );
+
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('includes active task metadata', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
@@ -323,7 +389,7 @@ void main() {
       expect(code, equals(0));
 
       await _waitFor(
-        () => events.any(
+        () async => events.any(
           (event) =>
               event.type == WorkerEventType.revoked &&
               event.envelope?.id == taskId,
@@ -395,15 +461,32 @@ class _LoopingTask implements TaskHandler<void> {
 }
 
 Future<void> _waitFor(
-  bool Function() predicate, {
+  Future<bool> Function() predicate, {
   Duration timeout = const Duration(seconds: 2),
   Duration pollInterval = const Duration(milliseconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
-  while (!predicate()) {
+  while (!await predicate()) {
     if (DateTime.now().isAfter(deadline)) {
       throw TimeoutException('Condition not met within $timeout');
     }
     await Future<void>.delayed(pollInterval);
   }
+}
+
+class _FastTask implements TaskHandler<void> {
+  @override
+  String get name => 'tasks.fast';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 0);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {}
 }

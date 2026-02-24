@@ -74,13 +74,18 @@ Switch to Postgres with `PostgresScheduleStore.connect` / `PostgresLockStore.con
 
 ## Revoke store
 
-Store revocations in Redis or Postgres so workers can honour `stem worker revoke`:
+Store revocations in Redis/Postgres/SQLite so workers can honour
+`stem worker revoke`:
 
 ```bash
 export STEM_REVOKE_STORE_URL=postgres://postgres:postgres@localhost:5432/stem
 ```
 
-```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-revoke-store
+```dart title="Postgres revoke store" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-revoke-store
+
+```
+
+```dart title="SQLite revoke store" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-revoke-store-sqlite
 
 ```
 

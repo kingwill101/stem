@@ -67,6 +67,45 @@ void main() {
     ),
   );
 
+  runQueueEventsContractTests(
+    adapterName: 'Redis',
+    factory: QueueEventsContractFactory(
+      create: () async {
+        final namespace = _uniqueNamespace();
+        contractNamespace = namespace;
+        return RedisStreamsBroker.connect(
+          redisUrl,
+          namespace: namespace,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          claimInterval: const Duration(milliseconds: 200),
+          blockTime: const Duration(milliseconds: 100),
+        );
+      },
+      dispose: (broker) async {
+        if (broker is _NoCloseBroker) {
+          return;
+        }
+        await _safeCloseRedisBroker(broker as RedisStreamsBroker);
+      },
+      additionalBrokerFactory: () async {
+        final namespace = contractNamespace;
+        if (namespace == null || namespace.isEmpty) {
+          throw StateError(
+            'Redis queue-events contract requires primary broker namespace.',
+          );
+        }
+        final broker = await RedisStreamsBroker.connect(
+          redisUrl,
+          namespace: namespace,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          claimInterval: const Duration(milliseconds: 200),
+          blockTime: const Duration(milliseconds: 100),
+        );
+        return _NoCloseBroker(broker);
+      },
+    ),
+  );
+
   test('namespace isolates queue data', () async {
     final namespaceA = _uniqueNamespace();
     final namespaceB = _uniqueNamespace();

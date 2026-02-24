@@ -151,6 +151,99 @@ class ChordResult<T extends Object?> {
   final List<T?> values;
 }
 
+/// Lifecycle states for first-class batch submissions.
+enum BatchLifecycleState {
+  /// Batch has no completed children yet.
+  pending,
+
+  /// Batch has some completed children but is not terminal.
+  running,
+
+  /// All children succeeded.
+  succeeded,
+
+  /// All children failed.
+  failed,
+
+  /// All children were cancelled.
+  cancelled,
+
+  /// Batch completed with mixed terminal outcomes.
+  partial,
+}
+
+/// Handle returned when a batch is submitted.
+class BatchSubmission {
+  /// Creates a batch submission snapshot.
+  const BatchSubmission({
+    required this.batchId,
+    required this.taskIds,
+  });
+
+  /// Stable batch identifier.
+  final String batchId;
+
+  /// Child task ids dispatched for the batch.
+  final List<String> taskIds;
+}
+
+/// Durable batch status projection derived from group metadata/results.
+class BatchStatus {
+  /// Creates a durable batch status snapshot.
+  const BatchStatus({
+    required this.batchId,
+    required this.state,
+    required this.expected,
+    required this.completed,
+    required this.succeededCount,
+    required this.failedCount,
+    required this.cancelledCount,
+    required this.failedTaskIds,
+    required this.cancelledTaskIds,
+    required this.meta,
+  });
+
+  /// Stable batch identifier.
+  final String batchId;
+
+  /// Current batch lifecycle state.
+  final BatchLifecycleState state;
+
+  /// Total children expected for the batch.
+  final int expected;
+
+  /// Number of children currently in terminal states.
+  final int completed;
+
+  /// Number of children that succeeded.
+  final int succeededCount;
+
+  /// Number of children that failed.
+  final int failedCount;
+
+  /// Number of children that were cancelled.
+  final int cancelledCount;
+
+  /// Child task ids that failed.
+  final List<String> failedTaskIds;
+
+  /// Child task ids that were cancelled.
+  final List<String> cancelledTaskIds;
+
+  /// Persisted batch metadata.
+  final Map<String, Object?> meta;
+
+  /// Number of children not yet complete.
+  int get pendingCount => (expected - completed).clamp(0, expected);
+
+  /// Whether the batch is in a terminal state.
+  bool get isTerminal =>
+      state == BatchLifecycleState.succeeded ||
+      state == BatchLifecycleState.failed ||
+      state == BatchLifecycleState.cancelled ||
+      state == BatchLifecycleState.partial;
+}
+
 /// A high-level API for composing and dispatching tasks.
 ///
 /// [Canvas] publishes [Envelope]s to a [Broker] and records status in a
@@ -316,6 +409,45 @@ class Canvas {
       results: controller.stream,
       onDispose: dispose,
     );
+  }
+
+  /// Submits an immutable batch of task signatures under one batch id.
+  ///
+  /// Batches are backed by durable group records and can be inspected via
+  /// [inspectBatch]. The batch is immutable once submitted.
+  Future<BatchSubmission> submitBatch<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? batchId,
+    Duration? ttl,
+  }) async {
+    if (signatures.isEmpty) {
+      throw ArgumentError('Batch must include at least one task');
+    }
+    final id = batchId ?? _generateId('batch');
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    await backend.initGroup(
+      GroupDescriptor(
+        id: id,
+        expected: signatures.length,
+        ttl: ttl,
+        meta: {
+          'stem.batch': true,
+          'stem.batch.createdAt': createdAt,
+          'stem.batch.taskCount': signatures.length,
+        },
+      ),
+    );
+    final dispatch = await group(signatures, groupId: id);
+    final taskIds = List<String>.from(dispatch.taskIds);
+    await dispatch.dispose();
+    return BatchSubmission(batchId: id, taskIds: taskIds);
+  }
+
+  /// Reads durable lifecycle status for a submitted [batchId].
+  Future<BatchStatus?> inspectBatch(String batchId) async {
+    final status = await backend.getGroup(batchId);
+    if (status == null) return null;
+    return _buildBatchStatus(status);
   }
 
   /// Runs tasks sequentially, passing each result to the next.
@@ -548,6 +680,50 @@ class Canvas {
       }
       return values;
     }
+  }
+
+  BatchStatus _buildBatchStatus(GroupStatus status) {
+    final entries = status.results.entries.toList(growable: false);
+    final succeeded = entries
+        .where((entry) => entry.value.state == TaskState.succeeded)
+        .length;
+    final failedEntries = entries
+        .where((entry) => entry.value.state == TaskState.failed)
+        .toList(growable: false);
+    final cancelledEntries = entries
+        .where((entry) => entry.value.state == TaskState.cancelled)
+        .toList(growable: false);
+    final failed = failedEntries.length;
+    final cancelled = cancelledEntries.length;
+    final completed = entries.length;
+
+    BatchLifecycleState state;
+    if (completed == 0) {
+      state = BatchLifecycleState.pending;
+    } else if (completed < status.expected) {
+      state = BatchLifecycleState.running;
+    } else if (failed == 0 && cancelled == 0) {
+      state = BatchLifecycleState.succeeded;
+    } else if (succeeded == 0 && cancelled == 0) {
+      state = BatchLifecycleState.failed;
+    } else if (succeeded == 0 && failed == 0) {
+      state = BatchLifecycleState.cancelled;
+    } else {
+      state = BatchLifecycleState.partial;
+    }
+
+    return BatchStatus(
+      batchId: status.id,
+      state: state,
+      expected: status.expected,
+      completed: completed,
+      succeededCount: succeeded,
+      failedCount: failed,
+      cancelledCount: cancelled,
+      failedTaskIds: failedEntries.map((entry) => entry.key).toList(),
+      cancelledTaskIds: cancelledEntries.map((entry) => entry.key).toList(),
+      meta: status.meta,
+    );
   }
 
   (Envelope, TaskPayloadEncoder) _prepareEnvelope(Envelope envelope) {

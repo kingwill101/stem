@@ -52,6 +52,26 @@ void main() {
     ),
   );
 
+  runQueueEventsContractTests(
+    adapterName: 'SQLite',
+    factory: QueueEventsContractFactory(
+      create: () async => SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(milliseconds: 200),
+        pollInterval: const Duration(milliseconds: 25),
+        sweeperInterval: const Duration(milliseconds: 75),
+      ),
+      dispose: (broker) => (broker as SqliteBroker).close(),
+      additionalBrokerFactory: () async => SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(milliseconds: 200),
+        pollInterval: const Duration(milliseconds: 25),
+        sweeperInterval: const Duration(milliseconds: 75),
+      ),
+      additionalDispose: (broker) => (broker as SqliteBroker).close(),
+    ),
+  );
+
   test('fromDataSource runs migrations', () async {
     ensureSqliteDriverRegistration();
     final dataSource = DataSource(

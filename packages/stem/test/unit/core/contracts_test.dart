@@ -124,6 +124,10 @@ void main() {
         'maxRetries': 5,
         'softTimeLimitMs': 1000,
         'hardTimeLimitMs': '2000',
+        'groupRateLimit': '25/m',
+        'groupRateKey': 'tenant:acme',
+        'groupRateKeyHeader': 'x-tenant',
+        'groupRateLimiterFailureMode': 'failClosed',
         'unique': true,
         'uniqueForMs': 5000,
         'priority': 3,
@@ -144,6 +148,13 @@ void main() {
       expect(options.maxRetries, equals(5));
       expect(options.softTimeLimit, equals(const Duration(milliseconds: 1000)));
       expect(options.hardTimeLimit, equals(const Duration(milliseconds: 2000)));
+      expect(options.groupRateLimit, equals('25/m'));
+      expect(options.groupRateKey, equals('tenant:acme'));
+      expect(options.groupRateKeyHeader, equals('x-tenant'));
+      expect(
+        options.groupRateLimiterFailureMode,
+        equals(RateLimiterFailureMode.failClosed),
+      );
       expect(options.unique, isTrue);
       expect(options.uniqueFor, equals(const Duration(milliseconds: 5000)));
       expect(options.priority, equals(3));

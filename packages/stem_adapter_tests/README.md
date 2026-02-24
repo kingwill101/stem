@@ -26,6 +26,11 @@ void main() {
     factory: ResultBackendContractFactory(create: createBackend),
   );
 
+  runQueueEventsContractTests(
+    adapterName: 'my-adapter',
+    factory: QueueEventsContractFactory(create: createBroker),
+  );
+
   final workflowFactory = WorkflowStoreContractFactory(
     create: createWorkflowStore,
   );
@@ -63,6 +68,12 @@ all other contract assertions active.
 | `verifyChordClaiming` | `true` | Chord claiming tests | Verifies single-claimant callback dispatch semantics. |
 | `verifyWorkerHeartbeats` | `true` | Heartbeat CRUD tests | Verifies heartbeat set/get/list/update behavior. |
 | `verifyHeartbeatExpiry` | `true` | Heartbeat expiry tests | Verifies heartbeat TTL expiration behavior independently from heartbeat CRUD checks. |
+
+### QueueEventsContractCapabilities
+
+| Flag | Default | Affects | Behavior when enabled |
+|---|---|---|---|
+| `verifyFanout` | `true` | Multi-listener fan-out tests | Verifies custom queue events reach all active listeners on the same queue scope. |
 
 ### WorkflowStoreContractCapabilities
 

@@ -1,3 +1,5 @@
+import 'package:stem/src/core/stem_event.dart';
+
 /// Enumerates workflow step event types emitted by the runtime.
 enum WorkflowStepEventType {
   /// Step execution started.
@@ -14,7 +16,7 @@ enum WorkflowStepEventType {
 }
 
 /// Step-level execution event emitted by the workflow runtime.
-class WorkflowStepEvent {
+class WorkflowStepEvent implements StemEvent {
   /// Creates a workflow step execution event.
   WorkflowStepEvent({
     required this.runId,
@@ -54,6 +56,23 @@ class WorkflowStepEvent {
 
   /// Optional metadata associated with the event.
   final Map<String, Object?>? metadata;
+
+  @override
+  String get eventName => 'workflow.step.${type.name}';
+
+  @override
+  DateTime get occurredAt => timestamp;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'runId': runId,
+    'workflow': workflow,
+    'stepId': stepId,
+    if (iteration != null) 'iteration': iteration,
+    if (result != null) 'result': result,
+    if (error != null) 'error': error,
+    if (metadata != null) 'metadata': metadata,
+  };
 }
 
 /// Sink for workflow step execution events.

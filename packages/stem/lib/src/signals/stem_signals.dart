@@ -32,6 +32,7 @@ library;
 
 import 'package:contextual/contextual.dart';
 
+import 'package:stem/src/core/stem_event.dart';
 import 'package:stem/src/observability/logging.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/signals/signal.dart';
@@ -363,6 +364,12 @@ class StemSignals {
     workerHeartbeat,
     workerChildInit,
     workerChildShutdown,
+    workflowRunStarted,
+    workflowRunSuspended,
+    workflowRunResumed,
+    workflowRunCompleted,
+    workflowRunFailed,
+    workflowRunCancelled,
     scheduleEntryDue,
     scheduleEntryDispatched,
     scheduleEntryFailed,
@@ -412,56 +419,113 @@ class StemSignals {
   static SignalSubscription onTaskPrerun(
     SignalHandler<TaskPrerunPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskPrerun.connect(handler, filter: _taskNameFilter(taskName));
+    return taskPrerun.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task postrun signal with optional filtering.
   static SignalSubscription onTaskPostrun(
     SignalHandler<TaskPostrunPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskPostrun.connect(handler, filter: _taskNameFilter(taskName));
+    return taskPostrun.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task success signal with optional filtering.
   static SignalSubscription onTaskSuccess(
     SignalHandler<TaskSuccessPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskSucceeded.connect(handler, filter: _taskNameFilter(taskName));
+    return taskSucceeded.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task failure signal with optional filtering.
   static SignalSubscription onTaskFailure(
     SignalHandler<TaskFailurePayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskFailed.connect(handler, filter: _taskNameFilter(taskName));
+    return taskFailed.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task retry signal with optional filtering.
   static SignalSubscription onTaskRetry(
     SignalHandler<TaskRetryPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskRetry.connect(handler, filter: _taskNameFilter(taskName));
+    return taskRetry.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task received signal with optional filtering.
   static SignalSubscription onTaskReceived(
     SignalHandler<TaskReceivedPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskReceived.connect(handler, filter: _taskNameFilter(taskName));
+    return taskReceived.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
   }
 
   /// Subscribes to the task revoked signal with optional filtering.
   static SignalSubscription onTaskRevoked(
     SignalHandler<TaskRevokedPayload> handler, {
     String? taskName,
+    String? workerId,
   }) {
-    return taskRevoked.connect(handler, filter: _taskNameFilter(taskName));
+    return taskRevoked.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
+  }
+
+  /// Subscribes to the worker init signal with optional filtering.
+  static SignalSubscription onWorkerInit(
+    SignalHandler<WorkerLifecyclePayload> handler, {
+    String? workerId,
+  }) {
+    return workerInit.connect(handler, filter: _workerIdFilter(workerId));
   }
 
   /// Subscribes to the worker heartbeat signal with optional filtering.
@@ -489,6 +553,22 @@ class StemSignals {
       handler,
       filter: _workerIdFilter(workerId),
     );
+  }
+
+  /// Subscribes to the worker stopping signal with optional filtering.
+  static SignalSubscription onWorkerStopping(
+    SignalHandler<WorkerLifecyclePayload> handler, {
+    String? workerId,
+  }) {
+    return workerStopping.connect(handler, filter: _workerIdFilter(workerId));
+  }
+
+  /// Subscribes to the worker shutdown signal with optional filtering.
+  static SignalSubscription onWorkerShutdown(
+    SignalHandler<WorkerLifecyclePayload> handler, {
+    String? workerId,
+  }) {
+    return workerShutdown.connect(handler, filter: _workerIdFilter(workerId));
   }
 
   /// Subscribes to the schedule entry due signal with optional filtering.
@@ -529,10 +609,14 @@ class StemSignals {
   static SignalSubscription onControlCommandReceived(
     SignalHandler<ControlCommandReceivedPayload> handler, {
     String? commandType,
+    String? workerId,
   }) {
     return controlCommandReceived.connect(
       handler,
-      filter: _commandTypeFilter(commandType),
+      filter: _mergeFilters([
+        _commandTypeFilter(commandType),
+        _workerIdFilter(workerId),
+      ]),
     );
   }
 
@@ -541,10 +625,14 @@ class StemSignals {
   static SignalSubscription onControlCommandCompleted(
     SignalHandler<ControlCommandCompletedPayload> handler, {
     String? commandType,
+    String? workerId,
   }) {
     return controlCommandCompleted.connect(
       handler,
-      filter: _commandTypeFilter(commandType),
+      filter: _mergeFilters([
+        _commandTypeFilter(commandType),
+        _workerIdFilter(workerId),
+      ]),
     );
   }
 
@@ -553,13 +641,12 @@ class StemSignals {
     SignalHandler<WorkerLifecyclePayload> handler, {
     String? workerId,
   }) {
-    return workerReady.connect(
-      handler,
-      filter: _workerIdFilter<WorkerLifecyclePayload>(workerId),
-    );
+    return workerReady.connect(handler, filter: _workerIdFilter(workerId));
   }
 
-  static SignalFilter<T>? _taskNameFilter<T>(String? taskName) {
+  static SignalFilter<T>? _taskNameFilter<T extends StemEvent>(
+    String? taskName,
+  ) {
     if (taskName == null) return null;
     return SignalFilter<T>.where(
       (payload, _) => _payloadTaskName(payload as Object) == taskName,
@@ -579,7 +666,9 @@ class StemSignals {
     return null;
   }
 
-  static SignalFilter<T>? _workerIdFilter<T>(String? workerId) {
+  static SignalFilter<T>? _workerIdFilter<T extends StemEvent>(
+    String? workerId,
+  ) {
     if (workerId == null) return null;
     return SignalFilter<T>.where(
       (payload, _) => _payloadWorkerId(payload as Object) == workerId,
@@ -602,7 +691,9 @@ class StemSignals {
     return null;
   }
 
-  static SignalFilter<T>? _scheduleIdFilter<T>(String? entryId) {
+  static SignalFilter<T>? _scheduleIdFilter<T extends StemEvent>(
+    String? entryId,
+  ) {
     if (entryId == null) return null;
     return SignalFilter<T>.where(
       (payload, _) => _payloadScheduleId(payload as Object) == entryId,
@@ -616,7 +707,9 @@ class StemSignals {
     return null;
   }
 
-  static SignalFilter<T>? _commandTypeFilter<T>(String? commandType) {
+  static SignalFilter<T>? _commandTypeFilter<T extends StemEvent>(
+    String? commandType,
+  ) {
     if (commandType == null) return null;
     return SignalFilter<T>.where(
       (payload, _) => _payloadCommandType(payload as Object) == commandType,
@@ -631,6 +724,19 @@ class StemSignals {
       return payload.command.type;
     }
     return null;
+  }
+
+  static SignalFilter<T>? _mergeFilters<T extends StemEvent>(
+    Iterable<SignalFilter<T>?> filters,
+  ) {
+    SignalFilter<T>? merged;
+    for (final filter in filters) {
+      if (filter == null) {
+        continue;
+      }
+      merged = merged == null ? filter : merged.and(filter);
+    }
+    return merged;
   }
 
   static SignalDispatchConfig _dispatchConfigFor(String name) =>

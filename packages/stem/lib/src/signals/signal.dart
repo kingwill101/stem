@@ -1,17 +1,24 @@
 import 'dart:async';
 
+import 'package:stem/src/core/stem_event.dart';
+
 /// Signature for signal handlers.
-typedef SignalHandler<T> =
+typedef SignalHandler<T extends StemEvent> =
     FutureOr<void> Function(T payload, SignalContext context);
 
 /// Predicate used to filter signal payloads.
-typedef SignalPredicate<T> = bool Function(T payload, SignalContext context);
+typedef SignalPredicate<T extends StemEvent> =
+    bool Function(T payload, SignalContext context);
 
 /// Context passed to every signal dispatch.
 class SignalContext {
   /// Creates a signal dispatch context.
-  SignalContext({required this.name, this.sender, DateTime? timestamp})
-    : timestamp = timestamp ?? DateTime.now();
+  SignalContext({
+    required this.name,
+    this.sender,
+    DateTime? timestamp,
+    this.event,
+  }) : timestamp = timestamp ?? DateTime.now();
 
   /// Signal identifier.
   final String name;
@@ -21,6 +28,9 @@ class SignalContext {
 
   /// Time when dispatch started.
   final DateTime timestamp;
+
+  /// Shared event wrapper for this dispatch.
+  final StemEvent? event;
 
   bool _cancelled = false;
 
@@ -70,7 +80,7 @@ class SignalSubscription {
 }
 
 /// Filters signal emissions based on payload and context.
-class SignalFilter<T> {
+class SignalFilter<T extends StemEvent> {
   /// Creates a filter using [predicate].
   factory SignalFilter.where(SignalPredicate<T> predicate) =>
       SignalFilter<T>._(predicate);
@@ -81,7 +91,8 @@ class SignalFilter<T> {
   static bool _alwaysTrue<T>(T _, SignalContext _) => true;
 
   /// Allows all payloads through the filter.
-  static SignalFilter<T> allowAll<T>() => SignalFilter<T>._(_alwaysTrue);
+  static SignalFilter<T> allowAll<T extends StemEvent>() =>
+      SignalFilter<T>._(_alwaysTrue);
 
   /// Returns whether the [payload] passes the filter.
   bool matches(T payload, SignalContext context) =>
@@ -99,7 +110,7 @@ class SignalFilter<T> {
 }
 
 /// Dispatchable signal with typed payloads and listener management.
-class Signal<T> {
+class Signal<T extends StemEvent> {
   /// Creates a signal with the given [name] and default filter.
   Signal({
     required this.name,
@@ -143,11 +154,16 @@ class Signal<T> {
 
   /// Emits the signal to all matching listeners.
   Future<void> emit(T payload, {String? sender}) async {
-    if (!config.enabled || _listeners.isEmpty) {
+    if (!config.enabled || !hasListeners) {
       return;
     }
 
-    final context = SignalContext(name: name, sender: sender);
+    final context = SignalContext(
+      name: name,
+      sender: sender,
+      timestamp: payload.occurredAt,
+      event: payload,
+    );
     final snapshot = List<_Listener<T>>.from(_listeners);
     for (final listener in snapshot) {
       if (!_listeners.contains(listener)) {
@@ -172,7 +188,7 @@ class Signal<T> {
   }
 }
 
-class _Listener<T> {
+class _Listener<T extends StemEvent> {
   _Listener({
     required this.handler,
     required this.filter,

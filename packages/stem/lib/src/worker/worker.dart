@@ -109,6 +109,7 @@ import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/stem.dart';
+import 'package:stem/src/core/stem_event.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
@@ -585,16 +586,19 @@ class Worker {
   bool _running = false;
   final Map<String, _ActiveDelivery> _activeDeliveries = {};
   final Map<String, int> _inflightPerQueue = {};
+  final Set<String> _queueSubscriptionNames = <String>{};
   int _inflight = 0;
   Timer? _workerHeartbeatTimer;
   DateTime? _lastLeaseRenewal;
   int? _lastQueueDepth;
   final Map<String, RevokeEntry> _revocations = {};
+  final Map<String, RevokeEntry> _queuePauses = {};
   int _latestRevocationVersion = 0;
   DateTime? _startedAt;
   int _startedCount = 0;
   int _completedCount = 0;
   int _failedCount = 0;
+  static const String _queuePauseTaskPrefix = '__stem.queue.pause__:';
 
   /// A stream of events emitted during task processing.
   ///
@@ -627,53 +631,10 @@ class Worker {
     _recordInflightGauge();
     _recordConcurrencyGauge();
     unawaited(_publishWorkerHeartbeat());
-    final queueNames = _effectiveQueues;
-    if (queueNames.isEmpty) {
+    if (_effectiveQueues.isEmpty) {
       throw StateError('Worker subscription resolved no queues.');
     }
-    for (var index = 0; index < queueNames.length; index += 1) {
-      final queueName = queueNames[index];
-      final stream = broker.consume(
-        RoutingSubscription(
-          queues: [queueName],
-          broadcastChannels: index == 0
-              ? _broadcastSubscriptions
-              : const <String>[],
-        ),
-        prefetch: prefetch,
-        consumerName: consumerName,
-      );
-      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
-      // ignore: cancel_subscriptions
-      final subscription = stream.listen(
-        (delivery) {
-          // Fire-and-forget; handler manages its own lifecycle.
-          final task = _handle(delivery);
-          unawaited(
-            task.catchError((Object error, StackTrace stack) {
-              _events.add(
-                WorkerEvent(
-                  type: WorkerEventType.error,
-                  envelope: delivery.envelope,
-                  error: error,
-                  stackTrace: stack,
-                ),
-              );
-            }),
-          );
-        },
-        onError: (Object error, StackTrace stack) {
-          _events.add(
-            WorkerEvent(
-              type: WorkerEventType.error,
-              error: error,
-              stackTrace: stack,
-            ),
-          );
-        },
-      );
-      _subscriptions[queueName] = subscription;
-    }
+    await _refreshQueueSubscriptions();
     _startControlPlane();
     _startAutoscaler();
     _installSignalHandlers();
@@ -736,6 +697,7 @@ class Worker {
     _cancelTimers();
     await heartbeatTransport.close();
     _revocations.clear();
+    _queuePauses.clear();
     _latestRevocationVersion = 0;
     _inflightPerQueue.clear();
     _inflight = 0;
@@ -813,7 +775,95 @@ class Worker {
           return;
         }
 
+        if (_isQueuePaused(envelope.queue)) {
+          await _handlePausedQueueDelivery(delivery, envelope, resultEncoder);
+          return;
+        }
+
         final decodedArgs = _decodeArgs(envelope, argsEncoder);
+
+        final groupRateSpec = handler.options.groupRateLimit != null
+            ? _parseRate(handler.options.groupRateLimit!)
+            : null;
+        if (rateLimiter != null && groupRateSpec != null) {
+          final groupKey = _groupRateLimitKey(handler.options, envelope);
+          try {
+            final decision = await rateLimiter!.acquire(
+              'group:$groupKey',
+              tokens: groupRateSpec.tokens,
+              interval: groupRateSpec.period,
+              meta: {'task': envelope.name, 'queue': envelope.queue},
+            );
+            if (!decision.allowed) {
+              final backoff =
+                  decision.retryAfter ??
+                  retryStrategy.nextDelay(
+                    envelope.attempt,
+                    StateError('group-rate-limit'),
+                    StackTrace.current,
+                  );
+              await _retryDelivery(
+                delivery,
+                envelope,
+                resultEncoder,
+                backoff: backoff,
+                extra: {
+                  'rateLimited': true,
+                  'groupRateLimited': true,
+                  'groupKey': groupKey,
+                  'retryAfterMs': backoff.inMilliseconds,
+                },
+              );
+              return;
+            }
+          } on Object catch (error, stack) {
+            final mode = handler.options.groupRateLimiterFailureMode;
+            if (mode == RateLimiterFailureMode.failOpen) {
+              StemMetrics.instance.increment(
+                'stem.rate_limiter.degraded',
+                tags: {
+                  'task': envelope.name,
+                  'queue': envelope.queue,
+                  'scope': 'group',
+                  'mode': mode.name,
+                },
+              );
+              stemLogger.warning(
+                'Group rate limiter unavailable; continuing in fail-open mode',
+                Context(
+                  _logContext({
+                    'task': envelope.name,
+                    'id': envelope.id,
+                    'queue': envelope.queue,
+                    'group': groupKey,
+                    'error': error.toString(),
+                    'stack': stack.toString(),
+                  }),
+                ),
+              );
+            } else {
+              final backoff = retryStrategy.nextDelay(
+                envelope.attempt,
+                error,
+                stack,
+              );
+              await _retryDelivery(
+                delivery,
+                envelope,
+                resultEncoder,
+                backoff: backoff,
+                extra: {
+                  'groupRateLimited': true,
+                  'groupKey': groupKey,
+                  'rateLimiterUnavailable': true,
+                  'failureMode': mode.name,
+                  'error': error.toString(),
+                },
+              );
+              return;
+            }
+          }
+        }
 
         final rateSpec = handler.options.rateLimit != null
             ? _parseRate(handler.options.rateLimit!)
@@ -833,32 +883,15 @@ class Worker {
                   StateError('rate-limit'),
                   StackTrace.current,
                 );
-            await broker.nack(delivery, requeue: false);
-            await broker.publish(
-              envelope.copyWith(notBefore: DateTime.now().add(backoff)),
-            );
-            await backend.set(
-              envelope.id,
-              TaskState.retried,
-              attempt: envelope.attempt,
-              meta: _statusMeta(
-                envelope,
-                resultEncoder,
-                extra: {
-                  'rateLimited': true,
-                  'retryAfterMs': backoff.inMilliseconds,
-                },
-              ),
-            );
-            _events.add(
-              WorkerEvent(
-                type: WorkerEventType.retried,
-                envelope: envelope,
-                data: {
-                  'rateLimited': true,
-                  'retryAfterMs': backoff.inMilliseconds,
-                },
-              ),
+            await _retryDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              backoff: backoff,
+              extra: {
+                'rateLimited': true,
+                'retryAfterMs': backoff.inMilliseconds,
+              },
             );
             return;
           }
@@ -2240,6 +2273,70 @@ class Worker {
   String _rateLimitKey(TaskOptions options, Envelope envelope) =>
       '${envelope.name}:${envelope.headers['tenant'] ?? 'global'}';
 
+  /// Resolves a shared group rate-limit key for the current task.
+  String _groupRateLimitKey(TaskOptions options, Envelope envelope) {
+    final configured = options.groupRateKey?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
+    final header = options.groupRateKeyHeader.trim();
+    if (header.isNotEmpty) {
+      final fromHeader = envelope.headers[header]?.trim();
+      if (fromHeader != null && fromHeader.isNotEmpty) {
+        return fromHeader;
+      }
+    }
+    return 'global';
+  }
+
+  /// Requeues a delivery after [backoff] and records retry metadata.
+  Future<void> _retryDelivery(
+    Delivery delivery,
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder, {
+    required Duration backoff,
+    Map<String, Object?> extra = const {},
+  }) async {
+    await broker.nack(delivery, requeue: false);
+    await broker.publish(
+      envelope.copyWith(notBefore: DateTime.now().add(backoff)),
+    );
+    final data = <String, Object?>{
+      ...extra,
+      if (!extra.containsKey('retryAfterMs'))
+        'retryAfterMs': backoff.inMilliseconds,
+    };
+    await backend.set(
+      envelope.id,
+      TaskState.retried,
+      attempt: envelope.attempt,
+      meta: _statusMeta(envelope, resultEncoder, extra: data),
+    );
+    _events.add(
+      WorkerEvent(
+        type: WorkerEventType.retried,
+        envelope: envelope,
+        data: data,
+      ),
+    );
+  }
+
+  /// Requeues deliveries from paused queues without executing handlers.
+  Future<void> _handlePausedQueueDelivery(
+    Delivery delivery,
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
+  ) async {
+    const backoff = Duration(milliseconds: 250);
+    await _retryDelivery(
+      delivery,
+      envelope,
+      resultEncoder,
+      backoff: backoff,
+      extra: {'queuePaused': true, 'queue': envelope.queue},
+    );
+  }
+
   /// Parses a rate limit string such as "10/m" into a spec.
   _RateSpec? _parseRate(String rate) {
     final parts = rate.split('/');
@@ -2360,11 +2457,95 @@ class Worker {
     return result;
   }
 
+  /// Refreshes queue subscriptions after pause/resume changes.
+  Future<void> _refreshQueueSubscriptions() async {
+    final existing = List<String>.from(_queueSubscriptionNames);
+    for (final queueName in existing) {
+      final subscription = _subscriptions.remove(queueName);
+      _queueSubscriptionNames.remove(queueName);
+      if (subscription == null) continue;
+      try {
+        await subscription.cancel();
+      } on Object catch (error, stack) {
+        stemLogger.warning(
+          'Failed to cancel queue subscription: $error',
+          Context(
+            _logContext({
+              'queue': queueName,
+              'stack': stack.toString(),
+            }),
+          ),
+        );
+      }
+    }
+
+    final activeQueues = _effectiveQueues
+        .where((queueName) => !_isQueuePaused(queueName))
+        .toList(growable: false);
+    if (activeQueues.isEmpty) {
+      stemLogger.info(
+        'All subscribed queues are paused.',
+        Context(
+          _logContext({
+            'worker': _workerIdentifier,
+            'queues': _effectiveQueues.join(','),
+          }),
+        ),
+      );
+      return;
+    }
+
+    for (var index = 0; index < activeQueues.length; index += 1) {
+      final queueName = activeQueues[index];
+      final stream = broker.consume(
+        RoutingSubscription(
+          queues: [queueName],
+          broadcastChannels: index == 0
+              ? _broadcastSubscriptions
+              : const <String>[],
+        ),
+        prefetch: prefetch,
+        consumerName: consumerName,
+      );
+      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
+      // ignore: cancel_subscriptions
+      final subscription = stream.listen(
+        (delivery) {
+          final task = _handle(delivery);
+          unawaited(
+            task.catchError((Object error, StackTrace stack) {
+              _events.add(
+                WorkerEvent(
+                  type: WorkerEventType.error,
+                  envelope: delivery.envelope,
+                  error: error,
+                  stackTrace: stack,
+                ),
+              );
+            }),
+          );
+        },
+        onError: (Object error, StackTrace stack) {
+          _events.add(
+            WorkerEvent(
+              type: WorkerEventType.error,
+              error: error,
+              stackTrace: stack,
+            ),
+          );
+        },
+      );
+      _subscriptions[queueName] = subscription;
+      _queueSubscriptionNames.add(queueName);
+    }
+  }
+
   /// Cancels broker subscriptions and clears tracking state.
   Future<void> _cancelAllSubscriptions() async {
     if (_subscriptions.isEmpty) return;
     final subs = List<StreamSubscription<Delivery>>.from(_subscriptions.values);
     _subscriptions.clear();
+    _queueSubscriptionNames.clear();
     for (final sub in subs) {
       try {
         await sub.cancel();
@@ -2961,10 +3142,15 @@ class Worker {
     try {
       final fetched = await store.list(namespace);
       for (final entry in fetched) {
+        if (_isQueuePauseTaskId(entry.taskId)) {
+          _applyQueuePauseEntry(entry, clock: now);
+          continue;
+        }
         _applyRevocationEntry(entry, clock: now);
       }
       await store.pruneExpired(namespace, now);
       _pruneExpiredLocalRevocations(now);
+      _pruneExpiredQueuePauses(now);
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Failed to synchronize revokes: $error',
@@ -2982,6 +3168,58 @@ class Worker {
       }
     });
     remove.forEach(_revocations.remove);
+  }
+
+  /// Drops expired queue pause entries from local state.
+  void _pruneExpiredQueuePauses(DateTime now) {
+    final remove = <String>[];
+    _queuePauses.forEach((key, value) {
+      if (value.isExpired(now)) {
+        remove.add(key);
+      }
+    });
+    remove.forEach(_queuePauses.remove);
+  }
+
+  bool _isQueuePauseTaskId(String taskId) =>
+      taskId.startsWith(_queuePauseTaskPrefix);
+
+  String _queuePauseTaskId(String queue) => '$_queuePauseTaskPrefix$queue';
+
+  String? _queueNameFromPauseTaskId(String taskId) {
+    if (!_isQueuePauseTaskId(taskId)) return null;
+    final queue = taskId.substring(_queuePauseTaskPrefix.length).trim();
+    return queue.isEmpty ? null : queue;
+  }
+
+  void _applyQueuePauseEntry(RevokeEntry entry, {DateTime? clock}) {
+    final queueName = _queueNameFromPauseTaskId(entry.taskId);
+    if (queueName == null) return;
+    final now = clock ?? DateTime.now().toUtc();
+    if (entry.isExpired(now)) {
+      _queuePauses.remove(queueName);
+      return;
+    }
+    final current = _queuePauses[queueName];
+    if (current == null || entry.version >= current.version) {
+      _queuePauses[queueName] = entry;
+    }
+  }
+
+  bool _isQueuePaused(String queueName) {
+    final entry = _queuePauses[queueName];
+    if (entry == null) return false;
+    if (entry.isExpired(DateTime.now().toUtc())) {
+      _queuePauses.remove(queueName);
+      return false;
+    }
+    return true;
+  }
+
+  List<String> _pausedQueueNames() {
+    _pruneExpiredQueuePauses(DateTime.now().toUtc());
+    final queues = _queuePauses.keys.toList()..sort();
+    return queues;
   }
 
   RevokeEntry? _revocationFor(String taskId) {
@@ -3488,6 +3726,94 @@ class Worker {
     };
   }
 
+  List<String> _extractQueueTargets(Map<String, Object?> payload) {
+    final queues = <String>{};
+    final queue = (payload['queue'] as String?)?.trim();
+    if (queue != null && queue.isNotEmpty) {
+      queues.add(queue);
+    }
+    final rawQueues = payload['queues'];
+    if (rawQueues is List) {
+      for (final value in rawQueues) {
+        final queueName = value.toString().trim();
+        if (queueName.isNotEmpty) {
+          queues.add(queueName);
+        }
+      }
+    }
+    return queues.toList()..sort();
+  }
+
+  Future<Map<String, Object?>> _processQueuePauseCommand(
+    ControlCommandMessage command, {
+    required bool paused,
+  }) async {
+    final payload = command.payload;
+    final namespaceOverride = (payload['namespace'] as String?)?.trim();
+    if (namespaceOverride != null &&
+        namespaceOverride.isNotEmpty &&
+        namespaceOverride != namespace) {
+      return {
+        'queues': const <String>[],
+        'updated': 0,
+        'paused': _pausedQueueNames(),
+        'namespace': namespace,
+      };
+    }
+    final queues = _extractQueueTargets(payload);
+    if (queues.isEmpty) {
+      throw StateError('Queue control command requires at least one queue.');
+    }
+
+    final now = DateTime.now().toUtc();
+    final requester = (payload['requester'] as String?)?.trim();
+    final reason = (payload['reason'] as String?)?.trim();
+    final baseVersion = generateRevokeVersion();
+    final entries = <RevokeEntry>[];
+    for (var i = 0; i < queues.length; i += 1) {
+      entries.add(
+        RevokeEntry(
+          namespace: namespace,
+          taskId: _queuePauseTaskId(queues[i]),
+          version: baseVersion + i,
+          issuedAt: now,
+          terminate: false,
+          reason: reason,
+          requestedBy: requester,
+          expiresAt: paused ? null : now,
+        ),
+      );
+    }
+
+    final store = revokeStore;
+    if (store != null) {
+      try {
+        await store.upsertAll(entries);
+        await store.pruneExpired(namespace, now);
+      } on Object catch (error, stack) {
+        stemLogger.warning(
+          'Failed to persist queue pause state: $error',
+          Context(_logContext({'stack': stack.toString()})),
+        );
+        throw StateError('Failed to persist queue pause state: $error');
+      }
+    }
+
+    for (final entry in entries) {
+      _applyQueuePauseEntry(entry, clock: now);
+    }
+    _pruneExpiredQueuePauses(now);
+    await _refreshQueueSubscriptions();
+
+    return {
+      'queues': queues,
+      'updated': queues.length,
+      'persisted': store != null,
+      'paused': _pausedQueueNames(),
+      'namespace': namespace,
+    };
+  }
+
   /// Starts the control-plane subscription for revoke and shutdown commands.
   void _startControlPlane() {
     final controlQueues = <String>{
@@ -3605,6 +3931,39 @@ class Worker {
               },
             );
           }
+        case 'queue_pause':
+          final result = await _processQueuePauseCommand(
+            command,
+            paused: true,
+          );
+          reply = ControlReplyMessage(
+            requestId: command.requestId,
+            workerId: _workerIdentifier,
+            status: 'ok',
+            payload: result,
+          );
+        case 'queue_resume':
+          final result = await _processQueuePauseCommand(
+            command,
+            paused: false,
+          );
+          reply = ControlReplyMessage(
+            requestId: command.requestId,
+            workerId: _workerIdentifier,
+            status: 'ok',
+            payload: result,
+          );
+        case 'queue_status':
+          reply = ControlReplyMessage(
+            requestId: command.requestId,
+            workerId: _workerIdentifier,
+            status: 'ok',
+            payload: {
+              'namespace': namespace,
+              'paused': _pausedQueueNames(),
+              'subscriptions': _subscriptionMetadata(),
+            },
+          );
         case 'shutdown':
           final mode = _parseShutdownMode(command.payload['mode'] as String?);
           final summary = await _handleShutdownRequest(mode);
@@ -3698,6 +4057,7 @@ class Worker {
       'prefetch': prefetch,
       'inflight': _inflight,
       'queues': queues,
+      'pausedQueues': _pausedQueueNames(),
       'active': activeTasks,
       'subscriptions': _subscriptionMetadata(),
       'lastLeaseRenewalMsAgo': _lastLeaseRenewal == null
@@ -3739,6 +4099,7 @@ class Worker {
       'timestamp': now.toIso8601String(),
       'inflight': _inflight,
       'active': active,
+      'pausedQueues': _pausedQueueNames(),
       if (includeRevoked) 'revoked': revoked,
     };
   }
@@ -3935,7 +4296,7 @@ class Worker {
 /// An event emitted during worker operation.
 ///
 /// Provides details about task lifecycle, errors, and progress.
-class WorkerEvent {
+class WorkerEvent implements StemEvent {
   /// Creates a worker event.
   ///
   /// [type] indicates the event kind. [envelope] provides task details for
@@ -3944,16 +4305,20 @@ class WorkerEvent {
   /// percentage. [data] holds additional event-specific information.
   WorkerEvent({
     required this.type,
+    DateTime? timestamp,
     this.envelope,
     this.envelopeId,
     this.error,
     this.stackTrace,
     this.progress,
     this.data,
-  });
+  }) : timestamp = timestamp ?? DateTime.now();
 
   /// The type of event.
   final WorkerEventType type;
+
+  /// Time when the event was created.
+  final DateTime timestamp;
 
   /// The envelope associated with the event, if applicable.
   final Envelope? envelope;
@@ -3972,6 +4337,24 @@ class WorkerEvent {
 
   /// Additional data for the event.
   final Map<String, Object?>? data;
+
+  @override
+  String get eventName => 'worker.${type.name}';
+
+  @override
+  DateTime get occurredAt => timestamp;
+
+  @override
+  Map<String, Object?> get attributes => {
+    if (envelope != null) 'envelopeId': envelope!.id,
+    if (envelope != null) 'taskName': envelope!.name,
+    if (envelope != null) 'queue': envelope!.queue,
+    if (envelopeId != null) 'trackedEnvelopeId': envelopeId,
+    if (error != null) 'error': error.toString(),
+    if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+    if (progress != null) 'progress': progress,
+    if (data != null) 'data': data,
+  };
 }
 
 /// Types of events a worker can emit.

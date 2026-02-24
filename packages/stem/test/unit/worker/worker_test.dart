@@ -1288,6 +1288,283 @@ void main() {
       broker.dispose();
     });
 
+    test('shares group limiter keys across task types', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final limiter = _ScenarioRateLimiter((key, attempt) {
+        if (key == 'group:acme' && attempt == 2) {
+          return const RateLimitDecision(
+            allowed: false,
+            retryAfter: Duration(milliseconds: 25),
+          );
+        }
+        return const RateLimitDecision(allowed: true);
+      });
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.group.a',
+            options: const TaskOptions(
+              groupRateLimit: '1/s',
+              groupRateKeyHeader: 'tenant',
+            ),
+            entrypoint: (context, args) async => null,
+          ),
+        )
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'tasks.group.b',
+            options: const TaskOptions(
+              groupRateLimit: '1/s',
+              groupRateKeyHeader: 'tenant',
+            ),
+            entrypoint: (context, args) async => null,
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        rateLimiter: limiter,
+        consumerName: 'group-limit-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final firstId = await stem.enqueue(
+        'tasks.group.a',
+        headers: const {'tenant': 'acme'},
+      );
+      final secondId = await stem.enqueue(
+        'tasks.group.b',
+        headers: const {'tenant': 'acme'},
+      );
+
+      await _waitFor(
+        () =>
+            events
+                .where((event) => event.type == WorkerEventType.completed)
+                .length >=
+            2,
+        timeout: const Duration(seconds: 3),
+      );
+
+      expect(await backend.get(firstId), isNotNull);
+      expect((await backend.get(firstId))?.state, TaskState.succeeded);
+      expect((await backend.get(secondId))?.state, TaskState.succeeded);
+      expect(
+        limiter.keys.where((key) => key == 'group:acme').length,
+        greaterThanOrEqualTo(2),
+      );
+      expect(
+        events.any(
+          (event) =>
+              event.type == WorkerEventType.retried &&
+              event.data?['groupRateLimited'] == true,
+        ),
+        isTrue,
+      );
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test(
+      'group limiter fail-open continues execution on limiter errors',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 20),
+        );
+        final backend = InMemoryResultBackend();
+        final limiter = _ScenarioRateLimiter((key, attempt) {
+          throw StateError('limiter unavailable');
+        });
+        final registry = SimpleTaskRegistry()
+          ..register(
+            FunctionTaskHandler<void>(
+              name: 'tasks.group.failopen',
+              options: const TaskOptions(
+                groupRateLimit: '10/m',
+                groupRateKeyHeader: 'tenant',
+                groupRateLimiterFailureMode: RateLimiterFailureMode.failOpen,
+              ),
+              entrypoint: (context, args) async => null,
+            ),
+          );
+        final worker = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          rateLimiter: limiter,
+          consumerName: 'group-fail-open-worker',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue(
+          'tasks.group.failopen',
+          headers: const {'tenant': 'acme'},
+        );
+
+        await _waitForTaskState(backend, taskId, TaskState.succeeded);
+        expect((await backend.get(taskId))?.state, TaskState.succeeded);
+
+        await worker.shutdown();
+        broker.dispose();
+      },
+    );
+
+    test(
+      'group limiter fail-closed requeues while limiter is unavailable',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 20),
+        );
+        final backend = InMemoryResultBackend();
+        final limiter = _ScenarioRateLimiter((key, attempt) {
+          throw StateError('limiter unavailable');
+        });
+        var executed = 0;
+        final registry = SimpleTaskRegistry()
+          ..register(
+            FunctionTaskHandler<void>(
+              name: 'tasks.group.failclosed',
+              options: const TaskOptions(
+                groupRateLimit: '10/m',
+                groupRateKeyHeader: 'tenant',
+                groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
+              ),
+              entrypoint: (context, args) async {
+                executed += 1;
+                return null;
+              },
+            ),
+          );
+        final worker = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          rateLimiter: limiter,
+          consumerName: 'group-fail-closed-worker',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+          retryStrategy: const _FixedRetryStrategy(
+            Duration(milliseconds: 120),
+          ),
+        );
+
+        await worker.start();
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue(
+          'tasks.group.failclosed',
+          headers: const {'tenant': 'acme'},
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 220));
+        final status = await backend.get(taskId);
+        expect(status?.state, TaskState.retried);
+        expect(executed, equals(0));
+
+        await worker.shutdown();
+        broker.dispose();
+      },
+    );
+
+    test('queue pause persists across restarts until resumed', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 20),
+      );
+      final backend = InMemoryResultBackend();
+      final revokeStore = InMemoryRevokeStore();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+
+      final workerA = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'pause-worker-a',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        revokeStore: revokeStore,
+      );
+      await workerA.start();
+
+      final pauseReply = await _sendControlCommand(
+        broker: broker,
+        namespace: workerA.namespace,
+        queue: ControlQueueNames.worker(
+          workerA.namespace,
+          workerA.consumerName!,
+        ),
+        type: 'queue_pause',
+        payload: const {
+          'queues': ['default'],
+        },
+      );
+      expect(pauseReply.status, equals('ok'));
+      await workerA.shutdown();
+
+      final workerB = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'pause-worker-b',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        revokeStore: revokeStore,
+      );
+      final events = <WorkerEvent>[];
+      final sub = workerB.events.listen(events.add);
+      await workerB.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final taskId = await stem.enqueue('tasks.success');
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+      final pausedStatus = await backend.get(taskId);
+      expect(pausedStatus?.state, TaskState.queued);
+
+      final resumeReply = await _sendControlCommand(
+        broker: broker,
+        namespace: workerB.namespace,
+        queue: ControlQueueNames.worker(
+          workerB.namespace,
+          workerB.consumerName!,
+        ),
+        type: 'queue_resume',
+        payload: const {
+          'queues': ['default'],
+        },
+      );
+      expect(resumeReply.status, equals('ok'));
+
+      await _waitFor(
+        () => events.any(
+          (event) =>
+              event.type == WorkerEventType.completed &&
+              event.envelope?.id == taskId,
+        ),
+        timeout: const Duration(seconds: 3),
+      );
+      expect((await backend.get(taskId))?.state, TaskState.succeeded);
+
+      await sub.cancel();
+      await workerB.shutdown();
+      broker.dispose();
+    });
+
     test('emits control command signals', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 
@@ -1450,6 +1727,97 @@ Future<void> _waitForCallbackSuccess(
     }
     await Future<void>.delayed(const Duration(milliseconds: 25));
   }
+}
+
+Future<void> _waitForTaskState(
+  ResultBackend backend,
+  String taskId,
+  TaskState expected, {
+  Duration timeout = const Duration(seconds: 3),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (true) {
+    final status = await backend.get(taskId);
+    if (status?.state == expected) {
+      return;
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      throw TimeoutException(
+        'Task $taskId did not reach state ${expected.name}',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+Future<ControlReplyMessage> _sendControlCommand({
+  required Broker broker,
+  required String namespace,
+  required String queue,
+  required String type,
+  Map<String, Object?> payload = const {},
+}) async {
+  final requestId = generateEnvelopeId();
+  final replyQueue = ControlQueueNames.reply(namespace, requestId);
+  final completer = Completer<ControlReplyMessage>();
+
+  late final StreamSubscription<Delivery> subscription;
+  subscription = broker
+      .consume(
+        RoutingSubscription.singleQueue(replyQueue),
+        prefetch: 1,
+        consumerName: 'worker-test-control-$requestId',
+      )
+      .listen((delivery) async {
+        final reply = controlReplyFromEnvelope(delivery.envelope);
+        await broker.ack(delivery);
+        if (!completer.isCompleted) {
+          completer.complete(reply);
+        }
+      });
+
+  final command = ControlCommandMessage(
+    requestId: requestId,
+    type: type,
+    targets: const ['*'],
+    payload: payload,
+  );
+  await broker.publish(command.toEnvelope(queue: queue));
+  try {
+    return await completer.future.timeout(const Duration(seconds: 2));
+  } finally {
+    await subscription.cancel();
+  }
+}
+
+class _ScenarioRateLimiter implements RateLimiter {
+  _ScenarioRateLimiter(this._decision);
+
+  final RateLimitDecision Function(String key, int attempt) _decision;
+  final Map<String, int> _attempts = <String, int>{};
+  final List<String> keys = <String>[];
+
+  @override
+  Future<RateLimitDecision> acquire(
+    String key, {
+    int tokens = 1,
+    Duration? interval,
+    Map<String, Object?>? meta,
+  }) async {
+    final attempt = (_attempts[key] ?? 0) + 1;
+    _attempts[key] = attempt;
+    keys.add(key);
+    return _decision(key, attempt);
+  }
+}
+
+class _FixedRetryStrategy implements RetryStrategy {
+  const _FixedRetryStrategy(this.delay);
+
+  final Duration delay;
+
+  @override
+  Duration nextDelay(int attempt, Object error, StackTrace stackTrace) => delay;
 }
 
 class _FlakyTask implements TaskHandler<void> {

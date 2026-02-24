@@ -79,6 +79,29 @@ void main() {
       final status = await _waitForSuccess(backend, result.callbackTaskId);
       expect(status.payload, equals(5));
     });
+
+    test(
+      'submitBatch returns stable id and terminal lifecycle summary',
+      () async {
+        final batch = await canvas.submitBatch<int>([
+          task<int>('echo', args: {'value': 8}),
+          task<int>('echo', args: {'value': 13}),
+        ]);
+
+        expect(batch.batchId, isNotEmpty);
+        expect(batch.taskIds, hasLength(2));
+
+        final status = await _waitForBatchTerminal(canvas, batch.batchId);
+        expect(status.state, BatchLifecycleState.succeeded);
+        expect(status.expected, equals(2));
+        expect(status.completed, equals(2));
+        expect(status.succeededCount, equals(2));
+        expect(status.failedCount, equals(0));
+        expect(status.cancelledCount, equals(0));
+        expect(status.failedTaskIds, isEmpty);
+        expect(status.meta['stem.batch'], isTrue);
+      },
+    );
   });
 }
 
@@ -95,6 +118,24 @@ Future<TaskStatus> _waitForSuccess(
     }
     if (DateTime.now().difference(start) > timeout) {
       throw TimeoutException('Task $taskId did not succeed in time');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+}
+
+Future<BatchStatus> _waitForBatchTerminal(
+  Canvas canvas,
+  String batchId, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final start = DateTime.now();
+  while (true) {
+    final status = await canvas.inspectBatch(batchId);
+    if (status != null && status.isTerminal) {
+      return status;
+    }
+    if (DateTime.now().difference(start) > timeout) {
+      throw TimeoutException('Batch $batchId did not complete in time');
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }

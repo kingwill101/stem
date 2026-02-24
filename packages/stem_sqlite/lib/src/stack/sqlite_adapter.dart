@@ -81,7 +81,10 @@ class StemSqliteAdapter implements StemStoreAdapter {
   LockStoreFactory? lockStoreFactory(Uri uri) => null;
 
   @override
-  RevokeStoreFactory? revokeStoreFactory(Uri uri) => null;
+  RevokeStoreFactory? revokeStoreFactory(Uri uri) {
+    final file = _fileFromUri(uri);
+    return sqliteRevokeStoreFactory(file);
+  }
 }
 
 File _fileFromUri(Uri uri) {

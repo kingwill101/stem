@@ -4,6 +4,7 @@ import 'package:stem/stem.dart';
 // import 'package:stem_cloud_worker/stem_cloud_worker.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
+import 'package:stem_sqlite/stem_sqlite.dart';
 
 /// Creates a [RevokeStore] based on configuration and URL overrides.
 class RevokeStoreFactory {
@@ -43,6 +44,8 @@ class RevokeStoreFactory {
           namespace: namespace,
           tls: config.tls,
         );
+      case 'sqlite':
+        return SqliteRevokeStore.connect(candidate, namespace: namespace);
       case 'postgres':
       case 'postgresql':
       case 'postgres+ssl':

@@ -81,3 +81,25 @@ class LockStoreContractCapabilities {
   /// Whether lock renewal behavior should be verified.
   final bool verifyRenewSemantics;
 }
+
+/// Feature capability flags for revoke store contract tests.
+class RevokeStoreContractCapabilities {
+  /// Creates revoke store contract capability flags.
+  const RevokeStoreContractCapabilities({
+    this.verifyPruneExpired = true,
+  });
+
+  /// Whether expiry pruning behavior should be verified.
+  final bool verifyPruneExpired;
+}
+
+/// Feature capability flags for queue events contract tests.
+class QueueEventsContractCapabilities {
+  /// Creates queue events contract capability flags.
+  const QueueEventsContractCapabilities({
+    this.verifyFanout = true,
+  });
+
+  /// Whether multi-listener fan-out behavior should be verified.
+  final bool verifyFanout;
+}

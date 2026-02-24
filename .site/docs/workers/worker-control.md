@@ -26,6 +26,8 @@ revocation durability, and termination semantics for inline vs isolate handlers.
 | `stem worker stats` | Summarize inflight counts, queue depth, and metadata. |
 | `stem worker revoke` | Persist revocations and broadcast terminate/best-effort revokes. |
 | `stem worker shutdown` | Request warm/soft/hard shutdown via the control channel. |
+| `stem worker pause` | Pause one or more queues on target workers. |
+| `stem worker resume` | Resume paused queues on target workers. |
 | `stem worker status` | Stream heartbeats or snapshot the backend (existing command). |
 | `stem worker healthcheck` | Probe worker processes for readiness/liveness. |
 | `stem worker diagnose` | Run local diagnostics for pid/log/env configuration issues. |
@@ -46,6 +48,12 @@ stem worker inspect --json
 
 # Revoke a task and request termination
 stem worker revoke --task 1761057... --terminate
+
+# Pause default queue on one worker
+stem worker pause --worker worker-a --queue default
+
+# Resume that queue later
+stem worker resume --worker worker-a --queue default
 ```
 
 For a runnable lab that exercises ping/stats/revoke/shutdown against real
@@ -133,11 +141,12 @@ CLI resolves the backing store in this order:
 3. `STEM_BROKER_URL`
 
 Supported schemes: Redis (`redis://`, `rediss://`), Postgres (`postgres://`,
-`postgresql://`), a newline-delimited file (`file:///path/to/revokes.stem` or
-bare path), and in-memory (`memory://` – useful for tests). Workers hydrate the
-revocation cache at startup, prune expired records, and apply new control
-messages. The CLI writes through the store *before* broadcasting control
-messages to guarantee durability precedes visibility.
+`postgresql://`), SQLite (`sqlite:///path/to/stem.sqlite`), a
+newline-delimited file (`file:///path/to/revokes.stem` or bare path), and
+in-memory (`memory://` – useful for tests). Workers hydrate the revocation
+cache at startup, prune expired records, and apply new control messages. The
+CLI writes through the store *before* broadcasting control messages to
+guarantee durability precedes visibility.
 
 ## Termination Semantics
 
@@ -204,6 +213,16 @@ By default, workers install signal handlers that map `SIGTERM` to warm,
 with `WorkerLifecycleConfig(installSignalHandlers: false)` when embedding Stem
 inside a larger host that already owns signal routing.
 
+## Queue Pause/Resume
+
+`stem worker pause` and `stem worker resume` target queue names (repeatable
+`--queue`) and optionally specific workers (`--worker`). Paused queues are
+requeued instead of executed until resumed.
+
+- Pause/resume state is persisted when a revoke store is configured.
+- Without a revoke store, pause/resume still works for active workers but does
+  not survive worker restarts.
+
 Lifecycle guards can also recycle isolates automatically:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-lifecycle
@@ -227,6 +246,12 @@ example, to use Postgres alongside the result backend:
 
 ```bash
 export STEM_REVOKE_STORE_URL=postgres://stem:secret@db:5432/stem
+```
+
+For local single-node deployments, SQLite works as well:
+
+```bash
+export STEM_REVOKE_STORE_URL=sqlite:///var/lib/stem/revokes.sqlite
 ```
 
 ## Additional Resources
