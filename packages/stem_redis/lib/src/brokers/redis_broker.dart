@@ -634,7 +634,9 @@ class RedisStreamsBroker implements Broker {
     }
 
     for (final channel in broadcastChannels) {
-      final group = consumerGroup ?? _broadcastGroupKey(channel, consumer);
+      final group = queue == null && consumerGroup != null
+          ? consumerGroup
+          : _broadcastGroupKey(channel, consumer);
       _listenBroadcast(channel, group, consumer, prefetch, controller);
       final key = _scheduleClaim(
         _broadcastStreamKey(channel),
