@@ -7,7 +7,7 @@ environment:
   sdk: ^3.9.2
 
 dependencies:
-  artisanal: ^0.1.2
+  artisanal: ^0.2.0
   collection: ^1.19.1
   contextual: ^2.2.0
   meta: ^1.18.0

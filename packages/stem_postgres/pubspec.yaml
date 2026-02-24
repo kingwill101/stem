@@ -7,7 +7,7 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  artisanal: ^0.1.2
+  artisanal: ^0.2.0
   collection: ^1.19.1
   contextual: ^2.2.0
   ormed: ^0.1.0

@@ -4,6 +4,7 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 workspace:
   - packages/stem
+  - packages/dashboard
   - packages/stem_builder
   - packages/stem_sqlite
   - packages/stem_memory
