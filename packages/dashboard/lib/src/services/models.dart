@@ -1,4 +1,4 @@
-import 'package:stem/stem.dart' show QueueHeartbeat, WorkerHeartbeat;
+import 'package:stem/stem.dart' show QueueHeartbeat, WorkerHeartbeat, stemNow;
 
 /// Aggregate counts for a queue at a point in time.
 class QueueSummary {
@@ -155,7 +155,7 @@ class WorkerStatus {
   final Map<String, Object?> extras;
 
   /// Age of the last heartbeat.
-  Duration get age => DateTime.now().toUtc().difference(timestamp);
+  Duration get age => stemNow().toUtc().difference(timestamp);
 }
 
 /// Event captured for the dashboard activity log.

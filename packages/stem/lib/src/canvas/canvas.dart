@@ -8,6 +8,7 @@ import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
 import 'package:uuid/uuid.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
 class TaskSignature<T extends Object?> {
@@ -151,6 +152,99 @@ class ChordResult<T extends Object?> {
   final List<T?> values;
 }
 
+/// Lifecycle states for first-class batch submissions.
+enum BatchLifecycleState {
+  /// Batch has no completed children yet.
+  pending,
+
+  /// Batch has some completed children but is not terminal.
+  running,
+
+  /// All children succeeded.
+  succeeded,
+
+  /// All children failed.
+  failed,
+
+  /// All children were cancelled.
+  cancelled,
+
+  /// Batch completed with mixed terminal outcomes.
+  partial,
+}
+
+/// Handle returned when a batch is submitted.
+class BatchSubmission {
+  /// Creates a batch submission snapshot.
+  const BatchSubmission({
+    required this.batchId,
+    required this.taskIds,
+  });
+
+  /// Stable batch identifier.
+  final String batchId;
+
+  /// Child task ids dispatched for the batch.
+  final List<String> taskIds;
+}
+
+/// Durable batch status projection derived from group metadata/results.
+class BatchStatus {
+  /// Creates a durable batch status snapshot.
+  const BatchStatus({
+    required this.batchId,
+    required this.state,
+    required this.expected,
+    required this.completed,
+    required this.succeededCount,
+    required this.failedCount,
+    required this.cancelledCount,
+    required this.failedTaskIds,
+    required this.cancelledTaskIds,
+    required this.meta,
+  });
+
+  /// Stable batch identifier.
+  final String batchId;
+
+  /// Current batch lifecycle state.
+  final BatchLifecycleState state;
+
+  /// Total children expected for the batch.
+  final int expected;
+
+  /// Number of children currently in terminal states.
+  final int completed;
+
+  /// Number of children that succeeded.
+  final int succeededCount;
+
+  /// Number of children that failed.
+  final int failedCount;
+
+  /// Number of children that were cancelled.
+  final int cancelledCount;
+
+  /// Child task ids that failed.
+  final List<String> failedTaskIds;
+
+  /// Child task ids that were cancelled.
+  final List<String> cancelledTaskIds;
+
+  /// Persisted batch metadata.
+  final Map<String, Object?> meta;
+
+  /// Number of children not yet complete.
+  int get pendingCount => (expected - completed).clamp(0, expected);
+
+  /// Whether the batch is in a terminal state.
+  bool get isTerminal =>
+      state == BatchLifecycleState.succeeded ||
+      state == BatchLifecycleState.failed ||
+      state == BatchLifecycleState.cancelled ||
+      state == BatchLifecycleState.partial;
+}
+
 /// A high-level API for composing and dispatching tasks.
 ///
 /// [Canvas] publishes [Envelope]s to a [Broker] and records status in a
@@ -190,6 +284,9 @@ class Canvas {
 
   /// The task registry for resolving task metadata and handlers.
   final TaskRegistry registry;
+
+  final Map<String, Future<void>> _batchSubmissionLocks =
+      <String, Future<void>>{};
 
   /// Publishes a single task described by [signature].
   ///
@@ -316,6 +413,94 @@ class Canvas {
       results: controller.stream,
       onDispose: dispose,
     );
+  }
+
+  /// Submits an immutable batch of task signatures under one batch id.
+  ///
+  /// Batches are backed by durable group records and can be inspected via
+  /// [inspectBatch]. The batch is immutable once submitted.
+  Future<BatchSubmission> submitBatch<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? batchId,
+    Duration? ttl,
+  }) async {
+    if (signatures.isEmpty) {
+      throw ArgumentError('Batch must include at least one task');
+    }
+    final id = batchId ?? _generateId('batch');
+    return _withBatchSubmissionLock(id, () async {
+      final existing = await backend.getGroup(id);
+      if (existing != null) {
+        if (existing.meta['stem.batch'] != true) {
+          throw StateError('Group "$id" already exists and is not a batch');
+        }
+        return BatchSubmission(
+          batchId: id,
+          taskIds: _batchTaskIdsFromGroup(existing),
+        );
+      }
+
+      final normalizedSignatures = <TaskSignature<T>>[];
+      final taskIds = <String>[];
+      for (final signature in signatures) {
+        final raw = signature();
+        final grouped = raw.copyWith(
+          headers: {...raw.headers, 'stem-group-id': id},
+          meta: {...raw.meta, 'groupId': id},
+        );
+        taskIds.add(grouped.id);
+        normalizedSignatures.add(
+          TaskSignature.custom(
+            signature.name,
+            () => grouped,
+            decode: signature.decode,
+          ),
+        );
+      }
+
+      final createdAt = stemNow().toUtc().toIso8601String();
+      await backend.initGroup(
+        GroupDescriptor(
+          id: id,
+          expected: signatures.length,
+          ttl: ttl,
+          meta: {
+            'stem.batch': true,
+            'stem.batch.createdAt': createdAt,
+            'stem.batch.taskCount': signatures.length,
+            'stem.batch.taskIds': taskIds,
+          },
+        ),
+      );
+      final dispatch = await group(normalizedSignatures, groupId: id);
+      await dispatch.dispose();
+      return BatchSubmission(batchId: id, taskIds: taskIds);
+    });
+  }
+
+  /// Reads durable lifecycle status for a submitted [batchId].
+  Future<BatchStatus?> inspectBatch(String batchId) async {
+    final status = await backend.getGroup(batchId);
+    if (status == null || status.meta['stem.batch'] != true) return null;
+    return _buildBatchStatus(status);
+  }
+
+  Future<T> _withBatchSubmissionLock<T>(
+    String batchId,
+    Future<T> Function() operation,
+  ) async {
+    final previous = _batchSubmissionLocks[batchId] ?? Future<void>.value();
+    final completer = Completer<void>();
+    _batchSubmissionLocks[batchId] = completer.future;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      completer.complete();
+      if (identical(_batchSubmissionLocks[batchId], completer.future)) {
+        _batchSubmissionLocks.remove(batchId);
+      }
+    }
   }
 
   /// Runs tasks sequentially, passing each result to the next.
@@ -548,6 +733,83 @@ class Canvas {
       }
       return values;
     }
+  }
+
+  BatchStatus _buildBatchStatus(GroupStatus status) {
+    final entries = status.results.entries
+        .where((entry) => entry.value.state.isTerminal)
+        .toList(growable: false);
+    final succeeded = entries
+        .where((entry) => entry.value.state == TaskState.succeeded)
+        .length;
+    final failedEntries = entries
+        .where((entry) => entry.value.state == TaskState.failed)
+        .toList(growable: false);
+    final cancelledEntries = entries
+        .where((entry) => entry.value.state == TaskState.cancelled)
+        .toList(growable: false);
+    final failed = failedEntries.length;
+    final cancelled = cancelledEntries.length;
+    final completed = entries.length;
+
+    BatchLifecycleState state;
+    if (completed == 0) {
+      state = BatchLifecycleState.pending;
+    } else if (completed < status.expected) {
+      state = BatchLifecycleState.running;
+    } else if (succeeded == completed) {
+      state = BatchLifecycleState.succeeded;
+    } else if (failed == completed) {
+      state = BatchLifecycleState.failed;
+    } else if (cancelled == completed) {
+      state = BatchLifecycleState.cancelled;
+    } else {
+      state = BatchLifecycleState.partial;
+    }
+
+    return BatchStatus(
+      batchId: status.id,
+      state: state,
+      expected: status.expected,
+      completed: completed,
+      succeededCount: succeeded,
+      failedCount: failed,
+      cancelledCount: cancelled,
+      failedTaskIds: failedEntries.map((entry) => entry.key).toList(),
+      cancelledTaskIds: cancelledEntries.map((entry) => entry.key).toList(),
+      meta: status.meta,
+    );
+  }
+
+  List<String> _batchTaskIdsFromGroup(GroupStatus status) {
+    final taskIds = <String>[];
+    final seen = <String>{};
+    final rawTaskIds = status.meta['stem.batch.taskIds'];
+    if (rawTaskIds is List) {
+      for (final rawTaskId in rawTaskIds) {
+        if (rawTaskId is! String) {
+          continue;
+        }
+        final trimmed = rawTaskId.trim();
+        if (trimmed.isNotEmpty) {
+          if (seen.add(trimmed)) {
+            taskIds.add(trimmed);
+          }
+        }
+      }
+    }
+    if (taskIds.isEmpty) {
+      for (final taskId in status.results.keys) {
+        final trimmed = taskId.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        if (seen.add(trimmed)) {
+          taskIds.add(trimmed);
+        }
+      }
+    }
+    return List<String>.unmodifiable(taskIds);
   }
 
   (Envelope, TaskPayloadEncoder) _prepareEnvelope(Envelope envelope) {

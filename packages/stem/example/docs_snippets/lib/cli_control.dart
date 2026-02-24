@@ -35,6 +35,14 @@ const String workerRevokeCommand = 'stem worker revoke --task <id>';
 const String workerShutdownCommand = 'stem worker shutdown --mode warm';
 // #endregion cli-control-worker-shutdown
 
+// #region cli-control-worker-pause
+const String workerPauseCommand = 'stem worker pause --queue default';
+// #endregion cli-control-worker-pause
+
+// #region cli-control-worker-resume
+const String workerResumeCommand = 'stem worker resume --queue default';
+// #endregion cli-control-worker-resume
+
 // #region cli-control-schedule-apply
 const String scheduleApplyCommand =
     'stem schedule apply --file config/schedules.yaml --yes';
@@ -60,6 +68,8 @@ Future<void> main() async {
   stdout.writeln('  $workerStatsCommand');
   stdout.writeln('  $workerRevokeCommand');
   stdout.writeln('  $workerShutdownCommand');
+  stdout.writeln('  $workerPauseCommand');
+  stdout.writeln('  $workerResumeCommand');
 
   stdout.writeln('Schedules:');
   stdout.writeln('  $scheduleApplyCommand');

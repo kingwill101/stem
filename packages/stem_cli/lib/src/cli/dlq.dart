@@ -334,7 +334,7 @@ class DlqReplayCommand extends Command<int> {
       if (!result.dryRun) {
         final backend = ctx.backend;
         if (backend != null) {
-          final replayedAt = DateTime.now().toIso8601String();
+          final replayedAt = stemNow().toIso8601String();
           for (final entry in result.entries) {
             try {
               final status = await backend.get(entry.envelope.id);

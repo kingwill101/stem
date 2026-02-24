@@ -221,11 +221,6 @@ class PostgresBroker implements Broker {
       'queues=${subscription.queues})',
       _logContext({'queues': subscription.queues}),
     );
-    if (subscription.queues.isEmpty) {
-      throw ArgumentError(
-        'RoutingSubscription must specify at least one queue.',
-      );
-    }
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'PostgresBroker currently supports consuming a single queue per '
@@ -233,21 +228,29 @@ class PostgresBroker implements Broker {
       );
     }
 
-    final queue = subscription.queues.first;
+    final queue = subscription.queues.isEmpty
+        ? null
+        : subscription.queues.single;
     final group = consumerGroup ?? 'default';
     final consumer = consumerName ?? const Uuid().v7();
-    final locker = _encodeLocker(queue, group, consumer);
     final broadcastChannels = subscription.broadcastChannels;
+    if (queue == null && broadcastChannels.isEmpty) {
+      throw ArgumentError(
+        'PostgresBroker requires at least one queue or broadcast channel.',
+      );
+    }
+    final locker = _encodeLocker(queue ?? '__broadcast__', group, consumer);
 
     late _ConsumerRunner runner;
     late StreamController<Delivery> controller;
     controller = StreamController<Delivery>(
       onListen: () => runner.start(),
       onCancel: () {
+        final queueLabel = queue ?? '<broadcast-only>';
         stemLogger.debug(
-          'Consumer stream canceled (queue=$queue, worker=$consumer)',
+          'Consumer stream canceled (queue=$queueLabel, worker=$consumer)',
           _logContext({
-            'queue': queue,
+            'queue': queueLabel,
             'worker': consumer,
           }),
         );
@@ -322,7 +325,7 @@ class PostgresBroker implements Broker {
         'queue': delivery.envelope.queue,
       }),
     );
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     await _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -353,7 +356,7 @@ class PostgresBroker implements Broker {
     final entryReason = (reason == null || reason.trim().isEmpty)
         ? 'unknown'
         : reason.trim();
-    final deadAt = DateTime.now().toUtc();
+    final deadAt = stemNow().toUtc();
 
     await _withDb(() async {
       await _connections.runInTransaction((txn) async {
@@ -400,7 +403,7 @@ class PostgresBroker implements Broker {
   Future<void> extendLease(Delivery delivery, Duration by) async {
     if (by <= Duration.zero) return;
     final jobId = _parseReceipt(delivery.receipt);
-    final leaseUntil = DateTime.now().toUtc().add(by);
+    final leaseUntil = stemNow().toUtc().add(by);
     await _withDb(() {
       return _context.repository<StemQueueJob>().update(
         StemQueueJobUpdateDto(lockedUntil: leaseUntil),
@@ -411,7 +414,7 @@ class PostgresBroker implements Broker {
 
   @override
   Future<int?> pendingCount(String queue) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     return _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -433,7 +436,7 @@ class PostgresBroker implements Broker {
 
   @override
   Future<int?> inflightCount(String queue) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     return _withDb(() {
       return _context
           .query<StemQueueJob>()
@@ -520,7 +523,7 @@ class PostgresBroker implements Broker {
           final updatedEnvelope = delay == null
               ? entry.envelope
               : entry.envelope.copyWith(
-                  notBefore: DateTime.now().toUtc().add(delay),
+                  notBefore: stemNow().toUtc().add(delay),
                 );
           await _insertJob(
             txn,
@@ -584,7 +587,7 @@ class PostgresBroker implements Broker {
   }
 
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final visibilityUntil = now.add(defaultVisibilityTimeout);
 
     return _withDb(() {
@@ -704,7 +707,7 @@ class PostgresBroker implements Broker {
       messageId: messageId,
       workerId: workerId,
       namespace: namespace,
-      acknowledgedAt: DateTime.now().toUtc(),
+      acknowledgedAt: stemNow().toUtc(),
     ).toTracked();
     await _withDb(() {
       return _context.repository<StemBroadcastAck>().upsert(
@@ -723,7 +726,7 @@ class PostgresBroker implements Broker {
   }
 
   Future<void> _runSweeperCycle() async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     await _withDb(() async {
       await _connections.runInTransaction((txn) async {
         await txn
@@ -806,7 +809,7 @@ class _ConsumerRunner {
 
   final PostgresBroker broker;
   final StreamController<Delivery> controller;
-  final String queue;
+  final String? queue;
   final String locker;
   final int prefetch;
   final List<String> broadcastChannels;
@@ -818,17 +821,19 @@ class _ConsumerRunner {
   void start() {
     if (_started) return;
     _started = true;
+    final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
-      'Consumer runner started (queue=$queue, worker=$workerId)',
-      broker._logContext({'queue': queue, 'worker': workerId}),
+      'Consumer runner started (queue=$queueLabel, worker=$workerId)',
+      broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     unawaited(_loop());
   }
 
   void stop() {
+    final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
-      'Consumer runner stopped (queue=$queue, worker=$workerId)',
-      broker._logContext({'queue': queue, 'worker': workerId}),
+      'Consumer runner stopped (queue=$queueLabel, worker=$workerId)',
+      broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     _stopped = true;
   }
@@ -840,10 +845,12 @@ class _ConsumerRunner {
         !broker._closed) {
       try {
         final jobs = <_QueuedJob>[];
-        for (var i = 0; i < prefetch; i++) {
-          final job = await broker._claimNextJob(queue, locker);
-          if (job == null) break;
-          jobs.add(job);
+        if (queue != null) {
+          for (var i = 0; i < prefetch; i++) {
+            final job = await broker._claimNextJob(queue!, locker);
+            if (job == null) break;
+            jobs.add(job);
+          }
         }
         final broadcasts = broadcastChannels.isEmpty
             ? const <Delivery>[]
@@ -856,7 +863,7 @@ class _ConsumerRunner {
           await Future<void>.delayed(broker.pollInterval);
           continue;
         }
-        final leaseExpiresAt = DateTime.now().toUtc().add(
+        final leaseExpiresAt = stemNow().toUtc().add(
           broker.defaultVisibilityTimeout,
         );
         for (final delivery in [
@@ -869,11 +876,12 @@ class _ConsumerRunner {
           controller.add(delivery);
         }
       } on Object catch (error, stack) {
+        final queueLabel = queue ?? '<broadcast-only>';
         stemLogger.warning(
-          'Consumer loop error (queue=$queue, worker=$workerId): '
+          'Consumer loop error (queue=$queueLabel, worker=$workerId): '
           '$error\n$stack',
           broker._logContext({
-            'queue': queue,
+            'queue': queueLabel,
             'worker': workerId,
             'error': error.toString(),
             'stack': stack.toString(),

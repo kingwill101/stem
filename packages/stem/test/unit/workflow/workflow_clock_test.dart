@@ -1,3 +1,5 @@
+import 'package:stem/stem.dart';
+import 'package:stem/testing.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:test/test.dart';
 
@@ -11,11 +13,12 @@ void main() {
     expect(clock.now(), DateTime.parse('2025-01-01T00:00:05Z'));
   });
 
-  test('SystemWorkflowClock returns current time', () {
+  test('SystemWorkflowClock respects scoped Stem clock overrides', () {
     const clock = SystemWorkflowClock();
-    final now = DateTime.now();
-    final clockNow = clock.now();
+    final fake = FakeStemClock(DateTime.parse('2025-01-01T00:00:10Z'));
 
-    expect(clockNow.isAfter(now.subtract(const Duration(seconds: 1))), isTrue);
+    final clockNow = withStemClock(fake, clock.now);
+
+    expect(clockNow, DateTime.parse('2025-01-01T00:00:10Z'));
   });
 }

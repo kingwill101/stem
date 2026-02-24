@@ -17,7 +17,9 @@ behavior before touching production.
 - Worker lifecycle management, concurrency controls, and graceful shutdown.
 - Beat scheduler for interval/cron/solar/clocked jobs.
 - Canvas primitives (chains, groups, chords) for task composition.
+- First-class batch submissions with durable aggregate status inspection.
 - Lifecycle signals for instrumentation and integrations.
+- Queue-scoped custom events via `QueueEventsProducer`/`QueueEvents`.
 - Declarative routing across queues and broadcast channels.
 - Result backends and progress reporting via `TaskContext`.
 
@@ -47,6 +49,7 @@ behavior before touching production.
 - **[Namespaces](./namespaces.md)** – Isolate environments and tenants.
 - **[Routing](./routing.md)** – Queue aliases, priorities, and broadcast channels.
 - **[Signals](./signals.md)** – Lifecycle hooks for instrumentation and integrations.
+- **[Queue Events](./queue-events.md)** – Publish/listen to queue-scoped custom events.
 - **[Canvas Patterns](./canvas.md)** – Chains, groups, and chords for composing work.
 - **[Observability](./observability.md)** – Metrics, traces, logging, and lifecycle signals.
 - **[Persistence & Stores](./persistence.md)** – Result backends, schedule/lock stores, and revocation storage.

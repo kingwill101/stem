@@ -123,7 +123,7 @@ class PostgresScheduleStore implements ScheduleStore {
   /// Inserts or updates a schedule [entry] within the configured namespace.
   @override
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final ctx = _connections.context;
 
     final existing = await ctx
@@ -252,7 +252,7 @@ class PostgresScheduleStore implements ScheduleStore {
             expireAt: entry.expireAt,
             meta: entry.meta,
             createdAt: entry.createdAt,
-            updatedAt: DateTime.now().toUtc(),
+            updatedAt: stemNow().toUtc(),
             version: entry.version,
           ),
         );

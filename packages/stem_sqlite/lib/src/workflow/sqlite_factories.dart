@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/src/backend/sqlite_result_backend.dart';
 import 'package:stem_sqlite/src/broker/sqlite_broker.dart';
+import 'package:stem_sqlite/src/control/sqlite_revoke_store.dart';
 import 'package:stem_sqlite/src/workflow/sqlite_workflow_store.dart';
 
 /// Creates a [StemBrokerFactory] backed by SQLite.
@@ -57,6 +58,21 @@ WorkflowStoreFactory sqliteWorkflowStoreFactory(File file) {
     create: () async => SqliteWorkflowStore.open(file),
     dispose: (store) async {
       if (store is SqliteWorkflowStore) {
+        await store.close();
+      }
+    },
+  );
+}
+
+/// Creates a [RevokeStoreFactory] backed by SQLite.
+RevokeStoreFactory sqliteRevokeStoreFactory(
+  File file, {
+  String namespace = 'stem',
+}) {
+  return RevokeStoreFactory(
+    create: () async => SqliteRevokeStore.open(file, namespace: namespace),
+    dispose: (store) async {
+      if (store is SqliteRevokeStore) {
         await store.close();
       }
     },

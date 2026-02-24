@@ -1,6 +1,8 @@
 import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/stem_event.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Status of a workflow run emitted via signals.
 enum WorkflowRunStatus {
@@ -40,7 +42,7 @@ class WorkerInfo {
 }
 
 /// Payload emitted before a task is published to the broker.
-class BeforeTaskPublishPayload {
+class BeforeTaskPublishPayload implements StemEvent {
   /// Creates a new [BeforeTaskPublishPayload] instance.
   const BeforeTaskPublishPayload({
     required this.envelope,
@@ -52,10 +54,24 @@ class BeforeTaskPublishPayload {
 
   /// The attempt number for this task.
   final int attempt;
+
+  @override
+  String get eventName => 'before-task-publish';
+
+  @override
+  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': envelope.id,
+    'taskName': envelope.name,
+    'queue': envelope.queue,
+    'attempt': attempt,
+  };
 }
 
 /// Payload emitted after a task has been published to the broker.
-class AfterTaskPublishPayload {
+class AfterTaskPublishPayload implements StemEvent {
   /// Creates a new [AfterTaskPublishPayload] instance.
   const AfterTaskPublishPayload({
     required this.envelope,
@@ -71,12 +87,30 @@ class AfterTaskPublishPayload {
 
   /// The unique identifier for the task.
   final String taskId;
+
+  @override
+  String get eventName => 'after-task-publish';
+
+  @override
+  DateTime get occurredAt => envelope.enqueuedAt.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': envelope.name,
+    'queue': envelope.queue,
+    'attempt': attempt,
+  };
 }
 
 /// Payload emitted when a task is received by a worker.
-class TaskReceivedPayload {
+class TaskReceivedPayload implements StemEvent {
   /// Creates a new [TaskReceivedPayload] instance.
-  const TaskReceivedPayload({required this.envelope, required this.worker});
+  TaskReceivedPayload({
+    required this.envelope,
+    required this.worker,
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was received.
   final Envelope envelope;
@@ -84,21 +118,38 @@ class TaskReceivedPayload {
   /// The worker that received the task.
   final WorkerInfo worker;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
   /// The name of the task.
   String get taskName => envelope.name;
+
+  @override
+  String get eventName => 'task-received';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'workerId': worker.id,
+  };
 }
 
 /// Payload emitted before a task begins execution.
-class TaskPrerunPayload {
+class TaskPrerunPayload implements StemEvent {
   /// Creates a new [TaskPrerunPayload] instance.
-  const TaskPrerunPayload({
+  TaskPrerunPayload({
     required this.envelope,
     required this.worker,
     required this.context,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope to be executed.
   final Envelope envelope;
@@ -109,6 +160,8 @@ class TaskPrerunPayload {
   /// The execution context for the task.
   final TaskContext context;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -117,18 +170,34 @@ class TaskPrerunPayload {
 
   /// The attempt number for this task execution.
   int get attempt => envelope.attempt;
+
+  @override
+  String get eventName => 'task-prerun';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'attempt': attempt,
+    'workerId': worker.id,
+  };
 }
 
 /// Payload emitted after a task finishes execution.
-class TaskPostrunPayload {
+class TaskPostrunPayload implements StemEvent {
   /// Creates a new [TaskPostrunPayload] instance.
-  const TaskPostrunPayload({
+  TaskPostrunPayload({
     required this.envelope,
     required this.worker,
     required this.context,
     required this.result,
     required this.state,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was executed.
   final Envelope envelope;
@@ -145,6 +214,8 @@ class TaskPostrunPayload {
   /// The final state of the task.
   final TaskState state;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -153,17 +224,34 @@ class TaskPostrunPayload {
 
   /// The attempt number for this task execution.
   int get attempt => envelope.attempt;
+
+  @override
+  String get eventName => 'task-postrun';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'attempt': attempt,
+    'workerId': worker.id,
+    'state': state.name,
+  };
 }
 
 /// Payload emitted when a task is scheduled for retry.
-class TaskRetryPayload {
+class TaskRetryPayload implements StemEvent {
   /// Creates a new [TaskRetryPayload] instance.
-  const TaskRetryPayload({
+  TaskRetryPayload({
     required this.envelope,
     required this.worker,
     required this.reason,
     required this.nextRetryAt,
-  });
+    DateTime? emittedAt,
+  }) : emittedAt = (emittedAt ?? stemNow()).toUtc();
 
   /// The task envelope to be retried.
   final Envelope envelope;
@@ -177,6 +265,9 @@ class TaskRetryPayload {
   /// The scheduled time for the next retry attempt.
   final DateTime nextRetryAt;
 
+  /// The timestamp when the retry signal was emitted.
+  final DateTime emittedAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -185,16 +276,35 @@ class TaskRetryPayload {
 
   /// The attempt number for this task execution.
   int get attempt => envelope.attempt;
+
+  @override
+  String get eventName => 'task-retry';
+
+  @override
+  DateTime get occurredAt => emittedAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'attempt': attempt,
+    'workerId': worker.id,
+    'reason': reason.toString(),
+    'emittedAt': emittedAt.toIso8601String(),
+    'nextRetryAt': nextRetryAt.toUtc().toIso8601String(),
+  };
 }
 
 /// Payload emitted when a task completes successfully.
-class TaskSuccessPayload {
+class TaskSuccessPayload implements StemEvent {
   /// Creates a new [TaskSuccessPayload] instance.
-  const TaskSuccessPayload({
+  TaskSuccessPayload({
     required this.envelope,
     required this.worker,
     required this.result,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that completed successfully.
   final Envelope envelope;
@@ -205,6 +315,8 @@ class TaskSuccessPayload {
   /// The result returned by the successful task.
   final Object? result;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -213,17 +325,33 @@ class TaskSuccessPayload {
 
   /// The attempt number for this task execution.
   int get attempt => envelope.attempt;
+
+  @override
+  String get eventName => 'task-succeeded';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'attempt': attempt,
+    'workerId': worker.id,
+  };
 }
 
 /// Payload emitted when a task fails.
-class TaskFailurePayload {
+class TaskFailurePayload implements StemEvent {
   /// Creates a new [TaskFailurePayload] instance.
-  const TaskFailurePayload({
+  TaskFailurePayload({
     required this.envelope,
     required this.worker,
     required this.error,
     required this.stackTrace,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that failed.
   final Envelope envelope;
@@ -237,6 +365,8 @@ class TaskFailurePayload {
   /// The stack trace associated with the failure, if available.
   final StackTrace? stackTrace;
 
+  final DateTime _occurredAt;
+
   /// The unique identifier for the task.
   String get taskId => envelope.id;
 
@@ -245,16 +375,34 @@ class TaskFailurePayload {
 
   /// The attempt number for this task execution.
   int get attempt => envelope.attempt;
+
+  @override
+  String get eventName => 'task-failed';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': taskId,
+    'taskName': taskName,
+    'queue': envelope.queue,
+    'attempt': attempt,
+    'workerId': worker.id,
+    'error': error.toString(),
+    if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+  };
 }
 
 /// Payload emitted when a task is revoked.
-class TaskRevokedPayload {
+class TaskRevokedPayload implements StemEvent {
   /// Creates a new [TaskRevokedPayload] instance.
-  const TaskRevokedPayload({
+  TaskRevokedPayload({
     required this.envelope,
     required this.worker,
     required this.reason,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The task envelope that was revoked.
   final Envelope envelope;
@@ -264,22 +412,63 @@ class TaskRevokedPayload {
 
   /// The reason for revoking the task.
   final String reason;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => 'task-revoked';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': envelope.id,
+    'taskName': envelope.name,
+    'queue': envelope.queue,
+    'workerId': worker.id,
+    'reason': reason,
+  };
 }
 
 /// Payload emitted for worker lifecycle events (start, stop, etc.).
-class WorkerLifecyclePayload {
+class WorkerLifecyclePayload implements StemEvent {
   /// Creates a new [WorkerLifecyclePayload] instance.
-  const WorkerLifecyclePayload({required this.worker, this.reason});
+  WorkerLifecyclePayload({
+    required this.worker,
+    this.reason,
+    this.signalName = 'worker-lifecycle',
+    DateTime? timestamp,
+  }) : _occurredAt = (timestamp ?? stemNow()).toUtc();
 
   /// The worker involved in the lifecycle event.
   final WorkerInfo worker;
 
   /// Optional reason for the lifecycle event (e.g., shutdown reason).
   final String? reason;
+
+  /// Canonical signal name for this lifecycle event.
+  final String signalName;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => signalName;
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'workerId': worker.id,
+    'queues': worker.queues,
+    'broadcasts': worker.broadcasts,
+    if (reason != null) 'reason': reason,
+  };
 }
 
 /// Payload emitted when a worker sends a heartbeat.
-class WorkerHeartbeatPayload {
+class WorkerHeartbeatPayload implements StemEvent {
   /// Creates a new [WorkerHeartbeatPayload] instance.
   const WorkerHeartbeatPayload({required this.worker, required this.timestamp});
 
@@ -288,33 +477,68 @@ class WorkerHeartbeatPayload {
 
   /// The timestamp when the heartbeat was sent.
   final DateTime timestamp;
+
+  @override
+  String get eventName => 'worker-heartbeat';
+
+  @override
+  DateTime get occurredAt => timestamp.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'workerId': worker.id,
+    'queues': worker.queues,
+    'broadcasts': worker.broadcasts,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+  };
 }
 
 /// Payload emitted for worker child isolate lifecycle events.
-class WorkerChildLifecyclePayload {
+class WorkerChildLifecyclePayload implements StemEvent {
   /// Creates a new [WorkerChildLifecyclePayload] instance.
-  const WorkerChildLifecyclePayload({
+  WorkerChildLifecyclePayload({
     required this.worker,
     required this.isolateId,
-  });
+    this.signalName = 'worker-child-lifecycle',
+    DateTime? timestamp,
+  }) : _occurredAt = (timestamp ?? stemNow()).toUtc();
 
   /// The parent worker managing the child isolate.
   final WorkerInfo worker;
 
   /// The unique identifier for the child isolate.
   final int isolateId;
+
+  /// Canonical signal name for this child lifecycle event.
+  final String signalName;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => signalName;
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'workerId': worker.id,
+    'isolateId': isolateId,
+  };
 }
 
 /// Payload emitted for workflow run events.
-class WorkflowRunPayload {
+class WorkflowRunPayload implements StemEvent {
   /// Creates a new [WorkflowRunPayload] instance.
-  const WorkflowRunPayload({
+  WorkflowRunPayload({
     required this.runId,
     required this.workflow,
     required this.status,
     this.step,
     this.metadata = const {},
-  });
+    this.signalName,
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The unique identifier for the workflow run.
   final String runId;
@@ -330,10 +554,41 @@ class WorkflowRunPayload {
 
   /// Additional metadata associated with the workflow run.
   final Map<String, Object?> metadata;
+
+  /// Optional canonical signal name when this payload is emitted.
+  final String? signalName;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => signalName ?? 'workflow-run-${status.name}';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  /// Returns a copy of this payload bound to a concrete signal name.
+  WorkflowRunPayload withSignalName(String signalName) => WorkflowRunPayload(
+    runId: runId,
+    workflow: workflow,
+    status: status,
+    step: step,
+    metadata: metadata,
+    signalName: signalName,
+    occurredAt: _occurredAt,
+  );
+
+  @override
+  Map<String, Object?> get attributes => {
+    'runId': runId,
+    'workflow': workflow,
+    'status': status.name,
+    if (step != null) 'step': step,
+    if (metadata.isNotEmpty) 'metadata': metadata,
+  };
 }
 
 /// Payload emitted when a schedule entry becomes due for execution.
-class ScheduleEntryDuePayload {
+class ScheduleEntryDuePayload implements StemEvent {
   /// Creates a new [ScheduleEntryDuePayload] instance.
   const ScheduleEntryDuePayload({required this.entry, required this.tickAt});
 
@@ -342,10 +597,22 @@ class ScheduleEntryDuePayload {
 
   /// The time at which the entry became due.
   final DateTime tickAt;
+
+  @override
+  String get eventName => 'schedule-entry-due';
+
+  @override
+  DateTime get occurredAt => tickAt.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'entryId': entry.id,
+    'tickAt': tickAt.toUtc().toIso8601String(),
+  };
 }
 
 /// Payload emitted when a schedule entry has been dispatched.
-class ScheduleEntryDispatchedPayload {
+class ScheduleEntryDispatchedPayload implements StemEvent {
   /// Creates a new [ScheduleEntryDispatchedPayload] instance.
   const ScheduleEntryDispatchedPayload({
     required this.entry,
@@ -365,10 +632,24 @@ class ScheduleEntryDispatchedPayload {
 
   /// The time difference between scheduled and actual execution.
   final Duration drift;
+
+  @override
+  String get eventName => 'schedule-entry-dispatched';
+
+  @override
+  DateTime get occurredAt => executedAt.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'entryId': entry.id,
+    'scheduledFor': scheduledFor.toUtc().toIso8601String(),
+    'executedAt': executedAt.toUtc().toIso8601String(),
+    'driftMs': drift.inMilliseconds,
+  };
 }
 
 /// Payload emitted when a schedule entry fails to execute.
-class ScheduleEntryFailedPayload {
+class ScheduleEntryFailedPayload implements StemEvent {
   /// Creates a new [ScheduleEntryFailedPayload] instance.
   const ScheduleEntryFailedPayload({
     required this.entry,
@@ -388,33 +669,67 @@ class ScheduleEntryFailedPayload {
 
   /// The stack trace associated with the error.
   final StackTrace stackTrace;
+
+  @override
+  String get eventName => 'schedule-entry-failed';
+
+  @override
+  DateTime get occurredAt => scheduledFor.toUtc();
+
+  @override
+  Map<String, Object?> get attributes => {
+    'entryId': entry.id,
+    'scheduledFor': scheduledFor.toUtc().toIso8601String(),
+    'error': error.toString(),
+    'stackTrace': stackTrace.toString(),
+  };
 }
 
 /// Payload emitted when a control command is received by a worker.
-class ControlCommandReceivedPayload {
+class ControlCommandReceivedPayload implements StemEvent {
   /// Creates a new [ControlCommandReceivedPayload] instance.
-  const ControlCommandReceivedPayload({
+  ControlCommandReceivedPayload({
     required this.worker,
     required this.command,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The worker that received the command.
   final WorkerInfo worker;
 
   /// The control command that was received.
   final ControlCommandMessage command;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => 'control-command-received';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'workerId': worker.id,
+    'requestId': command.requestId,
+    'type': command.type,
+    'targets': command.targets,
+    'payload': command.payload,
+    if (command.timeoutMs != null) 'timeoutMs': command.timeoutMs,
+  };
 }
 
 /// Payload emitted when a control command completes execution.
-class ControlCommandCompletedPayload {
+class ControlCommandCompletedPayload implements StemEvent {
   /// Creates a new [ControlCommandCompletedPayload] instance.
-  const ControlCommandCompletedPayload({
+  ControlCommandCompletedPayload({
     required this.worker,
     required this.command,
     required this.status,
     this.response,
     this.error,
-  });
+    DateTime? occurredAt,
+  }) : _occurredAt = (occurredAt ?? stemNow()).toUtc();
 
   /// The worker that executed the command.
   final WorkerInfo worker;
@@ -430,4 +745,22 @@ class ControlCommandCompletedPayload {
 
   /// Error information if the command failed, if any.
   final Map<String, Object?>? error;
+
+  final DateTime _occurredAt;
+
+  @override
+  String get eventName => 'control-command-completed';
+
+  @override
+  DateTime get occurredAt => _occurredAt;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'workerId': worker.id,
+    'requestId': command.requestId,
+    'type': command.type,
+    'status': status,
+    if (response != null) 'response': response,
+    if (error != null) 'error': error,
+  };
 }

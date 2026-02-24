@@ -5,6 +5,7 @@ import 'src/models/stem_dead_letter.dart';
 import 'src/models/stem_group.dart';
 import 'src/models/stem_group_result.dart';
 import 'src/models/stem_queue_job.dart';
+import 'src/models/stem_revoke_entry.dart';
 import 'src/models/stem_task_result.dart';
 import 'src/models/stem_worker_heartbeat.dart';
 import 'src/models/stem_workflow_run.dart';
@@ -16,6 +17,7 @@ final List<ModelDefinition<OrmEntity>> _$ormModelDefinitions = [
   StemGroupOrmDefinition.definition,
   StemGroupResultOrmDefinition.definition,
   StemQueueJobOrmDefinition.definition,
+  StemRevokeEntryOrmDefinition.definition,
   StemTaskResultOrmDefinition.definition,
   StemWorkerHeartbeatOrmDefinition.definition,
   StemWorkflowRunOrmDefinition.definition,
@@ -29,11 +31,12 @@ ModelRegistry buildOrmRegistry() => ModelRegistry()
   ..registerTypeAlias<StemGroup>(_$ormModelDefinitions[1])
   ..registerTypeAlias<StemGroupResult>(_$ormModelDefinitions[2])
   ..registerTypeAlias<StemQueueJob>(_$ormModelDefinitions[3])
-  ..registerTypeAlias<StemTaskResult>(_$ormModelDefinitions[4])
-  ..registerTypeAlias<StemWorkerHeartbeat>(_$ormModelDefinitions[5])
-  ..registerTypeAlias<StemWorkflowRun>(_$ormModelDefinitions[6])
-  ..registerTypeAlias<StemWorkflowStep>(_$ormModelDefinitions[7])
-  ..registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[8]);
+  ..registerTypeAlias<StemRevokeEntry>(_$ormModelDefinitions[4])
+  ..registerTypeAlias<StemTaskResult>(_$ormModelDefinitions[5])
+  ..registerTypeAlias<StemWorkerHeartbeat>(_$ormModelDefinitions[6])
+  ..registerTypeAlias<StemWorkflowRun>(_$ormModelDefinitions[7])
+  ..registerTypeAlias<StemWorkflowStep>(_$ormModelDefinitions[8])
+  ..registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[9]);
 
 List<ModelDefinition<OrmEntity>> get generatedOrmModelDefinitions =>
     List.unmodifiable(_$ormModelDefinitions);
@@ -45,11 +48,12 @@ extension GeneratedOrmModels on ModelRegistry {
     registerTypeAlias<StemGroup>(_$ormModelDefinitions[1]);
     registerTypeAlias<StemGroupResult>(_$ormModelDefinitions[2]);
     registerTypeAlias<StemQueueJob>(_$ormModelDefinitions[3]);
-    registerTypeAlias<StemTaskResult>(_$ormModelDefinitions[4]);
-    registerTypeAlias<StemWorkerHeartbeat>(_$ormModelDefinitions[5]);
-    registerTypeAlias<StemWorkflowRun>(_$ormModelDefinitions[6]);
-    registerTypeAlias<StemWorkflowStep>(_$ormModelDefinitions[7]);
-    registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[8]);
+    registerTypeAlias<StemRevokeEntry>(_$ormModelDefinitions[4]);
+    registerTypeAlias<StemTaskResult>(_$ormModelDefinitions[5]);
+    registerTypeAlias<StemWorkerHeartbeat>(_$ormModelDefinitions[6]);
+    registerTypeAlias<StemWorkflowRun>(_$ormModelDefinitions[7]);
+    registerTypeAlias<StemWorkflowStep>(_$ormModelDefinitions[8]);
+    registerTypeAlias<StemWorkflowWatcher>(_$ormModelDefinitions[9]);
     return this;
   }
 }

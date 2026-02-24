@@ -9,6 +9,9 @@ Stem supports per-task rate limits via `TaskOptions.rateLimit` and a pluggable
 `RateLimiter` interface. This lets you throttle hot handlers with a shared
 Redis-backed limiter or custom driver.
 
+Stem also supports group-scoped rate limits with `TaskOptions.groupRateLimit`
+for shared quotas across multiple task types/tenants.
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -125,6 +128,8 @@ Run the `rate_limit_delay` example for a full demo:
 - `100/m` — 100 tokens per minute
 - `500/h` — 500 tokens per hour
 
+`groupRateLimit` uses the same syntax.
+
 ## How it works
 
 - The worker parses `rateLimit` for each task.
@@ -133,6 +138,22 @@ Run the `rate_limit_delay` example for a full demo:
 - Retry delays come from the limiter `retryAfter` if provided, otherwise the
   worker’s retry strategy.
 - If granted, the task executes immediately.
+
+## Group rate limiting
+
+Group rate limits share a limiter bucket across related tasks.
+
+- `groupRateLimit`: limiter policy for the shared group bucket
+- `groupRateKey`: optional static key (if omitted, Stem resolves from header)
+- `groupRateKeyHeader`: header used when `groupRateKey` is not set
+  (default: `tenant`)
+- `groupRateLimiterFailureMode` (default: `failOpen`):
+  - `failOpen`: continue execution if limiter backend fails
+  - `failClosed`: requeue/retry when limiter backend fails
+
+```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-group-task-options
+
+```
 
 ## Redis-backed limiter example
 

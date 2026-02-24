@@ -126,7 +126,7 @@ Future<void> configureBeatStores() async {
 // #endregion persistence-beat-stores
 
 // #region persistence-revoke-store
-Future<void> configureRevokeStore() async {
+Future<void> configurePostgresRevokeStore() async {
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final revokeStore = await PostgresRevokeStore.connect(
@@ -145,6 +145,28 @@ Future<void> configureRevokeStore() async {
   await broker.close();
 }
 // #endregion persistence-revoke-store
+
+// #region persistence-revoke-store-sqlite
+Future<void> configureSqliteRevokeStore() async {
+  final broker = InMemoryBroker();
+  final backend = InMemoryResultBackend();
+  final revokeStore = await SqliteRevokeStore.open(
+    File('stem_revoke.sqlite'),
+    namespace: 'stem',
+  );
+  final worker = Worker(
+    broker: broker,
+    registry: registry,
+    backend: backend,
+    revokeStore: revokeStore,
+  );
+
+  await worker.shutdown();
+  await revokeStore.close();
+  await backend.close();
+  await broker.close();
+}
+// #endregion persistence-revoke-store-sqlite
 
 class GzipPayloadEncoder extends TaskPayloadEncoder {
   const GzipPayloadEncoder();

@@ -6,6 +6,7 @@ import 'package:routed_hotwire/routed_hotwire.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
 import 'package:stem_dashboard/src/ui/event_templates.dart';
+import 'package:stem/stem.dart' show stemNow;
 
 /// Manages polling, state, and event streaming for the dashboard.
 class DashboardState {
@@ -81,7 +82,7 @@ class DashboardState {
   }
 
   void _updateThroughput(List<QueueSummary> queues) {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     if (_lastPollAt == null) {
       _lastPollAt = now;
       return;
@@ -117,7 +118,7 @@ class DashboardState {
     List<QueueSummary> current,
   ) {
     final prevMap = {for (final summary in previous) summary.queue: summary};
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     for (final summary in current) {
       final prev = prevMap.remove(summary.queue);
       if (prev == null) {
@@ -192,7 +193,7 @@ class DashboardState {
     Map<String, WorkerStatus> current,
   ) {
     final remaining = Map<String, WorkerStatus>.from(previous);
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     for (final entry in current.entries) {
       final prev = remaining.remove(entry.key);
       final worker = entry.value;

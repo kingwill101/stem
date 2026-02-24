@@ -20,7 +20,8 @@ manage workers, and operate schedules and routing.
 
 ## Remote control primer
 
-The worker control commands (`ping`, `stats`, `inspect`, `revoke`, `shutdown`)
+The worker control commands
+(`ping`, `stats`, `inspect`, `revoke`, `shutdown`, `pause`, `resume`)
 publish control messages into the broker. Each command uses a request id and
 waits for replies on a per-request reply queue.
 
@@ -35,8 +36,9 @@ Inspect vs control semantics:
 
 - **Inspect** (`ping`, `stats`, `inspect`) returns snapshots and does not
   mutate worker state.
-- **Control** (`revoke`, `shutdown`) persists intent and asks workers to change
-  behavior (terminate tasks or shut down).
+- **Control** (`revoke`, `shutdown`, `pause`, `resume`) persists intent and asks
+  workers to change behavior (terminate tasks, shut down, or pause queue
+  consumption).
 
 Payload highlights (as sent by the CLI):
 
@@ -84,6 +86,14 @@ stem worker stats --worker worker-a
 ```
 
 ```dart title="Shutdown workers" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-shutdown
+
+```
+
+```dart title="Pause queues" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-pause
+
+```
+
+```dart title="Resume queues" file=<rootDir>/../packages/stem/example/docs_snippets/lib/cli_control.dart#cli-control-worker-resume
 
 ```
 
@@ -154,6 +164,8 @@ stem worker ping
 stem worker stats
 stem worker revoke --task <id>
 stem worker shutdown --mode warm
+stem worker pause --queue default
+stem worker resume --queue default
 ```
 
 Expected output:
@@ -223,6 +235,7 @@ Use this table to sanity-check which connection strings are required:
 | `stem worker status` | optional (follow) | optional (snapshot) | ❌ | ❌ | ❌ |
 | `stem worker revoke` | ✅ | optional | ❌ | optional | ❌ |
 | `stem worker shutdown` | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `stem worker pause/resume` | ✅ | ❌ | ❌ | optional | ❌ |
 | `stem schedule apply/list/dry-run` | ❌ | ❌ | ✅ | ❌ | ❌ |
 | `stem health` | ✅ | optional | ❌ | ❌ | ❌ |
 
@@ -230,6 +243,8 @@ Notes:
 
 - The CLI resolves URLs from `STEM_BROKER_URL`, `STEM_RESULT_BACKEND_URL`,
   `STEM_SCHEDULE_STORE_URL`, and `STEM_REVOKE_STORE_URL`.
+- `STEM_REVOKE_STORE_URL` supports `redis://`, `postgres://`, `sqlite:///`,
+  `file:///`, and `memory://` targets.
 - When a backend is “optional”, the command still runs but will skip that
   slice of data (for example, worker heartbeats without a result backend).
 - Schedule commands fall back to local schedule files when no schedule store

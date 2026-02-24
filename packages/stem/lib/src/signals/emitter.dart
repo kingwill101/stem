@@ -3,6 +3,7 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/signals/stem_signals.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Helper used by coordinators, workers, and middleware to emit strongly
 /// typed Stem signals without duplicating payload construction.
@@ -101,12 +102,14 @@ class StemSignalEmitter {
     required DateTime nextRetryAt,
     String? sender,
   }) {
+    final emittedAt = stemNow().toUtc();
     return StemSignals.taskRetry.emit(
       TaskRetryPayload(
         envelope: envelope,
         worker: worker,
         reason: reason,
         nextRetryAt: nextRetryAt,
+        emittedAt: emittedAt,
       ),
       sender: _senderOverride(sender),
     );
@@ -160,7 +163,11 @@ class StemSignalEmitter {
   /// Emits the worker-init signal.
   Future<void> workerInit(WorkerInfo worker, {String? reason, String? sender}) {
     return StemSignals.workerInit.emit(
-      WorkerLifecyclePayload(worker: worker, reason: reason),
+      WorkerLifecyclePayload(
+        worker: worker,
+        reason: reason,
+        signalName: StemSignals.workerInitName,
+      ),
       sender: _senderOverride(sender),
     );
   }
@@ -172,7 +179,11 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workerReady.emit(
-      WorkerLifecyclePayload(worker: worker, reason: reason),
+      WorkerLifecyclePayload(
+        worker: worker,
+        reason: reason,
+        signalName: StemSignals.workerReadyName,
+      ),
       sender: _senderOverride(sender),
     );
   }
@@ -184,7 +195,11 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workerStopping.emit(
-      WorkerLifecyclePayload(worker: worker, reason: reason),
+      WorkerLifecyclePayload(
+        worker: worker,
+        reason: reason,
+        signalName: StemSignals.workerStoppingName,
+      ),
       sender: _senderOverride(sender),
     );
   }
@@ -196,7 +211,11 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workerShutdown.emit(
-      WorkerLifecyclePayload(worker: worker, reason: reason),
+      WorkerLifecyclePayload(
+        worker: worker,
+        reason: reason,
+        signalName: StemSignals.workerShutdownName,
+      ),
       sender: _senderOverride(sender),
     );
   }
@@ -220,9 +239,13 @@ class StemSignalEmitter {
     required bool initializing,
     String? sender,
   }) {
+    final signalName = initializing
+        ? StemSignals.workerChildInitName
+        : StemSignals.workerChildShutdownName;
     final payload = WorkerChildLifecyclePayload(
       worker: worker,
       isolateId: isolateId,
+      signalName: signalName,
     );
     final effectiveSender = _senderOverride(sender);
     if (initializing) {
@@ -323,7 +346,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workflowRunStarted.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunStartedName),
       sender: _senderOverride(sender),
     );
   }
@@ -334,7 +357,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workflowRunSuspended.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunSuspendedName),
       sender: _senderOverride(sender),
     );
   }
@@ -345,7 +368,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workflowRunResumed.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunResumedName),
       sender: _senderOverride(sender),
     );
   }
@@ -356,7 +379,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workflowRunCompleted.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunCompletedName),
       sender: _senderOverride(sender),
     );
   }
@@ -364,7 +387,7 @@ class StemSignalEmitter {
   /// Emits the workflow-run-failed signal.
   Future<void> workflowRunFailed(WorkflowRunPayload payload, {String? sender}) {
     return StemSignals.workflowRunFailed.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunFailedName),
       sender: _senderOverride(sender),
     );
   }
@@ -375,7 +398,7 @@ class StemSignalEmitter {
     String? sender,
   }) {
     return StemSignals.workflowRunCancelled.emit(
-      payload,
+      payload.withSignalName(StemSignals.workflowRunCancelledName),
       sender: _senderOverride(sender),
     );
   }

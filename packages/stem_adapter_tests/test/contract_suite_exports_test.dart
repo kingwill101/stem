@@ -6,6 +6,8 @@ void main() {
     expect(runBrokerContractTests, isNotNull);
     expect(runResultBackendContractTests, isNotNull);
     expect(runLockStoreContractTests, isNotNull);
+    expect(runQueueEventsContractTests, isNotNull);
+    expect(runRevokeStoreContractTests, isNotNull);
     expect(runWorkflowStoreContractTests, isNotNull);
   });
 }

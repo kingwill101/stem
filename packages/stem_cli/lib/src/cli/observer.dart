@@ -390,7 +390,7 @@ class ObserveSchedulesCommand extends Command<int> {
         return 0;
       }
       final calculator = ScheduleCalculator();
-      final now = DateTime.now();
+      final now = stemNow();
       var dueCount = 0;
       var overdueCount = 0;
       Duration? maxDrift;

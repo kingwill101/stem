@@ -44,11 +44,49 @@ List<SignalSubscription> registerPublishSignals() {
 
 // #region signals-worker-listeners
 SignalSubscription registerWorkerSignals() {
-  return StemSignals.workerReady.connect((payload, _) {
+  return StemSignals.onWorkerReady((payload, _) {
     print('Worker ready: ${payload.worker.id}');
-  });
+  }, workerId: 'signals-worker');
 }
 // #endregion signals-worker-listeners
+
+// #region signals-worker-scoped
+List<SignalSubscription> registerWorkerScopedSignals() {
+  return [
+    StemSignals.onTaskFailure(
+      (payload, _) {
+        print(
+          'Task failed on worker ${payload.worker.id}: ${payload.taskName}',
+        );
+      },
+      taskName: 'signals.demo',
+      workerId: 'signals-worker',
+    ),
+    StemSignals.onControlCommandCompleted(
+      (payload, _) {
+        print(
+          'Control ${payload.command.type} -> ${payload.status} on ${payload.worker.id}',
+        );
+      },
+      workerId: 'signals-worker',
+      commandType: 'ping',
+    ),
+  ];
+}
+// #endregion signals-worker-scoped
+
+// #region signals-stem-event
+SignalSubscription registerStemEventView() {
+  return StemSignals.onTaskSuccess((payload, context) {
+    final event = context.event;
+    if (event != null) {
+      print(
+        'Event ${event.eventName} at ${event.occurredAt.toIso8601String()}',
+      );
+    }
+  });
+}
+// #endregion signals-stem-event
 
 // #region signals-scheduler-listeners
 SignalSubscription registerSchedulerSignals() {
@@ -60,7 +98,7 @@ SignalSubscription registerSchedulerSignals() {
 
 // #region signals-control-listeners
 SignalSubscription registerControlSignals() {
-  return StemSignals.controlCommandCompleted.connect((payload, _) {
+  return StemSignals.onControlCommandCompleted((payload, _) {
     print('Control command: ${payload.command.type}');
   });
 }
@@ -93,6 +131,8 @@ Future<void> main() async {
     ...registerPublishSignals(),
     ...registerTaskSignals(),
     registerWorkerSignals(),
+    ...registerWorkerScopedSignals(),
+    registerStemEventView(),
     registerSchedulerSignals(),
     registerControlSignals(),
   ];

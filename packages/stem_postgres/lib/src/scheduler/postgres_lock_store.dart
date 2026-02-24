@@ -70,7 +70,7 @@ class PostgresLockStore implements LockStore {
     String? owner,
   }) async {
     final ownerValue = _owner(owner);
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final expiresAt = now.add(ttl);
     final ctx = _connections.context;
     final repository = ctx.repository<$StemLock>();
@@ -116,7 +116,7 @@ class PostgresLockStore implements LockStore {
   }
 
   Future<bool> _renew(String key, String owner, Duration ttl) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final expiresAt = now.add(ttl);
     final ctx = _connections.context;
 
@@ -164,7 +164,7 @@ class PostgresLockStore implements LockStore {
   @override
   Future<String?> ownerOf(String key) async {
     final ctx = _connections.context;
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final locks = await ctx
         .query<$StemLock>()
         .whereEquals('key', key)

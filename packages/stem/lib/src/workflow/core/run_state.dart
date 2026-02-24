@@ -3,6 +3,7 @@ import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart' show WorkflowStore;
 import 'package:stem/src/workflow/workflow.dart' show WorkflowStore;
 import 'package:stem/stem.dart' show WorkflowStore;
+import 'package:stem/src/core/clock.dart';
 
 /// Snapshot of a workflow run persisted by a [WorkflowStore].
 ///
@@ -37,7 +38,7 @@ class RunState {
       status: _statusFromJson(json['status']),
       cursor: _intFromJson(json['cursor']),
       params: (json['params'] as Map?)?.cast<String, Object?>() ?? const {},
-      createdAt: _dateFromJson(json['createdAt']) ?? DateTime.now().toUtc(),
+      createdAt: _dateFromJson(json['createdAt']) ?? stemNow().toUtc(),
       result: json['result'],
       waitTopic: json['waitTopic'] as String?,
       resumeAt: _dateFromJson(json['resumeAt']),

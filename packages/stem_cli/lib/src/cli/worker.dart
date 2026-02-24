@@ -20,6 +20,8 @@ class WorkerCommand extends Command<int> {
     addSubcommand(WorkerStatsCommand(dependencies));
     addSubcommand(WorkerStatusCommand(dependencies));
     addSubcommand(WorkerShutdownCommand(dependencies));
+    addSubcommand(WorkerPauseCommand(dependencies));
+    addSubcommand(WorkerResumeCommand(dependencies));
     addSubcommand(WorkerHealthcheckCommand(dependencies));
     addSubcommand(WorkerDiagnoseCommand(dependencies));
     addSubcommand(WorkerMultiCommand(dependencies));
@@ -672,7 +674,7 @@ class WorkerRevokeCommand extends Command<int> {
         return 70;
       }
 
-      final now = DateTime.now().toUtc();
+      final now = stemNow().toUtc();
       final baseVersion = generateRevokeVersion();
       final entries = <RevokeEntry>[];
       for (var i = 0; i < tasks.length; i += 1) {
@@ -925,6 +927,205 @@ class WorkerShutdownCommand extends Command<int> {
       await ctx.dispose();
     }
   }
+}
+
+abstract class _WorkerQueueControlCommand extends Command<int> {
+  _WorkerQueueControlCommand(
+    this.dependencies, {
+    required this.commandType,
+    required this.commandName,
+    required this.commandDescription,
+    required this.defaultReason,
+  }) {
+    argParser
+      ..addMultiOption(
+        'queue',
+        abbr: 'q',
+        help: 'Queue name to control (repeatable).',
+        valueHelp: 'queue',
+      )
+      ..addMultiOption(
+        'worker',
+        abbr: 'w',
+        help: 'Target worker identifier (repeatable).',
+      )
+      ..addOption(
+        'namespace',
+        defaultsTo: 'stem',
+        help: 'Control namespace used for worker identifiers.',
+      )
+      ..addOption(
+        'timeout',
+        defaultsTo: '5s',
+        help: 'Wait duration for replies (e.g. 3s, 1m).',
+        valueHelp: 'duration',
+      )
+      ..addOption(
+        'reason',
+        help: 'Optional human-readable reason for audit logs.',
+      )
+      ..addOption(
+        'requester',
+        help: 'Requester identifier (defaults to stem-cli).',
+      )
+      ..addFlag(
+        'json',
+        defaultsTo: false,
+        negatable: false,
+        help: 'Emit replies as JSON instead of text.',
+      );
+  }
+
+  final StemCommandDependencies dependencies;
+  final String commandType;
+  final String commandName;
+  final String commandDescription;
+  final String defaultReason;
+
+  @override
+  String get name => commandName;
+
+  @override
+  String get description => commandDescription;
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final queues =
+        ((args['queue'] as List?) ?? const <String>[])
+            .cast<String>()
+            .map((value) => value.trim())
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    if (queues.isEmpty) {
+      dependencies.err.writeln('At least one --queue must be provided.');
+      return 64;
+    }
+
+    final namespaceInput = (args['namespace'] as String?)?.trim();
+    final namespace = namespaceInput == null || namespaceInput.isEmpty
+        ? 'stem'
+        : namespaceInput;
+    final timeout =
+        ObservabilityConfig.parseDuration(args['timeout'] as String?) ??
+        const Duration(seconds: 5);
+    final requester = (args['requester'] as String?)?.trim();
+    final reason = (args['reason'] as String?)?.trim() ?? defaultReason;
+    final jsonOutput = args['json'] as bool? ?? false;
+    final targets = ((args['worker'] as List?) ?? const <String>[])
+        .cast<String>()
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    late CliContext ctx;
+    try {
+      ctx = await dependencies.createCliContext();
+    } catch (error, stack) {
+      dependencies.err.writeln('Failed to initialize Stem context: $error');
+      dependencies.err.writeln(stack);
+      return 70;
+    }
+
+    try {
+      final requestId = generateEnvelopeId();
+      final command = ControlCommandMessage(
+        requestId: requestId,
+        type: commandType,
+        targets: targets.isEmpty ? const ['*'] : targets.toList(),
+        timeoutMs: timeout.inMilliseconds,
+        payload: {
+          'namespace': namespace,
+          'queues': queues,
+          'reason': reason,
+          if (requester != null && requester.isNotEmpty) 'requester': requester,
+        },
+      );
+
+      await _publishControlCommand(
+        ctx,
+        namespace: namespace,
+        targets: targets,
+        command: command,
+      );
+
+      final replies = await _collectControlReplies(
+        ctx,
+        namespace: namespace,
+        requestId: requestId,
+        expectedWorkers: targets.isEmpty ? null : targets.length,
+        timeout: timeout,
+      );
+
+      if (jsonOutput) {
+        dependencies.out.writeln(
+          jsonEncode(replies.map((reply) => reply.toMap()).toList()),
+        );
+      } else {
+        if (targets.isNotEmpty) {
+          final missing = targets.difference(
+            replies.map((reply) => reply.workerId).toSet(),
+          );
+          if (missing.isNotEmpty) {
+            dependencies.err.writeln('No reply from: ${missing.join(', ')}');
+          }
+        }
+        if (replies.isEmpty) {
+          dependencies.out.writeln(
+            'No replies received within ${timeout.inMilliseconds}ms.',
+          );
+          return 70;
+        }
+        dependencies.out.writeln(
+          'Worker        | Status | Updated | Paused queues (after)',
+        );
+        dependencies.out.writeln(
+          '--------------+--------+---------+----------------------',
+        );
+        final ordered = [...replies]
+          ..sort((a, b) => a.workerId.compareTo(b.workerId));
+        for (final reply in ordered) {
+          final updated = (reply.payload['updated'] ?? '-').toString();
+          final paused = (reply.payload['paused'] as List?)?.join(', ') ?? '-';
+          dependencies.out.writeln(
+            '${reply.workerId.padRight(14)}| '
+            '${reply.status.padRight(6)} | '
+            '${updated.padRight(7)} | '
+            '$paused',
+          );
+        }
+      }
+
+      final hasError = replies.any((reply) => reply.status != 'ok');
+      return (replies.isEmpty || hasError) ? 70 : 0;
+    } finally {
+      await ctx.dispose();
+    }
+  }
+}
+
+class WorkerPauseCommand extends _WorkerQueueControlCommand {
+  WorkerPauseCommand(StemCommandDependencies dependencies)
+    : super(
+        dependencies,
+        commandType: 'queue_pause',
+        commandName: 'pause',
+        commandDescription: 'Pause one or more queues for targeted workers.',
+        defaultReason: 'queue paused by stem-cli',
+      );
+}
+
+class WorkerResumeCommand extends _WorkerQueueControlCommand {
+  WorkerResumeCommand(StemCommandDependencies dependencies)
+    : super(
+        dependencies,
+        commandType: 'queue_resume',
+        commandName: 'resume',
+        commandDescription: 'Resume one or more paused queues.',
+        defaultReason: 'queue resumed by stem-cli',
+      );
 }
 
 class WorkerStatusCommand extends Command<int> {
@@ -1251,7 +1452,7 @@ class WorkerStatusCommand extends Command<int> {
       out.writeln(jsonEncode(heartbeat.toJson()));
       return;
     }
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     final age = now.difference(heartbeat.timestamp);
     final isStale = expectedInterval != null && expectedInterval > Duration.zero
         ? age > expectedInterval
@@ -1684,7 +1885,7 @@ class WorkerMultiCommand extends Command<int> {
       environment: baseEnv,
     );
 
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -1726,7 +1927,7 @@ class WorkerMultiCommand extends Command<int> {
     );
 
     final host = _hostname;
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -1769,7 +1970,7 @@ class WorkerMultiCommand extends Command<int> {
     );
 
     final host = _hostname;
-    final timestamp = DateTime.now()
+    final timestamp = stemNow()
         .toUtc()
         .toIso8601String()
         .replaceAll(':', '-')
@@ -1896,9 +2097,7 @@ class WorkerHealthcheckCommand extends Command<int> {
     }
 
     final since = _pidFileTimestamp(pidfile);
-    final uptime = since != null
-        ? DateTime.now().toUtc().difference(since)
-        : null;
+    final uptime = since != null ? stemNow().toUtc().difference(since) : null;
 
     final payload = <String, Object?>{
       'status': running ? 'ok' : 'error',
@@ -2224,7 +2423,7 @@ String _describeUptime(String pidfile) {
   if (since == null) {
     return 'uptime unknown';
   }
-  final duration = DateTime.now().toUtc().difference(since);
+  final duration = stemNow().toUtc().difference(since);
   return 'uptime ${formatReadableDuration(duration)}';
 }
 
@@ -2479,9 +2678,9 @@ Future<bool> _waitForExit(int pid, Duration timeout) async {
   if (timeout.isNegative) {
     return false;
   }
-  final deadline = DateTime.now().add(timeout);
+  final deadline = stemNow().add(timeout);
   while (await _isPidRunning(pid)) {
-    if (DateTime.now().isAfter(deadline)) {
+    if (stemNow().isAfter(deadline)) {
       return false;
     }
     await Future<void>.delayed(const Duration(milliseconds: 200));

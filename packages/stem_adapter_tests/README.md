@@ -26,6 +26,11 @@ void main() {
     factory: ResultBackendContractFactory(create: createBackend),
   );
 
+  runQueueEventsContractTests(
+    adapterName: 'my-adapter',
+    factory: QueueEventsContractFactory(create: createBroker),
+  );
+
   final workflowFactory = WorkflowStoreContractFactory(
     create: createWorkflowStore,
   );
@@ -64,6 +69,12 @@ all other contract assertions active.
 | `verifyWorkerHeartbeats` | `true` | Heartbeat CRUD tests | Verifies heartbeat set/get/list/update behavior. |
 | `verifyHeartbeatExpiry` | `true` | Heartbeat expiry tests | Verifies heartbeat TTL expiration behavior independently from heartbeat CRUD checks. |
 
+### QueueEventsContractCapabilities
+
+| Flag | Default | Affects | Behavior when enabled |
+|---|---|---|---|
+| `verifyFanout` | `true` | Multi-listener fan-out tests | Verifies custom queue events reach all active listeners on the same queue scope. |
+
 ### WorkflowStoreContractCapabilities
 
 | Flag | Default | Affects | Behavior when enabled |
@@ -80,6 +91,12 @@ all other contract assertions active.
 |---|---|---|---|
 | `verifyOwnerLookup` | `true` | `ownerOf` tests | Verifies lock owner lookup behavior. |
 | `verifyRenewSemantics` | `true` | Renew and expiry tests | Verifies renewal/TTL semantics for active locks. |
+
+### RevokeStoreContractCapabilities
+
+| Flag | Default | Affects | Behavior when enabled |
+|---|---|---|---|
+| `verifyPruneExpired` | `true` | Revoke expiry pruning tests | Verifies `pruneExpired` removes only expired revocations in the target namespace. |
 
 ## Skip Behavior
 
@@ -124,6 +141,20 @@ runResultBackendContractTests(
     capabilities: ResultBackendContractCapabilities(
       verifyWorkerHeartbeats: true,
       verifyHeartbeatExpiry: false,
+    ),
+  ),
+);
+```
+
+### Adapter without queue-event fan-out
+
+```dart
+runQueueEventsContractTests(
+  adapterName: 'single-listener-adapter',
+  factory: QueueEventsContractFactory(create: createBroker),
+  settings: const QueueEventsContractSettings(
+    capabilities: QueueEventsContractCapabilities(
+      verifyFanout: false,
     ),
   ),
 );

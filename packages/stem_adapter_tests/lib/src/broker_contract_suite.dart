@@ -781,30 +781,42 @@ void runBrokerContractTests({
             broadcastChannels: [channel],
           );
 
-          final futureOne = workerOne.consume(subscription).first;
-          final futureTwo = workerTwo.consume(subscription).first;
+          final iteratorOne = StreamIterator(workerOne.consume(subscription));
+          final iteratorTwo = StreamIterator(workerTwo.consume(subscription));
 
-          await publisher.publish(
-            Envelope(
-              name: 'contract.broadcast',
-              args: const {'value': 'fanout'},
-              queue: queue,
-            ),
-            routing: RoutingInfo.broadcast(channel: channel),
-          );
+          try {
+            final nextOne = iteratorOne.moveNext();
+            final nextTwo = iteratorTwo.moveNext();
+            await Future<void>.delayed(settings.queueSettleDelay);
+            await publisher.publish(
+              Envelope(
+                name: 'contract.broadcast',
+                args: const {'value': 'fanout'},
+                queue: queue,
+              ),
+              routing: RoutingInfo.broadcast(channel: channel),
+            );
 
-          final deliveryOne = await futureOne.timeout(
-            const Duration(seconds: 5),
-          );
-          final deliveryTwo = await futureTwo.timeout(
-            const Duration(seconds: 5),
-          );
+            expect(
+              await nextOne.timeout(const Duration(seconds: 5)),
+              isTrue,
+            );
+            expect(
+              await nextTwo.timeout(const Duration(seconds: 5)),
+              isTrue,
+            );
+            final deliveryOne = iteratorOne.current;
+            final deliveryTwo = iteratorTwo.current;
 
-          expect(deliveryOne.envelope.name, 'contract.broadcast');
-          expect(deliveryTwo.envelope.name, 'contract.broadcast');
+            expect(deliveryOne.envelope.name, 'contract.broadcast');
+            expect(deliveryTwo.envelope.name, 'contract.broadcast');
 
-          await workerOne.ack(deliveryOne);
-          await workerTwo.ack(deliveryTwo);
+            await workerOne.ack(deliveryOne);
+            await workerTwo.ack(deliveryTwo);
+          } finally {
+            await iteratorOne.cancel();
+            await iteratorTwo.cancel();
+          }
         } finally {
           if (factory.dispose != null) {
             await factory.dispose!(workerOne);

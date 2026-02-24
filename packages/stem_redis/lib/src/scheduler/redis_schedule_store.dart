@@ -218,7 +218,7 @@ class RedisScheduleStore implements ScheduleStore {
 
   @override
   Future<void> upsert(ScheduleEntry entry) async {
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     var nextRun = entry.nextRunAt;
     if (entry.enabled) {
       nextRun ??= _calculator.nextRun(

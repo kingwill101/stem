@@ -70,6 +70,27 @@ class RateLimitedTask extends TaskHandler<void> {
 // #endregion rate-limit-task-options
 // #endregion rate-limit-task
 
+// #region rate-limit-group-task-options
+class GroupRateLimitedTask extends TaskHandler<void> {
+  @override
+  String get name => 'demo.groupRateLimited';
+
+  @override
+  TaskOptions get options => const TaskOptions(
+    groupRateLimit: '20/m',
+    groupRateKeyHeader: 'tenant',
+    groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
+    maxRetries: 5,
+  );
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    final tenant = args['tenant'] as String? ?? 'global';
+    print('Handled group-rate-limited task for $tenant');
+  }
+}
+// #endregion rate-limit-group-task-options
+
 // #region rate-limit-producer
 Future<String> enqueueRateLimited(Stem stem) async {
   return stem.enqueue(

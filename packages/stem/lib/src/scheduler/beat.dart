@@ -23,6 +23,7 @@ import 'package:stem/src/observability/logging.dart';
 import 'package:stem/src/observability/metrics.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Scheduler loop that dispatches due [ScheduleEntry] records.
 ///
@@ -106,7 +107,7 @@ class Beat {
   /// 4. Dispatches each entry via [_dispatch].
   Future<void> _tick() async {
     if (!_running && _timer != null) return;
-    final now = DateTime.now();
+    final now = stemNow();
     final dueEntries = await store.due(now);
     StemMetrics.instance.setGauge(
       'stem.scheduler.due.entries',
@@ -214,7 +215,7 @@ class Beat {
         ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
         : Duration.zero;
     final scheduledFor = baseScheduled.add(jitterDelay);
-    final startedAt = DateTime.now();
+    final startedAt = stemNow();
 
     StemMetrics.instance.increment(
       'stem.scheduler.dispatch.attempts',
@@ -239,7 +240,7 @@ class Beat {
       }
       await broker.publish(envelope);
 
-      final executedAt = DateTime.now();
+      final executedAt = stemNow();
       final duration = executedAt.difference(startedAt);
       StemMetrics.instance.recordDuration(
         'stem.scheduler.dispatch.duration',
@@ -293,7 +294,7 @@ class Beat {
         ),
       );
       try {
-        final executedAt = DateTime.now();
+        final executedAt = stemNow();
         await store.markExecuted(
           entry.id,
           scheduledFor: scheduledFor,

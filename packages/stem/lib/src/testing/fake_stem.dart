@@ -2,6 +2,7 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/stem.dart' show Stem;
 import 'package:stem/stem.dart' show Stem;
+import 'package:stem/src/core/clock.dart';
 
 /// Record describing an enqueued task captured by [FakeStem].
 class RecordedEnqueue {
@@ -74,7 +75,7 @@ class FakeStem {
         options: options,
         notBefore: call.notBefore,
         meta: Map<String, Object?>.from(call.meta),
-        enqueuedAt: DateTime.now(),
+        enqueuedAt: stemNow(),
         call: call,
       ),
     );
@@ -100,7 +101,7 @@ class FakeStem {
         options: options,
         notBefore: notBefore,
         meta: Map<String, Object?>.from(meta),
-        enqueuedAt: DateTime.now(),
+        enqueuedAt: stemNow(),
       ),
     );
     return id;

@@ -5,8 +5,8 @@ sidebar_position: 2
 slug: /brokers/sqlite
 ---
 
-Stem ships a SQLite adapter in `stem_sqlite` that implements both the broker
-and result backend contracts. It is designed for local development, demo
+Stem ships a SQLite adapter in `stem_sqlite` that implements broker, result
+backend, and revoke store contracts. It is designed for local development, demo
 environments, and single-node deployments that want a zero-infra dependency.
 
 ## When to use SQLite
@@ -38,6 +38,12 @@ dependencies:
 ## Quick start (result backend)
 
 ```dart title="persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-backend-sqlite
+
+```
+
+## Quick start (revoke store)
+
+```dart title="persistence.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/persistence.dart#persistence-revoke-store-sqlite
 
 ```
 

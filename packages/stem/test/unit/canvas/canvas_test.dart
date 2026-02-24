@@ -79,6 +79,79 @@ void main() {
       final status = await _waitForSuccess(backend, result.callbackTaskId);
       expect(status.payload, equals(5));
     });
+
+    test(
+      'submitBatch returns stable id and terminal lifecycle summary',
+      () async {
+        final batch = await canvas.submitBatch<int>([
+          task<int>('echo', args: {'value': 8}),
+          task<int>('echo', args: {'value': 13}),
+        ]);
+
+        expect(batch.batchId, isNotEmpty);
+        expect(batch.taskIds, hasLength(2));
+
+        final status = await _waitForBatchTerminal(canvas, batch.batchId);
+        expect(status.state, BatchLifecycleState.succeeded);
+        expect(status.expected, equals(2));
+        expect(status.completed, equals(2));
+        expect(status.succeededCount, equals(2));
+        expect(status.failedCount, equals(0));
+        expect(status.cancelledCount, equals(0));
+        expect(status.failedTaskIds, isEmpty);
+        expect(status.meta['stem.batch'], isTrue);
+      },
+    );
+
+    test('submitBatch with an existing batchId is idempotent', () async {
+      const batchId = 'batch-fixed';
+      final first = await canvas.submitBatch<int>([
+        task<int>('echo', args: {'value': 1}),
+        task<int>('echo', args: {'value': 2}),
+      ], batchId: batchId);
+      final second = await canvas.submitBatch<int>([
+        task<int>('echo', args: {'value': 99}),
+      ], batchId: batchId);
+
+      expect(second.batchId, equals(first.batchId));
+      expect(second.taskIds, equals(first.taskIds));
+
+      final status = await _waitForBatchTerminal(canvas, batchId);
+      expect(status.expected, equals(2));
+      expect(status.meta['stem.batch.taskCount'], equals(2));
+    });
+
+    test(
+      'inspectBatch counts only terminal group entries as completed',
+      () async {
+        const batchId = 'batch-non-terminal';
+        await backend.initGroup(
+          GroupDescriptor(
+            id: batchId,
+            expected: 2,
+            meta: const {'stem.batch': true},
+          ),
+        );
+        await backend.addGroupResult(
+          batchId,
+          TaskStatus(id: 'task-queued', state: TaskState.queued, attempt: 0),
+        );
+        await backend.addGroupResult(
+          batchId,
+          TaskStatus(
+            id: 'task-succeeded',
+            state: TaskState.succeeded,
+            attempt: 0,
+          ),
+        );
+
+        final status = await canvas.inspectBatch(batchId);
+        expect(status, isNotNull);
+        expect(status!.completed, equals(1));
+        expect(status.succeededCount, equals(1));
+        expect(status.state, equals(BatchLifecycleState.running));
+      },
+    );
   });
 }
 
@@ -87,14 +160,50 @@ Future<TaskStatus> _waitForSuccess(
   String taskId, {
   Duration timeout = const Duration(seconds: 2),
 }) async {
+  return _waitForNonNull<TaskStatus>(
+    () async {
+      final status = await backend.get(taskId);
+      if (status?.state == TaskState.succeeded) {
+        return status;
+      }
+      return null;
+    },
+    timeout: timeout,
+    errorMessage: 'Task $taskId did not succeed in time',
+  );
+}
+
+Future<BatchStatus> _waitForBatchTerminal(
+  Canvas canvas,
+  String batchId, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  return _waitForNonNull<BatchStatus>(
+    () async {
+      final status = await canvas.inspectBatch(batchId);
+      if (status != null && status.isTerminal) {
+        return status;
+      }
+      return null;
+    },
+    timeout: timeout,
+    errorMessage: 'Batch $batchId did not complete in time',
+  );
+}
+
+Future<T> _waitForNonNull<T>(
+  Future<T?> Function() read, {
+  required Duration timeout,
+  required String errorMessage,
+}) async {
   final start = DateTime.now();
   while (true) {
-    final status = await backend.get(taskId);
-    if (status != null && status.state == TaskState.succeeded) {
-      return status;
+    final value = await read();
+    if (value != null) {
+      return value;
     }
     if (DateTime.now().difference(start) > timeout) {
-      throw TimeoutException('Task $taskId did not succeed in time');
+      throw TimeoutException(errorMessage);
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }

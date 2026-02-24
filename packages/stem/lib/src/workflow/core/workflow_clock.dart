@@ -1,12 +1,10 @@
+import 'package:stem/src/core/clock.dart';
+
 /// Abstraction over time sources used by the workflow runtime and stores.
 // Intentionally interface-like for injection and testing.
-// ignore: one_member_abstracts
-abstract class WorkflowClock {
+abstract class WorkflowClock extends StemClock {
   /// Creates a workflow clock implementation.
   const WorkflowClock();
-
-  /// Returns the current instant.
-  DateTime now();
 }
 
 /// Default clock that proxies to [DateTime.now].
@@ -15,7 +13,7 @@ class SystemWorkflowClock extends WorkflowClock {
   const SystemWorkflowClock();
 
   @override
-  DateTime now() => DateTime.now();
+  DateTime now() => stemNow();
 }
 
 /// Controllable clock intended for tests.

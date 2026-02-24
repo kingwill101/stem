@@ -108,6 +108,87 @@ void main() {
       broker.dispose();
     });
 
+    test('pause/resume commands stop and restart queue consumption', () async {
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final revokeStore = InMemoryRevokeStore();
+      final started = Completer<void>();
+      final release = Completer<void>();
+      final registry = SimpleTaskRegistry()
+        ..register(_BlockingTask(started, release));
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        queue: 'default',
+        consumerName: 'worker-pause',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        revokeStore: revokeStore,
+      );
+      await worker.start();
+      try {
+        final pauseOut = StringBuffer();
+        final pauseErr = StringBuffer();
+        final pauseCode = await runStemCli(
+          ['worker', 'pause', '--worker', 'worker-pause', '--queue', 'default'],
+          out: pauseOut,
+          err: pauseErr,
+          contextBuilder: () async => CliContext(
+            broker: broker,
+            backend: backend,
+            revokeStore: revokeStore,
+            routing: RoutingRegistry(RoutingConfig.legacy()),
+            dispose: () async {},
+            registry: registry,
+          ),
+        );
+        expect(pauseCode, equals(0));
+
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue('tasks.blocking');
+        await _assertTaskRemainsQueued(backend, taskId);
+        expect(started.isCompleted, isFalse);
+
+        final resumeOut = StringBuffer();
+        final resumeErr = StringBuffer();
+        final resumeCode = await runStemCli(
+          [
+            'worker',
+            'resume',
+            '--worker',
+            'worker-pause',
+            '--queue',
+            'default',
+          ],
+          out: resumeOut,
+          err: resumeErr,
+          contextBuilder: () async => CliContext(
+            broker: broker,
+            backend: backend,
+            revokeStore: revokeStore,
+            routing: RoutingRegistry(RoutingConfig.legacy()),
+            dispose: () async {},
+            registry: registry,
+          ),
+        );
+        expect(resumeCode, equals(0));
+
+        await _waitFor(() async => started.isCompleted);
+        release.complete();
+        await _waitFor(
+          () async => (await backend.get(taskId))?.state == TaskState.succeeded,
+        );
+      } finally {
+        if (!release.isCompleted) {
+          release.complete();
+        }
+        await worker.shutdown();
+        broker.dispose();
+      }
+    });
+
     test('includes active task metadata', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
@@ -323,7 +404,7 @@ void main() {
       expect(code, equals(0));
 
       await _waitFor(
-        () => events.any(
+        () async => events.any(
           (event) =>
               event.type == WorkerEventType.revoked &&
               event.envelope?.id == taskId,
@@ -395,15 +476,54 @@ class _LoopingTask implements TaskHandler<void> {
 }
 
 Future<void> _waitFor(
-  bool Function() predicate, {
+  Future<bool> Function() predicate, {
   Duration timeout = const Duration(seconds: 2),
   Duration pollInterval = const Duration(milliseconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
-  while (!predicate()) {
+  while (true) {
     if (DateTime.now().isAfter(deadline)) {
       throw TimeoutException('Condition not met within $timeout');
     }
+    if (await predicate()) {
+      return;
+    }
     await Future<void>.delayed(pollInterval);
   }
+}
+
+Future<void> _assertTaskRemainsQueued(
+  ResultBackend backend,
+  String taskId, {
+  Duration holdFor = const Duration(milliseconds: 180),
+}) async {
+  await _waitFor(() async => (await backend.get(taskId))?.state != null);
+  final deadline = DateTime.now().add(holdFor);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await backend.get(taskId);
+    if (status?.state != TaskState.queued) {
+      throw StateError(
+        'Expected task $taskId to remain queued while paused. '
+        'Found ${status?.state}.',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+class _FastTask implements TaskHandler<void> {
+  @override
+  String get name => 'tasks.fast';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 0);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {}
 }

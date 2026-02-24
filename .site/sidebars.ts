@@ -29,6 +29,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Guides",
       items: [
+        "comparisons/stem-vs-bullmq",
         "getting-started/observability-and-ops",
         "getting-started/production-checklist",
         "getting-started/troubleshooting",
@@ -52,6 +53,7 @@ const sidebars: SidebarsConfig = {
         "core-concepts/namespaces",
         "core-concepts/routing",
         "core-concepts/signals",
+        "core-concepts/queue-events",
         "core-concepts/canvas",
         "core-concepts/observability",
         "core-concepts/dashboard",

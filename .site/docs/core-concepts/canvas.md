@@ -31,6 +31,19 @@ Groups fan out work and persist each branch in the result backend.
 
 ```
 
+## Batches
+
+Batches provide a first-class immutable submission API on top of durable group
+state:
+
+- `canvas.submitBatch(signatures)` returns a stable `batchId` and task ids.
+- `canvas.inspectBatch(batchId)` returns aggregate lifecycle status
+  (`pending`, `running`, `succeeded`, `failed`, `cancelled`, `partial`).
+
+```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_batch.dart#canvas-batch
+
+```
+
 ## Chords
 
 Chords combine a group with a callback. Once all body tasks succeed, the callback

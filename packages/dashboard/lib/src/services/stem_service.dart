@@ -157,7 +157,7 @@ class StemDashboardService implements DashboardDataSource {
               .map((target) => ControlQueueNames.worker(_namespace, target))
               .toList();
 
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     for (final queue in targets) {
       final envelope = Envelope(
         id: generateEnvelopeId(),
@@ -189,11 +189,15 @@ class StemDashboardService implements DashboardDataSource {
 
     final iterator = StreamIterator(subscription);
     final replies = <ControlReplyMessage>[];
-    final deadline = DateTime.now().add(timeout);
+    final deadline = stemNow().add(timeout);
 
     try {
-      while (DateTime.now().isBefore(deadline)) {
-        final remaining = deadline.difference(DateTime.now());
+      while (true) {
+        final now = stemNow();
+        final remaining = deadline.difference(now);
+        if (remaining <= Duration.zero) {
+          break;
+        }
         bool hasNext;
         try {
           hasNext = await iterator.moveNext().timeout(remaining);

@@ -171,7 +171,7 @@ class SqliteResultBackend implements ResultBackend {
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final expiresAt = now.add(ttl ?? defaultTtl);
     final status = TaskStatus(
       id: taskId,
@@ -201,7 +201,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<TaskStatus?> get(String taskId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final row = await _context
         .query<StemTaskResult>()
         .whereEquals('id', taskId)
@@ -237,7 +237,7 @@ class SqliteResultBackend implements ResultBackend {
     if (request.limit <= 0) {
       return const TaskStatusPage(items: []);
     }
-    final now = DateTime.now();
+    final now = stemNow();
     final matches = <TaskStatusRecord>[];
     var scanOffset = 0;
     final target = request.offset + request.limit;
@@ -296,7 +296,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final expiresAt = now.add(heartbeatTtl);
     await _connections.runInTransaction((txn) async {
       final model = StemWorkerHeartbeat(
@@ -322,7 +322,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final row = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('workerId', workerId)
@@ -334,7 +334,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats() async {
-    final now = DateTime.now();
+    final now = stemNow();
     final rows = await _context
         .query<StemWorkerHeartbeat>()
         .whereEquals('namespace', namespace)
@@ -346,7 +346,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<void> initGroup(GroupDescriptor descriptor) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
     await _connections.runInTransaction((txn) async {
       await txn.repository<StemGroup>().upsert(
@@ -394,7 +394,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<GroupStatus?> getGroup(String groupId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     final groupRow = await _context
         .query<StemGroup>()
         .whereEquals('id', groupId)
@@ -433,7 +433,7 @@ class SqliteResultBackend implements ResultBackend {
 
   @override
   Future<void> expire(String taskId, Duration ttl) async {
-    final expiresAt = DateTime.now().add(ttl);
+    final expiresAt = stemNow().add(ttl);
     await _context.repository<StemTaskResult>().update(
       StemTaskResultUpdateDto(expiresAt: expiresAt),
       where: StemTaskResultPartial(id: taskId, namespace: namespace),
@@ -486,7 +486,7 @@ class SqliteResultBackend implements ResultBackend {
   }
 
   Future<void> _runCleanupCycle() async {
-    final now = DateTime.now();
+    final now = stemNow();
     await _connections.runInTransaction((txn) async {
       await txn
           .query<StemTaskResult>()
@@ -521,7 +521,7 @@ class SqliteResultBackend implements ResultBackend {
   }
 
   Future<bool> _groupExists(String groupId) async {
-    final now = DateTime.now();
+    final now = stemNow();
     return _context
         .query<StemGroup>()
         .whereEquals('id', groupId)

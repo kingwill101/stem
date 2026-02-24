@@ -139,7 +139,7 @@ class RedisResultBackend implements ResultBackend {
       meta: meta,
     );
     final key = _taskKey(taskId);
-    final now = DateTime.now().toUtc();
+    final now = stemNow().toUtc();
     var createdAt = now;
     final existingRaw = await _send(['GET', key]);
     if (existingRaw is String) {

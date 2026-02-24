@@ -38,6 +38,7 @@ import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/core/clock.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -853,6 +854,10 @@ class TaskOptions {
     this.softTimeLimit,
     this.hardTimeLimit,
     this.rateLimit,
+    this.groupRateLimit,
+    this.groupRateKey,
+    this.groupRateKeyHeader = 'tenant',
+    this.groupRateLimiterFailureMode = RateLimiterFailureMode.failOpen,
     this.unique = false,
     this.uniqueFor,
     this.priority = 0,
@@ -872,12 +877,21 @@ class TaskOptions {
         retryValue.cast<String, Object?>(),
       );
     }
+    final failureMode =
+        _parseFailureMode(
+          json['groupRateLimiterFailureMode'],
+        ) ??
+        RateLimiterFailureMode.failOpen;
     return TaskOptions(
       queue: json['queue'] as String? ?? 'default',
       maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
       softTimeLimit: _durationFromJson(json['softTimeLimitMs']),
       hardTimeLimit: _durationFromJson(json['hardTimeLimitMs']),
       rateLimit: json['rateLimit'] as String?,
+      groupRateLimit: json['groupRateLimit'] as String?,
+      groupRateKey: json['groupRateKey'] as String?,
+      groupRateKeyHeader: json['groupRateKeyHeader'] as String? ?? 'tenant',
+      groupRateLimiterFailureMode: failureMode,
       unique: json['unique'] as bool? ?? false,
       uniqueFor: _durationFromJson(json['uniqueForMs']),
       priority: (json['priority'] as num?)?.toInt() ?? 0,
@@ -901,6 +915,18 @@ class TaskOptions {
 
   /// The rate limit for tasks with these options.
   final String? rateLimit;
+
+  /// Group-scoped rate limit shared by tasks that resolve to the same group key.
+  final String? groupRateLimit;
+
+  /// Optional static group key used for group-scoped rate limiting.
+  final String? groupRateKey;
+
+  /// Header key used to resolve group identity when [groupRateKey] is not set.
+  final String groupRateKeyHeader;
+
+  /// Behavior to apply when group limiter calls fail.
+  final RateLimiterFailureMode groupRateLimiterFailureMode;
 
   /// Whether tasks with these options should be unique.
   final bool unique;
@@ -927,6 +953,10 @@ class TaskOptions {
     Duration? softTimeLimit,
     Duration? hardTimeLimit,
     String? rateLimit,
+    String? groupRateLimit,
+    String? groupRateKey,
+    String? groupRateKeyHeader,
+    RateLimiterFailureMode? groupRateLimiterFailureMode,
     bool? unique,
     Duration? uniqueFor,
     int? priority,
@@ -940,6 +970,11 @@ class TaskOptions {
       softTimeLimit: softTimeLimit ?? this.softTimeLimit,
       hardTimeLimit: hardTimeLimit ?? this.hardTimeLimit,
       rateLimit: rateLimit ?? this.rateLimit,
+      groupRateLimit: groupRateLimit ?? this.groupRateLimit,
+      groupRateKey: groupRateKey ?? this.groupRateKey,
+      groupRateKeyHeader: groupRateKeyHeader ?? this.groupRateKeyHeader,
+      groupRateLimiterFailureMode:
+          groupRateLimiterFailureMode ?? this.groupRateLimiterFailureMode,
       unique: unique ?? this.unique,
       uniqueFor: uniqueFor ?? this.uniqueFor,
       priority: priority ?? this.priority,
@@ -956,6 +991,10 @@ class TaskOptions {
     'softTimeLimitMs': softTimeLimit?.inMilliseconds,
     'hardTimeLimitMs': hardTimeLimit?.inMilliseconds,
     'rateLimit': rateLimit,
+    'groupRateLimit': groupRateLimit,
+    'groupRateKey': groupRateKey,
+    'groupRateKeyHeader': groupRateKeyHeader,
+    'groupRateLimiterFailureMode': groupRateLimiterFailureMode.name,
     'unique': unique,
     'uniqueForMs': uniqueFor?.inMilliseconds,
     'priority': priority,
@@ -982,6 +1021,20 @@ class TaskOptions {
         : double.tryParse(value.toString());
     if (fallback != null) {
       return Duration(milliseconds: fallback.toInt());
+    }
+    return null;
+  }
+
+  static RateLimiterFailureMode? _parseFailureMode(Object? value) {
+    if (value is RateLimiterFailureMode) {
+      return value;
+    }
+    final raw = value?.toString().trim().toLowerCase();
+    if (raw == null || raw.isEmpty) return null;
+    for (final mode in RateLimiterFailureMode.values) {
+      if (mode.name.toLowerCase() == raw) {
+        return mode;
+      }
     }
     return null;
   }
@@ -1953,7 +2006,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 
   /// Sets a relative delay before execution.
   TaskEnqueueBuilder<TArgs, TResult> delay(Duration duration) {
-    _notBefore = DateTime.now().add(duration);
+    _notBefore = stemNow().add(duration);
     return this;
   }
 
@@ -2008,6 +2061,15 @@ abstract class RateLimiter {
     Duration? interval,
     Map<String, Object?>? meta,
   });
+}
+
+/// Defines behavior when a limiter backend call fails.
+enum RateLimiterFailureMode {
+  /// Continue executing even when limiter calls fail.
+  failOpen,
+
+  /// Block execution and retry later when limiter calls fail.
+  failClosed,
 }
 
 /// Result of attempting to acquire tokens from the rate limiter.

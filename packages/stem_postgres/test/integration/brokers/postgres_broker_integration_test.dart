@@ -56,6 +56,28 @@ Future<void> main() async {
       ),
     );
 
+    runQueueEventsContractTests(
+      adapterName: 'Postgres',
+      factory: QueueEventsContractFactory(
+        create: () async => PostgresBroker.fromDataSource(
+          dataSource,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          pollInterval: const Duration(milliseconds: 50),
+          sweeperInterval: const Duration(milliseconds: 200),
+          runMigrations: false,
+        ),
+        dispose: (broker) => (broker as PostgresBroker).close(),
+        additionalBrokerFactory: () async => PostgresBroker.fromDataSource(
+          dataSource,
+          defaultVisibilityTimeout: const Duration(seconds: 1),
+          pollInterval: const Duration(milliseconds: 50),
+          sweeperInterval: const Duration(milliseconds: 200),
+          runMigrations: false,
+        ),
+        additionalDispose: (broker) => (broker as PostgresBroker).close(),
+      ),
+    );
+
     test('namespace isolates queue data', () async {
       final namespaceA = 'broker-ns-a-${DateTime.now().microsecondsSinceEpoch}';
       final namespaceB = 'broker-ns-b-${DateTime.now().microsecondsSinceEpoch}';
