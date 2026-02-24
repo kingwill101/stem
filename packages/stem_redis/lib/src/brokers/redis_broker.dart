@@ -941,10 +941,9 @@ class RedisStreamsBroker implements Broker {
             entries: entries,
           );
           for (final delivery in deliveries) {
-            if (controller.isClosed) {
+            if (!_tryAddDelivery(controller, delivery)) {
               break;
             }
-            controller.add(delivery);
           }
         }
       }
