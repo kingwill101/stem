@@ -105,4 +105,68 @@ void main() {
     expect(workers, hasLength(1));
     expect(workers.first.workerId, 'worker-sqlite');
   });
+
+  test('fetchTaskStatuses returns recent records with filters', () async {
+    await backend.set(
+      'task-ok',
+      TaskState.succeeded,
+      attempt: 1,
+      payload: const {'ok': true},
+      meta: const {
+        'queue': 'default',
+        'task': 'demo.ok',
+        'stem.workflow.runId': 'run-1',
+      },
+    );
+    await backend.set(
+      'task-stem-meta',
+      TaskState.running,
+      meta: const {
+        'stem.queue': 'stem-only',
+        'stem.task': 'demo.stem.meta',
+        'stem.workflow.runId': 'run-1',
+      },
+    );
+    await backend.set(
+      'task-failed',
+      TaskState.failed,
+      attempt: 2,
+      error: const TaskError(type: 'StateError', message: 'boom'),
+      meta: const {
+        'queue': 'critical',
+        'task': 'demo.fail',
+        'stem.workflow.runId': 'run-1',
+      },
+    );
+
+    final all = await service.fetchTaskStatuses(limit: 10);
+    expect(all.length, greaterThanOrEqualTo(2));
+    final failed = all.firstWhere((entry) => entry.id == 'task-failed');
+    expect(failed.queue, 'critical');
+    expect(failed.taskName, 'demo.fail');
+    expect(failed.state, TaskState.failed);
+    expect(failed.errorMessage, 'boom');
+
+    final stemMeta = all.firstWhere((entry) => entry.id == 'task-stem-meta');
+    expect(stemMeta.queue, 'stem-only');
+    expect(stemMeta.taskName, 'demo.stem.meta');
+    expect(stemMeta.state, TaskState.running);
+
+    final failedOnly = await service.fetchTaskStatuses(state: TaskState.failed);
+    expect(failedOnly, hasLength(1));
+    expect(failedOnly.first.id, 'task-failed');
+
+    final queueOnly = await service.fetchTaskStatuses(queue: 'default');
+    expect(queueOnly, hasLength(1));
+    expect(queueOnly.first.id, 'task-ok');
+
+    final detail = await service.fetchTaskStatus('task-failed');
+    expect(detail, isNotNull);
+    expect(detail!.errorType, 'StateError');
+    expect(detail.errorMessage, 'boom');
+    expect(detail.runId, 'run-1');
+
+    final runStatuses = await service.fetchTaskStatusesForRun('run-1');
+    expect(runStatuses.length, 3);
+  });
 }

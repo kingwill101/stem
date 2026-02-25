@@ -36,6 +36,7 @@ Environment variables mirror the Stem CLI:
 - `STEM_RESULT_BACKEND_URL` (defaults to the broker URL when omitted)
 - `STEM_NAMESPACE` / `STEM_DASHBOARD_NAMESPACE` (defaults to `stem`)
 - `STEM_TLS_*` for TLS-enabled Redis endpoints
+- `DASHBOARD_BASE_PATH` (optional mount prefix such as `/dashboard`)
 
 Because the dashboard reuses `StemConfig`, any broker/result backend supported
 by Stem (`redis://`, `rediss://`, `postgres://`, `postgresql://`, `memory://`)
@@ -44,6 +45,37 @@ works out of the box.
 The events page keeps a websocket open to `/dash/streams` so new
 queue/worker deltas appear instantly without refreshing. Tasks and workers
 pages use Turbo Frames for navigation and sorting.
+
+## Library Embedding
+
+`stem_dashboard` can run standalone (via `runDashboardServer`) or be mounted
+into an existing `routed` engine:
+
+```dart
+import 'package:routed/routed.dart';
+import 'package:stem_dashboard/dashboard.dart';
+
+Future<void> main() async {
+  final service = await StemDashboardService.connect();
+  final state = DashboardState(service: service);
+  await state.start();
+
+  final engine = Engine();
+  mountDashboard(
+    engine: engine,
+    service: service,
+    state: state,
+    options: const DashboardMountOptions(basePath: '/dashboard'),
+  );
+
+  await engine.serve(host: '127.0.0.1', port: 8080);
+}
+```
+
+For embedded usage, the host app owns lifecycle:
+
+- call `state.start()` before serving.
+- call `state.dispose()` and `service.close()` on shutdown.
 
 ### Local dependency overrides
 

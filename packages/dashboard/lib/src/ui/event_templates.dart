@@ -11,11 +11,11 @@ String renderEventItem(DashboardEvent event) {
       .map((entry) => '<span>${entry.key}: ${entry.value}</span>')
       .join();
   final summary = event.summary != null && event.summary!.isNotEmpty
-      ? '<p class="muted">${event.summary}</p>'
+      ? '<p class="muted mt-3 leading-relaxed">${event.summary}</p>'
       : '';
 
   return '''
-<details class="event-item" data-event>
+<details class="event-item ring-1 ring-inset ring-sky-300/10" data-event>
   <summary>
     <span class="event-title">${event.title}</span>
     <span class="event-time">$timestamp</span>
