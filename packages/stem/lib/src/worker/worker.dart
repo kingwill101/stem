@@ -720,9 +720,14 @@ class Worker {
     final envelope = delivery.envelope;
     final tracer = StemTracer.instance;
     final parentContext = tracer.extractTraceContext(envelope.headers);
-    final spanAttributes = <String, Object>{
-      'stem.task': envelope.name,
-      'stem.queue': envelope.queue,
+    final baseSpanAttributes = _deliverySpanAttributes(envelope);
+    final consumeSpanAttributes = <String, Object>{
+      ...baseSpanAttributes,
+      'stem.span.phase': 'consume',
+    };
+    final executeSpanAttributes = <String, Object>{
+      ...baseSpanAttributes,
+      'stem.span.phase': 'execute',
     };
 
     await tracer.trace(
@@ -987,7 +992,7 @@ class Worker {
                 decodedArgs,
               ),
             ),
-            attributes: spanAttributes,
+            attributes: executeSpanAttributes,
           );
 
           _cancelLeaseTimer(delivery.receipt);
@@ -1121,7 +1126,7 @@ class Worker {
       },
       context: parentContext,
       spanKind: dotel.SpanKind.consumer,
-      attributes: spanAttributes,
+      attributes: consumeSpanAttributes,
     );
   }
 
@@ -2027,14 +2032,13 @@ class Worker {
         retryPolicy,
       );
       final nextRunAt = stemNow().add(delay);
-      await broker.nack(delivery, requeue: false);
-      await broker.publish(
-        envelope.copyWith(
-          attempt: envelope.attempt + 1,
-          maxRetries: maxRetries,
-          notBefore: stemNow().add(delay),
-        ),
+      final retryEnvelope = envelope.copyWith(
+        attempt: envelope.attempt + 1,
+        maxRetries: maxRetries,
+        notBefore: nextRunAt,
       );
+      await broker.nack(delivery, requeue: false);
+      await _publishWithOptionalSigning(retryEnvelope);
       final retriedMeta = _statusMeta(
         envelope,
         resultEncoder,
@@ -2226,15 +2230,14 @@ class Worker {
       updatedMeta['stem.retryPolicy'] = request.retryPolicy!.toJson();
     }
 
-    await broker.nack(delivery, requeue: false);
-    await broker.publish(
-      envelope.copyWith(
-        attempt: envelope.attempt + 1,
-        maxRetries: maxRetries,
-        notBefore: notBefore,
-        meta: updatedMeta,
-      ),
+    final retryEnvelope = envelope.copyWith(
+      attempt: envelope.attempt + 1,
+      maxRetries: maxRetries,
+      notBefore: notBefore,
+      meta: updatedMeta,
     );
+    await broker.nack(delivery, requeue: false);
+    await _publishWithOptionalSigning(retryEnvelope);
 
     final retriedMeta = _statusMeta(
       envelope,
@@ -2296,10 +2299,9 @@ class Worker {
     required Duration backoff,
     Map<String, Object?> extra = const {},
   }) async {
+    final retryEnvelope = envelope.copyWith(notBefore: stemNow().add(backoff));
     await broker.nack(delivery, requeue: false);
-    await broker.publish(
-      envelope.copyWith(notBefore: stemNow().add(backoff)),
-    );
+    await _publishWithOptionalSigning(retryEnvelope);
     final data = <String, Object?>{
       ...extra,
       if (!extra.containsKey('retryAfterMs'))
@@ -2318,6 +2320,16 @@ class Worker {
         data: data,
       ),
     );
+  }
+
+  Future<void> _publishWithOptionalSigning(Envelope envelope) async {
+    final payloadSigner = signer;
+    if (payloadSigner == null) {
+      await broker.publish(envelope);
+      return;
+    }
+    final signed = await payloadSigner.sign(envelope);
+    await broker.publish(signed);
   }
 
   /// Requeues deliveries from paused queues without executing handlers.
@@ -2696,6 +2708,156 @@ class Worker {
     final traceFields = StemTracer.instance.traceFields();
     if (traceFields.isEmpty) return context;
     return {...context, ...traceFields};
+  }
+
+  Map<String, Object> _deliverySpanAttributes(Envelope envelope) {
+    final attributes = <String, Object>{
+      'stem.task': envelope.name,
+      'stem.task.id': envelope.id,
+      'stem.task.attempt': envelope.attempt,
+      'stem.task.max_retries': envelope.maxRetries,
+      'stem.task.priority': envelope.priority,
+      'stem.queue': envelope.queue,
+      'stem.worker.id': _workerIdentifier,
+      'stem.worker.namespace': namespace,
+    };
+
+    final groupId = envelope.headers['stem-group-id']?.trim();
+    if (groupId != null && groupId.isNotEmpty) {
+      attributes['stem.group.id'] = groupId;
+    }
+
+    final host = _safeLocalHostname();
+    if (host != null) {
+      attributes['host.name'] = host;
+    }
+
+    _appendEnvelopeMetaTraceAttributes(attributes, envelope.meta);
+    return attributes;
+  }
+
+  void _appendEnvelopeMetaTraceAttributes(
+    Map<String, Object> attributes,
+    Map<String, Object?> meta,
+  ) {
+    final namespaceValue = _metaString(meta, const [
+      'stem.namespace',
+      'namespace',
+    ]);
+    if (namespaceValue != null) {
+      attributes['stem.namespace'] = namespaceValue;
+    }
+
+    final parentTaskId = _metaString(meta, const ['stem.parentTaskId']);
+    if (parentTaskId != null) {
+      attributes['stem.parent_task_id'] = parentTaskId;
+    }
+
+    final rootTaskId = _metaString(meta, const ['stem.rootTaskId']);
+    if (rootTaskId != null) {
+      attributes['stem.root_task_id'] = rootTaskId;
+    }
+
+    final workflowRunId = _metaString(meta, const [
+      'stem.workflow.runId',
+      'workflow.runId',
+      'stem.workflow.run_id',
+    ]);
+    if (workflowRunId != null) {
+      attributes['stem.workflow.run_id'] = workflowRunId;
+    }
+
+    final workflowName = _metaString(meta, const [
+      'stem.workflow.name',
+      'workflow.name',
+    ]);
+    if (workflowName != null) {
+      attributes['stem.workflow.name'] = workflowName;
+    }
+
+    final workflowStep = _metaString(meta, const [
+      'stem.workflow.step',
+      'workflow.step',
+      'stem.workflow.stepName',
+      'workflow.stepName',
+      'stepName',
+      'step',
+    ]);
+    if (workflowStep != null) {
+      attributes['stem.workflow.step'] = workflowStep;
+    }
+
+    final workflowStepId = _metaString(meta, const [
+      'stem.workflow.stepId',
+      'workflow.stepId',
+      'stepId',
+    ]);
+    if (workflowStepId != null) {
+      attributes['stem.workflow.step_id'] = workflowStepId;
+    }
+
+    final workflowStepIndex = _metaInt(meta, const [
+      'stem.workflow.stepIndex',
+      'stem.workflow.step_index',
+    ]);
+    if (workflowStepIndex != null) {
+      attributes['stem.workflow.step_index'] = workflowStepIndex;
+    }
+
+    final workflowIteration = _metaInt(meta, const ['stem.workflow.iteration']);
+    if (workflowIteration != null) {
+      attributes['stem.workflow.iteration'] = workflowIteration;
+    }
+
+    final workflowStepAttempt = _metaInt(meta, const [
+      'stem.workflow.stepAttempt',
+      'workflow.stepAttempt',
+      'stepAttempt',
+    ]);
+    if (workflowStepAttempt != null) {
+      attributes['stem.workflow.step_attempt'] = workflowStepAttempt;
+    }
+  }
+
+  String? _metaString(Map<String, Object?> meta, List<String> keys) {
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+      }
+    }
+    return null;
+  }
+
+  int? _metaInt(Map<String, Object?> meta, List<String> keys) {
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      if (value is String) {
+        final parsed = int.tryParse(value.trim());
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  static String? _safeLocalHostname() {
+    try {
+      final hostname = Platform.localHostname.trim();
+      return hostname.isEmpty ? null : hostname;
+    } on Object {
+      return null;
+    }
   }
 
   /// Starts periodic worker heartbeat publishing and metrics updates.
@@ -3469,7 +3631,15 @@ class Worker {
     TaskPayloadEncoder resultEncoder, {
     Map<String, Object?> extra = const {},
   }) {
-    return _withResultEncoderMeta({...envelope.meta, ...extra}, resultEncoder);
+    final merged = <String, Object?>{
+      ...envelope.meta,
+      'task': envelope.name,
+      'stem.task': envelope.name,
+      'queue': envelope.queue,
+      'stem.queue': envelope.queue,
+      ...extra,
+    };
+    return _withResultEncoderMeta(merged, resultEncoder);
   }
 
   /// Adds encoder metadata to a result status payload.
