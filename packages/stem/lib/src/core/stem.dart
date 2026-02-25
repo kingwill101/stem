@@ -246,10 +246,12 @@ class Stem implements TaskEnqueuer {
     }
     _appendTracingMetaAttributes(spanAttributes, enrichedMeta);
 
-    // Use explicit wire headers as the only source of producer parent context.
-    // This avoids accidental context bleed from unrelated async operations
-    // while still supporting distributed parent propagation via traceparent.
-    final producerParentContext = tracer.extractTraceContext(headers);
+    // Prefer explicit wire headers when present, but still fall back to the
+    // current ambient span so in-process producers preserve parent linkage.
+    final producerParentContext = tracer.extractTraceContext(
+      headers,
+      context: dotel.Context.current,
+    );
 
     return tracer.trace(
       'stem.enqueue',

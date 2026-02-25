@@ -258,4 +258,44 @@ void main() {
         .toSet();
     expect(consumeTraceIds.length, equals(2));
   });
+
+  test(
+    'enqueue span uses ambient parent context when headers are absent',
+    () async {
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()
+        ..register(
+          FunctionTaskHandler<void>(
+            name: 'trace.parent',
+            entrypoint: (context, args) async => null,
+          ),
+        );
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final tracer = dotel.OTel.tracerProvider().getTracer('stem-test-parent');
+
+      final parent = tracer.startSpan('http.request');
+      await tracer.withSpanAsync(parent, () async {
+        await stem.enqueue('trace.parent');
+      });
+      parent.end();
+      broker.dispose();
+
+      final enqueueSpan = exporter.spans.lastWhere(
+        (span) => span.name == 'stem.enqueue',
+      );
+      final parentSpan = exporter.spans.lastWhere(
+        (span) => span.name == 'http.request',
+      );
+
+      final enqueueParentId =
+          enqueueSpan.parentSpanContext?.spanId.hexString ??
+          enqueueSpan.parentSpan?.spanContext.spanId.hexString;
+      expect(enqueueParentId, parentSpan.spanContext.spanId.hexString);
+      expect(
+        enqueueSpan.spanContext.traceId.hexString,
+        parentSpan.spanContext.traceId.hexString,
+      );
+    },
+  );
 }
