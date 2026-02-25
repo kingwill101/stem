@@ -23,7 +23,7 @@ String prefixDashboardUrlAttributes(String html, String basePath) {
   if (normalizedBasePath.isEmpty) return html;
 
   return html.replaceAllMapped(
-    RegExp(r'''(href|action|value)=("')/(?!/)([^"']*)\2'''),
+    RegExp(r'''(href|action|value)=(["'])/(?!/)([^"']*)\2'''),
     (match) {
       final attribute = match.group(1)!;
       final quote = match.group(2)!;

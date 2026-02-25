@@ -9,14 +9,15 @@ import 'package:stem_dashboard/src/services/models.dart';
 final dashboardNumberFormat = NumberFormat.decimalPattern();
 
 String buildQueueTableRow(QueueSummary summary) {
+  final escapedQueue = escapeHtml(summary.queue);
   return '''
-<tr class="queue-row group" data-queue-row="${summary.queue}">
-  <td><span class="pill">${summary.queue}</span></td>
+<tr class="queue-row group" data-queue-row="$escapedQueue">
+  <td><span class="pill">$escapedQueue</span></td>
   <td class="font-medium text-slate-100">${formatInt(summary.pending)}</td>
   <td class="font-medium text-slate-100">${formatInt(summary.inflight)}</td>
   <td class="font-medium text-slate-100">${formatInt(summary.deadLetters)}</td>
 </tr>
-<tr class="queue-detail" data-queue-detail="${summary.queue}">
+<tr class="queue-detail" data-queue-detail="$escapedQueue">
   <td colspan="4" class="bg-slate-950/40">
     <div class="detail-grid">
       <div><span class="muted">Pending</span> ${formatInt(summary.pending)}</div>
@@ -177,9 +178,7 @@ String buildTaskStatusTable(
   <td colspan="${headers.length}" class="muted">${escapeHtml(options.emptyMessage)}</td>
 </tr>
 '''
-      : tasks
-            .map((task) => _buildTaskStatusRow(task, options: options))
-            .join();
+      : tasks.map((task) => _buildTaskStatusRow(task, options: options)).join();
 
   return '''
 <table>

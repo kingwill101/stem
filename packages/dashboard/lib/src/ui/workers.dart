@@ -79,7 +79,7 @@ ${renderWorkersAlert(options)}
     <tbody>
       ${filteredWorkers.isEmpty ? '''
               <tr>
-                <td colspan="7" class="muted">No heartbeats detected for namespace "${options.namespaceFilter ?? 'stem'}".</td>
+                <td colspan="7" class="muted">No heartbeats detected for namespace "${escapeHtml(options.namespaceFilter ?? 'stem')}".</td>
               </tr>
             ''' : filteredWorkers.map((worker) => buildWorkerRow(worker, namespaceFilter: options.namespaceFilter)).join()}
     </tbody>
@@ -98,11 +98,13 @@ String buildWorkerRow(WorkerStatus status, {String? namespaceFilter}) {
   final queues = status.queues.isEmpty
       ? '<span class="muted">—</span>'
       : status.queues
-            .map((queue) => '<span class="pill">${queue.name}</span>')
+            .map(
+              (queue) => '<span class="pill">${escapeHtml(queue.name)}</span>',
+            )
             .join(' ');
   return '''
 <tr>
-  <td class="font-semibold text-slate-100">${status.workerId}</td>
+  <td class="font-semibold text-slate-100">${escapeHtml(status.workerId)}</td>
   <td><span class="pill">${escapeHtml(status.namespace)}</span></td>
   <td>$queues</td>
   <td>${formatInt(status.inflight)}</td>

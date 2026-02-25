@@ -24,6 +24,8 @@ class DashboardState {
     this.alertCooldown = const Duration(minutes: 5),
   }) : hub = TurboStreamHub();
 
+  static const _alertWebhookTimeout = Duration(seconds: 5);
+
   /// Data source used to fetch queues and workers.
   final DashboardDataSource service;
 
@@ -103,13 +105,14 @@ class DashboardState {
   Future<void> runOnce() => _poll();
 
   Future<void> _poll() async {
-    final queueFuture = service.fetchQueueSummaries();
-    final workerFuture = service.fetchWorkerStatuses();
-    final taskFuture = service.fetchTaskStatuses(limit: 120);
-
-    final queues = await queueFuture;
-    final workers = await workerFuture;
-    final tasks = await taskFuture;
+    final results = await Future.wait<Object>([
+      service.fetchQueueSummaries(),
+      service.fetchWorkerStatuses(),
+      service.fetchTaskStatuses(limit: 120),
+    ]);
+    final queues = results[0] as List<QueueSummary>;
+    final workers = results[1] as List<WorkerStatus>;
+    final tasks = results[2] as List<DashboardTaskStatusEntry>;
     _updateThroughput(queues);
 
     _generateQueueEvents(_previousQueues, queues);
@@ -397,7 +400,8 @@ class DashboardState {
     if (totalPending >= alertBacklogThreshold) {
       await _emitAlert(
         key: 'queue.backlog.high',
-        summary: 'Backlog threshold exceeded: '
+        summary:
+            'Backlog threshold exceeded: '
             '$totalPending >= $alertBacklogThreshold.',
         metadata: {
           'pendingTotal': totalPending,
@@ -413,7 +417,8 @@ class DashboardState {
     if (failedCount >= alertFailedTaskThreshold) {
       await _emitAlert(
         key: 'tasks.failed.high',
-        summary: 'Failed task threshold exceeded: '
+        summary:
+            'Failed task threshold exceeded: '
             '$failedCount >= $alertFailedTaskThreshold.',
         metadata: {
           'failedCount': failedCount,
@@ -513,13 +518,21 @@ class DashboardState {
         continue;
       }
 
+      final client = HttpClient()..connectionTimeout = _alertWebhookTimeout;
       HttpClientRequest? request;
+      var shouldAbortRequest = false;
       try {
-        final client = HttpClient();
-        request = await client.postUrl(uri);
+        request = await client.postUrl(uri).timeout(_alertWebhookTimeout);
+        shouldAbortRequest = true;
         request.headers.contentType = ContentType.json;
         request.add(utf8.encode(jsonEncode(payload)));
-        final response = await request.close();
+        final response = await request.close().timeout(_alertWebhookTimeout);
+        shouldAbortRequest = false;
+        try {
+          await response.drain<void>().timeout(_alertWebhookTimeout);
+        } on Object {
+          // Response body is optional for webhook auditing.
+        }
         if (response.statusCode >= 200 && response.statusCode < 300) {
           recordAudit(
             kind: 'alert',
@@ -537,9 +550,21 @@ class DashboardState {
             summary: 'Webhook returned HTTP ${response.statusCode} for $url.',
           );
         }
-        client.close(force: true);
+      } on TimeoutException {
+        if (shouldAbortRequest) {
+          request?.abort();
+        }
+        recordAudit(
+          kind: 'alert',
+          action: key,
+          status: 'error',
+          actor: 'system',
+          summary: 'Webhook delivery timed out for $url.',
+        );
       } on Object catch (error) {
-        request?.abort();
+        if (shouldAbortRequest) {
+          request?.abort();
+        }
         recordAudit(
           kind: 'alert',
           action: key,
@@ -547,6 +572,8 @@ class DashboardState {
           actor: 'system',
           summary: 'Webhook delivery failed for $url: $error',
         );
+      } finally {
+        client.close(force: true);
       }
     }
   }
