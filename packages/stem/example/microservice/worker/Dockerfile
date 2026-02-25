@@ -3,6 +3,7 @@
 FROM dart:stable
 WORKDIR /workspace
 COPY . /workspace
-WORKDIR /workspace/example/microservice/worker
+WORKDIR /workspace/packages/stem/example/microservice/worker
 ENV DART_PUB_CACHE=/tmp/.dart_pub_cache
+ENV PATH=/usr/lib/dart/bin:$PATH
 CMD ["sh", "-c", "dart pub get && dart run bin/worker.dart"]

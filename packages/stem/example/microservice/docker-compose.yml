@@ -16,6 +16,7 @@ services:
     image: jaegertracing/all-in-one:1.56
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      QUERY_BASE_PATH: /jaeger
     restart: unless-stopped
 
   prometheus:
@@ -36,12 +37,13 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SERVER_DOMAIN: localhost
-      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+      GF_SERVER_ROOT_URL: "http://localhost:8080/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./grafana/provisioning/dashboards/stem.yml:/etc/grafana/provisioning/dashboards/stem.yaml:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards/stem:ro
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -61,8 +63,8 @@ services:
 
   dashboard:
     build:
-      context: ../..
-      dockerfile: example/microservice/dashboard/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/dashboard/Dockerfile
     env_file:
       - .env.example
     environment:
@@ -74,12 +76,16 @@ services:
 
   enqueuer:
     build:
-      context: ../..
-      dockerfile: example/microservice/enqueuer/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/enqueuer/Dockerfile
     env_file:
       - .env.example
     environment:
       PORT: ${PORT:-8081}
+      ENQUEUER_AUTOFILL_ENABLED: ${ENQUEUER_AUTOFILL_ENABLED:-true}
+      ENQUEUER_AUTOFILL_INTERVAL_MS: ${ENQUEUER_AUTOFILL_INTERVAL_MS:-2500}
+      ENQUEUER_AUTOFILL_BATCH_SIZE: ${ENQUEUER_AUTOFILL_BATCH_SIZE:-2}
+      ENQUEUER_AUTOFILL_FAILURE_EVERY: ${ENQUEUER_AUTOFILL_FAILURE_EVERY:-8}
     depends_on:
       - redis
       - otel-collector
@@ -87,10 +93,14 @@ services:
 
   worker:
     build:
-      context: ../..
-      dockerfile: example/microservice/worker/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/worker/Dockerfile
     env_file:
       - .env.example
+    environment:
+      STEM_WORKER_NAME: microservice-worker-1
+      STEM_WORKER_QUEUE: greetings
+      STEM_WORKER_NAMESPACE: customer-experience
     depends_on:
       - redis
       - otel-collector
@@ -98,10 +108,14 @@ services:
 
   worker2:
     build:
-      context: ../..
-      dockerfile: example/microservice/worker/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/worker/Dockerfile
     env_file:
       - .env.example
+    environment:
+      STEM_WORKER_NAME: microservice-worker-2
+      STEM_WORKER_QUEUE: billing
+      STEM_WORKER_NAMESPACE: revenue
     depends_on:
       - redis
       - otel-collector
@@ -109,10 +123,14 @@ services:
 
   worker3:
     build:
-      context: ../..
-      dockerfile: example/microservice/worker/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/worker/Dockerfile
     env_file:
       - .env.example
+    environment:
+      STEM_WORKER_NAME: microservice-worker-3
+      STEM_WORKER_QUEUE: reporting
+      STEM_WORKER_NAMESPACE: analytics
     depends_on:
       - redis
       - otel-collector
@@ -120,8 +138,8 @@ services:
 
   beat:
     build:
-      context: ../..
-      dockerfile: example/microservice/beat/Dockerfile
+      context: ../../../..
+      dockerfile: packages/stem/example/microservice/beat/Dockerfile
     env_file:
       - .env.example
     environment:

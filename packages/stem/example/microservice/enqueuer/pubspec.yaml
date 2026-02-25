@@ -19,3 +19,5 @@ dependency_overrides:
     path: ../../..
   stem_redis:
     path: ../../../../stem_redis
+  stem_memory:
+    path: ../../../../stem_memory

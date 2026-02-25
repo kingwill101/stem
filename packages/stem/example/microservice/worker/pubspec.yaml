@@ -17,3 +17,5 @@ dev_dependencies:
 dependency_overrides:
   stem:
     path: ../../..
+  stem_memory:
+    path: ../../../../stem_memory
