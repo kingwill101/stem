@@ -42,6 +42,27 @@ class WorkflowWatcher {
   /// Additional metadata supplied when the watcher was registered.
   final Map<String, Object?> data;
 
+  /// Suspension type (`sleep`, `event`, etc.) when recorded by runtime.
+  String? get suspensionType => data['type']?.toString();
+
+  /// Workflow iteration value when present.
+  int? get iteration => _intFromJson(data['iteration']);
+
+  /// Iteration step marker when present.
+  String? get iterationStep => data['iterationStep']?.toString();
+
+  /// Effective payload snapshot captured at suspension time.
+  Object? get payload => data['payload'];
+
+  /// Timestamp when suspension was recorded.
+  DateTime? get suspendedAt => _dateFromJson(data['suspendedAt']);
+
+  /// Requested resume timestamp when a policy is active.
+  DateTime? get requestedResumeAt => _dateFromJson(data['requestedResumeAt']);
+
+  /// Timeout deadline chosen by the policy/runtime.
+  DateTime? get policyDeadline => _dateFromJson(data['policyDeadline']);
+
   /// Converts this watcher to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {
@@ -88,6 +109,21 @@ class WorkflowWatcherResolution {
   /// Resume data merged from stored metadata and event payload.
   final Map<String, Object?> resumeData;
 
+  /// Suspension type (`sleep`, `event`, etc.) propagated to resume payload.
+  String? get suspensionType => resumeData['type']?.toString();
+
+  /// Workflow iteration value when present.
+  int? get iteration => _intFromJson(resumeData['iteration']);
+
+  /// Iteration step marker when present.
+  String? get iterationStep => resumeData['iterationStep']?.toString();
+
+  /// Resume payload delivered to workflow step.
+  Object? get payload => resumeData['payload'];
+
+  /// Timestamp when event delivery was recorded.
+  DateTime? get deliveredAt => _dateFromJson(resumeData['deliveredAt']);
+
   /// Converts this resolution to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {
@@ -103,4 +139,10 @@ DateTime? _dateFromJson(Object? value) {
   if (value == null) return null;
   if (value is DateTime) return value;
   return DateTime.tryParse(value.toString());
+}
+
+int? _intFromJson(Object? value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.tryParse(value?.toString() ?? '');
 }

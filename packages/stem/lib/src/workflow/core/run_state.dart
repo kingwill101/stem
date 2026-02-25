@@ -111,6 +111,44 @@ class RunState {
       status == WorkflowStatus.failed ||
       status == WorkflowStatus.cancelled;
 
+  /// Whether the run currently carries suspension metadata.
+  bool get isSuspended => suspensionData != null || waitTopic != null;
+
+  /// Suspension type marker (`sleep`, `event`, etc.), when provided.
+  String? get suspensionType => suspensionData?['type']?.toString();
+
+  /// Suspended step name, when provided.
+  String? get suspensionStep => suspensionData?['step']?.toString();
+
+  /// Suspended iteration index, when provided.
+  int? get suspensionIteration => _intFromJson(suspensionData?['iteration']);
+
+  /// Step name scoped to a workflow iteration, when provided.
+  String? get suspensionIterationStep =>
+      suspensionData?['iterationStep']?.toString();
+
+  /// Event topic being awaited by the run.
+  String? get waitEventTopic =>
+      suspensionData?['topic']?.toString() ?? waitTopic;
+
+  /// Timestamp when the run entered suspended state.
+  DateTime? get suspendedAt => _dateFromJson(suspensionData?['suspendedAt']);
+
+  /// Requested resume timestamp from suspension metadata.
+  DateTime? get requestedResumeAt =>
+      _dateFromJson(suspensionData?['requestedResumeAt']);
+
+  /// Policy deadline used for suspension timeout behavior.
+  DateTime? get suspensionPolicyDeadline =>
+      _dateFromJson(suspensionData?['policyDeadline']);
+
+  /// Resume payload delivered to the suspended run, when present.
+  Object? get suspensionPayload => suspensionData?['payload'];
+
+  /// Timestamp when a matching event was delivered for this suspension.
+  DateTime? get suspensionDeliveredAt =>
+      _dateFromJson(suspensionData?['deliveredAt']);
+
   /// Returns a copy of this run state with updated fields.
   RunState copyWith({
     WorkflowStatus? status,

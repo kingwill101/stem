@@ -1027,6 +1027,72 @@ void main() {
       broker.dispose();
     });
 
+    test('retries signed failing task then succeeds', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 10),
+        claimInterval: const Duration(milliseconds: 40),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+
+      final signingConfig = SigningConfig.fromEnvironment({
+        'STEM_SIGNING_KEYS':
+            'primary:${base64.encode(utf8.encode('signing-secret'))}',
+        'STEM_SIGNING_ACTIVE_KEY': 'primary',
+      });
+      final producerSigner = PayloadSigner(signingConfig);
+      final verifierSigner = PayloadSigner(signingConfig);
+
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'worker-signed-retry',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+        retryStrategy: ExponentialJitterRetryStrategy(
+          base: const Duration(milliseconds: 10),
+        ),
+        signer: verifierSigner,
+      );
+
+      final events = <WorkerEvent>[];
+      final sub = worker.events.listen(events.add);
+
+      await worker.start();
+
+      final stem = Stem(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        signer: producerSigner,
+      );
+      final taskId = await stem.enqueue('tasks.flaky');
+
+      await _waitFor(
+        () => events.any(
+          (e) =>
+              e.type == WorkerEventType.completed && e.envelope?.id == taskId,
+        ),
+      );
+      await _waitFor(
+        () => events.any(
+          (e) => e.type == WorkerEventType.retried && e.envelope?.id == taskId,
+        ),
+      );
+
+      final status = await backend.get(taskId);
+      expect(status?.state, TaskState.succeeded);
+      expect(status?.attempt, equals(1));
+
+      final deadPage = await broker.listDeadLetters('default');
+      expect(deadPage.entries, isEmpty);
+
+      await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
     test('moves task to dead letter after max retries', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 

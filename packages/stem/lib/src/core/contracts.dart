@@ -260,6 +260,58 @@ class TaskStatus {
   /// The attempt number for this task execution.
   final int attempt;
 
+  /// Task name extracted from metadata (`task` / `stem.task`).
+  String? get taskName =>
+      meta['task']?.toString() ?? meta['stem.task']?.toString();
+
+  /// Queue name extracted from metadata (`queue` / `stem.queue`).
+  String? get queueName =>
+      meta['queue']?.toString() ?? meta['stem.queue']?.toString();
+
+  /// Namespace extracted from metadata (`namespace` / `stem.namespace`).
+  String? get namespace =>
+      meta['namespace']?.toString() ?? meta['stem.namespace']?.toString();
+
+  /// Worker id that reported this status, if available.
+  String? get workerId => meta['worker']?.toString();
+
+  /// Processing start timestamp recorded by the worker, if present.
+  DateTime? get startedAt => _taskStatusDate(meta['startedAt']);
+
+  /// Completion timestamp recorded by the worker, if present.
+  DateTime? get completedAt => _taskStatusDate(meta['completedAt']);
+
+  /// Failure timestamp recorded by the worker, if present.
+  DateTime? get failedAt => _taskStatusDate(meta['failedAt']);
+
+  /// Revocation timestamp when this task was revoked, if present.
+  DateTime? get revokedAt => _taskStatusDate(meta['revokedAt']);
+
+  /// Revocation reason, when recorded.
+  String? get revokedReason => meta['revokedReason']?.toString();
+
+  /// Actor that requested revocation, when recorded.
+  String? get revokedBy => meta['revokedBy']?.toString();
+
+  /// Whether this status indicates a revoked task.
+  bool get wasRevoked => meta['revoked'] == true || revokedAt != null;
+
+  /// Whether this status indicates a time-limit expiration.
+  bool get isExpired => meta['stem.expired'] == true || meta['expired'] == true;
+
+  /// Hard execution time limit reported by worker metadata, if present.
+  Duration? get hardTimeLimit => _taskStatusDuration(meta['stem.timeLimitMs']);
+
+  /// Soft execution time limit reported by worker metadata, if present.
+  Duration? get softTimeLimit =>
+      _taskStatusDuration(meta['stem.softTimeLimitMs']);
+
+  /// Parent task id in a lineage chain, if present.
+  String? get parentTaskId => meta['stem.parentTaskId']?.toString();
+
+  /// Root task id in a lineage chain, if present.
+  String? get rootTaskId => meta['stem.rootTaskId']?.toString();
+
   /// Serializes this status to JSON.
   Map<String, Object?> toJson() => {
     'id': id,
@@ -269,6 +321,21 @@ class TaskStatus {
     'meta': meta,
     'attempt': attempt,
   };
+}
+
+DateTime? _taskStatusDate(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value.toUtc();
+  return DateTime.tryParse(value.toString())?.toUtc();
+}
+
+Duration? _taskStatusDuration(Object? value) {
+  if (value is num) {
+    return Duration(milliseconds: value.toInt());
+  }
+  final parsed = int.tryParse(value?.toString() ?? '');
+  if (parsed == null) return null;
+  return Duration(milliseconds: parsed);
 }
 
 /// Immutable record representing a persisted task status with timestamps.
