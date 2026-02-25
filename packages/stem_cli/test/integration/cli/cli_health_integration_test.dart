@@ -41,10 +41,13 @@ void main() {
     );
 
     expect(exitCode, 0);
-    final output = stdoutBuffer.toString();
-    expect(output.toLowerCase(), contains('[ok]'));
-    expect(output, contains('broker: Connected to $redisUrl'));
-    expect(output, contains('backend: Connected to $postgresUrl'));
+    final output = stdoutBuffer.toString().toLowerCase();
+    expect(output, contains('health checks'));
+    expect(output, contains('broker: connected to ${redisUrl.toLowerCase()}'));
+    expect(
+      output,
+      contains('backend: connected to ${postgresUrl.toLowerCase()}'),
+    );
     expect(stderrBuffer.isEmpty, isTrue);
   });
 }

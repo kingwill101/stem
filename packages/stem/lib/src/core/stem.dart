@@ -250,7 +250,7 @@ class Stem implements TaskEnqueuer {
     // current ambient span so in-process producers preserve parent linkage.
     final producerParentContext = tracer.extractTraceContext(
       headers,
-      context: dotel.Context.current,
+      context: tracer.ambientContextOrNull(),
     );
 
     return tracer.trace(

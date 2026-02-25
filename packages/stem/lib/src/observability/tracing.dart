@@ -137,6 +137,19 @@ class StemTracer {
     };
   }
 
+  /// Returns the current ambient tracing context when telemetry is ready.
+  ///
+  /// Returns `null` if OpenTelemetry is not initialized or no ambient context
+  /// can be resolved safely.
+  dotel.Context? ambientContextOrNull() {
+    if (!_isTelemetryReady) return null;
+    try {
+      return dotel.Context.current;
+    } on Object {
+      return null;
+    }
+  }
+
   dotel.SpanContext? _spanContextFrom(dotel.Context context) {
     final span = context.span;
     if (span != null && span.spanContext.isValid) {
