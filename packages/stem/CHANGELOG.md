@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Expanded span attribution across enqueue/consume/execute with task identity,
+  queue, worker, host, lineage, namespace, and workflow step metadata
+  (`run_id`, `step`, `step_id`, `step_index`, `step_attempt`, `iteration`).
+- Improved worker retry republish behavior to preserve optional payload signing
+  when retrying deliveries.
+- Added workflow metadata quality-of-life getters and watcher/run-state helpers
+  to make workflow introspection easier from task metadata.
+- Strengthened tracing and workflow-related test coverage for metadata
+  propagation and contract behavior.
+- Expanded the microservice example with richer workload generation, queue
+  diversity, updated scheduler/demo flows, and full local observability wiring
+  for Jaeger/Prometheus/Grafana through nginx.
+
 ## 0.1.1
 
 - Improved bootstrap DX with explicit fail-fast errors across broker/backend/
