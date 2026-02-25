@@ -22,7 +22,7 @@
   "links": [],
   "panels": [
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -63,7 +63,7 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -104,7 +104,7 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "ops"
@@ -145,7 +145,7 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "ops"
@@ -186,7 +186,7 @@
       "type": "stat"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "ops"
@@ -234,7 +234,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "s"
@@ -282,7 +282,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {},
         "overrides": []

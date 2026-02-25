@@ -22,7 +22,7 @@
   "links": [],
   "panels": [
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -61,7 +61,7 @@
       "type": "bargauge"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -100,7 +100,7 @@
       "type": "bargauge"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -141,7 +141,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "ops"
@@ -182,7 +182,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {
           "unit": "ops"
@@ -230,7 +230,7 @@
       "type": "timeseries"
     },
     {
-      "datasource": "Prometheus",
+      "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
       "fieldConfig": {
         "defaults": {},
         "overrides": []
@@ -282,7 +282,7 @@
           "text": "All",
           "value": "$__all"
         },
-        "datasource": "Prometheus",
+        "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
         "hide": 0,
         "includeAll": true,
         "label": "Namespace",
@@ -302,7 +302,7 @@
           "text": "All",
           "value": "$__all"
         },
-        "datasource": "Prometheus",
+        "datasource": {"type": "prometheus", "uid": "stem-prometheus"},
         "hide": 0,
         "includeAll": true,
         "label": "Queue",
