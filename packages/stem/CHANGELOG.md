@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - Expanded span attribution across enqueue/consume/execute with task identity,
   queue, worker, host, lineage, namespace, and workflow step metadata
@@ -14,9 +14,6 @@
 - Expanded the microservice example with richer workload generation, queue
   diversity, updated scheduler/demo flows, and full local observability wiring
   for Jaeger/Prometheus/Grafana through nginx.
-
-## 0.1.1
-
 - Improved bootstrap DX with explicit fail-fast errors across broker/backend/
   workflow/schedule/lock/revoke resolution paths in `StemStack.fromUrl`,
   including actionable hints when adapters support a URL but do not implement

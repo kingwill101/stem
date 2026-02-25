@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0
 
 - Reworked the dashboard into a richer operations console with dedicated views
   for tasks, jobs, workflows, workers, failures, audit, events, namespaces, and
@@ -13,7 +13,4 @@
   during page switches.
 - Expanded dashboard state/service/server models and test coverage to support
   the new views and metadata-rich rendering paths.
-
-## 0.1.0
-
 - Initial release of the `stem_dashboard` package.
