@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:stem_builder_example/stem_registry.g.dart';
+import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
   final app = await createStemGeneratedInMemoryApp();
@@ -24,14 +24,12 @@ Future<void> main() async {
       ),
     );
 
-    final flowRunId = await runtime.startBuilderExampleFlow(
+    final flowRunId = await runtime.startFlow(
       params: const {'name': 'runtime metadata'},
     );
     await runtime.executeRun(flowRunId);
 
-    final scriptRunId = await runtime.startBuilderExampleUserSignup(
-      email: 'dev@stem.dev',
-    );
+    final scriptRunId = await runtime.startUserSignup(email: 'dev@stem.dev');
     await runtime.executeRun(scriptRunId);
 
     final runViews = await runtime.listRunViews(limit: 10);

@@ -8,8 +8,8 @@ This example demonstrates:
   - `createStemGeneratedInMemoryApp()`
   - `createStemGeneratedWorkflowApp(stemApp: ...)`
 - Generated typed workflow starters (no manual workflow-name strings):
-  - `runtime.startBuilderExampleFlow(...)`
-  - `runtime.startBuilderExampleUserSignup(email: ...)`
+  - `runtime.startFlow(...)`
+  - `runtime.startUserSignup(email: ...)`
 - Generated `stemWorkflowManifest`
 - Running generated definitions through `StemWorkflowApp`
 - Runtime manifest + run/step metadata views via `WorkflowRuntime`
@@ -28,5 +28,5 @@ dart run bin/main.dart
 dart run bin/runtime_metadata_views.dart
 ```
 
-The checked-in `lib/stem_registry.g.dart` is only a starter snapshot; rerun
+The checked-in `lib/definitions.stem.g.dart` is only a starter snapshot; rerun
 `build_runner` after changing annotations.

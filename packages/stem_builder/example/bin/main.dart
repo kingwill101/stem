@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:stem_builder_example/stem_registry.g.dart';
+import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
   print('Registered workflows:');
@@ -25,7 +25,7 @@ Future<void> main() async {
     print('\nRuntime manifest:');
     print(const JsonEncoder.withIndent('  ').convert(runtimeManifest));
 
-    final runId = await runtime.startBuilderExampleFlow(
+    final runId = await runtime.startFlow(
       params: const {'name': 'Stem Builder'},
     );
     await runtime.executeRun(runId);

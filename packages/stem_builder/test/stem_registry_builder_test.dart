@@ -112,6 +112,8 @@ void main() {
     const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(name: 'hello.flow')
 class HelloWorkflow {
   @WorkflowStep(name: 'step-1')
@@ -141,23 +143,21 @@ Future<void> sendEmail(
           stubStem,
         ),
       outputs: {
-        'stem_builder|lib/stem_registry.g.dart': decodedMatches(
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
             contains('registerStemDefinitions'),
             contains('StemWorkflowNames'),
             contains('StemGeneratedWorkflowAppStarters'),
             contains('StemGeneratedWorkflowRuntimeStarters'),
-            contains('startHelloFlow'),
-            contains('startScriptWorkflow'),
+            contains('startFlow'),
+            contains('startWorkflow'),
             contains('createStemGeneratedWorkflowApp'),
             contains('createStemGeneratedInMemoryApp'),
             contains('Flow('),
             contains('WorkflowScript('),
             contains('stemWorkflowManifest'),
             contains('FunctionTaskHandler'),
-            contains(
-              "import 'package:stem_builder/workflows.dart' as stemLib0;",
-            ),
+            contains("part of 'workflows.dart';"),
           ]),
         ),
       },
@@ -167,6 +167,8 @@ Future<void> sendEmail(
   test('rejects @workflow.run without script kind', () async {
     const input = '''
 import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
 
 @WorkflowDefn()
 class BadWorkflow {
@@ -195,6 +197,8 @@ class BadWorkflow {
       const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(kind: WorkflowKind.script)
 class ScriptWithStepsWorkflow {
   @WorkflowRun()
@@ -217,11 +221,10 @@ class ScriptWithStepsWorkflow {
             stubStem,
           ),
         outputs: {
-          'stem_builder|lib/stem_registry.g.dart': decodedMatches(
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains(
-                'class _StemScriptProxy0 extends '
-                'stemLib0.ScriptWithStepsWorkflow',
+                'class _StemScriptProxy0 extends ScriptWithStepsWorkflow',
               ),
               contains('return _script.step<String>('),
               contains('(context) => super.sendEmail(email)'),
@@ -238,6 +241,8 @@ class ScriptWithStepsWorkflow {
   test('rejects script workflow steps that are not async', () async {
     const input = '''
 import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
 
 @WorkflowDefn(kind: WorkflowKind.script)
 class BadScriptWorkflow {
@@ -274,6 +279,8 @@ class BadScriptWorkflow {
       const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(kind: WorkflowKind.script)
 class SignupWorkflow {
   @WorkflowRun()
@@ -297,7 +304,7 @@ class SignupWorkflow {
             stubStem,
           ),
         outputs: {
-          'stem_builder|lib/stem_registry.g.dart': decodedMatches(
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains(
                 'run: (script) => _StemScriptProxy0(',
@@ -322,6 +329,8 @@ class SignupWorkflow {
       const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(kind: WorkflowKind.script)
 class SignupWorkflow {
   @WorkflowRun()
@@ -344,7 +353,7 @@ class SignupWorkflow {
             stubStem,
           ),
         outputs: {
-          'stem_builder|lib/stem_registry.g.dart': decodedMatches(
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains('run: (script) => _StemScriptProxy0('),
               contains(
@@ -361,6 +370,8 @@ class SignupWorkflow {
   test('rejects non-serializable @workflow.run parameter types', () async {
     const input = '''
 import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
 
 @WorkflowDefn(kind: WorkflowKind.script)
 class BadScriptWorkflow {
@@ -387,6 +398,8 @@ class BadScriptWorkflow {
     const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @TaskDefn()
 Future<void> badTask(
   TaskInvocationContext ctx,
@@ -412,6 +425,8 @@ Future<void> badTask(
     const input = '''
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(name: 'typed.flow')
 class TypedWorkflow {
   @WorkflowStep(name: 'send-email')
@@ -436,11 +451,11 @@ Future<void> typedTask(
           stubStem,
         ),
       outputs: {
-        'stem_builder|lib/stem_registry.g.dart': decodedMatches(
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
             contains('_stemRequireArg(ctx.params, "email") as String'),
             contains('_stemRequireArg(ctx.params, "retries") as int'),
-            contains('FutureOr<Object?> _stemTaskAdapter0('),
+            contains('Future<Object?> _stemTaskAdapter0('),
             contains('_stemRequireArg(args, "email") as String'),
             contains('_stemRequireArg(args, "retries") as int'),
             contains('entrypoint: _stemTaskAdapter0'),
@@ -453,6 +468,8 @@ Future<void> typedTask(
   test('rejects non-serializable workflow step parameter types', () async {
     const input = '''
 import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
 
 @WorkflowDefn(name: 'bad.flow')
 class BadWorkflow {

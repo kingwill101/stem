@@ -30,6 +30,8 @@ Annotate workflows and tasks:
 ```dart
 import 'package:stem/stem.dart';
 
+part 'workflows.stem.g.dart';
+
 @WorkflowDefn(name: 'hello.flow')
 class HelloFlow {
   @WorkflowStep()
@@ -63,16 +65,16 @@ Future<void> helloTask(
 `@WorkflowRun` may optionally take `WorkflowScriptContext` as its first
 parameter, followed by required positional serializable parameters.
 
-Run build_runner to generate `lib/stem_registry.g.dart`:
+Run build_runner to generate `*.stem.g.dart` part files:
 
 ```bash
 dart run build_runner build
 ```
 
-The generated registry exports `registerStemDefinitions` to register annotated
-flows, scripts, and tasks with your `WorkflowRegistry` and `TaskRegistry`.
-It also emits typed starters so you can avoid raw workflow-name strings, for
-example `runtime.startHelloScript(email: 'user@example.com')`.
+The generated part exports helpers like `registerStemDefinitions`,
+`createStemGeneratedWorkflowApp`, `createStemGeneratedInMemoryApp`, and typed
+starters so you can avoid raw workflow-name strings (for example
+`runtime.startScript(email: 'user@example.com')`).
 
 ## Examples
 

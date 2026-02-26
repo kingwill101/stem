@@ -1,15 +1,13 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: unused_element, unnecessary_lambdas, omit_local_variable_types, unused_import
 
-import 'dart:async';
-import 'package:stem/stem.dart';
-import 'package:stem_builder_example/definitions.dart' as stemLib0;
+part of 'definitions.dart';
 
 final List<Flow> stemFlows = <Flow>[
   Flow(
     name: "builder.example.flow",
     build: (flow) {
-      final impl = stemLib0.BuilderExampleFlow();
+      final impl = BuilderExampleFlow();
       flow.step(
         "greet",
         (ctx) => impl.greet((_stemRequireArg(ctx.params, "name") as String)),
@@ -20,7 +18,7 @@ final List<Flow> stemFlows = <Flow>[
   ),
 ];
 
-class _StemScriptProxy0 extends stemLib0.BuilderUserSignupWorkflow {
+class _StemScriptProxy0 extends BuilderUserSignupWorkflow {
   _StemScriptProxy0(this._script);
   final WorkflowScriptContext _script;
   @override
@@ -78,19 +76,19 @@ final List<WorkflowScript> stemScripts = <WorkflowScript>[
 ];
 
 abstract final class StemWorkflowNames {
-  static const String builderExampleFlow = "builder.example.flow";
-  static const String builderExampleUserSignup = "builder.example.user_signup";
+  static const String flow = "builder.example.flow";
+  static const String userSignup = "builder.example.user_signup";
 }
 
 extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
-  Future<String> startBuilderExampleFlow({
+  Future<String> startFlow({
     Map<String, Object?> params = const {},
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
     return startWorkflow(
-      StemWorkflowNames.builderExampleFlow,
+      StemWorkflowNames.flow,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -98,7 +96,7 @@ extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
     );
   }
 
-  Future<String> startBuilderExampleUserSignup({
+  Future<String> startUserSignup({
     required String email,
     Map<String, Object?> extraParams = const {},
     String? parentRunId,
@@ -107,7 +105,7 @@ extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
   }) {
     final params = <String, Object?>{...extraParams, "email": email};
     return startWorkflow(
-      StemWorkflowNames.builderExampleUserSignup,
+      StemWorkflowNames.userSignup,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -117,14 +115,14 @@ extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
 }
 
 extension StemGeneratedWorkflowRuntimeStarters on WorkflowRuntime {
-  Future<String> startBuilderExampleFlow({
+  Future<String> startFlow({
     Map<String, Object?> params = const {},
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
     return startWorkflow(
-      StemWorkflowNames.builderExampleFlow,
+      StemWorkflowNames.flow,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -132,7 +130,7 @@ extension StemGeneratedWorkflowRuntimeStarters on WorkflowRuntime {
     );
   }
 
-  Future<String> startBuilderExampleUserSignup({
+  Future<String> startUserSignup({
     required String email,
     Map<String, Object?> extraParams = const {},
     String? parentRunId,
@@ -141,7 +139,7 @@ extension StemGeneratedWorkflowRuntimeStarters on WorkflowRuntime {
   }) {
     final params = <String, Object?>{...extraParams, "email": email};
     return startWorkflow(
-      StemWorkflowNames.builderExampleUserSignup,
+      StemWorkflowNames.userSignup,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -156,8 +154,7 @@ final List<WorkflowManifestEntry> stemWorkflowManifest =
       ...stemScripts.map((script) => script.definition.toManifestEntry()),
     ];
 
-FutureOr<Object?> _stemScriptManifestStepNoop(FlowContext context) async =>
-    null;
+Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {
@@ -169,7 +166,7 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
 final List<TaskHandler<Object?>> stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "builder.example.task",
-    entrypoint: stemLib0.builderExampleTask,
+    entrypoint: builderExampleTask,
     options: const TaskOptions(),
     metadata: const TaskMetadata(),
   ),

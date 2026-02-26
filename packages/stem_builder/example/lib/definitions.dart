@@ -1,5 +1,7 @@
 import 'package:stem/stem.dart';
 
+part 'definitions.stem.g.dart';
+
 @WorkflowDefn(name: 'builder.example.flow')
 class BuilderExampleFlow {
   @WorkflowStep(name: 'greet')
