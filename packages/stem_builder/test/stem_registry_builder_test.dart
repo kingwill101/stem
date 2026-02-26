@@ -49,9 +49,16 @@ class TaskMetadata {
 }
 
 class WorkflowDefn {
-  const WorkflowDefn({this.name, this.kind = WorkflowKind.flow});
+  const WorkflowDefn({
+    this.name,
+    this.kind = WorkflowKind.flow,
+    this.starterName,
+    this.nameField,
+  });
   final String? name;
   final WorkflowKind kind;
+  final String? starterName;
+  final String? nameField;
 }
 
 class WorkflowRun {
@@ -192,6 +199,63 @@ class BadWorkflow {
   });
 
   test(
+    'honors workflow starter/name field overrides from annotations',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(
+  name: 'hello.flow',
+  starterName: 'LaunchHello',
+  nameField: 'helloFlow',
+)
+class HelloWorkflow {
+  @WorkflowStep()
+  Future<void> stepOne() async {}
+}
+
+@WorkflowDefn(
+  name: 'billing.daily_sync',
+  kind: WorkflowKind.script,
+  starterName: 'startDailyBilling',
+  nameField: 'dailyBilling',
+)
+class DailyBillingWorkflow {
+  @WorkflowRun()
+  Future<void> run(String tenant) async {}
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains('static const String helloFlow = "hello.flow";'),
+              contains(
+                'static const String dailyBilling = "billing.daily_sync";',
+              ),
+              contains('Future<String> startLaunchHello({'),
+              contains('Future<String> startDailyBilling({'),
+              contains('StemWorkflowNames.helloFlow'),
+              contains('StemWorkflowNames.dailyBilling'),
+            ]),
+          ),
+        },
+      );
+    },
+  );
+
+  test(
     'generates script workflow step proxies for direct method calls',
     () async {
       const input = '''
@@ -231,6 +295,47 @@ class ScriptWithStepsWorkflow {
               contains(
                 'run: (script) => _StemScriptProxy0(script).run(script)',
               ),
+            ]),
+          ),
+        },
+      );
+    },
+  );
+
+  test(
+    'supports script workflows with plain run(...) and no @WorkflowRun',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class ScriptWorkflow {
+  Future<String> run(String email) async => sendEmail(email);
+
+  @WorkflowStep()
+  Future<String> sendEmail(String email) async => email;
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains('class _StemScriptProxy0 extends ScriptWorkflow'),
+              contains(
+                'run: (script) => _StemScriptProxy0(',
+              ),
+              contains('_stemRequireArg(script.params, "email") as String'),
             ]),
           ),
         },

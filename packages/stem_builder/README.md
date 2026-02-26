@@ -42,7 +42,6 @@ class HelloFlow {
 
 @WorkflowDefn(name: 'hello.script', kind: WorkflowKind.script)
 class HelloScript {
-  @WorkflowRun()
   Future<void> run(String email) async {
     await sendEmail(email);
   }
@@ -62,8 +61,24 @@ Future<void> helloTask(
 }
 ```
 
-`@WorkflowRun` may optionally take `WorkflowScriptContext` as its first
-parameter, followed by required positional serializable parameters.
+Script workflows can use a plain `run(...)` method (no extra annotation
+required). `@WorkflowRun` is still supported for backward compatibility.
+`run(...)` may optionally take `WorkflowScriptContext` as its first parameter,
+followed by required positional serializable parameters.
+
+You can customize generated starter names via `@WorkflowDefn`:
+
+```dart
+@WorkflowDefn(
+  name: 'billing.daily_sync',
+  starterName: 'DailyBilling',
+  nameField: 'dailyBilling',
+  kind: WorkflowKind.script,
+)
+class BillingWorkflow {
+  Future<void> run(String tenant) async {}
+}
+```
 
 Run build_runner to generate `*.stem.g.dart` part files:
 

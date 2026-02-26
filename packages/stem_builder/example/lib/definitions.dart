@@ -12,7 +12,6 @@ class BuilderExampleFlow {
 
 @WorkflowDefn(name: 'builder.example.user_signup', kind: WorkflowKind.script)
 class BuilderUserSignupWorkflow {
-  @WorkflowRun()
   Future<Map<String, Object?>> run(String email) async {
     final user = await createUser(email);
     await sendWelcomeEmail(email);

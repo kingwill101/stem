@@ -115,15 +115,27 @@ class StemRegistryBuilder implements Builder {
       final version = _stringOrNull(readerAnnotation.peek('version'));
       final description = _stringOrNull(readerAnnotation.peek('description'));
       final metadata = _objectOrNull(readerAnnotation.peek('metadata'));
+      final starterName = _stringOrNull(readerAnnotation.peek('starterName'));
+      final nameField = _stringOrNull(readerAnnotation.peek('nameField'));
       final kind = _readWorkflowKind(readerAnnotation);
 
-      final runMethods = classElement.methods
+      final annotatedRunMethods = classElement.methods
           .where(
             (method) =>
                 workflowRunChecker.hasAnnotationOfExact(method) &&
                 !method.isStatic,
           )
           .toList(growable: false);
+      final inferredRunMethods = classElement.methods
+          .where(
+            (method) => method.displayName == 'run' && !method.isStatic,
+          )
+          .toList(growable: false);
+      final runMethods = kind == WorkflowKind.script
+          ? (annotatedRunMethods.isNotEmpty
+                ? annotatedRunMethods
+                : inferredRunMethods)
+          : annotatedRunMethods;
       final stepMethods =
           classElement.methods
               .where(
@@ -143,7 +155,7 @@ class StemRegistryBuilder implements Builder {
       if (kind == WorkflowKind.script) {
         if (runMethods.isEmpty) {
           throw InvalidGenerationSourceError(
-            'Workflow ${classElement.displayName} is marked as script but has no @workflow.run method.',
+            'Workflow ${classElement.displayName} is marked as script but has no run entry method. Add @WorkflowRun or define a public run(...) method.',
             element: classElement,
           );
         }
@@ -211,6 +223,8 @@ class StemRegistryBuilder implements Builder {
             version: version,
             description: description,
             metadata: metadata,
+            starterNameOverride: starterName,
+            nameFieldOverride: nameField,
           ),
         );
         continue;
@@ -278,6 +292,8 @@ class StemRegistryBuilder implements Builder {
           version: version,
           description: description,
           metadata: metadata,
+          starterNameOverride: starterName,
+          nameFieldOverride: nameField,
         ),
       );
     }
@@ -659,6 +675,8 @@ class _WorkflowInfo {
     required this.importAlias,
     required this.className,
     required this.steps,
+    this.starterNameOverride,
+    this.nameFieldOverride,
     this.version,
     this.description,
     this.metadata,
@@ -675,6 +693,8 @@ class _WorkflowInfo {
     required this.runMethod,
     required this.runAcceptsScriptContext,
     required this.runValueParameters,
+    this.starterNameOverride,
+    this.nameFieldOverride,
     this.version,
     this.description,
     this.metadata,
@@ -688,6 +708,8 @@ class _WorkflowInfo {
   final String? runMethod;
   final bool runAcceptsScriptContext;
   final List<_ValueParameterInfo> runValueParameters;
+  final String? starterNameOverride;
+  final String? nameFieldOverride;
   final String? version;
   final String? description;
   final DartObject? metadata;
@@ -1089,19 +1111,7 @@ class _RegistryEmitter {
       return;
     }
     final symbolNames = _symbolNamesForWorkflows(workflows);
-    final fieldNames = <_WorkflowInfo, String>{};
-    final usedFields = <String>{};
-    for (final workflow in workflows) {
-      final base = _lowerCamel(symbolNames[workflow]!);
-      var candidate = base;
-      var suffix = 2;
-      while (usedFields.contains(candidate)) {
-        candidate = '$base$suffix';
-        suffix += 1;
-      }
-      usedFields.add(candidate);
-      fieldNames[workflow] = candidate;
-    }
+    final fieldNames = _fieldNamesForWorkflows(workflows, symbolNames);
 
     buffer.writeln('abstract final class StemWorkflowNames {');
     for (final workflow in workflows) {
@@ -1199,7 +1209,10 @@ class _RegistryEmitter {
     final result = <_WorkflowInfo, String>{};
     final used = <String>{};
     for (final workflow in values) {
-      final candidates = _workflowSymbolCandidates(workflow.name);
+      final candidates = _workflowSymbolCandidates(
+        workflowName: workflow.name,
+        starterNameOverride: workflow.starterNameOverride,
+      );
       var chosen = candidates.firstWhere(
         (candidate) => !used.contains(candidate),
         orElse: () => candidates.last,
@@ -1218,7 +1231,47 @@ class _RegistryEmitter {
     return result;
   }
 
-  List<String> _workflowSymbolCandidates(String workflowName) {
+  Map<_WorkflowInfo, String> _fieldNamesForWorkflows(
+    List<_WorkflowInfo> values,
+    Map<_WorkflowInfo, String> symbolNames,
+  ) {
+    final result = <_WorkflowInfo, String>{};
+    final used = <String>{};
+    for (final workflow in values) {
+      final candidateList = <String>[
+        if (workflow.nameFieldOverride != null &&
+            workflow.nameFieldOverride!.trim().isNotEmpty)
+          _lowerCamelIdentifier(workflow.nameFieldOverride!),
+        _lowerCamel(symbolNames[workflow]!),
+      ];
+      var chosen = candidateList.firstWhere(
+        (candidate) => candidate.isNotEmpty && !used.contains(candidate),
+        orElse: () => candidateList.last,
+      );
+      if (used.contains(chosen)) {
+        final base = chosen;
+        var suffix = 2;
+        while (used.contains(chosen)) {
+          chosen = '$base$suffix';
+          suffix += 1;
+        }
+      }
+      used.add(chosen);
+      result[workflow] = chosen;
+    }
+    return result;
+  }
+
+  List<String> _workflowSymbolCandidates({
+    required String workflowName,
+    String? starterNameOverride,
+  }) {
+    if (starterNameOverride != null && starterNameOverride.trim().isNotEmpty) {
+      final override = _starterSuffix(starterNameOverride);
+      if (override.isNotEmpty) {
+        return [override];
+      }
+    }
     final segments = workflowName
         .split('.')
         .map(_pascalIdentifier)
@@ -1234,6 +1287,16 @@ class _RegistryEmitter {
       );
     }
     return candidates;
+  }
+
+  String _starterSuffix(String value) {
+    final trimmed = value.trim();
+    final match = RegExp(
+      '^start(?=[A-Z0-9_])',
+      caseSensitive: false,
+    ).firstMatch(trimmed);
+    final stripped = match == null ? trimmed : trimmed.substring(match.end);
+    return _pascalIdentifier(stripped);
   }
 
   String _pascalIdentifier(String value) {
@@ -1258,6 +1321,11 @@ class _RegistryEmitter {
   String _lowerCamel(String value) {
     if (value.isEmpty) return value;
     return '${value[0].toLowerCase()}${value.substring(1)}';
+  }
+
+  String _lowerCamelIdentifier(String value) {
+    final pascal = _pascalIdentifier(value);
+    return _lowerCamel(pascal);
   }
 
   void _emitTasks(StringBuffer buffer) {

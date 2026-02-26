@@ -32,6 +32,8 @@ class WorkflowDefn {
     this.version,
     this.description,
     this.metadata,
+    this.starterName,
+    this.nameField,
   });
 
   /// Optional override for the workflow definition name.
@@ -48,6 +50,17 @@ class WorkflowDefn {
 
   /// Optional metadata attached to the workflow definition.
   final Map<String, Object?>? metadata;
+
+  /// Optional override for generated starter method suffix.
+  ///
+  /// Example: `starterName: 'UserSignup'` generates `startUserSignup(...)`.
+  final String? starterName;
+
+  /// Optional override for `StemWorkflowNames` field name.
+  ///
+  /// Example: `nameField: 'userSignup'` generates
+  /// `StemWorkflowNames.userSignup`.
+  final String? nameField;
 }
 
 /// Marks a workflow class method as the run entrypoint.
