@@ -30,22 +30,38 @@ Annotate workflows and tasks:
 ```dart
 import 'package:stem/stem.dart';
 
-@workflow.defn(name: 'hello.flow')
+@WorkflowDefn(name: 'hello.flow')
 class HelloFlow {
-  @workflow.step()
-  Future<void> greet(FlowContext context) async {
+  @WorkflowStep()
+  Future<void> greet(String email) async {
     // ...
+  }
+}
+
+@WorkflowDefn(name: 'hello.script', kind: WorkflowKind.script)
+class HelloScript {
+  @WorkflowRun()
+  Future<void> run(String email) async {
+    await sendEmail(email);
+  }
+
+  @WorkflowStep()
+  Future<void> sendEmail(String email) async {
+    // builder routes this through durable script.step(...)
   }
 }
 
 @TaskDefn(name: 'hello.task')
 Future<void> helloTask(
   TaskInvocationContext context,
-  Map<String, Object?> args,
+  String email,
 ) async {
   // ...
 }
 ```
+
+`@WorkflowRun` may optionally take `WorkflowScriptContext` as its first
+parameter, followed by required positional serializable parameters.
 
 Run build_runner to generate `lib/stem_registry.g.dart`:
 
@@ -55,3 +71,12 @@ dart run build_runner build
 
 The generated registry exports `registerStemDefinitions` to register annotated
 flows, scripts, and tasks with your `WorkflowRegistry` and `TaskRegistry`.
+It also emits typed starters so you can avoid raw workflow-name strings, for
+example `runtime.startHelloScript(email: 'user@example.com')`.
+
+## Examples
+
+See [`example/README.md`](example/README.md) for runnable examples, including:
+
+- Generated registration + execution with `StemWorkflowApp`
+- Runtime manifest + run detail views with `WorkflowRuntime`
