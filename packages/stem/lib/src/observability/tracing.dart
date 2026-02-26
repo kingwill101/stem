@@ -117,7 +117,10 @@ class StemTracer {
     if (!_isTelemetryReady) {
       return context ?? _fallbackContext();
     }
-    final baseContext = context ?? dotel.Context.current;
+    // Default to a fresh context when no explicit parent is supplied.
+    // Using ambient context here can accidentally chain unrelated async
+    // deliveries into one long trace when headers are missing traceparent.
+    final baseContext = context ?? _fallbackContext();
     final spanContext = _parseTraceContext(headers);
     if (spanContext == null) return baseContext;
     return baseContext.withSpanContext(spanContext);
@@ -132,6 +135,19 @@ class StemTracer {
       'traceId': spanContext.traceId.hexString,
       'spanId': spanContext.spanId.hexString,
     };
+  }
+
+  /// Returns the current ambient tracing context when telemetry is ready.
+  ///
+  /// Returns `null` if OpenTelemetry is not initialized or no ambient context
+  /// can be resolved safely.
+  dotel.Context? ambientContextOrNull() {
+    if (!_isTelemetryReady) return null;
+    try {
+      return dotel.Context.current;
+    } on Object {
+      return null;
+    }
   }
 
   dotel.SpanContext? _spanContextFrom(dotel.Context context) {

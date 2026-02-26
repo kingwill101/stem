@@ -82,6 +82,45 @@ void main() {
 
       expect(decoded.state, equals(TaskState.queued));
     });
+
+    test('metadata getters expose typed status context', () {
+      final status = TaskStatus(
+        id: 'task-3',
+        state: TaskState.failed,
+        attempt: 1,
+        meta: const {
+          'task': 'email.send',
+          'queue': 'critical',
+          'namespace': 'acme',
+          'worker': 'worker-1',
+          'startedAt': '2026-02-25T00:00:00Z',
+          'failedAt': '2026-02-25T00:00:03Z',
+          'revokedAt': '2026-02-25T00:00:04Z',
+          'revokedReason': 'manual',
+          'revokedBy': 'dashboard',
+          'stem.expired': true,
+          'stem.timeLimitMs': 1500,
+          'stem.softTimeLimitMs': 750,
+          'stem.parentTaskId': 'parent-1',
+          'stem.rootTaskId': 'root-1',
+        },
+      );
+
+      expect(status.taskName, equals('email.send'));
+      expect(status.queueName, equals('critical'));
+      expect(status.namespace, equals('acme'));
+      expect(status.workerId, equals('worker-1'));
+      expect(status.startedAt, equals(DateTime.utc(2026, 2, 25)));
+      expect(status.failedAt, equals(DateTime.utc(2026, 2, 25, 0, 0, 3)));
+      expect(status.wasRevoked, isTrue);
+      expect(status.revokedReason, equals('manual'));
+      expect(status.revokedBy, equals('dashboard'));
+      expect(status.isExpired, isTrue);
+      expect(status.hardTimeLimit, equals(const Duration(milliseconds: 1500)));
+      expect(status.softTimeLimit, equals(const Duration(milliseconds: 750)));
+      expect(status.parentTaskId, equals('parent-1'));
+      expect(status.rootTaskId, equals('root-1'));
+    });
   });
 
   group('DeadLetterEntry', () {

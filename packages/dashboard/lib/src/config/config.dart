@@ -11,6 +11,11 @@ class DashboardConfig {
     required this.stem,
     required this.namespace,
     required this.routing,
+    required this.alertWebhookUrls,
+    required this.alertBacklogThreshold,
+    required this.alertFailedTaskThreshold,
+    required this.alertOfflineWorkerThreshold,
+    required this.alertCooldown,
   });
 
   /// Loads a dashboard config from the provided environment map.
@@ -29,12 +34,37 @@ class DashboardConfig {
     final routing = RoutingConfigLoader(
       StemRoutingContext.fromConfig(stemConfig),
     ).load();
+    final webhookUrls = _parseCsv(
+      env['STEM_DASHBOARD_ALERT_WEBHOOK_URLS'] ??
+          env['STEM_DASHBOARD_WEBHOOK_URLS'],
+    );
+    final backlogThreshold = _parsePositiveInt(
+      env['STEM_DASHBOARD_ALERT_BACKLOG_THRESHOLD'],
+      fallback: 500,
+    );
+    final failedThreshold = _parsePositiveInt(
+      env['STEM_DASHBOARD_ALERT_FAILED_TASK_THRESHOLD'],
+      fallback: 25,
+    );
+    final offlineThreshold = _parsePositiveInt(
+      env['STEM_DASHBOARD_ALERT_OFFLINE_WORKER_THRESHOLD'],
+      fallback: 1,
+    );
+    final cooldown = _parseDuration(
+      env['STEM_DASHBOARD_ALERT_COOLDOWN'],
+      fallback: const Duration(minutes: 5),
+    );
 
     return DashboardConfig._(
       environment: Map.unmodifiable(env),
       stem: stemConfig,
       namespace: namespace,
       routing: routing,
+      alertWebhookUrls: webhookUrls,
+      alertBacklogThreshold: backlogThreshold,
+      alertFailedTaskThreshold: failedThreshold,
+      alertOfflineWorkerThreshold: offlineThreshold,
+      alertCooldown: cooldown,
     );
   }
 
@@ -54,6 +84,21 @@ class DashboardConfig {
   /// Routing registry resolved for this dashboard session.
   final RoutingRegistry routing;
 
+  /// Alert webhook URLs.
+  final List<String> alertWebhookUrls;
+
+  /// Backlog alert threshold.
+  final int alertBacklogThreshold;
+
+  /// Failed task alert threshold.
+  final int alertFailedTaskThreshold;
+
+  /// Offline worker alert threshold.
+  final int alertOfflineWorkerThreshold;
+
+  /// Alert cooldown.
+  final Duration alertCooldown;
+
   /// Broker URL resolved from the underlying Stem config.
   String get brokerUrl => stem.brokerUrl;
 
@@ -62,4 +107,40 @@ class DashboardConfig {
 
   /// TLS configuration resolved from the underlying Stem config.
   TlsConfig get tls => stem.tls;
+}
+
+List<String> _parseCsv(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return const [];
+  return raw
+      .split(',')
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
+}
+
+int _parsePositiveInt(String? raw, {required int fallback}) {
+  if (raw == null || raw.trim().isEmpty) return fallback;
+  final parsed = int.tryParse(raw.trim());
+  if (parsed == null || parsed <= 0) return fallback;
+  return parsed;
+}
+
+Duration _parseDuration(String? raw, {required Duration fallback}) {
+  if (raw == null || raw.trim().isEmpty) return fallback;
+  final value = raw.trim();
+  final match = RegExp(r'^(\d+)(ms|s|m|h)$').firstMatch(value);
+  if (match == null) return fallback;
+  final amount = int.tryParse(match.group(1) ?? '');
+  if (amount == null || amount <= 0) return fallback;
+  switch (match.group(2)) {
+    case 'ms':
+      return Duration(milliseconds: amount);
+    case 's':
+      return Duration(seconds: amount);
+    case 'm':
+      return Duration(minutes: amount);
+    case 'h':
+      return Duration(hours: amount);
+  }
+  return fallback;
 }

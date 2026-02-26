@@ -4,6 +4,60 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
+const _taskSpecs = <_WorkerTaskSpec>[
+  _WorkerTaskSpec(
+    name: 'greeting.send',
+    queue: 'greetings',
+    maxRetries: 5,
+    softLimit: Duration(seconds: 10),
+    hardLimit: Duration(seconds: 20),
+  ),
+  _WorkerTaskSpec(
+    name: 'customer.followup',
+    queue: 'greetings',
+    maxRetries: 4,
+    softLimit: Duration(seconds: 12),
+    hardLimit: Duration(seconds: 22),
+  ),
+  _WorkerTaskSpec(
+    name: 'billing.charge',
+    queue: 'billing',
+    maxRetries: 5,
+    softLimit: Duration(seconds: 12),
+    hardLimit: Duration(seconds: 24),
+  ),
+  _WorkerTaskSpec(
+    name: 'billing.settlement',
+    queue: 'billing',
+    maxRetries: 3,
+    softLimit: Duration(seconds: 10),
+    hardLimit: Duration(seconds: 18),
+  ),
+  _WorkerTaskSpec(
+    name: 'reports.aggregate',
+    queue: 'reporting',
+    maxRetries: 2,
+    softLimit: Duration(seconds: 12),
+    hardLimit: Duration(seconds: 24),
+  ),
+  _WorkerTaskSpec(
+    name: 'reports.publish',
+    queue: 'reporting',
+    maxRetries: 2,
+    softLimit: Duration(seconds: 10),
+    hardLimit: Duration(seconds: 18),
+  ),
+];
+
+final _taskEntrypoints = <String, TaskEntrypoint>{
+  'greeting.send': _greetingSendEntrypoint,
+  'customer.followup': _customerFollowupEntrypoint,
+  'billing.charge': _billingChargeEntrypoint,
+  'billing.settlement': _billingSettlementEntrypoint,
+  'reports.aggregate': _reportsAggregateEntrypoint,
+  'reports.publish': _reportsPublishEntrypoint,
+};
+
 Future<void> main(List<String> args) async {
   // #region signing-worker-config
   final config = StemConfig.fromEnvironment();
@@ -22,29 +76,44 @@ Future<void> main(List<String> args) async {
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-worker-signer
 
-  final registry = SimpleTaskRegistry()
-    ..register(
+  final registry = SimpleTaskRegistry();
+  for (final spec in _taskSpecs) {
+    final entrypoint = _taskEntrypoints[spec.name];
+    if (entrypoint == null) {
+      throw StateError('Missing task entrypoint for ${spec.name}');
+    }
+    registry.register(
       FunctionTaskHandler<String>(
-        name: 'greeting.send',
-        entrypoint: _greetingEntrypoint,
-        options: const TaskOptions(
-          queue: 'greetings',
-          maxRetries: 5,
-          softTimeLimit: Duration(seconds: 10),
-          hardTimeLimit: Duration(seconds: 20),
+        name: spec.name,
+        entrypoint: entrypoint,
+        options: TaskOptions(
+          queue: spec.queue,
+          maxRetries: spec.maxRetries,
+          softTimeLimit: spec.softLimit,
+          hardTimeLimit: spec.hardLimit,
         ),
       ),
     );
+  }
 
   final observability = ObservabilityConfig.fromEnvironment();
+  final configuredWorkerName = Platform.environment['STEM_WORKER_NAME']?.trim();
+  final configuredQueue = Platform.environment['STEM_WORKER_QUEUE']?.trim();
+  final queue = configuredQueue != null && configuredQueue.isNotEmpty
+      ? configuredQueue
+      : 'greetings';
+  final resolvedWorkerName =
+      configuredWorkerName != null && configuredWorkerName.isNotEmpty
+          ? configuredWorkerName
+          : 'microservice-worker-${Platform.environment['HOSTNAME'] ?? pid}';
 
   // #region signing-worker-wire
   final worker = Worker(
     broker: broker,
     registry: registry,
     backend: backend,
-    queue: 'greetings',
-    consumerName: 'microservice-worker',
+    queue: queue,
+    consumerName: resolvedWorkerName,
     concurrency: 4,
     prefetchMultiplier: 2,
     signer: signer,
@@ -53,7 +122,9 @@ Future<void> main(List<String> args) async {
   // #endregion signing-worker-wire
 
   await worker.start();
-  stdout.writeln('Worker listening for greetings...');
+  stdout.writeln(
+    'Worker "$resolvedWorkerName" listening on queue "$queue"...',
+  );
 
   ProcessSignal.sigint.watch().listen((_) async {
     stdout.writeln('Stopping worker...');
@@ -68,15 +139,89 @@ Future<void> main(List<String> args) async {
   await Completer<void>().future; // Keep process alive
 }
 
-FutureOr<Object?> _greetingEntrypoint(
+FutureOr<Object?> _greetingSendEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('greeting.send', context, args);
+
+FutureOr<Object?> _customerFollowupEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('customer.followup', context, args);
+
+FutureOr<Object?> _billingChargeEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('billing.charge', context, args);
+
+FutureOr<Object?> _billingSettlementEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('billing.settlement', context, args);
+
+FutureOr<Object?> _reportsAggregateEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('reports.aggregate', context, args);
+
+FutureOr<Object?> _reportsPublishEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) =>
+    _taskEntrypoint('reports.publish', context, args);
+
+FutureOr<Object?> _taskEntrypoint(
+  String taskName,
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
   final name = (args['name'] as String?) ?? 'friend';
-  context.heartbeat();
-  await Future<void>.delayed(const Duration(milliseconds: 500));
-  final message = 'Processed greeting for $name ';
-  stdout.writeln('👋 $message (attempt ${context.attempt})');
+  final fail = args['fail'] == true;
+  final delayMsRaw = switch (args['delayMs']) {
+    int value => value,
+    num value => value.toInt(),
+    String value => int.tryParse(value),
+    _ => null,
+  };
+  final delayMs = delayMsRaw == null || delayMsRaw <= 0 ? 500 : delayMsRaw;
+  final totalSteps = (delayMs / 200).ceil().clamp(1, 60);
+  for (var step = 1; step <= totalSteps; step++) {
+    context.heartbeat();
+    context.progress(step / totalSteps, data: {
+      'step': step,
+      'totalSteps': totalSteps,
+      'name': name,
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+  }
+  if (fail) {
+    throw StateError(
+      'Synthetic failure requested for task=$taskName label=$name',
+    );
+  }
+  final message = 'Processed $taskName for $name';
+  stdout.writeln('$message (attempt ${context.attempt})');
   context.progress(1.0, data: {'message': message});
   return message;
+}
+
+class _WorkerTaskSpec {
+  const _WorkerTaskSpec({
+    required this.name,
+    required this.queue,
+    required this.maxRetries,
+    required this.softLimit,
+    required this.hardLimit,
+  });
+
+  final String name;
+  final String queue;
+  final int maxRetries;
+  final Duration softLimit;
+  final Duration hardLimit;
 }

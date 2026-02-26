@@ -53,6 +53,7 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
@@ -188,19 +189,69 @@ class Stem implements TaskEnqueuer {
     final metadata = handler.metadata;
     final argsEncoder = _resolveArgsEncoder(handler);
     final resultEncoder = _resolveResultEncoder(handler);
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    final mergedMeta = scopeMeta == null
+        ? meta
+        : <String, Object?>{
+            ...scopeMeta,
+            ...meta,
+          };
+    final enrichedMeta = _applyEnqueueOptionsToMeta(
+      mergedMeta,
+      enqueueOptions,
+    );
+    if (!enrichedMeta.containsKey('stem.task')) {
+      enrichedMeta['stem.task'] = name;
+    }
+    if (options.retryPolicy != null &&
+        !enrichedMeta.containsKey('stem.retryPolicy')) {
+      enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
+    }
+
+    final scheduledAt = _resolveNotBefore(
+      notBefore,
+      enqueueOptions,
+    );
+    final maxRetries = _resolveMaxRetries(
+      options,
+      handler.options,
+      enqueueOptions,
+    );
+    final taskId = enqueueOptions?.taskId ?? generateEnvelopeId();
 
     final spanAttributes = <String, Object>{
       'stem.task': name,
+      'stem.task.id': taskId,
+      'stem.task.attempt': 0,
+      'stem.task.max_retries': maxRetries,
+      'stem.task.priority': resolvedPriority,
       'stem.queue': targetName,
       'stem.routing.target_type': decision.isBroadcast ? 'broadcast' : 'queue',
       'stem.task.idempotent': metadata.idempotent,
     };
+    if (scheduledAt != null) {
+      spanAttributes['stem.task.not_before'] = scheduledAt
+          .toUtc()
+          .toIso8601String();
+    }
     if (metadata.description != null && metadata.description!.isNotEmpty) {
       spanAttributes['stem.task.description'] = metadata.description!;
     }
     if (metadata.tags.isNotEmpty) {
       spanAttributes['stem.task.tags'] = List<String>.from(metadata.tags);
     }
+    final producerHost = _safeLocalHostname();
+    if (producerHost != null) {
+      spanAttributes['host.name'] = producerHost;
+    }
+    _appendTracingMetaAttributes(spanAttributes, enrichedMeta);
+
+    // Prefer explicit wire headers when present, but still fall back to the
+    // current ambient span so in-process producers preserve parent linkage.
+    final producerParentContext = tracer.extractTraceContext(
+      headers,
+      context: tracer.ambientContextOrNull(),
+    );
 
     return tracer.trace(
       'stem.enqueue',
@@ -212,41 +263,12 @@ class Stem implements TaskEnqueuer {
           argsEncoder,
         );
         final encodedArgs = _encodeArgs(args, argsEncoder);
-        final scopeMeta = TaskEnqueueScope.currentMeta();
-        final mergedMeta = scopeMeta == null
-            ? meta
-            : <String, Object?>{
-                ...scopeMeta,
-                ...meta,
-              };
-        final enrichedMeta = _applyEnqueueOptionsToMeta(
-          mergedMeta,
-          enqueueOptions,
-        );
-        if (!enrichedMeta.containsKey('stem.task')) {
-          enrichedMeta['stem.task'] = name;
-        }
-        if (options.retryPolicy != null &&
-            !enrichedMeta.containsKey('stem.retryPolicy')) {
-          enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
-        }
         final encodedMeta = _withArgsEncoderMeta(enrichedMeta, argsEncoder);
-
-        final scheduledAt = _resolveNotBefore(
-          notBefore,
-          enqueueOptions,
-        );
-
-        final maxRetries = _resolveMaxRetries(
-          options,
-          handler.options,
-          enqueueOptions,
-        );
 
         var envelope = Envelope(
           name: name,
           args: encodedArgs,
-          id: enqueueOptions?.taskId,
+          id: taskId,
           headers: encodedHeaders,
           queue: targetName,
           notBefore: scheduledAt,
@@ -358,6 +380,7 @@ class Stem implements TaskEnqueuer {
 
         return envelope.id;
       },
+      context: producerParentContext,
       spanKind: dotel.SpanKind.producer,
       attributes: spanAttributes,
     );
@@ -572,6 +595,135 @@ class Stem implements TaskEnqueuer {
       meta['producer'] = enqueueOptions.producer;
     }
     return meta;
+  }
+
+  void _appendTracingMetaAttributes(
+    Map<String, Object> attributes,
+    Map<String, Object?> meta,
+  ) {
+    final namespace = _metaString(meta, const ['stem.namespace', 'namespace']);
+    if (namespace != null) {
+      attributes['stem.namespace'] = namespace;
+    }
+
+    final parentTaskId = _metaString(meta, const ['stem.parentTaskId']);
+    if (parentTaskId != null) {
+      attributes['stem.parent_task_id'] = parentTaskId;
+    }
+
+    final rootTaskId = _metaString(meta, const ['stem.rootTaskId']);
+    if (rootTaskId != null) {
+      attributes['stem.root_task_id'] = rootTaskId;
+    }
+
+    final workflowRunId = _metaString(meta, const [
+      'stem.workflow.runId',
+      'workflow.runId',
+      'stem.workflow.run_id',
+    ]);
+    if (workflowRunId != null) {
+      attributes['stem.workflow.run_id'] = workflowRunId;
+    }
+
+    final workflowName = _metaString(meta, const [
+      'stem.workflow.name',
+      'workflow.name',
+    ]);
+    if (workflowName != null) {
+      attributes['stem.workflow.name'] = workflowName;
+    }
+
+    final workflowStep = _metaString(meta, const [
+      'stem.workflow.step',
+      'workflow.step',
+      'stem.workflow.stepName',
+      'workflow.stepName',
+      'stepName',
+      'step',
+    ]);
+    if (workflowStep != null) {
+      attributes['stem.workflow.step'] = workflowStep;
+    }
+
+    final workflowStepId = _metaString(meta, const [
+      'stem.workflow.stepId',
+      'workflow.stepId',
+      'stepId',
+    ]);
+    if (workflowStepId != null) {
+      attributes['stem.workflow.step_id'] = workflowStepId;
+    }
+
+    final workflowStepIndex = _metaInt(meta, const [
+      'stem.workflow.stepIndex',
+      'stem.workflow.step_index',
+    ]);
+    if (workflowStepIndex != null) {
+      attributes['stem.workflow.step_index'] = workflowStepIndex;
+    }
+
+    final workflowIteration = _metaInt(meta, const [
+      'stem.workflow.iteration',
+    ]);
+    if (workflowIteration != null) {
+      attributes['stem.workflow.iteration'] = workflowIteration;
+    }
+
+    final workflowStepAttempt = _metaInt(meta, const [
+      'stem.workflow.stepAttempt',
+      'workflow.stepAttempt',
+      'stepAttempt',
+    ]);
+    if (workflowStepAttempt != null) {
+      attributes['stem.workflow.step_attempt'] = workflowStepAttempt;
+    }
+  }
+
+  String? _metaString(
+    Map<String, Object?> meta,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isNotEmpty) {
+          return trimmed;
+        }
+      }
+    }
+    return null;
+  }
+
+  int? _metaInt(
+    Map<String, Object?> meta,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is int) {
+        return value;
+      }
+      if (value is num) {
+        return value.toInt();
+      }
+      if (value is String) {
+        final parsed = int.tryParse(value.trim());
+        if (parsed != null) {
+          return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  static String? _safeLocalHostname() {
+    try {
+      final hostname = Platform.localHostname.trim();
+      return hostname.isEmpty ? null : hostname;
+    } on Object {
+      return null;
+    }
   }
 
   /// Publishes a task with optional retry policy.

@@ -1,5 +1,6 @@
 import 'package:property_testing/property_testing.dart';
-import 'package:stem/stem.dart' show DeadLetterEntry, DeadLetterReplayResult;
+import 'package:stem/stem.dart'
+    show DeadLetterEntry, DeadLetterReplayResult, TaskState;
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
 import 'package:stem_dashboard/src/state/dashboard_state.dart';
@@ -77,6 +78,33 @@ class _SequenceDashboardService implements DashboardDataSource {
   }
 
   @override
+  Future<List<DashboardTaskStatusEntry>> fetchTaskStatuses({
+    TaskState? state,
+    String? queue,
+    int limit = 100,
+    int offset = 0,
+  }) async => const [];
+
+  @override
+  Future<DashboardTaskStatusEntry?> fetchTaskStatus(String taskId) async =>
+      null;
+
+  @override
+  Future<List<DashboardTaskStatusEntry>> fetchTaskStatusesForRun(
+    String runId, {
+    int limit = 200,
+  }) async => const [];
+
+  @override
+  Future<DashboardWorkflowRunSnapshot?> fetchWorkflowRun(String runId) async =>
+      null;
+
+  @override
+  Future<List<DashboardWorkflowStepSnapshot>> fetchWorkflowSteps(
+    String runId,
+  ) async => const [];
+
+  @override
   Future<void> enqueueTask(EnqueueRequest request) async {}
 
   @override
@@ -86,6 +114,16 @@ class _SequenceDashboardService implements DashboardDataSource {
     bool dryRun = false,
   }) async =>
       const DeadLetterReplayResult(entries: <DeadLetterEntry>[], dryRun: false);
+
+  @override
+  Future<bool> replayTaskById(String taskId, {String? queue}) async => false;
+
+  @override
+  Future<bool> revokeTask(
+    String taskId, {
+    bool terminate = false,
+    String? reason,
+  }) async => false;
 
   @override
   Future<List<ControlReplyMessage>> sendControlCommand(

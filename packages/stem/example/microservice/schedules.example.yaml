@@ -2,9 +2,71 @@ entries:
   - id: greetings-reminder
     task: greeting.send
     queue: greetings
-    spec: every:1m
-    jitter: 10s
+    spec: every:30s
+    jitter: 5s
     args:
       name: scheduled friend
+      delayMs: 500
     meta:
       seeded: true
+
+  - id: greetings-followup
+    task: customer.followup
+    queue: greetings
+    spec: every:12s
+    jitter: 1s
+    args:
+      name: scheduled followup
+      delayMs: 450
+    meta:
+      seeded: true
+      namespace: customer-experience
+
+  - id: billing-charge
+    task: billing.charge
+    queue: billing
+    spec: every:18s
+    jitter: 2s
+    args:
+      name: scheduled charge
+      delayMs: 700
+    meta:
+      seeded: true
+      namespace: revenue
+
+  - id: billing-settlement
+    task: billing.settlement
+    queue: billing
+    spec: every:40s
+    jitter: 3s
+    args:
+      name: scheduled settlement
+      delayMs: 900
+    meta:
+      seeded: true
+      namespace: revenue
+
+  - id: reports-aggregate
+    task: reports.aggregate
+    queue: reporting
+    spec: every:25s
+    jitter: 2s
+    args:
+      name: scheduled aggregate
+      delayMs: 850
+    meta:
+      seeded: true
+      namespace: analytics
+
+  - id: reports-publish-flaky
+    task: reports.publish
+    queue: reporting
+    spec: every:55s
+    jitter: 3s
+    args:
+      name: scheduled publish
+      fail: true
+      delayMs: 650
+    meta:
+      seeded: true
+      namespace: analytics

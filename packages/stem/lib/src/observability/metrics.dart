@@ -569,6 +569,12 @@ class _DartasticMetricsRuntime {
   Future<void> _start() async {
     try {
       final grpcEndpoint = _normaliseGrpcEndpoint(endpoint);
+      final traceExporter = dotel.OtlpGrpcSpanExporter(
+        dotel.OtlpGrpcExporterConfig(
+          endpoint: grpcEndpoint.toString(),
+          insecure: grpcEndpoint.scheme != 'https',
+        ),
+      );
       final exporter = dotel.OtlpGrpcMetricExporter(
         dotel.OtlpGrpcMetricExporterConfig(
           endpoint: grpcEndpoint.toString(),
@@ -583,9 +589,9 @@ class _DartasticMetricsRuntime {
         serviceName: serviceName,
         endpoint: grpcEndpoint.toString(),
         secure: grpcEndpoint.scheme == 'https',
+        spanProcessor: dotel.BatchSpanProcessor(traceExporter),
         metricExporter: exporter,
         metricReader: reader,
-        spanProcessor: _NoopSpanProcessor(),
       );
       _meter = dotel.OTel.meterProvider().getMeter(name: 'stem');
       _initialized = true;
@@ -655,26 +661,6 @@ class _DartasticMetricsRuntime {
     await _ensureInitialized();
     await dotel.OTel.meterProvider().forceFlush();
   }
-}
-
-/// Span processor that drops all tracing data (metrics-only usage).
-class _NoopSpanProcessor extends dotel.SpanProcessor {
-  _NoopSpanProcessor();
-
-  @override
-  Future<void> onStart(dotel.Span span, dotel.Context? parentContext) async {}
-
-  @override
-  Future<void> onEnd(dotel.Span span) async {}
-
-  @override
-  Future<void> onNameUpdate(dotel.Span span, String newName) async {}
-
-  @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<void> forceFlush() async {}
 }
 
 Uri _normaliseGrpcEndpoint(Uri endpoint) {
