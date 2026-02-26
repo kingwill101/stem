@@ -15,6 +15,12 @@ enum WorkflowStepEventType {
   retrying,
 }
 
+/// Runtime-level workflow events emitted by orchestration transitions.
+enum WorkflowRuntimeEventType {
+  /// A continuation task was enqueued for a run.
+  continuationEnqueued,
+}
+
 /// Step-level execution event emitted by the workflow runtime.
 class WorkflowStepEvent implements StemEvent {
   /// Creates a workflow step execution event.
@@ -75,10 +81,54 @@ class WorkflowStepEvent implements StemEvent {
   };
 }
 
+/// Runtime orchestration event emitted by the workflow runtime.
+class WorkflowRuntimeEvent implements StemEvent {
+  /// Creates a runtime orchestration event.
+  WorkflowRuntimeEvent({
+    required this.runId,
+    required this.workflow,
+    required this.type,
+    required this.timestamp,
+    this.metadata,
+  });
+
+  /// Workflow run identifier.
+  final String runId;
+
+  /// Workflow name.
+  final String workflow;
+
+  /// Runtime event type.
+  final WorkflowRuntimeEventType type;
+
+  /// Event timestamp.
+  final DateTime timestamp;
+
+  /// Additional event metadata.
+  final Map<String, Object?>? metadata;
+
+  @override
+  String get eventName => 'workflow.runtime.${type.name}';
+
+  @override
+  DateTime get occurredAt => timestamp;
+
+  @override
+  Map<String, Object?> get attributes => {
+    'runId': runId,
+    'workflow': workflow,
+    if (metadata != null) 'metadata': metadata,
+  };
+}
+
 /// Sink for workflow step execution events.
 mixin WorkflowIntrospectionSink {
   /// Records a workflow step execution [event].
   Future<void> recordStepEvent(WorkflowStepEvent event);
+
+  /// Records a workflow runtime [event]. Optional for sinks that only care
+  /// about step-level traces.
+  Future<void> recordRuntimeEvent(WorkflowRuntimeEvent event) async {}
 }
 
 /// Default no-op sink for workflow step events.
@@ -88,4 +138,7 @@ class NoopWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
 
   @override
   Future<void> recordStepEvent(WorkflowStepEvent event) async {}
+
+  @override
+  Future<void> recordRuntimeEvent(WorkflowRuntimeEvent event) async {}
 }

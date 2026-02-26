@@ -1,5 +1,6 @@
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart' show WorkflowStore;
 import 'package:stem/src/workflow/workflow.dart' show WorkflowStore;
@@ -69,6 +70,14 @@ class RunState {
 
   /// Parameters supplied at workflow start.
   final Map<String, Object?> params;
+
+  /// Parameters visible to workflow handlers (internal runtime keys removed).
+  Map<String, Object?> get workflowParams =>
+      WorkflowRunRuntimeMetadata.stripFromParams(params);
+
+  /// Run-scoped runtime metadata.
+  WorkflowRunRuntimeMetadata get runtimeMetadata =>
+      WorkflowRunRuntimeMetadata.fromParams(params);
 
   /// Timestamp when the workflow run was created.
   final DateTime createdAt;
@@ -148,6 +157,36 @@ class RunState {
   /// Timestamp when a matching event was delivered for this suspension.
   DateTime? get suspensionDeliveredAt =>
       _dateFromJson(suspensionData?['deliveredAt']);
+
+  /// Orchestration queue associated with this run.
+  String get orchestrationQueue => runtimeMetadata.orchestrationQueue;
+
+  /// Continuation queue associated with this run.
+  String get continuationQueue => runtimeMetadata.continuationQueue;
+
+  /// Execution queue associated with this run.
+  String get executionQueue => runtimeMetadata.executionQueue;
+
+  /// Serialization format associated with this run.
+  String get serializationFormat => runtimeMetadata.serializationFormat;
+
+  /// Serialization version associated with this run.
+  String get serializationVersion => runtimeMetadata.serializationVersion;
+
+  /// Framing format associated with this run.
+  String get frameFormat => runtimeMetadata.frameFormat;
+
+  /// Framing version associated with this run.
+  String get frameVersion => runtimeMetadata.frameVersion;
+
+  /// Encryption scope associated with this run.
+  String get encryptionScope => runtimeMetadata.encryptionScope;
+
+  /// Whether run payloads are expected to be encrypted.
+  bool get encryptionEnabled => runtimeMetadata.encryptionEnabled;
+
+  /// Stream identifier associated with this run.
+  String? get streamId => runtimeMetadata.streamId;
 
   /// Returns a copy of this run state with updated fields.
   RunState copyWith({

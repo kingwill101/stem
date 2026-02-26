@@ -87,6 +87,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   @override
   /// Creates a new workflow run and returns its generated id.
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,
@@ -94,7 +95,10 @@ class InMemoryWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final now = _clock.now();
-    final id = 'wf-${now.microsecondsSinceEpoch}-${_counter++}';
+    final id =
+        (runId != null && runId.trim().isNotEmpty)
+        ? runId.trim()
+        : 'wf-${now.microsecondsSinceEpoch}-${_counter++}';
     _runs[id] = RunState(
       id: id,
       workflow: workflow,

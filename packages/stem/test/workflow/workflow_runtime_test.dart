@@ -61,6 +61,76 @@ void main() {
     expect(await store.readStep<String>(runId, 'finish'), 'ready-done');
   });
 
+  test('startWorkflow persists runtime metadata and strips internal params', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'metadata.workflow',
+        build: (flow) {
+          flow.step('inspect', (context) async => context.params['tenant']);
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow(
+      'metadata.workflow',
+      params: const {'tenant': 'acme'},
+    );
+
+    final state = await store.get(runId);
+    expect(state, isNotNull);
+    expect(state!.params.containsKey(workflowRuntimeMetadataParamKey), isTrue);
+    expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+    expect(state.orchestrationQueue, equals(runtime.queue));
+    expect(state.executionQueue, equals(runtime.executionQueue));
+    expect(state.workflowParams.containsKey(workflowRuntimeMetadataParamKey), isFalse);
+    expect(introspection.runtimeEvents, isNotEmpty);
+    expect(
+      introspection.runtimeEvents.last.type,
+      equals(WorkflowRuntimeEventType.continuationEnqueued),
+    );
+  });
+
+  test('viewRunDetail exposes uniform run and step views', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'views.workflow',
+        build: (flow) {
+          flow.step('only', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('views.workflow');
+    await runtime.executeRun(runId);
+
+    final detail = await runtime.viewRunDetail(runId);
+    expect(detail, isNotNull);
+    expect(detail!.run.runId, equals(runId));
+    expect(detail.run.workflow, equals('views.workflow'));
+    expect(detail.steps, hasLength(1));
+    expect(detail.steps.first.baseStepName, equals('only'));
+    expect(detail.steps.first.stepName, equals('only'));
+  });
+
+  test('workflowManifest exposes typed manifest entries', () {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'manifest.runtime.workflow',
+        build: (flow) {
+          flow.step('only', (context) async => 'done');
+        },
+      ).definition,
+    );
+
+    final manifest = runtime.workflowManifest();
+    final entry = manifest.firstWhere(
+      (item) => item.name == 'manifest.runtime.workflow',
+    );
+    expect(entry.id, isNotEmpty);
+    expect(entry.steps, hasLength(1));
+    expect(entry.steps.first.name, equals('only'));
+  });
+
   test('extends lease when checkpoints persist', () async {
     runtime.registerWorkflow(
       Flow(
@@ -918,9 +988,15 @@ void main() {
 
 class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
   final List<WorkflowStepEvent> events = [];
+  final List<WorkflowRuntimeEvent> runtimeEvents = [];
 
   @override
   Future<void> recordStepEvent(WorkflowStepEvent event) async {
     events.add(event);
+  }
+
+  @override
+  Future<void> recordRuntimeEvent(WorkflowRuntimeEvent event) async {
+    runtimeEvents.add(event);
   }
 }

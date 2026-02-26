@@ -322,6 +322,7 @@ return 1
 
   @override
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,
@@ -330,7 +331,10 @@ return 1
   }) async {
     final now = _clock.now();
     final nowIso = now.toIso8601String();
-    final id = 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
+    final id =
+        (runId != null && runId.trim().isNotEmpty)
+        ? runId.trim()
+        : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final command = [
       'HSET',
       _runKey(id),

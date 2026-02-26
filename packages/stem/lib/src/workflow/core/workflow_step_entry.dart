@@ -30,6 +30,20 @@ class WorkflowStepEntry {
   /// Optional timestamp when the checkpoint was recorded.
   final DateTime? completedAt;
 
+  /// Base step name without any auto-version suffix.
+  String get baseName {
+    final hashIndex = name.indexOf('#');
+    if (hashIndex == -1) return name;
+    return name.substring(0, hashIndex);
+  }
+
+  /// Parsed iteration suffix for auto-versioned checkpoints, if present.
+  int? get iteration {
+    final hashIndex = name.lastIndexOf('#');
+    if (hashIndex == -1) return null;
+    return int.tryParse(name.substring(hashIndex + 1));
+  }
+
   /// Converts this entry to a JSON-compatible map.
   Map<String, Object?> toJson() {
     return {

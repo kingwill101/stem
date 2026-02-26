@@ -14,6 +14,7 @@ class _NoopWorkflowStore implements WorkflowStore {
 
   @override
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,

@@ -54,6 +54,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
@@ -111,7 +112,7 @@ class WorkflowDefinition<T extends Object?> {
       return WorkflowDefinition._(
         name: json['name']?.toString() ?? '',
         kind: kind,
-        steps: const [],
+        steps: steps,
         edges: edges,
         version: json['version']?.toString(),
         description: json['description']?.toString(),
@@ -158,6 +159,7 @@ class WorkflowDefinition<T extends Object?> {
   factory WorkflowDefinition.script({
     required String name,
     required WorkflowScriptBody<T> run,
+    Iterable<FlowStep> steps = const [],
     String? version,
     String? description,
     Map<String, Object?>? metadata,
@@ -165,7 +167,7 @@ class WorkflowDefinition<T extends Object?> {
     return WorkflowDefinition._(
       name: name,
       kind: WorkflowDefinitionKind.script,
-      steps: const [],
+      steps: List<FlowStep>.unmodifiable(steps),
       version: version,
       description: description,
       metadata: metadata,
@@ -200,6 +202,27 @@ class WorkflowDefinition<T extends Object?> {
   /// Whether this definition represents a script-based workflow.
   bool get isScript => _kind == WorkflowDefinitionKind.script;
 
+  /// Stable identifier derived from immutable workflow definition fields.
+  String get stableId {
+    final basis = StringBuffer()
+      ..write(name)
+      ..write('|')
+      ..write(_kind.name)
+      ..write('|')
+      ..write(version ?? '')
+      ..write('|');
+    for (final step in _steps) {
+      basis
+        ..write(step.name)
+        ..write(':')
+        ..write(step.kind.name)
+        ..write(':')
+        ..write(step.autoVersion ? '1' : '0')
+        ..write('|');
+    }
+    return _stableHexDigest(basis.toString());
+  }
+
   /// Serialize the workflow definition for introspection.
   Map<String, Object?> toJson() {
     final steps = <Map<String, Object?>>[];
@@ -218,6 +241,17 @@ class WorkflowDefinition<T extends Object?> {
       'edges': _edges.map((edge) => edge.toJson()).toList(),
     };
   }
+}
+
+String _stableHexDigest(String input) {
+  final bytes = utf8.encode(input);
+  var hash = 0xcbf29ce484222325;
+  const prime = 0x00000100000001B3;
+  for (final value in bytes) {
+    hash ^= value;
+    hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;
+  }
+  return hash.toRadixString(16).padLeft(16, '0');
 }
 
 /// Describes a directed edge between workflow steps.

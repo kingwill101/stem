@@ -50,6 +50,44 @@ void main() {
         equals(const <String, Object?>{'invoiceId': 'inv-1'}),
       );
     });
+
+    test('exposes runtime queue and serialization metadata', () {
+      final state = RunState(
+        id: 'run-2',
+        workflow: 'invoice',
+        status: WorkflowStatus.running,
+        cursor: 1,
+        params: const {
+          'tenant': 'acme',
+          '__stem.workflow.runtime': {
+            'workflowId': 'abc123',
+            'orchestrationQueue': 'workflow',
+            'continuationQueue': 'workflow-continue',
+            'executionQueue': 'workflow-step',
+            'serializationFormat': 'json',
+            'serializationVersion': '1',
+            'frameFormat': 'stem-envelope',
+            'frameVersion': '1',
+            'encryptionScope': 'signed-envelope',
+            'encryptionEnabled': true,
+            'streamId': 'invoice_run-2',
+          },
+        },
+        createdAt: DateTime.utc(2026, 2, 25),
+      );
+
+      expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(state.orchestrationQueue, equals('workflow'));
+      expect(state.continuationQueue, equals('workflow-continue'));
+      expect(state.executionQueue, equals('workflow-step'));
+      expect(state.serializationFormat, equals('json'));
+      expect(state.serializationVersion, equals('1'));
+      expect(state.frameFormat, equals('stem-envelope'));
+      expect(state.frameVersion, equals('1'));
+      expect(state.encryptionScope, equals('signed-envelope'));
+      expect(state.encryptionEnabled, isTrue);
+      expect(state.streamId, equals('invoice_run-2'));
+    });
   });
 
   group('Workflow watcher metadata getters', () {
@@ -105,6 +143,22 @@ void main() {
         resolution.deliveredAt,
         equals(DateTime.utc(2026, 2, 25, 0, 1, 30)),
       );
+    });
+  });
+
+  group('WorkflowStepEntry metadata getters', () {
+    test('parses base name and iteration suffix', () {
+      const step = WorkflowStepEntry(
+        name: 'approval#3',
+        value: 'ok',
+        position: 2,
+      );
+      const plain = WorkflowStepEntry(name: 'finalize', value: null, position: 3);
+
+      expect(step.baseName, equals('approval'));
+      expect(step.iteration, equals(3));
+      expect(plain.baseName, equals('finalize'));
+      expect(plain.iteration, isNull);
     });
   });
 }

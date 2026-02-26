@@ -40,11 +40,14 @@ import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
+import 'package:stem/src/workflow/runtime/workflow_views.dart';
 import 'package:uuid/uuid.dart';
 
 /// Task name used for workflow run execution tasks.
@@ -71,6 +74,8 @@ class WorkflowRuntime {
     this.leaseExtension = const Duration(seconds: 30),
     this.runLeaseDuration = const Duration(seconds: 30),
     this.queue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
     WorkflowRegistry? registry,
     WorkflowIntrospectionSink? introspectionSink,
     String? runtimeId,
@@ -82,6 +87,14 @@ class WorkflowRuntime {
        _registry = registry ?? InMemoryWorkflowRegistry(),
        _introspection =
            introspectionSink ?? const NoopWorkflowIntrospectionSink(),
+       continuationQueue = _resolveQueueName(
+         continuationQueue,
+         fallback: queue,
+       ),
+       executionQueue = _resolveQueueName(
+         executionQueue,
+         fallback: 'default',
+       ),
        _runtimeId = runtimeId ?? _defaultRuntimeId();
 
   final Stem _stem;
@@ -100,6 +113,12 @@ class WorkflowRuntime {
 
   /// Queue name used to enqueue workflow run tasks.
   final String queue;
+
+  /// Queue used for continuation tasks after suspension/event delivery.
+  final String continuationQueue;
+
+  /// Default queue for step-spawned execution channel tasks.
+  final String executionQueue;
   final WorkflowClock _clock;
   final StemSignalEmitter _signals = const StemSignalEmitter(
     defaultSender: 'workflow',
@@ -120,6 +139,13 @@ class WorkflowRuntime {
     _registry.register(definition);
   }
 
+  /// Returns typed manifest entries for all registered workflows.
+  List<WorkflowManifestEntry> workflowManifest() {
+    return _registry.all
+        .map((definition) => definition.toManifestEntry())
+        .toList(growable: false);
+  }
+
   /// Persists a new workflow run and enqueues it for execution.
   ///
   /// Throws [ArgumentError] if the workflow name is unknown. The returned run
@@ -138,9 +164,25 @@ class WorkflowRuntime {
     if (definition == null) {
       throw ArgumentError.value(name, 'name', 'Workflow is not registered');
     }
+    final requestedRunId = const Uuid().v7();
+    final runtimeMetadata = WorkflowRunRuntimeMetadata(
+      workflowId: definition.stableId,
+      orchestrationQueue: queue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      serializationFormat: _stem.payloadEncoders.defaultArgsEncoder.id,
+      serializationVersion: '1',
+      frameFormat: 'stem-envelope',
+      frameVersion: '1',
+      encryptionScope: _stem.signer != null ? 'signed-envelope' : 'none',
+      encryptionEnabled: _stem.signer != null,
+      streamId: '${name}_$requestedRunId',
+    );
+    final persistedParams = runtimeMetadata.attachToParams(params);
     final runId = await _store.createRun(
+      runId: requestedRunId,
       workflow: name,
-      params: params,
+      params: persistedParams,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
@@ -152,7 +194,13 @@ class WorkflowRuntime {
         status: WorkflowRunStatus.running,
       ),
     );
-    await _enqueueRun(runId, workflow: name);
+    await _enqueueRun(
+      runId,
+      workflow: name,
+      continuation: false,
+      reason: WorkflowContinuationReason.start,
+      runtimeMetadata: runtimeMetadata,
+    );
     return runId;
   }
 
@@ -180,7 +228,13 @@ class WorkflowRuntime {
         if (await _maybeCancelForPolicy(state, now: now)) {
           continue;
         }
-        await _enqueueRun(resolution.runId, workflow: state.workflow);
+        await _enqueueRun(
+          resolution.runId,
+          workflow: state.workflow,
+          continuation: true,
+          reason: WorkflowContinuationReason.event,
+          runtimeMetadata: state.runtimeMetadata,
+        );
       }
       if (resolutions.length < batchSize) {
         break;
@@ -204,7 +258,13 @@ class WorkflowRuntime {
           continue;
         }
         await _store.markResumed(runId, data: state.suspensionData);
-        await _enqueueRun(runId, workflow: state.workflow);
+        await _enqueueRun(
+          runId,
+          workflow: state.workflow,
+          continuation: true,
+          reason: WorkflowContinuationReason.due,
+          runtimeMetadata: state.runtimeMetadata,
+        );
       }
     });
   }
@@ -234,6 +294,53 @@ class WorkflowRuntime {
   /// Exposes the task handler that executes workflow steps.
   TaskHandler<void> workflowRunnerHandler() =>
       _WorkflowRunTaskHandler(runtime: this);
+
+  /// Returns a uniform run view for dashboard/CLI drilldowns.
+  Future<WorkflowRunView?> viewRun(String runId) async {
+    final state = await _store.get(runId);
+    if (state == null) return null;
+    return WorkflowRunView.fromState(state);
+  }
+
+  /// Returns persisted step views for [runId].
+  Future<List<WorkflowStepView>> viewSteps(String runId) async {
+    final state = await _store.get(runId);
+    if (state == null) return const [];
+    final steps = await _store.listSteps(runId);
+    return steps
+        .map(
+          (entry) => WorkflowStepView.fromEntry(
+            runId: runId,
+            workflow: state.workflow,
+            entry: entry,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  /// Returns combined run+step drilldown view for [runId].
+  Future<WorkflowRunDetailView?> viewRunDetail(String runId) async {
+    final run = await viewRun(runId);
+    if (run == null) return null;
+    final steps = await viewSteps(runId);
+    return WorkflowRunDetailView(run: run, steps: steps);
+  }
+
+  /// Returns uniform run views filtered by workflow/status.
+  Future<List<WorkflowRunView>> listRunViews({
+    String? workflow,
+    WorkflowStatus? status,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final runs = await _store.listRuns(
+      workflow: workflow,
+      status: status,
+      limit: limit,
+      offset: offset,
+    );
+    return runs.map(WorkflowRunView.fromState).toList(growable: false);
+  }
 
   /// Executes steps for [runId] until completion or the next suspension.
   ///
@@ -402,7 +509,7 @@ class WorkflowRuntime {
           workflow: runState.workflow,
           runId: runId,
           stepName: step.name,
-          params: runState.params,
+          params: runState.workflowParams,
           previousResult: previousResult,
           stepIndex: cursor,
           iteration: iteration,
@@ -411,6 +518,7 @@ class WorkflowRuntime {
           enqueuer: _stepEnqueuer(
             taskContext: taskContext,
             baseMeta: stepMeta,
+            targetExecutionQueue: runState.executionQueue,
           ),
         );
         resumeData = null;
@@ -668,6 +776,28 @@ class WorkflowRuntime {
     }
   }
 
+  /// Records a runtime orchestration event to the introspection sink.
+  Future<void> _recordRuntimeEvent({
+    required String runId,
+    required String workflow,
+    required WorkflowRuntimeEventType type,
+    Map<String, Object?>? metadata,
+  }) async {
+    try {
+      await _introspection.recordRuntimeEvent(
+        WorkflowRuntimeEvent(
+          runId: runId,
+          workflow: workflow,
+          type: type,
+          timestamp: _clock.now(),
+          metadata: metadata == null ? null : Map.unmodifiable(metadata),
+        ),
+      );
+    } on Object catch (_) {
+      // Ignore introspection failures to avoid impacting workflow execution.
+    }
+  }
+
   /// Loads the latest iteration number for each step name.
   Future<Map<String, int>> _loadCompletedIterations(String runId) async {
     final entries = await _store.listSteps(runId);
@@ -773,18 +903,65 @@ class WorkflowRuntime {
   /// Generates a unique runtime identifier for workflow lease ownership.
   static String _defaultRuntimeId() => 'workflow-runtime-${const Uuid().v7()}';
 
+  static String _resolveQueueName(String? raw, {required String fallback}) {
+    final trimmed = raw?.trim();
+    if (trimmed == null || trimmed.isEmpty) return fallback;
+    return trimmed;
+  }
+
   /// Enqueues a workflow run execution task.
-  Future<void> _enqueueRun(String runId, {String? workflow}) async {
+  Future<void> _enqueueRun(
+    String runId, {
+    String? workflow,
+    required bool continuation,
+    required WorkflowContinuationReason reason,
+    WorkflowRunRuntimeMetadata? runtimeMetadata,
+  }) async {
+    final metadata =
+        runtimeMetadata ??
+        WorkflowRunRuntimeMetadata(
+          workflowId: '',
+          orchestrationQueue: queue,
+          continuationQueue: continuationQueue,
+          executionQueue: executionQueue,
+        );
+    final targetQueue = continuation ? continuationQueue : queue;
     final meta = <String, Object?>{
+      'stem.workflow.channel': WorkflowChannelKind.orchestration.name,
       'stem.workflow.runId': runId,
+      'stem.workflow.continuation': continuation,
+      'stem.workflow.continuationReason': reason.name,
+      'stem.workflow.orchestrationQueue': queue,
+      'stem.workflow.continuationQueue': continuationQueue,
+      'stem.workflow.executionQueue': executionQueue,
+      'stem.workflow.serialization.format': metadata.serializationFormat,
+      'stem.workflow.serialization.version': metadata.serializationVersion,
+      'stem.workflow.frame.format': metadata.frameFormat,
+      'stem.workflow.frame.version': metadata.frameVersion,
+      'stem.workflow.encryption.scope': metadata.encryptionScope,
+      'stem.workflow.encryption.enabled': metadata.encryptionEnabled,
+      if (metadata.streamId != null)
+        'stem.workflow.stream.id': metadata.streamId,
+      if (metadata.workflowId.isNotEmpty)
+        'stem.workflow.id': metadata.workflowId,
       if (workflow != null && workflow.isNotEmpty)
         'stem.workflow.name': workflow,
     };
+    await _recordRuntimeEvent(
+      runId: runId,
+      workflow: workflow ?? '',
+      type: WorkflowRuntimeEventType.continuationEnqueued,
+      metadata: {
+        'continuation': continuation,
+        'reason': reason.name,
+        'queue': targetQueue,
+      },
+    );
     await _stem.enqueue(
       workflowRunTaskName,
       args: {'runId': runId},
       meta: meta,
-      options: TaskOptions(queue: queue),
+      options: TaskOptions(queue: targetQueue),
     );
   }
 
@@ -795,12 +972,25 @@ class WorkflowRuntime {
     required int stepIndex,
     required int iteration,
   }) {
+    final runtime = runState.runtimeMetadata;
     return Map<String, Object?>.unmodifiable({
+      'stem.workflow.channel': WorkflowChannelKind.execution.name,
       'stem.workflow.name': runState.workflow,
       'stem.workflow.runId': runState.id,
       'stem.workflow.step': stepName,
       'stem.workflow.stepIndex': stepIndex,
       'stem.workflow.iteration': iteration,
+      'stem.workflow.orchestrationQueue': runState.orchestrationQueue,
+      'stem.workflow.continuationQueue': runState.continuationQueue,
+      'stem.workflow.executionQueue': runState.executionQueue,
+      'stem.workflow.serialization.format': runtime.serializationFormat,
+      'stem.workflow.serialization.version': runtime.serializationVersion,
+      'stem.workflow.frame.format': runtime.frameFormat,
+      'stem.workflow.frame.version': runtime.frameVersion,
+      'stem.workflow.encryption.scope': runtime.encryptionScope,
+      'stem.workflow.encryption.enabled': runtime.encryptionEnabled,
+      if (runtime.streamId != null) 'stem.workflow.stream.id': runtime.streamId,
+      if (runtime.workflowId.isNotEmpty) 'stem.workflow.id': runtime.workflowId,
     });
   }
 
@@ -808,9 +998,17 @@ class WorkflowRuntime {
   TaskEnqueuer _stepEnqueuer({
     required Map<String, Object?> baseMeta,
     TaskContext? taskContext,
+    String? targetExecutionQueue,
   }) {
     final delegate = taskContext ?? _stem;
-    return _WorkflowStepEnqueuer(delegate: delegate, baseMeta: baseMeta);
+    return _WorkflowStepEnqueuer(
+      delegate: delegate,
+      baseMeta: baseMeta,
+      executionQueue: _resolveQueueName(
+        targetExecutionQueue,
+        fallback: executionQueue,
+      ),
+    );
   }
 
   /// Returns true when a cancellation policy triggers a terminal cancel.
@@ -972,7 +1170,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   String? get lastStepName => _lastStepName;
 
   @override
-  Map<String, Object?> get params => runState.params;
+  Map<String, Object?> get params => runState.workflowParams;
 
   @override
   String get runId => runState.id;
@@ -1073,6 +1271,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       enqueuer: runtime._stepEnqueuer(
         taskContext: taskContext,
         baseMeta: stepMeta,
+        targetExecutionQueue: runState.executionQueue,
       ),
     );
     T result;
@@ -1350,10 +1549,12 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
   _WorkflowStepEnqueuer({
     required this.delegate,
     required this.baseMeta,
+    required this.executionQueue,
   });
 
   final TaskEnqueuer delegate;
   final Map<String, Object?> baseMeta;
+  final String executionQueue;
 
   @override
   Future<String> enqueue(
@@ -1366,11 +1567,15 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
   }) {
     /// Merges workflow metadata into task enqueue requests.
     final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(meta);
+    final resolvedOptions =
+        (options.queue == 'default' && executionQueue != 'default')
+        ? options.copyWith(queue: executionQueue)
+        : options;
     return delegate.enqueue(
       name,
       args: args,
       headers: headers,
-      options: options,
+      options: resolvedOptions,
       meta: mergedMeta,
       enqueueOptions: enqueueOptions,
     );
@@ -1382,7 +1587,17 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     TaskEnqueueOptions? enqueueOptions,
   }) {
     final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(call.meta);
+    TaskOptions? resolvedOptions = call.options;
+    if (resolvedOptions == null) {
+      final inherited = call.definition.defaultOptions;
+      if (inherited.queue == 'default' && executionQueue != 'default') {
+        resolvedOptions = inherited.copyWith(queue: executionQueue);
+      }
+    } else if (resolvedOptions.queue == 'default' && executionQueue != 'default') {
+      resolvedOptions = resolvedOptions.copyWith(queue: executionQueue);
+    }
     final mergedCall = call.copyWith(
+      options: resolvedOptions,
       meta: Map.unmodifiable(mergedMeta),
     );
     return delegate.enqueueCall(
