@@ -22,6 +22,10 @@ All services expect the following environment variables (see `.env.example` for 
 | `STEM_TLS_CLIENT_CERT` | _(optional)_ | mTLS client certificate used by enqueuers/workers. |
 | `STEM_TLS_CLIENT_KEY` | _(optional)_ | Private key associated with the client certificate. |
 | `PORT` | `8081` | HTTP port for the enqueue API (nginx fronts it on `api.localhost:8080`). |
+| `ENQUEUER_AUTOFILL_ENABLED` | `true` | Enables a background demo producer that keeps the dashboard populated. |
+| `ENQUEUER_AUTOFILL_INTERVAL_MS` | `2500` | Interval between auto-fill publish cycles. |
+| `ENQUEUER_AUTOFILL_BATCH_SIZE` | `2` | Number of successful tasks published per auto-fill cycle. |
+| `ENQUEUER_AUTOFILL_FAILURE_EVERY` | `8` | Every Nth cycle enqueues one synthetic failing task. |
 | `STEM_SCHEDULE_FILE` | `/config/schedules.yaml` | Optional YAML file the beat service uses to seed schedules. |
 | `STEM_METRIC_EXPORTERS` | `otlp:http://otel-collector:4318/v1/metrics` | Comma-separated list of metrics exporters enabled for workers (OTLP by default). |
 | `STEM_OTLP_ENDPOINT` | `http://otel-collector:4318/v1/traces` | Default OTLP endpoint used when exporters do not specify a destination. |
@@ -58,7 +62,7 @@ If you want to run the stack with TLS enabled, generate certificates and switch 
 ## Running with Docker Compose
 
 ```bash
-cd examples/microservice
+cd packages/stem/example/microservice
 cp .env.hmac_tls .env   # or .env.hmac / .env.ed25519_tls
 docker compose up --build
 ```
@@ -74,14 +78,20 @@ The stack now brings up Redis, the enqueue API, three workers, the beat schedule
 
 - **Local overrides:** The compose file expects a routed ecosystem checkout next to this repo (sibling directory at `../routed_ecosystem`) so the dashboard overrides resolve correctly. If your local path differs, update the `volumes` entries in `docker-compose.yml` accordingly.
 
-Workers emit metrics to the collector via OTLP; Prometheus scrapes the collector and Grafana ships with a pre-provisioned datasource so you can build dashboards immediately. Jaeger receives spans published through the collector, allowing you to trace enqueue and worker execution paths without extra configuration.
+Workers emit metrics to the collector via OTLP; Prometheus scrapes the collector and Grafana ships with pre-provisioned datasources and Stem dashboards:
+
+- `Stem Overview`
+- `Stem Workers & Queues`
+- `Stem Scheduler`
+
+Jaeger receives spans published through the collector, allowing you to trace enqueue and worker execution paths without extra configuration.
 
 Enqueue a task:
 
 ```bash
 curl -X POST http://api.localhost:8080/enqueue \
   -H 'content-type: application/json' \
-  -d '{"name": "Ada"}'
+  -d '{"name": "Ada", "task": "greeting.send"}'
 ```
 
 Fan out work with the canvas helper:
@@ -104,6 +114,15 @@ The beat service seeds the `greetings-reminder` schedule from
 ```bash
 stem schedule list
 stem schedule dry-run --id greetings-reminder --count 3
+```
+
+The demo stack now auto-generates background traffic across `greetings`,
+`billing`, and `reporting` queues, including synthetic workflow metadata
+(`stem.workflow.runId`, `stem.workflow.name`, `stem.workflow.step`) so the
+Workflows/Jobs/Namespaces dashboard views stay populated. Disable this with:
+
+```bash
+ENQUEUER_AUTOFILL_ENABLED=false docker compose up --build
 ```
 
 Stop the stack with `docker compose down`.
@@ -130,7 +149,7 @@ Stop the stack with `docker compose down`.
 3. Run the worker:
 
    ```bash
-   cd examples/microservice/worker
+   cd packages/stem/example/microservice/worker
    dart pub get
    dart run bin/worker.dart
    ```
@@ -138,7 +157,7 @@ Stop the stack with `docker compose down`.
 4. In another terminal, run the enqueue API:
 
    ```bash
-   cd examples/microservice/enqueuer
+   cd packages/stem/example/microservice/enqueuer
    dart pub get
    dart run bin/main.dart
    ```
@@ -146,7 +165,7 @@ Stop the stack with `docker compose down`.
 The worker logs progress for each greeting task, demonstrating isolate execution, heartbeats, and result backend updates. Start the beat service in a third terminal to dispatch scheduled jobs:
 
 ```bash
-cd examples/microservice/beat
+cd packages/stem/example/microservice/beat
 dart pub get
 dart run bin/beat.dart
 ```

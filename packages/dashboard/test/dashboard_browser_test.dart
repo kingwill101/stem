@@ -6,7 +6,8 @@ import 'package:server_testing/src/browser/bootstrap/driver/driver_manager.dart'
     as driver_manager;
 import 'package:server_testing/src/browser/interfaces/browser_type.dart'
     show BrowserLaunchOptions;
-import 'package:stem/stem.dart' show DeadLetterEntry, DeadLetterReplayResult;
+import 'package:stem/stem.dart'
+    show DeadLetterEntry, DeadLetterReplayResult, TaskState;
 import 'package:stem_dashboard/src/server.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
@@ -17,16 +18,23 @@ class _FakeDashboardService implements DashboardDataSource {
   _FakeDashboardService({
     required List<QueueSummary> queues,
     required List<WorkerStatus> workers,
+    List<DashboardTaskStatusEntry> taskStatuses = const [],
   }) : _queues = queues,
-       _workers = workers;
+       _workers = workers,
+       _taskStatuses = taskStatuses;
 
   List<QueueSummary> _queues;
   List<WorkerStatus> _workers;
+  List<DashboardTaskStatusEntry> _taskStatuses;
   EnqueueRequest? lastEnqueue;
   final List<ControlCommandMessage> controlCommands = [];
   String? lastReplayQueue;
   int? lastReplayLimit;
   bool? lastReplayDryRun;
+  String? lastReplayTaskId;
+  String? lastRevokeTaskId;
+  bool replayTaskSuccess = true;
+  bool revokeTaskSuccess = true;
   DeadLetterReplayResult replayResult = const DeadLetterReplayResult(
     entries: <DeadLetterEntry>[],
     dryRun: false,
@@ -43,6 +51,11 @@ class _FakeDashboardService implements DashboardDataSource {
     _workers = List.unmodifiable(values);
   }
 
+  List<DashboardTaskStatusEntry> get taskStatuses => _taskStatuses;
+  set taskStatuses(List<DashboardTaskStatusEntry> values) {
+    _taskStatuses = List.unmodifiable(values);
+  }
+
   @override
   Future<List<QueueSummary>> fetchQueueSummaries() async =>
       List<QueueSummary>.from(_queues);
@@ -50,6 +63,51 @@ class _FakeDashboardService implements DashboardDataSource {
   @override
   Future<List<WorkerStatus>> fetchWorkerStatuses() async =>
       List<WorkerStatus>.from(_workers);
+
+  @override
+  Future<List<DashboardTaskStatusEntry>> fetchTaskStatuses({
+    TaskState? state,
+    String? queue,
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final matches = _taskStatuses.where((entry) {
+      if (state != null && entry.state != state) return false;
+      if (queue != null && queue.isNotEmpty && entry.queue != queue) {
+        return false;
+      }
+      return true;
+    });
+    return matches.skip(offset).take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<DashboardTaskStatusEntry?> fetchTaskStatus(String taskId) async {
+    for (final entry in _taskStatuses) {
+      if (entry.id == taskId) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Future<List<DashboardTaskStatusEntry>> fetchTaskStatusesForRun(
+    String runId, {
+    int limit = 200,
+  }) async {
+    final matches = _taskStatuses.where((entry) => entry.runId == runId);
+    return matches.take(limit).toList(growable: false);
+  }
+
+  @override
+  Future<DashboardWorkflowRunSnapshot?> fetchWorkflowRun(String runId) async =>
+      null;
+
+  @override
+  Future<List<DashboardWorkflowStepSnapshot>> fetchWorkflowSteps(
+    String runId,
+  ) async => const [];
 
   @override
   Future<void> enqueueTask(EnqueueRequest request) async {
@@ -66,6 +124,25 @@ class _FakeDashboardService implements DashboardDataSource {
     lastReplayLimit = limit;
     lastReplayDryRun = dryRun;
     return replayResult;
+  }
+
+  @override
+  Future<bool> replayTaskById(String taskId, {String? queue}) async {
+    lastReplayTaskId = taskId;
+    if (queue != null && queue.isNotEmpty) {
+      lastReplayQueue = queue;
+    }
+    return replayTaskSuccess;
+  }
+
+  @override
+  Future<bool> revokeTask(
+    String taskId, {
+    bool terminate = false,
+    String? reason,
+  }) async {
+    lastRevokeTaskId = taskId;
+    return revokeTaskSuccess;
   }
 
   @override
@@ -86,6 +163,10 @@ class _FakeDashboardService implements DashboardDataSource {
     lastReplayQueue = null;
     lastReplayLimit = null;
     lastReplayDryRun = null;
+    lastReplayTaskId = null;
+    lastRevokeTaskId = null;
+    replayTaskSuccess = true;
+    revokeTaskSuccess = true;
     replayResult = const DeadLetterReplayResult(
       entries: <DeadLetterEntry>[],
       dryRun: false,
@@ -282,5 +363,15 @@ return fetch('/queues/replay', {
     expect(service.lastReplayQueue, 'default');
     expect(service.lastReplayLimit, 5);
     expect(service.lastReplayDryRun, isFalse);
+  });
+
+  _dashboardBrowserTest('search page renders saved views and query results', (
+    browser,
+  ) async {
+    await browser.visit('/search?q=default&scope=all');
+    await browser.waiter.waitFor('.table-card');
+    await browser.assertSee('Search');
+    await browser.assertSee('Saved Views');
+    await browser.assertSee('Backlog hotspots');
   });
 }

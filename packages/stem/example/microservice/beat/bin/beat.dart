@@ -11,7 +11,10 @@ const _deepEquals = DeepCollectionEquality();
 Future<void> main(List<String> args) async {
   // #region signing-beat-config
   final config = StemConfig.fromEnvironment();
+  final observability = ObservabilityConfig.fromEnvironment();
   // #endregion signing-beat-config
+  observability.applyMetricExporters();
+  observability.applySignalConfiguration();
 
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,

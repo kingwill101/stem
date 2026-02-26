@@ -6,6 +6,7 @@ Future<void> main(List<String> args) async {
   final host = Platform.environment['DASHBOARD_HOST']?.trim();
   final portRaw = Platform.environment['DASHBOARD_PORT']?.trim();
   final echoRaw = Platform.environment['DASHBOARD_ECHO_ROUTES']?.trim();
+  final basePath = Platform.environment['DASHBOARD_BASE_PATH']?.trim();
 
   final resolvedHost = host != null && host.isNotEmpty ? host : '127.0.0.1';
   final resolvedPort = int.tryParse(portRaw ?? '') ?? 3080;
@@ -17,6 +18,7 @@ Future<void> main(List<String> args) async {
       host: resolvedHost,
       port: resolvedPort,
       echoRoutes: echoRoutes,
+      basePath: basePath ?? '',
     ),
   );
 }
