@@ -68,6 +68,8 @@
 /// ```
 library;
 
+export 'package:contextual/contextual.dart' show Context, Level, Logger;
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/scheduler/beat.dart';
