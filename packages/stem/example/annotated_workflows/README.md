@@ -7,13 +7,21 @@ with the `stem_builder` registry generator.
 
 ```bash
 cd packages/stem/example/annotated_workflows
+dart pub get
+dart run build_runner build --delete-conflicting-outputs
 dart run bin/main.dart
+```
+
+From the repo root:
+
+```bash
+task demo:annotated
 ```
 
 ## Regenerate the registry
 
 ```bash
-dart run build_runner build
+dart run build_runner build --delete-conflicting-outputs
 ```
 
-The generated file is `lib/stem_registry.g.dart`.
+The generated file is `lib/definitions.stem.g.dart`.

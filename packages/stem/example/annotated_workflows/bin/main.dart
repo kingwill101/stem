@@ -1,5 +1,5 @@
 import 'package:stem/stem.dart';
-import 'package:stem_annotated_workflows/stem_registry.g.dart';
+import 'package:stem_annotated_workflows/definitions.dart';
 
 Future<void> main() async {
   final client = await StemClient.inMemory();

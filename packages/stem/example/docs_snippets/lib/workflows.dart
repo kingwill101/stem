@@ -142,7 +142,7 @@ Future<void> configureWorkflowEncoders() async {
 // #region workflows-annotated
 @WorkflowDefn(name: 'approvals.flow')
 class ApprovalsAnnotatedWorkflow {
-  @workflow.step
+  @WorkflowStep()
   Future<String> draft(FlowContext ctx) async {
     final payload = ctx.params['draft'] as Map<String, Object?>;
     return payload['documentId'] as String;
@@ -152,13 +152,13 @@ class ApprovalsAnnotatedWorkflow {
   Future<String?> managerReview(FlowContext ctx) async {
     final resume = ctx.takeResumeData() as Map<String, Object?>?;
     if (resume == null) {
-      ctx.awaitEvent('approvals.manager');
+      await ctx.awaitEvent('approvals.manager');
       return null;
     }
     return resume['approvedBy'] as String?;
   }
 
-  @workflow.step
+  @WorkflowStep()
   Future<String> finalize(FlowContext ctx) async {
     final approvedBy = ctx.previousResult as String?;
     return 'approved-by:$approvedBy';
@@ -167,7 +167,7 @@ class ApprovalsAnnotatedWorkflow {
 
 @WorkflowDefn(name: 'billing.retry-script', kind: WorkflowKind.script)
 class BillingRetryAnnotatedWorkflow {
-  @workflow.run
+  @WorkflowRun()
   Future<String> run(WorkflowScriptContext script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
       final resume = ctx.takeResumeData() as Map<String, Object?>?;

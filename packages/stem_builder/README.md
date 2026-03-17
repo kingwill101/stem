@@ -91,6 +91,40 @@ The generated part exports helpers like `registerStemDefinitions`,
 starters so you can avoid raw workflow-name strings (for example
 `runtime.startScript(email: 'user@example.com')`).
 
+## Wiring Into StemWorkflowApp
+
+For the common case, pass generated tasks and workflows directly to
+`StemWorkflowApp`:
+
+```dart
+final workflowApp = await StemWorkflowApp.fromUrl(
+  'redis://localhost:6379',
+  scripts: stemScripts,
+  flows: stemFlows,
+  tasks: stemTasks,
+);
+```
+
+If your application already owns a `StemApp`, reuse it:
+
+```dart
+final stemApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  tasks: stemTasks,
+);
+
+final workflowApp = await StemWorkflowApp.create(
+  stemApp: stemApp,
+  scripts: stemScripts,
+  flows: stemFlows,
+  tasks: stemTasks,
+);
+```
+
+You only need `registerStemDefinitions(...)` when you want to register against
+existing `WorkflowRegistry` and `TaskRegistry` instances manually.
+
 ## Examples
 
 See [`example/README.md`](example/README.md) for runnable examples, including:

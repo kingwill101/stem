@@ -58,6 +58,8 @@ const sidebars: SidebarsConfig = {
         "core-concepts/observability",
         "core-concepts/dashboard",
         "core-concepts/persistence",
+        "core-concepts/workflows",
+        "core-concepts/stem-builder",
         "core-concepts/cli-control",
       ],
     },

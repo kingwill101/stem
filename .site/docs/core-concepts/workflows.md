@@ -71,8 +71,8 @@ iterations using the `stepName#iteration` naming convention.
 ## Annotated Workflows (stem_builder)
 
 If you prefer decorators over the DSL, annotate workflow classes and tasks with
-`@WorkflowDefn`, `@workflow.run`, `@workflow.step`, and `@TaskDefn`, then generate
-the registry with `stem_builder`.
+`@WorkflowDefn`, `@WorkflowStep`, optional `@WorkflowRun`, and `@TaskDefn`,
+then generate the registry with `stem_builder`.
 
 ```dart title="lib/workflows/annotated.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-annotated
 
@@ -84,6 +84,9 @@ Build the registry (example):
 dart pub add --dev build_runner stem_builder
 dart run build_runner build
 ```
+
+For full setup and generated API details, see
+[stem_builder](./stem-builder.md).
 
 ## Starting & Awaiting Workflows
 

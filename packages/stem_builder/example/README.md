@@ -30,3 +30,9 @@ dart run bin/runtime_metadata_views.dart
 
 The checked-in `lib/definitions.stem.g.dart` is only a starter snapshot; rerun
 `build_runner` after changing annotations.
+
+
+The generated helper APIs are convenience wrappers. The underlying public
+`StemWorkflowApp` API also accepts `scripts`, `flows`, and `tasks` directly, so
+you can wire generated definitions into a larger app without manual task
+registration loops.

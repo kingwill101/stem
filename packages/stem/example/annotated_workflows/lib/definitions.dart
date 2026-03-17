@@ -1,8 +1,10 @@
 import 'package:stem/stem.dart';
 
+part 'definitions.stem.g.dart';
+
 @WorkflowDefn(name: 'annotated.flow')
 class AnnotatedFlowWorkflow {
-  @workflow.step
+  @WorkflowStep()
   Future<String?> start(FlowContext ctx) async {
     final resume = ctx.takeResumeData();
     if (resume == null) {

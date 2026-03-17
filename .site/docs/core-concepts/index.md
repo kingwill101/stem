@@ -54,6 +54,7 @@ behavior before touching production.
 - **[Observability](./observability.md)** – Metrics, traces, logging, and lifecycle signals.
 - **[Persistence & Stores](./persistence.md)** – Result backends, schedule/lock stores, and revocation storage.
 - **[Workflows](./workflows.md)** – Durable Flow/Script runtimes with typed results, suspensions, and event watchers.
+- **[stem_builder](./stem-builder.md)** – Generate workflow/task registries and typed starters from annotations.
 - **[CLI & Control](./cli-control.md)** – Quickly inspect queues, workers, and health from the command line.
 
 Continue with the [Workers guide](../workers/index.md) for operational details.
