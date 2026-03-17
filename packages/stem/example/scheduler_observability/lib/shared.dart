@@ -14,17 +14,13 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
   return RedisResultBackend.connect(url, tls: tls);
 }
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry();
-  registry.register(
-    FunctionTaskHandler<void>(
-      name: 'scheduler.demo',
-      options: const TaskOptions(queue: scheduleQueue),
-      entrypoint: _scheduledEntrypoint,
-    ),
-  );
-  return registry;
-}
+List<TaskHandler<Object?>> buildTasks() => [
+      FunctionTaskHandler<void>(
+        name: 'scheduler.demo',
+        options: const TaskOptions(queue: scheduleQueue),
+        entrypoint: _scheduledEntrypoint,
+      ),
+    ];
 
 FutureOr<void> _scheduledEntrypoint(
   TaskInvocationContext context,

@@ -14,11 +14,7 @@ Future<RedisResultBackend> connectBackend(String url) {
   return RedisResultBackend.connect(url);
 }
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry();
-  registry.register(ProgressTask());
-  return registry;
-}
+List<TaskHandler<Object?>> buildTasks() => [ProgressTask()];
 
 // #region reliability-worker-event-logging
 void attachWorkerEventLogging(Worker worker) {

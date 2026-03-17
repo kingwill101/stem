@@ -14,17 +14,13 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
   return RedisResultBackend.connect(url, tls: tls);
 }
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry();
-  registry.register(
-    FunctionTaskHandler<void>(
-      name: 'ops.ping',
-      options: const TaskOptions(queue: opsQueue),
-      entrypoint: _opsEntrypoint,
-    ),
-  );
-  return registry;
-}
+List<TaskHandler<Object?>> buildTasks() => [
+      FunctionTaskHandler<void>(
+        name: 'ops.ping',
+        options: const TaskOptions(queue: opsQueue),
+        entrypoint: _opsEntrypoint,
+      ),
+    ];
 
 FutureOr<void> _opsEntrypoint(
   TaskInvocationContext context,

@@ -23,7 +23,7 @@ dart pub add stem           # core runtime APIs
 dart pub add stem_redis     # Redis broker + result backend
 dart pub add stem_postgres  # (optional) Postgres broker + backend
 dart pub add stem_sqlite    # (optional) SQLite broker + backend
-dart pub add -d stem_builder # (optional) registry builder
+dart pub add -d stem_builder # (optional) workflow/task code generator
 dart pub global activate stem_cli
 ```
 
@@ -129,12 +129,15 @@ class HelloTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(HelloTask());
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
-  final worker = Worker(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
+  final worker = Worker(
+    broker: broker,
+    backend: backend,
+    tasks: [HelloTask()],
+  );
 
   unawaited(worker.start());
   await stem.enqueue('demo.hello', args: {'name': 'Stem'});
@@ -179,12 +182,15 @@ class HelloArgs {
 }
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(HelloTask());
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
-  final worker = Worker(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
+  final worker = Worker(
+    broker: broker,
+    backend: backend,
+    tasks: [HelloTask()],
+  );
 
   unawaited(worker.start());
   await stem.enqueueCall(
@@ -445,7 +451,7 @@ final client = await StemClient.inMemory(
 final canvas = Canvas(
   broker: broker,
   backend: backend,
-  registry: registry,
+  tasks: [SecretTask()],
   resultEncoder: const Base64ResultEncoder(),
   argsEncoder: const Base64ResultEncoder(),
 );
@@ -493,8 +499,8 @@ final unique = UniqueTaskCoordinator(
 
 final stem = Stem(
   broker: broker,
-  registry: registry,
   backend: backend,
+  tasks: [OrdersSyncTask()],
   uniqueTaskCoordinator: unique,
 );
 ```

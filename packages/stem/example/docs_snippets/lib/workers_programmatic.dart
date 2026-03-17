@@ -9,24 +9,23 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region workers-producer-minimal
 Future<void> minimalProducer() async {
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'email.send',
-        entrypoint: (context, args) async {
-          final to = args['to'] as String? ?? 'friend';
-          print('Queued email to $to');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'email.send',
+      entrypoint: (context, args) async {
+        final to = args['to'] as String? ?? 'friend';
+        print('Queued email to $to');
+        return null;
+      },
+    ),
+  ];
 
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
   );
 
   final taskId = await stem.enqueue(
@@ -46,22 +45,21 @@ Future<void> redisProducer() async {
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
   final broker = await RedisStreamsBroker.connect(brokerUrl);
   final backend = await RedisResultBackend.connect('$brokerUrl/1');
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'report.generate',
-        entrypoint: (context, args) async {
-          final id = args['reportId'] as String? ?? 'unknown';
-          print('Queued report $id');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'report.generate',
+      entrypoint: (context, args) async {
+        final id = args['reportId'] as String? ?? 'unknown';
+        print('Queued report $id');
+        return null;
+      },
+    ),
+  ];
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
   );
 
   await stem.enqueue(
@@ -78,17 +76,16 @@ Future<void> redisProducer() async {
 Future<void> signedProducer() async {
   final config = StemConfig.fromEnvironment();
   final signer = PayloadSigner.maybe(config.signing);
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'billing.charge',
-        entrypoint: (context, args) async {
-          final customerId = args['customerId'] as String? ?? 'unknown';
-          print('Queued charge for $customerId');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'billing.charge',
+      entrypoint: (context, args) async {
+        final customerId = args['customerId'] as String? ?? 'unknown';
+        print('Queued charge for $customerId');
+        return null;
+      },
+    ),
+  ];
 
   final broker = await RedisStreamsBroker.connect(
     config.brokerUrl,
@@ -97,8 +94,8 @@ Future<void> signedProducer() async {
   final backend = InMemoryResultBackend();
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     signer: signer,
   );
 
@@ -127,14 +124,13 @@ class EmailTask extends TaskHandler<void> {
 }
 
 Future<void> minimalWorker() async {
-  final registry = SimpleTaskRegistry()..register(EmailTask());
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: [EmailTask()],
     queue: 'default',
   );
 
@@ -146,12 +142,11 @@ Future<void> minimalWorker() async {
 Future<void> redisWorker() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
-  final registry = SimpleTaskRegistry()..register(RedisEmailTask());
 
   final worker = Worker(
     broker: await RedisStreamsBroker.connect(brokerUrl),
-    registry: registry,
     backend: await RedisResultBackend.connect('$brokerUrl/1'),
+    tasks: [RedisEmailTask()],
     queue: 'default',
     concurrency: Platform.numberOfProcessors,
   );
@@ -197,11 +192,10 @@ Future<void> retryWorker() async {
     print('[retry] next run at: ${payload.nextRetryAt}');
   });
 
-  final registry = SimpleTaskRegistry()..register(FlakyTask());
   final worker = Worker(
     broker: InMemoryBroker(),
-    registry: registry,
     backend: InMemoryResultBackend(),
+    tasks: [FlakyTask()],
     retryStrategy: ExponentialJitterRetryStrategy(
       base: const Duration(milliseconds: 200),
       max: const Duration(seconds: 1),
@@ -214,9 +208,9 @@ Future<void> retryWorker() async {
 
 // #region workers-bootstrap
 class StemRuntime {
-  StemRuntime({required this.registry, required this.brokerUrl});
+  StemRuntime({required this.tasks, required this.brokerUrl});
 
-  final TaskRegistry registry;
+  final List<TaskHandler<Object?>> tasks;
   final String brokerUrl;
 
   final InMemoryBroker _stemBroker = InMemoryBroker();
@@ -226,14 +220,14 @@ class StemRuntime {
 
   late final Stem stem = Stem(
     broker: _stemBroker,
-    registry: registry,
     backend: _stemBackend,
+    tasks: tasks,
   );
 
   late final Worker worker = Worker(
     broker: _workerBroker,
-    registry: registry,
     backend: _workerBackend,
+    tasks: tasks,
   );
 
   Future<void> start() async {

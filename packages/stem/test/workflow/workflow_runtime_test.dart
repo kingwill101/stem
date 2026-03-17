@@ -5,7 +5,7 @@ import 'package:test/test.dart';
 void main() {
   late InMemoryBroker broker;
   late InMemoryResultBackend backend;
-  late SimpleTaskRegistry registry;
+  late InMemoryTaskRegistry registry;
   late Stem stem;
   late InMemoryWorkflowStore store;
   late WorkflowRuntime runtime;
@@ -15,7 +15,7 @@ void main() {
   setUp(() {
     broker = InMemoryBroker();
     backend = InMemoryResultBackend();
-    registry = SimpleTaskRegistry();
+    registry = InMemoryTaskRegistry();
     stem = Stem(broker: broker, registry: registry, backend: backend);
     clock = FakeWorkflowClock(DateTime.utc(2024));
     store = InMemoryWorkflowStore(clock: clock);

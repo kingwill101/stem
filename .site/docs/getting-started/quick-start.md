@@ -62,7 +62,7 @@ Each task declares its name and retry/timeout options.
 Use `StemApp` to wire tasks, the in-memory broker/backend, and the worker:
 
 <Tabs>
-<TabItem value="bootstrap" label="Registry + runtime bootstrap">
+<TabItem value="bootstrap" label="Tasks + runtime bootstrap">
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-bootstrap
 

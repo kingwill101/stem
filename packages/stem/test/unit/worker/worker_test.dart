@@ -14,11 +14,10 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
-        registry: registry,
         backend: backend,
+        tasks: [_SuccessTask()],
         consumerName: 'worker-1',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -29,7 +28,11 @@ void main() {
 
       await worker.start();
 
-      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final stem = Stem(
+        broker: broker,
+        backend: backend,
+        tasks: [_SuccessTask()],
+      );
       final taskId = await stem.enqueue('tasks.success');
 
       await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -70,7 +73,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -136,7 +139,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_ChordBodyTask())
         ..register(_ChordCallbackTask());
       final worker = Worker(
@@ -180,7 +183,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final coordinator = UniqueTaskCoordinator(
         lockStore: InMemoryLockStore(),
         defaultTtl: const Duration(seconds: 5),
@@ -245,7 +248,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -317,7 +320,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -356,7 +359,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'tasks.autoscale',
@@ -424,7 +427,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -497,7 +500,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<int>(
             name: 'tasks.isolate',
@@ -566,7 +569,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -639,7 +642,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+      final registry = InMemoryTaskRegistry()..register(_FlakyTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -700,7 +703,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'tasks.default',
@@ -775,7 +778,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'tasks.sleepy',
@@ -825,7 +828,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<int>(
             name: 'tasks.recycle',
@@ -881,7 +884,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<int>(
             name: 'tasks.memory-recycle',
@@ -937,7 +940,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
 
       final signingConfig = SigningConfig.fromEnvironment({
         'STEM_SIGNING_KEYS':
@@ -994,7 +997,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
 
       final signingConfig = SigningConfig.fromEnvironment({
         'STEM_SIGNING_KEYS':
@@ -1050,7 +1053,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+      final registry = InMemoryTaskRegistry()..register(_FlakyTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -1108,7 +1111,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+      final registry = InMemoryTaskRegistry()..register(_FlakyTask());
 
       final signingConfig = SigningConfig.fromEnvironment({
         'STEM_SIGNING_KEYS':
@@ -1176,7 +1179,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_AlwaysFailTask());
+      final registry = InMemoryTaskRegistry()..register(_AlwaysFailTask());
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -1243,7 +1246,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<int>(
             name: 'tasks.isolate',
@@ -1295,7 +1298,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<String>(
             name: 'tasks.hard-limit',
@@ -1363,7 +1366,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
       final revokeStore = InMemoryRevokeStore();
 
       final stem = Stem(broker: broker, registry: registry, backend: backend);
@@ -1444,7 +1447,7 @@ void main() {
         }
         return const RateLimitDecision(allowed: true);
       });
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'tasks.group.a',
@@ -1526,7 +1529,7 @@ void main() {
         final limiter = _ScenarioRateLimiter((key, attempt) {
           throw StateError('limiter unavailable');
         });
-        final registry = SimpleTaskRegistry()
+        final registry = InMemoryTaskRegistry()
           ..register(
             FunctionTaskHandler<void>(
               name: 'tasks.group.failopen',
@@ -1573,7 +1576,7 @@ void main() {
           throw StateError('limiter unavailable');
         });
         var executed = 0;
-        final registry = SimpleTaskRegistry()
+        final registry = InMemoryTaskRegistry()
           ..register(
             FunctionTaskHandler<void>(
               name: 'tasks.group.failclosed',
@@ -1623,7 +1626,7 @@ void main() {
       );
       final backend = InMemoryResultBackend();
       final revokeStore = InMemoryRevokeStore();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
 
       final workerA = Worker(
         broker: broker,
@@ -1705,7 +1708,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final registry = InMemoryTaskRegistry()..register(_SuccessTask());
 
       final worker = Worker(
         broker: broker,

@@ -8,7 +8,7 @@ Future<void> main() async {
   final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
   final backend = await connectBackend(backendUrl, tls: config.tls);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   final taskCount = _parseInt('TASKS', fallback: 48, min: 1);
   final burst = _parseInt('BURST', fallback: 12, min: 1);
@@ -21,7 +21,7 @@ Future<void> main() async {
     'tasks=$taskCount burst=$burst pauseMs=$pauseMs durationMs=$durationMs',
   );
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
   const options = TaskOptions(queue: autoscaleQueue);
 
   if (initialDelayMs > 0) {

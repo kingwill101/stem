@@ -10,9 +10,9 @@ Future<void> main() async {
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://redis:6379/0';
 
   final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final subscriptions = attachLogging('producer');
-  final stem = Stem(broker: broker, registry: registry);
+  final stem = Stem(broker: broker, tasks: tasks);
 
   final taskId = await stem.enqueue(
     'tasks.always_fail',

@@ -255,22 +255,34 @@ class Canvas {
   /// Creates a [Canvas] that uses [broker] to publish messages and [backend]
   /// to persist task state and group metadata.
   ///
-  /// [registry] provides task lookups when needed.
+  /// [tasks] are registered automatically. [registry] can be provided for
+  /// advanced setups that need a custom task catalog.
   Canvas({
     required this.broker,
     required ResultBackend backend,
-    required this.registry,
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? registry,
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+  }) : registry = _resolveTaskRegistry(registry, tasks),
+       payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
          resultEncoder: resultEncoder,
          argsEncoder: argsEncoder,
          additionalEncoders: additionalEncoders,
        ) {
     this.backend = withTaskPayloadEncoder(backend, payloadEncoders);
+  }
+
+  static TaskRegistry _resolveTaskRegistry(
+    TaskRegistry? registry,
+    Iterable<TaskHandler<Object?>> tasks,
+  ) {
+    final resolved = registry ?? InMemoryTaskRegistry();
+    tasks.forEach(resolved.register);
+    return resolved;
   }
 
   /// The message broker used to publish task envelopes.

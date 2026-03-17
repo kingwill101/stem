@@ -9,16 +9,15 @@ import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
-final registry = SimpleTaskRegistry()
-  ..register(
-    FunctionTaskHandler<void>(
-      name: 'demo',
-      entrypoint: (context, args) async {
-        print('Handled demo task');
-        return null;
-      },
-    ),
-  );
+final demoTasks = [
+  FunctionTaskHandler<void>(
+    name: 'demo',
+    entrypoint: (context, args) async {
+      print('Handled demo task');
+      return null;
+    },
+  ),
+];
 
 // #region persistence-backend-in-memory
 Future<void> connectInMemoryBackend() async {
@@ -26,8 +25,8 @@ Future<void> connectInMemoryBackend() async {
   final backend = InMemoryResultBackend();
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
   );
   await stem.enqueue('demo', args: {});
   await backend.close();
@@ -41,8 +40,8 @@ Future<void> connectRedisBackend() async {
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
   );
   await stem.enqueue('demo', args: {});
   await backend.close();
@@ -58,8 +57,8 @@ Future<void> connectPostgresBackend() async {
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
   );
   await stem.enqueue('demo', args: {});
   await backend.close();
@@ -73,8 +72,8 @@ Future<void> connectSqliteBackend() async {
   final backend = await SqliteResultBackend.open(File('stem_backend.sqlite'));
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
   );
   await stem.enqueue('demo', args: {});
   await backend.close();
@@ -134,8 +133,8 @@ Future<void> configurePostgresRevokeStore() async {
   );
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
     revokeStore: revokeStore,
   );
 
@@ -156,8 +155,8 @@ Future<void> configureSqliteRevokeStore() async {
   );
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: demoTasks,
     revokeStore: revokeStore,
   );
 

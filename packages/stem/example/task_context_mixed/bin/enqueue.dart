@@ -5,8 +5,8 @@ import 'package:stem_task_context_mixed_example/shared.dart';
 
 Future<void> main(List<String> args) async {
   final broker = await connectBroker();
-  final registry = buildRegistry();
-  final stem = Stem(broker: broker, registry: registry);
+  final tasks = buildTasks();
+  final stem = Stem(broker: broker, tasks: tasks);
 
   final forceFail = args.contains('--fail');
   final overwrite = args.contains('--overwrite');

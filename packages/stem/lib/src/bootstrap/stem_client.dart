@@ -271,7 +271,7 @@ class _DefaultStemClient extends StemClient {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
-    final registry = taskRegistry ?? SimpleTaskRegistry();
+    final registry = taskRegistry ?? InMemoryTaskRegistry();
     tasks.forEach(registry.register);
     final workflows = workflowRegistry ?? InMemoryWorkflowRegistry();
 

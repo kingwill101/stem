@@ -15,12 +15,12 @@ Future<void> main() async {
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-rotation-worker-signer
 
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   // #region signing-rotation-worker-start
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: rotationQueue,
     subscription: RoutingSubscription.singleQueue(rotationQueue),

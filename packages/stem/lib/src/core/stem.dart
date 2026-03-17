@@ -79,8 +79,9 @@ class Stem implements TaskEnqueuer {
   /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
-    required this.registry,
+    TaskRegistry? registry,
     this.backend,
+    Iterable<TaskHandler<Object?>> tasks = const [],
     this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
@@ -90,7 +91,8 @@ class Stem implements TaskEnqueuer {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+  }) : registry = _resolveTaskRegistry(registry, tasks),
+       payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
          resultEncoder: resultEncoder,
          argsEncoder: argsEncoder,
@@ -99,6 +101,15 @@ class Stem implements TaskEnqueuer {
        routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy(),
        middleware = List.unmodifiable(middleware);
+
+  static TaskRegistry _resolveTaskRegistry(
+    TaskRegistry? registry,
+    Iterable<TaskHandler<Object?>> tasks,
+  ) {
+    final resolved = registry ?? InMemoryTaskRegistry();
+    tasks.forEach(resolved.register);
+    return resolved;
+  }
 
   /// Broker used to publish task envelopes.
   final Broker broker;

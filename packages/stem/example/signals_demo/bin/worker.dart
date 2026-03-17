@@ -15,12 +15,12 @@ Future<void> main() async {
   registerSignalLogging('worker');
 
   final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final backend = InMemoryResultBackend();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: 'default',
     consumerName: workerName,

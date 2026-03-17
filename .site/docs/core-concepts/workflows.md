@@ -72,13 +72,13 @@ iterations using the `stepName#iteration` naming convention.
 
 If you prefer decorators over the DSL, annotate workflow classes and tasks with
 `@WorkflowDefn`, `@WorkflowStep`, optional `@WorkflowRun`, and `@TaskDefn`,
-then generate the registry with `stem_builder`.
+then generate the workflow/task helpers with `stem_builder`.
 
 ```dart title="lib/workflows/annotated.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-annotated
 
 ```
 
-Build the registry (example):
+Generate the helpers (example):
 
 ```bash
 dart pub add --dev build_runner stem_builder
@@ -163,7 +163,8 @@ accepts either a shared `TaskPayloadEncoderRegistry` or explicit defaults:
 ```
 
 Every workflow run task stores the result encoder id in `RunState.resultMeta`,
-and the internal tasks dispatched by workflows reuse the same registry—so
+and the internal tasks dispatched by workflows reuse the same encoder
+configuration—so
 typed steps can safely emit encrypted/binary payloads while workers decode them
 exactly once.
 

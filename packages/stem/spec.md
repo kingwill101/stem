@@ -944,7 +944,7 @@ abstract class TaskRegistry {
   Stream<TaskRegistrationEvent> get onRegister;
 }
 
-class SimpleTaskRegistry implements TaskRegistry {
+class InMemoryTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler> _m = {};
   final _onRegister = StreamController<TaskRegistrationEvent>.broadcast();
   @override
@@ -1564,7 +1564,7 @@ Future<void> main() async {
   final broker = RedisBroker(redis, namespace: 'stem');
   final backend = RedisResultBackend(redis, namespace: 'stem');
 
-  final reg = SimpleTaskRegistry()..register(SendEmailTask());
+  final reg = InMemoryTaskRegistry()..register(SendEmailTask());
 
   final w = Worker(
     broker: broker,

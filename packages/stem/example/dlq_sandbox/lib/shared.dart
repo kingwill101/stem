@@ -8,9 +8,7 @@ import 'package:stem_redis/stem_redis.dart';
 const _queueName = 'default';
 const _taskName = 'billing.invoice.process';
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry()
-    ..register(
+List<TaskHandler<Object?>> buildTasks() => [
       FunctionTaskHandler<void>(
         name: _taskName,
         options: const TaskOptions(
@@ -20,18 +18,16 @@ SimpleTaskRegistry buildRegistry() {
         ),
         entrypoint: _invoiceEntrypoint,
       ),
-    );
-  return registry;
-}
+    ];
 
 Stem buildStem({
   required Broker broker,
-  required TaskRegistry registry,
+  required Iterable<TaskHandler<Object?>> tasks,
   ResultBackend? backend,
 }) {
   return Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
   );
 }

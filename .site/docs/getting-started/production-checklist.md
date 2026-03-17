@@ -39,7 +39,7 @@ In code, wire the signer into both producers and workers:
 ```
 
 </TabItem>
-<TabItem value="registry" label="Register tasks + storage">
+<TabItem value="registry" label="Tasks + storage">
 
 ```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-registry
 

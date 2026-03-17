@@ -24,7 +24,6 @@ Future<void> loadSchedules() async {
 
 // #region beat-dev
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(DemoTask());
   final broker = InMemoryBroker();
   final store = InMemoryScheduleStore();
   final lockStore = InMemoryLockStore();

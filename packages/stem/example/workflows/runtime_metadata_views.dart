@@ -7,10 +7,16 @@ import 'dart:convert';
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry();
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final app = await StemApp.create(
+    tasks: [
+      FunctionTaskHandler<void>.inline(
+        name: 'example.noop',
+        entrypoint: (context, args) async => null,
+      ),
+    ],
+  );
+  final broker = app.broker as InMemoryBroker;
+  final stem = app.stem;
   final store = InMemoryWorkflowStore();
   final runtime = WorkflowRuntime(
     stem: stem,
@@ -21,14 +27,7 @@ Future<void> main() async {
     executionQueue: 'workflow-step',
   );
 
-  registry
-    ..register(runtime.workflowRunnerHandler())
-    ..register(
-      FunctionTaskHandler<void>.inline(
-        name: 'example.noop',
-        entrypoint: (context, args) async => null,
-      ),
-    );
+  app.register(runtime.workflowRunnerHandler());
 
   runtime.registerWorkflow(
     Flow(
@@ -98,7 +97,6 @@ Future<void> main() async {
     print(const JsonEncoder.withIndent('  ').convert(runDetail?.toJson()));
   } finally {
     await runtime.dispose();
-    await backend.close();
-    broker.dispose();
+    await app.close();
   }
 }

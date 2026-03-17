@@ -17,16 +17,15 @@ Future<void> configureSigning() async {
   // #region production-signing-registry
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'audit.log',
-        entrypoint: (context, args) async {
-          print('Audit log: ${args['message']}');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'audit.log',
+      entrypoint: (context, args) async {
+        print('Audit log: ${args['message']}');
+        return null;
+      },
+    ),
+  ];
   // #endregion production-signing-registry
 
   // #region production-signing-runtime
@@ -34,7 +33,7 @@ Future<void> configureSigning() async {
   final stem = Stem(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
     signer: signer,
   );
   // #endregion production-signing-stem
@@ -43,7 +42,7 @@ Future<void> configureSigning() async {
   final worker = Worker(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
     signer: signer,
   );
   // #endregion production-signing-worker

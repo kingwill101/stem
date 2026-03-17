@@ -9,7 +9,7 @@ Future<void> main() async {
       'redis://localhost:6379/0';
 
   final routing = buildRoutingRegistry();
-  final registry = buildDemoTaskRegistry();
+  final tasks = buildDemoTasks();
 
   final broker = await RedisStreamsBroker.connect(
     redisUrl,
@@ -24,7 +24,7 @@ Future<void> main() async {
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: 'standard',
     subscription: subscription,

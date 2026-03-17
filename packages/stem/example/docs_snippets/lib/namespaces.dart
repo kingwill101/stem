@@ -56,14 +56,13 @@ Future<void> isolateNamespaces() async {
 
 // #region namespaces-worker
 Future<void> configureWorkerNamespace() async {
-  final registry = SimpleTaskRegistry();
   final broker = InMemoryBroker(namespace: 'prod-us-east');
   final backend = InMemoryResultBackend();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: const [],
     heartbeatNamespace: 'prod-us-east',
   );
 

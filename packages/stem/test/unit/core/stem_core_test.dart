@@ -60,9 +60,11 @@ void main() {
     test('publishes to broker and writes queued state', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
-
-      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final stem = Stem(
+        broker: broker,
+        backend: backend,
+        tasks: [_StubTaskHandler()],
+      );
 
       final id = await stem.enqueue(
         'sample.task',

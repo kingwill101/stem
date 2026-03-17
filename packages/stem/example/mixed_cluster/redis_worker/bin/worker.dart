@@ -20,23 +20,22 @@ Future<void> main(List<String> args) async {
   );
   final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'redis.only',
-        entrypoint: _redisEntrypoint,
-        options: TaskOptions(
-          queue: config.defaultQueue,
-          maxRetries: 5,
-          softTimeLimit: const Duration(seconds: 5),
-          hardTimeLimit: const Duration(seconds: 10),
-        ),
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'redis.only',
+      entrypoint: _redisEntrypoint,
+      options: TaskOptions(
+        queue: config.defaultQueue,
+        maxRetries: 5,
+        softTimeLimit: const Duration(seconds: 5),
+        hardTimeLimit: const Duration(seconds: 10),
       ),
-    );
+    ),
+  ];
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: config.defaultQueue,
     consumerName: 'redis-worker-1',

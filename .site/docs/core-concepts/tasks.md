@@ -8,11 +8,12 @@ slug: /core-concepts/tasks
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Tasks are the units of work executed by Stem workers. Each task is represented by
-a handler registered in a `TaskRegistry`. Handlers expose metadata through
-`TaskOptions`, which control routing, retry behavior, timeouts, and isolation.
+Tasks are the units of work executed by Stem workers. In the common path, you
+provide handlers directly via `tasks: [...]` on `Stem`, `Worker`, `StemApp`, or
+`StemClient`. Handlers expose metadata through `TaskOptions`, which control
+routing, retry behavior, timeouts, and isolation.
 
-## Registering Handlers
+## Providing Handlers
 
 <Tabs>
 <TabItem value="in-memory" label="In-memory (tasks/email_task.dart)">
@@ -177,4 +178,5 @@ metadata overrides:
 
 Because encoders are centrally registered inside the
 `TaskPayloadEncoderRegistry`, every producer/worker instance that shares the
-registry can resolve encoder ids reliably—even across processes or languages.
+same encoder configuration can resolve encoder ids reliably, even across
+processes or languages.

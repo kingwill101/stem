@@ -15,12 +15,12 @@ Future<void> main() async {
 
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   // #region reliability-heartbeat-worker
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: progressQueue,
     subscription: RoutingSubscription.singleQueue(progressQueue),

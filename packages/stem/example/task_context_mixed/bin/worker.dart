@@ -8,11 +8,11 @@ import 'package:stem_sqlite/stem_sqlite.dart';
 Future<void> main() async {
   final broker = await connectBroker();
   final backend = await connectBackend();
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: mixedQueue,
     consumerName: Platform.environment['WORKER_NAME'] ?? 'task-context-worker',

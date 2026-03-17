@@ -3,31 +3,23 @@ import 'dart:convert';
 
 import 'package:stem/stem.dart';
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry()
-    ..register(
+List<TaskHandler<Object?>> buildTasks() => [
       FunctionTaskHandler<String>(
         name: 'tasks.hello',
         entrypoint: _helloEntrypoint,
         options: const TaskOptions(maxRetries: 0),
       ),
-    )
-    ..register(
       FunctionTaskHandler<String>(
         name: 'tasks.flaky',
         entrypoint: _flakyEntrypoint,
         options: const TaskOptions(maxRetries: 2),
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>(
         name: 'tasks.always_fail',
         entrypoint: _alwaysFailEntrypoint,
         options: const TaskOptions(maxRetries: 1),
       ),
-    );
-  return registry;
-}
+    ];
 
 List<SignalSubscription> registerSignalLogging(String label) {
   String prefix(String event) => '[signals][$label][$event]';

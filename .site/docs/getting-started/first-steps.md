@@ -68,9 +68,9 @@ For more detail, see [Broker Overview](../brokers/overview.md) and
 
 ## App setup
 
-- Register tasks and options via `StemApp` or a shared registry (see
+- Register tasks and options via `StemApp` or a shared task list (see
   [Tasks & Retries](../core-concepts/tasks.md)).
-- Wire producers with the same task list/registry (see
+- Wire producers with the same task list (see
   [Producer API](../core-concepts/producer.md)).
 
 ## Run a worker

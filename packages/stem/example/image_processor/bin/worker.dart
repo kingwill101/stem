@@ -28,18 +28,17 @@ Future<void> main(List<String> args) async {
     exit(64);
   }
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'image.generate_thumbnail',
-        entrypoint: generateThumbnail,
-        options: const TaskOptions(queue: 'images', maxRetries: 2),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'image.generate_thumbnail',
+      entrypoint: generateThumbnail,
+      options: const TaskOptions(queue: 'images', maxRetries: 2),
+    ),
+  ];
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     concurrency: 2, // Parallel processing
     signer: signer,

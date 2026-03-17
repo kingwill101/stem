@@ -402,7 +402,7 @@ void main() {
     test('fromUrl registers provided tasks', () async {
       final helperTask = FunctionTaskHandler<void>(
         name: 'workflow.task.helper',
-        entrypoint: (context, args) async {},
+        entrypoint: (context, args) async => null,
         runInIsolate: false,
       );
       final adapter = TestStoreAdapter(

@@ -11,28 +11,27 @@ Future<void> main(List<String> args) async {
   final port = int.tryParse(Platform.environment['PORT'] ?? '8080') ?? 8080;
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'greeting.send',
-        entrypoint: _greetingEntrypoint,
-        options: const TaskOptions(
-          maxRetries: 3,
-          softTimeLimit: Duration(seconds: 5),
-          hardTimeLimit: Duration(seconds: 8),
-        ),
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'greeting.send',
+      entrypoint: _greetingEntrypoint,
+      options: const TaskOptions(
+        maxRetries: 3,
+        softTimeLimit: Duration(seconds: 5),
+        hardTimeLimit: Duration(seconds: 8),
       ),
-    );
+    ),
+  ];
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
   final canvas = Canvas(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
   );
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     consumerName: 'monolith-worker',
     concurrency: 2,

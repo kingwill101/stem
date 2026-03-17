@@ -41,19 +41,18 @@
 ///     encodeArgs: (args) => args,
 ///   );
 ///
-///   // 2. Setup the registry and handler
-///   final registry = SimpleTaskRegistry()
-///     ..register(FunctionTaskHandler(
+///   // 2. Define the handler
+///   final addHandler = FunctionTaskHandler(
 ///       name: 'add_task',
 ///       entrypoint: (context, args) async {
 ///         return (args['a'] as int) + (args['b'] as int);
 ///       },
-///     ));
+///     );
 ///
 ///   // 3. Initialize Stem with a broker (e.g., In-Memory for testing)
 ///   final stem = Stem(
 ///     broker: InMemoryBroker(),
-///     registry: registry,
+///     tasks: [addHandler],
 ///   );
 ///
 ///   // 4. Enqueue work and wait for the result

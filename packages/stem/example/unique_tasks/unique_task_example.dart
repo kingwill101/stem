@@ -56,19 +56,19 @@ Future<void> main() async {
   );
   // #endregion unique-task-coordinator
 
-  final registry = SimpleTaskRegistry()..register(SendDigestTask());
+  final tasks = [SendDigestTask()];
 
   // #region unique-task-stem-worker
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     uniqueTaskCoordinator: coordinator,
   );
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     uniqueTaskCoordinator: coordinator,
     queue: 'email',
     consumerName: 'unique-worker',

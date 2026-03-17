@@ -14,11 +14,11 @@ Future<void> main() async {
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-rotation-producer-signer
 
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   // #region signing-rotation-producer-stem
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: signer,
   );

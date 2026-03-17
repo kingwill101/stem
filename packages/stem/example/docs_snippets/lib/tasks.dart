@@ -20,7 +20,7 @@ class EmailTask extends TaskHandler<void> {
   }
 }
 
-final registry = SimpleTaskRegistry()..register(EmailTask());
+final inMemoryTasks = [EmailTask()];
 // #endregion tasks-register-in-memory
 
 // #region tasks-register-redis
@@ -43,7 +43,7 @@ class RedisEmailTask extends TaskHandler<void> {
   }
 }
 
-final redisRegistry = SimpleTaskRegistry()..register(RedisEmailTask());
+final redisTasks = [RedisEmailTask()];
 // #endregion tasks-register-redis
 
 // #region tasks-typed-definition
@@ -78,8 +78,8 @@ Future<void> runTypedDefinitionExample() async {
   final backend = InMemoryResultBackend();
   final stem = Stem(
     broker: broker,
-    registry: SimpleTaskRegistry()..register(PublishInvoiceTask()),
     backend: backend,
+    tasks: [PublishInvoiceTask()],
   );
 
   final taskId = await stem.enqueueCall(

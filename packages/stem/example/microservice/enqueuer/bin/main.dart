@@ -107,21 +107,20 @@ Future<void> main(List<String> args) async {
   // #endregion signing-producer-signer
   final httpContext = _buildHttpSecurityContext();
 
-  final registry = SimpleTaskRegistry();
-  for (final spec in _demoTaskSpecs) {
-    registry.register(
-      FunctionTaskHandler<String>(
-        name: spec.name,
-        entrypoint: _placeholderEntrypoint,
-        options: TaskOptions(queue: spec.queue, maxRetries: spec.maxRetries),
-      ),
-    );
-  }
+  final tasks = _demoTaskSpecs
+      .map<TaskHandler<Object?>>(
+        (spec) => FunctionTaskHandler<String>(
+          name: spec.name,
+          entrypoint: _placeholderEntrypoint,
+          options: TaskOptions(queue: spec.queue, maxRetries: spec.maxRetries),
+        ),
+      )
+      .toList(growable: false);
 
   // #region signing-producer-stem
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: signer,
   );
@@ -129,7 +128,7 @@ Future<void> main(List<String> args) async {
   final canvas = Canvas(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
   );
   final autoFill = _AutoFillController(
     stem: stem,

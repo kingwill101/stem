@@ -1100,7 +1100,7 @@ class TaskOptions {
   /// The rate limit for tasks with these options.
   final String? rateLimit;
 
-  /// Group-scoped rate limit shared by tasks that resolve to 
+  /// Group-scoped rate limit shared by tasks that resolve to
   /// the same group key.
   final String? groupRateLimit;
 
@@ -1886,7 +1886,7 @@ abstract class TaskRegistry {
 }
 
 /// Default in-memory registry implementation.
-class SimpleTaskRegistry implements TaskRegistry {
+class InMemoryTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler<Object?>> _handlers = {};
   final StreamController<TaskRegistrationEvent> _registerController =
       StreamController<TaskRegistrationEvent>.broadcast();

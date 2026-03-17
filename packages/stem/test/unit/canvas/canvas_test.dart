@@ -7,7 +7,6 @@ void main() {
   group('Canvas', () {
     late InMemoryBroker broker;
     late InMemoryResultBackend backend;
-    late SimpleTaskRegistry registry;
     late Worker worker;
     late Canvas canvas;
 
@@ -17,14 +16,15 @@ void main() {
         claimInterval: const Duration(milliseconds: 20),
       );
       backend = InMemoryResultBackend();
-      registry = SimpleTaskRegistry()
-        ..register(_EchoTask())
-        ..register(_SumTask());
-      canvas = Canvas(broker: broker, backend: backend, registry: registry);
+      canvas = Canvas(
+        broker: broker,
+        backend: backend,
+        tasks: [_EchoTask(), _SumTask()],
+      );
       worker = Worker(
         broker: broker,
-        registry: registry,
         backend: backend,
+        tasks: [_EchoTask(), _SumTask()],
         consumerName: 'canvas-worker',
         concurrency: 1,
         prefetchMultiplier: 1,

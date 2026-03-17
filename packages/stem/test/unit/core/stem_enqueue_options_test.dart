@@ -16,7 +16,7 @@ void main() {
   group('Stem.enqueue options', () {
     test('applies countdown to notBefore', () async {
       final broker = _RecordingBroker();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       final start = DateTime.now();
@@ -38,7 +38,7 @@ void main() {
 
     test('applies eta to notBefore', () async {
       final broker = _RecordingBroker();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       final eta = DateTime.utc(2026, 01, 03, 12, 30);
@@ -53,7 +53,7 @@ void main() {
 
     test('applies taskId override', () async {
       final broker = _RecordingBroker();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       await stem.enqueue(
@@ -67,7 +67,7 @@ void main() {
 
     test('propagates routing overrides', () async {
       final broker = _RecordingBroker();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       await stem.enqueue(
@@ -90,7 +90,7 @@ void main() {
 
     test('stores metadata options in envelope meta', () async {
       final broker = _RecordingBroker();
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       await stem.enqueue(
@@ -120,7 +120,7 @@ void main() {
 
     test('retries publish when retry enabled', () async {
       final broker = _FlakyPublishBroker(failures: 1);
-      final registry = SimpleTaskRegistry()..register(_StubTaskHandler());
+      final registry = InMemoryTaskRegistry()..register(_StubTaskHandler());
       final stem = Stem(broker: broker, registry: registry);
 
       await stem.enqueue(

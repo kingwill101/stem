@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](https://github.com/kingwill101/stem/blob/main/LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
 
-Build-time registry generator for annotated Stem workflows and tasks.
+Build-time code generator for annotated Stem workflows and tasks.
 
 ## Install
 
@@ -122,8 +122,8 @@ final workflowApp = await StemWorkflowApp.create(
 );
 ```
 
-You only need `registerStemDefinitions(...)` when you want to register against
-existing `WorkflowRegistry` and `TaskRegistry` instances manually.
+You only need `registerStemDefinitions(...)` when you are integrating with
+existing custom `WorkflowRegistry` and `TaskRegistry` instances manually.
 
 ## Examples
 

@@ -46,15 +46,13 @@
 /// ```dart
 /// // 1. Set up dependencies
 /// final broker = RedisBroker();
-/// final registry = TaskRegistry()
-///   ..register('process_order', TaskHandler(processOrder));
 /// final backend = RedisResultBackend();
 ///
 /// // 2. Create and start worker
 /// final worker = Worker(
 ///   broker: broker,
-///   registry: registry,
 ///   backend: backend,
+///   tasks: [ProcessOrderTask()],
 ///   concurrency: 8,
 /// );
 ///
@@ -199,11 +197,12 @@ enum WorkerShutdownMode {
 ///
 /// | Parameter | Required | Description |
 /// |-----------|----------|-------------|
-/// | [broker] | Yes | Message broker for queue operations |
-/// | [registry] | Yes | Task handler registry |
-/// | [backend] | Yes | Result persistence backend |
-/// | [concurrency] | No | Max parallel tasks (default: CPU count) |
-/// | [queue] | No | Default queue name (default: 'default') |
+/// | `broker` | Yes | Message broker for queue operations |
+/// | `backend` | Yes | Result persistence backend |
+/// | `tasks` | No | Task handlers to register automatically |
+/// | `registry` | No | Custom task registry for advanced setups |
+/// | `concurrency` | No | Max parallel tasks (default: CPU count) |
+/// | `queue` | No | Default queue name (default: 'default') |
 /// | `autoscale` | No | Dynamic concurrency scaling config |
 /// | `lifecycle` | No | Shutdown and recycling config |
 ///
@@ -212,8 +211,8 @@ enum WorkerShutdownMode {
 /// ```dart
 /// final worker = Worker(
 ///   broker: RedisBroker(),
-///   registry: registry,
 ///   backend: RedisResultBackend(),
+///   tasks: [ProcessOrderTask()],
 ///   concurrency: 8,
 ///   middleware: [LoggingMiddleware()],
 ///   autoscale: WorkerAutoscaleConfig(
@@ -261,13 +260,14 @@ class Worker {
   ///
   /// - [broker]: The message broker for consuming and acknowledging tasks.
   ///   Must be connected before calling [start].
-  /// - [registry]: Contains registered task handlers. Tasks without handlers
-  ///   are dead-lettered with reason 'unregistered-task'.
   /// - [backend]: Stores task state and results. Used for task status tracking
   ///   and result retrieval by callers.
   ///
   /// ## Optional Parameters
   ///
+  /// - [tasks]: Task handlers registered into the worker automatically.
+  /// - [registry]: Optional custom registry. When omitted an in-memory registry
+  ///   is created and populated from [tasks].
   /// - [enqueuer]: [Stem] instance for spawning child tasks from handlers.
   ///   Created automatically if not provided.
   /// - [rateLimiter]: Enforces per-task rate limits. Rate limits are defined
@@ -300,8 +300,9 @@ class Worker {
   /// - [additionalEncoders]: Additional payload encoders to register.
   Worker({
     required Broker broker,
-    required TaskRegistry registry,
     required ResultBackend backend,
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? registry,
     Stem? enqueuer,
     RateLimiter? rateLimiter,
     List<Middleware> middleware = const [],
@@ -329,7 +330,7 @@ class Worker {
   }) : this._(
          broker: broker,
          enqueuer: enqueuer,
-         registry: registry,
+         registry: _resolveTaskRegistry(registry, tasks),
          backend: backend,
          rateLimiter: rateLimiter,
          middleware: middleware,
@@ -473,6 +474,15 @@ class Worker {
     subscriptionQueues = List.unmodifiable(normalizedQueues);
     subscriptionBroadcasts = List.unmodifiable(normalizedBroadcasts);
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
+  }
+
+  static TaskRegistry _resolveTaskRegistry(
+    TaskRegistry? registry,
+    Iterable<TaskHandler<Object?>> tasks,
+  ) {
+    final resolved = registry ?? InMemoryTaskRegistry();
+    tasks.forEach(resolved.register);
+    return resolved;
   }
 
   /// Broker used to consume and acknowledge deliveries.

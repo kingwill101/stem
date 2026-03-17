@@ -43,7 +43,7 @@ final priorityRegistry = RoutingRegistry(
 // #region routing-bootstrap
 Future<(Stem, Worker)> bootstrapStem() async {
   final routing = await loadRouting();
-  final registry = SimpleTaskRegistry()..register(EmailTask());
+  final tasks = [EmailTask()];
   final config = StemConfig.fromEnvironment();
   final subscription = RoutingSubscription(
     queues: config.workerQueues.isEmpty
@@ -54,15 +54,15 @@ Future<(Stem, Worker)> bootstrapStem() async {
 
   final stem = Stem(
     broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    registry: registry,
     backend: InMemoryResultBackend(),
+    tasks: tasks,
     routing: routing,
   );
 
   final worker = Worker(
     broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    registry: registry,
     backend: InMemoryResultBackend(),
+    tasks: tasks,
     subscription: subscription,
   );
 

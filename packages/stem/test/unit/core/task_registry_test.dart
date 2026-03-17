@@ -115,9 +115,9 @@ class _Args {
 }
 
 void main() {
-  group('SimpleTaskRegistry', () {
+  group('InMemoryTaskRegistry', () {
     test('emits registration events', () async {
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final events = <TaskRegistrationEvent>[];
       final sub = registry.onRegister.listen(events.add);
 
@@ -138,7 +138,7 @@ void main() {
       expect(events.last.handler, same(second));
     });
     test('throws when registering duplicate handler without override', () {
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_DuplicateHandler('sample.task'));
 
       expect(
@@ -154,7 +154,7 @@ void main() {
     });
 
     test('allows overriding when requested explicitly', () {
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final original = _TestHandler('sample.task');
       final replacement = _TestHandler('sample.task');
 
@@ -166,7 +166,7 @@ void main() {
     });
 
     test('exposes registered handlers as read-only list', () {
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_TestHandler('first'))
         ..register(_TestHandler('second'));
 
@@ -208,9 +208,10 @@ void main() {
 
     test('enqueues via Stem.enqueueCall', () async {
       final broker = _FakeBroker();
-      final registry = SimpleTaskRegistry()
-        ..register(_TestHandler('demo.task'));
-      final stem = Stem(broker: broker, registry: registry);
+      final stem = Stem(
+        broker: broker,
+        tasks: [_TestHandler('demo.task')],
+      );
 
       final definition = TaskDefinition<_Args, void>(
         name: 'demo.task',

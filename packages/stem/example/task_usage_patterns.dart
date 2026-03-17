@@ -69,33 +69,30 @@ FutureOr<Object?> invocationParentEntrypoint(
 }
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()
-    ..register(ParentTask())
-    ..register(
-      FunctionTaskHandler<String>.inline(
-        name: childDefinition.name,
-        entrypoint: childEntrypoint,
-        options: const TaskOptions(queue: 'default'),
-        metadata: childDefinition.metadata,
-      ),
-    )
-    ..register(
-      FunctionTaskHandler<void>.inline(
-        name: 'tasks.invocation_parent',
-        entrypoint: invocationParentEntrypoint,
-        options: const TaskOptions(queue: 'default'),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    ParentTask(),
+    FunctionTaskHandler<String>.inline(
+      name: childDefinition.name,
+      entrypoint: childEntrypoint,
+      options: const TaskOptions(queue: 'default'),
+      metadata: childDefinition.metadata,
+    ),
+    FunctionTaskHandler<void>.inline(
+      name: 'tasks.invocation_parent',
+      entrypoint: invocationParentEntrypoint,
+      options: const TaskOptions(queue: 'default'),
+    ),
+  ];
 
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     consumerName: 'example-worker',
   );
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: tasks);
 
   unawaited(worker.start());
 

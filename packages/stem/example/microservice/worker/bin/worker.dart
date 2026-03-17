@@ -76,25 +76,22 @@ Future<void> main(List<String> args) async {
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-worker-signer
 
-  final registry = SimpleTaskRegistry();
-  for (final spec in _taskSpecs) {
+  final tasks = _taskSpecs.map<TaskHandler<Object?>>((spec) {
     final entrypoint = _taskEntrypoints[spec.name];
     if (entrypoint == null) {
       throw StateError('Missing task entrypoint for ${spec.name}');
     }
-    registry.register(
-      FunctionTaskHandler<String>(
-        name: spec.name,
-        entrypoint: entrypoint,
-        options: TaskOptions(
-          queue: spec.queue,
-          maxRetries: spec.maxRetries,
-          softTimeLimit: spec.softLimit,
-          hardTimeLimit: spec.hardLimit,
-        ),
+    return FunctionTaskHandler<String>(
+      name: spec.name,
+      entrypoint: entrypoint,
+      options: TaskOptions(
+        queue: spec.queue,
+        maxRetries: spec.maxRetries,
+        softTimeLimit: spec.softLimit,
+        hardTimeLimit: spec.hardLimit,
       ),
     );
-  }
+  }).toList(growable: false);
 
   final observability = ObservabilityConfig.fromEnvironment();
   final configuredWorkerName = Platform.environment['STEM_WORKER_NAME']?.trim();
@@ -110,7 +107,7 @@ Future<void> main(List<String> args) async {
   // #region signing-worker-wire
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: queue,
     consumerName: resolvedWorkerName,

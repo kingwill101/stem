@@ -63,18 +63,17 @@ Future<Stem> _buildRedisStem(StemConfig config) async {
   }
   final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'redis.only',
-        entrypoint: _noopEntrypoint,
-        options: TaskOptions(queue: config.defaultQueue),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'redis.only',
+      entrypoint: _noopEntrypoint,
+      options: TaskOptions(queue: config.defaultQueue),
+    ),
+  ];
 
   return Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
@@ -94,18 +93,17 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
     connectionString: backendUrl,
   );
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'postgres.only',
-        entrypoint: _noopEntrypoint,
-        options: TaskOptions(queue: config.defaultQueue),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'postgres.only',
+      entrypoint: _noopEntrypoint,
+      options: TaskOptions(queue: config.defaultQueue),
+    ),
+  ];
 
   return Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );

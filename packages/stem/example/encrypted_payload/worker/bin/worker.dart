@@ -24,23 +24,22 @@ Future<void> main(List<String> args) async {
   );
   final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'secure.report',
-        entrypoint: (context, args) =>
-            _encryptedEntrypoint(context, args, cipher, secretKey),
-        options: TaskOptions(
-          queue: config.defaultQueue,
-          maxRetries: 5,
-          softTimeLimit: const Duration(seconds: 5),
-        ),
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'secure.report',
+      entrypoint: (context, args) =>
+          _encryptedEntrypoint(context, args, cipher, secretKey),
+      options: TaskOptions(
+        queue: config.defaultQueue,
+        maxRetries: 5,
+        softTimeLimit: const Duration(seconds: 5),
       ),
-    );
+    ),
+  ];
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: config.defaultQueue,
     consumerName: 'encrypted-worker-1',

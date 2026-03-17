@@ -9,8 +9,8 @@ final InMemoryResultBackend _autoscaleBackend = InMemoryResultBackend();
 // #region worker-control-autoscale
 final worker = Worker(
   broker: _autoscaleBroker,
-  registry: SimpleTaskRegistry(),
   backend: _autoscaleBackend,
+  tasks: const [],
   queue: 'critical',
   concurrency: 12,
   autoscale: const WorkerAutoscaleConfig(
@@ -97,8 +97,8 @@ final InMemoryResultBackend _lifecycleBackend = InMemoryResultBackend();
 // #region worker-control-lifecycle
 final lifecycleWorker = Worker(
   broker: _lifecycleBroker,
-  registry: SimpleTaskRegistry(),
   backend: _lifecycleBackend,
+  tasks: const [],
   lifecycle: const WorkerLifecycleConfig(
     maxTasksPerIsolate: 500,
     maxMemoryPerIsolateBytes: 512 * 1024 * 1024,
