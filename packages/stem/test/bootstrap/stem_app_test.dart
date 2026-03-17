@@ -399,6 +399,39 @@ void main() {
       }
     });
 
+    test('fromUrl registers provided tasks', () async {
+      final helperTask = FunctionTaskHandler<void>(
+        name: 'workflow.task.helper',
+        entrypoint: (context, args) async {},
+        runInIsolate: false,
+      );
+      final adapter = TestStoreAdapter(
+        scheme: 'test',
+        adapterName: 'bootstrap-test-adapter',
+        broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+        backend: StemBackendFactory(
+          create: () async => InMemoryResultBackend(),
+        ),
+        workflow: WorkflowStoreFactory(
+          create: () async => InMemoryWorkflowStore(),
+        ),
+      );
+
+      final workflowApp = await StemWorkflowApp.fromUrl(
+        'test://localhost',
+        adapters: [adapter],
+        tasks: [helperTask],
+      );
+      try {
+        expect(
+          workflowApp.app.registry.resolve('workflow.task.helper'),
+          same(helperTask),
+        );
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('fromUrl shuts down app when workflow bootstrap fails', () async {
       final createdLockStore = InMemoryLockStore();
       final createdRevokeStore = InMemoryRevokeStore();

@@ -4,6 +4,7 @@ import 'package:stem/src/bootstrap/stem_client.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/contracts.dart' show TaskHandler;
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -228,6 +229,7 @@ class StemWorkflowApp {
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     StemApp? stemApp,
     StemBrokerFactory? broker,
     StemBackendFactory? backend,
@@ -272,6 +274,7 @@ class StemWorkflowApp {
       introspectionSink: introspectionSink,
     );
 
+    tasks.forEach(appInstance.register);
     appInstance.register(runtime.workflowRunnerHandler());
 
     workflows.forEach(runtime.registerWorkflow);
@@ -306,6 +309,7 @@ class StemWorkflowApp {
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
@@ -320,6 +324,7 @@ class StemWorkflowApp {
       workflows: workflows,
       flows: flows,
       scripts: scripts,
+      tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
       storeFactory: WorkflowStoreFactory.inMemory(),
@@ -345,6 +350,7 @@ class StemWorkflowApp {
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     Iterable<StemStoreAdapter> adapters = const [],
     StemStoreOverrides overrides = const StemStoreOverrides(),
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
@@ -394,6 +400,7 @@ class StemWorkflowApp {
         workflows: workflows,
         flows: flows,
         scripts: scripts,
+        tasks: tasks,
         stemApp: app,
         storeFactory: stack.workflowStore,
         eventBusFactory: eventBusFactory,
@@ -421,6 +428,7 @@ class StemWorkflowApp {
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
@@ -436,6 +444,7 @@ class StemWorkflowApp {
       workflows: workflows,
       flows: flows,
       scripts: scripts,
+      tasks: tasks,
       stemApp: appInstance,
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
