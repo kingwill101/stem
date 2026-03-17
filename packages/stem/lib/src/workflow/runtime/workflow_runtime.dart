@@ -28,7 +28,9 @@ library;
 
 import 'dart:async';
 
+import 'package:contextual/contextual.dart' show Context;
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/observability/logging.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/signals/emitter.dart';
@@ -402,6 +404,14 @@ class WorkflowRuntime {
       final wasSuspended = runState.status == WorkflowStatus.suspended;
       await _store.markRunning(runId);
       if (wasSuspended) {
+        stemLogger.debug(
+          'Workflow {workflow} resumed',
+          _runtimeLogContext(
+            workflow: runState.workflow,
+            runId: runId,
+            extra: {'runtimeId': _runtimeId},
+          ),
+        );
         await _signals.workflowRunResumed(
           WorkflowRunPayload(
             runId: runId,
@@ -532,6 +542,19 @@ class WorkflowRuntime {
           return;
         } catch (error, stack) {
           await _store.markFailed(runId, error, stack);
+          stemLogger.warning(
+            'Workflow {workflow} failed',
+            _runtimeLogContext(
+              workflow: runState.workflow,
+              runId: runId,
+              step: step.name,
+              extra: {
+                'error': error.toString(),
+                'stack': stack.toString(),
+                'runtimeId': _runtimeId,
+              },
+            ),
+          );
           await _recordStepEvent(
             WorkflowStepEventType.failed,
             runState,
@@ -598,6 +621,20 @@ class WorkflowRuntime {
                 },
               ),
             );
+            stemLogger.debug(
+              'Workflow {workflow} suspended',
+              _runtimeLogContext(
+                workflow: runState.workflow,
+                runId: runId,
+                step: step.name,
+                extra: {
+                  'workflowSuspensionType': 'sleep',
+                  'resumeAt': resumeAt.toIso8601String(),
+                  'workflowIteration': iteration,
+                  'runtimeId': _runtimeId,
+                },
+              ),
+            );
           } else if (control.type == FlowControlType.waitForEvent) {
             metadata['type'] = 'event';
             metadata['topic'] = control.topic;
@@ -635,6 +672,21 @@ class WorkflowRuntime {
                 },
               ),
             );
+            stemLogger.debug(
+              'Workflow {workflow} suspended',
+              _runtimeLogContext(
+                workflow: runState.workflow,
+                runId: runId,
+                step: step.name,
+                extra: {
+                  'workflowSuspensionType': 'event',
+                  'topic': control.topic!,
+                  'workflowIteration': iteration,
+                  if (deadline != null) 'deadline': deadline.toIso8601String(),
+                  'runtimeId': _runtimeId,
+                },
+              ),
+            );
           }
           return;
         }
@@ -658,7 +710,14 @@ class WorkflowRuntime {
       }
 
       await _store.markCompleted(runId, previousResult);
-      await _extendLeases(taskContext, runId);
+      stemLogger.debug(
+        'Workflow {workflow} completed',
+        _runtimeLogContext(
+          workflow: runState.workflow,
+          runId: runId,
+          extra: {'runtimeId': _runtimeId},
+        ),
+      );
       await _signals.workflowRunCompleted(
         WorkflowRunPayload(
           runId: runId,
@@ -688,6 +747,14 @@ class WorkflowRuntime {
     final wasSuspended = runState.status == WorkflowStatus.suspended;
     await _store.markRunning(runId);
     if (wasSuspended) {
+      stemLogger.debug(
+        'Workflow {workflow} resumed',
+        _runtimeLogContext(
+          workflow: runState.workflow,
+          runId: runId,
+          extra: {'runtimeId': _runtimeId},
+        ),
+      );
       await _signals.workflowRunResumed(
         WorkflowRunPayload(
           runId: runId,
@@ -719,7 +786,14 @@ class WorkflowRuntime {
         return;
       }
       await _store.markCompleted(runId, result);
-      await _extendLeases(taskContext, runId);
+      stemLogger.debug(
+        'Workflow {workflow} completed',
+        _runtimeLogContext(
+          workflow: runState.workflow,
+          runId: runId,
+          extra: {'runtimeId': _runtimeId},
+        ),
+      );
       await _signals.workflowRunCompleted(
         WorkflowRunPayload(
           runId: runId,
@@ -734,6 +808,19 @@ class WorkflowRuntime {
       return;
     } catch (error, stack) {
       await _store.markFailed(runId, error, stack);
+      stemLogger.warning(
+        'Workflow {workflow} failed',
+        _runtimeLogContext(
+          workflow: runState.workflow,
+          runId: runId,
+          step: execution.lastStepName,
+          extra: {
+            'error': error.toString(),
+            'stack': stack.toString(),
+            'runtimeId': _runtimeId,
+          },
+        ),
+      );
       await _signals.workflowRunFailed(
         WorkflowRunPayload(
           runId: runId,
@@ -963,6 +1050,20 @@ class WorkflowRuntime {
       meta: meta,
       options: TaskOptions(queue: targetQueue),
     );
+    stemLogger.debug(
+      'Workflow {workflow} enqueued',
+      _runtimeLogContext(
+        workflow: workflow ?? '',
+        runId: runId,
+        extra: {
+          'workflowChannel': WorkflowChannelKind.orchestration.name,
+          'workflowContinuation': continuation,
+          'workflowReason': reason.name,
+          'queue': targetQueue,
+          'runtimeId': _runtimeId,
+        },
+      ),
+    );
   }
 
   /// Builds workflow metadata injected into step task enqueues.
@@ -1008,6 +1109,24 @@ class WorkflowRuntime {
         targetExecutionQueue,
         fallback: executionQueue,
       ),
+    );
+  }
+
+  Context _runtimeLogContext({
+    required String workflow,
+    required String runId,
+    String? step,
+    Map<String, Object?> extra = const {},
+  }) {
+    return stemLogContext(
+      component: 'stem',
+      subsystem: 'workflow',
+      fields: {
+        'workflow': workflow,
+        'workflowRunId': runId,
+        if (step != null && step.isNotEmpty) 'workflowStep': step,
+        ...extra,
+      },
     );
   }
 
@@ -1394,6 +1513,20 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
           metadata: {'type': 'sleep', 'resumeAt': resumeAt.toIso8601String()},
         ),
       );
+      stemLogger.debug(
+        'Workflow {workflow} suspended',
+        runtime._runtimeLogContext(
+          workflow: workflow,
+          runId: runId,
+          step: stepName,
+          extra: {
+            'workflowSuspensionType': 'sleep',
+            'resumeAt': resumeAt.toIso8601String(),
+            'workflowIteration': iteration,
+            'runtimeId': runtime._runtimeId,
+          },
+        ),
+      );
     } else if (control.type == _ScriptControlType.waitForEvent) {
       metadata['type'] = 'event';
       metadata['topic'] = control.topic;
@@ -1424,6 +1557,21 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
             'type': 'waitForEvent',
             'topic': control.topic,
             if (deadline != null) 'deadline': deadline.toIso8601String(),
+          },
+        ),
+      );
+      stemLogger.debug(
+        'Workflow {workflow} suspended',
+        runtime._runtimeLogContext(
+          workflow: workflow,
+          runId: runId,
+          step: stepName,
+          extra: {
+            'workflowSuspensionType': 'event',
+            'topic': control.topic!,
+            'workflowIteration': iteration,
+            if (deadline != null) 'deadline': deadline.toIso8601String(),
+            'runtimeId': runtime._runtimeId,
           },
         ),
       );
@@ -1593,7 +1741,8 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
       if (inherited.queue == 'default' && executionQueue != 'default') {
         resolvedOptions = inherited.copyWith(queue: executionQueue);
       }
-    } else if (resolvedOptions.queue == 'default' && executionQueue != 'default') {
+    } else if (resolvedOptions.queue == 'default' &&
+        executionQueue != 'default') {
       resolvedOptions = resolvedOptions.copyWith(queue: executionQueue);
     }
     final mergedCall = call.copyWith(

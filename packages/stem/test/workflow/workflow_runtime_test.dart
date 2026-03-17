@@ -1,3 +1,4 @@
+import 'package:contextual/contextual.dart' show Level, LogDriver, LogEntry;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -61,34 +62,43 @@ void main() {
     expect(await store.readStep<String>(runId, 'finish'), 'ready-done');
   });
 
-  test('startWorkflow persists runtime metadata and strips internal params', () async {
-    runtime.registerWorkflow(
-      Flow(
-        name: 'metadata.workflow',
-        build: (flow) {
-          flow.step('inspect', (context) async => context.params['tenant']);
-        },
-      ).definition,
-    );
+  test(
+    'startWorkflow persists runtime metadata and strips internal params',
+    () async {
+      runtime.registerWorkflow(
+        Flow(
+          name: 'metadata.workflow',
+          build: (flow) {
+            flow.step('inspect', (context) async => context.params['tenant']);
+          },
+        ).definition,
+      );
 
-    final runId = await runtime.startWorkflow(
-      'metadata.workflow',
-      params: const {'tenant': 'acme'},
-    );
+      final runId = await runtime.startWorkflow(
+        'metadata.workflow',
+        params: const {'tenant': 'acme'},
+      );
 
-    final state = await store.get(runId);
-    expect(state, isNotNull);
-    expect(state!.params.containsKey(workflowRuntimeMetadataParamKey), isTrue);
-    expect(state.workflowParams, equals(const {'tenant': 'acme'}));
-    expect(state.orchestrationQueue, equals(runtime.queue));
-    expect(state.executionQueue, equals(runtime.executionQueue));
-    expect(state.workflowParams.containsKey(workflowRuntimeMetadataParamKey), isFalse);
-    expect(introspection.runtimeEvents, isNotEmpty);
-    expect(
-      introspection.runtimeEvents.last.type,
-      equals(WorkflowRuntimeEventType.continuationEnqueued),
-    );
-  });
+      final state = await store.get(runId);
+      expect(state, isNotNull);
+      expect(
+        state!.params.containsKey(workflowRuntimeMetadataParamKey),
+        isTrue,
+      );
+      expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(state.orchestrationQueue, equals(runtime.queue));
+      expect(state.executionQueue, equals(runtime.executionQueue));
+      expect(
+        state.workflowParams.containsKey(workflowRuntimeMetadataParamKey),
+        isFalse,
+      );
+      expect(introspection.runtimeEvents, isNotEmpty);
+      expect(
+        introspection.runtimeEvents.last.type,
+        equals(WorkflowRuntimeEventType.continuationEnqueued),
+      );
+    },
+  );
 
   test('viewRunDetail exposes uniform run and step views', () async {
     runtime.registerWorkflow(
@@ -935,6 +945,87 @@ void main() {
     expect(meta['origin'], 'direct');
   });
 
+  test(
+    'emits workflow lifecycle logs for enqueue, suspension, and completion',
+    () async {
+      final driver = _RecordingLogDriver();
+      stemLogger
+        ..addChannel(
+          'workflow-runtime-log-test-${DateTime.now().microsecondsSinceEpoch}',
+          driver,
+        )
+        ..setLevel(Level.debug);
+
+      runtime.registerWorkflow(
+        Flow(
+          name: 'logging.suspend.workflow',
+          build: (flow) {
+            flow.step('wait', (context) async {
+              context.sleep(const Duration(milliseconds: 20));
+              return null;
+            });
+          },
+        ).definition,
+      );
+      runtime.registerWorkflow(
+        Flow(
+          name: 'logging.complete.workflow',
+          build: (flow) {
+            flow.step('finish', (context) async => 'done');
+          },
+        ).definition,
+      );
+
+      final suspendedRunId = await runtime.startWorkflow(
+        'logging.suspend.workflow',
+      );
+      await runtime.executeRun(suspendedRunId);
+
+      final completedRunId = await runtime.startWorkflow(
+        'logging.complete.workflow',
+      );
+      await runtime.executeRun(completedRunId);
+
+      LogEntry findEntry(String runId, String message) =>
+          driver.entries.firstWhere(
+            (entry) =>
+                entry.record.message == message &&
+                entry.record.context.all()['workflowRunId'] == runId,
+          );
+
+      final enqueued = driver.entries.firstWhere(
+        (entry) =>
+            entry.record.message == 'Workflow {workflow} enqueued' &&
+            entry.record.context.all()['workflowRunId'] == suspendedRunId &&
+            entry.record.context.all()['workflowReason'] == 'start',
+      );
+      expect(
+        enqueued.record.context.all()['workflow'],
+        equals('logging.suspend.workflow'),
+      );
+      expect(enqueued.record.context.all()['workflowReason'], equals('start'));
+
+      final suspended = findEntry(
+        suspendedRunId,
+        'Workflow {workflow} suspended',
+      );
+      expect(suspended.record.context.all()['workflowStep'], equals('wait'));
+      expect(
+        suspended.record.context.all()['workflowSuspensionType'],
+        equals('sleep'),
+      );
+
+      final completed = findEntry(
+        completedRunId,
+        'Workflow {workflow} completed',
+      );
+      expect(
+        completed.record.context.all()['workflow'],
+        equals('logging.complete.workflow'),
+      );
+    },
+  );
+
   test('enqueue builder in steps includes workflow metadata', () async {
     const taskName = 'tasks.meta.builder';
     registry.register(
@@ -998,5 +1089,16 @@ class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
   @override
   Future<void> recordRuntimeEvent(WorkflowRuntimeEvent event) async {
     runtimeEvents.add(event);
+  }
+}
+
+class _RecordingLogDriver extends LogDriver {
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
+
+  final List<LogEntry> entries;
+
+  @override
+  Future<void> log(LogEntry entry) async {
+    entries.add(entry);
   }
 }

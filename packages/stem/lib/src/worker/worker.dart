@@ -909,14 +909,7 @@ class Worker {
 
         stemLogger.debug(
           'Task {task} started',
-          Context(
-            _logContext({
-              'task': envelope.name,
-              'id': envelope.id,
-              'attempt': envelope.attempt,
-              'queue': envelope.queue,
-            }),
-          ),
+          Context(_deliveryLogContext(envelope)),
         );
         StemMetrics.instance.increment(
           'stem.tasks.started',
@@ -1036,15 +1029,7 @@ class Worker {
           _completedCount += 1;
           stemLogger.debug(
             'Task {task} succeeded',
-            Context(
-              _logContext({
-                'task': envelope.name,
-                'id': envelope.id,
-                'attempt': envelope.attempt,
-                'queue': envelope.queue,
-                'worker': consumerName ?? 'unknown',
-              }),
-            ),
+            Context(_deliveryLogContext(envelope)),
           );
           _events.add(
             WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
@@ -1939,14 +1924,13 @@ class Worker {
     stemLogger.error(
       'Task {task} signature verification failed',
       Context(
-        _logContext({
-          'task': envelope.name,
-          'id': envelope.id,
-          'queue': envelope.queue,
-          'worker': consumerName ?? 'unknown',
-          'error': error.message,
-          if (error.keyId != null) 'keyId': error.keyId!,
-        }),
+        _deliveryLogContext(
+          envelope,
+          extra: {
+            'error': error.message,
+            if (error.keyId != null) 'keyId': error.keyId!,
+          },
+        ),
       ),
     );
 
@@ -2075,6 +2059,20 @@ class Worker {
         reason: error,
         nextRetryAt: nextRunAt,
       );
+      stemLogger.debug(
+        'Task {task} scheduled for retry',
+        Context(
+          _deliveryLogContext(
+            envelope,
+            extra: {
+              'error': error.toString(),
+              'retryAfterMs': delay.inMilliseconds,
+              'nextAttempt': retryEnvelope.attempt,
+              'nextRunAt': nextRunAt.toIso8601String(),
+            },
+          ),
+        ),
+      );
       return TaskState.retried;
     } else {
       final failureMeta = _statusMeta(
@@ -2121,15 +2119,13 @@ class Worker {
       stemLogger.warning(
         'Task {task} failed: {error}',
         Context(
-          _logContext({
-            'task': envelope.name,
-            'id': envelope.id,
-            'attempt': envelope.attempt,
-            'queue': envelope.queue,
-            'worker': consumerName ?? 'unknown',
-            'error': error.toString(),
-            'stack': stack.toString(),
-          }),
+          _deliveryLogContext(
+            envelope,
+            extra: {
+              'error': error.toString(),
+              'stack': stack.toString(),
+            },
+          ),
         ),
       );
       _events.add(
@@ -2267,6 +2263,19 @@ class Worker {
       _workerInfoSnapshot,
       reason: request,
       nextRetryAt: notBefore,
+    );
+    stemLogger.debug(
+      'Task {task} retry requested',
+      Context(
+        _deliveryLogContext(
+          envelope,
+          extra: {
+            'retryAfterMs': delay.inMilliseconds,
+            'nextAttempt': retryEnvelope.attempt,
+            'nextRunAt': notBefore.toIso8601String(),
+          },
+        ),
+      ),
     );
     return TaskState.retried;
   }
@@ -2710,6 +2719,120 @@ class Worker {
     return {...context, ...traceFields};
   }
 
+  Map<String, Object?> _deliveryLogContext(
+    Envelope envelope, {
+    Map<String, Object?> extra = const {},
+  }) {
+    final fields = <String, Object?>{
+      'task': envelope.name,
+      'id': envelope.id,
+      'attempt': envelope.attempt,
+      'queue': envelope.queue,
+      ...extra,
+    };
+    _appendEnvelopeMetaLogFields(fields, envelope.meta);
+    return _logContext(fields.cast<String, Object>());
+  }
+
+  void _appendEnvelopeMetaLogFields(
+    Map<String, Object?> fields,
+    Map<String, Object?> meta,
+  ) {
+    final workflowChannel = _metaString(meta, const [
+      'stem.workflow.channel',
+      'workflow.channel',
+    ]);
+    if (workflowChannel != null) {
+      fields.putIfAbsent('workflowChannel', () => workflowChannel);
+    }
+
+    final workflowContinuation = _metaBool(meta, const [
+      'stem.workflow.continuation',
+      'workflow.continuation',
+    ]);
+    if (workflowContinuation != null) {
+      fields.putIfAbsent('workflowContinuation', () => workflowContinuation);
+    }
+
+    final workflowReason = _metaString(meta, const [
+      'stem.workflow.continuationReason',
+      'workflow.continuationReason',
+    ]);
+    if (workflowReason != null) {
+      fields.putIfAbsent('workflowReason', () => workflowReason);
+    }
+
+    final workflowRunId = _metaString(meta, const [
+      'stem.workflow.runId',
+      'workflow.runId',
+      'stem.workflow.run_id',
+    ]);
+    if (workflowRunId != null) {
+      fields.putIfAbsent('workflowRunId', () => workflowRunId);
+    }
+
+    final workflowId = _metaString(meta, const [
+      'stem.workflow.id',
+      'workflow.id',
+    ]);
+    if (workflowId != null) {
+      fields.putIfAbsent('workflowId', () => workflowId);
+    }
+
+    final workflowName = _metaString(meta, const [
+      'stem.workflow.name',
+      'workflow.name',
+    ]);
+    if (workflowName != null) {
+      fields.putIfAbsent('workflow', () => workflowName);
+    }
+
+    final workflowStep = _metaString(meta, const [
+      'stem.workflow.step',
+      'workflow.step',
+      'stem.workflow.stepName',
+      'workflow.stepName',
+      'stepName',
+      'step',
+    ]);
+    if (workflowStep != null) {
+      fields.putIfAbsent('workflowStep', () => workflowStep);
+    }
+
+    final workflowStepId = _metaString(meta, const [
+      'stem.workflow.stepId',
+      'workflow.stepId',
+      'stepId',
+    ]);
+    if (workflowStepId != null) {
+      fields.putIfAbsent('workflowStepId', () => workflowStepId);
+    }
+
+    final workflowStepIndex = _metaInt(meta, const [
+      'stem.workflow.stepIndex',
+      'stem.workflow.step_index',
+    ]);
+    if (workflowStepIndex != null) {
+      fields.putIfAbsent('workflowStepIndex', () => workflowStepIndex);
+    }
+
+    final workflowIteration = _metaInt(meta, const [
+      'stem.workflow.iteration',
+    ]);
+    if (workflowIteration != null) {
+      fields.putIfAbsent('workflowIteration', () => workflowIteration);
+    }
+
+    final workflowStepAttempt = _metaInt(meta, const [
+      'stem.workflow.stepAttempt',
+      'workflow.stepAttempt',
+      'stepAttempt',
+    ]);
+    if (workflowStepAttempt != null) {
+      fields.putIfAbsent('workflowStepAttempt', () => workflowStepAttempt);
+    }
+  }
+
   Map<String, Object> _deliverySpanAttributes(Envelope envelope) {
     final attributes = <String, Object>{
       'stem.task': envelope.name,
@@ -2845,6 +2968,25 @@ class Worker {
         final parsed = int.tryParse(value.trim());
         if (parsed != null) {
           return parsed;
+        }
+      }
+    }
+    return null;
+  }
+
+  bool? _metaBool(Map<String, Object?> meta, List<String> keys) {
+    for (final key in keys) {
+      final value = meta[key];
+      if (value is bool) {
+        return value;
+      }
+      if (value is String) {
+        final normalized = value.trim().toLowerCase();
+        if (normalized == 'true') {
+          return true;
+        }
+        if (normalized == 'false') {
+          return false;
         }
       }
     }

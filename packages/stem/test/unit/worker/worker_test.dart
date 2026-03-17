@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:isolate';
 
+import 'package:contextual/contextual.dart' show Level, LogDriver, LogEntry;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -51,6 +52,80 @@ void main() {
       expect(status?.state, TaskState.succeeded);
 
       await sub.cancel();
+      await worker.shutdown();
+      broker.dispose();
+    });
+
+    test('includes workflow metadata in task lifecycle logs', () async {
+      final driver = _RecordingLogDriver();
+      stemLogger
+        ..addChannel(
+          'worker-log-test-${DateTime.now().microsecondsSinceEpoch}',
+          driver,
+        )
+        ..setLevel(Level.debug);
+
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 10),
+        claimInterval: const Duration(milliseconds: 40),
+      );
+      final backend = InMemoryResultBackend();
+      final registry = SimpleTaskRegistry()..register(_SuccessTask());
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'worker-log-metadata',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      await worker.start();
+
+      final stem = Stem(broker: broker, registry: registry, backend: backend);
+      final taskId = await stem.enqueue(
+        'tasks.success',
+        meta: const {
+          'stem.workflow.channel': 'orchestration',
+          'stem.workflow.continuation': true,
+          'stem.workflow.continuationReason': 'due',
+          'stem.workflow.runId': 'run-123',
+          'stem.workflow.id': 'wf-123',
+          'stem.workflow.name': 'demo.workflow',
+          'stem.workflow.step': 'wait',
+          'stem.workflow.stepIndex': 2,
+          'stem.workflow.iteration': 1,
+        },
+      );
+
+      await _waitForTaskState(backend, taskId, TaskState.succeeded);
+      await Future<void>.delayed(Duration.zero);
+
+      LogEntry startedEntry() => driver.entries.firstWhere(
+        (entry) =>
+            entry.record.message == 'Task {task} started' &&
+            entry.record.context.all()['id'] == taskId,
+      );
+
+      LogEntry succeededEntry() => driver.entries.firstWhere(
+        (entry) =>
+            entry.record.message == 'Task {task} succeeded' &&
+            entry.record.context.all()['id'] == taskId,
+      );
+
+      for (final entry in [startedEntry(), succeededEntry()]) {
+        final context = entry.record.context.all();
+        expect(context['workflowChannel'], equals('orchestration'));
+        expect(context['workflowContinuation'], isTrue);
+        expect(context['workflowReason'], equals('due'));
+        expect(context['workflowRunId'], equals('run-123'));
+        expect(context['workflowId'], equals('wf-123'));
+        expect(context['workflow'], equals('demo.workflow'));
+        expect(context['workflowStep'], equals('wait'));
+        expect(context['workflowStepIndex'], equals(2));
+        expect(context['workflowIteration'], equals(1));
+      }
+
       await worker.shutdown();
       broker.dispose();
     });
@@ -1892,6 +1967,17 @@ class _FixedRetryStrategy implements RetryStrategy {
 
   @override
   Duration nextDelay(int attempt, Object error, StackTrace stackTrace) => delay;
+}
+
+class _RecordingLogDriver extends LogDriver {
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
+
+  final List<LogEntry> entries;
+
+  @override
+  Future<void> log(LogEntry entry) async {
+    entries.add(entry);
+  }
 }
 
 class _FlakyTask implements TaskHandler<void> {
