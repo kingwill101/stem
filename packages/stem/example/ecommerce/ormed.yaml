@@ -1,0 +1,9 @@
+driver:
+  type: sqlite
+  options:
+    database: ${ECOMMERCE_DB_PATH:-database/ecommerce.sqlite}
+migrations:
+  directory: lib/src/database/migrations
+  registry: lib/src/database/migrations.dart
+  ledger_table: orm_migrations
+  schema_dump: database/schema.sql
