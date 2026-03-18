@@ -129,7 +129,7 @@ Future<WorkflowCliContext> createDefaultWorkflowContext({
   final env = environment ?? Platform.environment;
   final config = StemConfig.fromEnvironment(env);
   final cliContext = await createDefaultContext(environment: env);
-  final registry = cliContext.registry ?? SimpleTaskRegistry();
+  final registry = cliContext.registry ?? InMemoryTaskRegistry();
   final stem = Stem(
     broker: cliContext.broker,
     registry: registry,

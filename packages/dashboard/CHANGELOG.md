@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Updated the dashboard data layer to use Ormed 0.2.0.
 - Reworked the dashboard into a richer operations console with dedicated views
   for tasks, jobs, workflows, workers, failures, audit, events, namespaces, and
   search.

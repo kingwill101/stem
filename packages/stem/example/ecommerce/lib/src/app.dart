@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:isolate';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
@@ -27,16 +26,11 @@ class EcommerceServer {
 
   static Future<EcommerceServer> create({String? databasePath}) async {
     final commerceDatabasePath = await _resolveDatabasePath(databasePath);
-    final packageRoot = await _resolvePackageRoot();
-    final ormConfigPath = p.join(packageRoot, 'ormed.yaml');
     final stemDatabasePath = p.join(
       p.dirname(commerceDatabasePath),
       'stem_runtime.sqlite',
     );
-    final repository = await EcommerceRepository.open(
-      commerceDatabasePath,
-      ormConfigPath: ormConfigPath,
-    );
+    final repository = await EcommerceRepository.open(commerceDatabasePath);
     bindAddToCartWorkflowRepository(repository);
 
     final workflowApp = await StemWorkflowApp.fromUrl(
@@ -220,17 +214,6 @@ Future<String> _resolveDatabasePath(String? path) async {
   final directory = Directory(p.join('.dart_tool', 'ecommerce'));
   await directory.create(recursive: true);
   return p.join(directory.path, 'ecommerce.sqlite');
-}
-
-Future<String> _resolvePackageRoot() async {
-  final packageUri = await Isolate.resolvePackageUri(
-    Uri.parse('package:stem_ecommerce_example/ecommerce.dart'),
-  );
-  if (packageUri == null || packageUri.scheme != 'file') {
-    throw StateError('Unable to resolve package root for ecommerce example.');
-  }
-  final packageFilePath = packageUri.toFilePath();
-  return p.dirname(p.dirname(packageFilePath));
 }
 
 Future<Map<String, Object?>> _readJsonMap(Request request) async {

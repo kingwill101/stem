@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
@@ -26,12 +25,8 @@ void main() {
 
   test('fromDataSource runs migrations', () async {
     ensureSqliteDriverRegistration();
-    final dataSource = DataSource(
-      DataSourceOptions(
-        driver: SqliteDriverAdapter.file(dbFile.path),
-        registry: buildOrmRegistry(),
-        database: dbFile.path,
-      ),
+    final dataSource = buildOrmRegistry().sqliteFileDataSource(
+      path: dbFile.path,
     );
     final store = await SqliteWorkflowStore.fromDataSource(dataSource);
     try {

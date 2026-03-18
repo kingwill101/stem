@@ -2,6 +2,22 @@
 
 ## 0.1.1
 
+- Added workflow manifests, runtime metadata views, and run/step drilldown APIs
+  for inspecting workflow definitions and persisted execution state.
+- Improved workflow store contracts and runtime compatibility for caller-
+  supplied run ids and persisted runtime metadata attached to workflow params.
+- Added `tasks:`-first wiring across `Stem`, `Worker`, `Canvas`, and
+  `StemWorkflowApp`, removing the need for manual default-registry setup in
+  normal application code and examples.
+- Renamed the default in-memory task registry surface to
+  `InMemoryTaskRegistry` and refreshed docs/examples to teach `tasks: [...]`
+  rather than explicit registry construction.
+- Improved workflow logging with richer run/step context on worker lifecycle
+  lines plus enqueue/suspend/fail/complete runtime events.
+- Exported logging types from `package:stem/stem.dart`, including `Level`,
+  `Logger`, and `Context`.
+- Added an end-to-end ecommerce workflow example using mixed annotated/manual
+  workflows, `StemWorkflowApp`, and Ormed-backed SQLite models/migrations.
 - Expanded span attribution across enqueue/consume/execute with task identity,
   queue, worker, host, lineage, namespace, and workflow step metadata
   (`run_id`, `step`, `step_id`, `step_index`, `step_attempt`, `iteration`).

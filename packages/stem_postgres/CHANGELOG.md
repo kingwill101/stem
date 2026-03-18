@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1
+
+- Updated Ormed dependencies to 0.2.0 for the Postgres adapter stack.
+- Simplified explicit Postgres URL datasource bootstrapping to use the new
+  Ormed code-first datasource helper path.
+- Updated Postgres workflow stores to honor caller-provided run ids, keeping
+  adapter behavior aligned with workflow runtime metadata/manifests and the
+  shared workflow-store contract suite.
+
 ## 0.1.0
 
 - Normalized `postgresResultBackendFactory` to accept a positional `uri`

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
@@ -8,19 +6,9 @@ import 'migrations.dart';
 
 Future<DataSource> openEcommerceDataSource({
   required String databasePath,
-  required String ormConfigPath,
 }) async {
-  final configFile = File(ormConfigPath);
-  final baseConfig = loadOrmProjectConfig(configFile);
-  final config = baseConfig.updateActiveConnection(
-    driver: baseConfig.driver.copyWith(
-      options: {...baseConfig.driver.options, 'database': databasePath},
-    ),
-  );
-
   ensureSqliteDriverRegistration();
-
-  final dataSource = DataSource.fromConfig(config, registry: bootstrapOrm());
+  final dataSource = bootstrapOrm().sqliteFileDataSource(path: databasePath);
 
   await dataSource.init();
 
@@ -30,10 +18,7 @@ Future<DataSource> openEcommerceDataSource({
   }
   final schemaDriver = driver as SchemaDriver;
 
-  final ledger = SqlMigrationLedger(
-    driver,
-    tableName: config.migrations.ledgerTable,
-  );
+  final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
   await ledger.ensureInitialized();
 
   final runner = MigrationRunner(

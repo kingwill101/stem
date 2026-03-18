@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Updated the Redis workflow store to honor caller-provided run ids, matching
+  the runtime metadata/manifests contract used by the core workflow views.
 - Enabled broadcast fan-out broker contract coverage in Redis integration tests
   by wiring additional broker instances for shared-namespace fan-out checks.
 

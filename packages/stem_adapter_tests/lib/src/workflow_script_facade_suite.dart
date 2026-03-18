@@ -11,7 +11,6 @@ void runWorkflowScriptFacadeTests({
     WorkflowStore? store;
     InMemoryBroker? broker;
     InMemoryResultBackend? backend;
-    SimpleTaskRegistry? registry;
     Stem? stem;
     WorkflowRuntime? runtime;
     late FakeWorkflowClock clock;
@@ -21,8 +20,8 @@ void runWorkflowScriptFacadeTests({
       store = await factory.create(clock);
       broker = InMemoryBroker();
       backend = InMemoryResultBackend();
-      registry = SimpleTaskRegistry();
-      stem = Stem(broker: broker!, registry: registry!, backend: backend);
+      final currentRegistry = InMemoryTaskRegistry();
+      stem = Stem(broker: broker!, registry: currentRegistry, backend: backend);
       runtime = WorkflowRuntime(
         stem: stem!,
         store: store!,
@@ -30,7 +29,7 @@ void runWorkflowScriptFacadeTests({
         clock: clock,
         pollInterval: const Duration(milliseconds: 50),
       );
-      registry!.register(runtime!.workflowRunnerHandler());
+      currentRegistry.register(runtime!.workflowRunnerHandler());
     });
 
     tearDown(() async {
@@ -44,7 +43,6 @@ void runWorkflowScriptFacadeTests({
       store = null;
       broker = null;
       backend = null;
-      registry = null;
       stem = null;
       runtime = null;
     });

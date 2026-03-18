@@ -23,7 +23,7 @@ void main() {
 
     Future<WorkflowCliContext> _buildWorkflowContext() async {
       final broker = InMemoryBroker();
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final stem = Stem(broker: broker, registry: registry, backend: null);
       final runtime = WorkflowRuntime(
         stem: stem,
@@ -52,7 +52,7 @@ void main() {
         dispose: () async {
           broker.dispose();
         },
-        registry: SimpleTaskRegistry(),
+        registry: InMemoryTaskRegistry(),
       );
     }
 

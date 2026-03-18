@@ -7,8 +7,8 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  ormed: ^0.1.0
-  ormed_sqlite: ^0.1.0
+  ormed: ^0.2.0
+  ormed_sqlite: ^0.2.0
   path: ^1.9.1
   shelf: ^1.4.2
   shelf_router: ^1.1.4
@@ -19,7 +19,7 @@ dependencies:
 
 dev_dependencies:
   build_runner: ^2.10.5
-  ormed_cli: any
+  ormed_cli: ^0.2.0
   lints: ^6.0.0
   server_testing: ^0.3.2
   server_testing_shelf: ^0.3.2

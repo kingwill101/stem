@@ -2,6 +2,13 @@
 
 ## 0.1.1
 
+- Updated Ormed dependencies to 0.2.0, including the new split
+  `ormed_sqlite_core` runtime dependency.
+- Simplified SQLite datasource bootstrapping and migration tests to use the new
+  Ormed SQLite code-first datasource helpers.
+- Updated the SQLite workflow store to honor caller-provided run ids, keeping
+  local workflow runtime metadata/manifests behavior aligned with the shared
+  store contract suite.
 - Added broker broadcast fan-out support for SQLite routing subscriptions with
   broadcast channels.
 - Enabled broadcast fan-out broker contract coverage for the SQLite adapter.

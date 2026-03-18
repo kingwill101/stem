@@ -11,48 +11,31 @@ DataSource createDataSource({
   contextual.Logger? logger,
 }) {
   ensurePostgresDriverRegistration();
+  final registry = bootstrapOrm();
 
-  var config = (connectionString != null && connectionString.isNotEmpty)
-      ? OrmProjectConfig(
-          connections: {
-            'default': ConnectionDefinition(
-              name: 'default',
-              driver: DriverConfig(
-                type: 'postgres',
-                options: {
-                  'url': connectionString,
-                  if (logging) 'logging': true,
-                },
-              ),
-              migrations: MigrationSection(
-                directory: 'lib/src/database/migrations',
-                registry: 'lib/src/database/migrations.dart',
-                ledgerTable: 'orm_migrations',
-                schemaDump: 'database/schema.sql',
-              ),
-              seeds: SeedSection(
-                directory: 'lib/src/database/seeders',
-                registry: 'lib/src/database/seeders.dart',
-              ),
-            ),
-          },
-          activeConnectionName: 'default',
+  if (connectionString != null && connectionString.isNotEmpty) {
+    final options = registry
+        .postgresDataSourceOptionsFromEnv(
+          environment: {'DATABASE_URL': connectionString},
+          logging: logging,
         )
-      : loadOrmConfig();
+        .copyWith(logger: logger ?? stemLogger);
+    return DataSource(options);
+  }
 
-  if (connectionString == null || connectionString.isEmpty) {
-    if (logging) {
-      config = config.updateActiveConnection(
-        driver: config.driver.copyWith(
-          options: {...config.driver.options, 'logging': true},
-        ),
-      );
-    }
+  var config = loadOrmConfig();
+
+  if (logging) {
+    config = config.updateActiveConnection(
+      driver: config.driver.copyWith(
+        options: {...config.driver.options, 'logging': true},
+      ),
+    );
   }
 
   return DataSource.fromConfig(
     config,
-    registry: bootstrapOrm(),
+    registry: registry,
     logger: logger ?? stemLogger,
   );
 }

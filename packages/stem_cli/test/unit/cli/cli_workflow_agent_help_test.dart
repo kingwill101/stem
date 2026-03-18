@@ -20,7 +20,7 @@ StemCommandDependencies _deps(StringBuffer out, StringBuffer err) {
         dispose: () async {
           broker.dispose();
         },
-        registry: SimpleTaskRegistry(),
+        registry: InMemoryTaskRegistry(),
       );
     },
   );
@@ -45,7 +45,7 @@ void main() {
           dispose: () async {
             broker.dispose();
           },
-          registry: SimpleTaskRegistry(),
+          registry: InMemoryTaskRegistry(),
         );
       },
     );
@@ -77,7 +77,7 @@ void main() {
           dispose: () async {
             broker.dispose();
           },
-          registry: SimpleTaskRegistry(),
+          registry: InMemoryTaskRegistry(),
         );
       },
     );

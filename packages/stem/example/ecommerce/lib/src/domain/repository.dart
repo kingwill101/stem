@@ -18,17 +18,13 @@ class EcommerceRepository {
 
   int _idCounter = 0;
 
-  static Future<EcommerceRepository> open(
-    String databasePath, {
-    required String ormConfigPath,
-  }) async {
+  static Future<EcommerceRepository> open(String databasePath) async {
     final file = File(databasePath);
     await file.parent.create(recursive: true);
 
     final normalizedPath = p.normalize(databasePath);
     final dataSource = await openEcommerceDataSource(
       databasePath: normalizedPath,
-      ormConfigPath: ormConfigPath,
     );
 
     final repository = EcommerceRepository._(

@@ -76,13 +76,10 @@ Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
   }
 
   ensureSqliteDriverRegistration();
-  final driver = SqliteDriverAdapter.file(file.path);
-  final registry = buildOrmRegistry();
-  final dataSource = DataSource(
-    DataSourceOptions(driver: driver, registry: registry, database: file.path),
-  );
+  final dataSource = buildOrmRegistry().sqliteFileDataSource(path: file.path);
   await dataSource.init();
   if (!readOnly) {
+    final driver = dataSource.connection.driver;
     await driver.executeRaw('PRAGMA journal_mode=WAL;');
     await driver.executeRaw('PRAGMA synchronous=NORMAL;');
   }
