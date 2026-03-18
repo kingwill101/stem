@@ -75,7 +75,6 @@ Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
     file.parent.createSync(recursive: true);
   }
 
-  ensureSqliteDriverRegistration();
   final dataSource = buildOrmRegistry().sqliteFileDataSource(path: file.path);
   await dataSource.init();
   if (!readOnly) {
@@ -91,7 +90,6 @@ Future<void> _runMigrations(File file) async {
     file.parent.createSync(recursive: true);
   }
 
-  ensureSqliteDriverRegistration();
   final adapter = SqliteDriverAdapter.file(file.path);
   try {
     final ledger = SqlMigrationLedger(adapter, tableName: 'orm_migrations');
@@ -109,7 +107,6 @@ Future<void> _runMigrations(File file) async {
 }
 
 Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
-  ensureSqliteDriverRegistration();
   if (!dataSource.isInitialized) {
     await dataSource.init();
   }

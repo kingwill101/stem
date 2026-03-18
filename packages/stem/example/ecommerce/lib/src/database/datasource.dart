@@ -7,7 +7,6 @@ import 'migrations.dart';
 Future<DataSource> openEcommerceDataSource({
   required String databasePath,
 }) async {
-  ensureSqliteDriverRegistration();
   final dataSource = bootstrapOrm().sqliteFileDataSource(path: databasePath);
 
   await dataSource.init();

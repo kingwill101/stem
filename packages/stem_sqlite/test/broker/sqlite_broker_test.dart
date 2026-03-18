@@ -72,7 +72,6 @@ void main() {
   );
 
   test('fromDataSource runs migrations', () async {
-    ensureSqliteDriverRegistration();
     final dataSource = buildOrmRegistry().sqliteFileDataSource(
       path: dbFile.path,
     );

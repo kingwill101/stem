@@ -9,8 +9,6 @@ DataSource createDataSource({
   bool logging = false,
   contextual.Logger? logger,
 }) {
-  ensureSqliteDriverRegistration();
-
   var config = loadOrmConfig();
   if (logging) {
     config = config.updateActiveConnection(
@@ -19,9 +17,33 @@ DataSource createDataSource({
       ),
     );
   }
-  return DataSource.fromConfig(
-    config,
-    registry: bootstrapOrm(),
-    logger: logger ?? stemLogger,
-  );
+  return createDataSourceFromConfig(config, logger: logger ?? stemLogger);
+}
+
+/// Creates a new DataSource instance using a resolved ORM project config.
+DataSource createDataSourceFromConfig(
+  OrmProjectConfig config, {
+  contextual.Logger? logger,
+}) {
+  final registry = bootstrapOrm();
+  final options = Map<String, Object?>.from(config.driver.options);
+  final database =
+      options['database']?.toString() ??
+      options['path']?.toString() ??
+      'database.sqlite';
+  final dataSourceOptions = database == ':memory:'
+      ? registry.sqliteInMemoryDataSourceOptions(
+          name: config.activeConnectionName,
+          logging: options['logging'] == true,
+          tablePrefix: options['table_prefix']?.toString() ?? '',
+          defaultSchema: options['default_schema']?.toString(),
+        )
+      : registry.sqliteFileDataSourceOptions(
+          path: database,
+          name: config.activeConnectionName,
+          logging: options['logging'] == true,
+          tablePrefix: options['table_prefix']?.toString() ?? '',
+          defaultSchema: options['default_schema']?.toString(),
+        );
+  return DataSource(dataSourceOptions.copyWith(logger: logger));
 }

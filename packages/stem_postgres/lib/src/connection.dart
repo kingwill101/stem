@@ -1,5 +1,4 @@
 import 'package:ormed/ormed.dart';
-import 'package:ormed_postgres/ormed_postgres.dart';
 
 import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:stem_postgres/src/database/migrations.dart';
@@ -133,7 +132,6 @@ Future<DataSource> _openDataSource(String? connectionString) async {
 }
 
 Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
-  ensurePostgresDriverRegistration();
   final driver = dataSource.connection.driver;
   if (driver is! SchemaDriver) {
     throw StateError('Expected a SchemaDriver for Postgres migrations.');

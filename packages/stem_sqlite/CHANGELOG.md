@@ -6,6 +6,9 @@
   `ormed_sqlite_core` runtime dependency.
 - Simplified SQLite datasource bootstrapping and migration tests to use the new
   Ormed SQLite code-first datasource helpers.
+- Removed explicit `ensureSqliteDriverRegistration()` calls from Stem SQLite
+  runtime and seed paths by routing config-driven datasource creation through
+  the new helper-based bootstrap code.
 - Updated the SQLite workflow store to honor caller-provided run ids, keeping
   local workflow runtime metadata/manifests behavior aligned with the shared
   store contract suite.

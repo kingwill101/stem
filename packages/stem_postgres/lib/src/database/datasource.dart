@@ -10,11 +10,8 @@ DataSource createDataSource({
   bool logging = false,
   contextual.Logger? logger,
 }) {
-  ensurePostgresDriverRegistration();
-  final registry = bootstrapOrm();
-
   if (connectionString != null && connectionString.isNotEmpty) {
-    final options = registry
+    final options = bootstrapOrm()
         .postgresDataSourceOptionsFromEnv(
           environment: {'DATABASE_URL': connectionString},
           logging: logging,
@@ -33,9 +30,59 @@ DataSource createDataSource({
     );
   }
 
-  return DataSource.fromConfig(
-    config,
-    registry: registry,
-    logger: logger ?? stemLogger,
-  );
+  return createDataSourceFromConfig(config, logger: logger ?? stemLogger);
+}
+
+/// Creates a new DataSource instance using a resolved ORM project config.
+DataSource createDataSourceFromConfig(
+  OrmProjectConfig config, {
+  contextual.Logger? logger,
+}) {
+  final registry = bootstrapOrm();
+  final options = Map<String, Object?>.from(config.driver.options);
+  final url = options['url']?.toString();
+  final dataSourceOptions = (url != null && url.isNotEmpty)
+      ? registry.postgresDataSourceOptionsFromEnv(
+          environment: {
+            'DATABASE_URL': url,
+            if (options['sslmode'] case final Object sslmode)
+              'DB_SSLMODE': sslmode.toString(),
+            if (options['timezone'] case final Object timezone)
+              'DB_TIMEZONE': timezone.toString(),
+            if (options['applicationName'] case final Object appName)
+              'DB_APP_NAME': appName.toString(),
+          },
+          name: config.activeConnectionName,
+          logging: options['logging'] == true,
+          tablePrefix: options['table_prefix']?.toString() ?? '',
+          defaultSchema:
+              options['default_schema']?.toString() ??
+              options['schema']?.toString() ??
+              'public',
+        )
+      : registry.postgresDataSourceOptions(
+          host: options['host']?.toString() ?? 'localhost',
+          port: switch (options['port']) {
+            final int value => value,
+            final String value => int.tryParse(value) ?? 5432,
+            _ => 5432,
+          },
+          database: options['database']?.toString() ?? 'postgres',
+          username:
+              options['username']?.toString() ??
+              options['user']?.toString() ??
+              'postgres',
+          password: options['password']?.toString(),
+          sslmode: options['sslmode']?.toString() ?? 'disable',
+          timezone: options['timezone']?.toString() ?? 'UTC',
+          applicationName: options['applicationName']?.toString(),
+          name: config.activeConnectionName,
+          logging: options['logging'] == true,
+          tablePrefix: options['table_prefix']?.toString() ?? '',
+          defaultSchema:
+              options['default_schema']?.toString() ??
+              options['schema']?.toString() ??
+              'public',
+        );
+  return DataSource(dataSourceOptions.copyWith(logger: logger));
 }
