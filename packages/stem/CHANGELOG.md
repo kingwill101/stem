@@ -8,6 +8,9 @@
   canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
   `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated
   enqueue/wait extension APIs.
+- Added `WorkflowStartCall.startWith(...)` so workflow refs can dispatch
+  uniformly through apps, runtimes, and child-workflow callers instead of
+  dropping back to `startWorkflowRef(...)` in durable workflow code.
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
 - Clarified the workflow authoring model by distinguishing flow steps from

@@ -105,8 +105,10 @@ Supported context injection points:
 
 Child workflows should be started from durable boundaries:
 
-- `FlowContext.workflows` inside flow steps
-- `WorkflowScriptStepContext.workflows` inside script checkpoints
+- `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  inside flow steps
+- `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  inside script checkpoints
 
 Avoid starting child workflows directly from the raw
 `WorkflowScriptContext` body unless you are explicitly handling replay

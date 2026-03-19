@@ -114,3 +114,12 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
     );
   }
 }
+
+/// Convenience helpers for dispatching prebuilt [WorkflowStartCall] instances.
+extension WorkflowStartCallExtension<TParams, TResult extends Object?>
+    on WorkflowStartCall<TParams, TResult> {
+  /// Starts this typed workflow call with the provided [caller].
+  Future<String> startWith(WorkflowCaller caller) {
+    return caller.startWorkflowCall(this);
+  }
+}

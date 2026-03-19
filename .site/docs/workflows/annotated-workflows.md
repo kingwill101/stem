@@ -140,8 +140,10 @@ This keeps one authoring model:
 
 When a workflow needs to start another workflow, do it from a durable boundary:
 
-- `FlowContext.workflows` inside flow steps
-- `WorkflowScriptStepContext.workflows` inside checkpoint methods
+- `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  inside flow steps
+- `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  inside checkpoint methods
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 

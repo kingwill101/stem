@@ -153,10 +153,9 @@ void main() {
           name: 'parent.runtime.flow',
           build: (flow) {
             flow.step('spawn', (context) async {
-              return context.workflows!.startWorkflowRef(
-                childRef,
-                const {'value': 'spawned'},
-              );
+              return childRef
+                  .call(const {'value': 'spawned'})
+                  .startWith(context.workflows!);
             });
           },
         ).definition,
@@ -201,10 +200,9 @@ void main() {
           ],
           run: (script) async {
             return script.step<String>('spawn', (context) async {
-              return context.workflows!.startWorkflowRef(
-                childRef,
-                const {'value': 'script-child'},
-              );
+              return childRef
+                  .call(const {'value': 'script-child'})
+                  .startWith(context.workflows!);
             });
           },
         ).definition,

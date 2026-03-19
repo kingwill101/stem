@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('runtime workflow call extensions', () {
     test(
-      'startAndWaitWithRuntime and waitForWithRuntime use typed workflow refs',
+      'startWith/startAndWaitWithRuntime and waitForWithRuntime use typed workflow refs',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -26,7 +26,7 @@ void main() {
 
           final runId = await workflowRef
               .call(const {'name': 'runtime'})
-              .startWithRuntime(workflowApp.runtime);
+              .startWith(workflowApp.runtime);
           final waited = await workflowRef.waitForWithRuntime(
             workflowApp.runtime,
             runId,

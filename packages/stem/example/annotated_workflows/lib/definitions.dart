@@ -188,12 +188,9 @@ class AnnotatedFlowWorkflow {
     if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
     }
-    final childRunId = await ctx.workflows!.startWorkflowRef(
-      StemWorkflowDefinitions.script,
-      (
-        request: const WelcomeRequest(email: 'flow-child@example.com'),
-      ),
-    );
+    final childRunId = await StemWorkflowDefinitions.script
+        .call((request: const WelcomeRequest(email: 'flow-child@example.com')))
+        .startWith(ctx.workflows!);
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -272,10 +269,9 @@ class AnnotatedContextScriptWorkflow {
     final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
-    final childRunId = await ctx.workflows!.startWorkflowRef(
-      StemWorkflowDefinitions.script,
-      (request: WelcomeRequest(email: normalizedEmail)),
-    );
+    final childRunId = await StemWorkflowDefinitions.script
+        .call((request: WelcomeRequest(email: normalizedEmail)))
+        .startWith(ctx.workflows!);
     return ContextCaptureResult(
       workflow: ctx.workflow,
       runId: ctx.runId,

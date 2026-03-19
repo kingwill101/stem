@@ -605,7 +605,7 @@ extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
     on WorkflowStartCall<TParams, TResult> {
   /// Starts this workflow call with [app].
   Future<String> startWithApp(StemWorkflowApp app) {
-    return app.startWorkflowCall(this);
+    return startWith(app);
   }
 
   /// Starts this workflow call with [app] and waits for the typed result.
@@ -625,7 +625,7 @@ extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
 
   /// Starts this workflow call with [runtime].
   Future<String> startWithRuntime(WorkflowRuntime runtime) {
-    return runtime.startWorkflowCall(this);
+    return startWith(runtime);
   }
 
   /// Starts this workflow call with [runtime] and waits for the typed result.
