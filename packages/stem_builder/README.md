@@ -111,24 +111,30 @@ Serializable parameter rules are enforced by the generator:
   - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
   - `List<T>` where `T` is serializable
   - `Map<String, T>` where `T` is serializable
+- supported DTOs:
+  - Dart classes with `toJson()` plus a named `fromJson(...)` constructor
+    taking `Map<String, Object?>`
 - unsupported directly:
-  - arbitrary Dart class instances
   - optional/named parameters on generated workflow/task entrypoints
 
-If you need to pass a richer domain object, encode it as
-`Map<String, Object?>` first and decode it inside the workflow or task body.
+Typed task results can use the same DTO convention.
+
+Workflow inputs, checkpoint values, and final workflow results can use the same
+DTO convention. The generated `PayloadCodec` persists the JSON form while
+workflow code continues to work with typed objects.
 
 The intended DX is:
 
 - define annotated workflows and tasks in one file
 - add `part '<file>.stem.g.dart';`
 - run `build_runner`
-- pass generated `stemFlows`, `stemScripts`, and `stemTasks` into
-  `StemWorkflowApp`
-- start workflows through generated `startXxx(...)` helpers instead of raw
+- pass generated `stemModule` into `StemWorkflowApp` or `StemClient`
+- start workflows through generated workflow refs instead of raw
   workflow-name strings
+- enqueue annotated tasks through generated `enqueueXxx(...)` helpers instead
+  of raw task-name strings
 
-You can customize generated starter names via `@WorkflowDefn`:
+You can customize generated workflow ref names via `@WorkflowDefn`:
 
 ```dart
 @WorkflowDefn(
@@ -148,36 +154,32 @@ Run build_runner to generate `*.stem.g.dart` part files:
 dart run build_runner build
 ```
 
-The generated part exports helpers like `registerStemDefinitions`,
-`createStemGeneratedWorkflowApp`, `createStemGeneratedInMemoryApp`, and typed
-starters so you can avoid raw workflow-name strings (for example
-`runtime.startScript(email: 'user@example.com')`).
+The generated part exports a bundle plus typed helpers so you can avoid raw
+workflow-name and task-name strings (for example
+`StemWorkflowDefinitions.userSignup.call((email: 'user@example.com'))` or
+`stem.enqueueBuilderExampleTask(args: {...})`).
 
 Generated output includes:
 
-- `stemFlows`
-- `stemScripts`
-- `stemTasks`
-- `StemWorkflowNames`
-- starter extensions on both `StemWorkflowApp` and `WorkflowRuntime`
-- convenience helpers for creating generated apps in memory or on top of an
-  existing `StemApp`
+- `stemModule`
+- `StemWorkflowDefinitions`
+- `StemTaskDefinitions`
+- typed enqueue helpers on `TaskEnqueuer`
+- typed result wait helpers on `Stem`
 
 ## Wiring Into StemWorkflowApp
 
-For the common case, pass generated tasks and workflows directly to
-`StemWorkflowApp`:
+For the common case, pass the generated bundle directly to `StemWorkflowApp`:
 
 ```dart
 final workflowApp = await StemWorkflowApp.fromUrl(
   'redis://localhost:6379',
-  scripts: stemScripts,
-  flows: stemFlows,
-  tasks: stemTasks,
+  module: stemModule,
 );
 
-final runId = await workflowApp.startUserSignup(email: 'user@example.com');
-final result = await workflowApp.waitForCompletion<Map<String, Object?>>(runId);
+final result = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startAndWaitWithApp(workflowApp);
 ```
 
 If your application already owns a `StemApp`, reuse it:
@@ -186,27 +188,44 @@ If your application already owns a `StemApp`, reuse it:
 final stemApp = await StemApp.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-  tasks: stemTasks,
+  tasks: stemModule.tasks,
 );
 
 final workflowApp = await StemWorkflowApp.create(
   stemApp: stemApp,
-  scripts: stemScripts,
-  flows: stemFlows,
-  tasks: stemTasks,
+  module: stemModule,
 );
 ```
 
-The generated helpers work on `WorkflowRuntime` too:
+If you already centralize wiring in a `StemClient`, prefer the shared-client
+path:
+
+```dart
+final client = await StemClient.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+);
+
+final workflowApp = await client.createWorkflowApp(module: stemModule);
+```
+
+The generated workflow refs work on `WorkflowRuntime` too:
 
 ```dart
 final runtime = workflowApp.runtime;
-final runId = await runtime.startUserSignup(email: 'user@example.com');
+final runId = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startWithRuntime(runtime);
 await runtime.executeRun(runId);
 ```
 
-You only need `registerStemDefinitions(...)` when you are integrating with
-existing custom `WorkflowRegistry` and `TaskRegistry` instances manually.
+Annotated tasks also get generated definitions and enqueue helpers:
+
+```dart
+final taskId = await workflowApp.app.stem.enqueueBuilderExampleTask(
+  args: const {'kind': 'welcome'},
+);
+```
 
 ## Examples
 

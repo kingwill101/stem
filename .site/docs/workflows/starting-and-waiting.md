@@ -2,7 +2,8 @@
 title: Starting and Waiting
 ---
 
-Workflow runs are started through the runtime or through `StemWorkflowApp`.
+Workflow runs are started through the runtime, through `StemWorkflowApp`, or
+through generated workflow refs.
 
 ## Start by workflow name
 
@@ -25,18 +26,22 @@ Use the returned `WorkflowResult<T>` when you need:
 - `status` for partial progress
 - `timedOut` to decide whether to keep polling
 
-## Start through generated helpers
+## Start through generated workflow refs
 
-When you use `stem_builder`, generated extension methods remove the raw
-workflow-name strings:
+When you use `stem_builder`, generated workflow refs remove the raw
+workflow-name strings and give you one typed handle for both start and wait:
 
 ```dart
-final runId = await workflowApp.startUserSignup(email: 'user@example.com');
-final result = await workflowApp.waitForCompletion<Map<String, Object?>>(runId);
+final result = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startAndWaitWithApp(workflowApp);
 ```
 
-These starters also exist on `WorkflowRuntime` when you want to work below the
-`StemWorkflowApp` abstraction.
+The same definitions work on `WorkflowRuntime` through
+`.startWithRuntime(runtime)`.
+
+If you still need the run identifier for inspection or operator tooling, read
+it from `result.runId`.
 
 ## Parent runs and TTL
 

@@ -3,14 +3,12 @@
 This example demonstrates:
 
 - Annotated workflow/task definitions
-- Generated `registerStemDefinitions(...)`
-- Generated app bootstrap helpers:
-  - `createStemGeneratedInMemoryApp()`
-  - `createStemGeneratedWorkflowApp(stemApp: ...)`
-- Generated typed workflow starters (no manual workflow-name strings):
-  - `runtime.startFlow(...)`
-  - `runtime.startUserSignup(email: ...)`
-- Generated `stemWorkflowManifest`
+- Generated `stemModule`
+- Generated typed workflow refs (no manual workflow-name strings):
+  - `StemWorkflowDefinitions.flow.call(...).startWithRuntime(runtime)`
+  - `StemWorkflowDefinitions.userSignup.call(...).startWithRuntime(runtime)`
+- Generated typed task definitions, enqueue helpers, and typed result wait helpers
+- Generated workflow manifest via `stemModule.workflowManifest`
 - Running generated definitions through `StemWorkflowApp`
 - Runtime manifest + run/step metadata views via `WorkflowRuntime`
 
@@ -32,7 +30,9 @@ The checked-in `lib/definitions.stem.g.dart` is only a starter snapshot; rerun
 `build_runner` after changing annotations.
 
 
-The generated helper APIs are convenience wrappers. The underlying public
-`StemWorkflowApp` API also accepts `scripts`, `flows`, and `tasks` directly, so
-you can wire generated definitions into a larger app without manual task
-registration loops.
+The generated bundle is the default integration surface:
+
+- `StemWorkflowApp.inMemory(module: stemModule)`
+- `StemWorkflowApp.fromUrl(..., module: stemModule)`
+- `StemWorkflowApp.create(stemApp: ..., module: stemModule)`
+- `StemClient.createWorkflowApp(module: stemModule)`

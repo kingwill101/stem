@@ -20,7 +20,8 @@ orients you and links back here.
 - **WorkflowScript**: a durable async function. Use this when normal Dart
   control flow should define the execution plan.
 - **Annotated workflows with `stem_builder`**: use annotations and generated
-  starters when you want plain method signatures and less string-based wiring.
+  workflow refs when you want plain method signatures and less string-based
+  wiring.
 
 ## Read this section in order
 
@@ -29,11 +30,11 @@ orients you and links back here.
 - [Flows and Scripts](./flows-and-scripts.md) explains the execution model
   difference between declared steps and script checkpoints.
 - [Starting and Waiting](./starting-and-waiting.md) covers named starts,
-  generated starters, results, and cancellation policies.
+  generated workflow refs, results, and cancellation policies.
 - [Suspensions and Events](./suspensions-and-events.md) covers `sleep`,
   `awaitEvent`, due runs, and external resume flows.
 - [Annotated Workflows](./annotated-workflows.md) covers `stem_builder`,
-  context injection, and generated starters.
+  context injection, and generated workflow refs.
 - [Context and Serialization](./context-and-serialization.md) documents where
   context objects are injected and what parameter shapes are supported.
 - [Errors, Retries, and Idempotency](./errors-retries-and-idempotency.md)

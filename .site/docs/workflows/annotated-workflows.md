@@ -10,21 +10,29 @@ methods instead of manual `Flow(...)` or `WorkflowScript(...)` objects.
 After adding `part '<file>.stem.g.dart';` and running `build_runner`, the
 generated file exposes:
 
-- `stemFlows`
-- `stemScripts`
-- `stemTasks`
-- `StemWorkflowNames`
-- typed starter helpers like `startUserSignup(...)`
+- `stemModule`
+- `StemWorkflowDefinitions`
+- `StemTaskDefinitions`
+- typed workflow refs like `StemWorkflowDefinitions.userSignup`
+- typed enqueue helpers like `enqueueSendEmailTyped(...)`
+- typed result wait helpers like `waitForSendEmailTyped(...)`
 
-Wire those directly into `StemWorkflowApp`:
+Wire the bundle directly into `StemWorkflowApp`:
 
 ```dart
 final workflowApp = await StemWorkflowApp.fromUrl(
   'memory://',
-  flows: stemFlows,
-  scripts: stemScripts,
-  tasks: stemTasks,
+  module: stemModule,
 );
+```
+
+Use the generated workflow refs when you want a single typed handle for start
+and wait operations:
+
+```dart
+final result = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startAndWaitWithApp(workflowApp);
 ```
 
 ## Two script entry styles
@@ -32,7 +40,7 @@ final workflowApp = await StemWorkflowApp.fromUrl(
 ### Direct-call style
 
 Use a plain `run(...)` when your annotated checkpoints only need serializable
-parameters:
+values or codec-backed DTO parameters:
 
 ```dart
 @WorkflowDefn(name: 'builder.example.user_signup', kind: WorkflowKind.script)
@@ -107,7 +115,25 @@ example that demonstrates:
 - `WorkflowScriptContext`
 - `WorkflowScriptStepContext`
 - `TaskInvocationContext`
-- typed task parameter decoding
+- codec-backed DTO workflow checkpoints and final workflow results
+- typed task DTO input and result decoding
+
+## DTO rules
+
+Generated workflow/task entrypoints support required positional parameters that
+are either:
+
+- serializable values (`String`, numbers, bools, `List<T>`, `Map<String, T>`)
+- codec-backed DTO classes that provide:
+  - `Map<String, Object?> toJson()`
+  - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent named
+    `fromJson` constructor
+
+Typed task results can use the same DTO convention.
+
+Workflow inputs, checkpoint values, and final workflow results can use the same
+DTO convention. The generated `PayloadCodec` persists the JSON form while
+workflow code continues to work with typed objects.
 
 For lower-level generator details, see
 [`Core Concepts > stem_builder`](../core-concepts/stem-builder.md).

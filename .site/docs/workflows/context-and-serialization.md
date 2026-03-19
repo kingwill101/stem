@@ -26,6 +26,7 @@ Depending on the context type, you can access:
 - `iteration`
 - workflow params and previous results
 - `takeResumeData()` for event-driven resumes
+- `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `idempotencyKey(...)`
 - task metadata like `id`, `attempt`, `meta`
 
@@ -50,21 +51,35 @@ Unsupported directly:
 - annotated workflow/task method signatures with optional or named business
   parameters
 
-If you have a domain object, encode it first:
+If you have a domain object, prefer a codec-backed DTO:
 
 ```dart
-final order = <String, Object?>{
-  'id': 'ord_42',
-  'customerId': 'cus_7',
-  'totalCents': 1250,
-};
+class OrderRequest {
+  const OrderRequest({required this.id, required this.customerId});
+
+  final String id;
+  final String customerId;
+
+  Map<String, Object?> toJson() => {'id': id, 'customerId': customerId};
+
+  factory OrderRequest.fromJson(Map<String, Object?> json) {
+    return OrderRequest(
+      id: json['id'] as String,
+      customerId: json['customerId'] as String,
+    );
+  }
+}
 ```
 
-Decode it inside the workflow or task body, not at the durable boundary.
+Generated workflow refs and task definitions will persist the JSON form while
+your workflow/task code keeps working with the typed object. The restriction
+still applies to the annotated business method signatures that `stem_builder`
+lowers into workflow/task definitions.
 
-Generated starter helpers may still expose named parameters as a wrapper over
-the serialized params map. The restriction applies to the annotated business
-method signatures that `stem_builder` lowers into workflow/task definitions.
+The same rule applies to workflow resume events: `emitValue(...)` can take a
+typed DTO plus a `PayloadCodec<T>`, but the codec must still encode to a
+`Map<String, Object?>` because watcher persistence and event delivery are
+map-based today.
 
 ## Practical rule
 

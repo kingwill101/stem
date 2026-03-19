@@ -6,7 +6,7 @@ slug: /core-concepts/stem-builder
 ---
 
 `stem_builder` generates workflow/task definitions, manifests, helper output,
-and typed workflow starters from annotations, so you can avoid stringly-typed
+and typed workflow refs from annotations, so you can avoid stringly-typed
 wiring.
 
 This page focuses on the generator itself. For the workflow authoring model and
@@ -66,12 +66,9 @@ dart run build_runner build --delete-conflicting-outputs
 
 Generated output (`workflow_defs.stem.g.dart`) includes:
 
-- `stemScripts`, `stemFlows`, `stemTasks`
-- typed starters like `workflowApp.startUserSignup(...)`
-- `StemWorkflowNames` constants
-- convenience helpers such as `createStemGeneratedWorkflowApp(...)`
-- `registerStemDefinitions(...)` for advanced/manual integrations that still
-  need explicit registries
+- `stemModule`
+- typed workflow refs like `StemWorkflowDefinitions.userSignup`
+- typed task definitions, enqueue helpers, and typed result wait helpers
 
 ## Wire Into StemWorkflowApp
 
@@ -80,13 +77,13 @@ Use the generated definitions/helpers directly with `StemWorkflowApp`:
 ```dart
 final workflowApp = await StemWorkflowApp.fromUrl(
   'memory://',
-  scripts: stemScripts,
-  flows: stemFlows,
-  tasks: stemTasks,
+  module: stemModule,
 );
 
 await workflowApp.start();
-final runId = await workflowApp.startUserSignup(email: 'user@example.com');
+final result = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startAndWaitWithApp(workflowApp);
 ```
 
 If you already manage a `StemApp` for a larger service, reuse it instead of
@@ -96,14 +93,12 @@ bootstrapping a second app:
 final stemApp = await StemApp.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-  tasks: stemTasks,
+  tasks: stemModule.tasks,
 );
 
 final workflowApp = await StemWorkflowApp.create(
   stemApp: stemApp,
-  scripts: stemScripts,
-  flows: stemFlows,
-  tasks: stemTasks,
+  module: stemModule,
 );
 ```
 
@@ -114,18 +109,16 @@ shared-client path:
 final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-  tasks: stemTasks,
 );
 
-final workflowApp = await client.createWorkflowApp(
-  scripts: stemScripts,
-  flows: stemFlows,
-);
+final workflowApp = await client.createWorkflowApp(module: stemModule);
 ```
 
 ## Parameter and Signature Rules
 
 - Parameters after context must be required positional serializable values.
+- Parameters after context must be required positional values that are either
+  serializable or codec-backed DTOs.
 - Script workflow `run(...)` can be plain (no annotation required).
 - `@WorkflowRun` is still supported for explicit run entrypoints.
 - Step methods use `@WorkflowStep`.
@@ -133,5 +126,11 @@ final workflowApp = await client.createWorkflowApp(
   parameters.
 - Use `@WorkflowRun()` plus `WorkflowScriptContext` when you need to enter a
   context-aware script checkpoint that consumes `WorkflowScriptStepContext`.
-- Arbitrary Dart class instances are not supported directly; encode them into
-  `Map<String, Object?>` first.
+- DTO classes are supported when they provide:
+  - `Map<String, Object?> toJson()`
+  - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent named
+    `fromJson` constructor
+- Typed task results can use the same DTO convention.
+- Workflow inputs, checkpoint values, and final workflow results can use the
+  same DTO convention. The generated `PayloadCodec` persists the JSON form
+  while workflow code continues to work with typed objects.

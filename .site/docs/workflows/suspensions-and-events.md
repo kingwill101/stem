@@ -21,22 +21,28 @@ Typical flow:
 
 1. a step calls `awaitEvent('orders.payment.confirmed')`
 2. the run is marked suspended in the store
-3. another process calls `WorkflowRuntime.emit(...)` (or an app/service wrapper
-   around it) with a payload
+3. another process calls `WorkflowRuntime.emit(...)` /
+   `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
+   a payload
 4. the runtime resumes the run and exposes the payload through
-   `takeResumeData()`
+   `takeResumeData()` or `takeResumeValue<T>(codec: ...)`
 
 ## Emit resume events
 
-Use `WorkflowRuntime.emit(...)` / `workflowApp.runtime.emit(...)` instead of
-hand-editing store state:
+Use `WorkflowRuntime.emit(...)` / `WorkflowRuntime.emitValue(...)` (or the app
+wrapper `workflowApp.emitValue(...)`) instead of hand-editing store state:
 
 ```dart
-await workflowApp.runtime.emit('orders.payment.confirmed', {
-  'paymentId': 'pay_42',
-  'approvedBy': 'gateway',
-});
+await workflowApp.emitValue(
+  'orders.payment.confirmed',
+  const PaymentConfirmed(paymentId: 'pay_42', approvedBy: 'gateway'),
+  codec: paymentConfirmedCodec,
+);
 ```
+
+Typed event payloads still serialize to the existing `Map<String, Object?>`
+wire format. `emitValue(...)` is a DTO/codec convenience layer, not a new
+transport shape.
 
 ## Inspect waiting runs
 

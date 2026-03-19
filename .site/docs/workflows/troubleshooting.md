@@ -22,10 +22,10 @@ task queue such as `default`.
 
 Check:
 
-- the topic passed to `WorkflowRuntime.emit(...)` or
-  `workflowApp.runtime.emit(...)` matches the one passed to `awaitEvent(...)`
+- the topic passed to `WorkflowRuntime.emit(...)` / `emitValue(...)` or
+  `workflowApp.emitValue(...)` matches the one passed to `awaitEvent(...)`
 - the run is still waiting on that topic
-- the payload is a `Map<String, Object?>`
+- the payload encodes to a `Map<String, Object?>`
 
 ## Serialization failures
 

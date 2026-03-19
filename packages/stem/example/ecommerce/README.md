@@ -33,10 +33,10 @@ The annotated workflow/task definitions live in:
 
 From those annotations, this example uses generated APIs:
 
-- `stemScripts` (workflow script registration)
-- `stemTasks` (task handler registration, passed into `StemWorkflowApp`)
-- `workflowApp.startAddToCart(...)` (typed starter extension)
-- `StemWorkflowNames.addToCart` (stable workflow name constant)
+- `stemModule` (generated workflow/task bundle)
+- `StemWorkflowDefinitions.addToCart`
+- `StemTaskDefinitions.ecommerceAuditLog`
+- `TaskEnqueuer.enqueueEcommerceAuditLog(...)`
 
 The server wires generated and manual tasks together in one place:
 
@@ -44,9 +44,9 @@ The server wires generated and manual tasks together in one place:
 final workflowApp = await StemWorkflowApp.fromUrl(
   'sqlite://$stemDatabasePath',
   adapters: const [StemSqliteAdapter()],
-  scripts: stemScripts,
+  module: stemModule,
   flows: [buildCheckoutFlow(repository)],
-  tasks: [...stemTasks, shipmentReserveTaskHandler],
+  tasks: [shipmentReserveTaskHandler],
 );
 ```
 

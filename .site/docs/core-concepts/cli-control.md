@@ -119,14 +119,14 @@ ensure the CLI and workers share the same task-definition entrypoint so task
 names, encoders, and routing rules stay consistent.
 
 A common pattern is to build that CLI registry from the same shared task list
-or generated `stemTasks` your app uses, so task metadata stays consistent
+or generated `stemModule.tasks` your app uses, so task metadata stays consistent
 without teaching registry-first bootstrap for normal services.
 
 If a command needs a registry and none is available, it will exit with an error
 or fall back to raw task metadata (depending on the subcommand).
 
-For normal app bootstrap, prefer `tasks: [...]` or generated `stemTasks`. See
-[Tasks](./tasks.md) and [stem_builder](./stem-builder.md).
+For normal app bootstrap, prefer `tasks: [...]` or a generated `stemModule`.
+See [Tasks](./tasks.md) and [stem_builder](./stem-builder.md).
 
 ## List registered tasks
 
