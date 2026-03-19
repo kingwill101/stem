@@ -694,6 +694,54 @@ class DuplicateManualCheckpointWorkflow {
   });
 
   test(
+    'warns when manual script.step wraps an annotated checkpoint call',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class MixedCheckpointWorkflow {
+  @WorkflowRun()
+  Future<void> run(WorkflowScriptContext script) async {
+    await script.step<void>('outer-wrapper', (ctx) => sendEmail('user@example.com'));
+  }
+
+  @WorkflowStep(name: 'send-email')
+  Future<void> sendEmail(String email) async {}
+}
+''';
+
+      final records = <Object?>[];
+      await testBuilders(
+        [stemRegistryBuilder(BuilderOptions.empty)],
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        onLog: records.add,
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+      );
+
+      expect(
+        records,
+        contains(
+          warningLogOf(
+            allOf([
+              contains('wraps annotated checkpoint "send-email"'),
+              contains('outer-wrapper'),
+              contains('avoid nested checkpoints'),
+            ]),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
     'decodes serializable @workflow.run parameters from script params',
     () async {
       const input = '''
