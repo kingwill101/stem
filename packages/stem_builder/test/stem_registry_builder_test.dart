@@ -343,8 +343,14 @@ class HelloScriptWorkflow {
             contains('NoArgsWorkflowRef<String>('),
             contains('static Future<String> startHelloScriptWorkflow('),
             contains(
+              'static Future<String> startHelloScriptWorkflowWithContext(',
+            ),
+            contains(
               'static Future<WorkflowResult<String>?> '
               'startAndWaitHelloScriptWorkflow(',
+            ),
+            contains(
+              'startAndWaitHelloScriptWorkflowWithContext(',
             ),
             contains(
               'static Future<WorkflowResult<String>?> '
@@ -458,9 +464,13 @@ class SignupWorkflow {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
             contains('static Future<String> startSignupWorkflow('),
+            contains('static Future<String> startSignupWorkflowWithContext('),
             contains(
               'static Future<WorkflowResult<String>?> '
               'startAndWaitSignupWorkflow(',
+            ),
+            contains(
+              'startAndWaitSignupWorkflowWithContext(',
             ),
             contains(
               'static Future<WorkflowResult<String>?> '

@@ -93,6 +93,25 @@ abstract final class StemWorkflowDefinitions {
         .startWith(caller);
   }
 
+  static Future<String> startAddToCartWithContext(
+    WorkflowChildCallerContext context, {
+    required String cartId,
+    required String sku,
+    required int quantity,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return addToCart
+        .call(
+          (cartId: cartId, sku: sku, quantity: quantity),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWithContext(context);
+  }
+
   static Future<WorkflowResult<Map<String, Object?>>?> startAndWaitAddToCart(
     WorkflowCaller caller, {
     required String cartId,
@@ -112,6 +131,32 @@ abstract final class StemWorkflowDefinitions {
           cancellationPolicy: cancellationPolicy,
         )
         .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>>?>
+  startAndWaitAddToCartWithContext(
+    WorkflowChildCallerContext context, {
+    required String cartId,
+    required String sku,
+    required int quantity,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return addToCart
+        .call(
+          (cartId: cartId, sku: sku, quantity: quantity),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWithContext(
+          context,
+          pollInterval: pollInterval,
+          timeout: timeout,
+        );
   }
 
   static Future<WorkflowResult<Map<String, Object?>>?> waitForAddToCart(

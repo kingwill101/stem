@@ -1703,6 +1703,22 @@ class _RegistryEmitter {
           '    return $fieldName.startWith(caller, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy);',
         );
         buffer.writeln('  }');
+        final startWithContextArgs = _methodSignature(
+          positional: ['WorkflowChildCallerContext context'],
+          named: [
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<String> start$helperSuffix'
+          'WithContext($startWithContextArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.startWithContext(context, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy);',
+        );
+        buffer.writeln('  }');
         final startAndWaitArgs = _methodSignature(
           positional: ['WorkflowCaller caller'],
           named: [
@@ -1718,6 +1734,24 @@ class _RegistryEmitter {
         );
         buffer.writeln(
           '    return $fieldName.startAndWaitWith(caller, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy, pollInterval: pollInterval, timeout: timeout);',
+        );
+        buffer.writeln('  }');
+        final startAndWaitWithContextArgs = _methodSignature(
+          positional: ['WorkflowChildCallerContext context'],
+          named: [
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+            'Duration pollInterval = const Duration(milliseconds: 100)',
+            'Duration? timeout',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<WorkflowResult<${workflow.resultTypeCode}>?> startAndWait$helperSuffix'
+          'WithContext($startAndWaitWithContextArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.startAndWaitWithContext(context, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy, pollInterval: pollInterval, timeout: timeout);',
         );
         buffer.writeln('  }');
       } else {
@@ -1745,6 +1779,25 @@ class _RegistryEmitter {
           '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startWith(caller);',
         );
         buffer.writeln('  }');
+        final startWithContextArgs = _methodSignature(
+          positional: ['WorkflowChildCallerContext context'],
+          named: [
+            ...parameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<String> start$helperSuffix'
+          'WithContext($startWithContextArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startWithContext(context);',
+        );
+        buffer.writeln('  }');
         final startAndWaitArgs = _methodSignature(
           positional: ['WorkflowCaller caller'],
           named: [
@@ -1763,6 +1816,27 @@ class _RegistryEmitter {
         );
         buffer.writeln(
           '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);',
+        );
+        buffer.writeln('  }');
+        final startAndWaitWithContextArgs = _methodSignature(
+          positional: ['WorkflowChildCallerContext context'],
+          named: [
+            ...parameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+            'Duration pollInterval = const Duration(milliseconds: 100)',
+            'Duration? timeout',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<WorkflowResult<${workflow.resultTypeCode}>?> startAndWait$helperSuffix'
+          'WithContext($startAndWaitWithContextArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startAndWaitWithContext(context, pollInterval: pollInterval, timeout: timeout);',
         );
         buffer.writeln('  }');
       }

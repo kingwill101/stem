@@ -245,6 +245,22 @@ abstract final class StemWorkflowDefinitions {
         .startWith(caller);
   }
 
+  static Future<String> startFlowWithContext(
+    WorkflowChildCallerContext context, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWithContext(context);
+  }
+
   static Future<WorkflowResult<Map<String, Object?>?>?> startAndWaitFlow(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -261,6 +277,29 @@ abstract final class StemWorkflowDefinitions {
           cancellationPolicy: cancellationPolicy,
         )
         .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>?>?>
+  startAndWaitFlowWithContext(
+    WorkflowChildCallerContext context, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWithContext(
+          context,
+          pollInterval: pollInterval,
+          timeout: timeout,
+        );
   }
 
   static Future<WorkflowResult<Map<String, Object?>?>?> waitForFlow(
@@ -302,6 +341,23 @@ abstract final class StemWorkflowDefinitions {
         .startWith(caller);
   }
 
+  static Future<String> startScriptWithContext(
+    WorkflowChildCallerContext context, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return script
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWithContext(context);
+  }
+
   static Future<WorkflowResult<WelcomeWorkflowResult>?> startAndWaitScript(
     WorkflowCaller caller, {
     required WelcomeRequest request,
@@ -319,6 +375,30 @@ abstract final class StemWorkflowDefinitions {
           cancellationPolicy: cancellationPolicy,
         )
         .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<WelcomeWorkflowResult>?>
+  startAndWaitScriptWithContext(
+    WorkflowChildCallerContext context, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return script
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWithContext(
+          context,
+          pollInterval: pollInterval,
+          timeout: timeout,
+        );
   }
 
   static Future<WorkflowResult<WelcomeWorkflowResult>?> waitForScript(
@@ -360,6 +440,23 @@ abstract final class StemWorkflowDefinitions {
         .startWith(caller);
   }
 
+  static Future<String> startContextScriptWithContext(
+    WorkflowChildCallerContext context, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return contextScript
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWithContext(context);
+  }
+
   static Future<WorkflowResult<ContextCaptureResult>?>
   startAndWaitContextScript(
     WorkflowCaller caller, {
@@ -378,6 +475,30 @@ abstract final class StemWorkflowDefinitions {
           cancellationPolicy: cancellationPolicy,
         )
         .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<ContextCaptureResult>?>
+  startAndWaitContextScriptWithContext(
+    WorkflowChildCallerContext context, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return contextScript
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWithContext(
+          context,
+          pollInterval: pollInterval,
+          timeout: timeout,
+        );
   }
 
   static Future<WorkflowResult<ContextCaptureResult>?> waitForContextScript(

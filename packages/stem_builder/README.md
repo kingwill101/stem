@@ -105,9 +105,9 @@ Supported context injection points:
 
 Child workflows should be started from durable boundaries:
 
-- `StemWorkflowDefinitions.someWorkflow.call(...).startAndWaitWithContext(context)`
+- `StemWorkflowDefinitions.startSomeWorkflowWithContext(context, ...)`
   inside flow steps
-- `StemWorkflowDefinitions.someWorkflow.call(...).startAndWaitWithContext(context)`
+- `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
   inside script checkpoints
 
 Avoid starting child workflows directly from the raw
