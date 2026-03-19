@@ -280,6 +280,7 @@ void main() {
       name: 'client.from-url',
       entrypoint: (context, args) async => 'ok',
     );
+    final definition = TaskDefinition.noArgs<String>(name: 'client.from-url');
     final client = await StemClient.fromUrl(
       'test://localhost',
       adapters: [
@@ -298,9 +299,8 @@ void main() {
     final worker = await client.createWorker();
     await worker.start();
     try {
-      final taskId = await client.stem.enqueue('client.from-url');
-      final result = await client.stem.waitForTask<String>(
-        taskId,
+      final result = await definition.enqueueAndWaitWithClient(
+        client,
         timeout: const Duration(seconds: 2),
       );
       expect(result?.value, 'ok');

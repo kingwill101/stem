@@ -6,6 +6,7 @@ import 'package:stem/src/bootstrap/workflow_app.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
@@ -18,7 +19,7 @@ import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Shared entrypoint that owns broker/backend configuration for Stem runtimes.
-abstract class StemClient {
+abstract class StemClient implements TaskEnqueuer {
   /// Creates a client using the provided factories and defaults.
   static Future<StemClient> create({
     StemModule? module,
@@ -147,6 +148,54 @@ abstract class StemClient {
   /// Enqueue facade for producers.
   Stem get stem;
 
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return stem.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return stem.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  /// Waits for a task result by task id using the client's shared backend.
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+  }) {
+    return stem.waitForTask(taskId, timeout: timeout, decode: decode);
+  }
+
+  /// Waits for a task result using a typed [definition] for decoding.
+  Future<TaskResult<TResult>?> waitForTaskDefinition<
+    TArgs,
+    TResult extends Object?
+  >(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  }) {
+    return stem.waitForTaskDefinition(taskId, definition, timeout: timeout);
+  }
+
   /// Payload encoder registry used for task args/results.
   TaskPayloadEncoderRegistry get encoderRegistry;
 
@@ -250,6 +299,100 @@ abstract class StemClient {
 
   /// Releases resources held by the client.
   Future<void> close();
+}
+
+/// Adds client-bound enqueue-and-wait helpers for prebuilt [TaskCall] objects.
+extension TaskCallStemClientExtension<TArgs, TResult extends Object?>
+    on TaskCall<TArgs, TResult> {
+  /// Enqueues this call with [client] and waits for its typed result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
+    StemClient client, {
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueWith(client, enqueueOptions: enqueueOptions);
+    return client.waitForTaskDefinition(taskId, definition, timeout: timeout);
+  }
+}
+
+/// Adds client-bound helpers for typed [TaskDefinition] values.
+extension TaskDefinitionStemClientExtension<TArgs, TResult extends Object?>
+    on TaskDefinition<TArgs, TResult> {
+  /// Enqueues this definition with [client] and waits for its typed result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
+    StemClient client,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) {
+    return call(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    ).enqueueAndWaitWithClient(
+      client,
+      enqueueOptions: enqueueOptions,
+      timeout: timeout,
+    );
+  }
+
+  /// Waits for [taskId] using this definition's decoding rules through
+  /// [client].
+  Future<TaskResult<TResult>?> waitForClient(
+    StemClient client,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return client.waitForTaskDefinition(taskId, this, timeout: timeout);
+  }
+}
+
+/// Adds client-bound helpers for no-arg [NoArgsTaskDefinition] values.
+extension NoArgsTaskDefinitionStemClientExtension<TResult extends Object?>
+    on NoArgsTaskDefinition<TResult> {
+  /// Enqueues this no-arg definition with [client] and waits for its result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
+    StemClient client, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) {
+    return call(
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    ).enqueueAndWaitWithClient(
+      client,
+      enqueueOptions: enqueueOptions,
+      timeout: timeout,
+    );
+  }
+
+  /// Waits for [taskId] using this definition's decoding rules through
+  /// [client].
+  Future<TaskResult<TResult>?> waitForClient(
+    StemClient client,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return client.waitForTaskDefinition(
+      taskId,
+      asDefinition,
+      timeout: timeout,
+    );
+  }
 }
 
 class _DefaultStemClient extends StemClient {

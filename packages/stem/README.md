@@ -64,7 +64,7 @@ Future<void> main() async {
   final worker = await client.createWorker();
   unawaited(worker.start());
 
-  await client.stem.enqueue('demo.hello');
+  await client.enqueue('demo.hello');
   await Future<void>.delayed(const Duration(seconds: 1));
 
   await worker.shutdown();
