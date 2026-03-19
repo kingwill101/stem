@@ -28,7 +28,7 @@ import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 /// This wrapper wires together broker/backend infrastructure, registers flows,
 /// and exposes convenience helpers for scheduling and observing workflow runs
 /// without having to manage [WorkflowRuntime] directly.
-class StemWorkflowApp {
+class StemWorkflowApp implements WorkflowCaller {
   StemWorkflowApp._({
     required this.app,
     required this.runtime,
@@ -117,6 +117,7 @@ class StemWorkflowApp {
   }
 
   /// Schedules a workflow run from a typed [WorkflowRef].
+  @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
     WorkflowRef<TParams, TResult> definition,
     TParams params, {
@@ -145,6 +146,7 @@ class StemWorkflowApp {
   }
 
   /// Schedules a workflow run from a prebuilt [WorkflowStartCall].
+  @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   ) {
@@ -220,10 +222,8 @@ class StemWorkflowApp {
   }
 
   /// Waits for [runId] using the decoding rules from a [WorkflowRef].
-  Future<WorkflowResult<TResult>?> waitForWorkflowRef<
-    TParams,
-    TResult extends Object?
-  >(
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
     String runId,
     WorkflowRef<TParams, TResult> definition, {
     Duration pollInterval = const Duration(milliseconds: 100),
@@ -288,7 +288,10 @@ class StemWorkflowApp {
   /// Creates a workflow app with custom backends and factories.
   ///
   /// Useful for wiring Redis/Postgres adapters or sharing an existing
-  /// [StemApp] instance with job processors.
+  /// [StemApp] instance with job processors. When [module] or [tasks] are
+  /// provided and [StemWorkerConfig.subscription] is omitted, the helper
+  /// infers a worker subscription that includes the workflow queue plus the
+  /// default queues declared on those task handlers.
   ///
   /// Example:
   /// ```dart
@@ -322,12 +325,19 @@ class StemWorkflowApp {
     final moduleTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
     final moduleWorkflowDefinitions =
         module?.workflowDefinitions ?? const <WorkflowDefinition>[];
+    final resolvedWorkerConfig = stemApp == null
+        ? _resolveWorkflowWorkerConfig(
+            workerConfig,
+            module: module,
+            tasks: tasks,
+          )
+        : workerConfig;
     final appInstance =
         stemApp ??
         await StemApp.create(
           broker: broker ?? StemBrokerFactory.inMemory(),
           backend: backend ?? StemBackendFactory.inMemory(),
-          workerConfig: workerConfig,
+          workerConfig: resolvedWorkerConfig,
           encoderRegistry: encoderRegistry,
           resultEncoder: resultEncoder,
           argsEncoder: argsEncoder,
@@ -346,12 +356,15 @@ class StemWorkflowApp {
       eventBus: eventBus,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
-      queue: workerConfig.queue,
+      queue: resolvedWorkerConfig.queue,
       registry: workflowRegistry,
       introspectionSink: introspectionSink,
     );
 
-    [...moduleTasks, ...tasks].forEach(appInstance.register);
+    registerModuleTaskHandlers(
+      appInstance.registry,
+      [...moduleTasks, ...tasks],
+    );
     appInstance.register(runtime.workflowRunnerHandler());
 
     [
@@ -374,6 +387,10 @@ class StemWorkflowApp {
   /// Creates an in-memory workflow app (in-memory broker, backend, and store).
   ///
   /// Ideal for unit tests and examples since it requires no external services.
+  /// When [module] or [tasks] are provided and
+  /// [StemWorkerConfig.subscription] is omitted, the helper infers a worker
+  /// subscription that includes the workflow queue plus the default queues
+  /// declared on those task handlers.
   ///
   /// Example:
   /// ```dart
@@ -422,7 +439,10 @@ class StemWorkflowApp {
   /// Creates a workflow app from a single backend URL plus adapter wiring.
   ///
   /// This wires broker/backend and workflow-store factories from one URL and
-  /// optional per-store overrides via [StemStack.fromUrl].
+  /// optional per-store overrides via [StemStack.fromUrl]. When [module] or
+  /// [tasks] are provided and [StemWorkerConfig.subscription] is omitted, the
+  /// helper infers a worker subscription that includes the workflow queue plus
+  /// the default queues declared on those task handlers.
   static Future<StemWorkflowApp> fromUrl(
     String url, {
     StemModule? module,
@@ -449,6 +469,11 @@ class StemWorkflowApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: module,
+      tasks: tasks,
+    );
     final stack = StemStack.fromUrl(
       url,
       adapters: adapters,
@@ -461,7 +486,7 @@ class StemWorkflowApp {
       adapters: adapters,
       overrides: overrides,
       stack: stack,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
       uniqueTasks: uniqueTasks,
       uniqueTaskDefaultTtl: uniqueTaskDefaultTtl,
       uniqueTaskNamespace: uniqueTaskNamespace,
@@ -484,7 +509,7 @@ class StemWorkflowApp {
         stemApp: app,
         storeFactory: stack.workflowStore,
         eventBusFactory: eventBusFactory,
-        workerConfig: workerConfig,
+        workerConfig: resolvedWorkerConfig,
         pollInterval: pollInterval,
         leaseExtension: leaseExtension,
         workflowRegistry: workflowRegistry,
@@ -503,6 +528,11 @@ class StemWorkflowApp {
   }
 
   /// Creates a workflow app backed by a shared [StemClient].
+  ///
+  /// When [module] or [tasks] are provided and
+  /// [StemWorkerConfig.subscription] is omitted, the helper infers a worker
+  /// subscription that includes the workflow queue plus the default queues
+  /// declared on those task handlers.
   static Future<StemWorkflowApp> fromClient({
     required StemClient client,
     StemModule? module,
@@ -517,9 +547,14 @@ class StemWorkflowApp {
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
   }) async {
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: module,
+      tasks: tasks,
+    );
     final appInstance = await StemApp.fromClient(
       client,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
     );
     return StemWorkflowApp.create(
       module: module,
@@ -529,13 +564,40 @@ class StemWorkflowApp {
       stemApp: appInstance,
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: client.workflowRegistry,
       introspectionSink: introspectionSink,
     );
   }
+}
+
+StemWorkerConfig _resolveWorkflowWorkerConfig(
+  StemWorkerConfig workerConfig, {
+  StemModule? module,
+  Iterable<TaskHandler<Object?>> tasks = const [],
+}) {
+  if (workerConfig.subscription != null) {
+    return workerConfig;
+  }
+
+  final inferredSubscription =
+      module?.inferWorkerSubscription(
+        workflowQueue: workerConfig.queue,
+        additionalTasks: tasks,
+      ) ??
+      (() {
+        final tempModule = StemModule(tasks: tasks);
+        return tempModule.inferWorkerSubscription(
+          workflowQueue: workerConfig.queue,
+        );
+      })();
+
+  if (inferredSubscription == null) {
+    return workerConfig;
+  }
+  return workerConfig.copyWith(subscription: inferredSubscription);
 }
 
 /// Convenience helpers for typed workflow start calls.
