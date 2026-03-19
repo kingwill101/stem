@@ -34,30 +34,23 @@ routes:
 RoutingRegistry buildRoutingRegistry() =>
     RoutingRegistry(RoutingConfig.fromYaml(_demoRoutingYaml));
 
-SimpleTaskRegistry buildDemoTaskRegistry() {
-  return SimpleTaskRegistry()
-    ..register(
+List<TaskHandler<Object?>> buildDemoTasks() => [
       FunctionTaskHandler<void>(
         name: 'billing.invoice',
         entrypoint: _processInvoice,
         options: const TaskOptions(queue: 'standard', maxRetries: 2),
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>(
         name: 'reports.generate',
         entrypoint: _processReport,
         options: const TaskOptions(queue: 'critical', maxRetries: 3),
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>(
         name: 'ops.status',
         entrypoint: _handleBroadcast,
         options: const TaskOptions(queue: 'standard'),
       ),
-    );
-}
+    ];
 
 Future<void> _processInvoice(
   TaskInvocationContext context,

@@ -9,7 +9,7 @@ void main() {
     test('prints snapshot for idle worker', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -34,7 +34,7 @@ void main() {
           backend: backend,
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
-          registry: SimpleTaskRegistry(),
+          registry: InMemoryTaskRegistry(),
         ),
       );
 
@@ -55,7 +55,7 @@ void main() {
       final started = Completer<void>();
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_BlockingTask(started, release));
 
       final worker = Worker(
@@ -95,7 +95,7 @@ void main() {
           revokeStore: InMemoryRevokeStore(),
           routing: RoutingRegistry(RoutingConfig.legacy()),
           dispose: () async {},
-          registry: SimpleTaskRegistry(),
+          registry: InMemoryTaskRegistry(),
         ),
       );
 
@@ -114,7 +114,7 @@ void main() {
       final revokeStore = InMemoryRevokeStore();
       final started = Completer<void>();
       final release = Completer<void>();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_BlockingTask(started, release));
 
       final worker = Worker(
@@ -194,7 +194,7 @@ void main() {
       final backend = InMemoryResultBackend();
       final started = Completer<void>();
       final release = Completer<void>();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_BlockingTask(started, release));
 
       final worker = Worker(
@@ -255,7 +255,7 @@ void main() {
       final revokeStore = InMemoryRevokeStore();
       final started = Completer<void>();
       final release = Completer<void>();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_BlockingTask(started, release));
 
       final worker = Worker(
@@ -307,7 +307,7 @@ void main() {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
       final revokeStore = InMemoryRevokeStore();
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
 
       final worker = Worker(
         broker: broker,
@@ -353,7 +353,7 @@ void main() {
       final backend = InMemoryResultBackend();
       final revokeStore = InMemoryRevokeStore();
       final started = Completer<void>();
-      final registry = SimpleTaskRegistry()..register(_LoopingTask(started));
+      final registry = InMemoryTaskRegistry()..register(_LoopingTask(started));
 
       final worker = Worker(
         broker: broker,

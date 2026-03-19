@@ -9,23 +9,22 @@ import 'rate_limiter.dart';
 
 const _taskName = 'demo.throttled.render';
 
-SimpleTaskRegistry buildRegistry() {
+List<TaskHandler<Object?>> buildTasks() {
   // #region rate-limit-task-options
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: _taskName,
-        options: const TaskOptions(
-          queue: 'throttled',
-          maxRetries: 0,
-          visibilityTimeout: Duration(seconds: 60),
-          rateLimit: '3/s',
-        ),
-        entrypoint: _renderEntrypoint,
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<void>(
+      name: _taskName,
+      options: const TaskOptions(
+        queue: 'throttled',
+        maxRetries: 0,
+        visibilityTimeout: Duration(seconds: 60),
+        rateLimit: '3/s',
       ),
-    );
+      entrypoint: _renderEntrypoint,
+    ),
+  ];
   // #endregion rate-limit-task-options
-  return registry;
+  return tasks;
 }
 
 RoutingRegistry buildRoutingRegistry() {
@@ -42,13 +41,13 @@ RoutingRegistry buildRoutingRegistry() {
 
 Stem buildStem({
   required Broker broker,
-  required TaskRegistry registry,
+  required Iterable<TaskHandler<Object?>> tasks,
   ResultBackend? backend,
   RoutingRegistry? routing,
 }) {
   return Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     routing: routing,
   );

@@ -13,12 +13,12 @@ Future<void> main() async {
 
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final subscriptions = attachSignalLogging();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: queueName(),
     consumerName: Platform.environment['WORKER_NAME'] ?? 'dlq-sandbox-worker',

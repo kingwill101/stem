@@ -3,29 +3,28 @@ import 'package:stem/stem.dart';
 Future<void> main() async {
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<int>(
-        name: 'square',
-        entrypoint: (context, args) async {
-          final value = args['value'] as int;
-          await Future<void>.delayed(const Duration(milliseconds: 50));
-          return value * value;
-        },
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<int>(
+      name: 'square',
+      entrypoint: (context, args) async {
+        final value = args['value'] as int;
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        return value * value;
+      },
+    ),
+  ];
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     consumerName: 'group-worker',
     concurrency: 2,
     prefetchMultiplier: 1,
   );
   await worker.start();
 
-  final canvas = Canvas(broker: broker, backend: backend, registry: registry);
+  final canvas = Canvas(broker: broker, backend: backend, tasks: tasks);
   const groupHandle = 'squares-demo';
   await backend.initGroup(GroupDescriptor(id: groupHandle, expected: 3));
   final dispatch = await canvas.group<int>([

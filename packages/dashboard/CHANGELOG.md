@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Updated the dashboard data layer to use Ormed 0.2.0.
 - Reworked the dashboard into a richer operations console with dedicated views
   for tasks, jobs, workflows, workers, failures, audit, events, namespaces, and
   search.
@@ -13,4 +14,6 @@
   during page switches.
 - Expanded dashboard state/service/server models and test coverage to support
   the new views and metadata-rich rendering paths.
+- Clarified workflow views by labeling script-runtime nodes as checkpoints
+  instead of steps.
 - Initial release of the `stem_dashboard` package.

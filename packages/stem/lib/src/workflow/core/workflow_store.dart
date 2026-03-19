@@ -8,6 +8,7 @@ import 'package:stem/src/workflow/core/workflow_watcher.dart';
 abstract class WorkflowStore {
   /// Creates a new workflow run record and returns its run id.
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,

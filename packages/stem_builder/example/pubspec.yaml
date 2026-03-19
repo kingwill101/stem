@@ -1,0 +1,22 @@
+name: stem_builder_example
+description: Example app showing stem_builder generated registry and manifest usage.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  stem:
+    path: ../../stem
+
+dev_dependencies:
+  stem_builder:
+    path: ..
+  build_runner: ^2.10.5
+
+dependency_overrides:
+  stem:
+    path: ../../stem
+  stem_memory:
+    path: ../../stem_memory

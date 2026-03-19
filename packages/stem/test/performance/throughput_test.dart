@@ -25,7 +25,7 @@ void main() {
     final backend = InMemoryResultBackend();
     final completed = <int>{};
 
-    final registry = SimpleTaskRegistry()
+    final registry = InMemoryTaskRegistry()
       ..register(
         InlineTaskHandler<void>(
           name: 'perf.echo',

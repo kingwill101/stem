@@ -46,7 +46,7 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 
 2) Wire the signer into producers, workers, and schedulers.
 
-These snippets come from the `example/microservice` project so you can see the
+These snippets come from the `packages/stem/example/microservice` project so you can see the
 full context.
 
 <Tabs>
@@ -144,7 +144,7 @@ export STEM_SIGNING_ACTIVE_KEY=primary
 4) Remove the old key after the backlog drains.
 
 Example: producer logging the active key and enqueuing during rotation (from
-`example/signing_key_rotation`):
+`packages/stem/example/signing_key_rotation`):
 
 <Tabs>
 <TabItem value="active-key" label="Rotation: log active key + signing state">

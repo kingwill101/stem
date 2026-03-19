@@ -29,18 +29,17 @@ Future<void> main(List<String> args) async {
     exit(64);
   }
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'email.send',
-        entrypoint: _placeholderEntrypoint,
-        options: const TaskOptions(queue: 'emails', maxRetries: 3),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'email.send',
+      entrypoint: _placeholderEntrypoint,
+      options: const TaskOptions(queue: 'emails', maxRetries: 3),
+    ),
+  ];
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: signer,
   );

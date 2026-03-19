@@ -14,14 +14,14 @@ void configureMetrics() {
 Stem buildTracedStem(
   Broker broker,
   ResultBackend backend,
-  TaskRegistry registry,
+  Iterable<TaskHandler<Object?>> tasks,
 ) {
   // Configure OpenTelemetry globally; StemTracer.instance reads from it.
   final _ = StemTracer.instance;
   return Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
   );
 }
 // #endregion observability-tracing
@@ -70,20 +70,19 @@ Future<void> main() async {
   configureMetrics();
   registerSignals();
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'demo.trace',
-        entrypoint: (context, args) async {
-          print('Tracing demo task');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'demo.trace',
+      entrypoint: (context, args) async {
+        print('Tracing demo task');
+        return null;
+      },
+    ),
+  ];
 
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final stem = buildTracedStem(broker, backend, registry);
+  final stem = buildTracedStem(broker, backend, tasks);
 
   logTaskStart(
     Envelope(

@@ -29,18 +29,17 @@ Future<void> main(List<String> args) async {
     exit(64);
   }
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'image.generate_thumbnail',
-        entrypoint: _placeholderEntrypoint,
-        options: const TaskOptions(queue: 'images', maxRetries: 2),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'image.generate_thumbnail',
+      entrypoint: _placeholderEntrypoint,
+      options: const TaskOptions(queue: 'images', maxRetries: 2),
+    ),
+  ];
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: signer,
   );

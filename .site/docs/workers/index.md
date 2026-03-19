@@ -53,7 +53,8 @@ Workers can subscribe to:
   fan-out, or dedicated lanes per workload).
 
 Queue subscriptions determine which stream shards the worker polls, so keep
-queue names stable and document them alongside task registries.
+queue names stable and document them alongside the shared task definitions your
+service uses.
 
 ```dart title="routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-bootstrap
 
@@ -94,5 +95,5 @@ so scaling does not starve queues.
 - **[Daemonization Guide](./daemonization.md)** – Run workers under systemd,
   launchd, or custom supervisors.
 
-Looking for retry tuning or task registries? See the
+Looking for retry tuning or task-definition guidance? See the
 [Core Concepts](../core-concepts/index.md).

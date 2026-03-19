@@ -4,6 +4,14 @@ import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/src/contract_capabilities.dart';
 import 'package:test/test.dart';
 
+int _workflowStoreContractRunIdCounter = 0;
+final int _workflowStoreContractRunIdSeed =
+    DateTime.now().microsecondsSinceEpoch;
+
+String _nextRequestedRunId() =>
+    'contract-run-id-$_workflowStoreContractRunIdSeed-'
+    '${_workflowStoreContractRunIdCounter++}';
+
 /// Settings that tune the workflow store contract suite.
 class WorkflowStoreContractSettings {
   /// Creates workflow store contract settings.
@@ -65,6 +73,109 @@ void runWorkflowStoreContractTests({
       expect(state.cursor, 0);
       expect(state.params['user'], 1);
     });
+
+    test('createRun honors caller-provided runId when supplied', () async {
+      final current = store!;
+      final requestedRunId = _nextRequestedRunId();
+      final runId = await current.createRun(
+        runId: requestedRunId,
+        workflow: 'contract.workflow',
+        params: const {'seed': 'value'},
+      );
+
+      expect(runId, requestedRunId);
+      final state = await current.get(requestedRunId);
+      expect(state, isNotNull);
+      expect(state!.id, requestedRunId);
+      expect(state.params['seed'], 'value');
+    });
+
+    test('createRun rejects duplicate caller-provided runId', () async {
+      final current = store!;
+      final requestedRunId = _nextRequestedRunId();
+      await current.createRun(
+        runId: requestedRunId,
+        workflow: 'contract.workflow.original',
+        params: const {'seed': 'value'},
+      );
+      await current.saveStep(requestedRunId, 'checkpoint', 'persisted');
+
+      await expectLater(
+        () => current.createRun(
+          runId: requestedRunId,
+          workflow: 'contract.workflow.duplicate',
+          params: const {'seed': 'other'},
+        ),
+        throwsA(anything),
+      );
+
+      final state = await current.get(requestedRunId);
+      expect(state, isNotNull);
+      expect(state!.workflow, 'contract.workflow.original');
+      expect(state.params['seed'], 'value');
+      expect(
+        await current.readStep<String>(requestedRunId, 'checkpoint'),
+        'persisted',
+      );
+    });
+
+    test(
+      'createRun persists runtime metadata and workflowParams strips internals',
+      () async {
+        final current = store!;
+        const runtimeMetadata = WorkflowRunRuntimeMetadata(
+          workflowId: 'wf_contract_01',
+          orchestrationQueue: 'workflow',
+          continuationQueue: 'workflow',
+          executionQueue: 'workflow-step',
+          serializationFormat: 'json',
+          serializationVersion: '1',
+          frameFormat: 'stem-envelope',
+          frameVersion: '1',
+          encryptionScope: 'signed-envelope',
+          encryptionEnabled: true,
+          streamId: 'contract_stream_01',
+        );
+        final params = runtimeMetadata.attachToParams(const {
+          'tenant': 'acme',
+          'jobType': 'sync',
+        });
+
+        final runId = await current.createRun(
+          workflow: 'contract.runtime.meta',
+          params: params,
+        );
+
+        final state = await current.get(runId);
+        expect(state, isNotNull);
+        expect(
+          state!.params.containsKey(workflowRuntimeMetadataParamKey),
+          isTrue,
+        );
+        expect(
+          state.params[workflowRuntimeMetadataParamKey],
+          runtimeMetadata.toJson(),
+        );
+        expect(
+          state.workflowParams,
+          equals(const {'tenant': 'acme', 'jobType': 'sync'}),
+        );
+        expect(
+          state.workflowParams.containsKey(workflowRuntimeMetadataParamKey),
+          isFalse,
+        );
+        expect(state.orchestrationQueue, 'workflow');
+        expect(state.continuationQueue, 'workflow');
+        expect(state.executionQueue, 'workflow-step');
+        expect(state.serializationFormat, 'json');
+        expect(state.serializationVersion, '1');
+        expect(state.frameFormat, 'stem-envelope');
+        expect(state.frameVersion, '1');
+        expect(state.encryptionScope, 'signed-envelope');
+        expect(state.encryptionEnabled, isTrue);
+        expect(state.streamId, 'contract_stream_01');
+      },
+    );
 
     test('saveStep/readStep/rewind maintain checkpoints', () async {
       final current = store!;

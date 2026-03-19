@@ -41,19 +41,18 @@
 ///     encodeArgs: (args) => args,
 ///   );
 ///
-///   // 2. Setup the registry and handler
-///   final registry = SimpleTaskRegistry()
-///     ..register(FunctionTaskHandler(
+///   // 2. Define the handler
+///   final addHandler = FunctionTaskHandler(
 ///       name: 'add_task',
 ///       entrypoint: (context, args) async {
 ///         return (args['a'] as int) + (args['b'] as int);
 ///       },
-///     ));
+///     );
 ///
 ///   // 3. Initialize Stem with a broker (e.g., In-Memory for testing)
 ///   final stem = Stem(
 ///     broker: InMemoryBroker(),
-///     registry: registry,
+///     tasks: [addHandler],
 ///   );
 ///
 ///   // 4. Enqueue work and wait for the result
@@ -67,6 +66,8 @@
 /// }
 /// ```
 library;
+
+export 'package:contextual/contextual.dart' show Context, Level, Logger;
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
@@ -84,6 +85,7 @@ export 'src/backend/encoding_result_backend.dart';
 export 'src/bootstrap/factories.dart';
 export 'src/bootstrap/stem_app.dart';
 export 'src/bootstrap/stem_client.dart';
+export 'src/bootstrap/stem_module.dart';
 export 'src/bootstrap/stem_stack.dart';
 export 'src/bootstrap/workflow_app.dart';
 export 'src/canvas/canvas.dart';
@@ -97,6 +99,7 @@ export 'src/core/contracts.dart';
 export 'src/core/encoder_keys.dart';
 export 'src/core/envelope.dart';
 export 'src/core/function_task_handler.dart';
+export 'src/core/payload_codec.dart';
 export 'src/core/queue_events.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';

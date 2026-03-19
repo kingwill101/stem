@@ -59,7 +59,7 @@ void main() {
   test('traces flow from enqueue to execution', () async {
     final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
-    final registry = SimpleTaskRegistry()
+    final registry = InMemoryTaskRegistry()
       ..register(
         FunctionTaskHandler<void>(
           name: 'trace.test',
@@ -203,7 +203,7 @@ void main() {
   test('consume starts a new trace when trace headers are missing', () async {
     final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
-    final registry = SimpleTaskRegistry()
+    final registry = InMemoryTaskRegistry()
       ..register(
         FunctionTaskHandler<void>(
           name: 'trace.test',
@@ -264,7 +264,7 @@ void main() {
     () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'trace.parent',

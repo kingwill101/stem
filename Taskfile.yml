@@ -135,3 +135,34 @@ tasks:
       - task: stem_postgres:coverage
       - task: stem_redis:coverage
       - task: stem_sqlite:coverage
+
+  demo:annotated:
+    desc: Run the annotated workflows example.
+    dir: ./packages/stem/example/annotated_workflows
+    cmds:
+      - dart pub get
+      - dart run build_runner build --delete-conflicting-outputs
+      - dart run bin/main.dart
+
+  demo:builder:
+    desc: Run the stem_builder example.
+    dir: ./packages/stem_builder/example
+    cmds:
+      - dart pub get
+      - dart run build_runner build --delete-conflicting-outputs
+      - dart run bin/main.dart
+
+  demo:ecommerce:test:
+    desc: Run the ecommerce example test suite.
+    dir: ./packages/stem/example/ecommerce
+    cmds:
+      - dart pub get
+      - dart run build_runner build --delete-conflicting-outputs
+      - dart test
+
+  demo:all:
+    desc: Run the healthy example demos from the repo root.
+    cmds:
+      - task: demo:annotated
+      - task: demo:builder
+      - task: demo:ecommerce:test

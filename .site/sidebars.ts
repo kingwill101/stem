@@ -27,6 +27,41 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Workflows",
+      link: { type: "doc", id: "workflows/index" },
+      items: [
+        "workflows/getting-started",
+        {
+          type: "category",
+          label: "Foundations",
+          items: [
+            "workflows/flows-and-scripts",
+            "workflows/starting-and-waiting",
+            "workflows/suspensions-and-events",
+            "workflows/annotated-workflows",
+            "workflows/context-and-serialization",
+            "workflows/errors-retries-and-idempotency",
+          ],
+        },
+        {
+          type: "category",
+          label: "How It Works",
+          items: ["workflows/how-it-works"],
+        },
+        {
+          type: "category",
+          label: "Observability",
+          items: ["workflows/observability"],
+        },
+        {
+          type: "category",
+          label: "Troubleshooting",
+          items: ["workflows/troubleshooting"],
+        },
+      ],
+    },
+    {
+      type: "category",
       label: "Guides",
       items: [
         "comparisons/stem-vs-bullmq",
@@ -58,6 +93,7 @@ const sidebars: SidebarsConfig = {
         "core-concepts/observability",
         "core-concepts/dashboard",
         "core-concepts/persistence",
+        "core-concepts/stem-builder",
         "core-concepts/cli-control",
       ],
     },
@@ -79,8 +115,8 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
-      label: "Brokers & Backends",
-      items: ["brokers/overview", "brokers/caveats"],
+      label: "Brokers",
+      items: ["brokers/overview", "brokers/sqlite", "brokers/caveats"],
     },
   ],
 };

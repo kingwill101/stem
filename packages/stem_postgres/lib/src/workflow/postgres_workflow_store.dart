@@ -99,13 +99,17 @@ class PostgresWorkflowStore implements WorkflowStore {
 
   @override
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final id = _uuid.v7();
+    final id =
+        (runId != null && runId.trim().isNotEmpty)
+        ? runId.trim()
+        : _uuid.v7();
     final now = _clock.now().toUtc();
     final workflowName = workflow;
 

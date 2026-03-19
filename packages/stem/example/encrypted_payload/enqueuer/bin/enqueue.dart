@@ -23,18 +23,17 @@ Future<void> main(List<String> args) async {
   }
   final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'secure.report',
-        entrypoint: _noopEntrypoint,
-        options: TaskOptions(queue: config.defaultQueue),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'secure.report',
+      entrypoint: _noopEntrypoint,
+      options: TaskOptions(queue: config.defaultQueue),
+    ),
+  ];
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );

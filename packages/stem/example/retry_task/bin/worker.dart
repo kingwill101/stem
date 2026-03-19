@@ -16,13 +16,13 @@ Future<void> main() async {
     claimInterval: const Duration(milliseconds: 200),
     defaultVisibilityTimeout: const Duration(seconds: 2),
   );
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final backend = InMemoryResultBackend();
 
   // #region reliability-retry-worker
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: 'retry-demo',
     consumerName: workerName,

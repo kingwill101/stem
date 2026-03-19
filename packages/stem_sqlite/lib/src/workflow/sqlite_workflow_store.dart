@@ -82,6 +82,7 @@ class SqliteWorkflowStore implements WorkflowStore {
 
   @override
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,
@@ -89,7 +90,10 @@ class SqliteWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final now = _clock.now().toUtc();
-    final id = 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
+    final id =
+        (runId != null && runId.trim().isNotEmpty)
+        ? runId.trim()
+        : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final policyJson = cancellationPolicy == null || cancellationPolicy.isEmpty
         ? null
         : jsonEncode(cancellationPolicy.toJson());

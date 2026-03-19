@@ -24,23 +24,22 @@ Future<void> main(List<String> args) async {
     connectionString: backendUrl,
   );
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'report.generate',
-        entrypoint: _reportEntrypoint,
-        options: TaskOptions(
-          queue: config.defaultQueue,
-          maxRetries: 3,
-          softTimeLimit: const Duration(seconds: 5),
-          hardTimeLimit: const Duration(seconds: 10),
-        ),
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'report.generate',
+      entrypoint: _reportEntrypoint,
+      options: TaskOptions(
+        queue: config.defaultQueue,
+        maxRetries: 3,
+        softTimeLimit: const Duration(seconds: 5),
+        hardTimeLimit: const Duration(seconds: 10),
       ),
-    );
+    ),
+  ];
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: config.defaultQueue,
     consumerName: 'postgres-worker-1',

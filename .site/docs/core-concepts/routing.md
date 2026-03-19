@@ -3,6 +3,7 @@ title: Routing Configuration
 sidebar_label: Routing
 sidebar_position: 3
 slug: /core-concepts/routing
+description: Load routing config, build worker subscriptions, and resolve queue or broadcast targets in Stem.
 ---
 
 Stem workers and publishers resolve queue and broadcast targets from the routing

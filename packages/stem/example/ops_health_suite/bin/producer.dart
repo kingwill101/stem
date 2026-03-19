@@ -8,7 +8,7 @@ Future<void> main() async {
   final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
   final backend = await connectBackend(backendUrl, tls: config.tls);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   final taskCount = _parseInt('TASKS', fallback: 6, min: 1);
   final delayMs = _parseInt('DELAY_MS', fallback: 400, min: 0);
@@ -17,7 +17,7 @@ Future<void> main() async {
     '[producer] broker=${config.brokerUrl} backend=$backendUrl tasks=$taskCount',
   );
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
   const options = TaskOptions(queue: opsQueue);
 
   for (var i = 0; i < taskCount; i += 1) {

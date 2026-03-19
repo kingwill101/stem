@@ -237,6 +237,32 @@ redis.call('ZREM', dueKey, runId)
 return 1
 ''';
 
+  static const _luaCreateRun = '''
+local runKey = KEYS[1]
+local stepsKey = KEYS[2]
+local orderKey = KEYS[3]
+
+if redis.call('EXISTS', runKey) == 1 then
+  return 0
+end
+
+redis.call('DEL', stepsKey, orderKey)
+redis.call('HSET', runKey,
+  'workflow', ARGV[1],
+  'status', ARGV[2],
+  'params', ARGV[3],
+  'created_at', ARGV[4],
+  'updated_at', ARGV[5],
+  'owner_id', ARGV[6],
+  'lease_expires_at', ARGV[7])
+
+if ARGV[8] ~= '' then
+  redis.call('HSET', runKey, 'cancellation_policy', ARGV[8])
+end
+
+return 1
+''';
+
   static const _luaClaimRun = '''
 local runKey = KEYS[1]
 
@@ -322,6 +348,7 @@ return 1
 
   @override
   Future<String> createRun({
+    String? runId,
     required String workflow,
     required Map<String, Object?> params,
     String? parentRunId,
@@ -330,32 +357,31 @@ return 1
   }) async {
     final now = _clock.now();
     final nowIso = now.toIso8601String();
-    final id = 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
-    final command = [
-      'HSET',
+    final id =
+        (runId != null && runId.trim().isNotEmpty)
+        ? runId.trim()
+        : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
+    final result = await _send([
+      'EVAL',
+      _luaCreateRun,
+      '3',
       _runKey(id),
-      'workflow',
+      _stepsKey(id),
+      _orderKey(id),
       workflow,
-      'status',
       WorkflowStatus.running.name,
-      'params',
       jsonEncode(params),
-      'created_at',
       nowIso,
-      'updated_at',
       nowIso,
-      'owner_id',
       '',
-      'lease_expires_at',
       '',
-    ];
-    if (cancellationPolicy != null && !cancellationPolicy.isEmpty) {
-      command
-        ..add('cancellation_policy')
-        ..add(jsonEncode(cancellationPolicy.toJson()));
+      cancellationPolicy != null && !cancellationPolicy.isEmpty
+          ? jsonEncode(cancellationPolicy.toJson())
+          : '',
+    ]);
+    if (result != 1 && result != '1') {
+      throw StateError('Workflow run "$id" already exists.');
     }
-    await _send(command);
-    await _send(['DEL', _stepsKey(id), _orderKey(id)]);
     return id;
   }
 

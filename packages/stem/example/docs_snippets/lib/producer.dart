@@ -38,22 +38,21 @@ Future<void> enqueueWithRedis() async {
 
   final broker = await RedisStreamsBroker.connect(brokerUrl);
   final backend = await RedisResultBackend.connect('$brokerUrl/1');
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'reports.generate',
-        entrypoint: (context, args) async {
-          final id = args['reportId'] as String? ?? 'unknown';
-          print('Queued report $id');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'reports.generate',
+      entrypoint: (context, args) async {
+        final id = args['reportId'] as String? ?? 'unknown';
+        print('Queued report $id');
+        return null;
+      },
+    ),
+  ];
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
   );
 
   await stem.enqueue(
@@ -75,21 +74,20 @@ Future<void> enqueueWithSigning() async {
     tls: config.tls,
   );
   final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'billing.charge',
-        entrypoint: (context, args) async {
-          final customerId = args['customerId'] as String? ?? 'unknown';
-          print('Queued charge for $customerId');
-          return null;
-        },
-      ),
-    );
+  final tasks = [
+    FunctionTaskHandler<void>(
+      name: 'billing.charge',
+      entrypoint: (context, args) async {
+        final customerId = args['customerId'] as String? ?? 'unknown';
+        print('Queued charge for $customerId');
+        return null;
+      },
+    ),
+  ];
   final stem = Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );
 

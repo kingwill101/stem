@@ -20,7 +20,7 @@ void main() {
 
     final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
-    final registry = SimpleTaskRegistry()
+    final registry = InMemoryTaskRegistry()
       ..register(
         FunctionTaskHandler<void>(
           name: 'metrics.test',

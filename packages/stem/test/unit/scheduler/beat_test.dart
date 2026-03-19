@@ -24,7 +24,7 @@ void main() {
     test('fires schedule once per interval', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final store = InMemoryScheduleStore();
       final beat = Beat(
         store: store,
@@ -75,7 +75,7 @@ void main() {
 
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final store = InMemoryScheduleStore();
       final beat = Beat(
         store: store,
@@ -126,7 +126,7 @@ void main() {
 
     test('disables one-shot schedules after execution', () async {
       final broker = InMemoryBroker();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final backend = InMemoryResultBackend();
       final store = InMemoryScheduleStore();
       final beat = Beat(
@@ -170,7 +170,7 @@ void main() {
     test('only one beat instance dispatches when locks used', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final store = InMemoryScheduleStore();
       final lockStore = InMemoryLockStore();
       final beatA = Beat(

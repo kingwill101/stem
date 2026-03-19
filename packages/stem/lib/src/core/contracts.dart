@@ -275,6 +275,101 @@ class TaskStatus {
   /// Worker id that reported this status, if available.
   String? get workerId => meta['worker']?.toString();
 
+  /// Workflow name associated with this task status, if any.
+  String? get workflowName => _taskStatusString(
+    meta,
+    const ['stem.workflow.name', 'workflow.name', 'workflow'],
+  );
+
+  /// Workflow run identifier associated with this task status, if any.
+  String? get workflowRunId => _taskStatusString(
+    meta,
+    const ['stem.workflow.runId', 'workflow.runId'],
+  );
+
+  /// Stable workflow definition identifier, if provided.
+  String? get workflowId => _taskStatusString(
+    meta,
+    const ['stem.workflow.id', 'workflow.id'],
+  );
+
+  /// Workflow step name associated with this task status, if any.
+  String? get workflowStep => _taskStatusString(
+    meta,
+    const ['stem.workflow.step', 'workflow.step', 'step'],
+  );
+
+  /// Workflow step index associated with this task status, if any.
+  int? get workflowStepIndex => _taskStatusInt(
+    meta,
+    const ['stem.workflow.stepIndex', 'workflow.stepIndex'],
+  );
+
+  /// Workflow iteration associated with this task status, if any.
+  int? get workflowIteration => _taskStatusInt(
+    meta,
+    const ['stem.workflow.iteration', 'workflow.iteration'],
+  );
+
+  /// Workflow channel (`orchestration` or `execution`) for this status.
+  String? get workflowChannel => _taskStatusString(
+    meta,
+    const ['stem.workflow.channel', 'workflow.channel'],
+  );
+
+  /// Whether this status represents a continuation orchestration dispatch.
+  bool get workflowContinuation =>
+      meta['stem.workflow.continuation'] == true ||
+      meta['workflow.continuation'] == true;
+
+  /// Continuation reason label when present.
+  String? get workflowContinuationReason => _taskStatusString(
+    meta,
+    const [
+      'stem.workflow.continuationReason',
+      'workflow.continuationReason',
+    ],
+  );
+
+  /// Orchestration queue associated with the workflow runtime.
+  String? get workflowOrchestrationQueue => _taskStatusString(
+    meta,
+    const ['stem.workflow.orchestrationQueue', 'workflow.orchestrationQueue'],
+  );
+
+  /// Continuation queue associated with the workflow runtime.
+  String? get workflowContinuationQueue => _taskStatusString(
+    meta,
+    const ['stem.workflow.continuationQueue', 'workflow.continuationQueue'],
+  );
+
+  /// Execution queue associated with the workflow runtime.
+  String? get workflowExecutionQueue => _taskStatusString(
+    meta,
+    const ['stem.workflow.executionQueue', 'workflow.executionQueue'],
+  );
+
+  /// Serialization format used by the workflow run context.
+  String? get workflowSerializationFormat => _taskStatusString(
+    meta,
+    const ['stem.workflow.serialization.format', 'workflow.serialization'],
+  );
+
+  /// Serialization version used by the workflow run context.
+  String? get workflowSerializationVersion => _taskStatusString(
+    meta,
+    const [
+      'stem.workflow.serialization.version',
+      'workflow.serialization.version',
+    ],
+  );
+
+  /// Per-run stream identifier used for framing metadata.
+  String? get workflowStreamId => _taskStatusString(
+    meta,
+    const ['stem.workflow.stream.id', 'workflow.stream.id'],
+  );
+
   /// Processing start timestamp recorded by the worker, if present.
   DateTime? get startedAt => _taskStatusDate(meta['startedAt']);
 
@@ -327,6 +422,28 @@ DateTime? _taskStatusDate(Object? value) {
   if (value == null) return null;
   if (value is DateTime) return value.toUtc();
   return DateTime.tryParse(value.toString())?.toUtc();
+}
+
+String? _taskStatusString(Map<String, Object?> meta, List<String> keys) {
+  for (final key in keys) {
+    final value = meta[key];
+    if (value == null) continue;
+    final text = value.toString().trim();
+    if (text.isNotEmpty) return text;
+  }
+  return null;
+}
+
+int? _taskStatusInt(Map<String, Object?> meta, List<String> keys) {
+  for (final key in keys) {
+    final value = meta[key];
+    if (value == null) continue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    final parsed = int.tryParse(value.toString());
+    if (parsed != null) return parsed;
+  }
+  return null;
 }
 
 Duration? _taskStatusDuration(Object? value) {
@@ -983,7 +1100,7 @@ class TaskOptions {
   /// The rate limit for tasks with these options.
   final String? rateLimit;
 
-  /// Group-scoped rate limit shared by tasks that resolve to 
+  /// Group-scoped rate limit shared by tasks that resolve to
   /// the same group key.
   final String? groupRateLimit;
 
@@ -1769,7 +1886,7 @@ abstract class TaskRegistry {
 }
 
 /// Default in-memory registry implementation.
-class SimpleTaskRegistry implements TaskRegistry {
+class InMemoryTaskRegistry implements TaskRegistry {
   final Map<String, TaskHandler<Object?>> _handlers = {};
   final StreamController<TaskRegistrationEvent> _registerController =
       StreamController<TaskRegistrationEvent>.broadcast();
@@ -1804,6 +1921,10 @@ class SimpleTaskRegistry implements TaskRegistry {
   @override
   Stream<TaskRegistrationEvent> get onRegister => _registerController.stream;
 }
+
+/// Backwards-compatible alias for the default in-memory registry.
+@Deprecated('Use InMemoryTaskRegistry instead.')
+typedef SimpleTaskRegistry = InMemoryTaskRegistry;
 
 /// Optional task metadata for documentation and tooling.
 class TaskMetadata {

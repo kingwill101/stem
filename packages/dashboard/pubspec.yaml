@@ -9,7 +9,7 @@ resolution: workspace
 dependencies:
   intl: ^0.20.2
   meta: ^1.18.0
-  ormed: ^0.1.0
+  ormed: ^0.2.0
   routed: ^0.3.2
   routed_hotwire: ^0.1.2
   stem: ^0.1.0
@@ -29,4 +29,3 @@ dev_dependencies:
 dependency_overrides:
   analyzer: ^10.0.1
   artisanal: ^0.2.0
-

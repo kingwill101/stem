@@ -2,14 +2,21 @@ name: stem_annotated_workflows
 description: Example app using annotated Stem workflows and tasks.
 publish_to: 'none'
 version: 0.0.1
-resolution: workspace
 
 environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  stem: ^0.1.0
+  stem:
+    path: ../..
 
 dev_dependencies:
-  build_runner: ^2.10.4
-  stem_builder: ^0.1.0
+  build_runner: ^2.10.5
+  stem_builder:
+    path: ../../../stem_builder
+
+dependency_overrides:
+  stem:
+    path: ../..
+  stem_memory:
+    path: ../../../stem_memory

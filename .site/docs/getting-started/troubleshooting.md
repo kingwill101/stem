@@ -63,7 +63,8 @@ Checklist:
 
 - Validate the routing file path and format (YAML/JSON).
 - Confirm `STEM_ROUTING_CONFIG` points at the file you expect.
-- Confirm the registry matches the task names referenced in the file.
+- Confirm the routing config or routing registry matches the task names
+  referenced in the file.
 - If you use queue priorities, ensure the broker supports them.
 
 <Tabs>
@@ -74,7 +75,7 @@ Checklist:
 ```
 
 </TabItem>
-<TabItem value="inline" label="Inline routing registry">
+<TabItem value="inline" label="Inline routing config">
 
 ```dart title="lib/routing.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/routing.dart#routing-inline
 

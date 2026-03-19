@@ -19,11 +19,11 @@ Future<void> main() async {
 
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   final stem = Stem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
   );
   const taskOptions = TaskOptions(queue: progressQueue);

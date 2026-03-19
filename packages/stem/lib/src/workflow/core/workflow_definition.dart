@@ -11,8 +11,8 @@
 /// 1. **Flow**: A list of discrete `FlowStep`s that execute in order. This is
 ///    the most common model and is easily visualized.
 /// 2. **Script**: A procedural Dart function that uses `context.step` to
-///    wrap individual pieces of work. This allows for complex branching
-///    logic and loops using standard Dart control flow.
+///    create durable checkpoints around individual pieces of work. This allows
+///    for complex branching logic and loops using standard Dart control flow.
 ///
 /// ## Versioning and Metadata
 ///
@@ -38,7 +38,7 @@
 /// ```dart
 /// final script = WorkflowDefinition.script(
 ///   name: 'process_order',
-///   body: (context) async {
+///   run: (context) async {
 ///     await context.step('validate_order', ...);
 ///     if (isPremium) {
 ///       await context.step('apply_discount', ...);
@@ -54,7 +54,9 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
@@ -76,8 +78,9 @@ enum WorkflowDefinitionKind {
 }
 
 /// Declarative workflow definition built via [FlowBuilder] or a higher-level
-/// script facade. The definition captures the ordered steps that the runtime
-/// will execute along with optional script metadata used by the facade runner.
+/// script facade. Flow definitions capture an ordered execution plan. Script
+/// definitions capture a script body plus optional checkpoint metadata used for
+/// introspection and tooling.
 class WorkflowDefinition<T extends Object?> {
   /// Internal constructor used by builders and script facades.
   WorkflowDefinition._({
@@ -89,9 +92,13 @@ class WorkflowDefinition<T extends Object?> {
     this.description,
     Map<String, Object?>? metadata,
     this.scriptBody,
+    Object? Function(Object? value)? resultEncoder,
+    Object? Function(Object? payload)? resultDecoder,
   }) : _kind = kind,
        _steps = steps,
        _edges = edges,
+       _resultEncoder = resultEncoder,
+       _resultDecoder = resultDecoder,
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
   /// Rehydrates a workflow definition from serialized JSON.
@@ -111,7 +118,7 @@ class WorkflowDefinition<T extends Object?> {
       return WorkflowDefinition._(
         name: json['name']?.toString() ?? '',
         kind: kind,
-        steps: const [],
+        steps: steps,
         edges: edges,
         version: json['version']?.toString(),
         description: json['description']?.toString(),
@@ -136,12 +143,23 @@ class WorkflowDefinition<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
+    PayloadCodec<T>? resultCodec,
   }) {
     final steps = <FlowStep>[];
     build(FlowBuilder(steps));
     final edges = <WorkflowEdge>[];
     for (var i = 0; i < steps.length - 1; i += 1) {
       edges.add(WorkflowEdge(from: steps[i].name, to: steps[i + 1].name));
+    }
+    Object? Function(Object?)? resultEncoder;
+    Object? Function(Object?)? resultDecoder;
+    if (resultCodec != null) {
+      resultEncoder = (Object? value) {
+        return resultCodec.encodeDynamic(value);
+      };
+      resultDecoder = (Object? payload) {
+        return resultCodec.decodeDynamic(payload);
+      };
     }
     return WorkflowDefinition._(
       name: name,
@@ -151,6 +169,8 @@ class WorkflowDefinition<T extends Object?> {
       version: version,
       description: description,
       metadata: metadata,
+      resultEncoder: resultEncoder,
+      resultDecoder: resultDecoder,
     );
   }
 
@@ -158,18 +178,34 @@ class WorkflowDefinition<T extends Object?> {
   factory WorkflowDefinition.script({
     required String name,
     required WorkflowScriptBody<T> run,
+    Iterable<FlowStep> steps = const [],
+    Iterable<FlowStep> checkpoints = const [],
     String? version,
     String? description,
     Map<String, Object?>? metadata,
+    PayloadCodec<T>? resultCodec,
   }) {
+    final declaredCheckpoints = checkpoints.isNotEmpty ? checkpoints : steps;
+    Object? Function(Object?)? resultEncoder;
+    Object? Function(Object?)? resultDecoder;
+    if (resultCodec != null) {
+      resultEncoder = (Object? value) {
+        return resultCodec.encodeDynamic(value);
+      };
+      resultDecoder = (Object? payload) {
+        return resultCodec.decodeDynamic(payload);
+      };
+    }
     return WorkflowDefinition._(
       name: name,
       kind: WorkflowDefinitionKind.script,
-      steps: const [],
+      steps: List<FlowStep>.unmodifiable(declaredCheckpoints),
       version: version,
       description: description,
       metadata: metadata,
       scriptBody: run,
+      resultEncoder: resultEncoder,
+      resultDecoder: resultDecoder,
     );
   }
 
@@ -191,6 +227,9 @@ class WorkflowDefinition<T extends Object?> {
   /// Optional script body when using the script facade.
   final WorkflowScriptBody<T>? scriptBody;
 
+  final Object? Function(Object? value)? _resultEncoder;
+  final Object? Function(Object? payload)? _resultDecoder;
+
   /// Ordered list of steps for flow-based workflows.
   List<FlowStep> get steps => List.unmodifiable(_steps);
 
@@ -199,6 +238,53 @@ class WorkflowDefinition<T extends Object?> {
 
   /// Whether this definition represents a script-based workflow.
   bool get isScript => _kind == WorkflowDefinitionKind.script;
+
+  /// Looks up a declared step/checkpoint by its base name.
+  FlowStep? stepByName(String name) {
+    for (final step in _steps) {
+      if (step.name == name) {
+        return step;
+      }
+    }
+    return null;
+  }
+
+  /// Encodes a final workflow result before it is persisted.
+  Object? encodeResult(Object? value) {
+    if (value == null) return null;
+    final encoder = _resultEncoder;
+    if (encoder == null) return value;
+    return encoder(value);
+  }
+
+  /// Decodes a persisted final workflow result.
+  Object? decodeResult(Object? payload) {
+    if (payload == null) return null;
+    final decoder = _resultDecoder;
+    if (decoder == null) return payload;
+    return decoder(payload);
+  }
+
+  /// Stable identifier derived from immutable workflow definition fields.
+  String get stableId {
+    final basis = StringBuffer()
+      ..write(name)
+      ..write('|')
+      ..write(_kind.name)
+      ..write('|')
+      ..write(version ?? '')
+      ..write('|');
+    for (final step in _steps) {
+      basis
+        ..write(step.name)
+        ..write(':')
+        ..write(step.kind.name)
+        ..write(':')
+        ..write(step.autoVersion ? '1' : '0')
+        ..write('|');
+    }
+    return _stableHexDigest(basis.toString());
+  }
 
   /// Serialize the workflow definition for introspection.
   Map<String, Object?> toJson() {
@@ -218,6 +304,17 @@ class WorkflowDefinition<T extends Object?> {
       'edges': _edges.map((edge) => edge.toJson()).toList(),
     };
   }
+}
+
+String _stableHexDigest(String input) {
+  final bytes = utf8.encode(input);
+  var hash = 0xcbf29ce484222325;
+  const prime = 0x00000100000001B3;
+  for (final value in bytes) {
+    hash ^= value;
+    hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;
+  }
+  return hash.toRadixString(16).padLeft(16, '0');
 }
 
 /// Describes a directed edge between workflow steps.
@@ -283,25 +380,37 @@ class FlowBuilder {
   /// When [autoVersion] is `true`, the runtime stores checkpoints using a
   /// `name#iteration` convention so each execution is tracked separately and
   /// the handler receives the iteration number via [FlowContext.iteration].
-  void step(
+  void step<T extends Object?>(
     String name,
-    FutureOr<dynamic> Function(FlowContext context) handler, {
+    FutureOr<T> Function(FlowContext context) handler, {
     bool autoVersion = false,
     String? title,
     WorkflowStepKind kind = WorkflowStepKind.task,
     Iterable<String> taskNames = const [],
     Map<String, Object?>? metadata,
+    PayloadCodec<T>? valueCodec,
   }) {
     _steps.add(
-      FlowStep(
-        name: name,
-        handler: handler,
-        autoVersion: autoVersion,
-        title: title,
-        kind: kind,
-        taskNames: taskNames,
-        metadata: metadata,
-      ),
+      valueCodec == null
+          ? FlowStep(
+              name: name,
+              handler: handler,
+              autoVersion: autoVersion,
+              title: title,
+              kind: kind,
+              taskNames: taskNames,
+              metadata: metadata,
+            )
+          : FlowStep.typed<T>(
+              name: name,
+              handler: handler,
+              valueCodec: valueCodec,
+              autoVersion: autoVersion,
+              title: title,
+              kind: kind,
+              taskNames: taskNames,
+              metadata: metadata,
+            ),
     );
   }
 }

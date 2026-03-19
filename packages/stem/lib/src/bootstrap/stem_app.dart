@@ -103,7 +103,7 @@ class StemApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
-    final taskRegistry = registry ?? SimpleTaskRegistry();
+    final taskRegistry = registry ?? InMemoryTaskRegistry();
     tasks.forEach(taskRegistry.register);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();

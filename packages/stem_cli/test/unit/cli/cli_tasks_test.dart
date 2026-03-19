@@ -8,7 +8,7 @@ void main() {
   group('stem tasks', () {
     test('lists tasks with metadata', () async {
       final broker = InMemoryBroker();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'task.one',
@@ -52,7 +52,7 @@ void main() {
 
     test('emits json when requested', () async {
       final broker = InMemoryBroker();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>(
             name: 'task.two',

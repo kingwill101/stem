@@ -8,11 +8,12 @@ slug: /core-concepts/tasks
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Tasks are the units of work executed by Stem workers. Each task is represented by
-a handler registered in a `TaskRegistry`. Handlers expose metadata through
-`TaskOptions`, which control routing, retry behavior, timeouts, and isolation.
+Tasks are the units of work executed by Stem workers. In the common path, you
+provide handlers directly via `tasks: [...]` on `Stem`, `Worker`, `StemApp`, or
+`StemClient`. Handlers expose metadata through `TaskOptions`, which control
+routing, retry behavior, timeouts, and isolation.
 
-## Registering Handlers
+## Providing Handlers
 
 <Tabs>
 <TabItem value="in-memory" label="In-memory (tasks/email_task.dart)">
@@ -59,7 +60,7 @@ retry cadence by:
 - Tuning the broker connection (e.g. Redis `blockTime`, `claimInterval`,
   `defaultVisibilityTimeout`) so delayed messages are drained quickly.
 
-See the `examples/retry_task` Compose demo for a runnable setup that prints
+See the `packages/stem/example/retry_task` Compose demo for a runnable setup that prints
 every retry signal and shows how the strategy interacts with broker timings.
 
 ```dart title="lib/retry_backoff.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/retry_backoff.dart#retry-backoff-strategy
@@ -82,9 +83,9 @@ every retry signal and shows how the strategy interacts with broker timings.
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.
 
-See the `example/task_context_mixed` demo for a runnable sample that exercises
+See the `packages/stem/example/task_context_mixed` demo for a runnable sample that exercises
 inline + isolate enqueue, TaskRetryPolicy overrides, and enqueue options.
-The `example/task_usage_patterns.dart` sample shows in-memory TaskContext and
+The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory TaskContext and
 TaskInvocationContext patterns without external dependencies.
 
 ### Enqueue from a running task
@@ -177,4 +178,5 @@ metadata overrides:
 
 Because encoders are centrally registered inside the
 `TaskPayloadEncoderRegistry`, every producer/worker instance that shares the
-registry can resolve encoder ids reliably—even across processes or languages.
+same encoder configuration can resolve encoder ids reliably, even across
+processes or languages.

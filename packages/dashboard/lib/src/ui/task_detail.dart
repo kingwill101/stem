@@ -170,12 +170,12 @@ String buildWorkflowSection(
 
 <section class="table-card mt-7 ring-1 ring-inset ring-sky-300/10">
   <header class="border-b border-slate-300/10 px-4 py-3">
-    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Workflow Steps</h2>
+    <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300">Workflow Checkpoints</h2>
   </header>
   <table>
     <thead>
       <tr>
-        <th scope="col">Step</th>
+        <th scope="col">Checkpoint</th>
         <th scope="col">Position</th>
         <th scope="col">Completed</th>
         <th scope="col">Value</th>

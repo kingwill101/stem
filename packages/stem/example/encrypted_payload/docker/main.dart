@@ -15,16 +15,15 @@ Future<void> main(List<String> args) async {
   final broker = await RedisStreamsBroker.connect(config.brokerUrl);
   final backend = await RedisResultBackend.connect(config.resultBackendUrl!);
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'secure.report',
-        entrypoint: _noopEntrypoint,
-        options: TaskOptions(queue: config.defaultQueue),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'secure.report',
+      entrypoint: _noopEntrypoint,
+      options: TaskOptions(queue: config.defaultQueue),
+    ),
+  ];
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
 
   final jobs = [
     {'customerId': 'cust-1001', 'amount': 1250.75},

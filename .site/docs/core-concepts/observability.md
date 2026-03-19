@@ -60,15 +60,16 @@ control-plane commands.
 
 ## Workflow Introspection
 
-Workflow runtimes can emit step-level events (started/completed/failed/retrying)
-through a `WorkflowIntrospectionSink`. Use it to publish step telemetry or
-bridge to your own tracing/logging systems.
+Workflow runtimes can emit execution events (started/completed/failed/retrying)
+for both flow steps and script checkpoints through a
+`WorkflowIntrospectionSink`. Use it to publish workflow telemetry or bridge to
+your own tracing/logging systems.
 
 ```dart
 class LoggingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
   @override
   Future<void> recordStepEvent(WorkflowStepEvent event) async {
-    stemLogger.info('workflow.step', {
+    stemLogger.info('workflow.execution', {
       'run': event.runId,
       'workflow': event.workflow,
       'step': event.stepId,
@@ -111,5 +112,6 @@ A minimal dashboard typically charts:
 - Scheduler drift (`StemSignals.onScheduleEntryDispatched` drift metrics).
 
 Exporters can be mixed—enable console during development and OTLP in staging/
-production. For local exploration, run the `examples/otel_metrics` stack to see
-metrics in a collector + Jaeger pipeline.
+production. For local exploration, run the
+`packages/stem/example/otel_metrics` stack to see metrics in a collector +
+Jaeger pipeline.

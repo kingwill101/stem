@@ -1,8 +1,21 @@
-import 'package:contextual/contextual.dart';
-import 'package:stem/src/observability/logging.dart';
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('package:stem exports logging types used by the public API', () {
+    void acceptsStemLogger(Logger logger, Level level) {
+      logger.setLevel(level);
+    }
+
+    final context = stemLogContext(
+      component: 'stem',
+      subsystem: 'worker',
+    );
+
+    acceptsStemLogger(stemLogger, Level.critical);
+    expect(context, isA<Context>());
+  });
+
   test('configureStemLogging updates logger level', () {
     configureStemLogging(level: Level.debug);
     configureStemLogging(level: Level.warning);

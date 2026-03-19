@@ -4,17 +4,13 @@ import 'dart:convert';
 import 'package:stem/stem.dart';
 
 // #region reliability-retry-registry
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry()
-    ..register(
+List<TaskHandler<Object?>> buildTasks() => [
       FunctionTaskHandler<void>(
         name: 'tasks.always_fail',
         entrypoint: _alwaysFailEntrypoint,
         options: const TaskOptions(maxRetries: 2, queue: 'retry-demo'),
       ),
-    );
-  return registry;
-}
+    ];
 // #endregion reliability-retry-registry
 
 // #region reliability-retry-signals

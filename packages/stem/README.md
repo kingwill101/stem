@@ -23,7 +23,7 @@ dart pub add stem           # core runtime APIs
 dart pub add stem_redis     # Redis broker + result backend
 dart pub add stem_postgres  # (optional) Postgres broker + backend
 dart pub add stem_sqlite    # (optional) SQLite broker + backend
-dart pub add -d stem_builder # (optional) registry builder
+dart pub add -d stem_builder # (optional) workflow/task code generator
 dart pub global activate stem_cli
 ```
 
@@ -129,12 +129,15 @@ class HelloTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(HelloTask());
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
-  final worker = Worker(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
+  final worker = Worker(
+    broker: broker,
+    backend: backend,
+    tasks: [HelloTask()],
+  );
 
   unawaited(worker.start());
   await stem.enqueue('demo.hello', args: {'name': 'Stem'});
@@ -179,12 +182,15 @@ class HelloArgs {
 }
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(HelloTask());
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
-  final worker = Worker(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
+  final worker = Worker(
+    broker: broker,
+    backend: backend,
+    tasks: [HelloTask()],
+  );
 
   unawaited(worker.start());
   await stem.enqueueCall(
@@ -285,7 +291,7 @@ final app = await StemWorkflowApp.inMemory(
         });
 
         await script.step('poll-shipment', (step) async {
-          final resume = step.takeResumeData();
+          final resume = step.takeResumeValue<bool>();
           if (resume != true) {
             await step.sleep(const Duration(seconds: 30));
             return 'waiting';
@@ -316,8 +322,270 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - `step.iteration` tracks the current auto-version suffix when
   `autoVersion: true` is set.
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
-- `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
-  you can branch on resume paths.
+- `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface
+  payloads from sleeps or awaited events so you can branch on resume paths.
+
+### Current workflow model
+
+Stem supports three workflow authoring styles today:
+
+1. `Flow<T>` for explicit orchestration
+2. `WorkflowScript` for function-style durable workflows
+3. `stem_builder` for annotated workflows with generated workflow refs
+
+The runtime shape is the same in every case:
+
+- bootstrap a `StemWorkflowApp`
+- pass `flows:`, `scripts:`, and `tasks:` directly
+- start runs with `startWorkflow(...)` or generated workflow refs
+- wait with `waitForCompletion(...)`
+
+You do not need to build task registries manually for normal workflow usage.
+
+#### Manual `Flow`
+
+Use `Flow` when you want explicit step orchestration and fine control over
+resume behavior:
+
+```dart
+final approvalsFlow = Flow<String>(
+  name: 'approvals.flow',
+  build: (flow) {
+    flow.step('draft', (ctx) async {
+      final payload = ctx.params['draft'] as Map<String, Object?>;
+      return payload['documentId'];
+    });
+
+    flow.step('manager-review', (ctx) async {
+      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      if (resume == null) {
+        await ctx.awaitEvent('approvals.manager');
+        return null;
+      }
+      return resume['approvedBy'] as String?;
+    });
+
+    flow.step('finalize', (ctx) async {
+      final approvedBy = ctx.previousResult as String?;
+      return 'approved-by:$approvedBy';
+    });
+  },
+);
+
+final app = await StemWorkflowApp.fromUrl(
+  'memory://',
+  flows: [approvalsFlow],
+  tasks: const [],
+);
+
+final runId = await app.startWorkflow(
+  'approvals.flow',
+  params: {
+    'draft': {'documentId': 'doc-42'},
+  },
+);
+
+final result = await app.waitForCompletion<String>(runId);
+print(result?.value);
+await app.close();
+```
+
+#### Manual `WorkflowScript`
+
+Use `WorkflowScript` when you want your workflow to read like a normal async
+function while still persisting durable checkpoints:
+
+```dart
+final billingRetryScript = WorkflowScript(
+  name: 'billing.retry-script',
+  run: (script) async {
+    final chargeId = await script.step<String>('charge', (ctx) async {
+      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      if (resume == null) {
+        await ctx.awaitEvent('billing.charge.prepared');
+        return 'pending';
+      }
+      return resume['chargeId'] as String;
+    });
+
+    return script.step<String>('confirm', (ctx) async {
+      ctx.idempotencyKey('confirm-$chargeId');
+      return 'receipt-$chargeId';
+    });
+  },
+);
+
+final app = await StemWorkflowApp.inMemory(
+  scripts: [billingRetryScript],
+  tasks: const [],
+);
+```
+
+#### Annotated workflows with `stem_builder`
+
+Use `stem_builder` when you want the best DX: plain method signatures,
+generated manifests, and typed workflow refs.
+
+The important part of the model is that `run(...)` calls other annotated
+methods directly. Those method calls are what become durable script checkpoints in
+the generated proxy.
+
+The conceptual split is:
+
+- `Flow`: declared steps are the execution plan
+- `WorkflowScript`: `run(...)` is the execution plan, and declared checkpoints
+  are manifest/introspection metadata
+
+```dart
+import 'package:stem/stem.dart';
+
+part 'definitions.stem.g.dart';
+
+@WorkflowDefn(name: 'builder.example.user_signup', kind: WorkflowKind.script)
+class BuilderUserSignupWorkflow {
+  Future<Map<String, Object?>> run(String email) async {
+    final user = await createUser(email);
+    await sendWelcomeEmail(email);
+    await sendOneWeekCheckInEmail(email);
+    return {'userId': user['id'], 'status': 'done'};
+  }
+
+  @WorkflowStep(name: 'create-user')
+  Future<Map<String, Object?>> createUser(String email) async {
+    return {'id': 'user:$email'};
+  }
+
+  @WorkflowStep(name: 'send-welcome-email')
+  Future<void> sendWelcomeEmail(String email) async {}
+
+  @WorkflowStep(name: 'send-one-week-check-in-email')
+  Future<void> sendOneWeekCheckInEmail(String email) async {}
+}
+
+@TaskDefn(name: 'builder.example.task')
+Future<void> builderExampleTask(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {}
+```
+
+There are two supported script entry styles:
+
+- plain direct-call style:
+  - `Future<T> run(String email, ...)`
+  - best when your annotated step methods only take serializable parameters
+- context-aware style:
+  - `@WorkflowRun()`
+  - `Future<T> run(WorkflowScriptContext script, String email, ...)`
+  - use this when you need to enter a step explicitly with `script.step(...)`
+    so the step body can receive `WorkflowScriptStepContext`
+
+Context injection works at every runtime layer:
+
+- flow steps can take `FlowContext`
+- script runs can take `WorkflowScriptContext`
+- script steps can take `WorkflowScriptStepContext`
+- tasks can take `TaskInvocationContext`
+
+Serializable parameter rules for generated workflows and tasks are strict:
+
+- supported:
+  - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
+  - `List<T>` where `T` is serializable
+  - `Map<String, T>` where `T` is serializable
+  - DTO classes with:
+    - `Map<String, Object?> toJson()`
+    - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent
+      named `fromJson` constructor
+- not supported directly:
+  - optional/named parameters on generated workflow/task entrypoints
+
+Typed task results can use the same DTO convention.
+
+Workflow inputs, checkpoint values, and final workflow results can use the same
+DTO convention. The generated `PayloadCodec` persists the JSON form while
+workflow code continues to work with typed objects.
+
+See the runnable example:
+
+- [example/annotated_workflows](example/annotated_workflows)
+  - `FlowContext` metadata
+  - plain proxy-driven script step calls
+  - `WorkflowScriptContext` + `WorkflowScriptStepContext`
+  - codec-backed workflow checkpoint values and workflow results
+  - typed `@TaskDefn` decoding scalar, `Map`, and `List` parameters
+
+Generate code:
+
+```bash
+dart run build_runner build
+```
+
+Wire the generated bundle directly into `StemWorkflowApp`:
+
+```dart
+final app = await StemWorkflowApp.fromUrl(
+  'memory://',
+  module: stemModule,
+);
+
+final result = await StemWorkflowDefinitions.userSignup
+    .call((email: 'user@example.com'))
+    .startAndWaitWithApp(app);
+print(result?.value);
+await app.close();
+```
+
+Generated output gives you:
+
+- `stemModule`
+- `StemWorkflowDefinitions`
+- `StemTaskDefinitions`
+- typed enqueue helpers on `TaskEnqueuer`
+- typed result wait helpers on `Stem`
+
+If your service already owns a `StemApp`, reuse it:
+
+```dart
+final client = await StemClient.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+);
+
+final workflowApp = await client.createWorkflowApp(
+  module: stemModule,
+);
+```
+
+#### Mixing workflows and normal tasks
+
+A workflow can orchestrate durable steps and still enqueue ordinary Stem tasks
+for side effects:
+
+```dart
+flow.step('emit-side-effects', (ctx) async {
+  final order = ctx.previousResult as Map<String, Object?>;
+
+  await ctx.enqueuer!.enqueue(
+    'ecommerce.audit.log',
+    args: {
+      'event': 'order.checked_out',
+      'entityId': order['id'],
+      'detail': 'cart=${order['cartId']}',
+    },
+    options: const TaskOptions(queue: 'default'),
+  );
+
+  return order;
+});
+```
+
+That split is the intended model:
+
+- workflows coordinate durable state transitions
+- regular tasks handle side effects and background execution
+- both are wired into the same app, and generated modules bundle the two
+  surfaces together
 
 ### Typed workflow completion
 
@@ -338,6 +606,19 @@ if (result?.isCompleted == true) {
   inspectSuspension(result?.state);
 }
 ```
+
+In the example above, these calls inside `run(...)`:
+
+```dart
+final user = await createUser(email);
+await sendWelcomeEmail(email);
+await sendOneWeekCheckInEmail(email);
+```
+
+are transformed by generated code into durable `script.step(...)` calls. See
+the generated proxy in
+`packages/stem_builder/example/lib/definitions.stem.g.dart` for the concrete
+lowering.
 
 ### Typed task completion
 
@@ -445,7 +726,7 @@ final client = await StemClient.inMemory(
 final canvas = Canvas(
   broker: broker,
   backend: backend,
-  registry: registry,
+  tasks: [SecretTask()],
   resultEncoder: const Base64ResultEncoder(),
   argsEncoder: const Base64ResultEncoder(),
 );
@@ -493,8 +774,8 @@ final unique = UniqueTaskCoordinator(
 
 final stem = Stem(
   broker: broker,
-  registry: registry,
   backend: backend,
+  tasks: [OrdersSyncTask()],
   uniqueTaskCoordinator: unique,
 );
 ```
@@ -547,13 +828,14 @@ backend metadata under `stem.unique.duplicates`.
 - Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
   runtime skips re-suspending once the stored `resumeAt` is reached so loop
   handlers can simply call `sleep` without extra guards.
-- Use `ctx.takeResumeData()` to detect whether a step is resuming. Call it at
-  the start of the handler and branch accordingly.
+- Use `ctx.takeResumeData()` or `ctx.takeResumeValue<T>(codec: ...)` to detect
+  whether a step is resuming. Call it at the start of the handler and branch
+  accordingly.
 - When you suspend, provide a marker in the `data` payload so the resumed step
   can distinguish the wake-up path. For example:
 
   ```dart
-  final resume = ctx.takeResumeData();
+  final resume = ctx.takeResumeValue<bool>();
   if (resume != true) {
     ctx.sleep(const Duration(milliseconds: 200));
     return null;
@@ -561,7 +843,11 @@ backend metadata under `stem.unique.duplicates`.
   ```
 
 - Awaited events behave the same way: the emitted payload is delivered via
-  `takeResumeData()` when the run resumes.
+  `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
+- When you have a DTO event, emit it through `runtime.emitValue(...)` /
+  `workflowApp.emitValue(...)` with a `PayloadCodec<T>` instead of hand-building
+  the payload map. Event payloads still serialize onto the existing
+  `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

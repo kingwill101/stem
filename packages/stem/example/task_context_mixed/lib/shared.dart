@@ -102,10 +102,8 @@ final linkErrorDefinition = TaskDefinition<Map<String, Object?>, void>(
   defaultOptions: const TaskOptions(queue: mixedQueue),
 );
 
-SimpleTaskRegistry buildRegistry() {
-  return SimpleTaskRegistry()
-    ..register(InlineCoordinatorTask())
-    ..register(
+List<TaskHandler<Object?>> buildTasks() => [
+      InlineCoordinatorTask(),
       FunctionTaskHandler<void>.inline(
         name: 'demo.inline_entrypoint',
         entrypoint: inlineEntrypoint,
@@ -115,8 +113,6 @@ SimpleTaskRegistry buildRegistry() {
           tags: ['task-context', 'inline'],
         ),
       ),
-    )
-    ..register(
       FunctionTaskHandler<Object?>(
         name: 'demo.isolate_child',
         entrypoint: isolateChildEntrypoint,
@@ -126,8 +122,6 @@ SimpleTaskRegistry buildRegistry() {
           tags: ['task-context', 'isolate'],
         ),
       ),
-    )
-    ..register(
       FunctionTaskHandler<Object?>(
         name: 'demo.flaky',
         entrypoint: flakyEntrypoint,
@@ -146,32 +140,25 @@ SimpleTaskRegistry buildRegistry() {
           tags: ['task-context', 'retry'],
         ),
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>.inline(
         name: auditDefinition.name,
         entrypoint: auditEntrypoint,
         options: auditDefinition.defaultOptions,
         metadata: auditDefinition.metadata,
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>.inline(
         name: linkSuccessDefinition.name,
         entrypoint: linkSuccessEntrypoint,
         options: linkSuccessDefinition.defaultOptions,
         metadata: linkSuccessDefinition.metadata,
       ),
-    )
-    ..register(
       FunctionTaskHandler<void>.inline(
         name: linkErrorDefinition.name,
         entrypoint: linkErrorEntrypoint,
         options: linkErrorDefinition.defaultOptions,
         metadata: linkErrorDefinition.metadata,
       ),
-    );
-}
+    ];
 
 class InlineCoordinatorTask extends TaskHandler<void> {
   @override

@@ -23,11 +23,11 @@ Future<void> main() async {
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
   final revokeStore = await connectRevokeStore(revokeUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     revokeStore: revokeStore,
     queue: controlQueue,

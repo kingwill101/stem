@@ -115,9 +115,9 @@ class _Args {
 }
 
 void main() {
-  group('SimpleTaskRegistry', () {
+  group('InMemoryTaskRegistry', () {
     test('emits registration events', () async {
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final events = <TaskRegistrationEvent>[];
       final sub = registry.onRegister.listen(events.add);
 
@@ -138,7 +138,7 @@ void main() {
       expect(events.last.handler, same(second));
     });
     test('throws when registering duplicate handler without override', () {
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_DuplicateHandler('sample.task'));
 
       expect(
@@ -154,7 +154,7 @@ void main() {
     });
 
     test('allows overriding when requested explicitly', () {
-      final registry = SimpleTaskRegistry();
+      final registry = InMemoryTaskRegistry();
       final original = _TestHandler('sample.task');
       final replacement = _TestHandler('sample.task');
 
@@ -166,7 +166,7 @@ void main() {
     });
 
     test('exposes registered handlers as read-only list', () {
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_TestHandler('first'))
         ..register(_TestHandler('second'));
 
@@ -191,6 +191,18 @@ void main() {
       final handler = _TestHandler('meta', description: 'Example task');
       expect(handler.metadata.description, 'Example task');
     });
+
+    test('retains SimpleTaskRegistry as a compatibility alias', () {
+      // Compatibility coverage intentionally exercises the deprecated symbol.
+      // ignore: deprecated_member_use_from_same_package
+      final registry = SimpleTaskRegistry();
+      // A single plain call is clearer here than forcing a one-off cascade.
+      // ignore: cascade_invocations
+      registry.register(_TestHandler('legacy.task'));
+
+      expect(registry, isA<InMemoryTaskRegistry>());
+      expect(registry.resolve('legacy.task')?.name, 'legacy.task');
+    });
   });
 
   group('TaskDefinition', () {
@@ -208,9 +220,10 @@ void main() {
 
     test('enqueues via Stem.enqueueCall', () async {
       final broker = _FakeBroker();
-      final registry = SimpleTaskRegistry()
-        ..register(_TestHandler('demo.task'));
-      final stem = Stem(broker: broker, registry: registry);
+      final stem = Stem(
+        broker: broker,
+        tasks: [_TestHandler('demo.task')],
+      );
 
       final definition = TaskDefinition<_Args, void>(
         name: 'demo.task',

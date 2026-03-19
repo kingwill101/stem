@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
@@ -38,12 +39,40 @@ class FlowStep {
     required this.handler,
     this.autoVersion = false,
     String? title,
+    Object? Function(Object? value)? valueEncoder,
+    Object? Function(Object? payload)? valueDecoder,
     this.kind = WorkflowStepKind.task,
     Iterable<String> taskNames = const [],
     Map<String, Object?>? metadata,
   }) : title = title ?? name,
+       _valueEncoder = valueEncoder,
+       _valueDecoder = valueDecoder,
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
+
+  /// Creates a step definition backed by a typed [valueCodec].
+  static FlowStep typed<T>({
+    required String name,
+    required FutureOr<dynamic> Function(FlowContext context) handler,
+    required PayloadCodec<T> valueCodec,
+    bool autoVersion = false,
+    String? title,
+    WorkflowStepKind kind = WorkflowStepKind.task,
+    Iterable<String> taskNames = const [],
+    Map<String, Object?>? metadata,
+  }) {
+    return FlowStep(
+      name: name,
+      handler: handler,
+      autoVersion: autoVersion,
+      title: title,
+      valueEncoder: valueCodec.encodeDynamic,
+      valueDecoder: valueCodec.decodeDynamic,
+      kind: kind,
+      taskNames: taskNames,
+      metadata: metadata,
+    );
+  }
 
   /// Rehydrates a flow step from serialized JSON.
   factory FlowStep.fromJson(Map<String, Object?> json) {
@@ -67,6 +96,9 @@ class FlowStep {
   /// Step kind classification.
   final WorkflowStepKind kind;
 
+  final Object? Function(Object? value)? _valueEncoder;
+  final Object? Function(Object? payload)? _valueDecoder;
+
   /// Task names associated with this step (for UI introspection).
   final List<String> taskNames;
 
@@ -89,6 +121,22 @@ class FlowStep {
       'autoVersion': autoVersion,
       if (metadata != null) 'metadata': metadata,
     };
+  }
+
+  /// Encodes a step value before it is persisted.
+  Object? encodeValue(Object? value) {
+    if (value == null) return null;
+    final encoder = _valueEncoder;
+    if (encoder == null) return value;
+    return encoder(value);
+  }
+
+  /// Decodes a persisted step value back into the author-facing type.
+  Object? decodeValue(Object? payload) {
+    if (payload == null) return null;
+    final decoder = _valueDecoder;
+    if (decoder == null) return payload;
+    return decoder(payload);
   }
 }
 

@@ -17,13 +17,13 @@ Future<void> main() async {
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
   final rateLimiter = await connectRateLimiter(rateUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final subscriptions = attachSignalLogging();
 
   // #region rate-limit-worker
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     rateLimiter: rateLimiter,
     queue: 'throttled',

@@ -8,7 +8,7 @@ slug: /comparisons/stem-vs-bullmq
 This page is the canonical Stem comparison matrix for BullMQ-style features.
 It focuses on capability parity, not API-level compatibility.
 
-**As of:** February 24, 2026
+**As of:** March 18, 2026
 
 ## Status semantics
 
@@ -27,7 +27,7 @@ It focuses on capability parity, not API-level compatibility.
 | Group Rate Limit | `✓` | Stem supports group-scoped rate limiting via `TaskOptions.groupRateLimit`, `groupRateKey`, and `groupRateKeyHeader`. See [Rate Limiting](../core-concepts/rate-limiting.md). |
 | Group Support | `✓` | Stem provides `Canvas.group` and `Canvas.chord` primitives. See [Canvas Patterns](../core-concepts/canvas.md). |
 | Batches Support | `✓` | Stem exposes first-class batch APIs (`submitBatch`, `inspectBatch`) with durable batch lifecycle status. See [Canvas Patterns](../core-concepts/canvas.md). |
-| Parent/Child Dependencies | `✓` | Stem supports dependency composition through chains, groups/chords, and workflow steps. See [Canvas Patterns](../core-concepts/canvas.md) and [Workflows](../core-concepts/workflows.md). |
+| Parent/Child Dependencies | `✓` | Stem supports dependency composition through chains, groups/chords, and durable workflow stages. See [Canvas Patterns](../core-concepts/canvas.md) and [Workflows](../workflows/index.md). |
 | Deduplication (Debouncing) | `~` | `TaskOptions.unique` prevents duplicate enqueue claims, but semantics are lock/TTL-based rather than BullMQ-native dedupe APIs. See [Uniqueness](../core-concepts/uniqueness.md). |
 | Deduplication (Throttling) | `~` | `uniqueFor` and lock TTL windows approximate throttling behavior, but are not a direct BullMQ equivalent. See [Uniqueness](../core-concepts/uniqueness.md). |
 | Priorities | `✓` | Stem supports task priority and queue priority ranges. See [Tasks](../core-concepts/tasks.md) and [Routing](../core-concepts/routing.md). |
@@ -41,7 +41,7 @@ It focuses on capability parity, not API-level compatibility.
 | Atomic ops | `~` | Stem includes atomic behavior in specific stores/flows, but end-to-end transactional guarantees (for all enqueue/ack/result paths) are not universally built-in. See [Tasks idempotency guidance](../core-concepts/tasks.md#idempotency-checklist) and [Best Practices](../getting-started/best-practices.md). |
 | Persistence | `✓` | Stem persists task/workflow/schedule state through pluggable backends/stores. See [Persistence & Stores](../core-concepts/persistence.md). |
 | UI | `~` | Stem includes an experimental dashboard, not a fully mature operator UI parity target yet. See [Dashboard](../core-concepts/dashboard.md). |
-| Optimized for | `~` | Stem is optimized for jobs/messages plus durable workflow orchestration, not only queue semantics. See [Core Concepts](../core-concepts/index.md) and [Workflows](../core-concepts/workflows.md). |
+| Optimized for | `~` | Stem is optimized for jobs/messages plus durable workflow orchestration, not only queue semantics. See [Core Concepts](../core-concepts/index.md) and [Workflows](../workflows/index.md). |
 
 ## Update policy
 

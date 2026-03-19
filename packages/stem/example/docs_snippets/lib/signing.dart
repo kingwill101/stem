@@ -30,13 +30,13 @@ PayloadSigner? buildSigningSigner() {
 Stem buildSignedProducer(
   Broker broker,
   ResultBackend backend,
-  TaskRegistry registry,
+  Iterable<TaskHandler<Object?>> tasks,
   PayloadSigner? signer,
 ) {
   return Stem(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     signer: signer,
   );
 }
@@ -53,13 +53,13 @@ PayloadSigner? buildWorkerSigner() {
 Worker buildSignedWorker(
   Broker broker,
   ResultBackend backend,
-  TaskRegistry registry,
+  Iterable<TaskHandler<Object?>> tasks,
   PayloadSigner? signer,
 ) {
   return Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     signer: signer,
     queue: 'billing',
     consumerName: 'billing-worker',
@@ -109,16 +109,16 @@ Future<void> enqueueDuringRotation(Stem stem) async {
 Future<void> main() async {
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final registry = SimpleTaskRegistry()..register(BillingTask());
+  final tasks = [BillingTask()];
   final signer = buildSigningSigner();
 
-  final stem = buildSignedProducer(broker, backend, registry, signer);
+  final stem = buildSignedProducer(broker, backend, tasks, signer);
   await stem.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_demo', 'amount': 2500},
   );
 
-  final worker = buildSignedWorker(broker, backend, registry, signer);
+  final worker = buildSignedWorker(broker, backend, tasks, signer);
   unawaited(worker.start());
   await Future<void>.delayed(const Duration(milliseconds: 200));
   await worker.shutdown();

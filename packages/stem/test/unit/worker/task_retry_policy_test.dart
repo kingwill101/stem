@@ -22,7 +22,7 @@ void main() {
         name: 'tasks.policy',
         options: const TaskOptions(maxRetries: 1, retryPolicy: policy),
       );
-      final registry = SimpleTaskRegistry()..register(task);
+      final registry = InMemoryTaskRegistry()..register(task);
       final worker = Worker(
         broker: broker,
         registry: registry,
@@ -74,7 +74,7 @@ void main() {
         jitter: false,
         defaultDelay: Duration(milliseconds: 15),
       );
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           _PolicyFlakyTask(
             name: 'tasks.override',
@@ -133,7 +133,7 @@ void main() {
         autoRetryFor: [StateError],
         dontAutoRetryFor: [ArgumentError],
       );
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           _AlwaysErrorTask(
             name: 'tasks.filtered',
@@ -179,7 +179,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(_ExplicitRetryTask('tasks.explicit'));
 
       final worker = Worker(
@@ -220,7 +220,7 @@ void main() {
     test('retry semantics converge based on max retries', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_FlakyTask());
+      final registry = InMemoryTaskRegistry()..register(_FlakyTask());
       final worker = Worker(
         broker: broker,
         registry: registry,

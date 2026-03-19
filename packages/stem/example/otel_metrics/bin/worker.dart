@@ -4,18 +4,17 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'metrics.ping',
-        entrypoint: (context, _) async {
-          // Simulate a bit of work.
-          await Future<void>.delayed(const Duration(milliseconds: 150));
-          context.progress(1.0);
-          return null;
-        },
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<void>(
+      name: 'metrics.ping',
+      entrypoint: (context, _) async {
+        // Simulate a bit of work.
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+        context.progress(1.0);
+        return null;
+      },
+    ),
+  ];
 
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
@@ -31,14 +30,14 @@ Future<void> main() async {
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     consumerName: 'otel-demo-worker',
     observability: observability,
     heartbeatTransport: const NoopHeartbeatTransport(),
   );
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
 
   await worker.start();
   print(

@@ -14,17 +14,13 @@ Future<RedisResultBackend> connectBackend(String url, {TlsConfig? tls}) {
   return RedisResultBackend.connect(url, tls: tls);
 }
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry();
-  registry.register(
-    FunctionTaskHandler<void>(
-      name: 'autoscale.work',
-      options: const TaskOptions(queue: autoscaleQueue),
-      entrypoint: _autoscaleEntrypoint,
-    ),
-  );
-  return registry;
-}
+List<TaskHandler<Object?>> buildTasks() => [
+      FunctionTaskHandler<void>(
+        name: 'autoscale.work',
+        options: const TaskOptions(queue: autoscaleQueue),
+        entrypoint: _autoscaleEntrypoint,
+      ),
+    ];
 
 FutureOr<void> _autoscaleEntrypoint(
   TaskInvocationContext context,

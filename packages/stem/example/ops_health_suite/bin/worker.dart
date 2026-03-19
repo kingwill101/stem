@@ -10,12 +10,12 @@ Future<void> main() async {
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
   final backend = await connectBackend(backendUrl, tls: config.tls);
 
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final observability = ObservabilityConfig.fromEnvironment();
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     queue: opsQueue,
     subscription: RoutingSubscription.singleQueue(opsQueue),

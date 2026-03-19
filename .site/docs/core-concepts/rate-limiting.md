@@ -79,7 +79,7 @@ import TabItem from '@theme/TabItem';
 ```
 
 </TabItem>
-<TabItem value="registry" label="Bootstrap StemApp">
+<TabItem value="app" label="Bootstrap StemApp">
 
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-registry
 
@@ -157,7 +157,7 @@ Group rate limits share a limiter bucket across related tasks.
 
 ## Redis-backed limiter example
 
-The `example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
+The `packages/stem/example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
 
 - shares tokens across multiple workers,
 - logs when a token is granted or denied,

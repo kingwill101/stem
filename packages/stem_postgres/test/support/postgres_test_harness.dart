@@ -34,8 +34,6 @@ Future<StemPostgresTestHarness> createStemPostgresTestHarness({
   required String connectionString,
   bool? logging,
 }) async {
-  ensurePostgresDriverRegistration();
-
   final enableLogging =
       logging ?? Platform.environment['STEM_TEST_POSTGRES_LOGGING'] == 'true';
   final dataSource = createDataSource(

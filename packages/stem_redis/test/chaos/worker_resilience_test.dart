@@ -17,7 +17,7 @@ void main() {
 
     final succeeded = Completer<void>();
 
-    final registry = SimpleTaskRegistry()
+    final registry = InMemoryTaskRegistry()
       ..register(
         InlineTaskHandler<void>(
           name: 'chaos.resilience',

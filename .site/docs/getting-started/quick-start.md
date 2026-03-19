@@ -20,7 +20,7 @@ cd stem_quickstart
 
 # Add Stem as a dependency and activate the CLI.
 dart pub add stem
-dart pub global activate stem
+dart pub global activate stem_cli
 ```
 
 Add the Dart pub cache to your `PATH` so the `stem` CLI is reachable:
@@ -62,7 +62,7 @@ Each task declares its name and retry/timeout options.
 Use `StemApp` to wire tasks, the in-memory broker/backend, and the worker:
 
 <Tabs>
-<TabItem value="bootstrap" label="Registry + runtime bootstrap">
+<TabItem value="bootstrap" label="Tasks + runtime bootstrap">
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/quick_start.dart#quickstart-bootstrap
 

@@ -92,11 +92,17 @@ startup:
 Swap the in-memory adapters for Redis/Postgres when you deploy, keeping the API
 surface the same.
 
+If your service wants a higher-level bootstrap that owns broker/backend/tasks
+in one place, use `StemApp` or `StemClient` instead of wiring raw `Stem` and
+`Worker` instances by hand. This page stays focused on the lower-level
+embedding path.
+
 ## Checklist
 
 - Reuse producer and worker objects—avoid per-request construction.
-- Inject the `TaskRegistry` from a central module so producers and workers stay
-  in sync.
+- Keep a shared `tasks` list/module so producers and workers stay in sync.
+- Reach for a custom `TaskRegistry` only when you need advanced dynamic
+  registration behavior.
 - Capture task IDs returned by `Stem.enqueue` when you need to poll results or
   correlate with your own auditing.
 - Emit lifecycle signals (`StemSignals`) and wire logs/metrics early so

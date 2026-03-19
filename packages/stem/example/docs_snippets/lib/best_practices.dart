@@ -35,15 +35,15 @@ Future<void> enqueueTyped(Stem stem) async {
 // #endregion best-practices-enqueue
 
 Future<void> main() async {
-  final registry = SimpleTaskRegistry()..register(IdempotentTask());
   final broker = InMemoryBroker();
   final backend = InMemoryResultBackend();
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
+  final tasks = [IdempotentTask()];
+  final stem = Stem(broker: broker, backend: backend, tasks: tasks);
 
   final worker = Worker(
     broker: broker,
-    registry: registry,
     backend: backend,
+    tasks: tasks,
     queue: 'default',
   );
   unawaited(worker.start());

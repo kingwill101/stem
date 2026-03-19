@@ -47,12 +47,15 @@ class HelloArgs {
 
 Future<void> main() async {
   // #region getting-started-runtime-setup
-  final registry = SimpleTaskRegistry()..register(HelloTask());
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
   final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
 
-  final stem = Stem(broker: broker, registry: registry, backend: backend);
-  final worker = Worker(broker: broker, registry: registry, backend: backend);
+  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
+  final worker = Worker(
+    broker: broker,
+    backend: backend,
+    tasks: [HelloTask()],
+  );
   // #endregion getting-started-runtime-setup
 
   // #region getting-started-enqueue

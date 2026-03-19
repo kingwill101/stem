@@ -13,11 +13,11 @@ Future<void> main() async {
 
   final broker = await connectBroker(brokerUrl);
   final backend = await connectBackend(backendUrl);
-  final registry = buildRegistry();
+  final tasks = buildTasks();
   final routing = buildRoutingRegistry();
   final stem = buildStem(
     broker: broker,
-    registry: registry,
+    tasks: tasks,
     backend: backend,
     routing: routing,
   );

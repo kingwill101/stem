@@ -1,9 +1,12 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
+import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/contracts.dart' show TaskHandler;
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -11,6 +14,7 @@ import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -112,6 +116,58 @@ class StemWorkflowApp {
     );
   }
 
+  /// Schedules a workflow run from a typed [WorkflowRef].
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    if (!_started) {
+      return start().then(
+        (_) => runtime.startWorkflowRef(
+          definition,
+          params,
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        ),
+      );
+    }
+    return runtime.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Schedules a workflow run from a prebuilt [WorkflowStartCall].
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return startWorkflowRef(
+      call.definition,
+      call.params,
+      parentRunId: call.parentRunId,
+      ttl: call.ttl,
+      cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  /// Emits a typed event to resume runs waiting on [topic].
+  ///
+  /// This is a convenience wrapper over [WorkflowRuntime.emitValue].
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) {
+    return runtime.emitValue(topic, value, codec: codec);
+  }
+
   /// Returns the current [RunState] of a workflow run, or `null` if not found.
   ///
   /// Example:
@@ -161,6 +217,24 @@ class StemWorkflowApp {
       }
       await Future<void>.delayed(pollInterval);
     }
+  }
+
+  /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  Future<WorkflowResult<TResult>?> waitForWorkflowRef<
+    TParams,
+    TResult extends Object?
+  >(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return waitForCompletion<TResult>(
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+      decode: definition.decode,
+    );
   }
 
   WorkflowResult<T> _buildResult<T extends Object?>(
@@ -225,9 +299,11 @@ class StemWorkflowApp {
   /// );
   /// ```
   static Future<StemWorkflowApp> create({
+    StemModule? module,
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     StemApp? stemApp,
     StemBrokerFactory? broker,
     StemBackendFactory? backend,
@@ -243,6 +319,9 @@ class StemWorkflowApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
+    final moduleTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final moduleWorkflowDefinitions =
+        module?.workflowDefinitions ?? const <WorkflowDefinition>[];
     final appInstance =
         stemApp ??
         await StemApp.create(
@@ -272,15 +351,15 @@ class StemWorkflowApp {
       introspectionSink: introspectionSink,
     );
 
+    [...moduleTasks, ...tasks].forEach(appInstance.register);
     appInstance.register(runtime.workflowRunnerHandler());
 
-    workflows.forEach(runtime.registerWorkflow);
-    for (final flow in flows) {
-      runtime.registerWorkflow(flow.definition);
-    }
-    for (final script in scripts) {
-      runtime.registerWorkflow(script.definition);
-    }
+    [
+      ...moduleWorkflowDefinitions,
+      ...workflows,
+      ...flows.map((flow) => flow.definition),
+      ...scripts.map((script) => script.definition),
+    ].forEach(runtime.registerWorkflow);
 
     return StemWorkflowApp._(
       app: appInstance,
@@ -303,9 +382,11 @@ class StemWorkflowApp {
   /// );
   /// ```
   static Future<StemWorkflowApp> inMemory({
+    StemModule? module,
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
@@ -317,9 +398,11 @@ class StemWorkflowApp {
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return StemWorkflowApp.create(
+      module: module,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
+      tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
       storeFactory: WorkflowStoreFactory.inMemory(),
@@ -342,9 +425,11 @@ class StemWorkflowApp {
   /// optional per-store overrides via [StemStack.fromUrl].
   static Future<StemWorkflowApp> fromUrl(
     String url, {
+    StemModule? module,
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     Iterable<StemStoreAdapter> adapters = const [],
     StemStoreOverrides overrides = const StemStoreOverrides(),
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
@@ -391,9 +476,11 @@ class StemWorkflowApp {
 
     try {
       return await create(
+        module: module,
         workflows: workflows,
         flows: flows,
         scripts: scripts,
+        tasks: tasks,
         stemApp: app,
         storeFactory: stack.workflowStore,
         eventBusFactory: eventBusFactory,
@@ -418,9 +505,11 @@ class StemWorkflowApp {
   /// Creates a workflow app backed by a shared [StemClient].
   static Future<StemWorkflowApp> fromClient({
     required StemClient client,
+    StemModule? module,
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
@@ -433,6 +522,7 @@ class StemWorkflowApp {
       workerConfig: workerConfig,
     );
     return StemWorkflowApp.create(
+      module: module,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -444,6 +534,54 @@ class StemWorkflowApp {
       leaseExtension: leaseExtension,
       workflowRegistry: client.workflowRegistry,
       introspectionSink: introspectionSink,
+    );
+  }
+}
+
+/// Convenience helpers for typed workflow start calls.
+extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
+    on WorkflowStartCall<TParams, TResult> {
+  /// Starts this workflow call with [app].
+  Future<String> startWithApp(StemWorkflowApp app) {
+    return app.startWorkflowCall(this);
+  }
+
+  /// Starts this workflow call with [app] and waits for the typed result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithApp(
+    StemWorkflowApp app, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final runId = await app.startWorkflowCall(this);
+    return definition.waitFor(
+      app,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this workflow call with [runtime].
+  Future<String> startWithRuntime(WorkflowRuntime runtime) {
+    return runtime.startWorkflowCall(this);
+  }
+}
+
+/// Convenience helpers for waiting on workflow results using a typed reference.
+extension WorkflowRefAppExtension<TParams, TResult extends Object?>
+    on WorkflowRef<TParams, TResult> {
+  /// Waits for [runId] using this workflow reference's decode rules.
+  Future<WorkflowResult<TResult>?> waitFor(
+    StemWorkflowApp app,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return app.waitForWorkflowRef(
+      runId,
+      this,
+      pollInterval: pollInterval,
+      timeout: timeout,
     );
   }
 }

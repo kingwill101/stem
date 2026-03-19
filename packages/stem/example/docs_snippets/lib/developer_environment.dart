@@ -7,7 +7,7 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 // #region dev-env-bootstrap
-Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
+Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
   // #region dev-env-config
   final config = StemConfig.fromEnvironment(Platform.environment);
   // #endregion dev-env-config
@@ -32,7 +32,7 @@ Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
   final stem = Stem(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
     routing: routing,
   );
   // #endregion dev-env-stem
@@ -42,7 +42,7 @@ Future<Bootstrap> bootstrapStem(SimpleTaskRegistry registry) async {
   final worker = Worker(
     broker: broker,
     backend: backend,
-    registry: registry,
+    tasks: tasks,
     revokeStore: revokeStore,
     rateLimiter: rateLimiter,
     queue: config.defaultQueue,
@@ -84,7 +84,7 @@ class Bootstrap {
 // #region dev-env-canvas
 Future<void> runCanvasFlows(
   Bootstrap bootstrap,
-  SimpleTaskRegistry registry,
+  List<TaskHandler<Object?>> tasks,
 ) async {
   final canvas = Canvas(
     broker: bootstrap.stem.broker,
@@ -95,7 +95,7 @@ Future<void> runCanvasFlows(
         1,
       ),
     ),
-    registry: registry,
+    tasks: tasks,
   );
 
   final ids = await canvas.group([
@@ -187,43 +187,38 @@ Future<void> main() async {
     return;
   }
 
-  final registry = SimpleTaskRegistry()
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'media.resize',
-        entrypoint: (context, args) async {
-          final file = args['file'] as String? ?? 'asset.png';
-          print('Resized $file');
-          return file;
-        },
-      ),
-    )
-    ..register(
-      FunctionTaskHandler<String>(
-        name: 'reports.render',
-        entrypoint: (context, args) async {
-          final week = args['week'] as String? ?? '2024-W01';
-          print('Rendered report $week');
-          return week;
-        },
-      ),
-    )
-    ..register(
-      FunctionTaskHandler<void>(
-        name: 'billing.email-receipt',
-        entrypoint: (context, args) async {
-          final to = args['to'] as String? ?? 'ops@example.com';
-          print('Queued receipt email to $to');
-          return null;
-        },
-        options: const TaskOptions(queue: 'emails'),
-      ),
-    );
+  final tasks = <TaskHandler<Object?>>[
+    FunctionTaskHandler<String>(
+      name: 'media.resize',
+      entrypoint: (context, args) async {
+        final file = args['file'] as String? ?? 'asset.png';
+        print('Resized $file');
+        return file;
+      },
+    ),
+    FunctionTaskHandler<String>(
+      name: 'reports.render',
+      entrypoint: (context, args) async {
+        final week = args['week'] as String? ?? '2024-W01';
+        print('Rendered report $week');
+        return week;
+      },
+    ),
+    FunctionTaskHandler<void>(
+      name: 'billing.email-receipt',
+      entrypoint: (context, args) async {
+        final to = args['to'] as String? ?? 'ops@example.com';
+        print('Queued receipt email to $to');
+        return null;
+      },
+      options: const TaskOptions(queue: 'emails'),
+    ),
+  ];
 
   installSignalHandlers();
-  final bootstrap = await bootstrapStem(registry);
+  final bootstrap = await bootstrapStem(tasks);
   await bootstrap.worker.start();
-  await runCanvasFlows(bootstrap, registry);
+  await runCanvasFlows(bootstrap, tasks);
   await Future<void>.delayed(const Duration(seconds: 1));
   await bootstrap.worker.shutdown();
 }

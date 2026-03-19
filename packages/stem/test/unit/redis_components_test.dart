@@ -327,7 +327,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 30),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 
       final taskId = await stem.enqueue('noop');
@@ -350,7 +350,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 30),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()..register(_NoopTask());
+      final registry = InMemoryTaskRegistry()..register(_NoopTask());
       final stem = Stem(broker: broker, registry: registry, backend: backend);
 
       final taskId = await stem.enqueue('noop');

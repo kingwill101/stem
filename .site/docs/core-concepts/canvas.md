@@ -9,7 +9,7 @@ This guide walks through Stem's task composition primitives—chains, groups, an
 chords—using in-memory brokers and backends. Each snippet references a runnable
 file under `packages/stem/example/docs_snippets/` so you can experiment locally
 with `dart run`. If you bootstrap with `StemApp`, use `app.canvas` to reuse the
-same broker, backend, registry, and encoder registry.
+same broker, backend, task handlers, and encoder registry.
 
 ## Chains
 

@@ -18,13 +18,8 @@ Future<RedisRevokeStore> connectRevokeStore(String url) {
   return RedisRevokeStore.connect(url, namespace: 'stem');
 }
 
-SimpleTaskRegistry buildRegistry() {
-  final registry = SimpleTaskRegistry();
-  registry
-    ..register(ControlLongTask())
-    ..register(ControlQuickTask());
-  return registry;
-}
+List<TaskHandler<Object?>> buildTasks() =>
+    [ControlLongTask(), ControlQuickTask()];
 
 class ControlLongTask extends TaskHandler<String> {
   @override

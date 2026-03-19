@@ -1,0 +1,35 @@
+name: stem_ecommerce_example
+description: Workflow-driven ecommerce Shelf app using Stem + SQLite + Ormed.
+publish_to: 'none'
+version: 0.0.1
+
+environment:
+  sdk: ">=3.9.2 <4.0.0"
+
+dependencies:
+  ormed: ^0.2.0
+  ormed_sqlite: ^0.2.0
+  path: ^1.9.1
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+  stem:
+    path: ../..
+  stem_sqlite:
+    path: ../../../stem_sqlite
+
+dev_dependencies:
+  build_runner: ^2.10.5
+  ormed_cli: ^0.2.0
+  lints: ^6.0.0
+  server_testing: ^0.3.2
+  server_testing_shelf: ^0.3.2
+  stem_builder:
+    path: ../../../stem_builder
+  test: ^1.26.2
+
+dependency_overrides:
+  artisanal: ^0.2.0
+  stem:
+    path: ../..
+  stem_memory:
+    path: ../../../stem_memory

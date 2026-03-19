@@ -57,7 +57,7 @@ stem worker resume --worker worker-a --queue default
 ```
 
 For a runnable lab that exercises ping/stats/revoke/shutdown against real
-workers, see `example/worker_control_lab` in the repository.
+workers, see `packages/stem/example/worker_control_lab` in the repository.
 
 ## Autoscaling Concurrency
 
@@ -74,7 +74,7 @@ when to scale. Metrics expose the current setting via
 `stem.worker.concurrency`, and `stem worker stats --json` includes the live
 `activeConcurrency` value so dashboards can observe adjustments.
 
-See `example/autoscaling_demo` for a queue-backlog scenario that triggers
+See `packages/stem/example/autoscaling_demo` for a queue-backlog scenario that triggers
 scale-up and scale-down events.
 
 ## CLI Multi-Instance Management
@@ -257,5 +257,5 @@ export STEM_REVOKE_STORE_URL=sqlite:///var/lib/stem/revokes.sqlite
 ## Additional Resources
 
 - `stem worker --help` – built-in CLI usage for each subcommand.
-- The `examples/` directory in the Stem repository demonstrates control
-  commands alongside worker lifecycle signals.
+- The `packages/stem/example/` directory in the Stem repository demonstrates
+  control commands alongside worker lifecycle signals.

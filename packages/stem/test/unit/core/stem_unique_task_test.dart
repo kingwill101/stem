@@ -11,7 +11,7 @@ void main() {
           claimInterval: const Duration(milliseconds: 20),
         );
         final backend = InMemoryResultBackend();
-        final registry = SimpleTaskRegistry()
+        final registry = InMemoryTaskRegistry()
           ..register(
             FunctionTaskHandler<void>(
               name: 'demo.unique',

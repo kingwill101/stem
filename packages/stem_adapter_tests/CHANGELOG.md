@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added workflow-store contract coverage for caller-provided run ids and
+  persisted workflow runtime metadata introspection.
+- Added regression coverage for duplicate caller-provided run ids and
+  continuation re-enqueue routing using persisted workflow queue metadata.
 - Expanded adapter contract documentation with a capability matrix, explicit
   skip semantics, and recipe-style setup examples.
 - Scoped the binary payload round-trip contract test to the Base64 encoder

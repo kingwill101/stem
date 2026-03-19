@@ -23,7 +23,7 @@ void main() {
       final backend = InMemoryResultBackend();
       final childCompleted = Completer<String>();
 
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>.inline(
             name: _childDefinition.name,
@@ -61,7 +61,7 @@ void main() {
   test('enqueue + execute round-trip is stable', () async {
     final broker = InMemoryBroker();
     final backend = InMemoryResultBackend();
-    final registry = SimpleTaskRegistry()..register(_EchoTask());
+    final registry = InMemoryTaskRegistry()..register(_EchoTask());
     final worker = Worker(broker: broker, registry: registry, backend: backend);
     await worker.start();
 
@@ -105,7 +105,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>.inline(
             name: 'tasks.primary.success',
@@ -162,7 +162,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>.inline(
             name: 'tasks.primary.fail',
@@ -214,7 +214,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<String>.inline(
             name: 'tasks.payload',
@@ -260,7 +260,7 @@ void main() {
       );
       final backend = InMemoryResultBackend();
       var executed = false;
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<void>.inline(
             name: 'tasks.expiring',
@@ -311,7 +311,7 @@ void main() {
         claimInterval: const Duration(milliseconds: 40),
       );
       final backend = InMemoryResultBackend();
-      final registry = SimpleTaskRegistry()
+      final registry = InMemoryTaskRegistry()
         ..register(
           FunctionTaskHandler<int>.inline(
             name: 'tasks.echo',

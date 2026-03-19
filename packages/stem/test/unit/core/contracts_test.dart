@@ -103,6 +103,21 @@ void main() {
           'stem.softTimeLimitMs': 750,
           'stem.parentTaskId': 'parent-1',
           'stem.rootTaskId': 'root-1',
+          'stem.workflow.id': 'wf_def_01',
+          'stem.workflow.name': 'invoice.flow',
+          'stem.workflow.runId': 'run-123',
+          'stem.workflow.step': 'charge',
+          'stem.workflow.stepIndex': 2,
+          'stem.workflow.iteration': 1,
+          'stem.workflow.channel': 'execution',
+          'stem.workflow.continuation': false,
+          'stem.workflow.orchestrationQueue': 'workflow',
+          'stem.workflow.continuationQueue': 'workflow',
+          'stem.workflow.executionQueue': 'workflow-step',
+          'stem.workflow.continuationReason': 'event',
+          'stem.workflow.serialization.format': 'json',
+          'stem.workflow.serialization.version': '1',
+          'stem.workflow.stream.id': 'invoice_run-123',
         },
       );
 
@@ -120,6 +135,21 @@ void main() {
       expect(status.softTimeLimit, equals(const Duration(milliseconds: 750)));
       expect(status.parentTaskId, equals('parent-1'));
       expect(status.rootTaskId, equals('root-1'));
+      expect(status.workflowId, equals('wf_def_01'));
+      expect(status.workflowName, equals('invoice.flow'));
+      expect(status.workflowRunId, equals('run-123'));
+      expect(status.workflowStep, equals('charge'));
+      expect(status.workflowStepIndex, equals(2));
+      expect(status.workflowIteration, equals(1));
+      expect(status.workflowChannel, equals('execution'));
+      expect(status.workflowContinuation, isFalse);
+      expect(status.workflowContinuationReason, equals('event'));
+      expect(status.workflowOrchestrationQueue, equals('workflow'));
+      expect(status.workflowContinuationQueue, equals('workflow'));
+      expect(status.workflowExecutionQueue, equals('workflow-step'));
+      expect(status.workflowSerializationFormat, equals('json'));
+      expect(status.workflowSerializationVersion, equals('1'));
+      expect(status.workflowStreamId, equals('invoice_run-123'));
     });
   });
 

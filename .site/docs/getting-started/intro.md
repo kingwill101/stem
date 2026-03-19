@@ -80,7 +80,7 @@ keeps everything in a single file so you can see the moving parts together.
 
 ## Prerequisites
 
-- Dart **3.3+** installed (`dart --version`).
+- Dart **3.9.2+** installed (`dart --version`).
 - Access to the Dart pub cache (`dart pub ...`).
 - Optional but recommended: Docker Desktop or another container runtime for
   local Redis/Postgres instances.
@@ -91,8 +91,8 @@ keeps everything in a single file so you can see the moving parts together.
 
 1. **[Quick Start](./quick-start.md)** – Build and run your first Stem worker
    entirely in memory while you learn the task pipeline primitives.
-2. **[First Steps](./first-steps.md)** – Use Redis to run producers and workers
-   in separate processes, then fetch results.
+2. **[First Steps](./first-steps.md)** – Bootstrap an in-memory `StemApp`,
+   enqueue work from a producer, and fetch persisted results.
 3. **[Connect to Infrastructure](./developer-environment.md)** – Point Stem at
    Redis/Postgres, run workers/Beat across processes, and try routing/canvas
    patterns.

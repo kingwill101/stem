@@ -79,8 +79,9 @@ class Stem implements TaskEnqueuer {
   /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
-    required this.registry,
+    TaskRegistry? registry,
     this.backend,
+    Iterable<TaskHandler<Object?>> tasks = const [],
     this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
     List<Middleware> middleware = const [],
@@ -90,7 +91,8 @@ class Stem implements TaskEnqueuer {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-  }) : payloadEncoders = ensureTaskPayloadEncoderRegistry(
+  }) : registry = _resolveTaskRegistry(registry, tasks),
+       payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
          resultEncoder: resultEncoder,
          argsEncoder: argsEncoder,
@@ -99,6 +101,15 @@ class Stem implements TaskEnqueuer {
        routing = routing ?? RoutingRegistry(RoutingConfig.legacy()),
        retryStrategy = retryStrategy ?? ExponentialJitterRetryStrategy(),
        middleware = List.unmodifiable(middleware);
+
+  static TaskRegistry _resolveTaskRegistry(
+    TaskRegistry? registry,
+    Iterable<TaskHandler<Object?>> tasks,
+  ) {
+    final resolved = registry ?? InMemoryTaskRegistry();
+    tasks.forEach(resolved.register);
+    return resolved;
+  }
 
   /// Broker used to publish task envelopes.
   final Broker broker;
@@ -458,6 +469,40 @@ class Stem implements TaskEnqueuer {
     }
 
     return completer.future;
+  }
+
+  /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
+  Future<TaskResult<TResult>?> waitForTaskDefinition<
+    TArgs,
+    TResult extends Object?
+  >(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  }) {
+    return waitForTask<TResult>(
+      taskId,
+      timeout: timeout,
+      decode: (payload) {
+        TResult? value;
+        try {
+          value = definition.decode(payload);
+        } on Object {
+          if (payload is TResult) {
+            value = payload;
+          } else {
+            rethrow;
+          }
+        }
+        if (value == null && null is! TResult) {
+          throw StateError(
+            'Task definition "${definition.name}" decoded a null result '
+            'for non-nullable type $TResult.',
+          );
+        }
+        return value as TResult;
+      },
+    );
   }
 
   /// Executes the enqueue middleware chain in order.
