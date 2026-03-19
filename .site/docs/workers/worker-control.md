@@ -74,7 +74,7 @@ when to scale. Metrics expose the current setting via
 `stem.worker.concurrency`, and `stem worker stats --json` includes the live
 `activeConcurrency` value so dashboards can observe adjustments.
 
-See `example/autoscaling_demo` for a queue-backlog scenario that triggers
+See `packages/stem/example/autoscaling_demo` for a queue-backlog scenario that triggers
 scale-up and scale-down events.
 
 ## CLI Multi-Instance Management

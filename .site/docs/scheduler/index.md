@@ -76,7 +76,7 @@ Common scheduler CLI commands:
 Beat itself runs as a Dart process; see the Beat guide for entrypoints.
 
 - **[Beat Scheduler Guide](./beat-guide.md)** – Configure Beat, load schedules, and run it with in-memory, Redis, or Postgres stores.
-- **Example:** `example/scheduler_observability` shows drift metrics, schedule signals, and CLI inspection.
+- **Example:** `packages/stem/example/scheduler_observability` shows drift metrics, schedule signals, and CLI inspection.
 
 Looking for locking and storage details? Start with the
 [Beat Scheduler Guide](./beat-guide.md) and

@@ -157,7 +157,7 @@ Group rate limits share a limiter bucket across related tasks.
 
 ## Redis-backed limiter example
 
-The `example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
+The `packages/stem/example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
 
 - shares tokens across multiple workers,
 - logs when a token is granted or denied,
