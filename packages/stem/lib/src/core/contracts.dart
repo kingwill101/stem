@@ -2000,6 +2000,21 @@ class TaskDefinition<TArgs, TResult> {
   }) : _encodeArgs = encodeArgs,
        _encodeMeta = encodeMeta;
 
+  /// Creates a typed task definition for handlers with no producer args.
+  static NoArgsTaskDefinition<TResult> noArgs<TResult>({
+    required String name,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TaskResultDecoder<TResult>? decodeResult,
+  }) {
+    return NoArgsTaskDefinition<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      decodeResult: decodeResult,
+    );
+  }
+
   /// The logical task name registered in the registry.
   final String name;
 
@@ -2056,6 +2071,59 @@ class TaskDefinition<TArgs, TResult> {
     }
     return payload as TResult?;
   }
+}
+
+/// Typed producer-facing definition for tasks that take no input args.
+class NoArgsTaskDefinition<TResult> {
+  /// Creates a typed task definition for handlers with no producer args.
+  const NoArgsTaskDefinition({
+    required this.name,
+    this.defaultOptions = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
+    this.decodeResult,
+  });
+
+  /// The logical task name registered in the registry.
+  final String name;
+
+  /// Default options applied to every call unless overridden.
+  final TaskOptions defaultOptions;
+
+  /// Metadata associated with this task for documentation/tooling.
+  final TaskMetadata metadata;
+
+  /// Optional decoder for converting persisted payloads into a typed result.
+  final TaskResultDecoder<TResult>? decodeResult;
+
+  /// The underlying task definition for generic enqueue/wait surfaces.
+  TaskDefinition<(), TResult> get asDefinition => TaskDefinition<(), TResult>(
+    name: name,
+    encodeArgs: (_) => const <String, Object?>{},
+    defaultOptions: defaultOptions,
+    metadata: metadata,
+    decodeResult: decodeResult,
+  );
+
+  /// Builds a typed call without requiring an explicit empty payload.
+  TaskCall<(), TResult> call({
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return asDefinition.call(
+      (),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Decodes a persisted payload into a typed result.
+  TResult? decode(Object? payload) => asDefinition.decode(payload);
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].

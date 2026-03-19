@@ -65,6 +65,20 @@ class WorkflowScriptContext {
 class WorkflowScriptStepContext {}
 class TaskInvocationContext {}
 
+class NoArgsTaskDefinition<T> {
+  const NoArgsTaskDefinition({
+    required this.name,
+    this.defaultOptions = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
+    this.decodeResult,
+  });
+
+  final String name;
+  final TaskOptions defaultOptions;
+  final TaskMetadata metadata;
+  final T Function(Object? payload)? decodeResult;
+}
+
 class TaskOptions {
   const TaskOptions({this.maxRetries = 0});
   final int maxRetries;
@@ -322,8 +336,42 @@ class HelloScriptWorkflow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains('static final NoArgsWorkflowRef<String> helloScriptWorkflow ='),
+            contains(
+              'static final NoArgsWorkflowRef<String> '
+              'helloScriptWorkflow =',
+            ),
             contains('NoArgsWorkflowRef<String>('),
+          ]),
+        ),
+      },
+    );
+  });
+
+  test('uses NoArgsTaskDefinition for zero-argument tasks', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@TaskDefn(name: 'ping.task')
+Future<String> pingTask() async => 'pong';
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
+            contains('static final NoArgsTaskDefinition<String> pingTask ='),
+            contains('NoArgsTaskDefinition<String>('),
+            isNot(contains('encodeArgs: (args) => const <String, Object?>{}')),
           ]),
         ),
       },

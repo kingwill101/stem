@@ -137,6 +137,28 @@ void main() {
         expect(backend.records.single.id, id);
       },
     );
+
+    test(
+      'enqueueCall publishes no-arg definitions without fake empty maps',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition.noArgs<String>(
+          name: 'sample.no_args',
+          defaultOptions: const TaskOptions(queue: 'typed'),
+        );
+
+        final id = await stem.enqueueCall(definition.call());
+
+        expect(id, isNotEmpty);
+        expect(broker.published.single.envelope.name, 'sample.no_args');
+        expect(broker.published.single.envelope.queue, 'typed');
+        expect(broker.published.single.envelope.args, isEmpty);
+        expect(backend.records.single.id, id);
+        expect(backend.records.single.state, TaskState.queued);
+      },
+    );
   });
 
   group('TaskCall helpers', () {
@@ -210,6 +232,23 @@ void main() {
 
       expect(result?.value?.id, 'receipt-definition');
       expect(result?.rawPayload, isA<_CodecReceipt>());
+    });
+
+    test('supports no-arg task definitions', () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+      final definition = TaskDefinition.noArgs<String>(name: 'no-args.wait');
+
+      await backend.set(
+        'task-no-args-wait',
+        TaskState.succeeded,
+        payload: 'done',
+      );
+
+      final result = await definition.waitFor(stem, 'task-no-args-wait');
+
+      expect(result?.value, 'done');
+      expect(result?.rawPayload, 'done');
     });
   });
 

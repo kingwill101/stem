@@ -82,4 +82,18 @@ void main() {
     expect(updated.headers['h2'], 'v2');
     expect(updated.meta['m2'], 2);
   });
+
+  test('NoArgsTaskDefinition.call encodes an empty payload', () {
+    final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+
+    final call = definition.call(
+      headers: const {'h': 'v'},
+      meta: const {'m': 1},
+    );
+
+    expect(call.name, 'demo.no_args');
+    expect(call.encodeArgs(), isEmpty);
+    expect(call.headers, containsPair('h', 'v'));
+    expect(call.meta, containsPair('m', 1));
+  });
 }

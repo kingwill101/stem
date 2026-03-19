@@ -49,6 +49,10 @@ Typed results flow through `TaskResult<TResult>` when you call
 `Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
 lets you deserialize complex objects before they reach application code.
 
+For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
+instead. That gives you a `.call()` helper without passing a fake empty map and
+the same `waitFor(...)` decoding surface as normal typed definitions.
+
 ## Configuring Retries
 
 Workers apply an `ExponentialJitterRetryStrategy` by default. Each retry is

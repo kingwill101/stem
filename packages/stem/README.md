@@ -218,6 +218,17 @@ final taskId = await HelloTask.definition
 final result = await HelloTask.definition.waitFor(stem, taskId);
 ```
 
+For tasks without producer inputs, use `TaskDefinition.noArgs(...)` so callers
+can publish with `.call()` instead of passing a fake empty map:
+
+```dart
+final healthcheckDefinition = TaskDefinition.noArgs<void>(
+  name: 'demo.healthcheck',
+);
+
+await stem.enqueueCall(healthcheckDefinition.call());
+```
+
 You can also build requests fluently with the `TaskEnqueueBuilder`:
 
 ```dart

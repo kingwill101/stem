@@ -1067,3 +1067,16 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     return stem.waitForTaskDefinition(taskId, this, timeout: timeout);
   }
 }
+
+/// Convenience helpers for waiting on typed no-arg task definitions.
+extension NoArgsTaskDefinitionExtension<TResult extends Object?>
+    on NoArgsTaskDefinition<TResult> {
+  /// Waits for [taskId] using this definition's decoding rules.
+  Future<TaskResult<TResult>?> waitFor(
+    Stem stem,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return stem.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
+  }
+}

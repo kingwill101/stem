@@ -1921,15 +1921,21 @@ class _RegistryEmitter {
     for (final task in tasks) {
       final symbol = _lowerCamel(symbolNames[task]!);
       final argsTypeCode = _taskArgsTypeCode(task);
-      buffer.writeln(
-        '  static final TaskDefinition<$argsTypeCode, ${task.resultTypeCode}> $symbol = TaskDefinition<$argsTypeCode, ${task.resultTypeCode}>(',
-      );
+      final usesNoArgsDefinition =
+          !task.usesLegacyMapArgs && task.valueParameters.isEmpty;
+      if (usesNoArgsDefinition) {
+        buffer.writeln(
+          '  static final NoArgsTaskDefinition<${task.resultTypeCode}> $symbol = NoArgsTaskDefinition<${task.resultTypeCode}>(',
+        );
+      } else {
+        buffer.writeln(
+          '  static final TaskDefinition<$argsTypeCode, ${task.resultTypeCode}> $symbol = TaskDefinition<$argsTypeCode, ${task.resultTypeCode}>(',
+        );
+      }
       buffer.writeln('    name: ${_string(task.name)},');
       if (task.usesLegacyMapArgs) {
         buffer.writeln('    encodeArgs: (args) => args,');
-      } else if (task.valueParameters.isEmpty) {
-        buffer.writeln('    encodeArgs: (args) => const <String, Object?>{},');
-      } else {
+      } else if (task.valueParameters.isNotEmpty) {
         buffer.writeln('    encodeArgs: (args) => <String, Object?>{');
         for (final parameter in task.valueParameters) {
           buffer.writeln(
