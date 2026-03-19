@@ -292,6 +292,48 @@ abstract final class StemTaskDefinitions {
         metadata: const TaskMetadata(),
         decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
       );
+  static Future<String> enqueueSendEmailTyped(
+    TaskEnqueuer enqueuer, {
+    required EmailDispatch dispatch,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return sendEmailTyped
+        .call(
+          (dispatch: dispatch),
+          headers: headers,
+          options: options,
+          notBefore: notBefore,
+          meta: meta,
+          enqueueOptions: enqueueOptions,
+        )
+        .enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
+  }
+
+  static Future<TaskResult<EmailDeliveryReceipt>?> enqueueAndWaitSendEmailTyped(
+    Stem stem, {
+    required EmailDispatch dispatch,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueSendEmailTyped(
+      stem,
+      dispatch: dispatch,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return sendEmailTyped.waitFor(stem, taskId, timeout: timeout);
+  }
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[

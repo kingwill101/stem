@@ -140,7 +140,8 @@ The intended DX is:
 - pass generated `stemModule` into `StemWorkflowApp` or `StemClient`
 - start workflows through generated workflow refs instead of raw
   workflow-name strings
-- enqueue annotated tasks through `StemTaskDefinitions.*.call(...).enqueueWith(...)`
+- enqueue annotated tasks through generated direct helpers like
+  `StemTaskDefinitions.enqueueSendEmailTyped(...)`
   instead of raw task-name strings
 
 You can customize generated workflow ref names via `@WorkflowDefn`:
@@ -166,7 +167,7 @@ dart run build_runner build
 The generated part exports a bundle plus typed helpers so you can avoid raw
 workflow-name and task-name strings (for example
 `StemWorkflowDefinitions.userSignup.call((email: 'user@example.com'))` or
-`StemTaskDefinitions.builderExampleTask.call({...}).enqueueWith(stem)`).
+`StemTaskDefinitions.enqueueBuilderExampleTask(stem, ...)`).
 
 Generated output includes:
 

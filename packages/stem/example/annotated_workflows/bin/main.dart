@@ -68,22 +68,15 @@ Future<void> main() async {
     '${jsonEncode(contextResult.value!.childResult.toJson())}',
   );
 
-  final typedTaskId = await StemTaskDefinitions.sendEmailTyped
-      .call(
-        (
-          dispatch: const EmailDispatch(
-            email: 'typed@example.com',
-            subject: 'Welcome',
-            body: 'Codec-backed DTO payloads',
-            tags: ['welcome', 'transactional', 'annotated'],
-          ),
-        ),
-        meta: const {'origin': 'annotated_workflows_example'},
-      )
-      .enqueueWith(app.app.stem);
-  final typedTaskResult = await StemTaskDefinitions.sendEmailTyped.waitFor(
+  final typedTaskResult = await StemTaskDefinitions.enqueueAndWaitSendEmailTyped(
     app.app.stem,
-    typedTaskId,
+    dispatch: const EmailDispatch(
+      email: 'typed@example.com',
+      subject: 'Welcome',
+      body: 'Codec-backed DTO payloads',
+      tags: ['welcome', 'transactional', 'annotated'],
+    ),
+    meta: const {'origin': 'annotated_workflows_example'},
     timeout: const Duration(seconds: 2),
   );
   print('Typed task result: ${jsonEncode(typedTaskResult?.value?.toJson())}');

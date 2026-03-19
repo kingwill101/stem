@@ -36,7 +36,7 @@ From those annotations, this example uses generated APIs:
 - `stemModule` (generated workflow/task bundle)
 - `StemWorkflowDefinitions.addToCart`
 - `StemTaskDefinitions.ecommerceAuditLog`
-- `StemTaskDefinitions.ecommerceAuditLog.call(...)`
+- `StemTaskDefinitions.enqueueEcommerceAuditLog(...)`
 
 The manual checkout flow also derives a typed ref from its `Flow` definition:
 

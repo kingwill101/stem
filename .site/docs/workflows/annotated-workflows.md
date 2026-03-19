@@ -55,20 +55,14 @@ final result = await StemWorkflowDefinitions.userSignup
 Annotated tasks use the same shared typed task surface:
 
 ```dart
-final taskId = await StemTaskDefinitions.sendEmailTyped
-    .call((
-      dispatch: EmailDispatch(
-        email: 'typed@example.com',
-        subject: 'Welcome',
-        body: 'Codec-backed DTO payloads',
-        tags: ['welcome'],
-      ),
-    ))
-    .enqueueWith(workflowApp.app.stem);
-
-final result = await StemTaskDefinitions.sendEmailTyped.waitFor(
+final result = await StemTaskDefinitions.enqueueAndWaitSendEmailTyped(
   workflowApp.app.stem,
-  taskId,
+  dispatch: EmailDispatch(
+    email: 'typed@example.com',
+    subject: 'Welcome',
+    body: 'Codec-backed DTO payloads',
+    tags: ['welcome'],
+  ),
 );
 ```
 

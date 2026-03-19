@@ -116,6 +116,55 @@ abstract final class StemTaskDefinitions {
         defaultOptions: const TaskOptions(queue: "default"),
         metadata: const TaskMetadata(),
       );
+  static Future<String> enqueueEcommerceAuditLog(
+    TaskEnqueuer enqueuer, {
+    required String event,
+    required String entityId,
+    required String detail,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return ecommerceAuditLog
+        .call(
+          (event: event, entityId: entityId, detail: detail),
+          headers: headers,
+          options: options,
+          notBefore: notBefore,
+          meta: meta,
+          enqueueOptions: enqueueOptions,
+        )
+        .enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
+  }
+
+  static Future<TaskResult<Map<String, Object?>>?>
+  enqueueAndWaitEcommerceAuditLog(
+    Stem stem, {
+    required String event,
+    required String entityId,
+    required String detail,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueEcommerceAuditLog(
+      stem,
+      event: event,
+      entityId: entityId,
+      detail: detail,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return ecommerceAuditLog.waitFor(stem, taskId, timeout: timeout);
+  }
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[

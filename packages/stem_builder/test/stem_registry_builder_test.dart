@@ -371,7 +371,51 @@ Future<String> pingTask() async => 'pong';
           allOf([
             contains('static final NoArgsTaskDefinition<String> pingTask ='),
             contains('NoArgsTaskDefinition<String>('),
+            contains('static Future<String> enqueuePingTask('),
+            contains('static Future<TaskResult<String>?> enqueueAndWaitPingTask('),
             isNot(contains('encodeArgs: (args) => const <String, Object?>{}')),
+          ]),
+        ),
+      },
+    );
+  });
+
+  test('generates direct helpers for typed annotated tasks', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+class EmailRequest {
+  const EmailRequest({required this.email});
+  final String email;
+  Map<String, Object?> toJson() => {'email': email};
+  factory EmailRequest.fromJson(Map<String, Object?> json) =>
+      EmailRequest(email: json['email'] as String);
+}
+
+@TaskDefn(name: 'email.send')
+Future<String> sendEmail(EmailRequest request) async => request.email;
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
+            contains('static Future<String> enqueueEmailSend('),
+            contains(
+              'static Future<TaskResult<String>?> enqueueAndWaitEmailSend(',
+            ),
+            contains('required EmailRequest request'),
+            contains('return emailSend'),
           ]),
         ),
       },

@@ -113,6 +113,43 @@ abstract final class StemTaskDefinitions {
         defaultOptions: const TaskOptions(),
         metadata: const TaskMetadata(),
       );
+  static Future<String> enqueueBuilderExamplePing(
+    TaskEnqueuer enqueuer, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return builderExamplePing.enqueueWith(
+      enqueuer,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  static Future<TaskResult<String>?> enqueueAndWaitBuilderExamplePing(
+    Stem stem, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueBuilderExamplePing(
+      stem,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return builderExamplePing.waitFor(stem, taskId, timeout: timeout);
+  }
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[

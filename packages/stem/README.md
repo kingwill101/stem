@@ -721,18 +721,15 @@ if (charge?.isSucceeded == true) {
 Generated annotated tasks use the same surface:
 
 ```dart
-final taskId = await StemTaskDefinitions.sendEmailTyped
-    .call((
-      dispatch: EmailDispatch(
-        email: 'typed@example.com',
-        subject: 'Welcome',
-        body: 'Codec-backed DTO payloads',
-        tags: ['welcome'],
-      ),
-    ))
-    .enqueueWith(stem);
-
-final receipt = await StemTaskDefinitions.sendEmailTyped.waitFor(stem, taskId);
+final receipt = await StemTaskDefinitions.enqueueAndWaitSendEmailTyped(
+  stem,
+  dispatch: EmailDispatch(
+    email: 'typed@example.com',
+    subject: 'Welcome',
+    body: 'Codec-backed DTO payloads',
+    tags: ['welcome'],
+  ),
+);
 print(receipt?.value?.deliveryId);
 ```
 

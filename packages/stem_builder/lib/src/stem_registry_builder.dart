@@ -1959,6 +1959,82 @@ class _RegistryEmitter {
         );
       }
       buffer.writeln('  );');
+      if (!task.usesLegacyMapArgs) {
+        final helperSuffix = _pascalIdentifier(symbol);
+        final businessArgs = _methodSignature(
+          positional: ['TaskEnqueuer enqueuer'],
+          named: [
+            ...task.valueParameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'Map<String, String> headers = const {}',
+            'TaskOptions? options',
+            'DateTime? notBefore',
+            'Map<String, Object?>? meta',
+            'TaskEnqueueOptions? enqueueOptions',
+          ],
+        );
+        if (usesNoArgsDefinition) {
+          buffer.writeln(
+            '  static Future<String> enqueue$helperSuffix($businessArgs) {',
+          );
+          buffer.writeln(
+            '    return $symbol.enqueueWith(enqueuer, headers: headers, options: options, notBefore: notBefore, meta: meta, enqueueOptions: enqueueOptions);',
+          );
+        } else {
+          final callArgs = _invocationArgs(
+            positional: [
+              '(${task.valueParameters.map((parameter) => '${parameter.name}: ${parameter.name}').join(', ')})',
+            ],
+            named: {
+              'headers': 'headers',
+              'options': 'options',
+              'notBefore': 'notBefore',
+              'meta': 'meta',
+              'enqueueOptions': 'enqueueOptions',
+            },
+          );
+          buffer.writeln(
+            '  static Future<String> enqueue$helperSuffix($businessArgs) {',
+          );
+          buffer.writeln(
+            '    return $symbol.call($callArgs).enqueueWith(enqueuer, enqueueOptions: enqueueOptions);',
+          );
+        }
+        buffer.writeln('  }');
+        final waitArgs = _methodSignature(
+          positional: ['Stem stem'],
+          named: [
+            ...task.valueParameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'Map<String, String> headers = const {}',
+            'TaskOptions? options',
+            'DateTime? notBefore',
+            'Map<String, Object?>? meta',
+            'TaskEnqueueOptions? enqueueOptions',
+            'Duration? timeout',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<TaskResult<${task.resultTypeCode}>?> enqueueAndWait$helperSuffix($waitArgs) async {',
+        );
+        buffer.writeln('    final taskId = await enqueue$helperSuffix(');
+        buffer.writeln('      stem,');
+        for (final parameter in task.valueParameters) {
+          buffer.writeln('      ${parameter.name}: ${parameter.name},');
+        }
+        buffer.writeln('      headers: headers,');
+        buffer.writeln('      options: options,');
+        buffer.writeln('      notBefore: notBefore,');
+        buffer.writeln('      meta: meta,');
+        buffer.writeln('      enqueueOptions: enqueueOptions,');
+        buffer.writeln('    );');
+        buffer.writeln(
+          '    return $symbol.waitFor(stem, taskId, timeout: timeout);',
+        );
+        buffer.writeln('  }');
+      }
     }
     buffer.writeln('}');
     buffer.writeln();
