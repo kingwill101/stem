@@ -11,11 +11,18 @@ typedef _FlowStepHandler = Future<Object?> Function(FlowContext context);
 
 enum WorkflowStepKind { task, choice, parallel, wait, custom }
 
+class PayloadCodec<T> {
+  const PayloadCodec({required this.encode, required this.decode});
+  final Object? Function(T value) encode;
+  final T Function(Object? payload) decode;
+}
+
 class FlowStep {
   FlowStep({
     required this.name,
     required this.handler,
     this.autoVersion = false,
+    this.valueCodec,
     this.title,
     this.kind = WorkflowStepKind.task,
     this.taskNames = const [],
@@ -24,6 +31,7 @@ class FlowStep {
   final String name;
   final _FlowStepHandler handler;
   final bool autoVersion;
+  final PayloadCodec<Object?>? valueCodec;
   final String? title;
   final WorkflowStepKind kind;
   final List<String> taskNames;
@@ -88,7 +96,11 @@ class WorkflowAnnotations {
 const workflow = WorkflowAnnotations();
 
 class Flow<T> {
-  Flow({required String name, required void Function(dynamic) build});
+  Flow({
+    required String name,
+    required void Function(dynamic) build,
+    PayloadCodec<T>? resultCodec,
+  });
 }
 
 class WorkflowScript<T> {
@@ -96,6 +108,8 @@ class WorkflowScript<T> {
     required String name,
     required dynamic run,
     List<FlowStep> steps = const [],
+    List<FlowStep> checkpoints = const [],
+    PayloadCodec<T>? resultCodec,
   });
 }
 
@@ -103,6 +117,18 @@ class TaskHandler<T> {}
 
 class FunctionTaskHandler<T> implements TaskHandler<T> {
   FunctionTaskHandler({required String name, required dynamic entrypoint});
+}
+
+class Stem {
+  Future<TaskResult<T>?> waitForTaskDefinition<TArgs, T extends Object?>(
+    String taskId,
+    TaskDefinition<TArgs, T> definition, {
+    Duration? timeout,
+  }) async => null;
+}
+
+class TaskResult<T extends Object?> {
+  const TaskResult();
 }
 
 abstract class WorkflowRegistry {
@@ -149,25 +175,23 @@ Future<void> sendEmail(
           AssetId('stem', 'lib/stem.dart'),
           stubStem,
         ),
-      outputs: {
-        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
-          allOf([
-            contains('registerStemDefinitions'),
-            contains('StemWorkflowNames'),
-            contains('StemGeneratedWorkflowAppStarters'),
-            contains('StemGeneratedWorkflowRuntimeStarters'),
-            contains('startFlow'),
-            contains('startWorkflow'),
-            contains('createStemGeneratedWorkflowApp'),
-            contains('createStemGeneratedInMemoryApp'),
-            contains('Flow('),
-            contains('WorkflowScript('),
-            contains('stemWorkflowManifest'),
-            contains('FunctionTaskHandler'),
-            contains("part of 'workflows.dart';"),
-          ]),
-        ),
-      },
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains('StemWorkflowDefinitions'),
+              contains('StemTaskDefinitions'),
+              contains('StemGeneratedTaskEnqueuer'),
+              contains('StemGeneratedTaskResults'),
+              contains('waitForSendEmail('),
+              contains('WorkflowRef<Map<String, Object?>, String>'),
+              contains('Flow('),
+              contains('WorkflowScript('),
+              contains('stemModule = StemModule('),
+              contains('FunctionTaskHandler'),
+              contains("part of 'workflows.dart';"),
+            ]),
+          ),
+        },
     );
   });
 
@@ -240,14 +264,14 @@ class DailyBillingWorkflow {
         outputs: {
           'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
-              contains('static const String helloFlow = "hello.flow";'),
               contains(
-                'static const String dailyBilling = "billing.daily_sync";',
+                'static final WorkflowRef<Map<String, Object?>, Object?> '
+                'helloFlow =',
               ),
-              contains('Future<String> startLaunchHello({'),
-              contains('Future<String> startDailyBilling({'),
-              contains('StemWorkflowNames.helloFlow'),
-              contains('StemWorkflowNames.dailyBilling'),
+              contains(
+                'static final WorkflowRef<({String tenant}), Object?> '
+                'dailyBilling =',
+              ),
             ]),
           ),
         },
@@ -378,6 +402,80 @@ class BadScriptWorkflow {
     );
   });
 
+  test('rejects duplicate script checkpoint names', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class DuplicateCheckpointWorkflow {
+  Future<void> run() async {
+    await first();
+    await second();
+  }
+
+  @WorkflowStep(name: 'shared')
+  Future<void> first() async {}
+
+  @WorkflowStep(name: 'shared')
+  Future<void> second() async {}
+}
+''';
+
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('duplicate checkpoint names'));
+    expect(result.errors.join('\n'), contains('"shared" from first, second'));
+  });
+
+  test(
+    'rejects manual checkpoint names that conflict with annotated ones',
+    () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class DuplicateManualCheckpointWorkflow {
+  @WorkflowRun()
+  Future<void> run(WorkflowScriptContext script) async {
+    await script.step<void>('send-email', (ctx) => sendEmail('user@example.com'));
+  }
+
+  @WorkflowStep(name: 'send-email')
+  Future<void> sendEmail(String email) async {}
+}
+''';
+
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+    );
+    expect(result.succeeded, isFalse);
+    expect(result.errors.join('\n'), contains('manual checkpoint'));
+    expect(
+      result.errors.join('\n'),
+      contains('conflicts with annotated checkpoint'),
+    );
+  });
+
   test(
     'decodes serializable @workflow.run parameters from script params',
     () async {
@@ -418,9 +516,12 @@ class SignupWorkflow {
                 ').run((_stemRequireArg(script.params, "email") as String))',
               ),
               contains('_stemRequireArg(script.params, "email") as String'),
-              contains('Future<String> startSignupWorkflow({'),
-              contains('required String email,'),
-              contains('Map<String, Object?> extraParams = const {},'),
+              contains('abstract final class StemWorkflowDefinitions'),
+              contains(
+                'signupWorkflow = WorkflowRef<({String email}), '
+                'Map<String, Object?>>(',
+              ),
+              isNot(contains('extraParams')),
             ]),
           ),
         },
@@ -496,7 +597,10 @@ class BadScriptWorkflow {
         ),
     );
     expect(result.succeeded, isFalse);
-    expect(result.errors.join('\n'), contains('serializable type'));
+    expect(
+      result.errors.join('\n'),
+      contains('serializable or codec-backed DTO type'),
+    );
   });
 
   test('rejects task args that are not Map<String, Object?>', () async {
@@ -523,7 +627,10 @@ Future<void> badTask(
         ),
     );
     expect(result.succeeded, isFalse);
-    expect(result.errors.join('\n'), contains('serializable type'));
+    expect(
+      result.errors.join('\n'),
+      contains('serializable or codec-backed DTO type'),
+    );
   });
 
   test('generates adapters for typed workflow and task parameters', () async {
@@ -570,6 +677,86 @@ Future<void> typedTask(
     );
   });
 
+  test(
+    'generates codec-backed DTO helpers for workflow and task types',
+    () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+class EmailRequest {
+  const EmailRequest({required this.email, required this.retries});
+
+  final String email;
+  final int retries;
+
+  Map<String, Object?> toJson() => {
+    'email': email,
+    'retries': retries,
+  };
+
+  factory EmailRequest.fromJson(Map<String, Object?> json) => EmailRequest(
+    email: json['email'] as String,
+    retries: json['retries'] as int,
+  );
+}
+
+@WorkflowDefn(name: 'dto.script', kind: WorkflowKind.script)
+class DtoWorkflow {
+  Future<EmailRequest> run(EmailRequest request) async => send(request);
+
+  @WorkflowStep(name: 'send')
+  Future<EmailRequest> send(EmailRequest request) async => request;
+}
+
+@TaskDefn(name: 'dto.task')
+Future<EmailRequest> dtoTask(
+  TaskInvocationContext context,
+  EmailRequest request,
+) async => request;
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains('abstract final class StemPayloadCodecs'),
+              contains('PayloadCodec<EmailRequest> emailRequest ='),
+              contains(
+                'WorkflowRef<({EmailRequest request}), EmailRequest> script =',
+              ),
+              contains('encode: (value) => value.toJson(),'),
+              contains('EmailRequest.fromJson('),
+              contains(
+                'StemPayloadCodecs.emailRequest.encode(params.request)',
+              ),
+              contains('StemPayloadCodecs.emailRequest.decode('),
+              contains(
+                '_stemRequireArg(script.params, "request"),',
+              ),
+              contains(
+                'StemPayloadCodecs.emailRequest.decode('
+                '_stemRequireArg(args, "request"))',
+              ),
+              contains('decodeResult: StemPayloadCodecs.emailRequest.decode,'),
+              contains('CodecTaskPayloadEncoder<EmailRequest>('),
+              contains('valueCodec: StemPayloadCodecs.emailRequest,'),
+              contains('resultCodec: StemPayloadCodecs.emailRequest,'),
+            ]),
+        ),
+      },
+    );
+  });
+
   test('rejects non-serializable workflow step parameter types', () async {
     const input = '''
 import 'package:stem/stem.dart';
@@ -595,6 +782,9 @@ class BadWorkflow {
     );
 
     expect(result.succeeded, isFalse);
-    expect(result.errors.join('\n'), contains('serializable type'));
+    expect(
+      result.errors.join('\n'),
+      contains('serializable or codec-backed DTO type'),
+    );
   });
 }

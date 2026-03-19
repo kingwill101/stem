@@ -24,7 +24,7 @@ Flow<Map<String, Object?>> buildCheckoutFlow(EcommerceRepository repository) {
       });
 
       flow.step('capture-payment', (ctx) async {
-        final resume = ctx.takeResumeData();
+        final resume = ctx.takeResumeValue<Map<String, Object?>>();
         if (resume == null) {
           ctx.sleep(
             const Duration(milliseconds: 100),

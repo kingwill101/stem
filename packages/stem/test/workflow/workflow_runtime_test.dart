@@ -323,6 +323,51 @@ void main() {
     expect(observedPayload, 'user-123');
   });
 
+  test('emitValue resumes flows with codec-backed DTO payloads', () async {
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.typed.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = context.takeResumeValue<_UserUpdatedEvent>(
+                codec: _userUpdatedEventCodec,
+              );
+              if (resume == null) {
+                context.awaitEvent('user.updated.typed');
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.typed.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, 'user.updated.typed');
+
+    await runtime.emitValue(
+      'user.updated.typed',
+      const _UserUpdatedEvent(id: 'user-typed-1'),
+      codec: _userUpdatedEventCodec,
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-typed-1');
+    expect(completed?.result, 'user-typed-1');
+  });
+
   test('emit persists payload before worker resumes execution', () async {
     runtime.registerWorkflow(
       Flow(
@@ -1100,5 +1145,23 @@ class _RecordingLogDriver extends LogDriver {
   @override
   Future<void> log(LogEntry entry) async {
     entries.add(entry);
+  }
+}
+
+final _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>(
+  encode: (value) => value.toJson(),
+  decode: _UserUpdatedEvent.fromJson,
+);
+
+class _UserUpdatedEvent {
+  const _UserUpdatedEvent({required this.id});
+
+  final String id;
+
+  Map<String, Object?> toJson() => {'id': id};
+
+  static _UserUpdatedEvent fromJson(Object? payload) {
+    final json = payload! as Map<String, Object?>;
+    return _UserUpdatedEvent(id: json['id'] as String);
   }
 }

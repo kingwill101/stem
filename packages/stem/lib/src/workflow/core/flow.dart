@@ -1,3 +1,4 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 
 /// Convenience wrapper that builds a [WorkflowDefinition] using the declarative
@@ -15,12 +16,14 @@ class Flow<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
+    PayloadCodec<T>? resultCodec,
   }) : definition = WorkflowDefinition<T>.flow(
          name: name,
          build: build,
          version: version,
          description: description,
          metadata: metadata,
+         resultCodec: resultCodec,
        );
 
   /// The constructed workflow definition.

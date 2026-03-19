@@ -51,15 +51,16 @@ class WorkflowDefn {
   /// Optional metadata attached to the workflow definition.
   final Map<String, Object?>? metadata;
 
-  /// Optional override for generated starter method suffix.
+  /// Optional override for the generated workflow ref symbol suffix.
   ///
-  /// Example: `starterName: 'UserSignup'` generates `startUserSignup(...)`.
+  /// Example: `starterName: 'UserSignup'` contributes
+  /// `StemWorkflowDefinitions.userSignup`.
   final String? starterName;
 
-  /// Optional override for `StemWorkflowNames` field name.
+  /// Optional override for the generated workflow ref field name.
   ///
   /// Example: `nameField: 'userSignup'` generates
-  /// `StemWorkflowNames.userSignup`.
+  /// `StemWorkflowDefinitions.userSignup`.
   final String? nameField;
 }
 

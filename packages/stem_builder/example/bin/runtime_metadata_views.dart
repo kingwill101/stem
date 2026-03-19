@@ -1,9 +1,10 @@
 import 'dart:convert';
 
+import 'package:stem/stem.dart';
 import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
-  final app = await createStemGeneratedInMemoryApp();
+  final app = await StemWorkflowApp.inMemory(module: stemModule);
   final runtime = app.runtime;
 
   try {
@@ -11,7 +12,7 @@ Future<void> main() async {
     print(
       const JsonEncoder.withIndent(
         '  ',
-      ).convert(stemWorkflowManifest.map((entry) => entry.toJson()).toList()),
+      ).convert(stemModule.workflowManifest.map((entry) => entry.toJson()).toList()),
     );
 
     print('\n--- Runtime manifest (registered definitions) ---');
@@ -24,12 +25,14 @@ Future<void> main() async {
       ),
     );
 
-    final flowRunId = await runtime.startFlow(
-      params: const {'name': 'runtime metadata'},
-    );
+    final flowRunId = await StemWorkflowDefinitions.flow
+        .call(const {'name': 'runtime metadata'})
+        .startWithRuntime(runtime);
     await runtime.executeRun(flowRunId);
 
-    final scriptRunId = await runtime.startUserSignup(email: 'dev@stem.dev');
+    final scriptRunId = await StemWorkflowDefinitions.userSignup
+        .call((email: 'dev@stem.dev'))
+        .startWithRuntime(runtime);
     await runtime.executeRun(scriptRunId);
 
     final runViews = await runtime.listRunViews(limit: 10);

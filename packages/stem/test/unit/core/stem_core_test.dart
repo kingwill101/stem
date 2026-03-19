@@ -78,6 +78,107 @@ void main() {
       expect(backend.records.single.state, equals(TaskState.queued));
     });
   });
+
+  group('Stem.waitForTaskDefinition', () {
+    test('does not double decode codec-backed terminal results', () async {
+      final backend = _codecAwareBackend();
+      final stem = _codecAwareStem(backend);
+
+      await backend.set(
+        'task-terminal',
+        TaskState.succeeded,
+        payload: const _CodecReceipt('receipt-terminal'),
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+      );
+
+      final result = await stem.waitForTaskDefinition(
+        'task-terminal',
+        _codecReceiptDefinition,
+      );
+
+      expect(result?.value?.id, 'receipt-terminal');
+      expect(result?.rawPayload, isA<_CodecReceipt>());
+    });
+
+    test('does not double decode codec-backed watched results', () async {
+      final backend = _codecAwareBackend();
+      final stem = _codecAwareStem(backend);
+
+      unawaited(
+        Future<void>.delayed(const Duration(milliseconds: 20), () async {
+          await backend.set(
+            'task-watched',
+            TaskState.succeeded,
+            payload: const _CodecReceipt('receipt-watched'),
+            meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+          );
+        }),
+      );
+
+      final result = await stem.waitForTaskDefinition(
+        'task-watched',
+        _codecReceiptDefinition,
+        timeout: const Duration(seconds: 1),
+      );
+
+      expect(result?.value?.id, 'receipt-watched');
+      expect(result?.rawPayload, isA<_CodecReceipt>());
+    });
+  });
+}
+
+ResultBackend _codecAwareBackend() {
+  final registry = ensureTaskPayloadEncoderRegistry(
+    null,
+    additionalEncoders: [_codecReceiptEncoder],
+  );
+  return withTaskPayloadEncoder(InMemoryResultBackend(), registry);
+}
+
+Stem _codecAwareStem(ResultBackend backend) {
+  return Stem(
+    broker: _RecordingBroker(),
+    backend: backend,
+    encoderRegistry: ensureTaskPayloadEncoderRegistry(
+      null,
+      additionalEncoders: [_codecReceiptEncoder],
+    ),
+  );
+}
+
+class _CodecReceipt {
+  const _CodecReceipt(this.id);
+
+  factory _CodecReceipt.fromJson(Map<String, Object?> json) {
+    return _CodecReceipt(json['id']! as String);
+  }
+
+  final String id;
+
+  Map<String, Object?> toJson() => {'id': id};
+}
+
+const _codecReceiptCodec = PayloadCodec<_CodecReceipt>(
+  encode: _encodeCodecReceipt,
+  decode: _decodeCodecReceipt,
+);
+
+const _codecReceiptEncoder = CodecTaskPayloadEncoder<_CodecReceipt>(
+  idValue: 'test.codec.receipt',
+  codec: _codecReceiptCodec,
+);
+
+final _codecReceiptDefinition =
+    TaskDefinition<Map<String, Object?>, _CodecReceipt>(
+      name: 'codec.receipt',
+      encodeArgs: (args) => args,
+      decodeResult: _codecReceiptCodec.decode,
+    );
+
+Object? _encodeCodecReceipt(_CodecReceipt value) => value.toJson();
+
+_CodecReceipt _decodeCodecReceipt(Object? payload) {
+  return _CodecReceipt.fromJson(Map<String, Object?>.from(payload! as Map));
 }
 
 class _StubTaskHandler implements TaskHandler<void> {

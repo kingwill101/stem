@@ -432,6 +432,205 @@ void main() {
       }
     });
 
+    test('inMemory registers module tasks and workflows', () async {
+      final helperTask = FunctionTaskHandler<String>(
+        name: 'workflow.module.helper',
+        entrypoint: (context, args) async => 'ok',
+        runInIsolate: false,
+      );
+      final moduleFlow = Flow<String>(
+        name: 'workflow.module.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'from-module');
+        },
+      );
+      final module = StemModule(flows: [moduleFlow], tasks: [helperTask]);
+
+      final workflowApp = await StemWorkflowApp.inMemory(module: module);
+      try {
+        expect(
+          workflowApp.app.registry.resolve('workflow.module.helper'),
+          same(helperTask),
+        );
+
+        final runId = await workflowApp.startWorkflow('workflow.module.flow');
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'from-module');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('workflow refs start and decode runs through app helpers', () async {
+      final moduleFlow = Flow<String>(
+        name: 'workflow.ref.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return 'hello $name';
+          });
+        },
+      );
+      final workflowRef =
+          WorkflowRef<Map<String, Object?>, String>(
+            name: 'workflow.ref.flow',
+            encodeParams: (params) => params,
+          );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [moduleFlow]);
+      try {
+        final runId = await workflowRef.call(
+          const {'name': 'stem'},
+        ).startWithApp(workflowApp);
+        final result = await workflowRef.waitFor(
+          workflowApp,
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello stem');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test(
+      'workflow codecs persist encoded checkpoints and decode typed results',
+      () async {
+        final flow = Flow<_DemoPayload>(
+          name: 'workflow.codec.flow',
+          resultCodec: _demoPayloadCodec,
+          build: (builder) {
+            builder
+              ..step<_DemoPayload>(
+                'build',
+                (ctx) async => const _DemoPayload('bar'),
+                valueCodec: _demoPayloadCodec,
+              )
+              ..step<_DemoPayload>(
+                'finish',
+                (ctx) async {
+                  final previous = ctx.previousResult! as _DemoPayload;
+                  return _DemoPayload('${previous.foo}-done');
+                },
+                valueCodec: _demoPayloadCodec,
+              );
+          },
+        );
+        final workflowRef =
+            WorkflowRef<Map<String, Object?>, _DemoPayload>(
+              name: 'workflow.codec.flow',
+              encodeParams: (params) => params,
+              decodeResult: _demoPayloadCodec.decode,
+            );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          final runId = await workflowRef.call(const {}).startWithApp(
+            workflowApp,
+          );
+          final result = await workflowRef.waitFor(
+            workflowApp,
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(result, isNotNull);
+          expect(result!.value?.foo, 'bar-done');
+          expect(result.state.result, {'foo': 'bar-done'});
+          expect(
+            await workflowApp.store.readStep<Map<String, Object?>>(
+              runId,
+              'build',
+            ),
+            {'foo': 'bar'},
+          );
+          expect(
+            await workflowApp.store.readStep<Map<String, Object?>>(
+              runId,
+              'finish',
+            ),
+            {'foo': 'bar-done'},
+          );
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'script workflow codecs persist encoded checkpoints and decode typed results',
+      () async {
+        final script = WorkflowScript<_DemoPayload>(
+          name: 'workflow.codec.script',
+          resultCodec: _demoPayloadCodec,
+          checkpoints: [
+            FlowStep.typed<_DemoPayload>(
+              name: 'build',
+              handler: (_) async => null,
+              valueCodec: _demoPayloadCodec,
+            ),
+            FlowStep.typed<_DemoPayload>(
+              name: 'finish',
+              handler: (_) async => null,
+              valueCodec: _demoPayloadCodec,
+            ),
+          ],
+          run: (script) async {
+            final built = await script.step<_DemoPayload>(
+              'build',
+              (ctx) async => const _DemoPayload('bar'),
+            );
+            return script.step<_DemoPayload>(
+              'finish',
+              (ctx) async => _DemoPayload('${built.foo}-done'),
+            );
+          },
+        );
+        final workflowRef =
+            WorkflowRef<Map<String, Object?>, _DemoPayload>(
+              name: 'workflow.codec.script',
+              encodeParams: (params) => params,
+              decodeResult: _demoPayloadCodec.decode,
+            );
+
+        final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+        try {
+          final runId = await workflowRef.call(const {}).startWithApp(
+            workflowApp,
+          );
+          final result = await workflowRef.waitFor(
+            workflowApp,
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(result, isNotNull);
+          expect(result!.value?.foo, 'bar-done');
+          expect(result.state.result, {'foo': 'bar-done'});
+          expect(
+            await workflowApp.store.readStep<Map<String, Object?>>(
+              runId,
+              'build',
+            ),
+            {'foo': 'bar'},
+          );
+          expect(
+            await workflowApp.store.readStep<Map<String, Object?>>(
+              runId,
+              'finish',
+            ),
+            {'foo': 'bar-done'},
+          );
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('fromUrl shuts down app when workflow bootstrap fails', () async {
       final createdLockStore = InMemoryLockStore();
       final createdRevokeStore = InMemoryRevokeStore();
@@ -490,6 +689,17 @@ class _DemoPayload {
       _DemoPayload(json['foo']! as String);
 
   final String foo;
+}
+
+const _demoPayloadCodec = PayloadCodec<_DemoPayload>(
+  encode: _encodeDemoPayload,
+  decode: _decodeDemoPayload,
+);
+
+Object? _encodeDemoPayload(_DemoPayload value) => {'foo': value.foo};
+
+_DemoPayload _decodeDemoPayload(Object? payload) {
+  return _DemoPayload.fromJson(Map<String, Object?>.from(payload! as Map));
 }
 
 class _TestRateLimiter implements RateLimiter {

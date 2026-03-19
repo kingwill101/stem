@@ -471,6 +471,40 @@ class Stem implements TaskEnqueuer {
     return completer.future;
   }
 
+  /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
+  Future<TaskResult<TResult>?> waitForTaskDefinition<
+    TArgs,
+    TResult extends Object?
+  >(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  }) {
+    return waitForTask<TResult>(
+      taskId,
+      timeout: timeout,
+      decode: (payload) {
+        TResult? value;
+        try {
+          value = definition.decode(payload);
+        } on Object {
+          if (payload is TResult) {
+            value = payload;
+          } else {
+            rethrow;
+          }
+        }
+        if (value == null && null is! TResult) {
+          throw StateError(
+            'Task definition "${definition.name}" decoded a null result '
+            'for non-nullable type $TResult.',
+          );
+        }
+        return value as TResult;
+      },
+    );
+  }
+
   /// Executes the enqueue middleware chain in order.
   Future<void> _runEnqueueMiddleware(
     Envelope envelope,

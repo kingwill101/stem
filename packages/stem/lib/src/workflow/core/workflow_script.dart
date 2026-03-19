@@ -1,5 +1,6 @@
-import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_definition.dart';
 
 /// High-level workflow facade that allows scripts to be authored as a single
 /// async function using `step`, `sleep`, and `awaitEvent` helpers.
@@ -17,6 +18,7 @@ class WorkflowScript<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
+    PayloadCodec<T>? resultCodec,
   }) : definition = WorkflowDefinition<T>.script(
          name: name,
          run: run,
@@ -25,6 +27,7 @@ class WorkflowScript<T extends Object?> {
          version: version,
          description: description,
          metadata: metadata,
+         resultCodec: resultCodec,
        );
 
   /// The constructed workflow definition.

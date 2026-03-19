@@ -1,5 +1,10 @@
 import 'package:stem/stem.dart';
 
+final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>(
+  encode: (value) => value.toJson(),
+  decode: _ShipmentReadyEvent.fromJson,
+);
+
 /// Runs a workflow that suspends on `awaitEvent` and resumes once a payload is
 /// emitted. The example also inspects watcher metadata before the resume.
 Future<void> main() async {
@@ -16,8 +21,10 @@ Future<void> main() async {
           final trackingId = await script.step('wait-for-shipment', (
             step,
           ) async {
-            final resume = step.takeResumeData();
-            if (resume == null) {
+            final payload = step.takeResumeValue<_ShipmentReadyEvent>(
+              codec: shipmentReadyEventCodec,
+            );
+            if (payload == null) {
               await step.awaitEvent(
                 'shipment.ready',
                 deadline: DateTime.now().add(const Duration(minutes: 5)),
@@ -25,9 +32,7 @@ Future<void> main() async {
               );
               return 'waiting';
             }
-
-            final payload = resume as Map<String, Object?>;
-            return payload['trackingId'];
+            return payload.trackingId;
           });
 
           return trackingId;
@@ -52,7 +57,11 @@ Future<void> main() async {
     print('Watcher metadata: ${watcher.data}');
   }
 
-  await app.runtime.emit('shipment.ready', const {'trackingId': 'ZX-42'});
+  await app.emitValue(
+    'shipment.ready',
+    const _ShipmentReadyEvent(trackingId: 'ZX-42'),
+    codec: shipmentReadyEventCodec,
+  );
 
   await app.runtime.executeRun(runId);
 
@@ -60,4 +69,17 @@ Future<void> main() async {
   print('Workflow completed with result: ${completed?.result}');
 
   await app.close();
+}
+
+class _ShipmentReadyEvent {
+  const _ShipmentReadyEvent({required this.trackingId});
+
+  final String trackingId;
+
+  Map<String, Object?> toJson() => {'trackingId': trackingId};
+
+  static _ShipmentReadyEvent fromJson(Object? payload) {
+    final json = payload! as Map<String, Object?>;
+    return _ShipmentReadyEvent(trackingId: json['trackingId'] as String);
+  }
 }

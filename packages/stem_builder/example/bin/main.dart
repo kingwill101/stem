@@ -1,10 +1,11 @@
 import 'dart:convert';
 
+import 'package:stem/stem.dart';
 import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
   print('Registered workflows:');
-  for (final entry in stemWorkflowManifest) {
+  for (final entry in stemModule.workflowManifest) {
     print(' - ${entry.name} (id=${entry.id})');
   }
 
@@ -12,10 +13,10 @@ Future<void> main() async {
   print(
     const JsonEncoder.withIndent(
       '  ',
-    ).convert(stemWorkflowManifest.map((entry) => entry.toJson()).toList()),
+    ).convert(stemModule.workflowManifest.map((entry) => entry.toJson()).toList()),
   );
 
-  final app = await createStemGeneratedInMemoryApp();
+  final app = await StemWorkflowApp.inMemory(module: stemModule);
   try {
     final runtime = app.runtime;
     final runtimeManifest = runtime
@@ -25,12 +26,16 @@ Future<void> main() async {
     print('\nRuntime manifest:');
     print(const JsonEncoder.withIndent('  ').convert(runtimeManifest));
 
-    final runId = await runtime.startFlow(
-      params: const {'name': 'Stem Builder'},
-    );
+    final runId = await StemWorkflowDefinitions.flow
+        .call(const {'name': 'Stem Builder'})
+        .startWithRuntime(runtime);
     await runtime.executeRun(runId);
-    final result = await runtime.viewRun(runId);
-    print('\nFlow result: ${result?.result}');
+    final result = await StemWorkflowDefinitions.flow.waitFor(
+      app,
+      runId,
+      timeout: const Duration(seconds: 2),
+    );
+    print('\nFlow result: ${result?.value}');
   } finally {
     await app.close();
   }

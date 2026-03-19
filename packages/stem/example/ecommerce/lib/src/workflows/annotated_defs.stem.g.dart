@@ -3,7 +3,7 @@
 
 part of 'annotated_defs.dart';
 
-final List<Flow> stemFlows = <Flow>[];
+final List<Flow> _stemFlows = <Flow>[];
 
 class _StemScriptProxy0 extends AddToCartWorkflow {
   _StemScriptProxy0(this._script);
@@ -33,7 +33,7 @@ class _StemScriptProxy0 extends AddToCartWorkflow {
   }
 }
 
-final List<WorkflowScript> stemScripts = <WorkflowScript>[
+final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "ecommerce.cart.add_item",
     checkpoints: [
@@ -59,67 +59,24 @@ final List<WorkflowScript> stemScripts = <WorkflowScript>[
   ),
 ];
 
-abstract final class StemWorkflowNames {
-  static const String addToCart = "ecommerce.cart.add_item";
+abstract final class StemWorkflowDefinitions {
+  static final WorkflowRef<
+    ({String cartId, String sku, int quantity}),
+    Map<String, Object?>
+  >
+  addToCart =
+      WorkflowRef<
+        ({String cartId, String sku, int quantity}),
+        Map<String, Object?>
+      >(
+        name: "ecommerce.cart.add_item",
+        encodeParams: (params) => <String, Object?>{
+          "cartId": params.cartId,
+          "sku": params.sku,
+          "quantity": params.quantity,
+        },
+      );
 }
-
-extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
-  Future<String> startAddToCart({
-    required String cartId,
-    required String sku,
-    required int quantity,
-    Map<String, Object?> extraParams = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    final params = <String, Object?>{
-      ...extraParams,
-      "cartId": cartId,
-      "sku": sku,
-      "quantity": quantity,
-    };
-    return startWorkflow(
-      StemWorkflowNames.addToCart,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-}
-
-extension StemGeneratedWorkflowRuntimeStarters on WorkflowRuntime {
-  Future<String> startAddToCart({
-    required String cartId,
-    required String sku,
-    required int quantity,
-    Map<String, Object?> extraParams = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    final params = <String, Object?>{
-      ...extraParams,
-      "cartId": cartId,
-      "sku": sku,
-      "quantity": quantity,
-    };
-    return startWorkflow(
-      StemWorkflowNames.addToCart,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-}
-
-final List<WorkflowManifestEntry> stemWorkflowManifest =
-    <WorkflowManifestEntry>[
-      ...stemFlows.map((flow) => flow.definition.toManifestEntry()),
-      ...stemScripts.map((script) => script.definition.toManifestEntry()),
-    ];
 
 Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
@@ -144,7 +101,65 @@ Future<Object?> _stemTaskAdapter0(
   );
 }
 
-final List<TaskHandler<Object?>> stemTasks = <TaskHandler<Object?>>[
+abstract final class StemTaskDefinitions {
+  static final TaskDefinition<
+    ({String event, String entityId, String detail}),
+    Map<String, Object?>
+  >
+  ecommerceAuditLog =
+      TaskDefinition<
+        ({String event, String entityId, String detail}),
+        Map<String, Object?>
+      >(
+        name: "ecommerce.audit.log",
+        encodeArgs: (args) => <String, Object?>{
+          "event": args.event,
+          "entityId": args.entityId,
+          "detail": args.detail,
+        },
+        defaultOptions: const TaskOptions(queue: "default"),
+        metadata: const TaskMetadata(),
+      );
+}
+
+extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
+  Future<String> enqueueEcommerceAuditLog({
+    required String event,
+    required String entityId,
+    required String detail,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueueCall(
+      StemTaskDefinitions.ecommerceAuditLog.call(
+        (event: event, entityId: entityId, detail: detail),
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
+    );
+  }
+}
+
+extension StemGeneratedTaskResults on Stem {
+  Future<TaskResult<Map<String, Object?>>?> waitForEcommerceAuditLog(
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return waitForTaskDefinition(
+      taskId,
+      StemTaskDefinitions.ecommerceAuditLog,
+      timeout: timeout,
+    );
+  }
+}
+
+final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "ecommerce.audit.log",
     entrypoint: _stemTaskAdapter0,
@@ -154,46 +169,15 @@ final List<TaskHandler<Object?>> stemTasks = <TaskHandler<Object?>>[
   ),
 ];
 
-void registerStemDefinitions({
-  required WorkflowRegistry workflows,
-  required TaskRegistry tasks,
-}) {
-  for (final flow in stemFlows) {
-    workflows.register(flow.definition);
-  }
-  for (final script in stemScripts) {
-    workflows.register(script.definition);
-  }
-  for (final handler in stemTasks) {
-    tasks.register(handler);
-  }
-}
+final List<WorkflowManifestEntry> _stemWorkflowManifest =
+    <WorkflowManifestEntry>[
+      ..._stemFlows.map((flow) => flow.definition.toManifestEntry()),
+      ..._stemScripts.map((script) => script.definition.toManifestEntry()),
+    ];
 
-Future<StemWorkflowApp> createStemGeneratedWorkflowApp({
-  required StemApp stemApp,
-  bool registerTasks = true,
-  Duration pollInterval = const Duration(milliseconds: 500),
-  Duration leaseExtension = const Duration(seconds: 30),
-  WorkflowRegistry? workflowRegistry,
-  WorkflowIntrospectionSink? introspectionSink,
-}) async {
-  if (registerTasks) {
-    for (final handler in stemTasks) {
-      stemApp.register(handler);
-    }
-  }
-  return StemWorkflowApp.create(
-    stemApp: stemApp,
-    flows: stemFlows,
-    scripts: stemScripts,
-    pollInterval: pollInterval,
-    leaseExtension: leaseExtension,
-    workflowRegistry: workflowRegistry,
-    introspectionSink: introspectionSink,
-  );
-}
-
-Future<StemWorkflowApp> createStemGeneratedInMemoryApp() async {
-  final stemApp = await StemApp.inMemory(tasks: stemTasks);
-  return createStemGeneratedWorkflowApp(stemApp: stemApp, registerTasks: false);
-}
+final StemModule stemModule = StemModule(
+  flows: _stemFlows,
+  scripts: _stemScripts,
+  tasks: _stemTasks,
+  workflowManifest: _stemWorkflowManifest,
+);

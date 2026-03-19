@@ -36,9 +36,9 @@ class EcommerceServer {
     final workflowApp = await StemWorkflowApp.fromUrl(
       'sqlite://$stemDatabasePath',
       adapters: const [StemSqliteAdapter()],
-      scripts: stemScripts,
+      module: stemModule,
       flows: [buildCheckoutFlow(repository)],
-      tasks: [...stemTasks, shipmentReserveTaskHandler],
+      tasks: [shipmentReserveTaskHandler],
       workerConfig: StemWorkerConfig(
         queue: 'workflow',
         consumerName: 'ecommerce-worker',
@@ -57,7 +57,10 @@ class EcommerceServer {
           'status': 'ok',
           'databasePath': repository.databasePath,
           'stemDatabasePath': stemDatabasePath,
-          'workflows': [StemWorkflowNames.addToCart, checkoutWorkflowName],
+          'workflows': [
+            StemWorkflowDefinitions.addToCart.name,
+            checkoutWorkflowName,
+          ],
         });
       })
       ..get('/catalog', (Request request) async {
@@ -91,18 +94,15 @@ class EcommerceServer {
           final sku = payload['sku']?.toString() ?? '';
           final quantity = _toInt(payload['quantity']);
 
-          final runId = await workflowApp.startAddToCart(
-            cartId: cartId,
-            sku: sku,
-            quantity: quantity,
-          );
+          final runId = await StemWorkflowDefinitions.addToCart
+              .call((cartId: cartId, sku: sku, quantity: quantity))
+              .startWithApp(workflowApp);
 
-          final result = await workflowApp
-              .waitForCompletion<Map<String, Object?>>(
-                runId,
-                timeout: const Duration(seconds: 4),
-                decode: _toMap,
-              );
+          final result = await StemWorkflowDefinitions.addToCart.waitFor(
+            workflowApp,
+            runId,
+            timeout: const Duration(seconds: 4),
+          );
 
           if (result == null) {
             return _error(500, 'Add-to-cart workflow run not found.', {

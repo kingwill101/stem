@@ -15,7 +15,7 @@ Future<void> main() async {
         name: 'reports.generate',
         build: (flow) {
           flow.step('poll-status', (ctx) async {
-            final resume = ctx.takeResumeData();
+            final resume = ctx.takeResumeValue<bool>();
             if (resume != true) {
               print('[workflow] polling external system…');
               // Simulate a slow external service; the cancellation policy will

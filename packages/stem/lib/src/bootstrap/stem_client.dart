@@ -1,5 +1,6 @@
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
+import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/bootstrap/workflow_app.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -196,6 +197,7 @@ abstract class StemClient {
 
   /// Creates a workflow app using the shared client configuration.
   Future<StemWorkflowApp> createWorkflowApp({
+    StemModule? module,
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -208,6 +210,7 @@ abstract class StemClient {
   }) {
     return StemWorkflowApp.fromClient(
       client: this,
+      module: module,
       workflows: workflows,
       flows: flows,
       scripts: scripts,

@@ -3,7 +3,7 @@
 
 part of 'definitions.dart';
 
-final List<Flow> stemFlows = <Flow>[
+final List<Flow> _stemFlows = <Flow>[
   Flow(
     name: "builder.example.flow",
     build: (flow) {
@@ -46,7 +46,7 @@ class _StemScriptProxy0 extends BuilderUserSignupWorkflow {
   }
 }
 
-final List<WorkflowScript> stemScripts = <WorkflowScript>[
+final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "builder.example.user_signup",
     checkpoints: [
@@ -75,84 +75,18 @@ final List<WorkflowScript> stemScripts = <WorkflowScript>[
   ),
 ];
 
-abstract final class StemWorkflowNames {
-  static const String flow = "builder.example.flow";
-  static const String userSignup = "builder.example.user_signup";
+abstract final class StemWorkflowDefinitions {
+  static final WorkflowRef<Map<String, Object?>, String> flow =
+      WorkflowRef<Map<String, Object?>, String>(
+        name: "builder.example.flow",
+        encodeParams: (params) => params,
+      );
+  static final WorkflowRef<({String email}), Map<String, Object?>> userSignup =
+      WorkflowRef<({String email}), Map<String, Object?>>(
+        name: "builder.example.user_signup",
+        encodeParams: (params) => <String, Object?>{"email": params.email},
+      );
 }
-
-extension StemGeneratedWorkflowAppStarters on StemWorkflowApp {
-  Future<String> startFlow({
-    Map<String, Object?> params = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return startWorkflow(
-      StemWorkflowNames.flow,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-
-  Future<String> startUserSignup({
-    required String email,
-    Map<String, Object?> extraParams = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    final params = <String, Object?>{...extraParams, "email": email};
-    return startWorkflow(
-      StemWorkflowNames.userSignup,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-}
-
-extension StemGeneratedWorkflowRuntimeStarters on WorkflowRuntime {
-  Future<String> startFlow({
-    Map<String, Object?> params = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return startWorkflow(
-      StemWorkflowNames.flow,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-
-  Future<String> startUserSignup({
-    required String email,
-    Map<String, Object?> extraParams = const {},
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    final params = <String, Object?>{...extraParams, "email": email};
-    return startWorkflow(
-      StemWorkflowNames.userSignup,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-}
-
-final List<WorkflowManifestEntry> stemWorkflowManifest =
-    <WorkflowManifestEntry>[
-      ...stemFlows.map((flow) => flow.definition.toManifestEntry()),
-      ...stemScripts.map((script) => script.definition.toManifestEntry()),
-    ];
 
 Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
@@ -163,7 +97,52 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
   return args[name];
 }
 
-final List<TaskHandler<Object?>> stemTasks = <TaskHandler<Object?>>[
+abstract final class StemTaskDefinitions {
+  static final TaskDefinition<Map<String, Object?>, Object?>
+  builderExampleTask = TaskDefinition<Map<String, Object?>, Object?>(
+    name: "builder.example.task",
+    encodeArgs: (args) => args,
+    defaultOptions: const TaskOptions(),
+    metadata: const TaskMetadata(),
+  );
+}
+
+extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
+  Future<String> enqueueBuilderExampleTask({
+    required Map<String, Object?> args,
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueueCall(
+      StemTaskDefinitions.builderExampleTask.call(
+        args,
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
+    );
+  }
+}
+
+extension StemGeneratedTaskResults on Stem {
+  Future<TaskResult<Object?>?> waitForBuilderExampleTask(
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return waitForTaskDefinition(
+      taskId,
+      StemTaskDefinitions.builderExampleTask,
+      timeout: timeout,
+    );
+  }
+}
+
+final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "builder.example.task",
     entrypoint: builderExampleTask,
@@ -172,46 +151,15 @@ final List<TaskHandler<Object?>> stemTasks = <TaskHandler<Object?>>[
   ),
 ];
 
-void registerStemDefinitions({
-  required WorkflowRegistry workflows,
-  required TaskRegistry tasks,
-}) {
-  for (final flow in stemFlows) {
-    workflows.register(flow.definition);
-  }
-  for (final script in stemScripts) {
-    workflows.register(script.definition);
-  }
-  for (final handler in stemTasks) {
-    tasks.register(handler);
-  }
-}
+final List<WorkflowManifestEntry> _stemWorkflowManifest =
+    <WorkflowManifestEntry>[
+      ..._stemFlows.map((flow) => flow.definition.toManifestEntry()),
+      ..._stemScripts.map((script) => script.definition.toManifestEntry()),
+    ];
 
-Future<StemWorkflowApp> createStemGeneratedWorkflowApp({
-  required StemApp stemApp,
-  bool registerTasks = true,
-  Duration pollInterval = const Duration(milliseconds: 500),
-  Duration leaseExtension = const Duration(seconds: 30),
-  WorkflowRegistry? workflowRegistry,
-  WorkflowIntrospectionSink? introspectionSink,
-}) async {
-  if (registerTasks) {
-    for (final handler in stemTasks) {
-      stemApp.register(handler);
-    }
-  }
-  return StemWorkflowApp.create(
-    stemApp: stemApp,
-    flows: stemFlows,
-    scripts: stemScripts,
-    pollInterval: pollInterval,
-    leaseExtension: leaseExtension,
-    workflowRegistry: workflowRegistry,
-    introspectionSink: introspectionSink,
-  );
-}
-
-Future<StemWorkflowApp> createStemGeneratedInMemoryApp() async {
-  final stemApp = await StemApp.inMemory(tasks: stemTasks);
-  return createStemGeneratedWorkflowApp(stemApp: stemApp, registerTasks: false);
-}
+final StemModule stemModule = StemModule(
+  flows: _stemFlows,
+  scripts: _stemScripts,
+  tasks: _stemTasks,
+  workflowManifest: _stemWorkflowManifest,
+);
