@@ -248,6 +248,9 @@ final healthcheckDefinition = TaskDefinition.noArgs<void>(
 await healthcheckDefinition.enqueueWith(stem);
 ```
 
+If a no-arg task returns a DTO, pass `resultCodec:` so waiting helpers decode
+the result and the task metadata advertises the right result encoder.
+
 You can also build requests fluently with the `TaskEnqueueBuilder`:
 
 ```dart

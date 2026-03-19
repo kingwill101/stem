@@ -207,6 +207,27 @@ void main() {
         expect(backend.records.single.state, TaskState.queued);
       },
     );
+
+    test(
+      'no-arg task definitions can attach codec-backed result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition.noArgs<_CodecReceipt>(
+          name: 'sample.no_args.codec',
+          resultCodec: _codecReceiptCodec,
+        );
+
+        final id = await definition.enqueueWith(stem);
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
   });
 
   group('TaskCall helpers', () {
@@ -340,18 +361,22 @@ void main() {
     test('supports no-arg task definitions', () async {
       final backend = InMemoryResultBackend();
       final stem = Stem(broker: _RecordingBroker(), backend: backend);
-      final definition = TaskDefinition.noArgs<String>(name: 'no-args.wait');
+      final definition = TaskDefinition.noArgs<_CodecReceipt>(
+        name: 'no-args.wait',
+        resultCodec: _codecReceiptCodec,
+      );
 
       await backend.set(
         'task-no-args-wait',
         TaskState.succeeded,
-        payload: 'done',
+        payload: const _CodecReceipt('done'),
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
       );
 
       final result = await definition.waitFor(stem, 'task-no-args-wait');
 
-      expect(result?.value, 'done');
-      expect(result?.rawPayload, 'done');
+      expect(result?.value?.id, 'done');
+      expect(result?.rawPayload, isA<_CodecReceipt>());
     });
 
     test('enqueueAndWaitWith supports no-arg task definitions', () async {

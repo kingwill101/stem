@@ -2026,12 +2026,17 @@ class TaskDefinition<TArgs, TResult> {
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
     TaskResultDecoder<TResult>? decodeResult,
+    PayloadCodec<TResult>? resultCodec,
   }) {
     return NoArgsTaskDefinition<TResult>(
       name: name,
       defaultOptions: defaultOptions,
-      metadata: metadata,
-      decodeResult: decodeResult,
+      metadata: TaskDefinition._metadataWithResultCodec(
+        name,
+        metadata,
+        resultCodec,
+      ),
+      decodeResult: decodeResult ?? resultCodec?.decode,
     );
   }
 
