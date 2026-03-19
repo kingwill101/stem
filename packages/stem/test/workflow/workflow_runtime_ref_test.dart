@@ -13,8 +13,7 @@ void main() {
           });
         },
       );
-      final workflowRef = WorkflowRef<Map<String, Object?>, String>(
-        name: 'runtime.ref.flow',
+      final workflowRef = flow.ref<Map<String, Object?>>(
         encodeParams: (params) => params,
       );
 
@@ -44,6 +43,37 @@ void main() {
         );
 
         expect(oneShot?.value, 'hello inline');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('manual workflow scripts can derive typed refs', () async {
+      final script = WorkflowScript<String>(
+        name: 'runtime.ref.script',
+        run: (context) async {
+          final name = context.params['name'] as String? ?? 'world';
+          return 'script $name';
+        },
+      );
+      final workflowRef = script.ref<Map<String, Object?>>(
+        encodeParams: (params) => params,
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+      try {
+        await workflowApp.start();
+
+        final runId = await workflowRef
+            .call(const {'name': 'runtime'})
+            .startWith(workflowApp.runtime);
+        final waited = await workflowRef.waitForWithRuntime(
+          workflowApp.runtime,
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(waited?.value, 'script runtime');
       } finally {
         await workflowApp.shutdown();
       }

@@ -3,7 +3,7 @@ title: Starting and Waiting
 ---
 
 Workflow runs are started through the runtime, through `StemWorkflowApp`, or
-through generated workflow refs.
+through typed workflow refs.
 
 ## Start by workflow name
 
@@ -14,6 +14,29 @@ through generated workflow refs.
 Use `params:` to supply workflow input and
 `WorkflowCancellationPolicy` to cap wall-clock runtime or maximum suspension
 time.
+
+That low-level API is useful when workflow names come from config or external
+input. For workflows you define in code, prefer a typed workflow ref instead.
+
+## Start through manual workflow refs
+
+Manual `Flow(...)` and `WorkflowScript(...)` definitions can derive a typed ref
+without repeating the workflow-name string:
+
+```dart
+final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
+  encodeParams: (params) => <String, Object?>{'draft': params.draft},
+);
+
+final runId = await approvalsRef
+    .call((draft: const {'documentId': 'doc-42'}))
+    .startWithApp(workflowApp);
+
+final result = await approvalsRef.waitFor(workflowApp, runId);
+```
+
+Use this path when you want the same typed start/wait surface as generated
+workflow refs, but the workflow itself is still hand-written.
 
 ## Wait for completion
 

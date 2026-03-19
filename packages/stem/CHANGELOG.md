@@ -11,6 +11,9 @@
 - Added `WorkflowStartCall.startWith(...)` so workflow refs can dispatch
   uniformly through apps, runtimes, and child-workflow callers instead of
   dropping back to `startWorkflowRef(...)` in durable workflow code.
+- Added `Flow.ref(...)` / `WorkflowScript.ref(...)` helpers so manual workflow
+  definitions can derive typed workflow refs without repeating workflow-name
+  strings or manual result decoder wiring.
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
 - Clarified the workflow authoring model by distinguishing flow steps from

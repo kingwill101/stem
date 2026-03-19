@@ -1,5 +1,6 @@
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Convenience wrapper that builds a [WorkflowDefinition] using the declarative
 /// [FlowBuilder] DSL.
@@ -28,4 +29,12 @@ class Flow<T extends Object?> {
 
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
+
+  /// Builds a typed [WorkflowRef] using this flow's registered workflow name
+  /// and result decoder.
+  WorkflowRef<TParams, T> ref<TParams>({
+    required Map<String, Object?> Function(TParams params) encodeParams,
+  }) {
+    return definition.ref<TParams>(encodeParams: encodeParams);
+  }
 }

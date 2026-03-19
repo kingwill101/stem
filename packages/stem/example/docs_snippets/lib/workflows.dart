@@ -64,6 +64,10 @@ class ApprovalsFlow {
       });
     },
   );
+
+  static final ref = flow.ref<({Map<String, Object?> draft})>(
+    encodeParams: (params) => <String, Object?>{'draft': params.draft},
+  );
 }
 
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
@@ -99,18 +103,20 @@ final retryDefinition = retryScript.definition;
 
 // #region workflows-run
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
-  final runId = await workflowApp.startWorkflow(
-    'approvals.flow',
-    params: {
-      'draft': {'documentId': 'doc-42'},
-    },
-    cancellationPolicy: const WorkflowCancellationPolicy(
-      maxRunDuration: Duration(hours: 2),
-      maxSuspendDuration: Duration(minutes: 30),
-    ),
-  );
+  final runId = await ApprovalsFlow.ref
+      .call(
+        (
+          draft: const <String, Object?>{'documentId': 'doc-42'},
+        ),
+        cancellationPolicy: const WorkflowCancellationPolicy(
+          maxRunDuration: Duration(hours: 2),
+          maxSuspendDuration: Duration(minutes: 30),
+        ),
+      )
+      .startWithApp(workflowApp);
 
-  final result = await workflowApp.waitForCompletion<String>(
+  final result = await ApprovalsFlow.ref.waitFor(
+    workflowApp,
     runId,
     timeout: const Duration(minutes: 5),
   );

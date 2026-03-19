@@ -1,6 +1,7 @@
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// High-level workflow facade that allows scripts to be authored as a single
 /// async function using `step`, `sleep`, and `awaitEvent` helpers.
@@ -30,4 +31,12 @@ class WorkflowScript<T extends Object?> {
 
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
+
+  /// Builds a typed [WorkflowRef] using this script's registered workflow name
+  /// and result decoder.
+  WorkflowRef<TParams, T> ref<TParams>({
+    required Map<String, Object?> Function(TParams params) encodeParams,
+  }) {
+    return definition.ref<TParams>(encodeParams: encodeParams);
+  }
 }

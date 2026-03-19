@@ -61,6 +61,7 @@ import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
@@ -114,7 +115,7 @@ class WorkflowDefinition<T extends Object?> {
               .map(FlowStep.fromJson)
               .toList()
         : <FlowStep>[];
-    final checkpointsJson = ((json['checkpoints'] as List?) ?? stepsJson);
+    final checkpointsJson = (json['checkpoints'] as List?) ?? stepsJson;
     final checkpoints = kind == WorkflowDefinitionKind.script
         ? checkpointsJson
               .whereType<Map<String, Object?>>()
@@ -290,6 +291,18 @@ class WorkflowDefinition<T extends Object?> {
     final decoder = _resultDecoder;
     if (decoder == null) return payload;
     return decoder(payload);
+  }
+
+  /// Builds a typed [WorkflowRef] from this definition without repeating the
+  /// registered workflow name.
+  WorkflowRef<TParams, T> ref<TParams>({
+    required Map<String, Object?> Function(TParams params) encodeParams,
+  }) {
+    return WorkflowRef<TParams, T>(
+      name: name,
+      encodeParams: encodeParams,
+      decodeResult: (payload) => decodeResult(payload) as T,
+    );
   }
 
   /// Stable identifier derived from immutable workflow definition fields.

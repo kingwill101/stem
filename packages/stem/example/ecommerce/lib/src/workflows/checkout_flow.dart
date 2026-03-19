@@ -4,6 +4,14 @@ import '../domain/repository.dart';
 
 const checkoutWorkflowName = 'ecommerce.checkout';
 
+WorkflowRef<({String cartId}), Map<String, Object?>> checkoutWorkflowRef(
+  Flow<Map<String, Object?>> flow,
+) {
+  return flow.ref<({String cartId})>(
+    encodeParams: (params) => <String, Object?>{'cartId': params.cartId},
+  );
+}
+
 Flow<Map<String, Object?>> buildCheckoutFlow(EcommerceRepository repository) {
   return Flow<Map<String, Object?>>(
     name: checkoutWorkflowName,
@@ -24,15 +32,14 @@ Flow<Map<String, Object?>> buildCheckoutFlow(EcommerceRepository repository) {
       });
 
       flow.step('capture-payment', (ctx) async {
-        final resume = ctx.takeResumeValue<Map<String, Object?>>();
-        if (resume == null) {
-          ctx.sleep(
-            const Duration(milliseconds: 100),
-            data: {
-              'phase': 'payment-authorization',
-              'cartId': ctx.params['cartId'],
-            },
-          );
+        if (
+            !ctx.sleepUntilResumed(
+              const Duration(milliseconds: 100),
+              data: {
+                'phase': 'payment-authorization',
+                'cartId': ctx.params['cartId'],
+              },
+            )) {
           return null;
         }
 

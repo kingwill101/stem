@@ -38,6 +38,10 @@ From those annotations, this example uses generated APIs:
 - `StemTaskDefinitions.ecommerceAuditLog`
 - `StemTaskDefinitions.ecommerceAuditLog.call(...)`
 
+The manual checkout flow also derives a typed ref from its `Flow` definition:
+
+- `checkoutWorkflowRef(checkoutFlow)`
+
 The server wires generated and manual tasks together in one place:
 
 ```dart

@@ -32,12 +32,14 @@ class EcommerceServer {
     );
     final repository = await EcommerceRepository.open(commerceDatabasePath);
     bindAddToCartWorkflowRepository(repository);
+    final checkoutFlow = buildCheckoutFlow(repository);
+    final checkoutWorkflow = checkoutWorkflowRef(checkoutFlow);
 
     final workflowApp = await StemWorkflowApp.fromUrl(
       'sqlite://$stemDatabasePath',
       adapters: const [StemSqliteAdapter()],
       module: stemModule,
-      flows: [buildCheckoutFlow(repository)],
+      flows: [checkoutFlow],
       tasks: [shipmentReserveTaskHandler],
       workerConfig: StemWorkerConfig(
         queue: 'workflow',
@@ -56,7 +58,7 @@ class EcommerceServer {
           'stemDatabasePath': stemDatabasePath,
           'workflows': [
             StemWorkflowDefinitions.addToCart.name,
-            checkoutWorkflowName,
+            checkoutWorkflow.name,
           ],
         });
       })
@@ -132,17 +134,15 @@ class EcommerceServer {
       })
       ..post('/checkout/<cartId>', (Request request, String cartId) async {
         try {
-          final runId = await workflowApp.startWorkflow(
-            checkoutWorkflowName,
-            params: {'cartId': cartId},
-          );
+          final runId = await checkoutWorkflow
+              .call((cartId: cartId))
+              .startWithApp(workflowApp);
 
-          final result = await workflowApp
-              .waitForCompletion<Map<String, Object?>>(
-                runId,
-                timeout: const Duration(seconds: 6),
-                decode: _toMap,
-              );
+          final result = await checkoutWorkflow.waitFor(
+            workflowApp,
+            runId,
+            timeout: const Duration(seconds: 6),
+          );
 
           if (result == null) {
             return _error(500, 'Checkout workflow run not found.', {
@@ -237,16 +237,6 @@ Response _json(int status, Map<String, Object?> payload) {
 
 Response _error(int status, String message, Object? error) {
   return _json(status, {'error': message, 'details': _normalizeError(error)});
-}
-
-Map<String, Object?> _toMap(Object? value) {
-  if (value is Map<String, Object?>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.cast<String, Object?>();
-  }
-  return <String, Object?>{};
 }
 
 Object? _normalizeError(Object? error) {

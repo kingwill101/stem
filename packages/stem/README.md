@@ -389,20 +389,21 @@ final approvalsFlow = Flow<String>(
   },
 );
 
+final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
+  encodeParams: (params) => <String, Object?>{'draft': params.draft},
+);
+
 final app = await StemWorkflowApp.fromUrl(
   'memory://',
   flows: [approvalsFlow],
   tasks: const [],
 );
 
-final runId = await app.startWorkflow(
-  'approvals.flow',
-  params: {
-    'draft': {'documentId': 'doc-42'},
-  },
-);
+final runId = await approvalsRef
+    .call((draft: const {'documentId': 'doc-42'}))
+    .startWithApp(app);
 
-final result = await app.waitForCompletion<String>(runId);
+final result = await approvalsRef.waitFor(app, runId);
 print(result?.value);
 await app.close();
 ```
