@@ -44,6 +44,7 @@ import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -238,6 +239,45 @@ class WorkflowRuntime {
     );
   }
 
+  /// Waits for [runId] to reach a terminal state.
+  Future<WorkflowResult<T>?> waitForCompletion<T extends Object?>(
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+    T Function(Object? payload)? decode,
+  }) async {
+    final startedAt = _clock.now();
+    while (true) {
+      final state = await _store.get(runId);
+      if (state == null) {
+        return null;
+      }
+      if (state.isTerminal) {
+        return _buildResult(state, decode, timedOut: false);
+      }
+      if (timeout != null && _clock.now().difference(startedAt) >= timeout) {
+        return _buildResult(state, decode, timedOut: true);
+      }
+      await Future<void>.delayed(pollInterval);
+    }
+  }
+
+  /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return waitForCompletion<TResult>(
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+      decode: definition.decode,
+    );
+  }
+
   /// Emits an external event and resumes all runs waiting on [topic].
   ///
   /// Each resumed run receives the event as `resumeData` for the awaiting step
@@ -274,6 +314,34 @@ class WorkflowRuntime {
         break;
       }
     }
+  }
+
+  WorkflowResult<T> _buildResult<T extends Object?>(
+    RunState state,
+    T Function(Object? payload)? decode, {
+    required bool timedOut,
+  }) {
+    final value = state.status == WorkflowStatus.completed
+        ? _decodeResult(state.result, decode)
+        : null;
+    return WorkflowResult<T>(
+      runId: state.id,
+      status: state.status,
+      state: state,
+      value: value,
+      rawResult: state.result,
+      timedOut: timedOut && !state.isTerminal,
+    );
+  }
+
+  T? _decodeResult<T extends Object?>(
+    Object? payload,
+    T Function(Object? payload)? decode,
+  ) {
+    if (decode != null) {
+      return decode(payload);
+    }
+    return payload as T?;
   }
 
   /// Emits a typed external event that serializes to the existing map-based
