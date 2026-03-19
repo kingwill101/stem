@@ -36,3 +36,6 @@ Future<void> builderExampleTask(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {}
+
+@TaskDefn(name: 'builder.example.ping')
+Future<String> builderPingTask() async => 'pong';

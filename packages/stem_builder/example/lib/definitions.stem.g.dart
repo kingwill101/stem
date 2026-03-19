@@ -92,6 +92,13 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
   return args[name];
 }
 
+Future<Object?> _stemTaskAdapter0(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  return await Future<Object?>.value(builderPingTask());
+}
+
 abstract final class StemTaskDefinitions {
   static final TaskDefinition<Map<String, Object?>, Object?>
   builderExampleTask = TaskDefinition<Map<String, Object?>, Object?>(
@@ -100,12 +107,24 @@ abstract final class StemTaskDefinitions {
     defaultOptions: const TaskOptions(),
     metadata: const TaskMetadata(),
   );
+  static final NoArgsTaskDefinition<String> builderExamplePing =
+      NoArgsTaskDefinition<String>(
+        name: "builder.example.ping",
+        defaultOptions: const TaskOptions(),
+        metadata: const TaskMetadata(),
+      );
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "builder.example.task",
     entrypoint: builderExampleTask,
+    options: const TaskOptions(),
+    metadata: const TaskMetadata(),
+  ),
+  FunctionTaskHandler<Object?>(
+    name: "builder.example.ping",
+    entrypoint: _stemTaskAdapter0,
     options: const TaskOptions(),
     metadata: const TaskMetadata(),
   ),

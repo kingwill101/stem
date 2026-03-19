@@ -39,4 +39,14 @@ Future<void> main() async {
   } finally {
     await app.close();
   }
+
+  final taskApp = await StemApp.inMemory(module: stemModule);
+  try {
+    await taskApp.start();
+    final taskResult = await StemTaskDefinitions.builderExamplePing
+        .enqueueAndWaitWith(taskApp.stem, timeout: const Duration(seconds: 2));
+    print('\nNo-arg task result: ${taskResult?.value}');
+  } finally {
+    await taskApp.shutdown();
+  }
 }
