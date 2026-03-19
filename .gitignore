@@ -33,3 +33,5 @@ packages/cloud/
 # Local test artifacts
 /test/
 /test_screenshots/
+third_party/
+packages/stem/workflow.sqlite*
