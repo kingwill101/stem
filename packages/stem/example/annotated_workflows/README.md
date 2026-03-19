@@ -38,6 +38,7 @@ The generated file exposes:
 
 - `stemModule`
 - `StemWorkflowDefinitions`
+- direct workflow helpers like `startScript(...)` and `startAndWaitScript(...)`
 - typed workflow refs for `StemWorkflowApp` and `WorkflowRuntime`
 - typed task definitions that use the shared `TaskCall` /
   `TaskDefinition.waitFor(...)` APIs

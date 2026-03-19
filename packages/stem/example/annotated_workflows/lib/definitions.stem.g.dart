@@ -229,6 +229,54 @@ abstract final class StemWorkflowDefinitions {
         name: "annotated.flow",
         encodeParams: (params) => params,
       );
+  static Future<String> startFlow(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>?>?> startAndWaitFlow(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>?>?> waitForFlow(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return flow.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   static final WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>
   script = WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>(
     name: "annotated.script",
@@ -237,6 +285,56 @@ abstract final class StemWorkflowDefinitions {
     },
     decodeResult: StemPayloadCodecs.welcomeWorkflowResult.decode,
   );
+  static Future<String> startScript(
+    WorkflowCaller caller, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return script
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<WelcomeWorkflowResult>?> startAndWaitScript(
+    WorkflowCaller caller, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return script
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<WelcomeWorkflowResult>?> waitForScript(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return script.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   static final WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>
   contextScript = WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>(
     name: "annotated.context_script",
@@ -245,6 +343,56 @@ abstract final class StemWorkflowDefinitions {
     },
     decodeResult: StemPayloadCodecs.contextCaptureResult.decode,
   );
+  static Future<String> startContextScript(
+    WorkflowCaller caller, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return contextScript
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<ContextCaptureResult>?>
+  startAndWaitContextScript(
+    WorkflowCaller caller, {
+    required WelcomeRequest request,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return contextScript
+        .call(
+          (request: request),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<ContextCaptureResult>?> waitForContextScript(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return contextScript.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {

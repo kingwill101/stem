@@ -166,7 +166,7 @@ dart run build_runner build
 
 The generated part exports a bundle plus typed helpers so you can avoid raw
 workflow-name and task-name strings (for example
-`StemWorkflowDefinitions.userSignup.call((email: 'user@example.com'))` or
+`StemWorkflowDefinitions.startUserSignup(workflowApp, email: 'user@example.com')` or
 `StemTaskDefinitions.enqueueBuilderExampleTask(stem, ...)`).
 
 Generated output includes:
@@ -191,9 +191,10 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startAndWaitWithApp(workflowApp);
+final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+  workflowApp,
+  email: 'user@example.com',
+);
 ```
 
 When you use `module: stemModule`, the workflow app infers the worker
@@ -250,9 +251,10 @@ The generated workflow refs work on `WorkflowRuntime` too:
 
 ```dart
 final runtime = workflowApp.runtime;
-final runId = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startWithRuntime(runtime);
+final runId = await StemWorkflowDefinitions.startUserSignup(
+  runtime,
+  email: 'user@example.com',
+);
 await runtime.executeRun(runId);
 ```
 

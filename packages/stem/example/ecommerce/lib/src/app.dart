@@ -93,26 +93,24 @@ class EcommerceServer {
           final sku = payload['sku']?.toString() ?? '';
           final quantity = _toInt(payload['quantity']);
 
-          final runId = await StemWorkflowDefinitions.addToCart
-              .call((cartId: cartId, sku: sku, quantity: quantity))
-              .startWithApp(workflowApp);
-
-          final result = await StemWorkflowDefinitions.addToCart.waitFor(
+          final result = await StemWorkflowDefinitions.startAndWaitAddToCart(
             workflowApp,
-            runId,
+            cartId: cartId,
+            sku: sku,
+            quantity: quantity,
             timeout: const Duration(seconds: 4),
           );
 
           if (result == null) {
             return _error(500, 'Add-to-cart workflow run not found.', {
-              'runId': runId,
+              'runId': null,
             });
           }
 
           if (result.status != WorkflowStatus.completed ||
               result.value == null) {
             return _error(422, 'Add-to-cart workflow did not complete.', {
-              'runId': runId,
+              'runId': result.runId,
               'status': result.status.name,
               'lastError': result.state.lastError,
             });
@@ -127,7 +125,7 @@ class EcommerceServer {
             unitPriceCents: _toInt(computed['unitPriceCents']),
           );
 
-          return _json(200, {'runId': runId, 'cart': updatedCart});
+          return _json(200, {'runId': result.runId, 'cart': updatedCart});
         } on Object catch (error) {
           return _error(400, 'Failed to add item to cart.', error);
         }

@@ -47,9 +47,10 @@ Use the generated workflow refs when you want a single typed handle for start
 and wait operations:
 
 ```dart
-final result = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startAndWaitWithApp(workflowApp);
+final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+  workflowApp,
+  email: 'user@example.com',
+);
 ```
 
 Annotated tasks use the same shared typed task surface:

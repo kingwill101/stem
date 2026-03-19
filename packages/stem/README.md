@@ -582,9 +582,10 @@ final app = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startAndWaitWithApp(app);
+final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+  app,
+  email: 'user@example.com',
+);
 print(result?.value);
 await app.close();
 ```

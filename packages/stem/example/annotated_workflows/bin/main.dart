@@ -8,10 +8,10 @@ Future<void> main() async {
   final app = await client.createWorkflowApp(module: stemModule);
   await app.start();
 
-  final flowRunId = await StemWorkflowDefinitions.flow
-      .call(const <String, Object?>{})
-      .startWithApp(app);
-  final flowResult = await StemWorkflowDefinitions.flow.waitFor(
+  final flowRunId = await StemWorkflowDefinitions.startFlow(
+    app,
+  );
+  final flowResult = await StemWorkflowDefinitions.waitForFlow(
     app,
     flowRunId,
     timeout: const Duration(seconds: 2),
@@ -22,11 +22,9 @@ Future<void> main() async {
     '${jsonEncode(flowResult?.value?['childResult'])}',
   );
 
-  final scriptCall = StemWorkflowDefinitions.script.call((
-    request: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
-  ));
-  final scriptResult = await scriptCall.startAndWaitWithApp(
+  final scriptResult = await StemWorkflowDefinitions.startAndWaitScript(
     app,
+    request: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
     timeout: const Duration(seconds: 2),
   );
   print('Script result: ${jsonEncode(scriptResult?.value?.toJson())}');
@@ -47,11 +45,9 @@ Future<void> main() async {
   print('Persisted script result: ${jsonEncode(scriptDetail?.run.result)}');
   print('Script detail: ${jsonEncode(scriptDetail?.toJson())}');
 
-  final contextCall = StemWorkflowDefinitions.contextScript.call((
-    request: const WelcomeRequest(email: '  ContextEmail@Example.com  '),
-  ));
-  final contextResult = await contextCall.startAndWaitWithApp(
+  final contextResult = await StemWorkflowDefinitions.startAndWaitContextScript(
     app,
+    request: const WelcomeRequest(email: '  ContextEmail@Example.com  '),
     timeout: const Duration(seconds: 2),
   );
   print('Context script result: ${jsonEncode(contextResult?.value?.toJson())}');

@@ -74,6 +74,59 @@ abstract final class StemWorkflowDefinitions {
           "quantity": params.quantity,
         },
       );
+  static Future<String> startAddToCart(
+    WorkflowCaller caller, {
+    required String cartId,
+    required String sku,
+    required int quantity,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return addToCart
+        .call(
+          (cartId: cartId, sku: sku, quantity: quantity),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>>?> startAndWaitAddToCart(
+    WorkflowCaller caller, {
+    required String cartId,
+    required String sku,
+    required int quantity,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return addToCart
+        .call(
+          (cartId: cartId, sku: sku, quantity: quantity),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>>?> waitForAddToCart(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return addToCart.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {

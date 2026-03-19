@@ -1641,14 +1641,16 @@ class _RegistryEmitter {
     if (workflows.isEmpty) {
       return;
     }
+    final symbolNames = _symbolNamesForWorkflows(workflows);
     final fieldNames = _fieldNamesForWorkflows(
       workflows,
-      _symbolNamesForWorkflows(workflows),
+      symbolNames,
     );
 
     buffer.writeln('abstract final class StemWorkflowDefinitions {');
     for (final workflow in workflows) {
       final fieldName = fieldNames[workflow]!;
+      final helperSuffix = symbolNames[workflow]!;
       final argsTypeCode = _workflowArgsTypeCode(workflow);
       final isNoArgsScript =
           workflow.kind == WorkflowKind.script &&
@@ -1685,6 +1687,93 @@ class _RegistryEmitter {
         );
       }
       buffer.writeln('  );');
+      if (isNoArgsScript) {
+        final startArgs = _methodSignature(
+          positional: ['WorkflowCaller caller'],
+          named: [
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<String> start$helperSuffix($startArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.startWith(caller, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy);',
+        );
+        buffer.writeln('  }');
+        final startAndWaitArgs = _methodSignature(
+          positional: ['WorkflowCaller caller'],
+          named: [
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+            'Duration pollInterval = const Duration(milliseconds: 100)',
+            'Duration? timeout',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<WorkflowResult<${workflow.resultTypeCode}>?> startAndWait$helperSuffix($startAndWaitArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.startAndWaitWith(caller, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy, pollInterval: pollInterval, timeout: timeout);',
+        );
+        buffer.writeln('  }');
+      } else {
+        final parameters = workflow.kind == WorkflowKind.script
+            ? workflow.runValueParameters
+            : workflow.steps.first.valueParameters;
+        final callParams = workflow.kind == WorkflowKind.script
+            ? '(${parameters.map((parameter) => '${parameter.name}: ${parameter.name}').join(', ')})'
+            : '<String, Object?>{${parameters.map((parameter) => '${_string(parameter.name)}: ${_encodeValueExpression(parameter.name, parameter)}').join(', ')}}';
+        final startArgs = _methodSignature(
+          positional: ['WorkflowCaller caller'],
+          named: [
+            ...parameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<String> start$helperSuffix($startArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startWith(caller);',
+        );
+        buffer.writeln('  }');
+        final startAndWaitArgs = _methodSignature(
+          positional: ['WorkflowCaller caller'],
+          named: [
+            ...parameters.map(
+              (parameter) => 'required ${parameter.typeCode} ${parameter.name}',
+            ),
+            'String? parentRunId',
+            'Duration? ttl',
+            'WorkflowCancellationPolicy? cancellationPolicy',
+            'Duration pollInterval = const Duration(milliseconds: 100)',
+            'Duration? timeout',
+          ],
+        );
+        buffer.writeln(
+          '  static Future<WorkflowResult<${workflow.resultTypeCode}>?> startAndWait$helperSuffix($startAndWaitArgs) {',
+        );
+        buffer.writeln(
+          '    return $fieldName.call($callParams, parentRunId: parentRunId, ttl: ttl, cancellationPolicy: cancellationPolicy).startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);',
+        );
+        buffer.writeln('  }');
+      }
+      buffer.writeln(
+        '  static Future<WorkflowResult<${workflow.resultTypeCode}>?> waitFor$helperSuffix('
+        '${_methodSignature(positional: ['WorkflowCaller caller', 'String runId'], named: ['Duration pollInterval = const Duration(milliseconds: 100)', 'Duration? timeout'])}) {',
+      );
+      buffer.writeln(
+        '    return $fieldName.waitForWith(caller, runId, pollInterval: pollInterval, timeout: timeout);',
+      );
+      buffer.writeln('  }');
     }
     buffer.writeln('}');
     buffer.writeln();

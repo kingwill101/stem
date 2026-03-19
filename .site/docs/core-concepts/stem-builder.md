@@ -87,9 +87,10 @@ final workflowApp = await StemWorkflowApp.fromUrl(
 );
 
 await workflowApp.start();
-final result = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startAndWaitWithApp(workflowApp);
+final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+  workflowApp,
+  email: 'user@example.com',
+);
 ```
 
 When you pass `module: stemModule`, the workflow app infers the worker

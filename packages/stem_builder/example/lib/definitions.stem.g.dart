@@ -78,11 +78,110 @@ abstract final class StemWorkflowDefinitions {
         name: "builder.example.flow",
         encodeParams: (params) => params,
       );
+  static Future<String> startFlow(
+    WorkflowCaller caller, {
+    required String name,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{"name": name},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<String>?> startAndWaitFlow(
+    WorkflowCaller caller, {
+    required String name,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return flow
+        .call(
+          <String, Object?>{"name": name},
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<String>?> waitForFlow(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return flow.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   static final WorkflowRef<({String email}), Map<String, Object?>> userSignup =
       WorkflowRef<({String email}), Map<String, Object?>>(
         name: "builder.example.user_signup",
         encodeParams: (params) => <String, Object?>{"email": params.email},
       );
+  static Future<String> startUserSignup(
+    WorkflowCaller caller, {
+    required String email,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return userSignup
+        .call(
+          (email: email),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startWith(caller);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>>?> startAndWaitUserSignup(
+    WorkflowCaller caller, {
+    required String email,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return userSignup
+        .call(
+          (email: email),
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        )
+        .startAndWaitWith(caller, pollInterval: pollInterval, timeout: timeout);
+  }
+
+  static Future<WorkflowResult<Map<String, Object?>>?> waitForUserSignup(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return userSignup.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
