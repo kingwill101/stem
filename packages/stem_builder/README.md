@@ -103,6 +103,12 @@ Supported context injection points:
 - script checkpoints: `WorkflowScriptStepContext`
 - tasks: `TaskInvocationContext`
 
+Durable workflow contexts enqueue tasks directly:
+
+- `FlowContext.enqueue(...)`
+- `WorkflowScriptStepContext.enqueue(...)`
+- typed task definitions can target those contexts via `enqueueWith(...)`
+
 Child workflows should be started from durable boundaries:
 
 - `StemWorkflowDefinitions.someWorkflow.startWithContext(context, (...))`

@@ -14,7 +14,7 @@ import 'package:stem/src/workflow/core/workflow_ref.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext implements WorkflowChildCallerContext {
+class FlowContext implements WorkflowChildCallerContext, TaskEnqueuer {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -151,5 +151,45 @@ class FlowContext implements WorkflowChildCallerContext {
         ? defaultScope
         : scope;
     return '$workflow/$runId/$effectiveScope';
+  }
+
+  /// Enqueues a task using the workflow-scoped enqueuer.
+  ///
+  /// Workflow metadata propagation is handled by the runtime-provided
+  /// enqueuer implementation.
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('FlowContext has no enqueuer configured');
+    }
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueues a typed task call using the workflow-scoped enqueuer.
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('FlowContext has no enqueuer configured');
+    }
+    return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
   }
 }

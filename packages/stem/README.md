@@ -571,6 +571,12 @@ Context injection works at every runtime layer:
 - script checkpoints can take `WorkflowScriptStepContext`
 - tasks can take `TaskInvocationContext`
 
+Durable workflow contexts enqueue tasks directly:
+
+- `FlowContext.enqueue(...)`
+- `WorkflowScriptStepContext.enqueue(...)`
+- typed task definitions can target those contexts via `enqueueWith(...)`
+
 Child workflows belong in durable execution boundaries:
 
 - use
@@ -689,7 +695,7 @@ for side effects:
 flow.step('emit-side-effects', (ctx) async {
   final order = ctx.previousResult as Map<String, Object?>;
 
-  await ctx.enqueuer!.enqueue(
+  await ctx.enqueue(
     'ecommerce.audit.log',
     args: {
       'event': 'order.checked_out',

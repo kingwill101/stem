@@ -34,7 +34,7 @@ Future<void> main() async {
       name: 'example.runtime.features',
       build: (flow) {
         flow.step('dispatch-task', (ctx) async {
-          await ctx.enqueuer!.enqueue(
+          await ctx.enqueue(
             'example.noop',
             args: const {'payload': true},
             meta: const {'origin': 'runtime_metadata_views'},

@@ -216,6 +216,34 @@ void main() {
     final resumedValue = resumed.waitForEventRef(event);
     expect(resumedValue?.message, 'approved');
   });
+
+  test(
+    'WorkflowScriptStepContext.enqueue delegates to the configured enqueuer',
+    () async {
+      final enqueuer = _RecordingTaskEnqueuer();
+      final context = _FakeWorkflowScriptStepContext(enqueuer: enqueuer);
+
+      final taskId = await context.enqueue(
+        'tasks.child',
+        args: const {'value': 42},
+        meta: const {'source': 'script'},
+      );
+
+      expect(taskId, equals('recorded-1'));
+      expect(enqueuer.lastName, equals('tasks.child'));
+      expect(enqueuer.lastArgs, equals({'value': 42}));
+      expect(enqueuer.lastMeta, containsPair('source', 'script'));
+    },
+  );
+
+  test(
+    'WorkflowScriptStepContext.enqueue throws when no enqueuer is configured',
+    () {
+      final context = _FakeWorkflowScriptStepContext();
+
+      expect(() => context.enqueue('tasks.child'), throwsStateError);
+    },
+  );
 }
 
 class _ResumePayload {
@@ -245,15 +273,19 @@ _ResumePayload _decodeResumePayload(Object? payload) {
 }
 
 class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
-  _FakeWorkflowScriptStepContext({Object? resumeData})
-    : _resumeData = resumeData;
+  _FakeWorkflowScriptStepContext({
+    Object? resumeData,
+    TaskEnqueuer? enqueuer,
+  }) : _resumeData = resumeData,
+       _enqueuer = enqueuer;
 
   Object? _resumeData;
+  final TaskEnqueuer? _enqueuer;
   final List<String> awaitedTopics = <String>[];
   final List<Duration> sleepCalls = <Duration>[];
 
   @override
-  TaskEnqueuer? get enqueuer => null;
+  TaskEnqueuer? get enqueuer => _enqueuer;
 
   @override
   Never? get workflows => null;
@@ -302,5 +334,76 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     final value = _resumeData;
     _resumeData = null;
     return value;
+  }
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = _enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = _enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+}
+
+class _RecordingTaskEnqueuer implements TaskEnqueuer {
+  String? lastName;
+  Map<String, Object?>? lastArgs;
+  Map<String, Object?>? lastMeta;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    lastName = name;
+    lastArgs = Map<String, Object?>.from(args);
+    lastMeta = Map<String, Object?>.from(meta);
+    return 'recorded-1';
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      call.name,
+      args: call.encodeArgs(),
+      headers: call.headers,
+      meta: call.meta,
+      options: call.resolveOptions(),
+      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+    );
   }
 }

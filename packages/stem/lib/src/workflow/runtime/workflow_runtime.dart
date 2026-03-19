@@ -1851,6 +1851,41 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
 
   @override
   String get workflow => execution.workflow;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
 }
 
 /// Enqueuer that prefixes workflow step metadata onto spawned tasks.

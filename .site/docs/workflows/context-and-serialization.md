@@ -40,6 +40,9 @@ Depending on the context type, you can access:
 - `idempotencyKey(...)`
 - `workflows` for typed child-workflow starts from durable step/checkpoint
   contexts
+- direct task enqueue APIs because `FlowContext`,
+  `WorkflowScriptStepContext`, and `TaskInvocationContext` all implement
+  `TaskEnqueuer`
 - task metadata like `id`, `attempt`, `meta`
 
 Child workflow starts belong in durable boundaries:

@@ -71,31 +71,29 @@ Flow<Map<String, Object?>> buildCheckoutFlow(EcommerceRepository repository) {
         final orderId = order['id']?.toString() ?? '';
         final cartId = order['cartId']?.toString() ?? '';
 
-        if (ctx.enqueuer != null) {
-          await ctx.enqueuer!.enqueue(
-            'ecommerce.audit.log',
-            args: {
-              'event': 'order.checked_out',
-              'entityId': orderId,
-              'detail': 'cart=$cartId',
-            },
-            options: const TaskOptions(queue: 'default'),
-            meta: {
-              'workflow': checkoutWorkflowName,
-              'step': 'emit-side-effects',
-            },
-          );
+        await ctx.enqueue(
+          'ecommerce.audit.log',
+          args: {
+            'event': 'order.checked_out',
+            'entityId': orderId,
+            'detail': 'cart=$cartId',
+          },
+          options: const TaskOptions(queue: 'default'),
+          meta: {
+            'workflow': checkoutWorkflowName,
+            'step': 'emit-side-effects',
+          },
+        );
 
-          await ctx.enqueuer!.enqueue(
-            'ecommerce.shipping.reserve',
-            args: {'orderId': orderId, 'carrier': 'acme-post'},
-            options: const TaskOptions(queue: 'default'),
-            meta: {
-              'workflow': checkoutWorkflowName,
-              'step': 'emit-side-effects',
-            },
-          );
-        }
+        await ctx.enqueue(
+          'ecommerce.shipping.reserve',
+          args: {'orderId': orderId, 'carrier': 'acme-post'},
+          options: const TaskOptions(queue: 'default'),
+          meta: {
+            'workflow': checkoutWorkflowName,
+            'step': 'emit-side-effects',
+          },
+        );
 
         return order;
       });

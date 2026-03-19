@@ -1188,9 +1188,7 @@ void main() {
         name: 'meta.workflow',
         build: (flow) {
           flow.step('dispatch', (context) async {
-            final enqueuer = context.enqueuer;
-            expect(enqueuer, isNotNull);
-            await enqueuer!.enqueue(
+            await context.enqueue(
               taskName,
               meta: const {'custom': 'value'},
             );
