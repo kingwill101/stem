@@ -1058,6 +1058,51 @@ extension TaskCallExtension<TArgs, TResult extends Object?>
 /// Convenience helpers for waiting on typed task definitions.
 extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     on TaskDefinition<TArgs, TResult> {
+  /// Enqueues this typed task definition directly with [enqueuer].
+  Future<String> enqueueWith(
+    TaskEnqueuer enqueuer,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return call(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    ).enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
+  }
+
+  /// Enqueues this typed task definition and waits for its typed result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWith(
+    Stem stem,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) {
+    return call(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    ).enqueueAndWaitWith(
+      stem,
+      enqueueOptions: enqueueOptions,
+      timeout: timeout,
+    );
+  }
+
   /// Waits for [taskId] using this definition's decoding rules.
   Future<TaskResult<TResult>?> waitFor(
     Stem stem,

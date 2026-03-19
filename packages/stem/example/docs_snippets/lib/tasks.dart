@@ -102,8 +102,9 @@ Future<void> runTypedDefinitionExample() async {
     tasks: [PublishInvoiceTask()],
   );
 
-  final taskId = await stem.enqueueCall(
-    PublishInvoiceTask.definition(const InvoicePayload(invoiceId: 'inv_42')),
+  final taskId = await PublishInvoiceTask.definition.enqueueWith(
+    stem,
+    const InvoicePayload(invoiceId: 'inv_42'),
   );
   final result = await stem.waitForTask<bool>(taskId);
   if (result?.isSucceeded == true) {

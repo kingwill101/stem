@@ -206,8 +206,9 @@ Future<void> main() async {
   );
 
   unawaited(worker.start());
-  await stem.enqueueCall(
-    HelloTask.definition(const HelloArgs(name: 'Stem')),
+  await HelloTask.definition.enqueueWith(
+    stem,
+    const HelloArgs(name: 'Stem'),
   );
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
@@ -228,9 +229,10 @@ For typed task calls, the definition and call objects now expose the common
 producer operations directly:
 
 ```dart
-final taskId = await HelloTask.definition
-  .call(const HelloArgs(name: 'Stem'))
-  .enqueueWith(stem);
+final taskId = await HelloTask.definition.enqueueWith(
+  stem,
+  const HelloArgs(name: 'Stem'),
+);
 
 final result = await HelloTask.definition.waitFor(stem, taskId);
 ```

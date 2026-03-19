@@ -210,6 +210,32 @@ void main() {
   });
 
   group('TaskCall helpers', () {
+    test('TaskDefinition.enqueueWith enqueues typed args directly', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<({String value}), String>(
+        name: 'sample.task_definition_enqueue',
+        encodeArgs: (args) => {'value': args.value},
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
+
+      final taskId = await TaskEnqueueScope.run({'traceId': 'scope-1'}, () {
+        return definition.enqueueWith(stem, (value: 'ok'));
+      });
+
+      expect(taskId, isNotEmpty);
+      expect(
+        broker.published.single.envelope.name,
+        'sample.task_definition_enqueue',
+      );
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(
+        broker.published.single.envelope.meta,
+        containsPair('traceId', 'scope-1'),
+      );
+    });
+
     test('enqueueWith enqueues typed calls with scoped metadata', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
@@ -255,6 +281,35 @@ void main() {
       final result = await definition
           .call((value: 'ok'))
           .enqueueAndWaitWith(stem, timeout: const Duration(seconds: 1));
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.value, 'done');
+    });
+
+    test('TaskDefinition.enqueueAndWaitWith returns typed results', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<({String value}), String>(
+        name: 'sample.task_definition_wait',
+        encodeArgs: (args) => {'value': args.value},
+      );
+
+      unawaited(
+        Future<void>(() async {
+          while (broker.published.isEmpty) {
+            await Future<void>.delayed(Duration.zero);
+          }
+          final taskId = broker.published.single.envelope.id;
+          await backend.set(taskId, TaskState.succeeded, payload: 'done');
+        }),
+      );
+
+      final result = await definition.enqueueAndWaitWith(
+        stem,
+        (value: 'ok'),
+        timeout: const Duration(seconds: 1),
+      );
 
       expect(result?.isSucceeded, isTrue);
       expect(result?.value, 'done');

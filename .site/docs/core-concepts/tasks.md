@@ -38,7 +38,10 @@ Stem ships with `TaskDefinition<TArgs, TResult>` so producers get compile-time
 checks for required arguments and result types. A definition bundles the task
 name, argument encoder, optional metadata, and default `TaskOptions`. Build a
 call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
-or `Canvas` helpers:
+or `Canvas` helpers. For the common path, use the direct
+`definition.enqueueWith(stem, args)` / `definition.enqueueAndWaitWith(...)`
+helpers and drop down to `.call(args)` only when you need a reusable prebuilt
+request:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-typed-definition
 
