@@ -1,4 +1,5 @@
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Typed producer-facing reference to a registered workflow.
 ///
@@ -115,8 +116,64 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     ).startWithContext(context);
   }
 
+  /// Starts this workflow ref with [caller] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWith(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return call(
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startAndWaitWith(
+      caller,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this workflow ref with a workflow child-caller [context] and waits
+  /// for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
+    WorkflowChildCallerContext context, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return call(
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startAndWaitWithContext(
+      context,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   /// Decodes a final workflow result payload.
   TResult decode(Object? payload) => asRef.decode(payload);
+
+  /// Waits for [runId] using this workflow reference's decode rules.
+  Future<WorkflowResult<TResult>?> waitForWith(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return asRef.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 /// Shared typed workflow-start surface used by apps, runtimes, and contexts.
@@ -134,6 +191,15 @@ abstract interface class WorkflowCaller {
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   );
+
+  /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  });
 }
 
 /// Shared contract for contexts that can spawn child workflows.
@@ -206,5 +272,60 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
       );
     }
     return startWith(caller);
+  }
+
+  /// Starts this typed workflow call with [caller] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWith(
+    WorkflowCaller caller, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final runId = await startWith(caller);
+    return definition.waitForWith(
+      caller,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this typed workflow call with a workflow child-caller [context]
+  /// and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
+    WorkflowChildCallerContext context, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    final caller = context.workflows;
+    if (caller == null) {
+      throw StateError(
+        'This workflow context does not support starting child workflows.',
+      );
+    }
+    return startAndWaitWith(
+      caller,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+}
+
+/// Convenience helpers for waiting on typed workflow refs using a generic
+/// [WorkflowCaller].
+extension WorkflowRefExtension<TParams, TResult extends Object?>
+    on WorkflowRef<TParams, TResult> {
+  /// Waits for [runId] using this workflow reference's decode rules.
+  Future<WorkflowResult<TResult>?> waitForWith(
+    WorkflowCaller caller,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return caller.waitForWorkflowRef(
+      runId,
+      this,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
   }
 }

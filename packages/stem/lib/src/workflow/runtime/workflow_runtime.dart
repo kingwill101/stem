@@ -1944,6 +1944,59 @@ class _ChildWorkflowCaller implements WorkflowCaller {
       call.copyWith(parentRunId: parentRunId),
     );
   }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return _waitForChildWorkflow(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  Future<WorkflowResult<TResult>?> _waitForChildWorkflow<
+    TParams,
+    TResult extends Object?
+  >(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    required Duration pollInterval,
+    required Duration? timeout,
+  }) async {
+    final startedAt = runtime.clock.now();
+    while (true) {
+      final state = await runtime._store.get(runId);
+      if (state == null) {
+        return null;
+      }
+      if (state.isTerminal) {
+        return runtime._buildResult(
+          state,
+          definition.decode,
+          timedOut: false,
+        );
+      }
+      if (timeout != null &&
+          runtime.clock.now().difference(startedAt) >= timeout) {
+        return runtime._buildResult(
+          state,
+          definition.decode,
+          timedOut: true,
+        );
+      }
+      await runtime.executeRun(runId);
+      if (pollInterval > Duration.zero) {
+        await Future<void>.delayed(pollInterval);
+      }
+    }
+  }
 }
 
 Map<String, Object?> _coerceEventPayload(String topic, Object? payload) {

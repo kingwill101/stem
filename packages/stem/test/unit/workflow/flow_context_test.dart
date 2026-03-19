@@ -77,23 +77,46 @@ void main() {
   test(
     'startWithContext throws when child workflow support is unavailable',
     () {
-    final context = FlowContext(
-      workflow: 'demo',
-      runId: 'run-4',
-      stepName: 'spawn',
-      params: const {},
-      previousResult: null,
-      stepIndex: 0,
-    );
-    final childRef = WorkflowRef<Map<String, Object?>, String>(
-      name: 'child.flow',
-      encodeParams: (params) => params,
-    );
+      final context = FlowContext(
+        workflow: 'demo',
+        runId: 'run-4',
+        stepName: 'spawn',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.flow',
+        encodeParams: (params) => params,
+      );
 
-    expect(
-      () => childRef.call(const {'value': 'x'}).startWithContext(context),
-      throwsStateError,
-    );
+      expect(
+        () => childRef.call(const {'value': 'x'}).startWithContext(context),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'startAndWaitWithContext throws when child workflow support is unavailable',
+    () {
+      final context = FlowContext(
+        workflow: 'demo',
+        runId: 'run-5',
+        stepName: 'spawn',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.flow',
+        encodeParams: (params) => params,
+      );
+
+      expect(
+        () => childRef.call(const {'value': 'x'}).startAndWaitWithContext(context),
+        throwsStateError,
+      );
     },
   );
 }

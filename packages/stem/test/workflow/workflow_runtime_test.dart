@@ -221,6 +221,106 @@ void main() {
     expect(childState.workflowParams, equals(const {'value': 'script-child'}));
   });
 
+  test('flow context workflows startAndWaitWithContext waits for child result', () async {
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.runtime.wait.flow',
+      encodeParams: (params) => params,
+    );
+
+    runtime
+      ..registerWorkflow(
+        Flow(
+          name: 'child.runtime.wait.flow',
+          build: (flow) {
+            flow.step('hello', (context) async {
+              final value = context.params['value'] as String? ?? 'child';
+              return 'ok:$value';
+            });
+          },
+        ).definition,
+      )
+      ..registerWorkflow(
+        Flow(
+          name: 'parent.runtime.wait.flow',
+          build: (flow) {
+            flow.step('spawn', (context) async {
+              final childResult = await childRef
+                  .call(const {'value': 'spawned'})
+                  .startAndWaitWithContext(
+                    context,
+                    timeout: const Duration(seconds: 2),
+                  );
+              return {
+                'childRunId': childResult?.runId,
+                'childValue': childResult?.value,
+              };
+            });
+          },
+        ).definition,
+      );
+
+    final parentRunId = await runtime.startWorkflow('parent.runtime.wait.flow');
+    await runtime.executeRun(parentRunId);
+
+    final parentState = await store.get(parentRunId);
+    final result = Map<String, Object?>.from(parentState!.result! as Map);
+    expect(result['childRunId'], isA<String>());
+    expect(result['childValue'], 'ok:spawned');
+  });
+
+  test(
+    'script checkpoint workflows startAndWaitWithContext waits for child result',
+    () async {
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.runtime.wait.script',
+        encodeParams: (params) => params,
+      );
+
+      runtime
+        ..registerWorkflow(
+          Flow(
+            name: 'child.runtime.wait.script',
+            build: (flow) {
+              flow.step('hello', (context) async {
+                final value = context.params['value'] as String? ?? 'child';
+                return 'ok:$value';
+              });
+            },
+          ).definition,
+        )
+        ..registerWorkflow(
+          WorkflowScript<Map<String, Object?>>(
+            name: 'parent.runtime.wait.script',
+            checkpoints: [WorkflowCheckpoint(name: 'spawn')],
+            run: (script) async {
+              return script.step<Map<String, Object?>>('spawn', (context) async {
+                final childResult = await childRef
+                    .call(const {'value': 'script-child'})
+                    .startAndWaitWithContext(
+                      context,
+                      timeout: const Duration(seconds: 2),
+                    );
+                return {
+                  'childRunId': childResult?.runId,
+                  'childValue': childResult?.value,
+                };
+              });
+            },
+          ).definition,
+        );
+
+      final parentRunId = await runtime.startWorkflow(
+        'parent.runtime.wait.script',
+      );
+      await runtime.executeRun(parentRunId);
+
+      final parentState = await store.get(parentRunId);
+      final result = Map<String, Object?>.from(parentState!.result! as Map);
+      expect(result['childRunId'], isA<String>());
+      expect(result['childValue'], 'ok:script-child');
+    },
+  );
+
   test('viewRunDetail exposes uniform run and checkpoint views', () async {
     runtime.registerWorkflow(
       Flow(

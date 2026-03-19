@@ -17,18 +17,10 @@ Future<void> main() async {
     timeout: const Duration(seconds: 2),
   );
   print('Flow result: ${jsonEncode(flowResult?.value)}');
-  final flowChildRunId = flowResult?.value?['childRunId'] as String?;
-  if (flowChildRunId != null) {
-    final flowChildResult = await StemWorkflowDefinitions.script.waitFor(
-      app,
-      flowChildRunId,
-      timeout: const Duration(seconds: 2),
-    );
-    print(
-      'Flow child workflow result: '
-      '${jsonEncode(flowChildResult?.value?.toJson())}',
-    );
-  }
+  print(
+    'Flow child workflow result: '
+    '${jsonEncode(flowResult?.value?['childResult'])}',
+  );
 
   final scriptCall = StemWorkflowDefinitions.script.call((
     request: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
@@ -71,14 +63,9 @@ Future<void> main() async {
   print('Context script checkpoints: $contextCheckpoints');
   print('Persisted context result: ${jsonEncode(contextDetail?.run.result)}');
   print('Context script detail: ${jsonEncode(contextDetail?.toJson())}');
-  final contextChildResult = await StemWorkflowDefinitions.script.waitFor(
-    app,
-    contextResult.value!.childRunId,
-    timeout: const Duration(seconds: 2),
-  );
   print(
     'Context child workflow result: '
-    '${jsonEncode(contextChildResult?.value?.toJson())}',
+    '${jsonEncode(contextResult.value!.childResult.toJson())}',
   );
 
   final typedTaskId = await StemTaskDefinitions.sendEmailTyped

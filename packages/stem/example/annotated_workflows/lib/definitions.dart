@@ -141,6 +141,7 @@ class ContextCaptureResult {
     required this.normalizedEmail,
     required this.subject,
     required this.childRunId,
+    required this.childResult,
   });
 
   final String workflow;
@@ -152,6 +153,7 @@ class ContextCaptureResult {
   final String normalizedEmail;
   final String subject;
   final String childRunId;
+  final WelcomeWorkflowResult childResult;
 
   Map<String, Object?> toJson() => {
     'workflow': workflow,
@@ -163,6 +165,7 @@ class ContextCaptureResult {
     'normalizedEmail': normalizedEmail,
     'subject': subject,
     'childRunId': childRunId,
+    'childResult': childResult.toJson(),
   };
 
   factory ContextCaptureResult.fromJson(Map<String, Object?> json) {
@@ -176,6 +179,9 @@ class ContextCaptureResult {
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
       childRunId: json['childRunId'] as String,
+      childResult: WelcomeWorkflowResult.fromJson(
+        Map<String, Object?>.from(json['childResult'] as Map),
+      ),
     );
   }
 }
@@ -188,9 +194,9 @@ class AnnotatedFlowWorkflow {
     if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
     }
-    final childRunId = await StemWorkflowDefinitions.script
+    final childResult = await StemWorkflowDefinitions.script
         .call((request: const WelcomeRequest(email: 'flow-child@example.com')))
-        .startWithContext(ctx);
+        .startAndWaitWithContext(ctx, timeout: const Duration(seconds: 2));
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -198,7 +204,8 @@ class AnnotatedFlowWorkflow {
       'stepIndex': ctx.stepIndex,
       'iteration': ctx.iteration,
       'idempotencyKey': ctx.idempotencyKey(),
-      'childRunId': childRunId,
+      'childRunId': childResult?.runId,
+      'childResult': childResult?.value?.toJson(),
     };
   }
 }
@@ -269,9 +276,9 @@ class AnnotatedContextScriptWorkflow {
     final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
-    final childRunId = await StemWorkflowDefinitions.script
+    final childResult = await StemWorkflowDefinitions.script
         .call((request: WelcomeRequest(email: normalizedEmail)))
-        .startWithContext(ctx);
+        .startAndWaitWithContext(ctx, timeout: const Duration(seconds: 2));
     return ContextCaptureResult(
       workflow: ctx.workflow,
       runId: ctx.runId,
@@ -281,7 +288,8 @@ class AnnotatedContextScriptWorkflow {
       idempotencyKey: ctx.idempotencyKey('welcome'),
       normalizedEmail: normalizedEmail,
       subject: subject,
-      childRunId: childRunId,
+      childRunId: childResult!.runId,
+      childResult: childResult.value!,
     );
   }
 

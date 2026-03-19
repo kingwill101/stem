@@ -5,8 +5,8 @@ with the `stem_builder` bundle generator.
 
 It now demonstrates the generated script-proxy behavior explicitly:
 - a flow step using `FlowContext`
-- a flow step starting a child workflow through
-  `StemWorkflowDefinitions.*.call(...).startWithContext(context)`
+- a flow step starting and waiting on a child workflow through
+  `StemWorkflowDefinitions.*.call(...).startAndWaitWithContext(context)`
 - `run(WelcomeRequest request)` calls annotated checkpoint methods directly
 - `prepareWelcome(...)` calls other annotated checkpoints
 - `deliverWelcome(...)` calls another annotated checkpoint from inside an
@@ -14,8 +14,8 @@ It now demonstrates the generated script-proxy behavior explicitly:
 - a second script workflow uses optional named context injection
   (`WorkflowScriptContext? context` / `WorkflowScriptStepContext? context`) to
   expose `runId`, `workflow`, `stepName`, `stepIndex`, and idempotency keys
-- a script checkpoint starting a child workflow through
-  `StemWorkflowDefinitions.*.call(...).startWithContext(context)`
+- a script checkpoint starting and waiting on a child workflow through
+  `StemWorkflowDefinitions.*.call(...).startAndWaitWithContext(context)`
 - a plain script workflow that returns a codec-backed DTO result and persists a
   codec-backed DTO checkpoint value
 - a typed `@TaskDefn` using optional named `TaskInvocationContext? context`
@@ -23,12 +23,14 @@ It now demonstrates the generated script-proxy behavior explicitly:
 
 When you run the example, it prints:
 - the flow result with `FlowContext` metadata
+- the flow child workflow result without a separate `waitFor(...)` call
 - the plain script result
 - the persisted checkpoint order for the plain script workflow
 - the persisted JSON form of the plain script DTO checkpoint and DTO result
 - the context-aware script result with workflow metadata
 - the persisted JSON form of the context-aware DTO result
 - the persisted checkpoint order for the context-aware workflow
+- the context child workflow result without a separate `waitFor(...)` call
 - the typed task result showing a decoded DTO result and task invocation
   metadata
 
