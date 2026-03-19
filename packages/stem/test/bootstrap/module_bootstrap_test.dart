@@ -10,6 +10,10 @@ void main() {
         entrypoint: (context, args) async => 'task-ok',
         runInIsolate: false,
       );
+      final moduleDefinition = TaskDefinition.noArgs<String>(
+        name: 'module.bootstrap.task',
+        defaultOptions: const TaskOptions(queue: 'priority'),
+      );
 
       final app = await StemApp.inMemory(
         module: StemModule(tasks: [moduleTask]),
@@ -19,12 +23,8 @@ void main() {
         expect(app.registry.resolve('module.bootstrap.task'), same(moduleTask));
         expect(app.worker.subscription.queues, ['priority']);
 
-        final taskId = await app.stem.enqueue(
-          'module.bootstrap.task',
-          enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
-        );
-        final result = await app.stem.waitForTask<String>(
-          taskId,
+        final result = await moduleDefinition.enqueueAndWaitWithApp(
+          app,
           timeout: const Duration(seconds: 2),
         );
 

@@ -5,9 +5,11 @@ import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/clock.dart';
-import 'package:stem/src/core/contracts.dart' show TaskHandler;
+import 'package:stem/src/core/contracts.dart'
+    show TaskCall, TaskDefinition, TaskEnqueueOptions, TaskHandler, TaskOptions;
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow.dart';
@@ -29,7 +31,7 @@ import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 /// This wrapper wires together broker/backend infrastructure, registers flows,
 /// and exposes convenience helpers for scheduling and observing workflow runs
 /// without having to manage [WorkflowRuntime] directly.
-class StemWorkflowApp implements WorkflowCaller {
+class StemWorkflowApp implements WorkflowCaller, StemTaskApp {
   StemWorkflowApp._({
     required this.app,
     required this.runtime,
@@ -72,6 +74,54 @@ class StemWorkflowApp implements WorkflowCaller {
     _started = true;
     await runtime.start();
     await app.start();
+  }
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  @override
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+  }) {
+    return app.waitForTask(taskId, timeout: timeout, decode: decode);
+  }
+
+  @override
+  Future<TaskResult<TResult>?> waitForTaskDefinition<
+    TArgs,
+    TResult extends Object?
+  >(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  }) {
+    return app.waitForTaskDefinition(taskId, definition, timeout: timeout);
   }
 
   /// Schedules a workflow run.

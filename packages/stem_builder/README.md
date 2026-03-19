@@ -262,7 +262,7 @@ Annotated tasks also get generated definitions:
 ```dart
 final taskId = await StemTaskDefinitions.builderExampleTask
     .call(const {'kind': 'welcome'})
-    .enqueueWith(workflowApp.app.stem);
+    .enqueueWith(workflowApp);
 ```
 
 ## Examples

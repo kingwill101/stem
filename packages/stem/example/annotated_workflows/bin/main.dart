@@ -68,8 +68,8 @@ Future<void> main() async {
   );
 
   final typedTaskResult = await StemTaskDefinitions.sendEmailTyped
-      .enqueueAndWaitWith(
-    app.app.stem,
+      .enqueueAndWaitWithApp(
+    app,
     (
       dispatch: const EmailDispatch(
         email: 'typed@example.com',

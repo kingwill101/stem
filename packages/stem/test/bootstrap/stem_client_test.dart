@@ -142,6 +142,9 @@ void main() {
         entrypoint: (context, args) async => 'task-ok',
         runInIsolate: false,
       );
+      final taskDefinition = TaskDefinition.noArgs<String>(
+        name: 'client.module.queued-task',
+      );
       final app = await client.createWorkflowApp(
         module: StemModule(tasks: [moduleTask]),
       );
@@ -152,9 +155,8 @@ void main() {
       );
 
       await app.start();
-      final taskId = await app.app.stem.enqueue('client.module.queued-task');
-      final result = await app.app.stem.waitForTask<String>(
-        taskId,
+      final result = await taskDefinition.enqueueAndWaitWithApp(
+        app,
         timeout: const Duration(seconds: 2),
       );
 

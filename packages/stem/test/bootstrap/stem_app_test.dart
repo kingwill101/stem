@@ -506,6 +506,9 @@ void main() {
           entrypoint: (context, args) async => 'queued-ok',
           runInIsolate: false,
         );
+        final helperDefinition = TaskDefinition.noArgs<String>(
+          name: 'workflow.module.queue-helper',
+        );
         final workflowApp = await StemWorkflowApp.inMemory(
           module: StemModule(tasks: [helperTask]),
         );
@@ -516,11 +519,8 @@ void main() {
           );
 
           await workflowApp.start();
-          final taskId = await workflowApp.app.stem.enqueue(
-            'workflow.module.queue-helper',
-          );
-          final result = await workflowApp.app.stem.waitForTask<String>(
-            taskId,
+          final result = await helperDefinition.enqueueAndWaitWithApp(
+            workflowApp,
             timeout: const Duration(seconds: 2),
           );
           expect(result?.value, 'queued-ok');
