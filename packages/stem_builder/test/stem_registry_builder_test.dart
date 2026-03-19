@@ -198,6 +198,7 @@ Future<void> sendEmail(
               contains('StemWorkflowDefinitions'),
               contains('StemTaskDefinitions'),
               contains('WorkflowRef<Map<String, Object?>, String>'),
+              contains('NoArgsWorkflowRef<String>'),
               contains('Flow('),
               contains('WorkflowScript('),
               contains('stemModule = StemModule('),
@@ -295,6 +296,39 @@ class DailyBillingWorkflow {
       );
     },
   );
+
+  test('uses NoArgsWorkflowRef for zero-argument script workflows', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class HelloScriptWorkflow {
+  @WorkflowRun()
+  Future<String> run() async => 'done';
+}
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
+            contains('static final NoArgsWorkflowRef<String> helloScriptWorkflow ='),
+            contains('NoArgsWorkflowRef<String>('),
+          ]),
+        ),
+      },
+    );
+  });
 
   test(
     'generates script workflow step proxies for direct method calls',

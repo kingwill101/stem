@@ -16,6 +16,8 @@
   strings or manual result decoder wiring.
 - Updated the manual workflow examples and docs to start runs through typed
   refs instead of repeating raw workflow-name strings in the happy path.
+- Added `NoArgsWorkflowRef` plus `Flow.ref0()` / `WorkflowScript.ref0()` so
+  zero-input workflows can use `.call()` instead of passing `const {}`.
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
 - Clarified the workflow authoring model by distinguishing flow steps from

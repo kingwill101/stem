@@ -610,19 +610,11 @@ void main() {
               );
           },
         );
-        final workflowRef = WorkflowRef<Map<String, Object?>, _DemoPayload>(
-          name: 'workflow.codec.flow',
-          encodeParams: (params) => params,
-          decodeResult: _demoPayloadCodec.decode,
-        );
+        final workflowRef = flow.ref0();
 
         final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
         try {
-          final runId = await workflowRef
-              .call(const {})
-              .startWithApp(
-                workflowApp,
-              );
+          final runId = await workflowRef.call().startWithApp(workflowApp);
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,
@@ -680,19 +672,11 @@ void main() {
             );
           },
         );
-        final workflowRef = WorkflowRef<Map<String, Object?>, _DemoPayload>(
-          name: 'workflow.codec.script',
-          encodeParams: (params) => params,
-          decodeResult: _demoPayloadCodec.decode,
-        );
+        final workflowRef = script.ref0();
 
         final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
         try {
-          final runId = await workflowRef
-              .call(const {})
-              .startWithApp(
-                workflowApp,
-              );
+          final runId = await workflowRef.call().startWithApp(workflowApp);
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,

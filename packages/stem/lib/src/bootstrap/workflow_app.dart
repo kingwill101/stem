@@ -677,3 +677,37 @@ extension WorkflowRefAppExtension<TParams, TResult extends Object?>
     );
   }
 }
+
+/// Convenience helpers for waiting on workflow results using a no-args ref.
+extension NoArgsWorkflowRefAppExtension<TResult extends Object?>
+    on NoArgsWorkflowRef<TResult> {
+  /// Waits for [runId] using this workflow reference's decode rules.
+  Future<WorkflowResult<TResult>?> waitFor(
+    StemWorkflowApp app,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return asRef.waitFor(
+      app,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Waits for [runId] using this workflow reference and [runtime].
+  Future<WorkflowResult<TResult>?> waitForWithRuntime(
+    WorkflowRuntime runtime,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return asRef.waitForWithRuntime(
+      runtime,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+}

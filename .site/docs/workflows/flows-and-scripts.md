@@ -35,6 +35,8 @@ final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
 );
 ```
 
+When a flow has no start params, prefer `flow.ref0()`.
+
 Use `Flow` when:
 
 - the sequence of durable actions should be obvious from the definition
@@ -54,6 +56,8 @@ final retryRef = retryScript.ref<Map<String, Object?>>(
   encodeParams: (params) => params,
 );
 ```
+
+When a script has no start params, prefer `retryScript.ref0()`.
 
 Use `WorkflowScript` when:
 

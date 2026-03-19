@@ -20,15 +20,13 @@ Future<void> main() async {
       });
     },
   );
-  final sleepLoopRef = sleepLoop.ref<Map<String, Object?>>(
-    encodeParams: (params) => params,
-  );
+  final sleepLoopRef = sleepLoop.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [sleepLoop],
   );
 
-  final runId = await sleepLoopRef.call(const {}).startWithApp(app);
+  final runId = await sleepLoopRef.call().startWithApp(app);
   await app.runtime.executeRun(runId);
 
   // After the delay elapses, the runtime should resume without the step

@@ -305,6 +305,14 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [NoArgsWorkflowRef] from this definition.
+  NoArgsWorkflowRef<T> ref0() {
+    return NoArgsWorkflowRef<T>(
+      name: name,
+      decodeResult: (payload) => decodeResult(payload) as T,
+    );
+  }
+
   /// Stable identifier derived from immutable workflow definition fields.
   String get stableId {
     final basis = StringBuffer()

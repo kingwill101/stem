@@ -14,9 +14,7 @@ Future<void> main() async {
       flow.step('greet', (ctx) async => 'Persisted to SQLite');
     },
   );
-  final sqliteExampleRef = sqliteExample.ref<Map<String, Object?>>(
-    encodeParams: (params) => params,
-  );
+  final sqliteExampleRef = sqliteExample.ref0();
   final app = await StemWorkflowApp.fromUrl(
     'sqlite://${databaseFile.path}',
     adapters: const [StemSqliteAdapter()],
@@ -24,7 +22,7 @@ Future<void> main() async {
   );
 
   try {
-    final runId = await sqliteExampleRef.call(const {}).startWithApp(app);
+    final runId = await sqliteExampleRef.call().startWithApp(app);
     final result = await sqliteExampleRef.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {

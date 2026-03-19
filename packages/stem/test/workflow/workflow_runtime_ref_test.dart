@@ -78,5 +78,47 @@ void main() {
         await workflowApp.shutdown();
       }
     });
+
+    test('manual workflows can derive no-args refs', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.no-args.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'hello flow');
+        },
+      );
+      final script = WorkflowScript<String>(
+        name: 'runtime.ref.no-args.script',
+        run: (context) async => 'hello script',
+      );
+
+      final flowRef = flow.ref0();
+      final scriptRef = script.ref0();
+
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+        scripts: [script],
+      );
+      try {
+        await workflowApp.start();
+
+        final flowResult = await flowRef
+            .call()
+            .startAndWaitWithRuntime(
+              workflowApp.runtime,
+              timeout: const Duration(seconds: 2),
+            );
+        final scriptResult = await scriptRef
+            .call()
+            .startAndWaitWithRuntime(
+              workflowApp.runtime,
+              timeout: const Duration(seconds: 2),
+            );
+
+        expect(flowResult?.value, 'hello flow');
+        expect(scriptResult?.value, 'hello script');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
   });
 }

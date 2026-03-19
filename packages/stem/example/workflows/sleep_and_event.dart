@@ -27,15 +27,13 @@ Future<void> main() async {
       });
     },
   );
-  final sleepAndEventRef = sleepAndEvent.ref<Map<String, Object?>>(
-    encodeParams: (params) => params,
-  );
+  final sleepAndEventRef = sleepAndEvent.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [sleepAndEvent],
   );
 
-  final runId = await sleepAndEventRef.call(const {}).startWithApp(app);
+  final runId = await sleepAndEventRef.call().startWithApp(app);
 
   // Wait until the workflow is suspended before emitting the event to avoid
   // losing the signal.

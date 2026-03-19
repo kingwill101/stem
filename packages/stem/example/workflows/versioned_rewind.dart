@@ -13,15 +13,13 @@ Future<void> main() async {
       flow.step('tail', (ctx) async => ctx.previousResult);
     },
   );
-  final versionedWorkflowRef = versionedWorkflow.ref<Map<String, Object?>>(
-    encodeParams: (params) => params,
-  );
+  final versionedWorkflowRef = versionedWorkflow.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [versionedWorkflow],
   );
 
-  final runId = await versionedWorkflowRef.call(const {}).startWithApp(app);
+  final runId = await versionedWorkflowRef.call().startWithApp(app);
   await app.runtime.executeRun(runId);
 
   // Rewind and execute again to append a new iteration checkpoint.

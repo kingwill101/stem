@@ -37,4 +37,9 @@ class Flow<T extends Object?> {
   }) {
     return definition.ref<TParams>(encodeParams: encodeParams);
   }
+
+  /// Builds a typed [NoArgsWorkflowRef] for flows without start params.
+  NoArgsWorkflowRef<T> ref0() {
+    return definition.ref0();
+  }
 }

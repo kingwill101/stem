@@ -51,6 +51,46 @@ class WorkflowRef<TParams, TResult extends Object?> {
   }
 }
 
+/// Typed producer-facing reference for workflows that take no input params.
+class NoArgsWorkflowRef<TResult extends Object?> {
+  /// Creates a typed workflow reference for workflows without input params.
+  const NoArgsWorkflowRef({required this.name, this.decodeResult});
+
+  /// Registered workflow name.
+  final String name;
+
+  /// Optional decoder for the final workflow result payload.
+  final TResult Function(Object? payload)? decodeResult;
+
+  WorkflowRef<(), TResult> get _inner => WorkflowRef<(), TResult>(
+    name: name,
+    encodeParams: _encodeParams,
+    decodeResult: decodeResult,
+  );
+
+  /// Returns the underlying typed workflow ref used for waiting and dispatch.
+  WorkflowRef<(), TResult> get asRef => _inner;
+
+  static Map<String, Object?> _encodeParams(() _) => const <String, Object?>{};
+
+  /// Builds a workflow start call without requiring an explicit empty payload.
+  WorkflowStartCall<(), TResult> call({
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return asRef.call(
+      (),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Decodes a final workflow result payload.
+  TResult decode(Object? payload) => asRef.decode(payload);
+}
+
 /// Shared typed workflow-start surface used by apps, runtimes, and contexts.
 abstract interface class WorkflowCaller {
   /// Starts a workflow from a typed [WorkflowRef].

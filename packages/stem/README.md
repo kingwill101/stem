@@ -275,15 +275,13 @@ final demoWorkflow = Flow<String>(
   },
 );
 
-final demoWorkflowRef = demoWorkflow.ref<Map<String, Object?>>(
-  encodeParams: (params) => params,
-);
+final demoWorkflowRef = demoWorkflow.ref0();
 
 final app = await StemWorkflowApp.inMemory(
   flows: [demoWorkflow],
 );
 
-final runId = await demoWorkflowRef.call(const {}).startWithApp(app);
+final runId = await demoWorkflowRef.call().startWithApp(app);
 final result = await demoWorkflowRef.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
@@ -410,6 +408,13 @@ final runId = await approvalsRef
 final result = await approvalsRef.waitFor(app, runId);
 print(result?.value);
 await app.close();
+```
+
+For workflows without start parameters, use `ref0()` and `call()`:
+
+```dart
+final healthcheckRef = healthcheckFlow.ref0();
+final runId = await healthcheckRef.call().startWithApp(app);
 ```
 
 #### Manual `WorkflowScript`

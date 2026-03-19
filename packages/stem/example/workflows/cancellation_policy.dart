@@ -24,9 +24,7 @@ Future<void> main() async {
       });
     },
   );
-  final reportsGenerateRef = reportsGenerate.ref<Map<String, Object?>>(
-    encodeParams: (params) => params,
-  );
+  final reportsGenerateRef = reportsGenerate.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [reportsGenerate],
@@ -34,7 +32,6 @@ Future<void> main() async {
 
   final runId = await reportsGenerateRef
       .call(
-        const {},
         cancellationPolicy: const WorkflowCancellationPolicy(
           maxRunDuration: Duration(minutes: 10),
           maxSuspendDuration: Duration(seconds: 2),

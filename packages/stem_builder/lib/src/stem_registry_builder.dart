@@ -1650,17 +1650,21 @@ class _RegistryEmitter {
     for (final workflow in workflows) {
       final fieldName = fieldNames[workflow]!;
       final argsTypeCode = _workflowArgsTypeCode(workflow);
-      buffer.writeln(
-        '  static final WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}> '
-        '$fieldName = WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>(',
-      );
+      final isNoArgsScript =
+          workflow.kind == WorkflowKind.script &&
+          workflow.runValueParameters.isEmpty;
+      final refType =
+          isNoArgsScript
+              ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
+              : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
+      final constructorType =
+          isNoArgsScript
+              ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
+              : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
+      buffer.writeln('  static final $refType $fieldName = $constructorType(');
       buffer.writeln('    name: ${_string(workflow.name)},');
       if (workflow.kind == WorkflowKind.script) {
-        if (workflow.runValueParameters.isEmpty) {
-          buffer.writeln(
-            '    encodeParams: (_) => const <String, Object?>{},',
-          );
-        } else {
+        if (workflow.runValueParameters.isNotEmpty) {
           buffer.writeln('    encodeParams: (params) => <String, Object?>{');
           for (final parameter in workflow.runValueParameters) {
             buffer.writeln(
