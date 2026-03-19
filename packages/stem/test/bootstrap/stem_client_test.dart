@@ -60,6 +60,154 @@ void main() {
     await client.close();
   });
 
+  test(
+    'StemClient remembers its default module for createApp',
+    () async {
+      final moduleTask = FunctionTaskHandler<String>(
+        name: 'client.default-module.app-task',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final client = await StemClient.inMemory(
+        module: StemModule(tasks: [moduleTask]),
+      );
+
+      final app = await client.createApp();
+      await app.start();
+
+      expect(
+        app.registry.resolve('client.default-module.app-task'),
+        same(moduleTask),
+      );
+      expect(app.worker.subscription.queues, ['priority']);
+
+      final taskId = await app.stem.enqueue(
+        'client.default-module.app-task',
+        enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+      );
+      final result = await app.stem.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 2),
+      );
+
+      expect(result?.value, 'task-ok');
+
+      await app.close();
+      await client.close();
+    },
+  );
+
+  test(
+    'StemClient createApp registers module tasks and infers queues',
+    () async {
+      final client = await StemClient.inMemory();
+      final moduleTask = FunctionTaskHandler<String>(
+        name: 'client.module.app-task',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+
+      final app = await client.createApp(
+        module: StemModule(tasks: [moduleTask]),
+      );
+      await app.start();
+
+      expect(app.registry.resolve('client.module.app-task'), same(moduleTask));
+      expect(app.worker.subscription.queues, ['priority']);
+
+      final taskId = await app.stem.enqueue(
+        'client.module.app-task',
+        enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+      );
+      final result = await app.stem.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 2),
+      );
+
+      expect(result?.value, 'task-ok');
+
+      await app.close();
+      await client.close();
+    },
+  );
+
+  test(
+    'StemClient createWorkflowApp infers module task queue subscriptions',
+    () async {
+      final client = await StemClient.inMemory();
+      final moduleTask = FunctionTaskHandler<String>(
+        name: 'client.module.queued-task',
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final app = await client.createWorkflowApp(
+        module: StemModule(tasks: [moduleTask]),
+      );
+
+      expect(
+        app.app.worker.subscription.queues,
+        unorderedEquals(['workflow', 'default']),
+      );
+
+      await app.start();
+      final taskId = await app.app.stem.enqueue('client.module.queued-task');
+      final result = await app.app.stem.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 2),
+      );
+
+      expect(result?.value, 'task-ok');
+
+      await app.close();
+      await client.close();
+    },
+  );
+
+  test(
+    'StemClient remembers its default module for createWorkflowApp',
+    () async {
+      final moduleTask = FunctionTaskHandler<String>(
+        name: 'client.default-module.workflow-task',
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final moduleFlow = Flow<String>(
+        name: 'client.default-module.workflow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'module-ok');
+        },
+      );
+      final client = await StemClient.inMemory(
+        module: StemModule(flows: [moduleFlow], tasks: [moduleTask]),
+      );
+
+      final app = await client.createWorkflowApp();
+      await app.start();
+
+      expect(
+        app.app.registry.resolve('client.default-module.workflow-task'),
+        same(moduleTask),
+      );
+      expect(
+        app.app.worker.subscription.queues,
+        unorderedEquals(['workflow', 'default']),
+      );
+
+      final runId = await app.startWorkflow('client.default-module.workflow');
+      final result = await app.waitForCompletion<String>(
+        runId,
+        timeout: const Duration(seconds: 2),
+      );
+
+      expect(result?.value, 'module-ok');
+
+      await app.close();
+      await client.close();
+    },
+  );
+
   test('StemClient workflow app supports typed workflow refs', () async {
     final client = await StemClient.inMemory();
     final flow = Flow<String>(
@@ -113,9 +261,11 @@ void main() {
     final app = await client.createWorkflowApp(flows: [flow]);
     await app.start();
 
-    final result = await workflowRef.call(
-      const {'name': 'one-shot'},
-    ).startAndWaitWithApp(app, timeout: const Duration(seconds: 2));
+    final result = await workflowRef
+        .call(
+          const {'name': 'one-shot'},
+        )
+        .startAndWaitWithApp(app, timeout: const Duration(seconds: 2));
 
     expect(result?.value, 'ok:one-shot');
 
