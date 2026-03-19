@@ -312,6 +312,7 @@ class WorkflowDefinition<T extends Object?> {
     return WorkflowRef<TParams, T>.withPayloadCodec(
       name: name,
       paramsCodec: paramsCodec,
+      decodeResult: (payload) => decodeResult(payload) as T,
     );
   }
 

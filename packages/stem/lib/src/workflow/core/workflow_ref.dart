@@ -20,11 +20,12 @@ class WorkflowRef<TParams, TResult extends Object?> {
     required String name,
     required PayloadCodec<TParams> paramsCodec,
     PayloadCodec<TResult>? resultCodec,
+    TResult Function(Object? payload)? decodeResult,
   }) {
     return WorkflowRef<TParams, TResult>(
       name: name,
       encodeParams: (params) => _encodeCodecParams(name, paramsCodec, params),
-      decodeResult: resultCodec?.decode,
+      decodeResult: decodeResult ?? resultCodec?.decode,
     );
   }
 

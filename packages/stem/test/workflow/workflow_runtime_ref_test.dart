@@ -13,9 +13,26 @@ class _GreetingParams {
   Map<String, Object?> toJson() => {'name': name};
 }
 
+class _GreetingResult {
+  const _GreetingResult({required this.message});
+
+  factory _GreetingResult.fromJson(Map<String, Object?> json) {
+    return _GreetingResult(message: json['message']! as String);
+  }
+
+  final String message;
+
+  Map<String, Object?> toJson() => {'message': message};
+}
+
 const _greetingParamsCodec = PayloadCodec<_GreetingParams>(
   encode: _encodeGreetingParams,
   decode: _decodeGreetingParams,
+);
+
+const _greetingResultCodec = PayloadCodec<_GreetingResult>(
+  encode: _encodeGreetingResult,
+  decode: _decodeGreetingResult,
 );
 
 Object? _encodeGreetingParams(_GreetingParams value) => value.toJson();
@@ -24,6 +41,12 @@ _GreetingParams _decodeGreetingParams(Object? payload) {
   return _GreetingParams.fromJson(
     Map<String, Object?>.from(payload! as Map),
   );
+}
+
+Object? _encodeGreetingResult(_GreetingResult value) => value.toJson();
+
+_GreetingResult _decodeGreetingResult(Object? payload) {
+  return _GreetingResult.fromJson(Map<String, Object?>.from(payload! as Map));
 }
 
 void main() {
@@ -131,6 +154,37 @@ void main() {
         );
 
         expect(result?.value, 'hello codec');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('codec-backed refs preserve workflow result decoding', () async {
+      final flow = Flow<_GreetingResult>(
+        name: 'runtime.ref.codec.result.flow',
+        resultCodec: _greetingResultCodec,
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return _GreetingResult(message: 'hello $name');
+          });
+        },
+      );
+      final workflowRef = flow.refWithCodec<_GreetingParams>(
+        paramsCodec: _greetingParamsCodec,
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final result = await workflowRef.startAndWaitWithRuntime(
+          workflowApp.runtime,
+          const _GreetingParams(name: 'codec'),
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value?.message, 'hello codec');
       } finally {
         await workflowApp.shutdown();
       }
