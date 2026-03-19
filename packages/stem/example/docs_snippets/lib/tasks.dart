@@ -50,15 +50,35 @@ final redisTasks = [RedisEmailTask()];
 class InvoicePayload {
   const InvoicePayload({required this.invoiceId});
   final String invoiceId;
+
+  Map<String, Object?> toJson() => {'invoiceId': invoiceId};
+
+  factory InvoicePayload.fromJson(Map<String, Object?> json) {
+    return InvoicePayload(invoiceId: json['invoiceId']! as String);
+  }
+}
+
+const invoicePayloadCodec = PayloadCodec<InvoicePayload>(
+  encode: _encodeInvoicePayload,
+  decode: _decodeInvoicePayload,
+);
+
+Object? _encodeInvoicePayload(InvoicePayload value) => value.toJson();
+
+InvoicePayload _decodeInvoicePayload(Object? payload) {
+  return InvoicePayload.fromJson(Map<String, Object?>.from(payload! as Map));
 }
 
 class PublishInvoiceTask extends TaskHandler<void> {
-  static final definition = TaskDefinition<InvoicePayload, bool>(
-    name: 'invoice.publish',
-    encodeArgs: (payload) => {'invoiceId': payload.invoiceId},
-    metadata: const TaskMetadata(description: 'Publishes invoices downstream'),
-    defaultOptions: const TaskOptions(queue: 'billing'),
-  );
+  static final definition =
+      TaskDefinition<InvoicePayload, bool>.withPayloadCodec(
+        name: 'invoice.publish',
+        argsCodec: invoicePayloadCodec,
+        metadata: const TaskMetadata(
+          description: 'Publishes invoices downstream',
+        ),
+        defaultOptions: const TaskOptions(queue: 'billing'),
+      );
 
   @override
   String get name => definition.name;

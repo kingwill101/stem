@@ -49,6 +49,11 @@ Typed results flow through `TaskResult<TResult>` when you call
 `Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
 lets you deserialize complex objects before they reach application code.
 
+If your manual task args are DTOs, prefer
+`TaskDefinition.withPayloadCodec(...)` over hand-written `encodeArgs` maps. The
+codec still needs to encode to `Map<String, Object?>` because task args are
+published as a map.
+
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueueWith(...)` /
 `enqueueAndWaitWith(...)` helpers without passing a fake empty map and the same

@@ -100,6 +100,29 @@ void main() {
       },
     );
 
+    test('enqueueCall publishes codec-backed task definitions', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition =
+          TaskDefinition<_CodecTaskArgs, Object?>.withPayloadCodec(
+            name: 'sample.codec.args',
+            argsCodec: _codecTaskArgsCodec,
+            defaultOptions: const TaskOptions(queue: 'typed'),
+          );
+
+      final id = await stem.enqueueCall(
+        definition.call(const _CodecTaskArgs('encoded')),
+      );
+
+      expect(id, isNotEmpty);
+      expect(broker.published.single.envelope.name, 'sample.codec.args');
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(broker.published.single.envelope.args, {'value': 'encoded'});
+      expect(backend.records.single.id, id);
+      expect(backend.records.single.state, TaskState.queued);
+    });
+
     test(
       'enqueueCall uses definition encoder metadata on producer-only paths',
       () async {
@@ -133,6 +156,31 @@ void main() {
         expect(
           backend.records.single.meta[stemResultEncoderMetaKey],
           _codecReceiptEncoder.id,
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+
+    test(
+      'codec-backed task definitions attach result encoder metadata by default',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition =
+            TaskDefinition<_CodecTaskArgs, _CodecReceipt>.withPayloadCodec(
+              name: 'sample.codec.result',
+              argsCodec: _codecTaskArgsCodec,
+              resultCodec: _codecReceiptCodec,
+            );
+
+        final id = await stem.enqueueCall(
+          definition.call(const _CodecTaskArgs('encoded')),
+        );
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
         );
         expect(backend.records.single.id, id);
       },
@@ -379,6 +427,26 @@ Object? _encodeCodecReceipt(_CodecReceipt value) => value.toJson();
 
 _CodecReceipt _decodeCodecReceipt(Object? payload) {
   return _CodecReceipt.fromJson(Map<String, Object?>.from(payload! as Map));
+}
+
+class _CodecTaskArgs {
+  const _CodecTaskArgs(this.value);
+
+  final String value;
+
+  Map<String, Object?> toJson() => {'value': value};
+}
+
+const _codecTaskArgsCodec = PayloadCodec<_CodecTaskArgs>(
+  encode: _encodeCodecTaskArgs,
+  decode: _decodeCodecTaskArgs,
+);
+
+Object? _encodeCodecTaskArgs(_CodecTaskArgs value) => value.toJson();
+
+_CodecTaskArgs _decodeCodecTaskArgs(Object? payload) {
+  final map = Map<String, Object?>.from(payload! as Map);
+  return _CodecTaskArgs(map['value']! as String);
 }
 
 class _StubTaskHandler implements TaskHandler<void> {

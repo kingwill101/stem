@@ -154,9 +154,9 @@ Use the new typed wrapper when you want compile-time checking and shared metadat
 
 ```dart
 class HelloTask implements TaskHandler<void> {
-  static final definition = TaskDefinition<HelloArgs, void>(
+  static final definition = TaskDefinition<HelloArgs, void>.withPayloadCodec(
     name: 'demo.hello',
-    encodeArgs: (args) => {'name': args.name},
+    argsCodec: helloArgsCodec,
     metadata: TaskMetadata(description: 'Simple hello world example'),
   );
 
@@ -179,7 +179,20 @@ class HelloTask implements TaskHandler<void> {
 class HelloArgs {
   const HelloArgs({required this.name});
   final String name;
+
+  Map<String, Object?> toJson() => {'name': name};
+
+  factory HelloArgs.fromJson(Map<String, Object?> json) {
+    return HelloArgs(name: json['name']! as String);
+  }
 }
+
+const helloArgsCodec = PayloadCodec<HelloArgs>(
+  encode: (value) => value.toJson(),
+  decode: (payload) => HelloArgs.fromJson(
+    Map<String, Object?>.from(payload! as Map),
+  ),
+);
 
 Future<void> main() async {
   final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
@@ -206,6 +219,10 @@ Future<void> main() async {
 `Stem.enqueueCall(...)` can publish from the `TaskDefinition` metadata alone, so
 producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
+
+Use `TaskDefinition.withPayloadCodec(...)` when your manual task args are DTOs
+that already have a `PayloadCodec<T>`. The codec still needs to encode to
+`Map<String, Object?>` because task args are published as a map.
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly:

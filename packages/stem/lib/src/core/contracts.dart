@@ -35,6 +35,7 @@ import 'dart:collection';
 
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
@@ -2000,6 +2001,25 @@ class TaskDefinition<TArgs, TResult> {
   }) : _encodeArgs = encodeArgs,
        _encodeMeta = encodeMeta;
 
+  /// Creates a typed task definition backed by payload codecs.
+  factory TaskDefinition.withPayloadCodec({
+    required String name,
+    required PayloadCodec<TArgs> argsCodec,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    PayloadCodec<TResult>? resultCodec,
+  }) {
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeCodecArgs(name, argsCodec, args),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgs<TResult>({
     required String name,
@@ -2029,6 +2049,58 @@ class TaskDefinition<TArgs, TResult> {
 
   final TaskArgsEncoder<TArgs> _encodeArgs;
   final TaskMetaBuilder<TArgs>? _encodeMeta;
+
+  static Map<String, Object?> _encodeCodecArgs<T>(
+    String taskName,
+    PayloadCodec<T> codec,
+    T args,
+  ) {
+    final payload = codec.encode(args);
+    if (payload is Map<String, Object?>) {
+      return Map<String, Object?>.from(payload);
+    }
+    if (payload is Map) {
+      final normalized = <String, Object?>{};
+      for (final entry in payload.entries) {
+        final key = entry.key;
+        if (key is! String) {
+          throw StateError(
+            'TaskDefinition.withPayloadCodec($taskName) requires payload keys '
+            'to be strings, got ${key.runtimeType}.',
+          );
+        }
+        normalized[key] = entry.value;
+      }
+      return normalized;
+    }
+    throw StateError(
+      'TaskDefinition.withPayloadCodec($taskName) must encode args to '
+      'Map<String, Object?>, got ${payload.runtimeType}.',
+    );
+  }
+
+  static TaskMetadata _metadataWithResultCodec<TResult>(
+    String taskName,
+    TaskMetadata metadata,
+    PayloadCodec<TResult>? resultCodec,
+  ) {
+    if (resultCodec == null) {
+      return metadata;
+    }
+    return TaskMetadata(
+      description: metadata.description,
+      tags: metadata.tags,
+      idempotent: metadata.idempotent,
+      attributes: metadata.attributes,
+      argsEncoder: metadata.argsEncoder,
+      resultEncoder:
+          metadata.resultEncoder ??
+          CodecTaskPayloadEncoder<TResult>(
+            idValue: '$taskName.result.codec',
+            codec: resultCodec,
+          ),
+    );
+  }
 
   /// Build a typed call which can be passed to `Stem.enqueueCall`.
   TaskCall<TArgs, TResult> call(
