@@ -26,12 +26,12 @@ Future<void> main() async {
     print('\nRuntime manifest:');
     print(const JsonEncoder.withIndent('  ').convert(runtimeManifest));
 
-    final runId = await StemWorkflowDefinitions.startFlow(
+    final runId = await StemWorkflowDefinitions.flow.startWithRuntime(
       runtime,
-      name: 'Stem Builder',
+      (name: 'Stem Builder'),
     );
     await runtime.executeRun(runId);
-    final result = await StemWorkflowDefinitions.waitForFlow(
+    final result = await StemWorkflowDefinitions.flow.waitFor(
       app,
       runId,
       timeout: const Duration(seconds: 2),
@@ -44,7 +44,8 @@ Future<void> main() async {
   final taskApp = await StemApp.inMemory(module: stemModule);
   try {
     await taskApp.start();
-    final taskResult = await StemTaskDefinitions.enqueueAndWaitBuilderExamplePing(
+    final taskResult = await StemTaskDefinitions.builderExamplePing
+        .enqueueAndWaitWith(
       taskApp.stem,
       timeout: const Duration(seconds: 2),
     );

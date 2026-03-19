@@ -47,22 +47,24 @@ Use the generated workflow refs when you want a single typed handle for start
 and wait operations:
 
 ```dart
-final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
   workflowApp,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 ```
 
 Annotated tasks use the same shared typed task surface:
 
 ```dart
-final result = await StemTaskDefinitions.enqueueAndWaitSendEmailTyped(
+final result = await StemTaskDefinitions.sendEmailTyped.enqueueAndWaitWith(
   workflowApp.app.stem,
-  dispatch: EmailDispatch(
-    email: 'typed@example.com',
-    subject: 'Welcome',
-    body: 'Codec-backed DTO payloads',
-    tags: ['welcome'],
+  (
+    dispatch: EmailDispatch(
+      email: 'typed@example.com',
+      subject: 'Welcome',
+      body: 'Codec-backed DTO payloads',
+      tags: ['welcome'],
+    ),
   ),
 );
 ```
@@ -135,9 +137,9 @@ This keeps one authoring model:
 
 When a workflow needs to start another workflow, do it from a durable boundary:
 
-- `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWithContext(context, (...))`
   inside flow steps
-- `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWithContext(context, (...))`
   inside checkpoint methods
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.

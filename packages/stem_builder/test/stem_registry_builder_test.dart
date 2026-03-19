@@ -211,7 +211,6 @@ Future<void> sendEmail(
             allOf([
               contains('StemWorkflowDefinitions'),
               contains('StemTaskDefinitions'),
-              contains('WorkflowRef<Map<String, Object?>, String>'),
               contains('NoArgsWorkflowRef<String>'),
               contains('Flow('),
               contains('WorkflowScript('),
@@ -297,7 +296,7 @@ class DailyBillingWorkflow {
           'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains(
-                'static final WorkflowRef<Map<String, Object?>, Object?> '
+                'static final NoArgsWorkflowRef<Object?> '
                 'helloFlow =',
               ),
               contains(
@@ -341,21 +340,9 @@ class HelloScriptWorkflow {
               'helloScriptWorkflow =',
             ),
             contains('NoArgsWorkflowRef<String>('),
-            contains('static Future<String> startHelloScriptWorkflow('),
-            contains(
-              'static Future<String> startHelloScriptWorkflowWithContext(',
-            ),
-            contains(
-              'static Future<WorkflowResult<String>?> '
-              'startAndWaitHelloScriptWorkflow(',
-            ),
-            contains(
-              'startAndWaitHelloScriptWorkflowWithContext(',
-            ),
-            contains(
-              'static Future<WorkflowResult<String>?> '
-              'waitForHelloScriptWorkflow(',
-            ),
+            isNot(contains('startHelloScriptWorkflow(')),
+            isNot(contains('startAndWaitHelloScriptWorkflow(')),
+            isNot(contains('waitForHelloScriptWorkflow(')),
           ]),
         ),
       },
@@ -386,10 +373,8 @@ Future<String> pingTask() async => 'pong';
           allOf([
             contains('static final NoArgsTaskDefinition<String> pingTask ='),
             contains('NoArgsTaskDefinition<String>('),
-            contains('static Future<String> enqueuePingTask('),
-            contains(
-              'static Future<TaskResult<String>?> enqueueAndWaitPingTask(',
-            ),
+            isNot(contains('enqueuePingTask(')),
+            isNot(contains('enqueueAndWaitPingTask(')),
             isNot(contains('encodeArgs: (args) => const <String, Object?>{}')),
           ]),
         ),
@@ -427,12 +412,11 @@ Future<String> sendEmail(EmailRequest request) async => request.email;
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains('static Future<String> enqueueEmailSend('),
             contains(
-              'static Future<TaskResult<String>?> enqueueAndWaitEmailSend(',
+              'static final TaskDefinition<({EmailRequest request}), String> emailSend =',
             ),
-            contains('required EmailRequest request'),
-            contains('return emailSend'),
+            isNot(contains('enqueueEmailSend(')),
+            isNot(contains('enqueueAndWaitEmailSend(')),
           ]),
         ),
       },
@@ -463,20 +447,49 @@ class SignupWorkflow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains('static Future<String> startSignupWorkflow('),
-            contains('static Future<String> startSignupWorkflowWithContext('),
             contains(
-              'static Future<WorkflowResult<String>?> '
-              'startAndWaitSignupWorkflow(',
+              'static final WorkflowRef<({String email}), String> signupWorkflow =',
             ),
+            isNot(contains('startSignupWorkflow(')),
+            isNot(contains('startAndWaitSignupWorkflow(')),
+            isNot(contains('waitForSignupWorkflow(')),
+          ]),
+        ),
+      },
+    );
+  });
+
+  test('generates typed workflow refs for annotated flows', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn()
+class GreetingFlow {
+  @WorkflowStep()
+  Future<String> greet(String name) async => 'hello \$name';
+}
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
             contains(
-              'startAndWaitSignupWorkflowWithContext(',
+              'static final WorkflowRef<({String name}), String> greetingFlow =',
             ),
-            contains(
-              'static Future<WorkflowResult<String>?> '
-              'waitForSignupWorkflow(',
-            ),
-            contains('required String email'),
+            isNot(contains('startGreetingFlow(')),
+            isNot(contains('startAndWaitGreetingFlow(')),
+            isNot(contains('waitForGreetingFlow(')),
           ]),
         ),
       },

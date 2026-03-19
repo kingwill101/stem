@@ -105,9 +105,9 @@ Supported context injection points:
 
 Child workflows should be started from durable boundaries:
 
-- `StemWorkflowDefinitions.startSomeWorkflowWithContext(context, ...)`
+- `StemWorkflowDefinitions.someWorkflow.startWithContext(context, (...))`
   inside flow steps
-- `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWithContext(context, (...))`
   inside script checkpoints
 
 Avoid starting child workflows directly from the raw
@@ -140,9 +140,8 @@ The intended DX is:
 - pass generated `stemModule` into `StemWorkflowApp` or `StemClient`
 - start workflows through generated workflow refs instead of raw
   workflow-name strings
-- enqueue annotated tasks through generated direct helpers like
-  `StemTaskDefinitions.enqueueSendEmailTyped(...)`
-  instead of raw task-name strings
+- enqueue annotated tasks through generated task definitions instead of raw
+  task-name strings
 
 You can customize generated workflow ref names via `@WorkflowDefn`:
 
@@ -164,10 +163,10 @@ Run build_runner to generate `*.stem.g.dart` part files:
 dart run build_runner build
 ```
 
-The generated part exports a bundle plus typed helpers so you can avoid raw
-workflow-name and task-name strings (for example
-`StemWorkflowDefinitions.startUserSignup(workflowApp, email: 'user@example.com')` or
-`StemTaskDefinitions.enqueueBuilderExampleTask(stem, ...)`).
+The generated part exports a bundle plus typed refs/definitions so you can
+avoid raw workflow-name and task-name strings (for example
+`StemWorkflowDefinitions.userSignup.startWith(workflowApp, (email: 'user@example.com'))`
+or `StemTaskDefinitions.builderExamplePing.enqueueWith(stem)`).
 
 Generated output includes:
 
@@ -191,9 +190,9 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
   workflowApp,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 ```
 
@@ -251,9 +250,9 @@ The generated workflow refs work on `WorkflowRuntime` too:
 
 ```dart
 final runtime = workflowApp.runtime;
-final runId = await StemWorkflowDefinitions.startUserSignup(
+final runId = await StemWorkflowDefinitions.userSignup.startWith(
   runtime,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 await runtime.executeRun(runId);
 ```

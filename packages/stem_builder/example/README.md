@@ -5,12 +5,12 @@ This example demonstrates:
 - Annotated workflow/task definitions
 - Generated `stemModule`
 - Generated typed workflow refs (no manual workflow-name strings):
-  - `StemWorkflowDefinitions.startFlow(runtime, ...)`
-  - `StemWorkflowDefinitions.startUserSignup(runtime, ...)`
+  - `StemWorkflowDefinitions.flow.startWithRuntime(runtime, (...))`
+  - `StemWorkflowDefinitions.userSignup.startWithRuntime(runtime, (...))`
 - Generated typed task definitions that use the shared `TaskCall` /
   `TaskDefinition.waitFor(...)` APIs
-- Generated zero-arg task definitions with direct helpers:
-  - `StemTaskDefinitions.enqueueAndWaitBuilderExamplePing(stem)`
+- Generated zero-arg task definitions with direct helpers from core:
+  - `StemTaskDefinitions.builderExamplePing.enqueueAndWaitWith(stem)`
 - Generated workflow manifest via `stemModule.workflowManifest`
 - Running generated definitions through `StemWorkflowApp`
 - Runtime manifest + run/step metadata views via `WorkflowRuntime`

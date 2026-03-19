@@ -574,10 +574,10 @@ Context injection works at every runtime layer:
 Child workflows belong in durable execution boundaries:
 
 - use
-  `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
+  `StemWorkflowDefinitions.someWorkflow.startAndWaitWithContext(context, (...))`
   inside flow steps
 - use
-  `StemWorkflowDefinitions.startAndWaitSomeWorkflowWithContext(context, ...)`
+  `StemWorkflowDefinitions.someWorkflow.startAndWaitWithContext(context, (...))`
   inside script checkpoints
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
@@ -628,9 +628,9 @@ final app = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
   app,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 print(result?.value);
 await app.close();
@@ -647,7 +647,8 @@ Generated output gives you:
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
 - typed workflow refs and task definitions that use the shared
-  `WorkflowStartCall`, `TaskCall`, and `TaskDefinition.waitFor(...)` APIs
+  `WorkflowStartCall`, `TaskCall`, `WorkflowRef`, and
+  `TaskDefinition.waitFor(...)` APIs
 
 The same bundle also works for plain task apps:
 
@@ -768,13 +769,15 @@ if (charge?.isSucceeded == true) {
 Generated annotated tasks use the same surface:
 
 ```dart
-final receipt = await StemTaskDefinitions.enqueueAndWaitSendEmailTyped(
+final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWaitWith(
   stem,
-  dispatch: EmailDispatch(
-    email: 'typed@example.com',
-    subject: 'Welcome',
-    body: 'Codec-backed DTO payloads',
-    tags: ['welcome'],
+  (
+    dispatch: EmailDispatch(
+      email: 'typed@example.com',
+      subject: 'Welcome',
+      body: 'Codec-backed DTO payloads',
+      tags: ['welcome'],
+    ),
   ),
 );
 print(receipt?.value?.deliveryId);

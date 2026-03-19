@@ -79,9 +79,9 @@ When you use `stem_builder`, generated workflow refs remove the raw
 workflow-name strings and give you one typed handle for both start and wait:
 
 ```dart
-final result = await StemWorkflowDefinitions.startAndWaitUserSignup(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
   workflowApp,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 ```
 
@@ -89,9 +89,9 @@ The same definitions work on `WorkflowRuntime` by passing the runtime as the
 `WorkflowCaller`:
 
 ```dart
-final runId = await StemWorkflowDefinitions.startUserSignup(
+final runId = await StemWorkflowDefinitions.userSignup.startWith(
   runtime,
-  email: 'user@example.com',
+  (email: 'user@example.com'),
 );
 ```
 
