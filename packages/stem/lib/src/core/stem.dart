@@ -1071,6 +1071,24 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
 /// Convenience helpers for waiting on typed no-arg task definitions.
 extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     on NoArgsTaskDefinition<TResult> {
+  /// Enqueues this no-arg task definition with [stem].
+  Future<String> enqueueWith(
+    Stem stem, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return call(
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    ).enqueueWith(stem, enqueueOptions: enqueueOptions);
+  }
+
   /// Waits for [taskId] using this definition's decoding rules.
   Future<TaskResult<TResult>?> waitFor(
     Stem stem,
@@ -1078,5 +1096,26 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     Duration? timeout,
   }) {
     return stem.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
+  }
+
+  /// Enqueues this no-arg task definition and waits for the typed result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWith(
+    Stem stem, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueWith(
+      stem,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return waitFor(stem, taskId, timeout: timeout);
   }
 }

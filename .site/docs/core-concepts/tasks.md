@@ -50,8 +50,9 @@ Typed results flow through `TaskResult<TResult>` when you call
 lets you deserialize complex objects before they reach application code.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
-instead. That gives you a `.call()` helper without passing a fake empty map and
-the same `waitFor(...)` decoding surface as normal typed definitions.
+instead. That gives you direct `enqueueWith(...)` /
+`enqueueAndWaitWith(...)` helpers without passing a fake empty map and the same
+`waitFor(...)` decoding surface as normal typed definitions.
 
 ## Configuring Retries
 

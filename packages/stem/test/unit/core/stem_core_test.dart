@@ -149,7 +149,7 @@ void main() {
           defaultOptions: const TaskOptions(queue: 'typed'),
         );
 
-        final id = await stem.enqueueCall(definition.call());
+        final id = await definition.enqueueWith(stem);
 
         expect(id, isNotEmpty);
         expect(broker.published.single.envelope.name, 'sample.no_args');
@@ -246,6 +246,31 @@ void main() {
       );
 
       final result = await definition.waitFor(stem, 'task-no-args-wait');
+
+      expect(result?.value, 'done');
+      expect(result?.rawPayload, 'done');
+    });
+
+    test('enqueueAndWaitWith supports no-arg task definitions', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition.noArgs<String>(name: 'no-args.enqueue');
+
+      unawaited(
+        Future<void>(() async {
+          while (broker.published.isEmpty) {
+            await Future<void>.delayed(Duration.zero);
+          }
+          final taskId = broker.published.single.envelope.id;
+          await backend.set(taskId, TaskState.succeeded, payload: 'done');
+        }),
+      );
+
+      final result = await definition.enqueueAndWaitWith(
+        stem,
+        timeout: const Duration(seconds: 1),
+      );
 
       expect(result?.value, 'done');
       expect(result?.rawPayload, 'done');
