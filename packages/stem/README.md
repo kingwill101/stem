@@ -527,10 +527,10 @@ Context injection works at every runtime layer:
 Child workflows belong in durable execution boundaries:
 
 - use
-  `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  `StemWorkflowDefinitions.someWorkflow.call(...).startWithContext(context)`
   inside flow steps
 - use
-  `StemWorkflowDefinitions.someWorkflow.call(...).startWith(context.workflows!)`
+  `StemWorkflowDefinitions.someWorkflow.call(...).startWithContext(context)`
   inside script checkpoints
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself

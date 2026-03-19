@@ -190,7 +190,7 @@ class AnnotatedFlowWorkflow {
     }
     final childRunId = await StemWorkflowDefinitions.script
         .call((request: const WelcomeRequest(email: 'flow-child@example.com')))
-        .startWith(ctx.workflows!);
+        .startWithContext(ctx);
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -271,7 +271,7 @@ class AnnotatedContextScriptWorkflow {
     final subject = await buildWelcomeSubject(normalizedEmail);
     final childRunId = await StemWorkflowDefinitions.script
         .call((request: WelcomeRequest(email: normalizedEmail)))
-        .startWith(ctx.workflows!);
+        .startWithContext(ctx);
     return ContextCaptureResult(
       workflow: ctx.workflow,
       runId: ctx.runId,

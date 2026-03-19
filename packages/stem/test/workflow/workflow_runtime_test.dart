@@ -155,7 +155,7 @@ void main() {
             flow.step('spawn', (context) async {
               return childRef
                   .call(const {'value': 'spawned'})
-                  .startWith(context.workflows!);
+                  .startWithContext(context);
             });
           },
         ).definition,
@@ -165,7 +165,7 @@ void main() {
     await runtime.executeRun(parentRunId);
 
     final parentState = await store.get(parentRunId);
-    final childRunId = parentState!.result as String;
+    final childRunId = parentState!.result! as String;
     final childState = await store.get(childRunId);
 
     expect(childState, isNotNull);
@@ -202,7 +202,7 @@ void main() {
             return script.step<String>('spawn', (context) async {
               return childRef
                   .call(const {'value': 'script-child'})
-                  .startWith(context.workflows!);
+                  .startWithContext(context);
             });
           },
         ).definition,
@@ -212,7 +212,7 @@ void main() {
     await runtime.executeRun(parentRunId);
 
     final parentState = await store.get(parentRunId);
-    final childRunId = parentState!.result as String;
+    final childRunId = parentState!.result! as String;
     final childState = await store.get(childRunId);
 
     expect(childState, isNotNull);

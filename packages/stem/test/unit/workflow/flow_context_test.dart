@@ -1,6 +1,7 @@
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -70,6 +71,29 @@ void main() {
         'demo/run-3/step#1',
       );
       expect(context.idempotencyKey('custom'), 'demo/run-3/custom');
+    },
+  );
+
+  test(
+    'startWithContext throws when child workflow support is unavailable',
+    () {
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-4',
+      stepName: 'spawn',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.flow',
+      encodeParams: (params) => params,
+    );
+
+    expect(
+      () => childRef.call(const {'value': 'x'}).startWithContext(context),
+      throwsStateError,
+    );
     },
   );
 }

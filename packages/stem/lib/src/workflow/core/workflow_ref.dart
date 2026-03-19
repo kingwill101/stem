@@ -108,6 +108,12 @@ abstract interface class WorkflowCaller {
   );
 }
 
+/// Shared contract for contexts that can spawn child workflows.
+abstract interface class WorkflowChildCallerContext {
+  /// Optional typed workflow caller for spawning child workflows.
+  WorkflowCaller? get workflows;
+}
+
 /// Typed start request built from a [WorkflowRef].
 class WorkflowStartCall<TParams, TResult extends Object?> {
   const WorkflowStartCall._({
@@ -161,5 +167,16 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
   /// Starts this typed workflow call with the provided [caller].
   Future<String> startWith(WorkflowCaller caller) {
     return caller.startWorkflowCall(this);
+  }
+
+  /// Starts this typed workflow call with a workflow child-caller [context].
+  Future<String> startWithContext(WorkflowChildCallerContext context) {
+    final caller = context.workflows;
+    if (caller == null) {
+      throw StateError(
+        'This workflow context does not support starting child workflows.',
+      );
+    }
+    return startWith(caller);
   }
 }
