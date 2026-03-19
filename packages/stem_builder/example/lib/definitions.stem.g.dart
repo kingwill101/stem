@@ -102,41 +102,6 @@ abstract final class StemTaskDefinitions {
   );
 }
 
-extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
-  Future<String> enqueueBuilderExampleTask({
-    required Map<String, Object?> args,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.builderExampleTask.call(
-        args,
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-}
-
-extension StemGeneratedTaskResults on Stem {
-  Future<TaskResult<Object?>?> waitForBuilderExampleTask(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.builderExampleTask,
-      timeout: timeout,
-    );
-  }
-}
-
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "builder.example.task",

@@ -81,16 +81,21 @@ Future<void> main() async {
     '${jsonEncode(contextChildResult?.value?.toJson())}',
   );
 
-  final typedTaskId = await app.app.stem.enqueueSendEmailTyped(
-    dispatch: const EmailDispatch(
-      email: 'typed@example.com',
-      subject: 'Welcome',
-      body: 'Codec-backed DTO payloads',
-      tags: ['welcome', 'transactional', 'annotated'],
-    ),
-    meta: const {'origin': 'annotated_workflows_example'},
-  );
-  final typedTaskResult = await app.app.stem.waitForSendEmailTyped(
+  final typedTaskId = await StemTaskDefinitions.sendEmailTyped
+      .call(
+        (
+          dispatch: const EmailDispatch(
+            email: 'typed@example.com',
+            subject: 'Welcome',
+            body: 'Codec-backed DTO payloads',
+            tags: ['welcome', 'transactional', 'annotated'],
+          ),
+        ),
+        meta: const {'origin': 'annotated_workflows_example'},
+      )
+      .enqueueWith(app.app.stem);
+  final typedTaskResult = await StemTaskDefinitions.sendEmailTyped.waitFor(
+    app.app.stem,
     typedTaskId,
     timeout: const Duration(seconds: 2),
   );

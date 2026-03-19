@@ -7,7 +7,8 @@ This example demonstrates:
 - Generated typed workflow refs (no manual workflow-name strings):
   - `StemWorkflowDefinitions.flow.call(...).startWithRuntime(runtime)`
   - `StemWorkflowDefinitions.userSignup.call(...).startWithRuntime(runtime)`
-- Generated typed task definitions, enqueue helpers, and typed result wait helpers
+- Generated typed task definitions that use the shared `TaskCall` /
+  `TaskDefinition.waitFor(...)` APIs
 - Generated workflow manifest via `stemModule.workflowManifest`
 - Running generated definitions through `StemWorkflowApp`
 - Runtime manifest + run/step metadata views via `WorkflowRuntime`

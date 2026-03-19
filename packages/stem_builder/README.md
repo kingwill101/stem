@@ -138,8 +138,8 @@ The intended DX is:
 - pass generated `stemModule` into `StemWorkflowApp` or `StemClient`
 - start workflows through generated workflow refs instead of raw
   workflow-name strings
-- enqueue annotated tasks through generated `enqueueXxx(...)` helpers instead
-  of raw task-name strings
+- enqueue annotated tasks through `StemTaskDefinitions.*.call(...).enqueueWith(...)`
+  instead of raw task-name strings
 
 You can customize generated workflow ref names via `@WorkflowDefn`:
 
@@ -164,15 +164,15 @@ dart run build_runner build
 The generated part exports a bundle plus typed helpers so you can avoid raw
 workflow-name and task-name strings (for example
 `StemWorkflowDefinitions.userSignup.call((email: 'user@example.com'))` or
-`stem.enqueueBuilderExampleTask(args: {...})`).
+`StemTaskDefinitions.builderExampleTask.call({...}).enqueueWith(stem)`).
 
 Generated output includes:
 
 - `stemModule`
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
-- typed enqueue helpers on `TaskEnqueuer`
-- typed result wait helpers on `Stem`
+- typed `TaskDefinition` objects that use the shared `TaskCall` /
+  `TaskDefinition.waitFor(...)` APIs from `stem`
 
 Generated task definitions are producer-safe. `Stem.enqueueCall(...)` can use
 the definition metadata directly, so a producer can publish typed task calls
@@ -253,12 +253,12 @@ final runId = await StemWorkflowDefinitions.userSignup
 await runtime.executeRun(runId);
 ```
 
-Annotated tasks also get generated definitions and enqueue helpers:
+Annotated tasks also get generated definitions:
 
 ```dart
-final taskId = await workflowApp.app.stem.enqueueBuilderExampleTask(
-  args: const {'kind': 'welcome'},
-);
+final taskId = await StemTaskDefinitions.builderExampleTask
+    .call(const {'kind': 'welcome'})
+    .enqueueWith(workflowApp.app.stem);
 ```
 
 ## Examples

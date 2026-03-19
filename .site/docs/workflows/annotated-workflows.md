@@ -14,8 +14,8 @@ generated file exposes:
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
 - typed workflow refs like `StemWorkflowDefinitions.userSignup`
-- typed enqueue helpers like `enqueueSendEmailTyped(...)`
-- typed result wait helpers like `waitForSendEmailTyped(...)`
+- typed task definitions that use the shared `TaskCall` /
+  `TaskDefinition.waitFor(...)` APIs
 
 The generated task definitions are producer-safe: `Stem.enqueueCall(...)` can
 publish from the definition metadata, so producer processes do not need to
@@ -50,6 +50,26 @@ and wait operations:
 final result = await StemWorkflowDefinitions.userSignup
     .call((email: 'user@example.com'))
     .startAndWaitWithApp(workflowApp);
+```
+
+Annotated tasks use the same shared typed task surface:
+
+```dart
+final taskId = await StemTaskDefinitions.sendEmailTyped
+    .call((
+      dispatch: EmailDispatch(
+        email: 'typed@example.com',
+        subject: 'Welcome',
+        body: 'Codec-backed DTO payloads',
+        tags: ['welcome'],
+      ),
+    ))
+    .enqueueWith(workflowApp.app.stem);
+
+final result = await StemTaskDefinitions.sendEmailTyped.waitFor(
+  workflowApp.app.stem,
+  taskId,
+);
 ```
 
 ## Script context injection

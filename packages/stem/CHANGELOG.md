@@ -4,6 +4,10 @@
 
 - Added `StemModule`, typed `WorkflowRef`/`WorkflowStartCall` helpers, and bundle-first `StemWorkflowApp`/`StemClient` composition for generated workflow and task definitions.
 - Added `PayloadCodec`, typed workflow resume helpers, codec-backed workflow checkpoint/result persistence, typed task result waiting, and typed workflow event emit helpers for DTO-shaped payloads.
+- Simplified generated annotated task usage so `StemTaskDefinitions.*` is the
+  canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
+  `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated
+  enqueue/wait extension APIs.
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
 - Clarified the workflow authoring model by distinguishing flow steps from

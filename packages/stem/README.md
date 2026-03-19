@@ -573,8 +573,8 @@ Generated output gives you:
 - `stemModule`
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
-- typed enqueue helpers on `TaskEnqueuer`
-- typed result wait helpers on `Stem`
+- typed workflow refs and task definitions that use the shared
+  `WorkflowStartCall`, `TaskCall`, and `TaskDefinition.waitFor(...)` APIs
 
 The same bundle also works for plain task apps:
 
@@ -690,6 +690,24 @@ if (charge?.isSucceeded == true) {
 } else if (charge?.isFailed == true) {
   log.severe('Charge failed: ${charge!.status.error}');
 }
+```
+
+Generated annotated tasks use the same surface:
+
+```dart
+final taskId = await StemTaskDefinitions.sendEmailTyped
+    .call((
+      dispatch: EmailDispatch(
+        email: 'typed@example.com',
+        subject: 'Welcome',
+        body: 'Codec-backed DTO payloads',
+        tags: ['welcome'],
+      ),
+    ))
+    .enqueueWith(stem);
+
+final receipt = await StemTaskDefinitions.sendEmailTyped.waitFor(stem, taskId);
+print(receipt?.value?.deliveryId);
 ```
 
 ### Typed canvas helpers

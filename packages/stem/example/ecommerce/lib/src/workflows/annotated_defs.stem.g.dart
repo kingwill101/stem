@@ -118,43 +118,6 @@ abstract final class StemTaskDefinitions {
       );
 }
 
-extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
-  Future<String> enqueueEcommerceAuditLog({
-    required String event,
-    required String entityId,
-    required String detail,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.ecommerceAuditLog.call(
-        (event: event, entityId: entityId, detail: detail),
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-}
-
-extension StemGeneratedTaskResults on Stem {
-  Future<TaskResult<Map<String, Object?>>?> waitForEcommerceAuditLog(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.ecommerceAuditLog,
-      timeout: timeout,
-    );
-  }
-}
-
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "ecommerce.audit.log",

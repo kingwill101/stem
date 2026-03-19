@@ -1952,68 +1952,6 @@ class _RegistryEmitter {
     }
     buffer.writeln('}');
     buffer.writeln();
-
-    buffer.writeln('extension StemGeneratedTaskEnqueuer on TaskEnqueuer {');
-    for (final task in tasks) {
-      final symbol = symbolNames[task]!;
-      final fieldName = _lowerCamel(symbol);
-      buffer.writeln('  Future<String> enqueue$symbol({');
-      if (task.usesLegacyMapArgs) {
-        buffer.writeln('    required Map<String, Object?> args,');
-      } else {
-        for (final parameter in task.valueParameters) {
-          buffer.writeln(
-            '    required ${parameter.typeCode} ${parameter.name},',
-          );
-        }
-      }
-      buffer.writeln('    Map<String, String> headers = const {},');
-      buffer.writeln('    TaskOptions? options,');
-      buffer.writeln('    DateTime? notBefore,');
-      buffer.writeln('    Map<String, Object?>? meta,');
-      buffer.writeln('    TaskEnqueueOptions? enqueueOptions,');
-      buffer.writeln('  }) {');
-      final callArgs = task.usesLegacyMapArgs
-          ? 'args'
-          : task.valueParameters.isEmpty
-          ? '()'
-          : '(${task.valueParameters.map((parameter) => '${parameter.name}: ${parameter.name}').join(', ')})';
-      buffer.writeln('    return enqueueCall(');
-      buffer.writeln('      StemTaskDefinitions.$fieldName.call(');
-      buffer.writeln('        $callArgs,');
-      buffer.writeln('        headers: headers,');
-      buffer.writeln('        options: options,');
-      buffer.writeln('        notBefore: notBefore,');
-      buffer.writeln('        meta: meta,');
-      buffer.writeln('        enqueueOptions: enqueueOptions,');
-      buffer.writeln('      ),');
-      buffer.writeln('    );');
-      buffer.writeln('  }');
-      buffer.writeln();
-    }
-    buffer.writeln('}');
-    buffer.writeln();
-
-    buffer.writeln('extension StemGeneratedTaskResults on Stem {');
-    for (final task in tasks) {
-      final symbol = symbolNames[task]!;
-      final fieldName = _lowerCamel(symbol);
-      buffer.writeln(
-        '  Future<TaskResult<${task.resultTypeCode}>?> waitFor$symbol(',
-      );
-      buffer.writeln('    String taskId, {');
-      buffer.writeln('    Duration? timeout,');
-      buffer.writeln('  }) {');
-      buffer.writeln('    return waitForTaskDefinition(');
-      buffer.writeln('      taskId,');
-      buffer.writeln('      StemTaskDefinitions.$fieldName,');
-      buffer.writeln('      timeout: timeout,');
-      buffer.writeln('    );');
-      buffer.writeln('  }');
-      buffer.writeln();
-    }
-    buffer.writeln('}');
-    buffer.writeln();
   }
 
   void _emitTaskAdapters(StringBuffer buffer) {

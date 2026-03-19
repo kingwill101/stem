@@ -36,7 +36,8 @@ The generated file exposes:
 - `stemModule`
 - `StemWorkflowDefinitions`
 - typed workflow refs for `StemWorkflowApp` and `WorkflowRuntime`
-- typed task definitions, enqueue helpers, and typed result wait helpers
+- typed task definitions that use the shared `TaskCall` /
+  `TaskDefinition.waitFor(...)` APIs
 
 When you pass `module: stemModule` into `StemWorkflowApp`, or create a
 `StemClient` with `module: stemModule` and then call

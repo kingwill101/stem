@@ -36,7 +36,7 @@ From those annotations, this example uses generated APIs:
 - `stemModule` (generated workflow/task bundle)
 - `StemWorkflowDefinitions.addToCart`
 - `StemTaskDefinitions.ecommerceAuditLog`
-- `TaskEnqueuer.enqueueEcommerceAuditLog(...)`
+- `StemTaskDefinitions.ecommerceAuditLog.call(...)`
 
 The server wires generated and manual tasks together in one place:
 
