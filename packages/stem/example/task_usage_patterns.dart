@@ -37,7 +37,7 @@ class ParentTask extends TaskHandler<void> {
       ),
     );
 
-    await context.enqueueCall(childDefinition.call(const ChildArgs('typed')));
+    await childDefinition.enqueueWith(context, const ChildArgs('typed'));
   }
 }
 
@@ -99,9 +99,10 @@ Future<void> main() async {
 
   await stem.enqueue('tasks.parent', args: const {});
   await stem.enqueue('tasks.invocation_parent', args: const {});
-  final directTaskId = await childDefinition
-      .call(const ChildArgs('direct-call'))
-      .enqueueWith(stem);
+  final directTaskId = await childDefinition.enqueueWith(
+    stem,
+    const ChildArgs('direct-call'),
+  );
   final directResult = await childDefinition.waitFor(
     stem,
     directTaskId,
@@ -111,9 +112,11 @@ Future<void> main() async {
   // ignore: avoid_print
   print('[direct] result=${directResult?.value}');
 
-  final inlineResult = await childDefinition
-      .call(const ChildArgs('inline-wait'))
-      .enqueueAndWaitWith(stem, timeout: const Duration(seconds: 1));
+  final inlineResult = await childDefinition.enqueueAndWaitWith(
+    stem,
+    const ChildArgs('inline-wait'),
+    timeout: const Duration(seconds: 1),
+  );
   // Example output keeps the script runnable without adding logging setup.
   // ignore: avoid_print
   print('[inline] result=${inlineResult?.value}');

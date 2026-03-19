@@ -218,12 +218,11 @@ class InlineCoordinatorTask extends TaskHandler<void> {
       ),
     );
 
-    final auditId = await context.enqueueCall(
-      auditDefinition.call(
-        AuditArgs(
-          runId: runId,
-          message: 'inline parent scheduled child tasks',
-        ),
+    final auditId = await auditDefinition.enqueueWith(
+      context,
+      AuditArgs(
+        runId: runId,
+        message: 'inline parent scheduled child tasks',
       ),
     );
 
@@ -286,14 +285,13 @@ FutureOr<Object?> inlineEntrypoint(
     '[inline_entrypoint] id=${context.id} attempt=${context.attempt} runId=$runId meta=${context.meta}',
   );
 
-  await context.enqueueCall(
-    auditDefinition.call(
-      AuditArgs(
-        runId: runId,
-        message: 'inline entrypoint completed',
-      ),
-      enqueueOptions: const TaskEnqueueOptions(priority: 4),
+  await auditDefinition.enqueueWith(
+    context,
+    AuditArgs(
+      runId: runId,
+      message: 'inline entrypoint completed',
     ),
+    enqueueOptions: const TaskEnqueueOptions(priority: 4),
   );
 
   return 'inline-ok';
