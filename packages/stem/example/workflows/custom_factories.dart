@@ -5,6 +5,15 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main() async {
+  final redisWorkflow = Flow<String>(
+    name: 'redis.workflow',
+    build: (flow) {
+      flow.step('greet', (ctx) async => 'Redis-backed workflow');
+    },
+  );
+  final redisWorkflowRef = redisWorkflow.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
+  );
   final app = await StemWorkflowApp.fromUrl(
     'redis://localhost:6379',
     adapters: const [StemRedisAdapter()],
@@ -12,19 +21,12 @@ Future<void> main() async {
       backend: 'redis://localhost:6379/1',
       workflow: 'redis://localhost:6379/2',
     ),
-    flows: [
-      Flow(
-        name: 'redis.workflow',
-        build: (flow) {
-          flow.step('greet', (ctx) async => 'Redis-backed workflow');
-        },
-      ),
-    ],
+    flows: [redisWorkflow],
   );
 
   try {
-    final runId = await app.startWorkflow('redis.workflow');
-    final result = await app.waitForCompletion<String>(runId);
+    final runId = await redisWorkflowRef.call(const {}).startWithApp(app);
+    final result = await redisWorkflowRef.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {
     await app.close();

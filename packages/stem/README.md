@@ -268,19 +268,23 @@ class ParentTask implements TaskHandler<void> {
 Spin up a full runtime in one call using the bootstrap APIs:
 
 ```dart
-final app = await StemWorkflowApp.inMemory(
-  flows: [
-    Flow(
-      name: 'demo.workflow',
-      build: (flow) {
-        flow.step('hello', (ctx) async => 'done');
-      },
-    ),
-  ],
+final demoWorkflow = Flow<String>(
+  name: 'demo.workflow',
+  build: (flow) {
+    flow.step('hello', (ctx) async => 'done');
+  },
 );
 
-final runId = await app.startWorkflow('demo.workflow');
-final result = await app.waitForCompletion<String>(runId);
+final demoWorkflowRef = demoWorkflow.ref<Map<String, Object?>>(
+  encodeParams: (params) => params,
+);
+
+final app = await StemWorkflowApp.inMemory(
+  flows: [demoWorkflow],
+);
+
+final runId = await demoWorkflowRef.call(const {}).startWithApp(app);
+final result = await demoWorkflowRef.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
 

@@ -8,22 +8,24 @@ import 'package:stem_sqlite/stem_sqlite.dart';
 
 Future<void> main() async {
   final databaseFile = File('workflow.sqlite');
+  final sqliteExample = Flow<String>(
+    name: 'sqlite.example',
+    build: (flow) {
+      flow.step('greet', (ctx) async => 'Persisted to SQLite');
+    },
+  );
+  final sqliteExampleRef = sqliteExample.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
+  );
   final app = await StemWorkflowApp.fromUrl(
     'sqlite://${databaseFile.path}',
     adapters: const [StemSqliteAdapter()],
-    flows: [
-      Flow(
-        name: 'sqlite.example',
-        build: (flow) {
-          flow.step('greet', (ctx) async => 'Persisted to SQLite');
-        },
-      ),
-    ],
+    flows: [sqliteExample],
   );
 
   try {
-    final runId = await app.startWorkflow('sqlite.example');
-    final result = await app.waitForCompletion<String>(runId);
+    final runId = await sqliteExampleRef.call(const {}).startWithApp(app);
+    final result = await sqliteExampleRef.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {
     await app.close();

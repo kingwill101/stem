@@ -14,6 +14,8 @@
 - Added `Flow.ref(...)` / `WorkflowScript.ref(...)` helpers so manual workflow
   definitions can derive typed workflow refs without repeating workflow-name
   strings or manual result decoder wiring.
+- Updated the manual workflow examples and docs to start runs through typed
+  refs instead of repeating raw workflow-name strings in the happy path.
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
 - Clarified the workflow authoring model by distinguishing flow steps from

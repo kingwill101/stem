@@ -6,33 +6,36 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory(
-    flows: [
-      Flow(
-        name: 'durable.sleep.event',
-        build: (flow) {
-          flow.step('initial', (ctx) async {
-            if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
-              return null;
-            }
-            return 'awake';
-          });
+  final sleepAndEvent = Flow<String>(
+    name: 'durable.sleep.event',
+    build: (flow) {
+      flow.step('initial', (ctx) async {
+        if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
+          return null;
+        }
+        return 'awake';
+      });
 
-          flow.step('await-event', (ctx) async {
-            final payload = ctx.waitForEventValue<Map<String, Object?>>(
-              'demo.event',
-            );
-            if (payload == null) {
-              return null;
-            }
-            return payload['message'];
-          });
-        },
-      ),
-    ],
+      flow.step('await-event', (ctx) async {
+        final payload = ctx.waitForEventValue<Map<String, Object?>>(
+          'demo.event',
+        );
+        if (payload == null) {
+          return null;
+        }
+        return payload['message'];
+      });
+    },
+  );
+  final sleepAndEventRef = sleepAndEvent.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
   );
 
-  final runId = await app.startWorkflow('durable.sleep.event');
+  final app = await StemWorkflowApp.inMemory(
+    flows: [sleepAndEvent],
+  );
+
+  final runId = await sleepAndEventRef.call(const {}).startWithApp(app);
 
   // Wait until the workflow is suspended before emitting the event to avoid
   // losing the signal.
@@ -46,7 +49,7 @@ Future<void> main() async {
 
   await app.runtime.emit('demo.event', {'message': 'event received'});
 
-  final result = await app.waitForCompletion<String>(runId);
+  final result = await sleepAndEventRef.waitFor(app, runId);
   print('Workflow $runId resumed and completed with: ${result?.value}');
 
   await app.close();

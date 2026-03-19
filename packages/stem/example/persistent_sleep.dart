@@ -7,26 +7,28 @@ import 'package:stem/stem.dart';
 /// completes on the next invocation.
 Future<void> main() async {
   var iterations = 0;
-
-  final app = await StemWorkflowApp.inMemory(
-    flows: [
-      Flow(
-        name: 'sleep.loop.workflow',
-        build: (flow) {
-          flow.step('loop', (ctx) async {
-            iterations += 1;
-            if (iterations == 1) {
-              ctx.sleep(const Duration(milliseconds: 100));
-              return 'waiting';
-            }
-            return 'resumed';
-          });
-        },
-      ),
-    ],
+  final sleepLoop = Flow<String>(
+    name: 'sleep.loop.workflow',
+    build: (flow) {
+      flow.step('loop', (ctx) async {
+        iterations += 1;
+        if (iterations == 1) {
+          ctx.sleep(const Duration(milliseconds: 100));
+          return 'waiting';
+        }
+        return 'resumed';
+      });
+    },
+  );
+  final sleepLoopRef = sleepLoop.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
   );
 
-  final runId = await app.startWorkflow('sleep.loop.workflow');
+  final app = await StemWorkflowApp.inMemory(
+    flows: [sleepLoop],
+  );
+
+  final runId = await sleepLoopRef.call(const {}).startWithApp(app);
   await app.runtime.executeRun(runId);
 
   // After the delay elapses, the runtime should resume without the step
@@ -39,7 +41,7 @@ Future<void> main() async {
     await app.runtime.executeRun(id);
   }
 
-  final completed = await app.store.get(runId);
-  print('Workflow completed with result: ${completed?.result}');
+  final completed = await sleepLoopRef.waitFor(app, runId);
+  print('Workflow completed with result: ${completed?.value}');
   await app.close();
 }

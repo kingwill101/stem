@@ -8,43 +8,42 @@ final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>(
 /// Runs a workflow that suspends on `awaitEvent` and resumes once a payload is
 /// emitted. The example also inspects watcher metadata before the resume.
 Future<void> main() async {
+  final shipmentWorkflow = WorkflowScript<String>(
+    name: 'shipment.workflow',
+    run: (script) async {
+      await script.step('prepare', (step) async {
+        final orderId = step.params['orderId'];
+        return 'prepared-$orderId';
+      });
+
+      final trackingId = await script.step('wait-for-shipment', (step) async {
+        final payload = step.takeResumeValue<_ShipmentReadyEvent>(
+          codec: shipmentReadyEventCodec,
+        );
+        if (payload == null) {
+          await step.awaitEvent(
+            'shipment.ready',
+            deadline: DateTime.now().add(const Duration(minutes: 5)),
+            data: const {'reason': 'waiting-for-carrier'},
+          );
+          return 'waiting';
+        }
+        return payload.trackingId;
+      });
+
+      return trackingId;
+    },
+  );
+  final shipmentWorkflowRef = shipmentWorkflow.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
+  );
   final app = await StemWorkflowApp.inMemory(
-    scripts: [
-      WorkflowScript(
-        name: 'shipment.workflow',
-        run: (script) async {
-          await script.step('prepare', (step) async {
-            final orderId = step.params['orderId'];
-            return 'prepared-$orderId';
-          });
-
-          final trackingId = await script.step('wait-for-shipment', (
-            step,
-          ) async {
-            final payload = step.takeResumeValue<_ShipmentReadyEvent>(
-              codec: shipmentReadyEventCodec,
-            );
-            if (payload == null) {
-              await step.awaitEvent(
-                'shipment.ready',
-                deadline: DateTime.now().add(const Duration(minutes: 5)),
-                data: const {'reason': 'waiting-for-carrier'},
-              );
-              return 'waiting';
-            }
-            return payload.trackingId;
-          });
-
-          return trackingId;
-        },
-      ),
-    ],
+    scripts: [shipmentWorkflow],
   );
 
-  final runId = await app.startWorkflow(
-    'shipment.workflow',
-    params: const {'orderId': 'A-123'},
-  );
+  final runId = await shipmentWorkflowRef
+      .call(const {'orderId': 'A-123'})
+      .startWithApp(app);
 
   // Drive the run until it suspends on the watcher.
   await app.runtime.executeRun(runId);
@@ -65,8 +64,8 @@ Future<void> main() async {
 
   await app.runtime.executeRun(runId);
 
-  final completed = await app.store.get(runId);
-  print('Workflow completed with result: ${completed?.result}');
+  final completed = await shipmentWorkflowRef.waitFor(app, runId);
+  print('Workflow completed with result: ${completed?.value}');
 
   await app.close();
 }

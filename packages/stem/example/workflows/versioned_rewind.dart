@@ -2,24 +2,26 @@ import 'package:stem/stem.dart';
 
 Future<void> main() async {
   final iterations = <int>[];
+  final versionedWorkflow = Flow<String>(
+    name: 'demo.versioned',
+    build: (flow) {
+      flow.step('repeat', (ctx) async {
+        iterations.add(ctx.iteration);
+        return 'iteration-${ctx.iteration}';
+      }, autoVersion: true);
 
-  final app = await StemWorkflowApp.inMemory(
-    flows: [
-      Flow(
-        name: 'demo.versioned',
-        build: (flow) {
-          flow.step('repeat', (ctx) async {
-            iterations.add(ctx.iteration);
-            return 'iteration-${ctx.iteration}';
-          }, autoVersion: true);
-
-          flow.step('tail', (ctx) async => ctx.previousResult);
-        },
-      ),
-    ],
+      flow.step('tail', (ctx) async => ctx.previousResult);
+    },
+  );
+  final versionedWorkflowRef = versionedWorkflow.ref<Map<String, Object?>>(
+    encodeParams: (params) => params,
   );
 
-  final runId = await app.startWorkflow('demo.versioned');
+  final app = await StemWorkflowApp.inMemory(
+    flows: [versionedWorkflow],
+  );
+
+  final runId = await versionedWorkflowRef.call(const {}).startWithApp(app);
   await app.runtime.executeRun(runId);
 
   // Rewind and execute again to append a new iteration checkpoint.
@@ -32,6 +34,8 @@ Future<void> main() async {
     print('${entry.name}: ${entry.value}');
   }
   print('Iterations executed: $iterations');
+  final completed = await versionedWorkflowRef.waitFor(app, runId);
+  print('Final result: ${completed?.value}');
 
   await app.close();
 }
