@@ -6,6 +6,9 @@
   for inspecting workflow definitions and persisted execution state.
 - Improved workflow store contracts and runtime compatibility for caller-
   supplied run ids and persisted runtime metadata attached to workflow params.
+- Restored the deprecated `SimpleTaskRegistry` alias for source compatibility
+  and fixed workflow continuation routing to honor persisted queue metadata
+  when resuming suspended runs after runtime configuration changes.
 - Added `tasks:`-first wiring across `Stem`, `Worker`, `Canvas`, and
   `StemWorkflowApp`, removing the need for manual default-registry setup in
   normal application code and examples.

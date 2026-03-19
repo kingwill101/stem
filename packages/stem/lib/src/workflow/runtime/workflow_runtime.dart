@@ -1012,15 +1012,29 @@ class WorkflowRuntime {
           continuationQueue: continuationQueue,
           executionQueue: executionQueue,
         );
-    final targetQueue = continuation ? continuationQueue : queue;
+    final orchestrationQueue = _resolveQueueName(
+      metadata.orchestrationQueue,
+      fallback: queue,
+    );
+    final resolvedContinuationQueue = _resolveQueueName(
+      metadata.continuationQueue,
+      fallback: continuationQueue,
+    );
+    final resolvedExecutionQueue = _resolveQueueName(
+      metadata.executionQueue,
+      fallback: executionQueue,
+    );
+    final targetQueue = continuation
+        ? resolvedContinuationQueue
+        : orchestrationQueue;
     final meta = <String, Object?>{
       'stem.workflow.channel': WorkflowChannelKind.orchestration.name,
       'stem.workflow.runId': runId,
       'stem.workflow.continuation': continuation,
       'stem.workflow.continuationReason': reason.name,
-      'stem.workflow.orchestrationQueue': queue,
-      'stem.workflow.continuationQueue': continuationQueue,
-      'stem.workflow.executionQueue': executionQueue,
+      'stem.workflow.orchestrationQueue': orchestrationQueue,
+      'stem.workflow.continuationQueue': resolvedContinuationQueue,
+      'stem.workflow.executionQueue': resolvedExecutionQueue,
       'stem.workflow.serialization.format': metadata.serializationFormat,
       'stem.workflow.serialization.version': metadata.serializationVersion,
       'stem.workflow.frame.format': metadata.frameFormat,

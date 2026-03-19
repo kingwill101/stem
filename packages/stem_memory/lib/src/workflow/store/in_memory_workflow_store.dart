@@ -95,10 +95,12 @@ class InMemoryWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final now = _clock.now();
-    final id =
-        (runId != null && runId.trim().isNotEmpty)
+    final id = (runId != null && runId.trim().isNotEmpty)
         ? runId.trim()
         : 'wf-${now.microsecondsSinceEpoch}-${_counter++}';
+    if (_runs.containsKey(id)) {
+      throw StateError('Workflow run "$id" already exists.');
+    }
     _runs[id] = RunState(
       id: id,
       workflow: workflow,

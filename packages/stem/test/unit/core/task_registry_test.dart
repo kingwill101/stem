@@ -191,6 +191,18 @@ void main() {
       final handler = _TestHandler('meta', description: 'Example task');
       expect(handler.metadata.description, 'Example task');
     });
+
+    test('retains SimpleTaskRegistry as a compatibility alias', () {
+      // Compatibility coverage intentionally exercises the deprecated symbol.
+      // ignore: deprecated_member_use_from_same_package
+      final registry = SimpleTaskRegistry();
+      // A single plain call is clearer here than forcing a one-off cascade.
+      // ignore: cascade_invocations
+      registry.register(_TestHandler('legacy.task'));
+
+      expect(registry, isA<InMemoryTaskRegistry>());
+      expect(registry.resolve('legacy.task')?.name, 'legacy.task');
+    });
   });
 
   group('TaskDefinition', () {

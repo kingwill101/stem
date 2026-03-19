@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/src/workflow_store_contract_suite.dart';
 import 'package:test/test.dart';
@@ -190,5 +192,109 @@ void runWorkflowScriptFacadeTests({
       expect(observed?['value'], 'resumed');
       expect(completed?.result, 'resumed');
     });
+
+    test(
+      'event resumptions enqueue continuations onto the '
+      'persisted queue metadata',
+      () async {
+        final currentStem = stem!;
+        final currentStore = store!;
+        final currentBroker = broker!;
+        final runtimeA = WorkflowRuntime(
+          stem: currentStem,
+          store: currentStore,
+          eventBus: InMemoryEventBus(currentStore),
+          clock: clock,
+          queue: 'workflow-a',
+          continuationQueue: 'workflow-a-cont',
+          executionQueue: 'workflow-a-exec',
+        );
+        final runtimeB = WorkflowRuntime(
+          stem: currentStem,
+          store: currentStore,
+          eventBus: InMemoryEventBus(currentStore),
+          clock: clock,
+          queue: 'workflow-b',
+          continuationQueue: 'workflow-b-cont',
+          executionQueue: 'workflow-b-exec',
+        );
+
+        final definition = WorkflowScript(
+          name: 'script.contract.queue-routing',
+          run: (script) async {
+            final value = await script.step<String>('wait', (step) async {
+              final resume = step.takeResumeData();
+              if (resume == null) {
+                await step.awaitEvent('contract.queue-routing');
+                return 'waiting';
+              }
+              final payload = resume as Map<String, Object?>;
+              return payload['value']?.toString() ?? 'missing';
+            });
+            return value;
+          },
+        ).definition;
+        runtimeA.registerWorkflow(definition);
+        runtimeB.registerWorkflow(definition);
+
+        Future<Delivery?> nextDelivery(String queue) async {
+          try {
+            return await currentBroker
+                .consume(RoutingSubscription.singleQueue(queue))
+                .first
+                .timeout(const Duration(milliseconds: 250));
+          } on TimeoutException {
+            return null;
+          }
+        }
+
+        try {
+          final runId = await runtimeA.startWorkflow(
+            'script.contract.queue-routing',
+          );
+          await runtimeA.executeRun(runId);
+
+          final suspended = await currentStore.get(runId);
+          expect(suspended?.status, WorkflowStatus.suspended);
+          expect(suspended?.waitTopic, 'contract.queue-routing');
+          expect(suspended?.continuationQueue, 'workflow-a-cont');
+          expect(
+            suspended?.executionQueue,
+            'workflow-a-exec',
+          );
+
+          final deliveryAFuture = nextDelivery('workflow-a-cont');
+          final deliveryBFuture = nextDelivery('workflow-b-cont');
+
+          await runtimeB.emit('contract.queue-routing', const {'value': 'ok'});
+
+          final deliveryA = await deliveryAFuture;
+          final deliveryB = await deliveryBFuture;
+
+          expect(deliveryA, isNotNull);
+          expect(deliveryB, isNull);
+          expect(deliveryA!.envelope.queue, 'workflow-a-cont');
+          expect(
+            deliveryA.envelope.meta['stem.workflow.orchestrationQueue'],
+            'workflow-a',
+          );
+          expect(
+            deliveryA.envelope.meta['stem.workflow.continuationQueue'],
+            'workflow-a-cont',
+          );
+          expect(
+            deliveryA.envelope.meta['stem.workflow.executionQueue'],
+            'workflow-a-exec',
+          );
+          expect(
+            deliveryA.envelope.meta['stem.workflow.continuationReason'],
+            WorkflowContinuationReason.event.name,
+          );
+        } finally {
+          await runtimeA.dispose();
+          await runtimeB.dispose();
+        }
+      },
+    );
   });
 }

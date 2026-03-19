@@ -1922,6 +1922,10 @@ class InMemoryTaskRegistry implements TaskRegistry {
   Stream<TaskRegistrationEvent> get onRegister => _registerController.stream;
 }
 
+/// Backwards-compatible alias for the default in-memory registry.
+@Deprecated('Use InMemoryTaskRegistry instead.')
+typedef SimpleTaskRegistry = InMemoryTaskRegistry;
+
 /// Optional task metadata for documentation and tooling.
 class TaskMetadata {
   /// Creates task metadata for documentation and tooling.
