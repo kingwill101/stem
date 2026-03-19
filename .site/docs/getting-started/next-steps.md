@@ -36,7 +36,7 @@ Use this page as a jump table once you’ve finished the first walkthroughs.
 ## Canvas/Workflows
 
 - [Canvas Patterns](../core-concepts/canvas.md)
-- [Workflows](../core-concepts/workflows.md)
+- [Workflows](../workflows/index.md)
 
 ```dart title="lib/canvas_chain.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chain.dart#canvas-chain
 

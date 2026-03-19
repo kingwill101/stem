@@ -53,7 +53,7 @@ behavior before touching production.
 - **[Canvas Patterns](./canvas.md)** – Chains, groups, and chords for composing work.
 - **[Observability](./observability.md)** – Metrics, traces, logging, and lifecycle signals.
 - **[Persistence & Stores](./persistence.md)** – Result backends, schedule/lock stores, and revocation storage.
-- **[Workflows](./workflows.md)** – Durable Flow/Script runtimes with typed results, suspensions, and event watchers.
+- **[Workflows](../workflows/index.md)** – Durable workflow orchestration, suspensions, recovery, and annotated workflow generation.
 - **[stem_builder](./stem-builder.md)** – Generate workflow/task registries and typed starters from annotations.
 - **[CLI & Control](./cli-control.md)** – Quickly inspect queues, workers, and health from the command line.
 

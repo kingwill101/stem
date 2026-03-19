@@ -21,7 +21,8 @@ want to explore further.
 - **[Stem vs BullMQ](../comparisons/stem-vs-bullmq.md)** – Canonical feature mapping with `✓/~ /✗` parity semantics.
 
 Once you complete the journey, continue with the in-depth material under
-[Core Concepts](../core-concepts/index.md) and [Workers](../workers/index.md).
+[Workflows](../workflows/index.md), [Core Concepts](../core-concepts/index.md),
+and [Workers](../workers/index.md).
 
 ## Preview: a full Stem pipeline in one file
 

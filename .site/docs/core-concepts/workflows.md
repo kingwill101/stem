@@ -11,7 +11,19 @@ state, typed results, automatic retries, and event-driven resumes. The
 event bus, and runtime so you can start runs, monitor progress, and interact
 with suspended steps from one place.
 
-## Runtime Overview
+This page is now the short orientation page. The full workflow manual lives in
+the top-level [Workflows](../workflows/index.md) section.
+
+## Start there for the full workflow guide
+
+- [Getting Started](../workflows/getting-started.md)
+- [Flows and Scripts](../workflows/flows-and-scripts.md)
+- [Annotated Workflows](../workflows/annotated-workflows.md)
+- [Context and Serialization](../workflows/context-and-serialization.md)
+- [How It Works](../workflows/how-it-works.md)
+- [Observability](../workflows/observability.md)
+
+## Runtime overview
 
 ```dart title="bin/workflows.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-app-create
 
@@ -30,153 +42,17 @@ Start the runtime once the app is constructed:
 - `eventBus` – emits topics that resume waiting steps.
 - `app` – the underlying `StemApp` (broker + result backend + worker).
 
-## StemClient Entrypoint
+## What makes workflows different from tasks
 
-`StemClient` is the shared entrypoint when you want a single object to own the
-broker, result backend, and workflow helpers. It creates workflow apps and
-workers with consistent configuration so you don't pass broker/backend handles
-around.
+- workflow runs persist durable state in a workflow store
+- steps or checkpoints can suspend on time or external events
+- resumption happens through persisted watchers and due-run scheduling
+- admin tooling can inspect runs even after worker restarts
 
-```dart title="bin/workflows_client.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-client
+## Flow versus script
 
-```
+- flows: declared steps are the execution plan
+- scripts: `run(...)` is the execution plan
+- script checkpoints are durable replay boundaries plus manifest metadata
 
-## Declaring Typed Flows
-
-Flows use the declarative DSL (`FlowBuilder`) to capture ordered steps. Specify
-`Flow<T>` to document the completion type; generic metadata is preserved all the
-way through `WorkflowResult<T>`.
-
-```dart title="lib/workflows/approvals_flow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-flow
-
-```
-
-Steps re-run from the top after every suspension, so handlers must be
-idempotent and rely on `FlowContext` helpers: `iteration`, `takeResumeData`,
-`sleep`, `awaitEvent`, `idempotencyKey`, and persisted step outputs.
-
-## Workflow Scripts
-
-`WorkflowScript` offers a higher-level facade that feels like a regular async
-function. You still get typed results and step-level durability, but the DSL
-handles `ctx.step` registration automatically.
-
-```dart title="lib/workflows/retry_script.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-script
-
-```
-
-Scripts can enable `autoVersion: true` inside `script.step` calls to track loop
-iterations using the `stepName#iteration` naming convention.
-
-## Annotated Workflows (stem_builder)
-
-If you prefer decorators over the DSL, annotate workflow classes and tasks with
-`@WorkflowDefn`, `@WorkflowStep`, optional `@WorkflowRun`, and `@TaskDefn`,
-then generate the workflow/task helpers with `stem_builder`.
-
-```dart title="lib/workflows/annotated.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-annotated
-
-```
-
-Generate the helpers (example):
-
-```bash
-dart pub add --dev build_runner stem_builder
-dart run build_runner build
-```
-
-For full setup and generated API details, see
-[stem_builder](./stem-builder.md).
-
-## Starting & Awaiting Workflows
-
-```dart title="bin/run_workflow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-run
-
-```
-
-`waitForCompletion<T>` returns a `WorkflowResult<T>` that includes the decoded
-value, original `RunState`, and a `timedOut` flag so callers can decide whether
-to keep polling or surface status upstream.
-
-### Cancellation policies
-
-`WorkflowCancellationPolicy` guards long-running runs. Use it to auto-cancel
-workflows that exceed a wall-clock budget or remain suspended longer than
-allowed.
-
-## Suspension, Events, and Groups of Runs
-
-- `sleep(duration)` stores a wake-up timestamp; the runtime polls `dueRuns` and
-  resumes those runs by re-enqueuing the internal workflow task.
-- `awaitEvent(topic, deadline: ...)` registers durable watchers so external
-  services can `emit(topic, payload)`. The payload becomes `resumeData` for the
-  awaiting step.
-- `runsWaitingOn(topic)` exposes all runs suspended on a channel—useful for CLI
-  tooling or dashboards. After a topic resumes the runtime calls
-  `markResumed(runId, data: suspensionData)` so flows can inspect the payload.
-
-Because watchers and due runs are persisted in the `WorkflowStore`, you can
-operate on *groups* of workflows (pause, resume, or inspect every run waiting on
-a topic) even if no worker is currently online.
-
-## Run Leases & Multi-Worker Recovery
-
-Workflow runs are lease-based: a worker claims a run for a fixed duration,
-renews the lease while executing, and releases it on completion. This prevents
-two workers from executing the same run concurrently while still allowing
-takeover after crashes.
-
-Operational guidance:
-
-- Keep `runLeaseDuration` **>=** the broker visibility timeout so redelivered
-  workflow tasks retry instead of being dropped before the lease expires.
-- Ensure workers renew leases (`leaseExtension`) before either the workflow
-  lease or broker visibility timeout expires.
-- Keep system clocks in sync (NTP) because lease expiry is time-based across
-  workers and the shared store.
-
-## Deterministic Tests with WorkflowClock
-
-Inject a `WorkflowClock` when you need deterministic timestamps (e.g. for lease
-expiry or due run scheduling). The `FakeWorkflowClock` lets tests advance time
-without waiting on real timers.
-
-```dart
-final clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
-final store = InMemoryWorkflowStore(clock: clock);
-final runtime = WorkflowRuntime(
-  stem: stem,
-  store: store,
-  eventBus: InMemoryEventBus(store: store),
-  clock: clock,
-);
-```
-
-## Payload Encoders in Workflow Apps
-
-Workflows execute on top of a `Stem` worker, so they inherit the same
-`TaskPayloadEncoder` facilities as regular tasks. `StemWorkflowApp.create`
-accepts either a shared `TaskPayloadEncoderRegistry` or explicit defaults:
-
-```dart title="lib/workflows/bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-encoders
-
-```
-
-Every workflow run task stores the result encoder id in `RunState.resultMeta`,
-and the internal tasks dispatched by workflows reuse the same encoder
-configuration—so
-typed steps can safely emit encrypted/binary payloads while workers decode them
-exactly once.
-
-Need per-workflow overrides? Register custom encoders on individual task
-handlers (via `TaskMetadata`) or attach a specialized encoder to a `Flow`/script
-step that persists sensitive data in the workflow store.
-
-## Tooling Tips
-
-- Use `workflowApp.store.listRuns(...)` to filter by workflow/status when
-  building admin dashboards.
-- `workflowApp.runtime.emit(topic, payload)` is the canonical way to resume
-  batches of runs waiting on external events.
-- CLI integrations (see `stem workflow ...`) rely on the same store APIs, so
-  keeping the store tidy (expired runs, watchers) ensures responsive tooling.
+The details now live in [Flows and Scripts](../workflows/flows-and-scripts.md).

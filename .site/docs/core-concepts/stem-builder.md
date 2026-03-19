@@ -8,6 +8,14 @@ slug: /core-concepts/stem-builder
 `stem_builder` generates workflow/task registries and typed workflow starters
 from annotations, so you can avoid stringly-typed wiring.
 
+This page focuses on the generator itself. For the workflow authoring model and
+durable runtime behavior, start with the top-level
+[Workflows](../workflows/index.md) section, especially
+[Annotated Workflows](../workflows/annotated-workflows.md).
+
+For script workflows, generated checkpoints are introspection metadata. The
+actual execution plan still comes from `run(...)`.
+
 ## Install
 
 ```bash
@@ -103,4 +111,9 @@ final workflowApp = await StemWorkflowApp.create(
 - Script workflow `run(...)` can be plain (no annotation required).
 - `@WorkflowRun` is still supported for explicit run entrypoints.
 - Step methods use `@WorkflowStep`.
-
+- Plain `run(...)` is best when called step methods only need serializable
+  parameters.
+- Use `@WorkflowRun()` plus `WorkflowScriptContext` when you need to enter a
+  context-aware script checkpoint that consumes `WorkflowScriptStepContext`.
+- Arbitrary Dart class instances are not supported directly; encode them into
+  `Map<String, Object?>` first.
