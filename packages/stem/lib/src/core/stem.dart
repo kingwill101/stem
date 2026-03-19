@@ -1071,9 +1071,9 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
 /// Convenience helpers for waiting on typed no-arg task definitions.
 extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     on NoArgsTaskDefinition<TResult> {
-  /// Enqueues this no-arg task definition with [stem].
+  /// Enqueues this no-arg task definition with [enqueuer].
   Future<String> enqueueWith(
-    Stem stem, {
+    TaskEnqueuer enqueuer, {
     Map<String, String> headers = const {},
     TaskOptions? options,
     DateTime? notBefore,
@@ -1086,7 +1086,7 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
       notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
-    ).enqueueWith(stem, enqueueOptions: enqueueOptions);
+    ).enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Waits for [taskId] using this definition's decoding rules.

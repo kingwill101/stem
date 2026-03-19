@@ -1,4 +1,4 @@
-import 'package:stem/src/core/contracts.dart';
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -96,4 +96,50 @@ void main() {
     expect(call.headers, containsPair('h', 'v'));
     expect(call.meta, containsPair('m', 1));
   });
+
+  test(
+    'NoArgsTaskDefinition.enqueueWith uses the TaskEnqueuer surface',
+    () async {
+    final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+    final enqueuer = _RecordingTaskEnqueuer();
+
+    final taskId = await definition.enqueueWith(
+      enqueuer,
+      headers: const {'h': 'v'},
+      meta: const {'m': 1},
+    );
+
+    expect(taskId, 'task-1');
+    expect(enqueuer.lastCall, isNotNull);
+    expect(enqueuer.lastCall!.name, 'demo.no_args');
+    expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
+    expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
+    expect(enqueuer.lastCall!.meta, containsPair('m', 1));
+    },
+  );
+}
+
+class _RecordingTaskEnqueuer implements TaskEnqueuer {
+  TaskCall<dynamic, dynamic>? lastCall;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    throw UnimplementedError('enqueue is not used in this test');
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    lastCall = call;
+    return 'task-1';
+  }
 }
