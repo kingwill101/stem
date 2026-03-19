@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 
 /// Typed resume helpers for durable workflow suspensions.
@@ -69,6 +70,21 @@ extension FlowContextResumeValues on FlowContext {
     awaitEvent(topic, deadline: deadline, data: data);
     return null;
   }
+
+  /// Returns the next event payload from [event] when the step has resumed, or
+  /// registers an event wait and returns `null` on the first invocation.
+  T? waitForEventRef<T>(
+    WorkflowEventRef<T> event, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return waitForEventValue<T>(
+      event.topic,
+      deadline: deadline,
+      data: data,
+      codec: event.codec,
+    );
+  }
 }
 
 /// Typed resume helpers for durable script checkpoints.
@@ -112,5 +128,21 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
     }
     unawaited(awaitEvent(topic, deadline: deadline, data: data));
     return null;
+  }
+
+  /// Returns the next event payload from [event] when the checkpoint has
+  /// resumed, or registers an event wait and returns `null` on the first
+  /// invocation.
+  T? waitForEventRef<T>(
+    WorkflowEventRef<T> event, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return waitForEventValue<T>(
+      event.topic,
+      deadline: deadline,
+      data: data,
+      codec: event.codec,
+    );
   }
 }

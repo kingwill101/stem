@@ -373,6 +373,8 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
+- `step.waitForEventRef(...)` handles the same path when you already have a
+  typed `WorkflowEventRef<T>`.
 - `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface
   payloads from sleeps or awaited events when you need lower-level control.
 
@@ -992,8 +994,9 @@ backend metadata under `stem.unique.duplicates`.
 - Awaited events behave the same way: the emitted payload is delivered via
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
 - When you have a DTO event, emit it through `runtime.emitValue(...)` /
-  `workflowApp.emitValue(...)` with a `PayloadCodec<T>` instead of hand-building
-  the payload map. Event payloads still serialize onto the existing
+  `workflowApp.emitValue(...)` with a `PayloadCodec<T>`, or bundle the topic
+  and codec once in a `WorkflowEventRef<T>` and use `emitEvent(...)` /
+  `waitForEventRef(...)`. Event payloads still serialize onto the existing
   `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.

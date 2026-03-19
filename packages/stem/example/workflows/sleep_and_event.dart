@@ -5,6 +5,10 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
+const demoEvent = WorkflowEventRef<Map<String, Object?>>(
+  topic: 'demo.event',
+);
+
 Future<void> main() async {
   final sleepAndEvent = Flow<String>(
     name: 'durable.sleep.event',
@@ -17,9 +21,7 @@ Future<void> main() async {
       });
 
       flow.step('await-event', (ctx) async {
-        final payload = ctx.waitForEventValue<Map<String, Object?>>(
-          'demo.event',
-        );
+        final payload = ctx.waitForEventRef(demoEvent);
         if (payload == null) {
           return null;
         }
@@ -39,13 +41,13 @@ Future<void> main() async {
   // losing the signal.
   while (true) {
     final state = await app.getRun(runId);
-    if (state?.waitTopic == 'demo.event') {
+    if (state?.waitTopic == demoEvent.topic) {
       break;
     }
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
 
-  await app.runtime.emit('demo.event', {'message': 'event received'});
+  await app.emitEvent(demoEvent, {'message': 'event received'});
 
   final result = await sleepAndEventRef.waitFor(app, runId);
   print('Workflow $runId resumed and completed with: ${result?.value}');

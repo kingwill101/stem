@@ -104,31 +104,34 @@ void main() {
     },
   );
 
-  test('startWorkflow persists parent run id without exposing it to handlers', () async {
-    runtime.registerWorkflow(
-      Flow(
-        name: 'parent.runtime.workflow',
-        build: (flow) {
-          flow.step('inspect', (context) async => context.params);
-        },
-      ).definition,
-    );
+  test(
+    'startWorkflow persists parent run id without exposing it to handlers',
+    () async {
+      runtime.registerWorkflow(
+        Flow(
+          name: 'parent.runtime.workflow',
+          build: (flow) {
+            flow.step('inspect', (context) async => context.params);
+          },
+        ).definition,
+      );
 
-    final runId = await runtime.startWorkflow(
-      'parent.runtime.workflow',
-      parentRunId: 'wf-parent',
-      params: const {'tenant': 'acme'},
-    );
+      final runId = await runtime.startWorkflow(
+        'parent.runtime.workflow',
+        parentRunId: 'wf-parent',
+        params: const {'tenant': 'acme'},
+      );
 
-    final state = await store.get(runId);
-    expect(state, isNotNull);
-    expect(state!.parentRunId, 'wf-parent');
-    expect(state.workflowParams, equals(const {'tenant': 'acme'}));
-    expect(
-      state.params[workflowParentRunIdParamKey],
-      equals('wf-parent'),
-    );
-  });
+      final state = await store.get(runId);
+      expect(state, isNotNull);
+      expect(state!.parentRunId, 'wf-parent');
+      expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(
+        state.params[workflowParentRunIdParamKey],
+        equals('wf-parent'),
+      );
+    },
+  );
 
   test('flow context workflows starts typed child workflows', () async {
     final childRef = WorkflowRef<Map<String, Object?>, String>(
@@ -221,52 +224,57 @@ void main() {
     expect(childState.workflowParams, equals(const {'value': 'script-child'}));
   });
 
-  test('flow context workflows startAndWaitWithContext waits for child result', () async {
-    final childRef = WorkflowRef<Map<String, Object?>, String>(
-      name: 'child.runtime.wait.flow',
-      encodeParams: (params) => params,
-    );
-
-    runtime
-      ..registerWorkflow(
-        Flow(
-          name: 'child.runtime.wait.flow',
-          build: (flow) {
-            flow.step('hello', (context) async {
-              final value = context.params['value'] as String? ?? 'child';
-              return 'ok:$value';
-            });
-          },
-        ).definition,
-      )
-      ..registerWorkflow(
-        Flow(
-          name: 'parent.runtime.wait.flow',
-          build: (flow) {
-            flow.step('spawn', (context) async {
-              final childResult = await childRef
-                  .call(const {'value': 'spawned'})
-                  .startAndWaitWithContext(
-                    context,
-                    timeout: const Duration(seconds: 2),
-                  );
-              return {
-                'childRunId': childResult?.runId,
-                'childValue': childResult?.value,
-              };
-            });
-          },
-        ).definition,
+  test(
+    'flow context workflows startAndWaitWithContext waits for child result',
+    () async {
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.runtime.wait.flow',
+        encodeParams: (params) => params,
       );
 
-    final parentRunId = await runtime.startWorkflow('parent.runtime.wait.flow');
-    await runtime.executeRun(parentRunId);
+      runtime
+        ..registerWorkflow(
+          Flow(
+            name: 'child.runtime.wait.flow',
+            build: (flow) {
+              flow.step('hello', (context) async {
+                final value = context.params['value'] as String? ?? 'child';
+                return 'ok:$value';
+              });
+            },
+          ).definition,
+        )
+        ..registerWorkflow(
+          Flow(
+            name: 'parent.runtime.wait.flow',
+            build: (flow) {
+              flow.step('spawn', (context) async {
+                final childResult = await childRef
+                    .call(const {'value': 'spawned'})
+                    .startAndWaitWithContext(
+                      context,
+                      timeout: const Duration(seconds: 2),
+                    );
+                return {
+                  'childRunId': childResult?.runId,
+                  'childValue': childResult?.value,
+                };
+              });
+            },
+          ).definition,
+        );
 
-    final parentState = await store.get(parentRunId);
-    final result = Map<String, Object?>.from(parentState!.result! as Map);
-    expect(result['childRunId'], isA<String>());
-    expect(result['childValue'], 'ok:spawned');
-  });
+      final parentRunId = await runtime.startWorkflow(
+        'parent.runtime.wait.flow',
+      );
+      await runtime.executeRun(parentRunId);
+
+      final parentState = await store.get(parentRunId);
+      final result = Map<String, Object?>.from(parentState!.result! as Map);
+      expect(result['childRunId'], isA<String>());
+      expect(result['childValue'], 'ok:spawned');
+    },
+  );
 
   test(
     'script checkpoint workflows startAndWaitWithContext waits for child result',
@@ -293,7 +301,9 @@ void main() {
             name: 'parent.runtime.wait.script',
             checkpoints: [WorkflowCheckpoint(name: 'spawn')],
             run: (script) async {
-              return script.step<Map<String, Object?>>('spawn', (context) async {
+              return script.step<Map<String, Object?>>('spawn', (
+                context,
+              ) async {
                 final childResult = await childRef
                     .call(const {'value': 'script-child'})
                     .startAndWaitWithContext(
@@ -587,6 +597,51 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload?.id, 'user-typed-1');
     expect(completed?.result, 'user-typed-1');
+  });
+
+  test('emitEvent resumes flows with typed workflow event refs', () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>(
+      topic: 'user.updated.ref',
+      codec: _userUpdatedEventCodec,
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = context.waitForEventRef(event);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await runtime.emitEvent(
+      event,
+      const _UserUpdatedEvent(id: 'user-typed-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-typed-2');
+    expect(completed?.result, 'user-typed-2');
   });
 
   test('emit persists payload before worker resumes execution', () async {

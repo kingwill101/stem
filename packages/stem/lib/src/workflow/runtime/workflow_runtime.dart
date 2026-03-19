@@ -38,6 +38,7 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
@@ -362,6 +363,11 @@ class WorkflowRuntime implements WorkflowCaller {
   }) {
     final encoded = codec != null ? codec.encodeDynamic(value) : value;
     return emit(topic, _coerceEventPayload(topic, encoded));
+  }
+
+  /// Emits a typed external event using a [WorkflowEventRef].
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 
   /// Starts periodic polling that resumes runs whose wake-up time has elapsed.
@@ -892,9 +898,10 @@ class WorkflowRuntime implements WorkflowCaller {
     final completedIterations = await _loadCompletedIterations(runId);
     Object? previousResult;
     if (checkpoints.isNotEmpty) {
-      previousResult = definition
-          .checkpointByName(checkpoints.last.baseName)
-          ?.decodeValue(checkpoints.last.value) ??
+      previousResult =
+          definition
+              .checkpointByName(checkpoints.last.baseName)
+              ?.decodeValue(checkpoints.last.value) ??
           checkpoints.last.value;
     }
     final execution = _WorkflowScriptExecution(
@@ -1961,10 +1968,8 @@ class _ChildWorkflowCaller implements WorkflowCaller {
     );
   }
 
-  Future<WorkflowResult<TResult>?> _waitForChildWorkflow<
-    TParams,
-    TResult extends Object?
-  >(
+  Future<WorkflowResult<TResult>?>
+  _waitForChildWorkflow<TParams, TResult extends Object?>(
     String runId,
     WorkflowRef<TParams, TResult> definition, {
     required Duration pollInterval,

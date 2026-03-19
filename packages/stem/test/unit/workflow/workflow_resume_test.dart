@@ -2,6 +2,7 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:test/test.dart';
@@ -124,6 +125,41 @@ void main() {
     },
   );
 
+  test('FlowContext.waitForEventRef reuses topic and codec', () {
+    const event = WorkflowEventRef<_ResumePayload>(
+      topic: 'demo.event',
+      codec: _resumePayloadCodec,
+    );
+    final firstContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    final firstResult = firstContext.waitForEventRef(event);
+
+    expect(firstResult, isNull);
+    final control = firstContext.takeControl();
+    expect(control, isNotNull);
+    expect(control!.topic, 'demo.event');
+
+    final resumedContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      resumeData: const {'message': 'approved'},
+    );
+
+    final resumed = resumedContext.waitForEventRef(event);
+    expect(resumed?.message, 'approved');
+  });
+
   test(
     'WorkflowScriptStepContext helpers suspend once and decode resumed values',
     () {
@@ -163,6 +199,23 @@ void main() {
       expect(resumedEvent.awaitedTopics, isEmpty);
     },
   );
+
+  test('WorkflowScriptStepContext.waitForEventRef reuses topic and codec', () {
+    const event = WorkflowEventRef<_ResumePayload>(
+      topic: 'demo.event',
+      codec: _resumePayloadCodec,
+    );
+    final waiting = _FakeWorkflowScriptStepContext();
+    final firstEvent = waiting.waitForEventRef(event);
+    expect(firstEvent, isNull);
+    expect(waiting.awaitedTopics, ['demo.event']);
+
+    final resumed = _FakeWorkflowScriptStepContext(
+      resumeData: const {'message': 'approved'},
+    );
+    final resumedValue = resumed.waitForEventRef(event);
+    expect(resumedValue?.message, 'approved');
+  });
 }
 
 class _ResumePayload {

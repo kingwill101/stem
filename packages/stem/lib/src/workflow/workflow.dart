@@ -10,6 +10,7 @@ export 'core/workflow_cancellation_policy.dart';
 export 'core/workflow_clock.dart';
 export 'core/workflow_checkpoint.dart';
 export 'core/workflow_definition.dart';
+export 'core/workflow_event_ref.dart';
 export 'core/workflow_ref.dart';
 export 'core/workflow_result.dart';
 export 'core/workflow_runtime_metadata.dart';

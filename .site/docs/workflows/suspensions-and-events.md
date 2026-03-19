@@ -34,7 +34,7 @@ Typical flow:
    `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
    a payload
 4. the runtime resumes the run and exposes the payload through
-   `waitForEventValue<T>(...)` or the lower-level
+   `waitForEventValue<T>(...)`, `waitForEventRef(...)`, or the lower-level
    `takeResumeData()` / `takeResumeValue<T>(codec: ...)`
 
 For the common "wait for one event and continue" case, prefer:
@@ -64,6 +64,9 @@ await workflowApp.emitValue(
 Typed event payloads still serialize to the existing `Map<String, Object?>`
 wire format. `emitValue(...)` is a DTO/codec convenience layer, not a new
 transport shape.
+
+When the topic and codec travel together in your codebase, prefer a typed
+`WorkflowEventRef<T>` and `emitEvent(...)` / `waitForEventRef(...)`.
 
 ## Inspect waiting runs
 

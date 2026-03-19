@@ -14,6 +14,7 @@ import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
@@ -168,6 +169,11 @@ class StemWorkflowApp implements WorkflowCaller {
     PayloadCodec<T>? codec,
   }) {
     return runtime.emitValue(topic, value, codec: codec);
+  }
+
+  /// Emits a typed event through a [WorkflowEventRef].
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return runtime.emitEvent(event, value);
   }
 
   /// Returns the current [RunState] of a workflow run, or `null` if not found.

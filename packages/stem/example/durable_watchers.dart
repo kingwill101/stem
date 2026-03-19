@@ -4,6 +4,10 @@ final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>(
   encode: (value) => value.toJson(),
   decode: _ShipmentReadyEvent.fromJson,
 );
+final shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>(
+  topic: 'shipment.ready',
+  codec: shipmentReadyEventCodec,
+);
 
 /// Runs a workflow that suspends on `awaitEvent` and resumes once a payload is
 /// emitted. The example also inspects watcher metadata before the resume.
@@ -17,15 +21,12 @@ Future<void> main() async {
       });
 
       final trackingId = await script.step('wait-for-shipment', (step) async {
-        final payload = step.takeResumeValue<_ShipmentReadyEvent>(
-          codec: shipmentReadyEventCodec,
+        final payload = step.waitForEventRef(
+          shipmentReadyEvent,
+          deadline: DateTime.now().add(const Duration(minutes: 5)),
+          data: const {'reason': 'waiting-for-carrier'},
         );
         if (payload == null) {
-          await step.awaitEvent(
-            'shipment.ready',
-            deadline: DateTime.now().add(const Duration(minutes: 5)),
-            data: const {'reason': 'waiting-for-carrier'},
-          );
           return 'waiting';
         }
         return payload.trackingId;
@@ -48,7 +49,7 @@ Future<void> main() async {
   // Drive the run until it suspends on the watcher.
   await app.runtime.executeRun(runId);
 
-  final watchers = await app.store.listWatchers('shipment.ready');
+  final watchers = await app.store.listWatchers(shipmentReadyEvent.topic);
   for (final watcher in watchers) {
     print(
       'Run ${watcher.runId} waiting on ${watcher.topic} (step ${watcher.stepName})',
@@ -56,10 +57,9 @@ Future<void> main() async {
     print('Watcher metadata: ${watcher.data}');
   }
 
-  await app.emitValue(
-    'shipment.ready',
+  await app.emitEvent(
+    shipmentReadyEvent,
     const _ShipmentReadyEvent(trackingId: 'ZX-42'),
-    codec: shipmentReadyEventCodec,
   );
 
   await app.runtime.executeRun(runId);
