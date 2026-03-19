@@ -1,9 +1,26 @@
+import 'dart:collection';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
+
+/// Registers task handlers while tolerating re-registration of identical
+/// handler instances.
+void registerModuleTaskHandlers(
+  TaskRegistry registry,
+  Iterable<TaskHandler<Object?>> handlers,
+) {
+  for (final handler in handlers) {
+    final existing = registry.resolve(handler.name);
+    if (identical(existing, handler)) {
+      continue;
+    }
+    registry.register(handler);
+  }
+}
 
 /// Generated or hand-authored bundle of tasks and workflow definitions.
 ///
@@ -68,6 +85,84 @@ class StemModule {
     if (tasks != null) {
       this.tasks.forEach(tasks.register);
     }
+  }
+
+  /// Returns the default queues implied by the bundled task handlers.
+  ///
+  /// The [workflowQueue] is always included so workflow orchestration remains
+  /// runnable when the inferred queues are used to bootstrap a worker.
+  List<String> inferredWorkerQueues({
+    String workflowQueue = 'workflow',
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = SplayTreeSet<String>();
+    final normalizedWorkflowQueue = workflowQueue.trim();
+    if (normalizedWorkflowQueue.isNotEmpty) {
+      queues.add(normalizedWorkflowQueue);
+    }
+
+    void addTaskQueue(TaskHandler<Object?> handler) {
+      final queue = handler.options.queue.trim();
+      if (queue.isNotEmpty) {
+        queues.add(queue);
+      }
+    }
+
+    tasks.forEach(addTaskQueue);
+    additionalTasks.forEach(addTaskQueue);
+    return queues.toList(growable: false);
+  }
+
+  /// Infers a worker subscription from the bundled task handlers.
+  ///
+  /// Returns `null` when only the [workflowQueue] is needed, allowing the
+  /// worker's default queue configuration to remain unchanged.
+  RoutingSubscription? inferWorkerSubscription({
+    String workflowQueue = 'workflow',
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = inferredWorkerQueues(
+      workflowQueue: workflowQueue,
+      additionalTasks: additionalTasks,
+    );
+    if (queues.length <= 1) {
+      return null;
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
+  /// Returns the default queues implied by the bundled task handlers only.
+  List<String> inferredTaskQueues({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = SplayTreeSet<String>();
+
+    void addTaskQueue(TaskHandler<Object?> handler) {
+      final queue = handler.options.queue.trim();
+      if (queue.isNotEmpty) {
+        queues.add(queue);
+      }
+    }
+
+    tasks.forEach(addTaskQueue);
+    additionalTasks.forEach(addTaskQueue);
+    return queues.toList(growable: false);
+  }
+
+  /// Infers a worker subscription from bundled task handlers only.
+  ///
+  /// Returns `null` when the bundled tasks only target [defaultQueue], allowing
+  /// the worker's default queue configuration to remain unchanged.
+  RoutingSubscription? inferTaskWorkerSubscription({
+    String defaultQueue = 'default',
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = inferredTaskQueues(additionalTasks: additionalTasks);
+    if (queues.isEmpty) return null;
+    if (queues.length == 1 && queues.first == defaultQueue.trim()) {
+      return null;
+    }
+    return RoutingSubscription(queues: queues);
   }
 
   static Iterable<WorkflowManifestEntry> _defaultManifest({

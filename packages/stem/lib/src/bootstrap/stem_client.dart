@@ -21,6 +21,7 @@ import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 abstract class StemClient {
   /// Creates a client using the provided factories and defaults.
   static Future<StemClient> create({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -39,6 +40,7 @@ abstract class StemClient {
   }) async {
     return _DefaultStemClient.create(
       tasks: tasks,
+      module: module,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
       broker: broker,
@@ -58,6 +60,7 @@ abstract class StemClient {
 
   /// Creates an in-memory client using in-memory broker/backend.
   static Future<StemClient> inMemory({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
@@ -66,6 +69,7 @@ abstract class StemClient {
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return create(
+      module: module,
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
@@ -83,6 +87,7 @@ abstract class StemClient {
   /// can avoid manual factory wiring for common Redis/Postgres/SQLite setups.
   static Future<StemClient> fromUrl(
     String url, {
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -105,6 +110,7 @@ abstract class StemClient {
       overrides: overrides,
     );
     return create(
+      module: module,
       tasks: tasks,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
@@ -134,6 +140,9 @@ abstract class StemClient {
 
   /// Shared workflow registry for workflow definitions.
   WorkflowRegistry get workflowRegistry;
+
+  /// Optional default bundle registered into this client.
+  StemModule? get module;
 
   /// Enqueue facade for producers.
   Stem get stem;
@@ -208,9 +217,10 @@ abstract class StemClient {
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
   }) {
+    final effectiveModule = module ?? this.module;
     return StemWorkflowApp.fromClient(
       client: this,
-      module: module,
+      module: effectiveModule,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -225,11 +235,14 @@ abstract class StemClient {
 
   /// Creates a StemApp wrapper using the shared client configuration.
   Future<StemApp> createApp({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig? workerConfig,
   }) {
+    final effectiveModule = module ?? this.module;
     return StemApp.fromClient(
       this,
+      module: effectiveModule,
       tasks: tasks,
       workerConfig: workerConfig ?? defaultWorkerConfig,
     );
@@ -245,6 +258,7 @@ class _DefaultStemClient extends StemClient {
     required this.backend,
     required this.taskRegistry,
     required this.workflowRegistry,
+    required this.module,
     required this.stem,
     required this.encoderRegistry,
     required this.routing,
@@ -258,6 +272,7 @@ class _DefaultStemClient extends StemClient {
   }) : middleware = List.unmodifiable(middleware);
 
   static Future<StemClient> create({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -274,9 +289,12 @@ class _DefaultStemClient extends StemClient {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
     final registry = taskRegistry ?? InMemoryTaskRegistry();
-    tasks.forEach(registry.register);
+    registerModuleTaskHandlers(registry, allTasks);
     final workflows = workflowRegistry ?? InMemoryWorkflowRegistry();
+    module?.registerInto(workflows: workflows);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
@@ -305,6 +323,7 @@ class _DefaultStemClient extends StemClient {
       backend: backendInstance,
       taskRegistry: registry,
       workflowRegistry: workflows,
+      module: module,
       stem: stem,
       encoderRegistry: stem.payloadEncoders,
       routing: stem.routing,
@@ -329,6 +348,9 @@ class _DefaultStemClient extends StemClient {
 
   @override
   final WorkflowRegistry workflowRegistry;
+
+  @override
+  final StemModule? module;
 
   @override
   final Stem stem;

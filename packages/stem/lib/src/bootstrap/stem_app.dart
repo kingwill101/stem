@@ -1,6 +1,7 @@
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
+import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/revoke_store.dart';
@@ -87,6 +88,7 @@ class StemApp {
 
   /// Creates a new Stem application with the provided configuration.
   static Future<StemApp> create({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     StemBrokerFactory? broker,
@@ -103,8 +105,10 @@ class StemApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
     final taskRegistry = registry ?? InMemoryTaskRegistry();
-    tasks.forEach(taskRegistry.register);
+    registerModuleTaskHandlers(taskRegistry, allTasks);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
@@ -143,6 +147,12 @@ class StemApp {
     final workerUniqueTaskCoordinator =
         workerConfig.uniqueTaskCoordinator ?? uniqueTaskCoordinator;
     final workerSigner = workerConfig.signer ?? signer;
+    final inferredSubscription =
+        workerConfig.subscription ??
+        module?.inferTaskWorkerSubscription(
+          defaultQueue: workerConfig.queue,
+          additionalTasks: tasks,
+        );
 
     final worker = Worker(
       broker: brokerInstance,
@@ -154,7 +164,7 @@ class StemApp {
       uniqueTaskCoordinator: workerUniqueTaskCoordinator,
       retryStrategy: workerRetryStrategy,
       queue: workerConfig.queue,
-      subscription: workerConfig.subscription,
+      subscription: inferredSubscription,
       consumerName: workerConfig.consumerName,
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
@@ -194,6 +204,7 @@ class StemApp {
 
   /// Creates an in-memory Stem application (broker + result backend).
   static Future<StemApp> inMemory({
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
@@ -202,6 +213,7 @@ class StemApp {
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return StemApp.create(
+      module: module,
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
@@ -219,6 +231,7 @@ class StemApp {
   /// can optionally auto-wire revoke and unique-task coordination stores.
   static Future<StemApp> fromUrl(
     String url, {
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     Iterable<StemStoreAdapter> adapters = const [],
@@ -292,6 +305,7 @@ class StemApp {
 
     try {
       final app = await create(
+        module: module,
         tasks: tasks,
         registry: registry,
         broker: resolvedStack.broker,
@@ -331,14 +345,24 @@ class StemApp {
   /// Creates a Stem app using a shared [StemClient].
   static Future<StemApp> fromClient(
     StemClient client, {
+    StemModule? module,
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
   }) async {
-    tasks.forEach(client.taskRegistry.register);
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    final taskRegistry = client.taskRegistry;
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    final inferredSubscription =
+        workerConfig.subscription ??
+        module?.inferTaskWorkerSubscription(
+          defaultQueue: workerConfig.queue,
+          additionalTasks: tasks,
+        );
 
     final worker = Worker(
       broker: client.broker,
-      registry: client.taskRegistry,
+      registry: taskRegistry,
       backend: client.backend,
       enqueuer: client.stem,
       rateLimiter: workerConfig.rateLimiter,
@@ -348,7 +372,7 @@ class StemApp {
           workerConfig.uniqueTaskCoordinator ?? client.uniqueTaskCoordinator,
       retryStrategy: workerConfig.retryStrategy ?? client.retryStrategy,
       queue: workerConfig.queue,
-      subscription: workerConfig.subscription,
+      subscription: inferredSubscription,
       consumerName: workerConfig.consumerName,
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
@@ -365,7 +389,7 @@ class StemApp {
     );
 
     return StemApp._(
-      registry: client.taskRegistry,
+      registry: taskRegistry,
       broker: client.broker,
       backend: client.backend,
       stem: client.stem,
