@@ -83,7 +83,7 @@ String buildWorkflowsContent({
 <tr>
   <td><code>${escapeHtml(entry.runId)}</code></td>
   <td>${escapeHtml(entry.workflowName)}</td>
-  <td class="muted">${escapeHtml(entry.lastStep ?? '—')}</td>
+  <td class="muted">${escapeHtml(entry.lastCheckpoint ?? '—')}</td>
   <td>${formatInt(entry.queued)}</td>
   <td>${formatInt(entry.running)}</td>
   <td>${formatInt(entry.succeeded)}</td>

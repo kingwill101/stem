@@ -514,7 +514,7 @@ class DashboardWorkflowRunSummary {
   const DashboardWorkflowRunSummary({
     required this.runId,
     required this.workflowName,
-    required this.lastStep,
+    required this.lastCheckpoint,
     required this.total,
     required this.queued,
     required this.running,
@@ -530,8 +530,8 @@ class DashboardWorkflowRunSummary {
   /// Workflow name, when available.
   final String workflowName;
 
-  /// Most recent step marker, when available.
-  final String? lastStep;
+  /// Most recent checkpoint marker, when available.
+  final String? lastCheckpoint;
 
   /// Total sampled statuses for this run.
   final int total;
@@ -762,9 +762,9 @@ class DashboardWorkflowRunSnapshot {
 }
 
 /// Projection of a persisted workflow checkpoint.
-class DashboardWorkflowStepSnapshot {
+class DashboardWorkflowCheckpointSnapshot {
   /// Creates a workflow checkpoint snapshot.
-  const DashboardWorkflowStepSnapshot({
+  const DashboardWorkflowCheckpointSnapshot({
     required this.name,
     required this.position,
     required this.value,
@@ -772,8 +772,10 @@ class DashboardWorkflowStepSnapshot {
   });
 
   /// Builds a workflow checkpoint snapshot from [WorkflowStepEntry].
-  factory DashboardWorkflowStepSnapshot.fromEntry(WorkflowStepEntry entry) {
-    return DashboardWorkflowStepSnapshot(
+  factory DashboardWorkflowCheckpointSnapshot.fromEntry(
+    WorkflowStepEntry entry,
+  ) {
+    return DashboardWorkflowCheckpointSnapshot(
       name: entry.name,
       position: entry.position,
       value: entry.value,
@@ -906,7 +908,7 @@ class _DashboardWorkflowSummaryBuilder {
 
   final String runId;
   String _workflowName = 'workflow';
-  String? _lastStep;
+  String? _lastCheckpoint;
   var _total = 0;
   var _queued = 0;
   var _running = 0;
@@ -921,7 +923,7 @@ class _DashboardWorkflowSummaryBuilder {
       _workflowName = task.workflowName!;
     }
     if (task.workflowStep != null && task.workflowStep!.isNotEmpty) {
-      _lastStep = task.workflowStep;
+      _lastCheckpoint = task.workflowStep;
     }
     if (task.state == TaskState.queued || task.state == TaskState.retried) {
       _queued += 1;
@@ -939,7 +941,7 @@ class _DashboardWorkflowSummaryBuilder {
     return DashboardWorkflowRunSummary(
       runId: runId,
       workflowName: _workflowName,
-      lastStep: _lastStep,
+      lastCheckpoint: _lastCheckpoint,
       total: _total,
       queued: _queued,
       running: _running,

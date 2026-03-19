@@ -510,39 +510,31 @@ class _WorkflowShowCommand extends Command<int> {
         dependencies.err.writeln('Workflow run "$runId" not found.');
         return 64;
       }
-      final steps = await workflowContext.store.listSteps(runId);
+      final detail = await workflowContext.runtime.viewRunDetail(runId);
       if (jsonOutput) {
         dependencies.out.writeln(
-          jsonEncode({
-            'run': {
-              'id': state.id,
-              'workflow': state.workflow,
-              'status': state.status.name,
-              'cursor': state.cursor,
-              'params': state.params,
-              'result': state.result,
-              'waitTopic': state.waitTopic,
-              'resumeAt': state.resumeAt?.toIso8601String(),
-              'lastError': state.lastError,
-              'createdAt': state.createdAt.toIso8601String(),
-              'updatedAt': state.updatedAt?.toIso8601String(),
-              'cancellationPolicy': state.cancellationPolicy?.toJson(),
-              'cancellationData': state.cancellationData,
-            },
-            'steps': steps
-                .map(
-                  (step) => {
-                    'name': step.name,
-                    'value': step.value,
-                    'position': step.position,
-                    'completedAt': step.completedAt?.toIso8601String(),
+          jsonEncode(
+            detail?.toJson() ??
+                {
+                  'run': {
+                    'runId': state.id,
+                    'workflow': state.workflow,
+                    'status': state.status.name,
+                    'cursor': state.cursor,
+                    'params': state.params,
+                    'result': state.result,
+                    'lastError': state.lastError,
+                    'createdAt': state.createdAt.toIso8601String(),
+                    'updatedAt': state.updatedAt?.toIso8601String(),
+                    'runtime': state.runtimeMetadata.toJson(),
+                    'suspensionData': state.suspensionData,
                   },
-                )
-                .toList(),
-          }),
+                  'checkpoints': const <Object?>[],
+                },
+          ),
         );
       } else {
-        _renderRunDetails(state, steps);
+        _renderRunDetails(state, detail?.checkpoints ?? const []);
       }
       return 0;
     } catch (error, stackTrace) {
@@ -557,7 +549,10 @@ class _WorkflowShowCommand extends Command<int> {
     }
   }
 
-  void _renderRunDetails(RunState state, List<WorkflowStepEntry> steps) {
+  void _renderRunDetails(
+    RunState state,
+    List<WorkflowCheckpointView> checkpoints,
+  ) {
     final out = dependencies.out;
     out
       ..writeln('Run: ${state.id}')
@@ -582,13 +577,14 @@ class _WorkflowShowCommand extends Command<int> {
     if (state.cancellationData != null && state.cancellationData!.isNotEmpty) {
       out.writeln('Cancellation Data: ${jsonEncode(state.cancellationData)}');
     }
-    if (steps.isEmpty) {
+    if (checkpoints.isEmpty) {
       out.writeln('No checkpoints recorded.');
     } else {
       out.writeln('Checkpoints:');
-      for (final step in steps) {
+      for (final checkpoint in checkpoints) {
         out.writeln(
-          '  [${step.position}] ${step.name}: ${jsonEncode(step.value)}',
+          '  [${checkpoint.position}] ${checkpoint.checkpointName}: '
+          '${jsonEncode(checkpoint.value)}',
         );
       }
     }

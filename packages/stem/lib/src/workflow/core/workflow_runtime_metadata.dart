@@ -3,6 +3,9 @@ import 'dart:collection';
 /// Reserved params key storing internal runtime metadata for workflow runs.
 const String workflowRuntimeMetadataParamKey = '__stem.workflow.runtime';
 
+/// Reserved params key storing the parent workflow run identifier.
+const String workflowParentRunIdParamKey = '__stem.workflow.parentRunId';
+
 /// Logical channel used by workflow-related task enqueues.
 enum WorkflowChannelKind {
   /// Orchestration channel used by workflow continuation tasks.
@@ -151,20 +154,28 @@ class WorkflowRunRuntimeMetadata {
   }
 
   /// Returns a new params map containing this metadata under the reserved key.
-  Map<String, Object?> attachToParams(Map<String, Object?> params) {
+  Map<String, Object?> attachToParams(
+    Map<String, Object?> params, {
+    String? parentRunId,
+  }) {
     return Map<String, Object?>.unmodifiable({
       ...params,
       workflowRuntimeMetadataParamKey: toJson(),
+      if (parentRunId != null && parentRunId.isNotEmpty)
+        workflowParentRunIdParamKey: parentRunId,
     });
   }
 
   /// Returns params without internal runtime metadata.
   static Map<String, Object?> stripFromParams(Map<String, Object?> params) {
     if (!params.containsKey(workflowRuntimeMetadataParamKey)) {
-      return Map<String, Object?>.unmodifiable(params);
+      if (!params.containsKey(workflowParentRunIdParamKey)) {
+        return Map<String, Object?>.unmodifiable(params);
+      }
     }
     final copy = Map<String, Object?>.from(params)
-      ..remove(workflowRuntimeMetadataParamKey);
+      ..remove(workflowRuntimeMetadataParamKey)
+      ..remove(workflowParentRunIdParamKey);
     return UnmodifiableMapView(copy);
   }
 }

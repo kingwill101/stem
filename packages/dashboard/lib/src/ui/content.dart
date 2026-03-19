@@ -24,7 +24,7 @@ String buildPageContent({
   DashboardTaskStatusEntry? taskDetail,
   List<DashboardTaskStatusEntry> runTimeline = const [],
   DashboardWorkflowRunSnapshot? workflowRun,
-  List<DashboardWorkflowStepSnapshot> workflowSteps = const [],
+  List<DashboardWorkflowCheckpointSnapshot> workflowCheckpoints = const [],
   List<DashboardAuditEntry> auditEntries = const [],
   DashboardThroughput? throughput,
   List<DashboardEvent> events = const [],
@@ -53,7 +53,7 @@ String buildPageContent({
         taskDetail,
         runTimeline,
         workflowRun,
-        workflowSteps,
+        workflowCheckpoints,
       );
     case DashboardPage.failures:
       return buildFailuresContent(taskStatuses, failuresOptions);

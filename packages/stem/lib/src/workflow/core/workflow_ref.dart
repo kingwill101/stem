@@ -51,6 +51,23 @@ class WorkflowRef<TParams, TResult extends Object?> {
   }
 }
 
+/// Shared typed workflow-start surface used by apps, runtimes, and contexts.
+abstract interface class WorkflowCaller {
+  /// Starts a workflow from a typed [WorkflowRef].
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  });
+
+  /// Starts a workflow from a prebuilt [WorkflowStartCall].
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  );
+}
+
 /// Typed start request built from a [WorkflowRef].
 class WorkflowStartCall<TParams, TResult extends Object?> {
   const WorkflowStartCall._({
@@ -81,4 +98,19 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
 
   /// Encodes typed parameters into the workflow parameter map.
   Map<String, Object?> encodeParams() => definition.encodeParams(params);
+
+  /// Returns a copy of this call with updated workflow start options.
+  WorkflowStartCall<TParams, TResult> copyWith({
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return WorkflowStartCall._(
+      definition: definition,
+      params: params,
+      parentRunId: parentRunId ?? this.parentRunId,
+      ttl: ttl ?? this.ttl,
+      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
+    );
+  }
 }

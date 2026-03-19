@@ -1,5 +1,5 @@
 import 'package:stem/src/core/payload_codec.dart';
-import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 
 /// High-level workflow facade that allows scripts to be authored as a single
@@ -13,8 +13,7 @@ class WorkflowScript<T extends Object?> {
   WorkflowScript({
     required String name,
     required WorkflowScriptBody<T> run,
-    Iterable<FlowStep> steps = const [],
-    Iterable<FlowStep> checkpoints = const [],
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
     String? version,
     String? description,
     Map<String, Object?>? metadata,
@@ -22,7 +21,6 @@ class WorkflowScript<T extends Object?> {
   }) : definition = WorkflowDefinition<T>.script(
          name: name,
          run: run,
-         steps: steps,
          checkpoints: checkpoints,
          version: version,
          description: description,

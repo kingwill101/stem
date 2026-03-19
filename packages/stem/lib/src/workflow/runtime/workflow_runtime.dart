@@ -67,7 +67,7 @@ const int _leaseConflictMaxRetries = 1000000;
 /// The runtime is durable: each step is re-executed from the top after a
 /// suspension or worker crash. Handlers must therefore be idempotent and rely
 /// on persisted step outputs or resume payloads to detect prior progress.
-class WorkflowRuntime {
+class WorkflowRuntime implements WorkflowCaller {
   /// Creates a workflow runtime backed by a [Stem] instance and
   /// [WorkflowStore].
   WorkflowRuntime({
@@ -183,7 +183,10 @@ class WorkflowRuntime {
       encryptionEnabled: _stem.signer != null,
       streamId: '${name}_$requestedRunId',
     );
-    final persistedParams = runtimeMetadata.attachToParams(params);
+    final persistedParams = runtimeMetadata.attachToParams(
+      params,
+      parentRunId: parentRunId,
+    );
     final runId = await _store.createRun(
       runId: requestedRunId,
       workflow: name,
@@ -210,6 +213,7 @@ class WorkflowRuntime {
   }
 
   /// Starts a workflow from a typed [WorkflowRef].
+  @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
     WorkflowRef<TParams, TResult> definition,
     TParams params, {
@@ -227,6 +231,7 @@ class WorkflowRuntime {
   }
 
   /// Starts a workflow from a prebuilt [WorkflowStartCall].
+  @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   ) {
@@ -419,14 +424,14 @@ class WorkflowRuntime {
     return WorkflowRunView.fromState(state);
   }
 
-  /// Returns persisted step views for [runId].
-  Future<List<WorkflowStepView>> viewSteps(String runId) async {
+  /// Returns persisted checkpoint views for [runId].
+  Future<List<WorkflowCheckpointView>> viewCheckpoints(String runId) async {
     final state = await _store.get(runId);
     if (state == null) return const [];
-    final steps = await _store.listSteps(runId);
-    return steps
+    final checkpoints = await _store.listSteps(runId);
+    return checkpoints
         .map(
-          (entry) => WorkflowStepView.fromEntry(
+          (entry) => WorkflowCheckpointView.fromEntry(
             runId: runId,
             workflow: state.workflow,
             entry: entry,
@@ -435,12 +440,12 @@ class WorkflowRuntime {
         .toList(growable: false);
   }
 
-  /// Returns combined run+step drilldown view for [runId].
+  /// Returns combined run+checkpoint drilldown view for [runId].
   Future<WorkflowRunDetailView?> viewRunDetail(String runId) async {
     final run = await viewRun(runId);
     if (run == null) return null;
-    final steps = await viewSteps(runId);
-    return WorkflowRunDetailView(run: run, steps: steps);
+    final checkpoints = await viewCheckpoints(runId);
+    return WorkflowRunDetailView(run: run, checkpoints: checkpoints);
   }
 
   /// Returns uniform run views filtered by workflow/status.
@@ -647,6 +652,7 @@ class WorkflowRuntime {
             baseMeta: stepMeta,
             targetExecutionQueue: runState.executionQueue,
           ),
+          workflows: _ChildWorkflowCaller(runtime: this, parentRunId: runId),
         );
         resumeData = null;
         dynamic result;
@@ -882,14 +888,14 @@ class WorkflowRuntime {
         ),
       );
     }
-    final steps = await _store.listSteps(runId);
+    final checkpoints = await _store.listSteps(runId);
     final completedIterations = await _loadCompletedIterations(runId);
     Object? previousResult;
-    if (steps.isNotEmpty) {
+    if (checkpoints.isNotEmpty) {
       previousResult = definition
-          .stepByName(steps.last.baseName)
-          ?.decodeValue(steps.last.value) ??
-          steps.last.value;
+          .checkpointByName(checkpoints.last.baseName)
+          ?.decodeValue(checkpoints.last.value) ??
+          checkpoints.last.value;
     }
     final execution = _WorkflowScriptExecution(
       runtime: this,
@@ -898,7 +904,7 @@ class WorkflowRuntime {
       completedIterations: completedIterations,
       definition: definition,
       previousResult: previousResult,
-      initialStepIndex: steps.length,
+      initialStepIndex: checkpoints.length,
       suspensionData: runState.suspensionData,
       policy: runState.cancellationPolicy,
     );
@@ -1014,7 +1020,7 @@ class WorkflowRuntime {
     final entries = await _store.listSteps(runId);
     final counts = <String, int>{};
     for (final entry in entries) {
-      final base = _baseStepName(entry.name);
+      final base = _basePersistedNodeName(entry.name);
       final suffix = _parseIterationSuffix(entry.name);
       final nextIndex = suffix != null ? suffix + 1 : 1;
       final current = counts[base] ?? 0;
@@ -1078,8 +1084,8 @@ class WorkflowRuntime {
     return int.tryParse(suffix);
   }
 
-  /// Removes an iteration suffix from a versioned step name.
-  String _baseStepName(String name) {
+  /// Removes an iteration suffix from a persisted step/checkpoint name.
+  String _basePersistedNodeName(String name) {
     final hashIndex = name.indexOf('#');
     if (hashIndex == -1) return name;
     return name.substring(0, hashIndex);
@@ -1422,10 +1428,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   int? _suspensionIteration;
   Object? _resumePayload;
 
-  /// Whether a script step suspended the run.
+  /// Whether a script checkpoint suspended the run.
   bool get wasSuspended => _wasSuspended;
 
-  /// Last executed step name, if any.
+  /// Last executed checkpoint name, if any.
   String? get lastStepName => _lastStepName;
 
   @override
@@ -1443,7 +1449,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
   }) async {
-    /// Executes a script step with checkpoint replay and suspension handling.
+    /// Executes a script checkpoint with replay and suspension handling.
     _lastStepName = name;
     final policy = this.policy;
     if (policy != null && policy.maxRunDuration != null) {
@@ -1490,13 +1496,13 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       ),
     );
 
-    final declaredStep = definition.stepByName(name);
+    final declaredCheckpoint = definition.checkpointByName(name);
     final cached = await runtime._store.readStep<Object?>(
       runId,
       checkpointName,
     );
     if (cached != null) {
-      final decodedCached = declaredStep?.decodeValue(cached) ?? cached;
+      final decodedCached = declaredCheckpoint?.decodeValue(cached) ?? cached;
       _previousResult = decodedCached;
       await runtime._recordStepEvent(
         WorkflowStepEventType.completed,
@@ -1534,6 +1540,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         baseMeta: stepMeta,
         targetExecutionQueue: runState.executionQueue,
       ),
+      workflows: _ChildWorkflowCaller(runtime: runtime, parentRunId: runId),
     );
     T result;
     try {
@@ -1560,7 +1567,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       }
     }
 
-    final storedResult = declaredStep?.encodeValue(result) ?? result;
+    final storedResult = declaredCheckpoint?.encodeValue(result) ?? result;
     await runtime._store.saveStep(runId, checkpointName, storedResult);
     await runtime._extendLeases(taskContext, runId);
     await runtime._recordStepEvent(
@@ -1580,7 +1587,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return result;
   }
 
-  /// Computes the next iteration for an auto-versioned step.
+  /// Computes the next iteration for an auto-versioned checkpoint.
   int _nextIteration(String name) {
     final completed = _completedIterations[name] ?? 0;
     if (_suspensionStep == name && _suspensionIteration != null) {
@@ -1589,7 +1596,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return completed;
   }
 
-  /// Returns resume payload if it matches the current step/iteration.
+  /// Returns resume payload if it matches the current checkpoint/iteration.
   Object? _takeResumePayload(String stepName, int? iteration) {
     final matchesStep = _suspensionStep == stepName;
     if (!matchesStep) return null;
@@ -1722,10 +1729,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     _wasSuspended = true;
   }
 
-  /// Previously completed step result, if any.
+  /// Previously completed checkpoint result, if any.
   Object? get previousResult => _previousResult;
 
-  /// Builds a stable idempotency key for a step/iteration scope.
+  /// Builds a stable idempotency key for a checkpoint/iteration scope.
   String idempotencyKey(String stepName, int iteration, [String? scope]) {
     final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
     final effectiveScope = (scope == null || scope.isEmpty)
@@ -1735,7 +1742,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   }
 }
 
-/// Workflow script step context used by script-defined workflows.
+/// Workflow script checkpoint context used by script-defined workflows.
 class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   _WorkflowScriptStepContextImpl({
     required this.execution,
@@ -1744,6 +1751,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     required int iteration,
     Object? resumeData,
     this.enqueuer,
+    this.workflows,
   }) : _stepName = stepName,
        _stepIndex = stepIndex,
        _iteration = iteration,
@@ -1832,6 +1840,9 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   final TaskEnqueuer? enqueuer;
 
   @override
+  final WorkflowCaller? workflows;
+
+  @override
   String get workflow => execution.workflow;
 }
 
@@ -1895,6 +1906,42 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     return delegate.enqueueCall(
       mergedCall,
       enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+class _ChildWorkflowCaller implements WorkflowCaller {
+  const _ChildWorkflowCaller({
+    required this.runtime,
+    required this.parentRunId,
+  });
+
+  final WorkflowRuntime runtime;
+  final String parentRunId;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return runtime.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: this.parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return runtime.startWorkflowCall(
+      call.copyWith(parentRunId: parentRunId),
     );
   }
 }

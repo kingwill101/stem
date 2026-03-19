@@ -87,31 +87,31 @@ class WorkflowRunView {
   }
 }
 
-/// Uniform workflow checkpoint view for dashboard/CLI step drilldowns.
-class WorkflowStepView {
-  /// Creates an immutable step view.
-  const WorkflowStepView({
+/// Uniform workflow checkpoint view for dashboard/CLI drilldowns.
+class WorkflowCheckpointView {
+  /// Creates an immutable checkpoint view.
+  const WorkflowCheckpointView({
     required this.runId,
     required this.workflow,
-    required this.stepName,
-    required this.baseStepName,
+    required this.checkpointName,
+    required this.baseCheckpointName,
     this.iteration,
     required this.position,
     this.completedAt,
     this.value,
   });
 
-  /// Creates a step view from a [WorkflowStepEntry].
-  factory WorkflowStepView.fromEntry({
+  /// Creates a checkpoint view from a [WorkflowStepEntry].
+  factory WorkflowCheckpointView.fromEntry({
     required String runId,
     required String workflow,
     required WorkflowStepEntry entry,
   }) {
-    return WorkflowStepView(
+    return WorkflowCheckpointView(
       runId: runId,
       workflow: workflow,
-      stepName: entry.name,
-      baseStepName: entry.baseName,
+      checkpointName: entry.name,
+      baseCheckpointName: entry.baseName,
       iteration: entry.iteration,
       position: entry.position,
       completedAt: entry.completedAt,
@@ -126,10 +126,10 @@ class WorkflowStepView {
   final String workflow;
 
   /// Persisted checkpoint name.
-  final String stepName;
+  final String checkpointName;
 
   /// Base step name without iteration suffix.
-  final String baseStepName;
+  final String baseCheckpointName;
 
   /// Optional iteration suffix.
   final int? iteration;
@@ -148,8 +148,8 @@ class WorkflowStepView {
     return {
       'runId': runId,
       'workflow': workflow,
-      'stepName': stepName,
-      'baseStepName': baseStepName,
+      'checkpointName': checkpointName,
+      'baseCheckpointName': baseCheckpointName,
       if (iteration != null) 'iteration': iteration,
       'position': position,
       if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
@@ -158,20 +158,20 @@ class WorkflowStepView {
   }
 }
 
-/// Combined run + step drilldown view.
+/// Combined run + checkpoint drilldown view.
 class WorkflowRunDetailView {
   /// Creates an immutable run detail view.
-  const WorkflowRunDetailView({required this.run, required this.steps});
+  const WorkflowRunDetailView({required this.run, required this.checkpoints});
 
   /// Run summary view.
   final WorkflowRunView run;
 
-  /// Persisted step views.
-  final List<WorkflowStepView> steps;
+  /// Persisted checkpoint views.
+  final List<WorkflowCheckpointView> checkpoints;
 
   /// Serializes this detail view into JSON.
   Map<String, Object?> toJson() => {
     'run': run.toJson(),
-    'steps': steps.map((step) => step.toJson()).toList(),
+    'checkpoints': checkpoints.map((step) => step.toJson()).toList(),
   };
 }

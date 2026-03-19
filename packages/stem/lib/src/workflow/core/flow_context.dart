@@ -1,6 +1,7 @@
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -26,6 +27,7 @@ class FlowContext {
     WorkflowClock clock = const SystemWorkflowClock(),
     Object? resumeData,
     this.enqueuer,
+    this.workflows,
   }) : _clock = clock,
        _resumeData = resumeData;
 
@@ -52,6 +54,9 @@ class FlowContext {
 
   /// Optional enqueuer for scheduling tasks with workflow metadata.
   final TaskEnqueuer? enqueuer;
+
+  /// Optional typed workflow caller for spawning child workflows.
+  final WorkflowCaller? workflows;
   final WorkflowClock _clock;
 
   FlowStepControl? _control;

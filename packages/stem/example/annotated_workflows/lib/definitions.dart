@@ -140,6 +140,7 @@ class ContextCaptureResult {
     required this.idempotencyKey,
     required this.normalizedEmail,
     required this.subject,
+    required this.childRunId,
   });
 
   final String workflow;
@@ -150,6 +151,7 @@ class ContextCaptureResult {
   final String idempotencyKey;
   final String normalizedEmail;
   final String subject;
+  final String childRunId;
 
   Map<String, Object?> toJson() => {
     'workflow': workflow,
@@ -160,6 +162,7 @@ class ContextCaptureResult {
     'idempotencyKey': idempotencyKey,
     'normalizedEmail': normalizedEmail,
     'subject': subject,
+    'childRunId': childRunId,
   };
 
   factory ContextCaptureResult.fromJson(Map<String, Object?> json) {
@@ -172,6 +175,7 @@ class ContextCaptureResult {
       idempotencyKey: json['idempotencyKey'] as String,
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
+      childRunId: json['childRunId'] as String,
     );
   }
 }
@@ -179,12 +183,17 @@ class ContextCaptureResult {
 @WorkflowDefn(name: 'annotated.flow')
 class AnnotatedFlowWorkflow {
   @WorkflowStep()
-  Future<Map<String, Object?>?> start(FlowContext ctx) async {
-    final resume = ctx.takeResumeData();
-    if (resume == null) {
-      ctx.sleep(const Duration(milliseconds: 50));
+  Future<Map<String, Object?>?> start({FlowContext? context}) async {
+    final ctx = context!;
+    if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
     }
+    final childRunId = await ctx.workflows!.startWorkflowRef(
+      StemWorkflowDefinitions.script,
+      (
+        request: const WelcomeRequest(email: 'flow-child@example.com'),
+      ),
+    );
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -192,6 +201,7 @@ class AnnotatedFlowWorkflow {
       'stepIndex': ctx.stepIndex,
       'iteration': ctx.iteration,
       'idempotencyKey': ctx.idempotencyKey(),
+      'childRunId': childRunId,
     };
   }
 }
@@ -243,24 +253,29 @@ class AnnotatedScriptWorkflow {
 
 @WorkflowDefn(name: 'annotated.context_script', kind: WorkflowKind.script)
 class AnnotatedContextScriptWorkflow {
-  @WorkflowRun()
   Future<ContextCaptureResult> run(
-    WorkflowScriptContext script,
     WelcomeRequest request,
+    {WorkflowScriptContext? context}
   ) async {
+    final script = context!;
     return script.step<ContextCaptureResult>(
       'enter-context-step',
-      (ctx) => captureContext(ctx, request),
+      (ctx) => captureContext(request, context: ctx),
     );
   }
 
   @WorkflowStep(name: 'capture-context')
   Future<ContextCaptureResult> captureContext(
-    WorkflowScriptStepContext ctx,
     WelcomeRequest request,
+    {WorkflowScriptStepContext? context}
   ) async {
+    final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
+    final childRunId = await ctx.workflows!.startWorkflowRef(
+      StemWorkflowDefinitions.script,
+      (request: WelcomeRequest(email: normalizedEmail)),
+    );
     return ContextCaptureResult(
       workflow: ctx.workflow,
       runId: ctx.runId,
@@ -270,6 +285,7 @@ class AnnotatedContextScriptWorkflow {
       idempotencyKey: ctx.idempotencyKey('welcome'),
       normalizedEmail: normalizedEmail,
       subject: subject,
+      childRunId: childRunId,
     );
   }
 
@@ -286,17 +302,20 @@ class AnnotatedContextScriptWorkflow {
 
 @TaskDefn(name: 'send_email', options: TaskOptions(maxRetries: 1))
 Future<void> sendEmail(
-  TaskInvocationContext ctx,
   Map<String, Object?> args,
+  {TaskInvocationContext? context}
 ) async {
+  final ctx = context!;
+  ctx.heartbeat();
   // No-op task for example purposes.
 }
 
 @TaskDefn(name: 'send_email_typed', options: TaskOptions(maxRetries: 1))
 Future<EmailDeliveryReceipt> sendEmailTyped(
-  TaskInvocationContext ctx,
   EmailDispatch dispatch,
+  {TaskInvocationContext? context}
 ) async {
+  final ctx = context!;
   ctx.heartbeat();
   await ctx.progress(
     100,

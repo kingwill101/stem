@@ -98,7 +98,7 @@ void main() {
       );
     });
 
-    test('show --json displays run details and steps', () async {
+    test('show --json displays run details and checkpoints', () async {
       await runStemCli(
         ['wf', 'start', 'demo.workflow'],
         contextBuilder: _buildCliContext,
@@ -118,8 +118,8 @@ void main() {
 
       expect(code, equals(0), reason: err.toString());
       final payload = jsonDecode(out.toString()) as Map<String, dynamic>;
-      expect(payload['run']['id'], run.id);
-      expect(payload['steps'], isList);
+      expect(payload['run']['runId'], run.id);
+      expect(payload['checkpoints'], isList);
     });
 
     test('start accepts cancellation policy flags', () async {

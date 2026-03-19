@@ -92,6 +92,10 @@ void main() {
         state.workflowParams.containsKey(workflowRuntimeMetadataParamKey),
         isFalse,
       );
+      expect(
+        state.workflowParams.containsKey(workflowParentRunIdParamKey),
+        isFalse,
+      );
       expect(introspection.runtimeEvents, isNotEmpty);
       expect(
         introspection.runtimeEvents.last.type,
@@ -100,7 +104,126 @@ void main() {
     },
   );
 
-  test('viewRunDetail exposes uniform run and step views', () async {
+  test('startWorkflow persists parent run id without exposing it to handlers', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'parent.runtime.workflow',
+        build: (flow) {
+          flow.step('inspect', (context) async => context.params);
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow(
+      'parent.runtime.workflow',
+      parentRunId: 'wf-parent',
+      params: const {'tenant': 'acme'},
+    );
+
+    final state = await store.get(runId);
+    expect(state, isNotNull);
+    expect(state!.parentRunId, 'wf-parent');
+    expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+    expect(
+      state.params[workflowParentRunIdParamKey],
+      equals('wf-parent'),
+    );
+  });
+
+  test('flow context workflows starts typed child workflows', () async {
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.runtime.flow',
+      encodeParams: (params) => params,
+    );
+
+    runtime
+      ..registerWorkflow(
+        Flow(
+          name: 'child.runtime.flow',
+          build: (flow) {
+            flow.step('hello', (context) async {
+              final value = context.params['value'] as String? ?? 'child';
+              return 'ok:$value';
+            });
+          },
+        ).definition,
+      )
+      ..registerWorkflow(
+        Flow(
+          name: 'parent.runtime.flow',
+          build: (flow) {
+            flow.step('spawn', (context) async {
+              return context.workflows!.startWorkflowRef(
+                childRef,
+                const {'value': 'spawned'},
+              );
+            });
+          },
+        ).definition,
+      );
+
+    final parentRunId = await runtime.startWorkflow('parent.runtime.flow');
+    await runtime.executeRun(parentRunId);
+
+    final parentState = await store.get(parentRunId);
+    final childRunId = parentState!.result as String;
+    final childState = await store.get(childRunId);
+
+    expect(childState, isNotNull);
+    expect(childState!.workflow, 'child.runtime.flow');
+    expect(childState.parentRunId, parentRunId);
+    expect(childState.workflowParams, equals(const {'value': 'spawned'}));
+  });
+
+  test('script checkpoint workflows starts typed child workflows', () async {
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.runtime.script',
+      encodeParams: (params) => params,
+    );
+
+    runtime
+      ..registerWorkflow(
+        Flow(
+          name: 'child.runtime.script',
+          build: (flow) {
+            flow.step('hello', (context) async {
+              final value = context.params['value'] as String? ?? 'child';
+              return 'ok:$value';
+            });
+          },
+        ).definition,
+      )
+      ..registerWorkflow(
+        WorkflowScript<String>(
+          name: 'parent.runtime.script',
+          checkpoints: [
+            WorkflowCheckpoint(name: 'spawn'),
+          ],
+          run: (script) async {
+            return script.step<String>('spawn', (context) async {
+              return context.workflows!.startWorkflowRef(
+                childRef,
+                const {'value': 'script-child'},
+              );
+            });
+          },
+        ).definition,
+      );
+
+    final parentRunId = await runtime.startWorkflow('parent.runtime.script');
+    await runtime.executeRun(parentRunId);
+
+    final parentState = await store.get(parentRunId);
+    final childRunId = parentState!.result as String;
+    final childState = await store.get(childRunId);
+
+    expect(childState, isNotNull);
+    expect(childState!.workflow, 'child.runtime.script');
+    expect(childState.parentRunId, parentRunId);
+    expect(childState.workflowParams, equals(const {'value': 'script-child'}));
+  });
+
+  test('viewRunDetail exposes uniform run and checkpoint views', () async {
     runtime.registerWorkflow(
       Flow(
         name: 'views.workflow',
@@ -117,9 +240,9 @@ void main() {
     expect(detail, isNotNull);
     expect(detail!.run.runId, equals(runId));
     expect(detail.run.workflow, equals('views.workflow'));
-    expect(detail.steps, hasLength(1));
-    expect(detail.steps.first.baseStepName, equals('only'));
-    expect(detail.steps.first.stepName, equals('only'));
+    expect(detail.checkpoints, hasLength(1));
+    expect(detail.checkpoints.first.baseCheckpointName, equals('only'));
+    expect(detail.checkpoints.first.checkpointName, equals('only'));
   });
 
   test('workflowManifest exposes typed manifest entries', () {

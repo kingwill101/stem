@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
@@ -16,8 +17,9 @@ abstract class WorkflowScriptContext {
   /// Parameters supplied when the workflow was started.
   Map<String, Object?> get params;
 
-  /// Invokes or replays a workflow step. The provided [handler] persists its
-  /// return value and the resolved value is replayed on subsequent runs.
+  /// Invokes or replays a workflow checkpoint. The provided [handler]
+  /// persists its return value and the resolved value is replayed on
+  /// subsequent runs.
   Future<T> step<T>(
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
@@ -25,8 +27,8 @@ abstract class WorkflowScriptContext {
   });
 }
 
-/// Context provided to each script step invocation. Mirrors [FlowContext] but
-/// tailored for the facade helpers.
+/// Context provided to each script checkpoint invocation. Mirrors
+/// [FlowContext] but tailored for the facade helpers.
 abstract class WorkflowScriptStepContext {
   /// Name of the workflow currently executing.
   String get workflow;
@@ -34,23 +36,23 @@ abstract class WorkflowScriptStepContext {
   /// Identifier for the workflow run.
   String get runId;
 
-  /// Name of the current step.
+  /// Name of the current checkpoint.
   String get stepName;
 
-  /// Zero-based step index in the workflow definition.
+  /// Zero-based checkpoint index in the workflow definition.
   int get stepIndex;
 
-  /// Iteration count for looped steps.
+  /// Iteration count for looped checkpoints.
   int get iteration;
 
   /// Parameters provided when the workflow started.
   Map<String, Object?> get params;
 
-  /// Result of the previous step, if any.
+  /// Result of the previous checkpoint, if any.
   Object? get previousResult;
 
-  /// Schedules a wake-up after [duration]. The workflow suspends once the step
-  /// handler returns.
+  /// Schedules a wake-up after [duration]. The workflow suspends once the
+  /// checkpoint handler returns.
   Future<void> sleep(Duration duration, {Map<String, Object?>? data});
 
   /// Suspends the workflow until the given [topic] is emitted.
@@ -61,12 +63,15 @@ abstract class WorkflowScriptStepContext {
   });
 
   /// Returns and clears the resume payload provided by the runtime when the
-  /// step resumes after a suspension.
+  /// checkpoint resumes after a suspension.
   Object? takeResumeData();
 
-  /// Returns a stable idempotency key derived from workflow/run/step.
+  /// Returns a stable idempotency key derived from workflow/run/checkpoint.
   String idempotencyKey([String? scope]);
 
   /// Optional enqueuer for scheduling tasks with workflow metadata.
   TaskEnqueuer? get enqueuer;
+
+  /// Optional typed workflow caller for spawning child workflows.
+  WorkflowCaller? get workflows;
 }

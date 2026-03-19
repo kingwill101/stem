@@ -100,7 +100,7 @@ class _SequenceDashboardService implements DashboardDataSource {
       null;
 
   @override
-  Future<List<DashboardWorkflowStepSnapshot>> fetchWorkflowSteps(
+  Future<List<DashboardWorkflowCheckpointSnapshot>> fetchWorkflowCheckpoints(
     String runId,
   ) async => const [];
 

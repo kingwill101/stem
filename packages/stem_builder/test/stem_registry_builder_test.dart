@@ -37,6 +37,24 @@ class FlowStep {
   final List<String> taskNames;
   final Map<String, Object?>? metadata;
 }
+class WorkflowCheckpoint {
+  WorkflowCheckpoint({
+    required this.name,
+    this.autoVersion = false,
+    this.valueCodec,
+    this.title,
+    this.kind = WorkflowStepKind.task,
+    this.taskNames = const [],
+    this.metadata,
+  });
+  final String name;
+  final bool autoVersion;
+  final PayloadCodec<Object?>? valueCodec;
+  final String? title;
+  final WorkflowStepKind kind;
+  final List<String> taskNames;
+  final Map<String, Object?>? metadata;
+}
 class WorkflowScriptContext {
   Future<T> step<T>(
     String name,
@@ -107,8 +125,7 @@ class WorkflowScript<T> {
   WorkflowScript({
     required String name,
     required dynamic run,
-    List<FlowStep> steps = const [],
-    List<FlowStep> checkpoints = const [],
+    List<WorkflowCheckpoint> checkpoints = const [],
     PayloadCodec<T>? resultCodec,
   });
 }
@@ -572,6 +589,155 @@ class SignupWorkflow {
       );
     },
   );
+
+  test(
+    'supports optional named WorkflowScriptContext injection',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class SignupWorkflow {
+  Future<void> run(String email, {WorkflowScriptContext? context}) async {
+    await sendWelcomeEmail(email);
+  }
+
+  @WorkflowStep()
+  Future<void> sendWelcomeEmail(String email) async {}
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains(
+                ').run(('
+                '_stemRequireArg(script.params, "email") as String), '
+                'context: script)',
+              ),
+            ]),
+          ),
+        },
+      );
+    },
+  );
+
+  test(
+    'supports optional named WorkflowScriptStepContext injection',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class SignupWorkflow {
+  Future<String> run(String email) async => sendWelcomeEmail(email);
+
+  @WorkflowStep()
+  Future<String> sendWelcomeEmail(
+    String email, {
+    WorkflowScriptStepContext? context,
+  }) async => email;
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains(
+                '(context) => super.sendWelcomeEmail(email, context: context)',
+              ),
+              contains('WorkflowScriptStepContext? context'),
+            ]),
+          ),
+        },
+      );
+    },
+  );
+
+  test('supports optional named FlowContext injection', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(name: 'hello.flow')
+class HelloWorkflow {
+  @WorkflowStep(name: 'step-1')
+  Future<String> stepOne({FlowContext? context}) async => 'ok';
+}
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          contains('(ctx) => impl.stepOne(context: ctx)'),
+        ),
+      },
+    );
+  });
+
+  test('supports optional named TaskInvocationContext injection', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@TaskDefn(name: 'typed.task')
+Future<void> typedTask(
+  String email, {
+  TaskInvocationContext? context,
+}) async {}
+''';
+
+    await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(
+          AssetId('stem', 'lib/stem.dart'),
+          stubStem,
+        ),
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
+            contains('typedTask((_stemRequireArg(args, "email") as String),'),
+            contains('context: context'),
+          ]),
+        ),
+      },
+    );
+  });
 
   test('rejects non-serializable @workflow.run parameter types', () async {
     const input = '''

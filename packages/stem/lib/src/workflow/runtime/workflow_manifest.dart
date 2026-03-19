@@ -3,15 +3,6 @@ import 'dart:convert';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 
-/// Distinguishes between declared flow steps and script checkpoints.
-enum WorkflowManifestStepRole {
-  /// Step that belongs to a declarative flow execution plan.
-  flowStep,
-
-  /// Checkpoint declared by a script workflow for tooling/introspection.
-  scriptCheckpoint,
-}
-
 /// Immutable manifest entry describing a workflow definition.
 class WorkflowManifestEntry {
   /// Creates a workflow manifest entry.
@@ -23,6 +14,7 @@ class WorkflowManifestEntry {
     this.description,
     this.metadata,
     this.steps = const [],
+    this.checkpoints = const [],
   });
 
   /// Stable workflow identifier.
@@ -43,21 +35,18 @@ class WorkflowManifestEntry {
   /// Optional workflow metadata.
   final Map<String, Object?>? metadata;
 
-  /// Declared flow steps or script checkpoints.
-  final List<WorkflowManifestStep> steps;
+  /// Declared flow steps.
+  final List<WorkflowManifestFlowStep> steps;
+
+  /// Declared script checkpoints.
+  final List<WorkflowManifestCheckpoint> checkpoints;
 
   /// Human-friendly label for the declared nodes on this workflow.
-  String get stepCollectionLabel =>
+  String get declaredNodeLabel =>
       kind == WorkflowDefinitionKind.script ? 'checkpoints' : 'steps';
-
-  /// Alias for [steps] when treating script nodes as checkpoints.
-  List<WorkflowManifestStep> get checkpoints => steps;
 
   /// Serializes this entry to a JSON-compatible map.
   Map<String, Object?> toJson() {
-    final serializedSteps = steps
-        .map((step) => step.toJson())
-        .toList(growable: false);
     return {
       'id': id,
       'name': name,
@@ -65,21 +54,24 @@ class WorkflowManifestEntry {
       if (version != null) 'version': version,
       if (description != null) 'description': description,
       if (metadata != null) 'metadata': metadata,
-      'stepCollectionLabel': stepCollectionLabel,
-      'steps': serializedSteps,
-      if (kind == WorkflowDefinitionKind.script) 'checkpoints': serializedSteps,
+      'declaredNodeLabel': declaredNodeLabel,
+      if (steps.isNotEmpty)
+        'steps': steps.map((step) => step.toJson()).toList(growable: false),
+      if (checkpoints.isNotEmpty)
+        'checkpoints': checkpoints
+            .map((checkpoint) => checkpoint.toJson())
+            .toList(growable: false),
     };
   }
 }
 
-/// Immutable manifest entry describing a workflow step or script checkpoint.
-class WorkflowManifestStep {
-  /// Creates a workflow step manifest entry.
-  const WorkflowManifestStep({
+/// Immutable manifest entry describing a declared flow step.
+class WorkflowManifestFlowStep {
+  /// Creates a flow step manifest entry.
+  const WorkflowManifestFlowStep({
     required this.id,
     required this.name,
     required this.position,
-    required this.role,
     required this.kind,
     required this.autoVersion,
     this.title,
@@ -95,9 +87,6 @@ class WorkflowManifestStep {
 
   /// Zero-based position in the workflow.
   final int position;
-
-  /// Whether this node is part of a flow plan or a script checkpoint list.
-  final WorkflowManifestStepRole role;
 
   /// Step kind.
   final WorkflowStepKind kind;
@@ -120,7 +109,59 @@ class WorkflowManifestStep {
       'id': id,
       'name': name,
       'position': position,
-      'role': role.name,
+      'kind': kind.name,
+      'autoVersion': autoVersion,
+      if (title != null) 'title': title,
+      if (taskNames.isNotEmpty) 'taskNames': taskNames,
+      if (metadata != null) 'metadata': metadata,
+    };
+  }
+}
+
+/// Immutable manifest entry describing a declared script checkpoint.
+class WorkflowManifestCheckpoint {
+  /// Creates a script checkpoint manifest entry.
+  const WorkflowManifestCheckpoint({
+    required this.id,
+    required this.name,
+    required this.position,
+    required this.kind,
+    required this.autoVersion,
+    this.title,
+    this.taskNames = const [],
+    this.metadata,
+  });
+
+  /// Stable checkpoint identifier.
+  final String id;
+
+  /// Checkpoint name.
+  final String name;
+
+  /// Zero-based position in the script declaration list.
+  final int position;
+
+  /// Checkpoint kind.
+  final WorkflowStepKind kind;
+
+  /// Whether this checkpoint auto-versions replays.
+  final bool autoVersion;
+
+  /// Optional title.
+  final String? title;
+
+  /// Associated task names.
+  final List<String> taskNames;
+
+  /// Optional checkpoint metadata.
+  final Map<String, Object?>? metadata;
+
+  /// Serializes this entry to a JSON-compatible map.
+  Map<String, Object?> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'position': position,
       'kind': kind.name,
       'autoVersion': autoVersion,
       if (title != null) 'title': title,
@@ -135,24 +176,40 @@ extension WorkflowManifestDefinition on WorkflowDefinition {
   /// Builds a manifest entry for this definition.
   WorkflowManifestEntry toManifestEntry() {
     final workflowId = stableId;
-    final stepEntries = <WorkflowManifestStep>[];
-    for (var index = 0; index < steps.length; index += 1) {
-      final step = steps[index];
-      stepEntries.add(
-        WorkflowManifestStep(
-          id: _stableHexDigest('$workflowId:${step.name}:$index'),
-          name: step.name,
-          position: index,
-          role: isScript
-              ? WorkflowManifestStepRole.scriptCheckpoint
-              : WorkflowManifestStepRole.flowStep,
-          kind: step.kind,
-          autoVersion: step.autoVersion,
-          title: step.title,
-          taskNames: step.taskNames,
-          metadata: step.metadata,
-        ),
-      );
+    final stepEntries = <WorkflowManifestFlowStep>[];
+    final checkpointEntries = <WorkflowManifestCheckpoint>[];
+    if (isScript) {
+      for (var index = 0; index < checkpoints.length; index += 1) {
+        final checkpoint = checkpoints[index];
+        checkpointEntries.add(
+          WorkflowManifestCheckpoint(
+            id: _stableHexDigest('$workflowId:${checkpoint.name}:$index'),
+            name: checkpoint.name,
+            position: index,
+            kind: checkpoint.kind,
+            autoVersion: checkpoint.autoVersion,
+            title: checkpoint.title,
+            taskNames: checkpoint.taskNames,
+            metadata: checkpoint.metadata,
+          ),
+        );
+      }
+    } else {
+      for (var index = 0; index < steps.length; index += 1) {
+        final step = steps[index];
+        stepEntries.add(
+          WorkflowManifestFlowStep(
+            id: _stableHexDigest('$workflowId:${step.name}:$index'),
+            name: step.name,
+            position: index,
+            kind: step.kind,
+            autoVersion: step.autoVersion,
+            title: step.title,
+            taskNames: step.taskNames,
+            metadata: step.metadata,
+          ),
+        );
+      }
     }
     return WorkflowManifestEntry(
       id: workflowId,
@@ -164,6 +221,7 @@ extension WorkflowManifestDefinition on WorkflowDefinition {
       description: description,
       metadata: metadata,
       steps: stepEntries,
+      checkpoints: checkpointEntries,
     );
   }
 }

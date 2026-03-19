@@ -27,6 +27,40 @@ void main() {
       }
     });
 
+    test(
+      'inMemory registers module tasks and infers queued subscriptions',
+      () async {
+        final handler = FunctionTaskHandler<String>(
+          name: 'test.module.queue',
+          options: const TaskOptions(queue: 'priority'),
+          entrypoint: (context, args) async => 'module-ok',
+          runInIsolate: false,
+        );
+
+        final app = await StemApp.inMemory(
+          module: StemModule(tasks: [handler]),
+        );
+        try {
+          expect(app.registry.resolve('test.module.queue'), same(handler));
+          expect(app.worker.subscription.queues, ['priority']);
+
+          await app.start();
+
+          final taskId = await app.stem.enqueue(
+            'test.module.queue',
+            enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+          );
+          final completed = await app.stem.waitForTask<String>(
+            taskId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(completed?.value, 'module-ok');
+        } finally {
+          await app.shutdown();
+        }
+      },
+    );
+
     test('inMemory applies worker config overrides', () async {
       final handler = FunctionTaskHandler<void>(
         name: 'test.worker-config',
@@ -464,6 +498,61 @@ void main() {
       }
     });
 
+    test(
+      'inMemory infers worker subscription from module task queues',
+      () async {
+        final helperTask = FunctionTaskHandler<String>(
+          name: 'workflow.module.queue-helper',
+          entrypoint: (context, args) async => 'queued-ok',
+          runInIsolate: false,
+        );
+        final workflowApp = await StemWorkflowApp.inMemory(
+          module: StemModule(tasks: [helperTask]),
+        );
+        try {
+          expect(
+            workflowApp.app.worker.subscription.queues,
+            unorderedEquals(['workflow', 'default']),
+          );
+
+          await workflowApp.start();
+          final taskId = await workflowApp.app.stem.enqueue(
+            'workflow.module.queue-helper',
+          );
+          final result = await workflowApp.app.stem.waitForTask<String>(
+            taskId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(result?.value, 'queued-ok');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'explicit workflow subscription overrides inferred module queues',
+      () async {
+        final helperTask = FunctionTaskHandler<String>(
+          name: 'workflow.module.explicit-subscription',
+          entrypoint: (context, args) async => 'ignored',
+          runInIsolate: false,
+        );
+        final workflowApp = await StemWorkflowApp.inMemory(
+          module: StemModule(tasks: [helperTask]),
+          workerConfig: StemWorkerConfig(
+            queue: 'workflow',
+            subscription: RoutingSubscription.singleQueue('workflow'),
+          ),
+        );
+        try {
+          expect(workflowApp.app.worker.subscription.queues, ['workflow']);
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('workflow refs start and decode runs through app helpers', () async {
       final moduleFlow = Flow<String>(
         name: 'workflow.ref.flow',
@@ -474,17 +563,18 @@ void main() {
           });
         },
       );
-      final workflowRef =
-          WorkflowRef<Map<String, Object?>, String>(
-            name: 'workflow.ref.flow',
-            encodeParams: (params) => params,
-          );
+      final workflowRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'workflow.ref.flow',
+        encodeParams: (params) => params,
+      );
 
       final workflowApp = await StemWorkflowApp.inMemory(flows: [moduleFlow]);
       try {
-        final runId = await workflowRef.call(
-          const {'name': 'stem'},
-        ).startWithApp(workflowApp);
+        final runId = await workflowRef
+            .call(
+              const {'name': 'stem'},
+            )
+            .startWithApp(workflowApp);
         final result = await workflowRef.waitFor(
           workflowApp,
           runId,
@@ -520,18 +610,19 @@ void main() {
               );
           },
         );
-        final workflowRef =
-            WorkflowRef<Map<String, Object?>, _DemoPayload>(
-              name: 'workflow.codec.flow',
-              encodeParams: (params) => params,
-              decodeResult: _demoPayloadCodec.decode,
-            );
+        final workflowRef = WorkflowRef<Map<String, Object?>, _DemoPayload>(
+          name: 'workflow.codec.flow',
+          encodeParams: (params) => params,
+          decodeResult: _demoPayloadCodec.decode,
+        );
 
         final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
         try {
-          final runId = await workflowRef.call(const {}).startWithApp(
-            workflowApp,
-          );
+          final runId = await workflowRef
+              .call(const {})
+              .startWithApp(
+                workflowApp,
+              );
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,
@@ -562,20 +653,19 @@ void main() {
     );
 
     test(
-      'script workflow codecs persist encoded checkpoints and decode typed results',
+      'script workflow codecs persist encoded checkpoints '
+      'and decode typed results',
       () async {
         final script = WorkflowScript<_DemoPayload>(
           name: 'workflow.codec.script',
           resultCodec: _demoPayloadCodec,
           checkpoints: [
-            FlowStep.typed<_DemoPayload>(
+            WorkflowCheckpoint.typed<_DemoPayload>(
               name: 'build',
-              handler: (_) async => null,
               valueCodec: _demoPayloadCodec,
             ),
-            FlowStep.typed<_DemoPayload>(
+            WorkflowCheckpoint.typed<_DemoPayload>(
               name: 'finish',
-              handler: (_) async => null,
               valueCodec: _demoPayloadCodec,
             ),
           ],
@@ -590,18 +680,19 @@ void main() {
             );
           },
         );
-        final workflowRef =
-            WorkflowRef<Map<String, Object?>, _DemoPayload>(
-              name: 'workflow.codec.script',
-              encodeParams: (params) => params,
-              decodeResult: _demoPayloadCodec.decode,
-            );
+        final workflowRef = WorkflowRef<Map<String, Object?>, _DemoPayload>(
+          name: 'workflow.codec.script',
+          encodeParams: (params) => params,
+          decodeResult: _demoPayloadCodec.decode,
+        );
 
         final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
         try {
-          final runId = await workflowRef.call(const {}).startWithApp(
-            workflowApp,
-          );
+          final runId = await workflowRef
+              .call(const {})
+              .startWithApp(
+                workflowApp,
+              );
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,

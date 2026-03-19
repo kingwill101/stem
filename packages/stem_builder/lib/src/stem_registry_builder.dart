@@ -200,8 +200,10 @@ class StemRegistryBuilder implements Builder {
             _WorkflowStepInfo(
               name: stepName,
               method: method.displayName,
-              acceptsFlowContext: false,
-              acceptsScriptStepContext: stepBinding.acceptsContext,
+              flowContextParameterName: null,
+              flowContextIsNamed: false,
+              scriptStepContextParameterName: stepBinding.contextParameterName,
+              scriptStepContextIsNamed: stepBinding.contextIsNamed,
               valueParameters: stepBinding.valueParameters,
               returnTypeCode: stepBinding.returnTypeCode,
               stepValueTypeCode: stepBinding.stepValueTypeCode,
@@ -225,7 +227,7 @@ class StemRegistryBuilder implements Builder {
           classElement,
           runMethod,
           scriptSteps,
-          runAcceptsScriptContext: runBinding.acceptsContext,
+          runAcceptsScriptContext: runBinding.contextParameterName != null,
         );
         workflows.add(
           _WorkflowInfo.script(
@@ -234,7 +236,8 @@ class StemRegistryBuilder implements Builder {
             className: classElement.displayName,
             steps: scriptSteps,
             runMethod: runMethod.displayName,
-            runAcceptsScriptContext: runBinding.acceptsContext,
+            runContextParameterName: runBinding.contextParameterName,
+            runContextIsNamed: runBinding.contextIsNamed,
             runValueParameters: runBinding.valueParameters,
             resultTypeCode: runBinding.resultTypeCode,
             resultPayloadCodecTypeCode: runBinding.resultPayloadCodecTypeCode,
@@ -288,8 +291,10 @@ class StemRegistryBuilder implements Builder {
           _WorkflowStepInfo(
             name: stepName,
             method: method.displayName,
-            acceptsFlowContext: stepBinding.acceptsContext,
-            acceptsScriptStepContext: false,
+            flowContextParameterName: stepBinding.contextParameterName,
+            flowContextIsNamed: stepBinding.contextIsNamed,
+            scriptStepContextParameterName: null,
+            scriptStepContextIsNamed: false,
             valueParameters: stepBinding.valueParameters,
             returnTypeCode: null,
             stepValueTypeCode: stepBinding.stepValueTypeCode,
@@ -368,10 +373,12 @@ class StemRegistryBuilder implements Builder {
           name: taskName,
           importAlias: '',
           function: function.displayName,
-          adapterName: taskBinding.usesLegacyMapArgs
+          adapterName:
+              taskBinding.usesLegacyMapArgs && !taskBinding.contextIsNamed
               ? null
               : '_stemTaskAdapter${taskAdapterIndex++}',
-          acceptsTaskContext: taskBinding.acceptsContext,
+          taskContextParameterName: taskBinding.contextParameterName,
+          taskContextIsNamed: taskBinding.contextIsNamed,
           valueParameters: taskBinding.valueParameters,
           usesLegacyMapArgs: taskBinding.usesLegacyMapArgs,
           resultTypeCode: taskBinding.resultTypeCode,
@@ -432,16 +439,19 @@ class StemRegistryBuilder implements Builder {
     }
 
     final parameters = method.formalParameters;
-    var acceptsContext = false;
-    var startIndex = 0;
-    if (parameters.isNotEmpty &&
-        scriptContextChecker.isAssignableFromType(parameters.first.type)) {
-      acceptsContext = true;
-      startIndex = 1;
-    }
+    final contextParameter = _extractInjectedContextParameter(
+      parameters,
+      scriptContextChecker,
+      method,
+      annotationLabel: '@workflow.run method',
+      contextTypeLabel: 'WorkflowScriptContext',
+    );
 
     final valueParameters = <_ValueParameterInfo>[];
-    for (final parameter in parameters.skip(startIndex)) {
+    for (final parameter in parameters) {
+      if (identical(parameter, contextParameter?.parameter)) {
+        continue;
+      }
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
           '@workflow.run method ${method.displayName} only supports required positional serializable or codec-backed parameters after WorkflowScriptContext.',
@@ -459,7 +469,8 @@ class StemRegistryBuilder implements Builder {
     }
 
     return _RunBinding(
-      acceptsContext: acceptsContext,
+      contextParameterName: contextParameter?.name,
+      contextIsNamed: contextParameter?.isNamed ?? false,
       valueParameters: valueParameters,
       resultTypeCode: _workflowResultTypeCode(method.returnType),
       resultPayloadCodecTypeCode: _workflowResultPayloadCodecTypeCode(
@@ -479,16 +490,19 @@ class StemRegistryBuilder implements Builder {
       );
     }
     final parameters = method.formalParameters;
-    var acceptsContext = false;
-    var startIndex = 0;
-    if (parameters.isNotEmpty &&
-        flowContextChecker.isAssignableFromType(parameters.first.type)) {
-      acceptsContext = true;
-      startIndex = 1;
-    }
+    final contextParameter = _extractInjectedContextParameter(
+      parameters,
+      flowContextChecker,
+      method,
+      annotationLabel: '@workflow.step method',
+      contextTypeLabel: 'FlowContext',
+    );
 
     final valueParameters = <_ValueParameterInfo>[];
-    for (final parameter in parameters.skip(startIndex)) {
+    for (final parameter in parameters) {
+      if (identical(parameter, contextParameter?.parameter)) {
+        continue;
+      }
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
           '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after FlowContext.',
@@ -506,7 +520,8 @@ class StemRegistryBuilder implements Builder {
     }
 
     return _FlowStepBinding(
-      acceptsContext: acceptsContext,
+      contextParameterName: contextParameter?.name,
+      contextIsNamed: contextParameter?.isNamed ?? false,
       valueParameters: valueParameters,
       stepValueTypeCode: _workflowResultTypeCode(method.returnType),
       stepValuePayloadCodecTypeCode: _workflowResultPayloadCodecTypeCode(
@@ -537,16 +552,19 @@ class StemRegistryBuilder implements Builder {
     final stepValueType = _extractStepValueType(returnType);
 
     final parameters = method.formalParameters;
-    var acceptsContext = false;
-    var startIndex = 0;
-    if (parameters.isNotEmpty &&
-        scriptStepContextChecker.isAssignableFromType(parameters.first.type)) {
-      acceptsContext = true;
-      startIndex = 1;
-    }
+    final contextParameter = _extractInjectedContextParameter(
+      parameters,
+      scriptStepContextChecker,
+      method,
+      annotationLabel: '@workflow.step method',
+      contextTypeLabel: 'WorkflowScriptStepContext',
+    );
 
     final valueParameters = <_ValueParameterInfo>[];
-    for (final parameter in parameters.skip(startIndex)) {
+    for (final parameter in parameters) {
+      if (identical(parameter, contextParameter?.parameter)) {
+        continue;
+      }
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
           '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after WorkflowScriptStepContext.',
@@ -564,7 +582,8 @@ class StemRegistryBuilder implements Builder {
     }
 
     return _ScriptStepBinding(
-      acceptsContext: acceptsContext,
+      contextParameterName: contextParameter?.name,
+      contextIsNamed: contextParameter?.isNamed ?? false,
       valueParameters: valueParameters,
       returnTypeCode: _typeCode(returnType),
       stepValueTypeCode: _typeCode(stepValueType),
@@ -578,24 +597,27 @@ class StemRegistryBuilder implements Builder {
     TypeChecker mapChecker,
   ) {
     final parameters = function.formalParameters;
-    var acceptsContext = false;
-    var startIndex = 0;
-    if (parameters.isNotEmpty &&
-        taskContextChecker.isAssignableFromType(parameters.first.type)) {
-      acceptsContext = true;
-      startIndex = 1;
-    }
+    final contextParameter = _extractInjectedContextParameter(
+      parameters,
+      taskContextChecker,
+      function,
+      annotationLabel: '@TaskDefn function',
+      contextTypeLabel: 'TaskInvocationContext',
+    );
 
-    final remaining = parameters.skip(startIndex).toList(growable: false);
+    final remaining = parameters
+        .where((parameter) => !identical(parameter, contextParameter?.parameter))
+        .toList(growable: false);
     final legacyMapSignature =
-        acceptsContext &&
+        contextParameter != null &&
         remaining.length == 1 &&
         mapChecker.isAssignableFromType(remaining.first.type) &&
         _isStringObjectMap(remaining.first.type) &&
         remaining.first.isRequiredPositional;
     if (legacyMapSignature) {
       return _TaskBinding(
-        acceptsContext: true,
+        contextParameterName: contextParameter.name,
+        contextIsNamed: contextParameter.isNamed,
         valueParameters: [],
         usesLegacyMapArgs: true,
         resultTypeCode: _taskResultTypeCode(function.returnType),
@@ -624,7 +646,8 @@ class StemRegistryBuilder implements Builder {
     }
 
     return _TaskBinding(
-      acceptsContext: acceptsContext,
+      contextParameterName: contextParameter?.name,
+      contextIsNamed: contextParameter?.isNamed ?? false,
       valueParameters: valueParameters,
       usesLegacyMapArgs: false,
       resultTypeCode: _taskResultTypeCode(function.returnType),
@@ -647,6 +670,55 @@ class StemRegistryBuilder implements Builder {
       typeCode: _typeCode(type),
       payloadCodecTypeCode: codecTypeCode,
     );
+  }
+
+  static _InjectedContextParameter? _extractInjectedContextParameter(
+    List<FormalParameterElement> parameters,
+    TypeChecker checker,
+    Element element, {
+    required String annotationLabel,
+    required String contextTypeLabel,
+  }) {
+    _InjectedContextParameter? contextParameter;
+    if (parameters.isNotEmpty &&
+        parameters.first.isRequiredPositional &&
+        checker.isAssignableFromType(parameters.first.type)) {
+      contextParameter = _InjectedContextParameter(
+        parameter: parameters.first,
+        name: parameters.first.displayName,
+        isNamed: false,
+      );
+    }
+
+    for (final parameter in parameters.skip(
+      contextParameter == null ? 0 : 1,
+    )) {
+      if (!checker.isAssignableFromType(parameter.type)) {
+        continue;
+      }
+      if (contextParameter != null) {
+        throw InvalidGenerationSourceError(
+          '$annotationLabel ${element.displayName} may declare at most one '
+          '$contextTypeLabel parameter.',
+          element: element,
+        );
+      }
+      if (!parameter.isNamed || parameter.isRequiredNamed) {
+        throw InvalidGenerationSourceError(
+          '$annotationLabel ${element.displayName} must declare '
+          '$contextTypeLabel as the first positional parameter or an '
+          'optional named parameter.',
+          element: element,
+        );
+      }
+      contextParameter = _InjectedContextParameter(
+        parameter: parameter,
+        name: parameter.displayName,
+        isNamed: true,
+      );
+    }
+
+    return contextParameter;
   }
 
   static String _taskResultTypeCode(DartType returnType) {
@@ -825,7 +897,8 @@ class _WorkflowInfo {
     this.metadata,
   }) : kind = WorkflowKind.flow,
        runMethod = null,
-       runAcceptsScriptContext = false,
+       runContextParameterName = null,
+       runContextIsNamed = false,
        runValueParameters = const [];
 
   _WorkflowInfo.script({
@@ -834,7 +907,8 @@ class _WorkflowInfo {
     required this.className,
     required this.steps,
     required this.runMethod,
-    required this.runAcceptsScriptContext,
+    required this.runContextParameterName,
+    required this.runContextIsNamed,
     required this.runValueParameters,
     required this.resultTypeCode,
     required this.resultPayloadCodecTypeCode,
@@ -853,7 +927,8 @@ class _WorkflowInfo {
   final String resultTypeCode;
   final String? resultPayloadCodecTypeCode;
   final String? runMethod;
-  final bool runAcceptsScriptContext;
+  final String? runContextParameterName;
+  final bool runContextIsNamed;
   final List<_ValueParameterInfo> runValueParameters;
   final String? starterNameOverride;
   final String? nameFieldOverride;
@@ -866,8 +941,10 @@ class _WorkflowStepInfo {
   const _WorkflowStepInfo({
     required this.name,
     required this.method,
-    required this.acceptsFlowContext,
-    required this.acceptsScriptStepContext,
+    required this.flowContextParameterName,
+    required this.flowContextIsNamed,
+    required this.scriptStepContextParameterName,
+    required this.scriptStepContextIsNamed,
     required this.valueParameters,
     required this.returnTypeCode,
     required this.stepValueTypeCode,
@@ -881,8 +958,10 @@ class _WorkflowStepInfo {
 
   final String name;
   final String method;
-  final bool acceptsFlowContext;
-  final bool acceptsScriptStepContext;
+  final String? flowContextParameterName;
+  final bool flowContextIsNamed;
+  final String? scriptStepContextParameterName;
+  final bool scriptStepContextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final String? returnTypeCode;
   final String? stepValueTypeCode;
@@ -892,6 +971,10 @@ class _WorkflowStepInfo {
   final DartObject? kind;
   final DartObject? taskNames;
   final DartObject? metadata;
+
+  bool get acceptsFlowContext => flowContextParameterName != null;
+
+  bool get acceptsScriptStepContext => scriptStepContextParameterName != null;
 }
 
 void _ensureUniqueWorkflowStepNames(
@@ -1047,7 +1130,8 @@ class _TaskInfo {
     required this.importAlias,
     required this.function,
     required this.adapterName,
-    required this.acceptsTaskContext,
+    required this.taskContextParameterName,
+    required this.taskContextIsNamed,
     required this.valueParameters,
     required this.usesLegacyMapArgs,
     required this.resultTypeCode,
@@ -1061,7 +1145,8 @@ class _TaskInfo {
   final String importAlias;
   final String function;
   final String? adapterName;
-  final bool acceptsTaskContext;
+  final String? taskContextParameterName;
+  final bool taskContextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final bool usesLegacyMapArgs;
   final String resultTypeCode;
@@ -1069,17 +1154,21 @@ class _TaskInfo {
   final DartObject? options;
   final DartObject? metadata;
   final bool runInIsolate;
+
+  bool get acceptsTaskContext => taskContextParameterName != null;
 }
 
 class _FlowStepBinding {
   const _FlowStepBinding({
-    required this.acceptsContext,
+    required this.contextParameterName,
+    required this.contextIsNamed,
     required this.valueParameters,
     required this.stepValueTypeCode,
     required this.stepValuePayloadCodecTypeCode,
   });
 
-  final bool acceptsContext;
+  final String? contextParameterName;
+  final bool contextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final String stepValueTypeCode;
   final String? stepValuePayloadCodecTypeCode;
@@ -1087,13 +1176,15 @@ class _FlowStepBinding {
 
 class _RunBinding {
   const _RunBinding({
-    required this.acceptsContext,
+    required this.contextParameterName,
+    required this.contextIsNamed,
     required this.valueParameters,
     required this.resultTypeCode,
     required this.resultPayloadCodecTypeCode,
   });
 
-  final bool acceptsContext;
+  final String? contextParameterName;
+  final bool contextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final String resultTypeCode;
   final String? resultPayloadCodecTypeCode;
@@ -1101,14 +1192,16 @@ class _RunBinding {
 
 class _ScriptStepBinding {
   const _ScriptStepBinding({
-    required this.acceptsContext,
+    required this.contextParameterName,
+    required this.contextIsNamed,
     required this.valueParameters,
     required this.returnTypeCode,
     required this.stepValueTypeCode,
     required this.stepValuePayloadCodecTypeCode,
   });
 
-  final bool acceptsContext;
+  final String? contextParameterName;
+  final bool contextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final String returnTypeCode;
   final String stepValueTypeCode;
@@ -1117,14 +1210,16 @@ class _ScriptStepBinding {
 
 class _TaskBinding {
   const _TaskBinding({
-    required this.acceptsContext,
+    required this.contextParameterName,
+    required this.contextIsNamed,
     required this.valueParameters,
     required this.usesLegacyMapArgs,
     required this.resultTypeCode,
     required this.resultPayloadCodecTypeCode,
   });
 
-  final bool acceptsContext;
+  final String? contextParameterName;
+  final bool contextIsNamed;
   final List<_ValueParameterInfo> valueParameters;
   final bool usesLegacyMapArgs;
   final String resultTypeCode;
@@ -1141,6 +1236,18 @@ class _ValueParameterInfo {
   final String name;
   final String typeCode;
   final String? payloadCodecTypeCode;
+}
+
+class _InjectedContextParameter {
+  const _InjectedContextParameter({
+    required this.parameter,
+    required this.name,
+    required this.isNamed,
+  });
+
+  final FormalParameterElement parameter;
+  final String name;
+  final bool isNamed;
 }
 
 class _RegistryEmitter {
@@ -1313,11 +1420,17 @@ class _RegistryEmitter {
       for (final step in workflow.steps) {
         final stepArgs = step.valueParameters
             .map((param) => _decodeArg('ctx.params', param))
-            .join(', ');
-        final invocationArgs = <String>[
-          if (step.acceptsFlowContext) 'ctx',
-          if (stepArgs.isNotEmpty) stepArgs,
-        ].join(', ');
+            .toList(growable: false);
+        final invocationArgs = _invocationArgs(
+          positional: [
+            if (step.acceptsFlowContext && !step.flowContextIsNamed) 'ctx',
+            ...stepArgs,
+          ],
+          named: {
+            if (step.acceptsFlowContext && step.flowContextIsNamed)
+              step.flowContextParameterName!: 'ctx',
+          },
+        );
         buffer.writeln('      flow.step<${step.stepValueTypeCode}>(');
         buffer.writeln('        ${_string(step.name)},');
         buffer.writeln(
@@ -1372,25 +1485,38 @@ class _RegistryEmitter {
       buffer.writeln('  $proxyClassName(this._script);');
       buffer.writeln('  final WorkflowScriptContext _script;');
       for (final step in workflow.steps) {
-        final signatureParts = <String>[
-          if (step.acceptsScriptStepContext)
-            'WorkflowScriptStepContext context',
-          ...step.valueParameters.map(
-            (parameter) => '${parameter.typeCode} ${parameter.name}',
-          ),
-        ];
-        final invocationArgs = <String>[
-          if (step.acceptsScriptStepContext) 'context',
-          ...step.valueParameters.map((parameter) => parameter.name),
-        ];
+        final signature = _methodSignature(
+          positional: [
+            if (step.acceptsScriptStepContext && !step.scriptStepContextIsNamed)
+              'WorkflowScriptStepContext ${step.scriptStepContextParameterName!}',
+            ...step.valueParameters.map(
+              (parameter) => '${parameter.typeCode} ${parameter.name}',
+            ),
+          ],
+          named: [
+            if (step.acceptsScriptStepContext && step.scriptStepContextIsNamed)
+              'WorkflowScriptStepContext? ${step.scriptStepContextParameterName!}',
+          ],
+        );
+        final invocationArgs = _invocationArgs(
+          positional: [
+            if (step.acceptsScriptStepContext && !step.scriptStepContextIsNamed)
+              'context',
+            ...step.valueParameters.map((parameter) => parameter.name),
+          ],
+          named: {
+            if (step.acceptsScriptStepContext && step.scriptStepContextIsNamed)
+              step.scriptStepContextParameterName!: 'context',
+          },
+        );
         buffer.writeln('  @override');
         buffer.writeln(
-          '  ${step.returnTypeCode} ${step.method}(${signatureParts.join(', ')}) {',
+          '  ${step.returnTypeCode} ${step.method}($signature) {',
         );
         buffer.writeln('    return _script.step<${step.stepValueTypeCode}>(');
         buffer.writeln('      ${_string(step.name)},');
         buffer.writeln(
-          '      (context) => super.${step.method}(${invocationArgs.join(', ')}),',
+          '      (context) => super.${step.method}($invocationArgs),',
         );
         if (step.autoVersion) {
           buffer.writeln('      autoVersion: true,');
@@ -1413,14 +1539,13 @@ class _RegistryEmitter {
         buffer.writeln('    checkpoints: [');
         for (final step in workflow.steps) {
           if (step.stepValuePayloadCodecTypeCode != null) {
-            buffer.writeln('      FlowStep.typed<${step.stepValueTypeCode}>(');
+            buffer.writeln(
+              '      WorkflowCheckpoint.typed<${step.stepValueTypeCode}>(',
+            );
           } else {
-            buffer.writeln('      FlowStep(');
+            buffer.writeln('      WorkflowCheckpoint(');
           }
           buffer.writeln('        name: ${_string(step.name)},');
-          buffer.writeln(
-            '        handler: _stemScriptManifestStepNoop,',
-          );
           if (step.autoVersion) {
             buffer.writeln('        autoVersion: true,');
           }
@@ -1468,22 +1593,40 @@ class _RegistryEmitter {
         buffer.writeln('    resultCodec: StemPayloadCodecs.$codecField,');
       }
       if (proxyClass != null) {
-        final runArgs = <String>[
-          if (workflow.runAcceptsScriptContext) 'script',
-          ...workflow.runValueParameters.map(
-            (parameter) => _decodeArg('script.params', parameter),
-          ),
-        ].join(', ');
+        final runArgs = _invocationArgs(
+          positional: [
+            if (workflow.runContextParameterName != null &&
+                !workflow.runContextIsNamed)
+              'script',
+            ...workflow.runValueParameters.map(
+              (parameter) => _decodeArg('script.params', parameter),
+            ),
+          ],
+          named: {
+            if (workflow.runContextParameterName != null &&
+                workflow.runContextIsNamed)
+              workflow.runContextParameterName!: 'script',
+          },
+        );
         buffer.writeln(
           '    run: (script) => $proxyClass(script).${workflow.runMethod}($runArgs),',
         );
       } else {
-        final runArgs = <String>[
-          if (workflow.runAcceptsScriptContext) 'script',
-          ...workflow.runValueParameters.map(
-            (parameter) => _decodeArg('script.params', parameter),
-          ),
-        ].join(', ');
+        final runArgs = _invocationArgs(
+          positional: [
+            if (workflow.runContextParameterName != null &&
+                !workflow.runContextIsNamed)
+              'script',
+            ...workflow.runValueParameters.map(
+              (parameter) => _decodeArg('script.params', parameter),
+            ),
+          ],
+          named: {
+            if (workflow.runContextParameterName != null &&
+                workflow.runContextIsNamed)
+              workflow.runContextParameterName!: 'script',
+          },
+        );
         buffer.writeln(
           '    run: (script) => ${_qualify(workflow.importAlias, workflow.className)}().${workflow.runMethod}($runArgs),',
         );
@@ -1714,14 +1857,38 @@ class _RegistryEmitter {
     return _lowerCamel(pascal);
   }
 
+  String _invocationArgs({
+    List<String> positional = const [],
+    Map<String, String> named = const {},
+  }) {
+    final parts = <String>[
+      ...positional.where((part) => part.isNotEmpty),
+      ...named.entries
+          .where((entry) => entry.value.isNotEmpty)
+          .map((entry) => '${entry.key}: ${entry.value}'),
+    ];
+    return parts.join(', ');
+  }
+
+  String _methodSignature({
+    List<String> positional = const [],
+    List<String> named = const [],
+  }) {
+    final parts = <String>[
+      ...positional.where((part) => part.isNotEmpty),
+    ];
+    if (named.isNotEmpty) {
+      parts.add('{${named.join(', ')}}');
+    }
+    return parts.join(', ');
+  }
+
   void _emitTasks(StringBuffer buffer) {
     buffer.writeln(
       'final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[',
     );
     for (final task in tasks) {
-      final entrypoint = task.usesLegacyMapArgs
-          ? _qualify(task.importAlias, task.function)
-          : task.adapterName!;
+      final entrypoint = task.adapterName ?? _qualify(task.importAlias, task.function);
       final metadataCode = _taskMetadataCode(task);
       buffer.writeln('  FunctionTaskHandler<Object?>(');
       buffer.writeln('    name: ${_string(task.name)},');
@@ -1850,16 +2017,27 @@ class _RegistryEmitter {
   }
 
   void _emitTaskAdapters(StringBuffer buffer) {
-    final typedTasks = tasks.where((task) => !task.usesLegacyMapArgs).toList();
-    if (typedTasks.isEmpty) {
+    final adaptedTasks = tasks
+        .where((task) => task.adapterName != null)
+        .toList(growable: false);
+    if (adaptedTasks.isEmpty) {
       return;
     }
-    for (final task in typedTasks) {
+    for (final task in adaptedTasks) {
       final adapterName = task.adapterName!;
-      final callArgs = <String>[
-        if (task.acceptsTaskContext) 'context',
-        ...task.valueParameters.map((param) => _decodeArg('args', param)),
-      ].join(', ');
+      final callArgs = _invocationArgs(
+        positional: [
+          if (task.acceptsTaskContext && !task.taskContextIsNamed) 'context',
+          if (task.usesLegacyMapArgs)
+            'args'
+          else
+          ...task.valueParameters.map((param) => _decodeArg('args', param)),
+        ],
+        named: {
+          if (task.acceptsTaskContext && task.taskContextIsNamed)
+            task.taskContextParameterName!: 'context',
+        },
+      );
       buffer.writeln(
         'Future<Object?> $adapterName(TaskInvocationContext context, Map<String, Object?> args) async {',
       );
@@ -1872,17 +2050,6 @@ class _RegistryEmitter {
   }
 
   void _emitGeneratedHelpers(StringBuffer buffer) {
-    final needsScriptStepNoop = workflows.any(
-      (workflow) =>
-          workflow.kind == WorkflowKind.script && workflow.steps.isNotEmpty,
-    );
-    if (needsScriptStepNoop) {
-      buffer.writeln(
-        'Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;',
-      );
-      buffer.writeln();
-    }
-
     final needsArgHelper =
         tasks.any((task) => !task.usesLegacyMapArgs) ||
         workflows.any(

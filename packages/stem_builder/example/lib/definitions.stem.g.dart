@@ -8,7 +8,7 @@ final List<Flow> _stemFlows = <Flow>[
     name: "builder.example.flow",
     build: (flow) {
       final impl = BuilderExampleFlow();
-      flow.step(
+      flow.step<String>(
         "greet",
         (ctx) => impl.greet((_stemRequireArg(ctx.params, "name") as String)),
         kind: WorkflowStepKind.task,
@@ -50,21 +50,18 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "builder.example.user_signup",
     checkpoints: [
-      FlowStep(
+      WorkflowCheckpoint(
         name: "create-user",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "send-welcome-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "send-one-week-check-in-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -87,8 +84,6 @@ abstract final class StemWorkflowDefinitions {
         encodeParams: (params) => <String, Object?>{"email": params.email},
       );
 }
-
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {

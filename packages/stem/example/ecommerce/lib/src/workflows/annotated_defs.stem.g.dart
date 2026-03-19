@@ -37,15 +37,13 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "ecommerce.cart.add_item",
     checkpoints: [
-      FlowStep(
+      WorkflowCheckpoint(
         name: "validate-input",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "price-line-item",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -77,8 +75,6 @@ abstract final class StemWorkflowDefinitions {
         },
       );
 }
-
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {

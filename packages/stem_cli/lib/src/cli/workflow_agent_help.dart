@@ -6,8 +6,8 @@ String buildWorkflowAgentHelpMarkdown(Iterable<args.Command<int>> commands) {
     ..writeln()
     ..writeln('## Summary')
     ..writeln(
-      '- Workflow steps are durable and may replay after sleeps, awaited '
-      'events, or worker restarts.',
+      '- Flow steps and script checkpoints are durable and may replay after '
+      'sleeps, awaited events, or worker restarts.',
     )
     ..writeln(
       '- Use FlowContext.idempotencyKey and stored checkpoints to guard side '

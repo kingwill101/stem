@@ -22,23 +22,26 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowRef
-            .call(const {'name': 'runtime'})
-            .startWithRuntime(workflowApp.runtime);
-        final waited = await workflowRef.waitForWithRuntime(
-          workflowApp.runtime,
+        final runId = await workflowApp.runtime.startWorkflowCall(
+          workflowRef.call(const {'name': 'runtime'}),
+        );
+        final waited = await workflowApp.runtime.waitForWorkflowRef(
           runId,
+          workflowRef,
           timeout: const Duration(seconds: 2),
         );
 
         expect(waited?.value, 'hello runtime');
 
-        final oneShot = await workflowRef
-            .call(const {'name': 'inline'})
-            .startAndWaitWithRuntime(
-              workflowApp.runtime,
-              timeout: const Duration(seconds: 2),
-            );
+        final inlineRunId = await workflowApp.runtime.startWorkflowRef(
+          workflowRef,
+          const {'name': 'inline'},
+        );
+        final oneShot = await workflowApp.runtime.waitForCompletion<String>(
+          inlineRunId,
+          timeout: const Duration(seconds: 2),
+          decode: workflowRef.decode,
+        );
 
         expect(oneShot?.value, 'hello inline');
       } finally {

@@ -38,7 +38,8 @@ abstract class DashboardDataSource {
   Future<DashboardWorkflowRunSnapshot?> fetchWorkflowRun(String runId);
 
   /// Fetches persisted workflow checkpoints, if a workflow store is available.
-  Future<List<DashboardWorkflowStepSnapshot>> fetchWorkflowSteps(String runId);
+  Future<List<DashboardWorkflowCheckpointSnapshot>>
+  fetchWorkflowCheckpoints(String runId);
 
   /// Enqueues a task request through the backing broker.
   Future<void> enqueueTask(EnqueueRequest request);
@@ -285,7 +286,7 @@ class StemDashboardService implements DashboardDataSource {
   }
 
   @override
-  Future<List<DashboardWorkflowStepSnapshot>> fetchWorkflowSteps(
+  Future<List<DashboardWorkflowCheckpointSnapshot>> fetchWorkflowCheckpoints(
     String runId,
   ) async {
     final store = _workflowStore;
@@ -297,7 +298,7 @@ class StemDashboardService implements DashboardDataSource {
     try {
       final steps = await store.listSteps(trimmed);
       return steps
-          .map(DashboardWorkflowStepSnapshot.fromEntry)
+          .map(DashboardWorkflowCheckpointSnapshot.fromEntry)
           .toList(growable: false)
         ..sort((a, b) => a.position.compareTo(b.position));
     } on Object {

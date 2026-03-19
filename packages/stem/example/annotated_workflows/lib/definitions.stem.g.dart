@@ -72,7 +72,7 @@ final List<Flow> _stemFlows = <Flow>[
       final impl = AnnotatedFlowWorkflow();
       flow.step<Map<String, Object?>?>(
         "start",
-        (ctx) => impl.start(ctx),
+        (ctx) => impl.start(context: ctx),
         kind: WorkflowStepKind.task,
         taskNames: [],
       );
@@ -129,12 +129,12 @@ class _StemScriptProxy1 extends AnnotatedContextScriptWorkflow {
   final WorkflowScriptContext _script;
   @override
   Future<ContextCaptureResult> captureContext(
-    WorkflowScriptStepContext context,
-    WelcomeRequest request,
-  ) {
+    WelcomeRequest request, {
+    WorkflowScriptStepContext? context,
+  }) {
     return _script.step<ContextCaptureResult>(
       "capture-context",
-      (context) => super.captureContext(context, request),
+      (context) => super.captureContext(request, context: context),
     );
   }
 
@@ -159,34 +159,29 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "annotated.script",
     checkpoints: [
-      FlowStep.typed<WelcomePreparation>(
+      WorkflowCheckpoint.typed<WelcomePreparation>(
         name: "prepare-welcome",
-        handler: _stemScriptManifestStepNoop,
         valueCodec: StemPayloadCodecs.welcomePreparation,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "normalize-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-welcome-subject",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "deliver-welcome",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-follow-up",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -201,32 +196,29 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "annotated.context_script",
     checkpoints: [
-      FlowStep.typed<ContextCaptureResult>(
+      WorkflowCheckpoint.typed<ContextCaptureResult>(
         name: "capture-context",
-        handler: _stemScriptManifestStepNoop,
         valueCodec: StemPayloadCodecs.contextCaptureResult,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "normalize-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-welcome-subject",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
     ],
     resultCodec: StemPayloadCodecs.contextCaptureResult,
     run: (script) => _StemScriptProxy1(script).run(
-      script,
       StemPayloadCodecs.welcomeRequest.decode(
         _stemRequireArg(script.params, "request"),
       ),
+      context: script,
     ),
   ),
 ];
@@ -255,8 +247,6 @@ abstract final class StemWorkflowDefinitions {
   );
 }
 
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
-
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {
     throw ArgumentError('Missing required argument "$name".');
@@ -268,10 +258,17 @@ Future<Object?> _stemTaskAdapter0(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
+  return await Future<Object?>.value(sendEmail(args, context: context));
+}
+
+Future<Object?> _stemTaskAdapter1(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
   return await Future<Object?>.value(
     sendEmailTyped(
-      context,
       StemPayloadCodecs.emailDispatch.decode(_stemRequireArg(args, "dispatch")),
+      context: context,
     ),
   );
 }
@@ -366,13 +363,13 @@ extension StemGeneratedTaskResults on Stem {
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "send_email",
-    entrypoint: sendEmail,
+    entrypoint: _stemTaskAdapter0,
     options: const TaskOptions(maxRetries: 1),
     metadata: const TaskMetadata(),
   ),
   FunctionTaskHandler<Object?>(
     name: "send_email_typed",
-    entrypoint: _stemTaskAdapter0,
+    entrypoint: _stemTaskAdapter1,
     options: const TaskOptions(maxRetries: 1),
     metadata: TaskMetadata(
       tags: [],
