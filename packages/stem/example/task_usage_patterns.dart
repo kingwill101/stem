@@ -46,6 +46,7 @@ FutureOr<Object?> childEntrypoint(
   Map<String, Object?> args,
 ) {
   final value = args['value'] as String? ?? 'unknown';
+  // Example output keeps the script runnable without adding logging setup.
   // ignore: avoid_print
   print('[child] value=$value attempt=${context.attempt}');
   return 'ok';
@@ -98,7 +99,24 @@ Future<void> main() async {
 
   await stem.enqueue('tasks.parent', args: const {});
   await stem.enqueue('tasks.invocation_parent', args: const {});
-  await stem.enqueueCall(childDefinition.call(const ChildArgs('direct-call')));
+  final directTaskId = await childDefinition
+      .call(const ChildArgs('direct-call'))
+      .enqueueWith(stem);
+  final directResult = await childDefinition.waitFor(
+    stem,
+    directTaskId,
+    timeout: const Duration(seconds: 1),
+  );
+  // Example output keeps the script runnable without adding logging setup.
+  // ignore: avoid_print
+  print('[direct] result=${directResult?.value}');
+
+  final inlineResult = await childDefinition
+      .call(const ChildArgs('inline-wait'))
+      .enqueueAndWaitWith(stem, timeout: const Duration(seconds: 1));
+  // Example output keeps the script runnable without adding logging setup.
+  // ignore: avoid_print
+  print('[inline] result=${inlineResult?.value}');
 
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();

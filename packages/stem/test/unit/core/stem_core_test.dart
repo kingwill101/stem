@@ -77,6 +77,140 @@ void main() {
       expect(backend.records.single.id, equals(id));
       expect(backend.records.single.state, equals(TaskState.queued));
     });
+
+    test(
+      'enqueueCall publishes typed calls without requiring registry handlers',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition<({String value}), Object?>(
+          name: 'sample.typed',
+          encodeArgs: (args) => {'value': args.value},
+          defaultOptions: const TaskOptions(queue: 'typed'),
+        );
+
+        final id = await stem.enqueueCall(definition.call((value: 'ok')));
+
+        expect(id, isNotEmpty);
+        expect(broker.published.single.envelope.name, 'sample.typed');
+        expect(broker.published.single.envelope.queue, 'typed');
+        expect(backend.records.single.id, id);
+        expect(backend.records.single.state, TaskState.queued);
+      },
+    );
+
+    test(
+      'enqueueCall uses definition encoder metadata on producer-only paths',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(
+          broker: broker,
+          backend: backend,
+          encoderRegistry: ensureTaskPayloadEncoderRegistry(
+            null,
+            additionalEncoders: [_codecReceiptEncoder, _passthroughMapEncoder],
+          ),
+        );
+        final definition = TaskDefinition<({String value}), _CodecReceipt>(
+          name: 'sample.typed.encoded',
+          encodeArgs: (args) => {'value': args.value},
+          metadata: const TaskMetadata(
+            argsEncoder: _passthroughMapEncoder,
+            resultEncoder: _codecReceiptEncoder,
+          ),
+        );
+
+        final id = await stem.enqueueCall(
+          definition.call((value: 'encoded')),
+        );
+
+        expect(
+          broker.published.single.envelope.headers[stemArgsEncoderHeader],
+          _passthroughMapEncoder.id,
+        );
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          _codecReceiptEncoder.id,
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+  });
+
+  group('TaskCall helpers', () {
+    test('enqueueWith enqueues typed calls with scoped metadata', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<({String value}), String>(
+        name: 'sample.task_call',
+        encodeArgs: (args) => {'value': args.value},
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
+
+      final taskId = await TaskEnqueueScope.run({'traceId': 'scope-1'}, () {
+        return definition.call((value: 'ok')).enqueueWith(stem);
+      });
+
+      expect(taskId, isNotEmpty);
+      expect(broker.published.single.envelope.name, 'sample.task_call');
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(
+        broker.published.single.envelope.meta,
+        containsPair('traceId', 'scope-1'),
+      );
+    });
+
+    test('enqueueAndWaitWith returns typed results', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<({String value}), String>(
+        name: 'sample.task_call_wait',
+        encodeArgs: (args) => {'value': args.value},
+      );
+
+      unawaited(
+        Future<void>(() async {
+          while (broker.published.isEmpty) {
+            await Future<void>.delayed(Duration.zero);
+          }
+          final taskId = broker.published.single.envelope.id;
+          await backend.set(taskId, TaskState.succeeded, payload: 'done');
+        }),
+      );
+
+      final result = await definition
+          .call((value: 'ok'))
+          .enqueueAndWaitWith(stem, timeout: const Duration(seconds: 1));
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.value, 'done');
+    });
+  });
+
+  group('TaskDefinition.waitFor', () {
+    test('uses definition decoding rules', () async {
+      final backend = _codecAwareBackend();
+      final stem = _codecAwareStem(backend);
+
+      await backend.set(
+        'task-definition-wait',
+        TaskState.succeeded,
+        payload: const _CodecReceipt('receipt-definition'),
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+      );
+
+      final result = await _codecReceiptDefinition.waitFor(
+        stem,
+        'task-definition-wait',
+      );
+
+      expect(result?.value?.id, 'receipt-definition');
+      expect(result?.rawPayload, isA<_CodecReceipt>());
+    });
   });
 
   group('Stem.waitForTaskDefinition', () {
@@ -167,6 +301,8 @@ const _codecReceiptEncoder = CodecTaskPayloadEncoder<_CodecReceipt>(
   idValue: 'test.codec.receipt',
   codec: _codecReceiptCodec,
 );
+
+const _passthroughMapEncoder = _MapPassthroughEncoder('test.args.map');
 
 final _codecReceiptDefinition =
     TaskDefinition<Map<String, Object?>, _CodecReceipt>(
@@ -275,6 +411,19 @@ class _RecordingBroker implements Broker {
 
   @override
   Future<void> close() async {}
+}
+
+class _MapPassthroughEncoder implements TaskPayloadEncoder {
+  const _MapPassthroughEncoder(this.id);
+
+  @override
+  final String id;
+
+  @override
+  Object? encode(Object? value) => value;
+
+  @override
+  Object? decode(Object? value) => value;
 }
 
 class _RecordingBackend implements ResultBackend {

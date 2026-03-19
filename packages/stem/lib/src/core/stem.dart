@@ -162,14 +162,21 @@ class Stem implements TaskEnqueuer {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    return enqueue(
-      call.name,
+    final definition = call.definition;
+    final resolvedOptions = call.resolveOptions();
+    final metadata = definition.metadata;
+    return _enqueueResolved(
+      name: call.name,
       args: call.encodeArgs(),
       headers: call.headers,
-      options: call.resolveOptions(),
+      options: resolvedOptions,
+      fallbackOptions: definition.defaultOptions,
       notBefore: call.notBefore,
       meta: call.meta,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+      metadata: metadata,
+      argsEncoder: _resolveArgsEncoderFromMetadata(metadata),
+      resultEncoder: _resolveResultEncoderFromMetadata(metadata),
     );
   }
 
@@ -184,6 +191,38 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
+    final handler = registry.resolve(name);
+    if (handler == null) {
+      throw ArgumentError.value(name, 'name', 'Task is not registered');
+    }
+    return _enqueueResolved(
+      name: name,
+      args: args,
+      headers: headers,
+      options: options,
+      fallbackOptions: handler.options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+      metadata: handler.metadata,
+      argsEncoder: _resolveArgsEncoder(handler),
+      resultEncoder: _resolveResultEncoder(handler),
+    );
+  }
+
+  Future<String> _enqueueResolved({
+    required String name,
+    required Map<String, Object?> args,
+    required Map<String, String> headers,
+    required TaskOptions options,
+    required TaskOptions fallbackOptions,
+    required DateTime? notBefore,
+    required Map<String, Object?> meta,
+    required TaskEnqueueOptions? enqueueOptions,
+    required TaskMetadata metadata,
+    required TaskPayloadEncoder argsEncoder,
+    required TaskPayloadEncoder resultEncoder,
+  }) async {
     final tracer = StemTracer.instance;
     final queueOverride = enqueueOptions?.queue ?? options.queue;
     final decision = routing.resolve(
@@ -192,14 +231,6 @@ class Stem implements TaskEnqueuer {
     final targetName = decision.targetName;
     final basePriority = enqueueOptions?.priority ?? options.priority;
     final resolvedPriority = decision.effectivePriority(basePriority);
-
-    final handler = registry.resolve(name);
-    if (handler == null) {
-      throw ArgumentError.value(name, 'name', 'Task is not registered');
-    }
-    final metadata = handler.metadata;
-    final argsEncoder = _resolveArgsEncoder(handler);
-    final resultEncoder = _resolveResultEncoder(handler);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = scopeMeta == null
         ? meta
@@ -225,7 +256,7 @@ class Stem implements TaskEnqueuer {
     );
     final maxRetries = _resolveMaxRetries(
       options,
-      handler.options,
+      fallbackOptions,
       enqueueOptions,
     );
     final taskId = enqueueOptions?.taskId ?? generateEnvelopeId();
@@ -472,10 +503,8 @@ class Stem implements TaskEnqueuer {
   }
 
   /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,
@@ -880,14 +909,24 @@ class Stem implements TaskEnqueuer {
 
   /// Resolves the args encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
-    final encoder = handler.metadata.argsEncoder;
-    payloadEncoders.register(encoder);
-    return encoder ?? payloadEncoders.defaultArgsEncoder;
+    return _resolveArgsEncoderFromMetadata(handler.metadata);
   }
 
   /// Resolves the result encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
-    final encoder = handler.metadata.resultEncoder;
+    return _resolveResultEncoderFromMetadata(handler.metadata);
+  }
+
+  /// Resolves the args encoder for producer-side task metadata.
+  TaskPayloadEncoder _resolveArgsEncoderFromMetadata(TaskMetadata metadata) {
+    final encoder = metadata.argsEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultArgsEncoder;
+  }
+
+  /// Resolves the result encoder for producer-side task metadata.
+  TaskPayloadEncoder _resolveResultEncoderFromMetadata(TaskMetadata metadata) {
+    final encoder = metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
   }
@@ -979,5 +1018,52 @@ extension TaskEnqueueBuilderExtension<TArgs, TResult>
     return enqueuer.enqueueCall(
       call.copyWith(meta: Map.unmodifiable(mergedMeta)),
     );
+  }
+}
+
+/// Convenience helpers for dispatching prebuilt [TaskCall] instances.
+extension TaskCallExtension<TArgs, TResult extends Object?>
+    on TaskCall<TArgs, TResult> {
+  /// Enqueues this typed call with the provided [enqueuer].
+  ///
+  /// Ambient [TaskEnqueueScope] metadata is merged the same way as the fluent
+  /// [TaskEnqueueBuilder] helper so producers and task contexts behave
+  /// consistently.
+  Future<String> enqueueWith(
+    TaskEnqueuer enqueuer, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    if (scopeMeta == null || scopeMeta.isEmpty) {
+      return enqueuer.enqueueCall(this, enqueueOptions: enqueueOptions);
+    }
+    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(meta);
+    return enqueuer.enqueueCall(
+      copyWith(meta: Map.unmodifiable(mergedMeta)),
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueues this call on [stem] and waits for the typed task result.
+  Future<TaskResult<TResult>?> enqueueAndWaitWith(
+    Stem stem, {
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueueWith(stem, enqueueOptions: enqueueOptions);
+    return definition.waitFor(stem, taskId, timeout: timeout);
+  }
+}
+
+/// Convenience helpers for waiting on typed task definitions.
+extension TaskDefinitionExtension<TArgs, TResult extends Object?>
+    on TaskDefinition<TArgs, TResult> {
+  /// Waits for [taskId] using this definition's decoding rules.
+  Future<TaskResult<TResult>?> waitFor(
+    Stem stem,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return stem.waitForTaskDefinition(taskId, this, timeout: timeout);
   }
 }
