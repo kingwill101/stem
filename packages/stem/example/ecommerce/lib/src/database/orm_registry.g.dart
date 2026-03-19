@@ -1,11 +1,11 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
 import 'package:ormed/ormed.dart';
-import 'src/database/models/cart_item.dart';
-import 'src/database/models/cart.dart';
-import 'src/database/models/catalog_sku.dart';
-import 'src/database/models/order_item.dart';
-import 'src/database/models/order.dart';
+import 'package:stem_ecommerce_example/src/database/models/cart_item.dart';
+import 'package:stem_ecommerce_example/src/database/models/cart.dart';
+import 'package:stem_ecommerce_example/src/database/models/catalog_sku.dart';
+import 'package:stem_ecommerce_example/src/database/models/order_item.dart';
+import 'package:stem_ecommerce_example/src/database/models/order.dart';
 
 final List<ModelDefinition<OrmEntity>> _$ormModelDefinitions = [
   CartItemModelOrmDefinition.definition,

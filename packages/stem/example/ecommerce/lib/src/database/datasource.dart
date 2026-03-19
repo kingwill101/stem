@@ -1,8 +1,8 @@
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
-import '../../orm_registry.g.dart';
 import 'migrations.dart';
+import 'orm_registry.g.dart';
 
 Future<DataSource> openEcommerceDataSource({
   required String databasePath,
