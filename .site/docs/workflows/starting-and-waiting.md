@@ -28,9 +28,10 @@ final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
   encodeParams: (params) => <String, Object?>{'draft': params.draft},
 );
 
-final runId = await approvalsRef
-    .call((draft: const {'documentId': 'doc-42'}))
-    .startWithApp(workflowApp);
+final runId = await approvalsRef.startWithApp(
+  workflowApp,
+  (draft: const {'documentId': 'doc-42'}),
+);
 
 final result = await approvalsRef.waitFor(workflowApp, runId);
 ```

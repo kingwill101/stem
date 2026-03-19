@@ -412,9 +412,10 @@ final app = await StemWorkflowApp.fromUrl(
   tasks: const [],
 );
 
-final runId = await approvalsRef
-    .call((draft: const {'documentId': 'doc-42'}))
-    .startWithApp(app);
+final runId = await approvalsRef.startWithApp(
+  app,
+  (draft: const {'documentId': 'doc-42'}),
+);
 
 final result = await approvalsRef.waitFor(app, runId);
 print(result?.value);

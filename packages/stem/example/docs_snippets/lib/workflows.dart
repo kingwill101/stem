@@ -103,17 +103,16 @@ final retryDefinition = retryScript.definition;
 
 // #region workflows-run
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
-  final runId = await ApprovalsFlow.ref
-      .call(
-        (
-          draft: const <String, Object?>{'documentId': 'doc-42'},
-        ),
-        cancellationPolicy: const WorkflowCancellationPolicy(
-          maxRunDuration: Duration(hours: 2),
-          maxSuspendDuration: Duration(minutes: 30),
-        ),
-      )
-      .startWithApp(workflowApp);
+  final runId = await ApprovalsFlow.ref.startWithApp(
+    workflowApp,
+    (
+      draft: const <String, Object?>{'documentId': 'doc-42'},
+    ),
+    cancellationPolicy: const WorkflowCancellationPolicy(
+      maxRunDuration: Duration(hours: 2),
+      maxSuspendDuration: Duration(minutes: 30),
+    ),
+  );
 
   final result = await ApprovalsFlow.ref.waitFor(
     workflowApp,

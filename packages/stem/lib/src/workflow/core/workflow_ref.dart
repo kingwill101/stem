@@ -50,6 +50,83 @@ class WorkflowRef<TParams, TResult extends Object?> {
     }
     return payload as TResult;
   }
+
+  /// Starts this workflow ref directly with [caller].
+  Future<String> startWith(
+    WorkflowCaller caller,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return call(
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startWith(caller);
+  }
+
+  /// Starts this workflow ref directly with a workflow child-caller [context].
+  Future<String> startWithContext(
+    WorkflowChildCallerContext context,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return call(
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startWithContext(context);
+  }
+
+  /// Starts this workflow ref with [caller] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWith(
+    WorkflowCaller caller,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return call(
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startAndWaitWith(
+      caller,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this workflow ref with a workflow child-caller [context] and
+  /// waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
+    WorkflowChildCallerContext context,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return call(
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startAndWaitWithContext(
+      context,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 /// Typed producer-facing reference for workflows that take no input params.

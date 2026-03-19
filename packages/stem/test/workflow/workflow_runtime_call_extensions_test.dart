@@ -48,5 +48,51 @@ void main() {
         }
       },
     );
+
+    test(
+      'WorkflowRef direct helpers mirror WorkflowStartCall dispatch',
+      () async {
+      final flow = Flow<String>(
+        name: 'runtime.extension.direct.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return 'hello $name';
+          });
+        },
+      );
+      final workflowRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'runtime.extension.direct.flow',
+        encodeParams: (params) => params,
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final runId = await workflowRef.startWithRuntime(
+          workflowApp.runtime,
+          const {'name': 'runtime'},
+        );
+        final waited = await workflowRef.waitForWithRuntime(
+          workflowApp.runtime,
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(waited?.value, 'hello runtime');
+
+        final oneShot = await workflowRef.startAndWaitWithRuntime(
+          workflowApp.runtime,
+          const {'name': 'inline'},
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(oneShot?.value, 'hello inline');
+      } finally {
+        await workflowApp.shutdown();
+      }
+      },
+    );
   });
 }

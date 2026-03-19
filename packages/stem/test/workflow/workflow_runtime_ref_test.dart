@@ -21,8 +21,9 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowApp.runtime.startWorkflowCall(
-          workflowRef.call(const {'name': 'runtime'}),
+        final runId = await workflowRef.startWithRuntime(
+          workflowApp.runtime,
+          const {'name': 'runtime'},
         );
         final waited = await workflowApp.runtime.waitForWorkflowRef(
           runId,
@@ -64,9 +65,10 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowRef
-            .call(const {'name': 'runtime'})
-            .startWith(workflowApp.runtime);
+        final runId = await workflowRef.startWithRuntime(
+          workflowApp.runtime,
+          const {'name': 'runtime'},
+        );
         final waited = await workflowRef.waitForWithRuntime(
           workflowApp.runtime,
           runId,

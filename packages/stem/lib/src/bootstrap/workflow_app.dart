@@ -222,6 +222,7 @@ class StemWorkflowApp implements WorkflowCaller {
   }
 
   /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  @override
   Future<WorkflowResult<TResult>?>
   waitForWorkflowRef<TParams, TResult extends Object?>(
     String runId,
@@ -647,6 +648,82 @@ extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
 /// Convenience helpers for waiting on workflow results using a typed reference.
 extension WorkflowRefAppExtension<TParams, TResult extends Object?>
     on WorkflowRef<TParams, TResult> {
+  /// Starts this workflow ref with [app].
+  Future<String> startWithApp(
+    StemWorkflowApp app,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWith(
+      app,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts this workflow ref with [app] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithApp(
+    StemWorkflowApp app,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return startAndWaitWith(
+      app,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this workflow ref with [runtime].
+  Future<String> startWithRuntime(
+    WorkflowRuntime runtime,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWith(
+      runtime,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts this workflow ref with [runtime] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithRuntime(
+    WorkflowRuntime runtime,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return startAndWaitWith(
+      runtime,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   /// Waits for [runId] using this workflow reference's decode rules.
   Future<WorkflowResult<TResult>?> waitFor(
     StemWorkflowApp app,
