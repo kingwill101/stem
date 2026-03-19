@@ -565,6 +565,21 @@ extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
   Future<String> startWithRuntime(WorkflowRuntime runtime) {
     return runtime.startWorkflowCall(this);
   }
+
+  /// Starts this workflow call with [runtime] and waits for the typed result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithRuntime(
+    WorkflowRuntime runtime, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final runId = await runtime.startWorkflowCall(this);
+    return runtime.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 /// Convenience helpers for waiting on workflow results using a typed reference.
@@ -578,6 +593,21 @@ extension WorkflowRefAppExtension<TParams, TResult extends Object?>
     Duration? timeout,
   }) {
     return app.waitForWorkflowRef(
+      runId,
+      this,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Waits for [runId] using this workflow reference and [runtime].
+  Future<WorkflowResult<TResult>?> waitForWithRuntime(
+    WorkflowRuntime runtime,
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return runtime.waitForWorkflowRef(
       runId,
       this,
       pollInterval: pollInterval,
