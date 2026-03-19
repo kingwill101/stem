@@ -325,6 +325,265 @@ Inside a script step you can access the same metadata as `FlowContext`:
 - `step.takeResumeData()` surfaces payloads from sleeps or awaited events so
   you can branch on resume paths.
 
+### Current workflow model
+
+Stem supports three workflow authoring styles today:
+
+1. `Flow<T>` for explicit orchestration
+2. `WorkflowScript` for function-style durable workflows
+3. `stem_builder` for annotated workflows with generated starters
+
+The runtime shape is the same in every case:
+
+- bootstrap a `StemWorkflowApp`
+- pass `flows:`, `scripts:`, and `tasks:` directly
+- start runs with `startWorkflow(...)` or generated `startXxx(...)` helpers
+- wait with `waitForCompletion(...)`
+
+You do not need to build task registries manually for normal workflow usage.
+
+#### Manual `Flow`
+
+Use `Flow` when you want explicit step orchestration and fine control over
+resume behavior:
+
+```dart
+final approvalsFlow = Flow<String>(
+  name: 'approvals.flow',
+  build: (flow) {
+    flow.step('draft', (ctx) async {
+      final payload = ctx.params['draft'] as Map<String, Object?>;
+      return payload['documentId'];
+    });
+
+    flow.step('manager-review', (ctx) async {
+      final resume = ctx.takeResumeData() as Map<String, Object?>?;
+      if (resume == null) {
+        await ctx.awaitEvent('approvals.manager');
+        return null;
+      }
+      return resume['approvedBy'] as String?;
+    });
+
+    flow.step('finalize', (ctx) async {
+      final approvedBy = ctx.previousResult as String?;
+      return 'approved-by:$approvedBy';
+    });
+  },
+);
+
+final app = await StemWorkflowApp.fromUrl(
+  'memory://',
+  flows: [approvalsFlow],
+  tasks: const [],
+);
+
+final runId = await app.startWorkflow(
+  'approvals.flow',
+  params: {
+    'draft': {'documentId': 'doc-42'},
+  },
+);
+
+final result = await app.waitForCompletion<String>(runId);
+print(result?.value);
+await app.close();
+```
+
+#### Manual `WorkflowScript`
+
+Use `WorkflowScript` when you want your workflow to read like a normal async
+function while still persisting durable checkpoints:
+
+```dart
+final billingRetryScript = WorkflowScript(
+  name: 'billing.retry-script',
+  run: (script) async {
+    final chargeId = await script.step<String>('charge', (ctx) async {
+      final resume = ctx.takeResumeData() as Map<String, Object?>?;
+      if (resume == null) {
+        await ctx.awaitEvent('billing.charge.prepared');
+        return 'pending';
+      }
+      return resume['chargeId'] as String;
+    });
+
+    return script.step<String>('confirm', (ctx) async {
+      ctx.idempotencyKey('confirm-$chargeId');
+      return 'receipt-$chargeId';
+    });
+  },
+);
+
+final app = await StemWorkflowApp.inMemory(
+  scripts: [billingRetryScript],
+  tasks: const [],
+);
+```
+
+#### Annotated workflows with `stem_builder`
+
+Use `stem_builder` when you want the best DX: plain method signatures,
+generated manifests, and typed starter helpers.
+
+The important part of the model is that `run(...)` calls other annotated
+methods directly. Those method calls are what become durable script checkpoints in
+the generated proxy.
+
+The conceptual split is:
+
+- `Flow`: declared steps are the execution plan
+- `WorkflowScript`: `run(...)` is the execution plan, and declared checkpoints
+  are manifest/introspection metadata
+
+```dart
+import 'package:stem/stem.dart';
+
+part 'definitions.stem.g.dart';
+
+@WorkflowDefn(name: 'builder.example.user_signup', kind: WorkflowKind.script)
+class BuilderUserSignupWorkflow {
+  Future<Map<String, Object?>> run(String email) async {
+    final user = await createUser(email);
+    await sendWelcomeEmail(email);
+    await sendOneWeekCheckInEmail(email);
+    return {'userId': user['id'], 'status': 'done'};
+  }
+
+  @WorkflowStep(name: 'create-user')
+  Future<Map<String, Object?>> createUser(String email) async {
+    return {'id': 'user:$email'};
+  }
+
+  @WorkflowStep(name: 'send-welcome-email')
+  Future<void> sendWelcomeEmail(String email) async {}
+
+  @WorkflowStep(name: 'send-one-week-check-in-email')
+  Future<void> sendOneWeekCheckInEmail(String email) async {}
+}
+
+@TaskDefn(name: 'builder.example.task')
+Future<void> builderExampleTask(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {}
+```
+
+There are two supported script entry styles:
+
+- plain direct-call style:
+  - `Future<T> run(String email, ...)`
+  - best when your annotated step methods only take serializable parameters
+- context-aware style:
+  - `@WorkflowRun()`
+  - `Future<T> run(WorkflowScriptContext script, String email, ...)`
+  - use this when you need to enter a step explicitly with `script.step(...)`
+    so the step body can receive `WorkflowScriptStepContext`
+
+Context injection works at every runtime layer:
+
+- flow steps can take `FlowContext`
+- script runs can take `WorkflowScriptContext`
+- script steps can take `WorkflowScriptStepContext`
+- tasks can take `TaskInvocationContext`
+
+Serializable parameter rules for generated workflows and tasks are strict:
+
+- supported:
+  - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
+  - `List<T>` where `T` is serializable
+  - `Map<String, T>` where `T` is serializable
+- not supported directly:
+  - arbitrary Dart class instances
+  - optional/named parameters on generated workflow/task entrypoints
+
+If you want to pass a domain object, encode it into a serializable map first
+and decode it inside the workflow or task body.
+
+See the runnable example:
+
+- [example/annotated_workflows](example/annotated_workflows)
+  - `FlowContext` metadata
+  - plain proxy-driven script step calls
+  - `WorkflowScriptContext` + `WorkflowScriptStepContext`
+  - typed `@TaskDefn` decoding scalar, `Map`, and `List` parameters
+
+Generate code:
+
+```bash
+dart run build_runner build
+```
+
+Wire the generated definitions directly into `StemWorkflowApp`:
+
+```dart
+final app = await StemWorkflowApp.fromUrl(
+  'memory://',
+  flows: stemFlows,
+  scripts: stemScripts,
+  tasks: stemTasks,
+);
+
+final runId = await app.startUserSignup(email: 'user@example.com');
+final result = await app.waitForCompletion<Map<String, Object?>>(runId);
+print(result?.value);
+await app.close();
+```
+
+Generated output gives you:
+
+- `stemFlows`
+- `stemScripts`
+- `stemTasks`
+- `StemWorkflowNames`
+- typed starter helpers on `StemWorkflowApp` and `WorkflowRuntime`
+
+If your service already owns a `StemApp`, reuse it:
+
+```dart
+final stemApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  tasks: stemTasks,
+);
+
+final workflowApp = await StemWorkflowApp.create(
+  stemApp: stemApp,
+  flows: stemFlows,
+  scripts: stemScripts,
+  tasks: stemTasks,
+);
+```
+
+#### Mixing workflows and normal tasks
+
+A workflow can orchestrate durable steps and still enqueue ordinary Stem tasks
+for side effects:
+
+```dart
+flow.step('emit-side-effects', (ctx) async {
+  final order = ctx.previousResult as Map<String, Object?>;
+
+  await ctx.enqueuer!.enqueue(
+    'ecommerce.audit.log',
+    args: {
+      'event': 'order.checked_out',
+      'entityId': order['id'],
+      'detail': 'cart=${order['cartId']}',
+    },
+    options: const TaskOptions(queue: 'default'),
+  );
+
+  return order;
+});
+```
+
+That split is the intended model:
+
+- workflows coordinate durable state transitions
+- regular tasks handle side effects and background execution
+- both are wired into the same app with `tasks:`
+
 ### Typed workflow completion
 
 All workflow definitions (flows and scripts) accept an optional type argument
@@ -344,6 +603,19 @@ if (result?.isCompleted == true) {
   inspectSuspension(result?.state);
 }
 ```
+
+In the example above, these calls inside `run(...)`:
+
+```dart
+final user = await createUser(email);
+await sendWelcomeEmail(email);
+await sendOneWeekCheckInEmail(email);
+```
+
+are transformed by generated code into durable `script.step(...)` calls. See
+the generated proxy in
+`packages/stem_builder/example/lib/definitions.stem.g.dart` for the concrete
+lowering.
 
 ### Typed task completion
 

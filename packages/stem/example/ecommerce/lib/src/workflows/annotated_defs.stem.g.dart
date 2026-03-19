@@ -36,7 +36,7 @@ class _StemScriptProxy0 extends AddToCartWorkflow {
 final List<WorkflowScript> stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "ecommerce.cart.add_item",
-    steps: [
+    checkpoints: [
       FlowStep(
         name: "validate-input",
         handler: _stemScriptManifestStepNoop,

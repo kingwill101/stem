@@ -10,6 +10,9 @@
   naming in generated APIs.
 - Refreshed the builder README, example package, and annotated workflow demos
   to match the generated `tasks:`-first runtime wiring.
+- Switched generated script metadata from `steps:` to `checkpoints:` and
+  expanded docs/examples around direct step calls, context injection, and
+  serializable parameter rules.
 - Initial builder for annotated Stem workflow/task registries.
 - Expanded the registry builder implementation and hardened generation output.
 - Added build configuration, analysis options, and tests for registry builds.

@@ -14,4 +14,6 @@
   during page switches.
 - Expanded dashboard state/service/server models and test coverage to support
   the new views and metadata-rich rendering paths.
+- Clarified workflow views by labeling script-runtime nodes as checkpoints
+  instead of steps.
 - Initial release of the `stem_dashboard` package.

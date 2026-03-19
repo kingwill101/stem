@@ -11,8 +11,8 @@
 /// 1. **Flow**: A list of discrete `FlowStep`s that execute in order. This is
 ///    the most common model and is easily visualized.
 /// 2. **Script**: A procedural Dart function that uses `context.step` to
-///    wrap individual pieces of work. This allows for complex branching
-///    logic and loops using standard Dart control flow.
+///    create durable checkpoints around individual pieces of work. This allows
+///    for complex branching logic and loops using standard Dart control flow.
 ///
 /// ## Versioning and Metadata
 ///
@@ -38,7 +38,7 @@
 /// ```dart
 /// final script = WorkflowDefinition.script(
 ///   name: 'process_order',
-///   body: (context) async {
+///   run: (context) async {
 ///     await context.step('validate_order', ...);
 ///     if (isPremium) {
 ///       await context.step('apply_discount', ...);
@@ -77,8 +77,9 @@ enum WorkflowDefinitionKind {
 }
 
 /// Declarative workflow definition built via [FlowBuilder] or a higher-level
-/// script facade. The definition captures the ordered steps that the runtime
-/// will execute along with optional script metadata used by the facade runner.
+/// script facade. Flow definitions capture an ordered execution plan. Script
+/// definitions capture a script body plus optional checkpoint metadata used for
+/// introspection and tooling.
 class WorkflowDefinition<T extends Object?> {
   /// Internal constructor used by builders and script facades.
   WorkflowDefinition._({
@@ -160,14 +161,16 @@ class WorkflowDefinition<T extends Object?> {
     required String name,
     required WorkflowScriptBody<T> run,
     Iterable<FlowStep> steps = const [],
+    Iterable<FlowStep> checkpoints = const [],
     String? version,
     String? description,
     Map<String, Object?>? metadata,
   }) {
+    final declaredCheckpoints = checkpoints.isNotEmpty ? checkpoints : steps;
     return WorkflowDefinition._(
       name: name,
       kind: WorkflowDefinitionKind.script,
-      steps: List<FlowStep>.unmodifiable(steps),
+      steps: List<FlowStep>.unmodifiable(declaredCheckpoints),
       version: version,
       description: description,
       metadata: metadata,

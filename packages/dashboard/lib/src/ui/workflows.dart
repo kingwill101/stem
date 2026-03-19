@@ -13,17 +13,19 @@ String buildWorkflowsContent({
   final runs = buildWorkflowRunSummaries(taskStatuses, limit: 400);
   final workflowFilter = options.workflow?.toLowerCase();
   final runFilter = options.runId?.toLowerCase();
-  final filtered = runs.where((entry) {
-    final matchesWorkflow =
-        workflowFilter == null ||
-        workflowFilter.isEmpty ||
-        entry.workflowName.toLowerCase().contains(workflowFilter);
-    final matchesRun =
-        runFilter == null ||
-        runFilter.isEmpty ||
-        entry.runId.toLowerCase().contains(runFilter);
-    return matchesWorkflow && matchesRun;
-  }).toList(growable: false);
+  final filtered = runs
+      .where((entry) {
+        final matchesWorkflow =
+            workflowFilter == null ||
+            workflowFilter.isEmpty ||
+            entry.workflowName.toLowerCase().contains(workflowFilter);
+        final matchesRun =
+            runFilter == null ||
+            runFilter.isEmpty ||
+            entry.runId.toLowerCase().contains(runFilter);
+        return matchesWorkflow && matchesRun;
+      })
+      .toList(growable: false);
 
   final running = filtered.fold<int>(0, (sum, entry) => sum + entry.running);
   final failed = filtered.fold<int>(0, (sum, entry) => sum + entry.failed);
@@ -33,15 +35,15 @@ String buildWorkflowsContent({
 <section class="page-header rounded-2xl border border-slate-300/15 bg-slate-900/45 px-5 py-5">
   <h1>Workflows</h1>
   <p class="page-subtitle">
-    Workflow run activity inferred from task metadata with run-level drill down.
+    Workflow run activity inferred from task metadata with run-level checkpoint drill down.
   </p>
 </section>
 
 <section class="cards">
   ${buildMetricCard('Runs (sample)', formatInt(filtered.length), 'Distinct workflow run IDs currently visible in task status history.')}
-  ${buildMetricCard('Queued steps', formatInt(queued), 'Queued or retried statuses across sampled runs.')}
-  ${buildMetricCard('Running steps', formatInt(running), 'Statuses currently executing inside workflow runs.')}
-  ${buildMetricCard('Failed steps', formatInt(failed), 'Failed statuses mapped to workflow runs.')}
+  ${buildMetricCard('Queued checkpoints', formatInt(queued), 'Queued or retried workflow run tasks across sampled runs.')}
+  ${buildMetricCard('Running checkpoints', formatInt(running), 'Workflow run tasks currently executing inside sampled runs.')}
+  ${buildMetricCard('Failed checkpoints', formatInt(failed), 'Failed workflow run tasks mapped to sampled runs.')}
 </section>
 
 <form class="filter-form rounded-2xl border border-slate-300/15 bg-slate-900/40 p-4" action="/workflows" method="get" data-turbo-frame="dashboard-content">
@@ -62,7 +64,7 @@ String buildWorkflowsContent({
       <tr>
         <th scope="col">Run ID</th>
         <th scope="col">Workflow</th>
-        <th scope="col">Last step</th>
+        <th scope="col">Last checkpoint</th>
         <th scope="col">Queued</th>
         <th scope="col">Running</th>
         <th scope="col">Succeeded</th>

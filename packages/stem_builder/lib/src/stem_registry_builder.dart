@@ -1038,7 +1038,7 @@ class _RegistryEmitter {
       buffer.writeln('  WorkflowScript(');
       buffer.writeln('    name: ${_string(workflow.name)},');
       if (workflow.steps.isNotEmpty) {
-        buffer.writeln('    steps: [');
+        buffer.writeln('    checkpoints: [');
         for (final step in workflow.steps) {
           buffer.writeln('      FlowStep(');
           buffer.writeln('        name: ${_string(step.name)},');

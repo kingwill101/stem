@@ -4,6 +4,9 @@
 
 - Added workflow manifests, runtime metadata views, and run/step drilldown APIs
   for inspecting workflow definitions and persisted execution state.
+- Clarified the workflow authoring model by distinguishing flow steps from
+  script checkpoints in manifests, docs, dashboard wording, and generated
+  workflow output.
 - Improved workflow store contracts and runtime compatibility for caller-
   supplied run ids and persisted runtime metadata attached to workflow params.
 - Restored the deprecated `SimpleTaskRegistry` alias for source compatibility

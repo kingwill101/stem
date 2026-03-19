@@ -21,21 +21,27 @@ void main() {
     expect(manifest.id, equals(firstId));
     expect(manifest.name, equals('manifest.flow'));
     expect(manifest.kind, equals(WorkflowDefinitionKind.flow));
+    expect(manifest.stepCollectionLabel, equals('steps'));
+    expect(manifest.checkpoints, hasLength(2));
     expect(manifest.steps, hasLength(2));
     expect(manifest.steps.first.position, equals(0));
     expect(manifest.steps.first.name, equals('first'));
+    expect(
+      manifest.steps.first.role,
+      equals(WorkflowManifestStepRole.flowStep),
+    );
     expect(manifest.steps.first.id, isNotEmpty);
     expect(manifest.steps.first.id, isNot(equals(manifest.steps.last.id)));
   });
 
-  test('script workflows can publish declared step metadata', () {
+  test('script workflows can publish declared checkpoint metadata', () {
     final definition = WorkflowScript<Map<String, Object?>>(
       name: 'manifest.script',
       run: (script) async {
         final email = script.params['email'] as String;
         return {'email': email, 'status': 'done'};
       },
-      steps: [
+      checkpoints: [
         FlowStep(
           name: 'create-user',
           title: 'Create user',
@@ -55,9 +61,15 @@ void main() {
 
     final manifest = definition.toManifestEntry();
     expect(manifest.kind, equals(WorkflowDefinitionKind.script));
+    expect(manifest.stepCollectionLabel, equals('checkpoints'));
+    expect(manifest.checkpoints, hasLength(2));
     expect(manifest.steps, hasLength(2));
     expect(manifest.steps.first.name, equals('create-user'));
     expect(manifest.steps.first.position, equals(0));
+    expect(
+      manifest.steps.first.role,
+      equals(WorkflowManifestStepRole.scriptCheckpoint),
+    );
     expect(manifest.steps.first.taskNames, equals(const ['user.create']));
     expect(manifest.steps.last.name, equals('send-welcome-email'));
     expect(manifest.steps.last.position, equals(1));

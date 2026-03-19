@@ -66,6 +66,68 @@ required). `@WorkflowRun` is still supported for backward compatibility.
 `run(...)` may optionally take `WorkflowScriptContext` as its first parameter,
 followed by required positional serializable parameters.
 
+The intended usage is to call annotated step methods directly from `run(...)`:
+
+```dart
+Future<Map<String, Object?>> run(String email) async {
+  final user = await createUser(email);
+  await sendWelcomeEmail(email);
+  await sendOneWeekCheckInEmail(email);
+  return {'userId': user['id'], 'status': 'done'};
+}
+```
+
+`stem_builder` generates a proxy subclass that rewrites those calls into
+durable `script.step(...)` executions. The source method bodies stay readable,
+while the generated part handles the workflow runtime plumbing.
+
+Conceptually:
+
+- `Flow`: declared steps are the execution plan
+- script workflows: `run(...)` is the execution plan, and declared checkpoints
+  are metadata for manifests/tooling
+
+Choose the entry shape based on whether you need step context:
+
+- plain direct-call style
+  - `Future<T> run(String email, ...)`
+  - use when annotated step methods only need serializable parameters
+- context-aware style
+  - `@WorkflowRun()`
+  - `Future<T> run(WorkflowScriptContext script, String email, ...)`
+  - use when you need to enter through `script.step(...)` so the step body can
+    receive `WorkflowScriptStepContext`
+
+Supported context injection points:
+
+- flow steps: `FlowContext`
+- script runs: `WorkflowScriptContext`
+- script steps: `WorkflowScriptStepContext`
+- tasks: `TaskInvocationContext`
+
+Serializable parameter rules are enforced by the generator:
+
+- supported:
+  - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
+  - `List<T>` where `T` is serializable
+  - `Map<String, T>` where `T` is serializable
+- unsupported directly:
+  - arbitrary Dart class instances
+  - optional/named parameters on generated workflow/task entrypoints
+
+If you need to pass a richer domain object, encode it as
+`Map<String, Object?>` first and decode it inside the workflow or task body.
+
+The intended DX is:
+
+- define annotated workflows and tasks in one file
+- add `part '<file>.stem.g.dart';`
+- run `build_runner`
+- pass generated `stemFlows`, `stemScripts`, and `stemTasks` into
+  `StemWorkflowApp`
+- start workflows through generated `startXxx(...)` helpers instead of raw
+  workflow-name strings
+
 You can customize generated starter names via `@WorkflowDefn`:
 
 ```dart
@@ -91,6 +153,16 @@ The generated part exports helpers like `registerStemDefinitions`,
 starters so you can avoid raw workflow-name strings (for example
 `runtime.startScript(email: 'user@example.com')`).
 
+Generated output includes:
+
+- `stemFlows`
+- `stemScripts`
+- `stemTasks`
+- `StemWorkflowNames`
+- starter extensions on both `StemWorkflowApp` and `WorkflowRuntime`
+- convenience helpers for creating generated apps in memory or on top of an
+  existing `StemApp`
+
 ## Wiring Into StemWorkflowApp
 
 For the common case, pass generated tasks and workflows directly to
@@ -103,6 +175,9 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   flows: stemFlows,
   tasks: stemTasks,
 );
+
+final runId = await workflowApp.startUserSignup(email: 'user@example.com');
+final result = await workflowApp.waitForCompletion<Map<String, Object?>>(runId);
 ```
 
 If your application already owns a `StemApp`, reuse it:
@@ -122,6 +197,14 @@ final workflowApp = await StemWorkflowApp.create(
 );
 ```
 
+The generated helpers work on `WorkflowRuntime` too:
+
+```dart
+final runtime = workflowApp.runtime;
+final runId = await runtime.startUserSignup(email: 'user@example.com');
+await runtime.executeRun(runId);
+```
+
 You only need `registerStemDefinitions(...)` when you are integrating with
 existing custom `WorkflowRegistry` and `TaskRegistry` instances manually.
 
@@ -131,3 +214,5 @@ See [`example/README.md`](example/README.md) for runnable examples, including:
 
 - Generated registration + execution with `StemWorkflowApp`
 - Runtime manifest + run detail views with `WorkflowRuntime`
+- Plain direct-call script steps and context-aware script steps
+- Typed `@TaskDefn` parameters with `TaskInvocationContext`

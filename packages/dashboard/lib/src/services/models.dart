@@ -572,9 +572,11 @@ List<DashboardNamespaceSnapshot> buildNamespaceSnapshots({
   final runsByNamespace = <String, Set<String>>{};
 
   for (final queue in queues) {
-    queueNamesByNamespace.putIfAbsent(defaultNamespace, () => <String>{}).add(
-      queue.queue,
-    );
+    queueNamesByNamespace
+        .putIfAbsent(defaultNamespace, () => <String>{})
+        .add(
+          queue.queue,
+        );
     pendingByNamespace[defaultNamespace] =
         (pendingByNamespace[defaultNamespace] ?? 0) + queue.pending;
     inflightByNamespace[defaultNamespace] =
@@ -602,9 +604,11 @@ List<DashboardNamespaceSnapshot> buildNamespaceSnapshots({
     final namespace = task.namespace.trim().isEmpty
         ? defaultNamespace
         : task.namespace.trim();
-    queueNamesByNamespace.putIfAbsent(namespace, () => <String>{}).add(
-      task.queue,
-    );
+    queueNamesByNamespace
+        .putIfAbsent(namespace, () => <String>{})
+        .add(
+          task.queue,
+        );
     if (task.state == TaskState.running) {
       runningByNamespace[namespace] = (runningByNamespace[namespace] ?? 0) + 1;
     }
@@ -622,22 +626,23 @@ List<DashboardNamespaceSnapshot> buildNamespaceSnapshots({
     ...runningByNamespace.keys,
     ...failedByNamespace.keys,
     ...runsByNamespace.keys,
-  }.toList(growable: false)
-    ..sort();
+  }.toList(growable: false)..sort();
 
-  return namespaces.map((namespace) {
-    return DashboardNamespaceSnapshot(
-      namespace: namespace,
-      queueCount: queueNamesByNamespace[namespace]?.length ?? 0,
-      workerCount: workerCountByNamespace[namespace] ?? 0,
-      pending: pendingByNamespace[namespace] ?? 0,
-      inflight: inflightByNamespace[namespace] ?? 0,
-      deadLetters: deadByNamespace[namespace] ?? 0,
-      runningTasks: runningByNamespace[namespace] ?? 0,
-      failedTasks: failedByNamespace[namespace] ?? 0,
-      workflowRuns: runsByNamespace[namespace]?.length ?? 0,
-    );
-  }).toList(growable: false);
+  return namespaces
+      .map((namespace) {
+        return DashboardNamespaceSnapshot(
+          namespace: namespace,
+          queueCount: queueNamesByNamespace[namespace]?.length ?? 0,
+          workerCount: workerCountByNamespace[namespace] ?? 0,
+          pending: pendingByNamespace[namespace] ?? 0,
+          inflight: inflightByNamespace[namespace] ?? 0,
+          deadLetters: deadByNamespace[namespace] ?? 0,
+          runningTasks: runningByNamespace[namespace] ?? 0,
+          failedTasks: failedByNamespace[namespace] ?? 0,
+          workflowRuns: runsByNamespace[namespace]?.length ?? 0,
+        );
+      })
+      .toList(growable: false);
 }
 
 /// Builds task/job summaries grouped by task name.
@@ -756,9 +761,9 @@ class DashboardWorkflowRunSnapshot {
   final Object? result;
 }
 
-/// Projection of a persisted workflow step checkpoint.
+/// Projection of a persisted workflow checkpoint.
 class DashboardWorkflowStepSnapshot {
-  /// Creates a workflow step snapshot.
+  /// Creates a workflow checkpoint snapshot.
   const DashboardWorkflowStepSnapshot({
     required this.name,
     required this.position,
@@ -766,7 +771,7 @@ class DashboardWorkflowStepSnapshot {
     this.completedAt,
   });
 
-  /// Builds a workflow step snapshot from [WorkflowStepEntry].
+  /// Builds a workflow checkpoint snapshot from [WorkflowStepEntry].
   factory DashboardWorkflowStepSnapshot.fromEntry(WorkflowStepEntry entry) {
     return DashboardWorkflowStepSnapshot(
       name: entry.name,
@@ -776,10 +781,10 @@ class DashboardWorkflowStepSnapshot {
     );
   }
 
-  /// Step name.
+  /// Checkpoint name.
   final String name;
 
-  /// Step ordering position.
+  /// Checkpoint ordering position.
   final int position;
 
   /// Persisted checkpoint value.
@@ -879,9 +884,9 @@ class _DashboardJobSummaryBuilder {
     final sampleQueue = _queueHits.entries.isEmpty
         ? 'default'
         : (_queueHits.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value)))
-            .first
-            .key;
+                ..sort((a, b) => b.value.compareTo(a.value)))
+              .first
+              .key;
     return DashboardJobSummary(
       taskName: taskName,
       sampleQueue: sampleQueue,

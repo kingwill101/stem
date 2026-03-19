@@ -49,7 +49,7 @@ class _StemScriptProxy0 extends BuilderUserSignupWorkflow {
 final List<WorkflowScript> stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "builder.example.user_signup",
-    steps: [
+    checkpoints: [
       FlowStep(
         name: "create-user",
         handler: _stemScriptManifestStepNoop,
