@@ -35,4 +35,4 @@ The generated bundle is the default integration surface:
 - `StemWorkflowApp.inMemory(module: stemModule)`
 - `StemWorkflowApp.fromUrl(..., module: stemModule)`
 - `StemWorkflowApp.create(stemApp: ..., module: stemModule)`
-- `StemClient.createWorkflowApp(module: stemModule)`
+- `StemClient.fromUrl(..., module: stemModule)` + `createWorkflowApp()`

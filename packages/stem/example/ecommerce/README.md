@@ -50,6 +50,12 @@ final workflowApp = await StemWorkflowApp.fromUrl(
 );
 ```
 
+That bootstrap path auto-subscribes the worker to the workflow queue plus the
+default queues declared on the bundled module tasks and
+`shipmentReserveTaskHandler`.
+You only need an explicit `workerConfig.subscription` if you route work to
+additional queues beyond those task defaults.
+
 This is why the run command always includes:
 
 ```bash

@@ -15,6 +15,14 @@ Everything else that crosses a durable boundary must be serializable.
 Those context objects are not part of the persisted payload shape. They are
 injected by the runtime when the handler executes.
 
+For annotated workflows/tasks, the preferred shape is an optional named context
+parameter:
+
+- `Future<T> run(String email, {WorkflowScriptContext? context})`
+- `Future<T> checkpoint(String email, {WorkflowScriptStepContext? context})`
+- `Future<T> step({FlowContext? context})`
+- `Future<void> task(String id, {TaskInvocationContext? context})`
+
 ## What context gives you
 
 Depending on the context type, you can access:
@@ -25,10 +33,22 @@ Depending on the context type, you can access:
 - `stepIndex`
 - `iteration`
 - workflow params and previous results
+- `sleepUntilResumed(...)` for common sleep/retry loops
+- `waitForEventValue<T>(...)` for common event waits
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `idempotencyKey(...)`
+- `workflows` for typed child-workflow starts from durable step/checkpoint
+  contexts
 - task metadata like `id`, `attempt`, `meta`
+
+Child workflow starts belong in durable boundaries:
+
+- `FlowContext.workflows` inside flow steps
+- `WorkflowScriptStepContext.workflows` inside script checkpoints
+
+Do not treat the raw `WorkflowScriptContext` body as a safe place for child
+starts or other replay-sensitive side effects.
 
 ## Serializable parameter rules
 
@@ -83,9 +103,18 @@ map-based today.
 
 ## Practical rule
 
-When you need context metadata, add the appropriate context parameter first.
-When you need business input, make it a required positional serializable value
-after the context parameter.
+When you need context metadata, add the appropriate optional named context
+parameter. When you need business input, make it a required positional
+serializable value.
+
+Prefer the higher-level helpers first:
+
+- `sleepUntilResumed(...)` when the step/checkpoint should pause once and
+  continue on resume
+- `waitForEventValue<T>(...)` when the step/checkpoint is waiting on one event
+
+Drop down to `takeResumeData()` / `takeResumeValue<T>(...)` only when you need
+custom branching around resume payloads.
 
 The runnable `annotated_workflows` example demonstrates both the context-aware
 and plain serializable forms.

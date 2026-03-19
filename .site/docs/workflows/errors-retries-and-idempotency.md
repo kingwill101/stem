@@ -12,6 +12,8 @@ the runtime after resume, and the step body must tolerate replay.
 
 Use:
 
+- `sleepUntilResumed(...)` for simple sleep/replay loops
+- `waitForEventValue<T>(...)` for one-event suspension points
 - `takeResumeData()` to branch on fresh resume payloads
 - `idempotencyKey(...)` when a step talks to an external side-effecting system
 - persisted previous results instead of in-memory state

@@ -43,9 +43,6 @@ class EcommerceServer {
         queue: 'workflow',
         consumerName: 'ecommerce-worker',
         concurrency: 2,
-        subscription: RoutingSubscription(
-          queues: const ['workflow', 'default'],
-        ),
       ),
     );
 

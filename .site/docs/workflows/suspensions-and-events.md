@@ -12,6 +12,15 @@ different worker.
 periodically scans due runs and re-enqueues the internal workflow task when the
 sleep expires.
 
+For the common "sleep once, continue on resume" case, prefer the higher-level
+helper:
+
+```dart
+if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
+  return null;
+}
+```
+
 ## Await external events
 
 `awaitEvent(topic, deadline: ...)` records a durable watcher. External code can
@@ -25,7 +34,19 @@ Typical flow:
    `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
    a payload
 4. the runtime resumes the run and exposes the payload through
-   `takeResumeData()` or `takeResumeValue<T>(codec: ...)`
+   `waitForEventValue<T>(...)` or the lower-level
+   `takeResumeData()` / `takeResumeValue<T>(codec: ...)`
+
+For the common "wait for one event and continue" case, prefer:
+
+```dart
+final payload = ctx.waitForEventValue<Map<String, Object?>>(
+  'orders.payment.confirmed',
+);
+if (payload == null) {
+  return null;
+}
+```
 
 ## Emit resume events
 

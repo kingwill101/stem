@@ -203,6 +203,21 @@ Future<void> main() async {
 }
 ```
 
+`Stem.enqueueCall(...)` can publish from the `TaskDefinition` metadata alone, so
+producer-only processes do not need to register the worker handler locally just
+to enqueue typed calls.
+
+For typed task calls, the definition and call objects now expose the common
+producer operations directly:
+
+```dart
+final taskId = await HelloTask.definition
+  .call(const HelloArgs(name: 'Stem'))
+  .enqueueWith(stem);
+
+final result = await HelloTask.definition.waitFor(stem, taskId);
+```
+
 You can also build requests fluently with the `TaskEnqueueBuilder`:
 
 ```dart
@@ -291,9 +306,7 @@ final app = await StemWorkflowApp.inMemory(
         });
 
         await script.step('poll-shipment', (step) async {
-          final resume = step.takeResumeValue<bool>();
-          if (resume != true) {
-            await step.sleep(const Duration(seconds: 30));
+          if (!step.sleepUntilResumed(const Duration(seconds: 30))) {
             return 'waiting';
           }
           final status = await fetchShipment(checkout.id);
@@ -316,14 +329,17 @@ final app = await StemWorkflowApp.inMemory(
 );
 ```
 
-Inside a script step you can access the same metadata as `FlowContext`:
+Inside a script checkpoint you can access the same metadata as `FlowContext`:
 
 - `step.previousResult` contains the prior step’s persisted value.
 - `step.iteration` tracks the current auto-version suffix when
   `autoVersion: true` is set.
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
+- `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
+  resume path.
+- `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
 - `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface
-  payloads from sleeps or awaited events so you can branch on resume paths.
+  payloads from sleeps or awaited events when you need lower-level control.
 
 ### Current workflow model
 
@@ -357,9 +373,10 @@ final approvalsFlow = Flow<String>(
     });
 
     flow.step('manager-review', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+        'approvals.manager',
+      );
       if (resume == null) {
-        await ctx.awaitEvent('approvals.manager');
         return null;
       }
       return resume['approvedBy'] as String?;
@@ -400,9 +417,10 @@ final billingRetryScript = WorkflowScript(
   name: 'billing.retry-script',
   run: (script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+        'billing.charge.prepared',
+      );
       if (resume == null) {
-        await ctx.awaitEvent('billing.charge.prepared');
         return 'pending';
       }
       return resume['chargeId'] as String;
@@ -464,28 +482,36 @@ class BuilderUserSignupWorkflow {
 
 @TaskDefn(name: 'builder.example.task')
 Future<void> builderExampleTask(
-  TaskInvocationContext context,
   Map<String, Object?> args,
+  {TaskInvocationContext? context}
 ) async {}
 ```
 
-There are two supported script entry styles:
+Script workflows use one authoring model:
 
-- plain direct-call style:
-  - `Future<T> run(String email, ...)`
-  - best when your annotated step methods only take serializable parameters
-- context-aware style:
-  - `@WorkflowRun()`
-  - `Future<T> run(WorkflowScriptContext script, String email, ...)`
-  - use this when you need to enter a step explicitly with `script.step(...)`
-    so the step body can receive `WorkflowScriptStepContext`
+- start with a plain `run(String email, ...)` method
+- add an optional named injected context when you need runtime metadata or an
+  explicit `script.step(...)` wrapper:
+  - `Future<T> run(String email, {WorkflowScriptContext? context})`
+  - `Future<T> capture(String email, {WorkflowScriptStepContext? context})`
+- direct checkpoint method calls still stay the default happy path
 
 Context injection works at every runtime layer:
 
 - flow steps can take `FlowContext`
 - script runs can take `WorkflowScriptContext`
-- script steps can take `WorkflowScriptStepContext`
+- script checkpoints can take `WorkflowScriptStepContext`
 - tasks can take `TaskInvocationContext`
+
+Child workflows belong in durable execution boundaries:
+
+- use `FlowContext.workflows` inside flow steps
+- use `WorkflowScriptStepContext.workflows` inside script checkpoints
+- do not start child workflows from the raw `WorkflowScriptContext` body unless
+  you are deliberately managing replay/idempotency yourself
+
+For annotated workflows/tasks, the preferred shape is an optional named context
+parameter. The runtime injects it, and it is not part of the durable payload.
 
 Serializable parameter rules for generated workflows and tasks are strict:
 
@@ -498,7 +524,7 @@ Serializable parameter rules for generated workflows and tasks are strict:
     - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent
       named `fromJson` constructor
 - not supported directly:
-  - optional/named parameters on generated workflow/task entrypoints
+  - optional/named business parameters on generated workflow/task entrypoints
 
 Typed task results can use the same DTO convention.
 
@@ -508,10 +534,11 @@ workflow code continues to work with typed objects.
 
 See the runnable example:
 
-- [example/annotated_workflows](example/annotated_workflows)
+  - [example/annotated_workflows](example/annotated_workflows)
   - `FlowContext` metadata
-  - plain proxy-driven script step calls
+  - plain proxy-driven script checkpoint calls
   - `WorkflowScriptContext` + `WorkflowScriptStepContext`
+  - optional named context injection
   - codec-backed workflow checkpoint values and workflow results
   - typed `@TaskDefn` decoding scalar, `Map`, and `List` parameters
 
@@ -536,6 +563,11 @@ print(result?.value);
 await app.close();
 ```
 
+When you use `module: stemModule`, `StemWorkflowApp` infers the worker
+subscription from the workflow queue plus the default queues declared on the
+bundled task handlers. You only need to set `workerConfig.subscription`
+explicitly when your routing goes beyond those defaults.
+
 Generated output gives you:
 
 - `stemModule`
@@ -544,18 +576,35 @@ Generated output gives you:
 - typed enqueue helpers on `TaskEnqueuer`
 - typed result wait helpers on `Stem`
 
+The same bundle also works for plain task apps:
+
+```dart
+final taskApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  module: stemModule,
+);
+```
+
+When you bootstrap a plain `StemApp` with `module: stemModule`, the worker
+infers task queue subscriptions from the bundled task handlers. Set
+`workerConfig.subscription` explicitly only when you need broader routing.
+
 If your service already owns a `StemApp`, reuse it:
 
 ```dart
 final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-);
-
-final workflowApp = await client.createWorkflowApp(
   module: stemModule,
 );
+
+final workflowApp = await client.createWorkflowApp();
 ```
+
+If you reuse an existing `StemApp`, its worker subscription stays authoritative.
+The module-based queue inference only applies when `StemWorkflowApp` is also
+creating the worker.
 
 #### Mixing workflows and normal tasks
 
@@ -622,20 +671,19 @@ lowering.
 
 ### Typed task completion
 
-Producers can now wait for individual task results using `Stem.waitForTask<T>`
-with optional decoders. The helper returns a `TaskResult<T>` containing the
-underlying `TaskStatus`, decoded payload, and a timeout flag:
+Producers can now wait for individual task results using either
+`TaskDefinition.waitFor(...)` or `Stem.waitForTask<T>` with optional decoders.
+These helpers return a `TaskResult<T>` containing the underlying `TaskStatus`,
+decoded payload, and a timeout flag:
 
 ```dart
-final taskId = await stem.enqueueCall(
-  ChargeCustomer.definition.call(ChargeArgs(orderId: '123')),
-);
+final taskId = await ChargeCustomer.definition
+  .call(ChargeArgs(orderId: '123'))
+  .enqueueWith(stem);
 
-final charge = await stem.waitForTask<ChargeReceipt>(
+final charge = await ChargeCustomer.definition.waitFor(
+  stem,
   taskId,
-  decode: (payload) => ChargeReceipt.fromJson(
-    payload! as Map<String, Object?>,
-  ),
 );
 if (charge?.isSucceeded == true) {
   print('Captured ${charge!.value!.total}');
@@ -828,16 +876,29 @@ backend metadata under `stem.unique.duplicates`.
 - Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
   runtime skips re-suspending once the stored `resumeAt` is reached so loop
   handlers can simply call `sleep` without extra guards.
-- Use `ctx.takeResumeData()` or `ctx.takeResumeValue<T>(codec: ...)` to detect
-  whether a step is resuming. Call it at the start of the handler and branch
-  accordingly.
-- When you suspend, provide a marker in the `data` payload so the resumed step
-  can distinguish the wake-up path. For example:
+- Prefer the higher-level helpers for common cases:
 
   ```dart
-  final resume = ctx.takeResumeValue<bool>();
-  if (resume != true) {
-    ctx.sleep(const Duration(milliseconds: 200));
+  if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
+    return null;
+  }
+  ```
+
+  ```dart
+  final payload = ctx.waitForEventValue<Map<String, Object?>>('demo.event');
+  if (payload == null) {
+    return null;
+  }
+  ```
+
+- Use `ctx.takeResumeData()` or `ctx.takeResumeValue<T>(codec: ...)` when you
+  need lower-level control over the resume payload or need to distinguish
+  custom suspension markers yourself.
+- When you suspend with the low-level API, provide a marker in the `data`
+  payload so the resumed step can distinguish the wake-up path. For example:
+
+  ```dart
+  if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
     return null;
   }
   ```

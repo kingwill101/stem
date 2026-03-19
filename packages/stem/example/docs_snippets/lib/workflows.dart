@@ -49,9 +49,10 @@ class ApprovalsFlow {
       });
 
       flow.step('manager-review', (ctx) async {
-        final resume = ctx.takeResumeValue<Map<String, Object?>>();
+        final resume = ctx.waitForEventValue<Map<String, Object?>>(
+          'approvals.manager',
+        );
         if (resume == null) {
-          await ctx.awaitEvent('approvals.manager');
           return null;
         }
         return resume['approvedBy'] as String?;
@@ -75,9 +76,10 @@ final retryScript = WorkflowScript(
   name: 'billing.retry-script',
   run: (script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+        'billing.charge.prepared',
+      );
       if (resume == null) {
-        await ctx.awaitEvent('billing.charge.prepared');
         return 'pending';
       }
       return resume['chargeId'] as String;
@@ -143,23 +145,27 @@ Future<void> configureWorkflowEncoders() async {
 @WorkflowDefn(name: 'approvals.flow')
 class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
-  Future<String> draft(FlowContext ctx) async {
+  Future<String> draft({FlowContext? context}) async {
+    final ctx = context!;
     final payload = ctx.params['draft'] as Map<String, Object?>;
     return payload['documentId'] as String;
   }
 
   @WorkflowStep(name: 'manager-review')
-  Future<String?> managerReview(FlowContext ctx) async {
-    final resume = ctx.takeResumeValue<Map<String, Object?>>();
+  Future<String?> managerReview({FlowContext? context}) async {
+    final ctx = context!;
+    final resume = ctx.waitForEventValue<Map<String, Object?>>(
+      'approvals.manager',
+    );
     if (resume == null) {
-      await ctx.awaitEvent('approvals.manager');
       return null;
     }
     return resume['approvedBy'] as String?;
   }
 
   @WorkflowStep()
-  Future<String> finalize(FlowContext ctx) async {
+  Future<String> finalize({FlowContext? context}) async {
+    final ctx = context!;
     final approvedBy = ctx.previousResult as String?;
     return 'approved-by:$approvedBy';
   }
@@ -167,12 +173,13 @@ class ApprovalsAnnotatedWorkflow {
 
 @WorkflowDefn(name: 'billing.retry-script', kind: WorkflowKind.script)
 class BillingRetryAnnotatedWorkflow {
-  @WorkflowRun()
-  Future<String> run(WorkflowScriptContext script) async {
+  Future<String> run({WorkflowScriptContext? context}) async {
+    final script = context!;
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+        'billing.charge.prepared',
+      );
       if (resume == null) {
-        await ctx.awaitEvent('billing.charge.prepared');
         return 'pending';
       }
       return resume['chargeId'] as String;
@@ -190,9 +197,11 @@ class BillingRetryAnnotatedWorkflow {
   options: TaskOptions(maxRetries: 5),
 )
 Future<void> sendEmail(
-  TaskInvocationContext ctx,
   Map<String, Object?> args,
+  {TaskInvocationContext? context}
 ) async {
+  final ctx = context!;
+  ctx.heartbeat();
   // send email
 }
 

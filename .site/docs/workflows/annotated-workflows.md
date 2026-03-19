@@ -17,6 +17,10 @@ generated file exposes:
 - typed enqueue helpers like `enqueueSendEmailTyped(...)`
 - typed result wait helpers like `waitForSendEmailTyped(...)`
 
+The generated task definitions are producer-safe: `Stem.enqueueCall(...)` can
+publish from the definition metadata, so producer processes do not need to
+register the worker handler locally just to enqueue typed task calls.
+
 Wire the bundle directly into `StemWorkflowApp`:
 
 ```dart
@@ -24,6 +28,19 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   'memory://',
   module: stemModule,
 );
+```
+
+With `module: stemModule`, the workflow app infers the worker subscription
+from the workflow queue plus the default queues declared on the bundled task
+handlers. Set `workerConfig.subscription` explicitly only when you need extra
+queues beyond those defaults.
+
+If you centralize broker/backend wiring in a `StemClient`, give the client the
+bundle once and then create workflow apps without repeating it:
+
+```dart
+final client = await StemClient.fromUrl('memory://', module: stemModule);
+final workflowApp = await client.createWorkflowApp();
 ```
 
 Use the generated workflow refs when you want a single typed handle for start
@@ -35,9 +52,7 @@ final result = await StemWorkflowDefinitions.userSignup
     .startAndWaitWithApp(workflowApp);
 ```
 
-## Two script entry styles
-
-### Direct-call style
+## Script context injection
 
 Use a plain `run(...)` when your annotated checkpoints only need serializable
 values or codec-backed DTO parameters:
@@ -64,30 +79,29 @@ class UserSignupWorkflow {
 The generator rewrites those calls into durable checkpoint boundaries in the
 generated proxy class.
 
-### Context-aware style
-
-Use `@WorkflowRun()` when you need to enter through `WorkflowScriptContext` so
-the checkpoint body can receive `WorkflowScriptStepContext`:
+When you need runtime metadata or an explicit `script.step(...)`, add an
+optional named injected context parameter:
 
 ```dart
 @WorkflowDefn(name: 'annotated.context_script', kind: WorkflowKind.script)
 class AnnotatedContextScriptWorkflow {
-  @WorkflowRun()
   Future<Map<String, Object?>> run(
-    WorkflowScriptContext script,
     String email,
+    {WorkflowScriptContext? context}
   ) async {
+    final script = context!;
     return script.step<Map<String, Object?>>(
       'enter-context-step',
-      (ctx) => captureContext(ctx, email),
+      (ctx) => captureContext(email, context: ctx),
     );
   }
 
   @WorkflowStep(name: 'capture-context')
   Future<Map<String, Object?>> captureContext(
-    WorkflowScriptStepContext ctx,
     String email,
+    {WorkflowScriptStepContext? context}
   ) async {
+    final ctx = context!;
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -98,11 +112,18 @@ class AnnotatedContextScriptWorkflow {
 }
 ```
 
-Context-aware checkpoint methods are not meant to be called directly from a
-plain `run(String ...)` signature. If a called step needs
-`WorkflowScriptStepContext`, enter it through `@WorkflowRun()` plus
-`WorkflowScriptContext`; plain direct-call style is for steps that consume only
-serializable business parameters.
+This keeps one authoring model:
+
+- plain direct method calls are still the default
+- context is added only when you need it
+- the injected context is not part of the durable payload shape
+
+When a workflow needs to start another workflow, do it from a durable boundary:
+
+- `FlowContext.workflows` inside flow steps
+- `WorkflowScriptStepContext.workflows` inside checkpoint methods
+
+Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 
 ## Runnable example
 
@@ -114,14 +135,18 @@ example that demonstrates:
 - nested annotated checkpoint calls
 - `WorkflowScriptContext`
 - `WorkflowScriptStepContext`
+- optional named context injection
 - `TaskInvocationContext`
 - codec-backed DTO workflow checkpoints and final workflow results
 - typed task DTO input and result decoding
 
+When you inspect run detail, the runtime now exposes `checkpoints` for script
+workflows rather than reusing the flow-step view model.
+
 ## DTO rules
 
-Generated workflow/task entrypoints support required positional parameters that
-are either:
+Generated workflow/task entrypoints support required positional business
+parameters that are either:
 
 - serializable values (`String`, numbers, bools, `List<T>`, `Map<String, T>`)
 - codec-backed DTO classes that provide:

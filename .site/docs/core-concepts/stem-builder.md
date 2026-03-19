@@ -53,7 +53,12 @@ class UserSignupWorkflow {
 }
 
 @TaskDefn(name: 'commerce.audit.log', runInIsolate: false)
-Future<void> logAudit(TaskInvocationContext ctx, String event, String id) async {
+Future<void> logAudit(
+  String event,
+  String id, {
+  TaskInvocationContext? context,
+}) async {
+  final ctx = context!;
   ctx.progress(1.0, data: {'event': event, 'id': id});
 }
 ```
@@ -86,6 +91,11 @@ final result = await StemWorkflowDefinitions.userSignup
     .startAndWaitWithApp(workflowApp);
 ```
 
+When you pass `module: stemModule`, the workflow app infers the worker
+subscription from the workflow queue plus the default queues declared on the
+bundled task handlers. Explicit subscriptions are still available for advanced
+routing.
+
 If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 
@@ -93,7 +103,7 @@ bootstrapping a second app:
 final stemApp = await StemApp.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-  tasks: stemModule.tasks,
+  module: stemModule,
 );
 
 final workflowApp = await StemWorkflowApp.create(
@@ -102,6 +112,19 @@ final workflowApp = await StemWorkflowApp.create(
 );
 ```
 
+For task-only services, the same bundle works directly with `StemApp`:
+
+```dart
+final taskApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  module: stemModule,
+);
+```
+
+Plain `StemApp` bootstrap infers task queue subscriptions from the bundled
+task handlers when `workerConfig.subscription` is omitted.
+
 If you already centralize broker/backend wiring in a `StemClient`, prefer the
 shared-client path:
 
@@ -109,23 +132,29 @@ shared-client path:
 final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
+  module: stemModule,
 );
 
-final workflowApp = await client.createWorkflowApp(module: stemModule);
+final workflowApp = await client.createWorkflowApp();
 ```
+
+If you reuse an existing `StemApp`, its worker subscription remains your
+responsibility. The module-based queue inference only applies when the
+workflow app is creating the worker itself.
 
 ## Parameter and Signature Rules
 
-- Parameters after context must be required positional serializable values.
-- Parameters after context must be required positional values that are either
+- Business parameters must be required positional values that are either
   serializable or codec-backed DTOs.
 - Script workflow `run(...)` can be plain (no annotation required).
-- `@WorkflowRun` is still supported for explicit run entrypoints.
-- Step methods use `@WorkflowStep`.
-- Plain `run(...)` is best when called step methods only need serializable
+- Checkpoint methods use `@WorkflowStep`.
+- Plain `run(...)` is best when called checkpoint methods only need
+  serializable
   parameters.
-- Use `@WorkflowRun()` plus `WorkflowScriptContext` when you need to enter a
-  context-aware script checkpoint that consumes `WorkflowScriptStepContext`.
+- When you need runtime metadata or an explicit `script.step(...)`, add an
+  optional named injected context parameter:
+  - `WorkflowScriptContext? context` on `run(...)`
+  - `WorkflowScriptStepContext? context` on the checkpoint method
 - DTO classes are supported when they provide:
   - `Map<String, Object?> toJson()`
   - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent named
@@ -134,3 +163,4 @@ final workflowApp = await client.createWorkflowApp(module: stemModule);
 - Workflow inputs, checkpoint values, and final workflow results can use the
   same DTO convention. The generated `PayloadCodec` persists the JSON form
   while workflow code continues to work with typed objects.
+- Runtime detail surfaces flow `steps` and script `checkpoints` separately.
