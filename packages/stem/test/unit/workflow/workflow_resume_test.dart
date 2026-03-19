@@ -1,6 +1,7 @@
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
+import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:test/test.dart';
@@ -40,13 +41,135 @@ void main() {
     expect(value!['approvedBy'], 'gateway');
     expect(context.takeResumeValue<Map<String, Object?>>(), isNull);
   });
+
+  test('FlowContext.sleepUntilResumed suspends once then resumes', () {
+    final firstContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    final firstResult = firstContext.sleepUntilResumed(
+      const Duration(seconds: 1),
+      data: const {'phase': 'initial'},
+    );
+
+    expect(firstResult, isFalse);
+    final control = firstContext.takeControl();
+    expect(control, isNotNull);
+    expect(control!.type, FlowControlType.sleep);
+
+    final resumedContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      resumeData: true,
+    );
+
+    final resumed = resumedContext.sleepUntilResumed(
+      const Duration(seconds: 1),
+    );
+
+    expect(resumed, isTrue);
+    expect(resumedContext.takeControl(), isNull);
+  });
+
+  test(
+    'FlowContext.waitForEventValue registers watcher then decodes payload',
+    () {
+      final firstContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      final firstResult = firstContext.waitForEventValue<_ResumePayload>(
+        'demo.event',
+        codec: _resumePayloadCodec,
+      );
+
+      expect(firstResult, isNull);
+      final control = firstContext.takeControl();
+      expect(control, isNotNull);
+      expect(control!.type, FlowControlType.waitForEvent);
+      expect(control.topic, 'demo.event');
+
+      final resumedContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {'message': 'approved'},
+      );
+
+      final resumed = resumedContext.waitForEventValue<_ResumePayload>(
+        'demo.event',
+        codec: _resumePayloadCodec,
+      );
+
+      expect(resumed, isNotNull);
+      expect(resumed!.message, 'approved');
+      expect(resumedContext.takeControl(), isNull);
+    },
+  );
+
+  test(
+    'WorkflowScriptStepContext helpers suspend once and decode resumed values',
+    () {
+      final sleeping = _FakeWorkflowScriptStepContext();
+
+      final firstSleep = sleeping.sleepUntilResumed(
+        const Duration(milliseconds: 10),
+      );
+
+      expect(firstSleep, isFalse);
+      expect(sleeping.sleepCalls, hasLength(1));
+
+      final resumedSleep = _FakeWorkflowScriptStepContext(resumeData: true);
+      expect(
+        resumedSleep.sleepUntilResumed(const Duration(milliseconds: 10)),
+        isTrue,
+      );
+      expect(resumedSleep.sleepCalls, isEmpty);
+
+      final waiting = _FakeWorkflowScriptStepContext();
+      final firstEvent = waiting.waitForEventValue<_ResumePayload>(
+        'demo.event',
+        codec: _resumePayloadCodec,
+      );
+      expect(firstEvent, isNull);
+      expect(waiting.awaitedTopics, ['demo.event']);
+
+      final resumedEvent = _FakeWorkflowScriptStepContext(
+        resumeData: const {'message': 'approved'},
+      );
+      final resumedValue = resumedEvent.waitForEventValue<_ResumePayload>(
+        'demo.event',
+        codec: _resumePayloadCodec,
+      );
+      expect(resumedValue, isNotNull);
+      expect(resumedValue!.message, 'approved');
+      expect(resumedEvent.awaitedTopics, isEmpty);
+    },
+  );
 }
 
 class _ResumePayload {
   const _ResumePayload({required this.message});
 
   factory _ResumePayload.fromJson(Map<String, Object?> json) {
-    return _ResumePayload(message: json['message'] as String);
+    return _ResumePayload(message: json['message']! as String);
   }
 
   final String message;
@@ -62,8 +185,9 @@ const _resumePayloadCodec = PayloadCodec<_ResumePayload>(
 Object? _encodeResumePayload(_ResumePayload value) => value.toJson();
 
 _ResumePayload _decodeResumePayload(Object? payload) {
+  final map = payload! as Map<Object?, Object?>;
   return _ResumePayload.fromJson(
-    Map<String, Object?>.from(payload! as Map<Object?, Object?>),
+    Map<String, Object?>.from(map),
   );
 }
 
@@ -72,9 +196,14 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     : _resumeData = resumeData;
 
   Object? _resumeData;
+  final List<String> awaitedTopics = <String>[];
+  final List<Duration> sleepCalls = <Duration>[];
 
   @override
   TaskEnqueuer? get enqueuer => null;
+
+  @override
+  Never? get workflows => null;
 
   @override
   int get iteration => 0;
@@ -102,14 +231,18 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     String topic, {
     DateTime? deadline,
     Map<String, Object?>? data,
-  }) async {}
+  }) async {
+    awaitedTopics.add(topic);
+  }
 
   @override
   String idempotencyKey([String? scope]) =>
       'demo.workflow/run-1/${scope ?? stepName}';
 
   @override
-  Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {}
+  Future<void> sleep(Duration duration, {Map<String, Object?>? data}) async {
+    sleepCalls.add(duration);
+  }
 
   @override
   Object? takeResumeData() {

@@ -15,15 +15,13 @@ Future<void> main() async {
         name: 'reports.generate',
         build: (flow) {
           flow.step('poll-status', (ctx) async {
-            final resume = ctx.takeResumeValue<bool>();
-            if (resume != true) {
+            if (!ctx.sleepUntilResumed(const Duration(seconds: 5))) {
               print('[workflow] polling external system…');
               // Simulate a slow external service; the cancellation policy will
               // cap this suspension to 2 seconds.
-              ctx.sleep(const Duration(seconds: 5));
               return null;
             }
-            print('[workflow] resumed with payload: $resume');
+            print('[workflow] resumed after sleep');
             return 'finished';
           });
         },

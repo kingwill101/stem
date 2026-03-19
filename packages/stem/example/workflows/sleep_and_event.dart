@@ -12,18 +12,17 @@ Future<void> main() async {
         name: 'durable.sleep.event',
         build: (flow) {
           flow.step('initial', (ctx) async {
-            final resumePayload = ctx.takeResumeValue<bool>();
-            if (resumePayload != true) {
-              ctx.sleep(const Duration(milliseconds: 200));
+            if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
               return null;
             }
             return 'awake';
           });
 
           flow.step('await-event', (ctx) async {
-            final payload = ctx.takeResumeValue<Map<String, Object?>>();
+            final payload = ctx.waitForEventValue<Map<String, Object?>>(
+              'demo.event',
+            );
             if (payload == null) {
-              ctx.awaitEvent('demo.event');
               return null;
             }
             return payload['message'];
