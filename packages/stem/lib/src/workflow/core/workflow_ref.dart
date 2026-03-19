@@ -1,3 +1,4 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
@@ -14,6 +15,19 @@ class WorkflowRef<TParams, TResult extends Object?> {
     this.decodeResult,
   });
 
+  /// Creates a typed workflow reference backed by payload codecs.
+  factory WorkflowRef.withPayloadCodec({
+    required String name,
+    required PayloadCodec<TParams> paramsCodec,
+    PayloadCodec<TResult>? resultCodec,
+  }) {
+    return WorkflowRef<TParams, TResult>(
+      name: name,
+      encodeParams: (params) => _encodeCodecParams(name, paramsCodec, params),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
   /// Registered workflow name.
   final String name;
 
@@ -22,6 +36,35 @@ class WorkflowRef<TParams, TResult extends Object?> {
 
   /// Optional decoder for the final workflow result payload.
   final TResult Function(Object? payload)? decodeResult;
+
+  static Map<String, Object?> _encodeCodecParams<T>(
+    String workflowName,
+    PayloadCodec<T> codec,
+    T params,
+  ) {
+    final payload = codec.encode(params);
+    if (payload is Map<String, Object?>) {
+      return Map<String, Object?>.from(payload);
+    }
+    if (payload is Map) {
+      final normalized = <String, Object?>{};
+      for (final entry in payload.entries) {
+        final key = entry.key;
+        if (key is! String) {
+          throw StateError(
+            'WorkflowRef.withPayloadCodec($workflowName) requires payload '
+            'keys to be strings, got ${key.runtimeType}.',
+          );
+        }
+        normalized[key] = entry.value;
+      }
+      return normalized;
+    }
+    throw StateError(
+      'WorkflowRef.withPayloadCodec($workflowName) must encode params to '
+      'Map<String, Object?>, got ${payload.runtimeType}.',
+    );
+  }
 
   /// Builds a workflow start call from typed arguments.
   WorkflowStartCall<TParams, TResult> call(

@@ -305,6 +305,16 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
+  WorkflowRef<TParams, T> refWithCodec<TParams>({
+    required PayloadCodec<TParams> paramsCodec,
+  }) {
+    return WorkflowRef<TParams, T>.withPayloadCodec(
+      name: name,
+      paramsCodec: paramsCodec,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] from this definition.
   NoArgsWorkflowRef<T> ref0() {
     return NoArgsWorkflowRef<T>(

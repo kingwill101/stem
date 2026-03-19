@@ -402,8 +402,25 @@ final approvalsFlow = Flow<String>(
   },
 );
 
-final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
-  encodeParams: (params) => <String, Object?>{'draft': params.draft},
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+  encode: (value) => value.toJson(),
+  decode: (payload) => ApprovalDraft.fromJson(
+    Map<String, Object?>.from(payload as Map),
+  ),
+);
+
+final approvalsRef = approvalsFlow.refWithCodec<({ApprovalDraft draft})>(
+  paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
+    encode: (value) => <String, Object?>{
+      'draft': approvalDraftCodec.encode(value.draft),
+    },
+    decode: (payload) {
+      final map = Map<String, Object?>.from(payload as Map);
+      return (
+        draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
+      );
+    },
+  ),
 );
 
 final app = await StemWorkflowApp.fromUrl(
@@ -414,13 +431,17 @@ final app = await StemWorkflowApp.fromUrl(
 
 final runId = await approvalsRef.startWithApp(
   app,
-  (draft: const {'documentId': 'doc-42'}),
+  (draft: const ApprovalDraft(documentId: 'doc-42')),
 );
 
 final result = await approvalsRef.waitFor(app, runId);
 print(result?.value);
 await app.close();
 ```
+
+Use `refWithCodec(...)` when your manual workflow start params are DTOs that
+already have a `PayloadCodec<T>`. The codec still needs to encode to
+`Map<String, Object?>` because workflow params are persisted as a map.
 
 For workflows without start parameters, use `ref0()` and start directly from
 the no-args ref:

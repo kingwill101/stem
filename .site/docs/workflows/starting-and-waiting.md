@@ -24,13 +24,30 @@ Manual `Flow(...)` and `WorkflowScript(...)` definitions can derive a typed ref
 without repeating the workflow-name string:
 
 ```dart
-final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
-  encodeParams: (params) => <String, Object?>{'draft': params.draft},
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+  encode: (value) => value.toJson(),
+  decode: (payload) => ApprovalDraft.fromJson(
+    Map<String, Object?>.from(payload as Map),
+  ),
+);
+
+final approvalsRef = approvalsFlow.refWithCodec<({ApprovalDraft draft})>(
+  paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
+    encode: (value) => <String, Object?>{
+      'draft': approvalDraftCodec.encode(value.draft),
+    },
+    decode: (payload) {
+      final map = Map<String, Object?>.from(payload as Map);
+      return (
+        draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
+      );
+    },
+  ),
 );
 
 final runId = await approvalsRef.startWithApp(
   workflowApp,
-  (draft: const {'documentId': 'doc-42'}),
+  (draft: const ApprovalDraft(documentId: 'doc-42')),
 );
 
 final result = await approvalsRef.waitFor(workflowApp, runId);
@@ -38,6 +55,9 @@ final result = await approvalsRef.waitFor(workflowApp, runId);
 
 Use this path when you want the same typed start/wait surface as generated
 workflow refs, but the workflow itself is still hand-written.
+
+`refWithCodec(...)` is the manual DTO path. The codec still needs to encode to
+`Map<String, Object?>` because workflow params are stored as a map.
 
 For workflows without start params, derive `ref0()` instead and start them
 directly from the no-args ref.

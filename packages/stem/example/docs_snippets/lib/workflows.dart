@@ -5,6 +5,29 @@ import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 
+class ApprovalDraft {
+  const ApprovalDraft({required this.documentId});
+
+  final String documentId;
+
+  Map<String, Object?> toJson() => {'documentId': documentId};
+
+  factory ApprovalDraft.fromJson(Map<String, Object?> json) {
+    return ApprovalDraft(documentId: json['documentId'] as String);
+  }
+}
+
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+  encode: _encodeApprovalDraft,
+  decode: _decodeApprovalDraft,
+);
+
+Object? _encodeApprovalDraft(ApprovalDraft value) => value.toJson();
+
+ApprovalDraft _decodeApprovalDraft(Object? payload) {
+  return ApprovalDraft.fromJson(Map<String, Object?>.from(payload as Map));
+}
+
 // #region workflows-runtime
 Future<void> bootstrapWorkflowRuntime() async {
   // #region workflows-app-create
@@ -65,8 +88,22 @@ class ApprovalsFlow {
     },
   );
 
-  static final ref = flow.ref<({Map<String, Object?> draft})>(
-    encodeParams: (params) => <String, Object?>{'draft': params.draft},
+  static final ref = flow.refWithCodec<({ApprovalDraft draft})>(
+    paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
+      encode: _encodeApprovalStart,
+      decode: _decodeApprovalStart,
+    ),
+  );
+}
+
+Object? _encodeApprovalStart(({ApprovalDraft draft}) value) {
+  return <String, Object?>{'draft': approvalDraftCodec.encode(value.draft)};
+}
+
+({ApprovalDraft draft}) _decodeApprovalStart(Object? payload) {
+  final map = Map<String, Object?>.from(payload as Map);
+  return (
+    draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
   );
 }
 
@@ -106,7 +143,7 @@ Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
   final runId = await ApprovalsFlow.ref.startWithApp(
     workflowApp,
     (
-      draft: const <String, Object?>{'documentId': 'doc-42'},
+      draft: const ApprovalDraft(documentId: 'doc-42'),
     ),
     cancellationPolicy: const WorkflowCancellationPolicy(
       maxRunDuration: Duration(hours: 2),
@@ -202,9 +239,9 @@ class BillingRetryAnnotatedWorkflow {
   options: TaskOptions(maxRetries: 5),
 )
 Future<void> sendEmail(
-  Map<String, Object?> args,
-  {TaskInvocationContext? context}
-) async {
+  Map<String, Object?> args, {
+  TaskInvocationContext? context,
+}) async {
   final ctx = context!;
   ctx.heartbeat();
   // send email

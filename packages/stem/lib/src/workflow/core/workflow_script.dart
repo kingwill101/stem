@@ -40,6 +40,13 @@ class WorkflowScript<T extends Object?> {
     return definition.ref<TParams>(encodeParams: encodeParams);
   }
 
+  /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
+  WorkflowRef<TParams, T> refWithCodec<TParams>({
+    required PayloadCodec<TParams> paramsCodec,
+  }) {
+    return definition.refWithCodec<TParams>(paramsCodec: paramsCodec);
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] for scripts without start params.
   NoArgsWorkflowRef<T> ref0() {
     return definition.ref0();

@@ -1,6 +1,31 @@
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+class _GreetingParams {
+  const _GreetingParams({required this.name});
+
+  factory _GreetingParams.fromJson(Map<String, Object?> json) {
+    return _GreetingParams(name: json['name']! as String);
+  }
+
+  final String name;
+
+  Map<String, Object?> toJson() => {'name': name};
+}
+
+const _greetingParamsCodec = PayloadCodec<_GreetingParams>(
+  encode: _encodeGreetingParams,
+  decode: _decodeGreetingParams,
+);
+
+Object? _encodeGreetingParams(_GreetingParams value) => value.toJson();
+
+_GreetingParams _decodeGreetingParams(Object? payload) {
+  return _GreetingParams.fromJson(
+    Map<String, Object?>.from(payload! as Map),
+  );
+}
+
 void main() {
   group('runtime workflow refs', () {
     test('start and wait helpers work directly with WorkflowRuntime', () async {
@@ -76,6 +101,36 @@ void main() {
         );
 
         expect(waited?.value, 'script runtime');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('manual workflows can derive codec-backed refs', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.codec.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return 'hello $name';
+          });
+        },
+      );
+      final workflowRef = flow.refWithCodec<_GreetingParams>(
+        paramsCodec: _greetingParamsCodec,
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final result = await workflowRef.startAndWaitWithRuntime(
+          workflowApp.runtime,
+          const _GreetingParams(name: 'codec'),
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello codec');
       } finally {
         await workflowApp.shutdown();
       }
