@@ -19,7 +19,7 @@ Future<void> main() async {
     flows: [versionedWorkflow],
   );
 
-  final runId = await versionedWorkflowRef.call().startWithApp(app);
+  final runId = await versionedWorkflowRef.startWithApp(app);
   await app.runtime.executeRun(runId);
 
   // Rewind and execute again to append a new iteration checkpoint.

@@ -22,7 +22,7 @@ Future<void> main() async {
   );
 
   try {
-    final runId = await sqliteExampleRef.call().startWithApp(app);
+    final runId = await sqliteExampleRef.startWithApp(app);
     final result = await sqliteExampleRef.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {

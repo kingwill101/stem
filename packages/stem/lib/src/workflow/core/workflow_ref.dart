@@ -87,6 +87,34 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     );
   }
 
+  /// Starts this workflow ref directly with [caller].
+  Future<String> startWith(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return call(
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startWith(caller);
+  }
+
+  /// Starts this workflow ref directly with a workflow child-caller [context].
+  Future<String> startWithContext(
+    WorkflowChildCallerContext context, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return call(
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    ).startWithContext(context);
+  }
+
   /// Decodes a final workflow result payload.
   TResult decode(Object? payload) => asRef.decode(payload);
 }

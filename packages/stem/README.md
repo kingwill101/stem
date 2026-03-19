@@ -292,7 +292,7 @@ final app = await StemWorkflowApp.inMemory(
   flows: [demoWorkflow],
 );
 
-final runId = await demoWorkflowRef.call().startWithApp(app);
+final runId = await demoWorkflowRef.startWithApp(app);
 final result = await demoWorkflowRef.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
@@ -421,11 +421,12 @@ print(result?.value);
 await app.close();
 ```
 
-For workflows without start parameters, use `ref0()` and `call()`:
+For workflows without start parameters, use `ref0()` and start directly from
+the no-args ref:
 
 ```dart
 final healthcheckRef = healthcheckFlow.ref0();
-final runId = await healthcheckRef.call().startWithApp(app);
+final runId = await healthcheckRef.startWithApp(app);
 ```
 
 #### Manual `WorkflowScript`

@@ -38,8 +38,8 @@ final result = await approvalsRef.waitFor(workflowApp, runId);
 Use this path when you want the same typed start/wait surface as generated
 workflow refs, but the workflow itself is still hand-written.
 
-For workflows without start params, derive `ref0()` instead and start them with
-`.call()`.
+For workflows without start params, derive `ref0()` instead and start them
+directly from the no-args ref.
 
 ## Wait for completion
 

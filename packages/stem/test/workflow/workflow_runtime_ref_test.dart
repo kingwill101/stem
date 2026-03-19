@@ -101,18 +101,14 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowResult = await flowRef
-            .call()
-            .startAndWaitWithRuntime(
-              workflowApp.runtime,
-              timeout: const Duration(seconds: 2),
-            );
-        final scriptResult = await scriptRef
-            .call()
-            .startAndWaitWithRuntime(
-              workflowApp.runtime,
-              timeout: const Duration(seconds: 2),
-            );
+        final flowResult = await flowRef.startAndWaitWithApp(
+          workflowApp,
+          timeout: const Duration(seconds: 2),
+        );
+        final scriptResult = await scriptRef.startAndWaitWithRuntime(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
 
         expect(flowResult?.value, 'hello flow');
         expect(scriptResult?.value, 'hello script');

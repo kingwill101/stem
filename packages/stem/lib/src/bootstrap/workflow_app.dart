@@ -681,6 +681,82 @@ extension WorkflowRefAppExtension<TParams, TResult extends Object?>
 /// Convenience helpers for waiting on workflow results using a no-args ref.
 extension NoArgsWorkflowRefAppExtension<TResult extends Object?>
     on NoArgsWorkflowRef<TResult> {
+  /// Starts this no-args workflow ref with [app].
+  Future<String> startWithApp(
+    StemWorkflowApp app, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWith(
+      app,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts this no-args workflow ref with [app] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithApp(
+    StemWorkflowApp app, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final runId = await startWithApp(
+      app,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+    return waitFor(
+      app,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this no-args workflow ref with [runtime].
+  Future<String> startWithRuntime(
+    WorkflowRuntime runtime, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWith(
+      runtime,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts this no-args workflow ref with [runtime] and waits for the result.
+  Future<WorkflowResult<TResult>?> startAndWaitWithRuntime(
+    WorkflowRuntime runtime, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final runId = await startWithRuntime(
+      runtime,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+    return waitForWithRuntime(
+      runtime,
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
   /// Waits for [runId] using this workflow reference's decode rules.
   Future<WorkflowResult<TResult>?> waitFor(
     StemWorkflowApp app,

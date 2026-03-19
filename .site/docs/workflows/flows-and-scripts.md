@@ -35,7 +35,8 @@ final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
 );
 ```
 
-When a flow has no start params, prefer `flow.ref0()`.
+When a flow has no start params, prefer `flow.ref0()` and start directly from
+that no-args ref.
 
 Use `Flow` when:
 
@@ -57,7 +58,8 @@ final retryRef = retryScript.ref<Map<String, Object?>>(
 );
 ```
 
-When a script has no start params, prefer `retryScript.ref0()`.
+When a script has no start params, prefer `retryScript.ref0()` and start
+directly from that no-args ref.
 
 Use `WorkflowScript` when:
 
