@@ -38,7 +38,8 @@ Supported shapes:
 - `int`
 - `double`
 - `num`
-- `Object?`
+- JSON-like scalar values (`Object?` only when the runtime value is itself
+  serializable)
 - `List<T>` where `T` is serializable
 - `Map<String, T>` where `T` is serializable
 
@@ -46,7 +47,8 @@ Unsupported directly:
 
 - arbitrary Dart class instances
 - non-string map keys
-- generated workflow/task entrypoints with optional or named parameters
+- annotated workflow/task method signatures with optional or named business
+  parameters
 
 If you have a domain object, encode it first:
 
@@ -59,6 +61,10 @@ final order = <String, Object?>{
 ```
 
 Decode it inside the workflow or task body, not at the durable boundary.
+
+Generated starter helpers may still expose named parameters as a wrapper over
+the serialized params map. The restriction applies to the annotated business
+method signatures that `stem_builder` lowers into workflow/task definitions.
 
 ## Practical rule
 

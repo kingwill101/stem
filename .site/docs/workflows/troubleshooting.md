@@ -22,7 +22,8 @@ task queue such as `default`.
 
 Check:
 
-- the topic passed to `emit(...)` matches the one passed to `awaitEvent(...)`
+- the topic passed to `WorkflowRuntime.emit(...)` or
+  `workflowApp.runtime.emit(...)` matches the one passed to `awaitEvent(...)`
 - the run is still waiting on that topic
 - the payload is a `Map<String, Object?>`
 

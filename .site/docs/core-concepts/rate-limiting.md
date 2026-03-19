@@ -79,7 +79,7 @@ import TabItem from '@theme/TabItem';
 ```
 
 </TabItem>
-<TabItem value="registry" label="Bootstrap StemApp">
+<TabItem value="app" label="Bootstrap StemApp">
 
 ```dart title="lib/rate_limiting.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/rate_limiting.dart#rate-limit-demo-registry
 

@@ -57,7 +57,7 @@ stem worker resume --worker worker-a --queue default
 ```
 
 For a runnable lab that exercises ping/stats/revoke/shutdown against real
-workers, see `example/worker_control_lab` in the repository.
+workers, see `packages/stem/example/worker_control_lab` in the repository.
 
 ## Autoscaling Concurrency
 
@@ -257,5 +257,5 @@ export STEM_REVOKE_STORE_URL=sqlite:///var/lib/stem/revokes.sqlite
 ## Additional Resources
 
 - `stem worker --help` – built-in CLI usage for each subcommand.
-- The `examples/` directory in the Stem repository demonstrates control
-  commands alongside worker lifecycle signals.
+- The `packages/stem/example/` directory in the Stem repository demonstrates
+  control commands alongside worker lifecycle signals.

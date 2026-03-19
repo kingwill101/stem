@@ -7,9 +7,9 @@ slug: /core-concepts/workflows
 
 Stem Workflows let you orchestrate multi-step business processes with durable
 state, typed results, automatic retries, and event-driven resumes. The
-`StemWorkflowApp` helper wires together a `Stem` instance, workflow store,
-event bus, and runtime so you can start runs, monitor progress, and interact
-with suspended steps from one place.
+`StemWorkflowApp` helper wires together a `StemApp`, workflow store, event
+bus, and runtime so you can start runs, monitor progress, and interact with
+suspended workflow state from one place.
 
 This page is now the short orientation page. The full workflow manual lives in
 the top-level [Workflows](../workflows/index.md) section.
@@ -37,9 +37,10 @@ Start the runtime once the app is constructed:
 
 `StemWorkflowApp` exposes:
 
-- `runtime` – registers `Flow`/`WorkflowScript` definitions and dequeues runs.
+- `runtime` – registers workflow definitions and coordinates run execution and
+  resume logic.
 - `store` – persists checkpoints, suspension metadata, and results.
-- `eventBus` – emits topics that resume waiting steps.
+- `eventBus` – routes topics that resume waiting runs.
 - `app` – the underlying `StemApp` (broker + result backend + worker).
 
 ## What makes workflows different from tasks

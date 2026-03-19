@@ -10,7 +10,8 @@ state, and orchestration-specific runtime metadata.
 
 `StemWorkflowApp` bundles:
 
-- `runtime`: workflow registration, run scheduling, and resume logic
+- `runtime`: workflow registration plus run execution/resume coordination once
+  the internal workflow task is invoked
 - `store`: persisted runs, checkpoints, watchers, due runs, and results
 - `eventBus`: topic-based resume channel
 - `app`: the underlying `StemApp` with broker, backend, and worker
@@ -29,7 +30,7 @@ lines.
 Stem keeps materialized workflow state in the workflow store:
 
 - run metadata and status
-- checkpoint/step results
+- flow step results and script checkpoint results
 - suspension records
 - due-run schedules
 - topic watchers

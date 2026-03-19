@@ -15,19 +15,21 @@ sleep expires.
 ## Await external events
 
 `awaitEvent(topic, deadline: ...)` records a durable watcher. External code can
-resume those runs by emitting a payload for the topic.
+resume those runs through the runtime API by emitting a payload for the topic.
 
 Typical flow:
 
 1. a step calls `awaitEvent('orders.payment.confirmed')`
 2. the run is marked suspended in the store
-3. another process emits the topic with a payload
+3. another process calls `WorkflowRuntime.emit(...)` (or an app/service wrapper
+   around it) with a payload
 4. the runtime resumes the run and exposes the payload through
    `takeResumeData()`
 
 ## Emit resume events
 
-Use the runtime event bus instead of hand-editing store state:
+Use `WorkflowRuntime.emit(...)` / `workflowApp.runtime.emit(...)` instead of
+hand-editing store state:
 
 ```dart
 await workflowApp.runtime.emit('orders.payment.confirmed', {

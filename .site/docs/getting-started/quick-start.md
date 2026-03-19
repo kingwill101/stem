@@ -20,7 +20,7 @@ cd stem_quickstart
 
 # Add Stem as a dependency and activate the CLI.
 dart pub add stem
-dart pub global activate stem
+dart pub global activate stem_cli
 ```
 
 Add the Dart pub cache to your `PATH` so the `stem` CLI is reachable:

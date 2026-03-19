@@ -61,36 +61,37 @@ Decision shortcuts:
 For more detail, see [Broker Overview](../brokers/overview.md) and
 [Persistence](../core-concepts/persistence.md).
 
-## Install
+## When you move past the in-memory demo
 
 - Install Stem and the CLI as shown in [Quick Start](./quick-start.md).
 - Ensure `stem --version` runs in your shell.
 
-## App setup
+## Reuse the same task definitions
 
 - Register tasks and options via `StemApp` or a shared task list (see
   [Tasks & Retries](../core-concepts/tasks.md)).
 - Wire producers with the same task list (see
   [Producer API](../core-concepts/producer.md)).
 
-## Run a worker
+## Split producers and workers into separate processes
 
-- Start a worker against your broker and queues (see
+- Once you leave the in-memory app, start workers against your broker and
+  queues (see
   [Connect to Infrastructure](./developer-environment.md)).
 - Use [Worker Control CLI](../workers/worker-control.md) to confirm it is
   responding.
 
-## Call a task
+## Enqueue from apps or the CLI
 
 - Enqueue from your app or the CLI (see
   [Producer API](../core-concepts/producer.md)).
 
-## Keeping results
+## Add a durable result backend
 
 - Configure a result backend for stored task results and groups (see
   [Persistence](../core-concepts/persistence.md)).
 
-## Configuration
+## Add environment-based configuration
 
 - Use `STEM_*` environment variables for brokers, routing, scheduling, and
   signing (see [CLI & Control](../core-concepts/cli-control.md)).

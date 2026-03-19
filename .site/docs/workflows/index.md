@@ -64,4 +64,16 @@ orients you and links back here.
 - the managed worker that executes the internal `stem.workflow.run` task
 
 If you already own a `StemClient`, you can attach workflow support through that
-shared client instead of constructing a second app boundary.
+shared client instead of constructing a second app boundary:
+
+```dart
+final client = await StemClient.fromUrl('memory://');
+final workflowApp = await client.createWorkflowApp(
+  flows: [ApprovalsFlow.flow],
+  scripts: [retryScript],
+);
+```
+
+If your service already owns a `StemApp`, reuse it directly with
+`StemWorkflowApp.create(stemApp: ..., flows: ..., scripts: ..., tasks: ...)`
+rather than bootstrapping a second broker/backend/task boundary.

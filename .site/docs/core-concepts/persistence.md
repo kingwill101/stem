@@ -5,9 +5,9 @@ sidebar_position: 7
 slug: /core-concepts/persistence
 ---
 
-Use persistence when you need durable task state, shared schedules, or
-revocation storage. Stem ships with Redis, Postgres, and SQLite adapters plus
-in-memory variants for local development.
+Use persistence when you need durable task state, workflow state, shared
+schedules, or revocation storage. Stem ships with Redis, Postgres, and SQLite
+adapters plus in-memory variants for local development.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -63,6 +63,19 @@ apps:
 Handlers needing bespoke treatment can override `TaskMetadata.argsEncoder` and
 `TaskMetadata.resultEncoder`; the worker ensures only that task uses the custom
 encoder while the rest fall back to the global defaults.
+
+## Workflow store
+
+Workflow stores persist:
+
+- workflow runs and status
+- flow step results and script checkpoint results
+- suspension/watcher records
+- due-run scheduling metadata
+
+That store is what allows workflow resumes, run inspection, and recovery across
+worker restarts. See the top-level [Workflows](../workflows/index.md) section
+for the durable orchestration model and runtime behavior.
 
 ## Schedule & lock stores
 

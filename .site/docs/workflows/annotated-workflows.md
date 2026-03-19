@@ -90,6 +90,12 @@ class AnnotatedContextScriptWorkflow {
 }
 ```
 
+Context-aware checkpoint methods are not meant to be called directly from a
+plain `run(String ...)` signature. If a called step needs
+`WorkflowScriptStepContext`, enter it through `@WorkflowRun()` plus
+`WorkflowScriptContext`; plain direct-call style is for steps that consume only
+serializable business parameters.
+
 ## Runnable example
 
 Use `packages/stem/example/annotated_workflows` when you want a verified

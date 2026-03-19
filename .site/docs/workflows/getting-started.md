@@ -24,6 +24,10 @@ enqueue regular Stem tasks.
 The managed worker subscribes to the workflow orchestration queue, so you do
 not need to manually register the internal `stem.workflow.run` task.
 
+If you prefer a minimal example, `startWorkflow(...)` also lazy-starts the
+runtime and managed worker on first use. Explicit `start()` is still the better
+choice when you want deterministic application lifecycle control.
+
 ## 3. Start a run and wait for the result
 
 ```dart title="bin/run_workflow.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-run
@@ -36,14 +40,17 @@ The returned `WorkflowResult<T>` includes:
 - the persisted `RunState`
 - a `timedOut` flag when the caller stops waiting before the run finishes
 
-## 4. Share bootstrap through StemClient when needed
+## 4. Reuse existing bootstrap when needed
 
 ```dart title="bin/workflows_client.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-client
 
 ```
 
 Use `StemClient` when one service wants to own broker, backend, and workflow
-setup in one place.
+setup in one place. The clean path there is `client.createWorkflowApp(...)`.
+
+If your service already owns a `StemApp`, layer workflows on top of it with
+`StemWorkflowApp.create(stemApp: ..., flows: ..., scripts: ..., tasks: ...)`.
 
 ## 5. Move to the right next page
 

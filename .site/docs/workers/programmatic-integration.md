@@ -92,6 +92,11 @@ startup:
 Swap the in-memory adapters for Redis/Postgres when you deploy, keeping the API
 surface the same.
 
+If your service wants a higher-level bootstrap that owns broker/backend/tasks
+in one place, use `StemApp` or `StemClient` instead of wiring raw `Stem` and
+`Worker` instances by hand. This page stays focused on the lower-level
+embedding path.
+
 ## Checklist
 
 - Reuse producer and worker objects—avoid per-request construction.

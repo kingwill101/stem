@@ -10,39 +10,40 @@ import TabItem from '@theme/TabItem';
 
 Stem now ships opinionated service templates and CLI helpers so you can manage
 workers like you would with Celery’s `celery multi`. This guide mirrors
-`docs/process/daemonization.md` and walks through real examples.
+`packages/stem/doc/process/daemonization.md` and walks through real examples.
 
 ## Prerequisites
 
 - Create an unprivileged `stem` user/group.
 - Install the Stem CLI and your worker launcher binary/script (for example,
   `/usr/local/bin/stem-worker`).
-- Copy templates from the repository (`templates/`) into your packaging step:
+- Copy templates from `packages/stem/templates/` into your packaging step:
   systemd units, SysV scripts, and `/etc/default/stem`.
 
 ## Worker entrypoint
 
 The daemonization templates expect a worker launcher that runs until signaled.
-This stub worker lives in `examples/daemonized_worker/bin/worker.dart`:
+This stub worker lives in
+`packages/stem/example/daemonized_worker/bin/worker.dart`:
 
 <Tabs>
 <TabItem value="entrypoint" label="Entrypoint: read node + log startup">
 
-```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-entrypoint
+```dart title="packages/stem/example/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-entrypoint
 
 ```
 
 </TabItem>
 <TabItem value="signals" label="Signal handlers: graceful shutdown">
 
-```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-signal-handlers
+```dart title="packages/stem/example/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-signal-handlers
 
 ```
 
 </TabItem>
 <TabItem value="loop" label="Heartbeat: keep the process alive">
 
-```dart title="examples/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-loop
+```dart title="packages/stem/example/daemonized_worker/bin/worker.dart" file=<rootDir>/../packages/stem/example/daemonized_worker/bin/worker.dart#daemonized-worker-loop
 
 ```
 
@@ -52,9 +53,9 @@ This stub worker lives in `examples/daemonized_worker/bin/worker.dart`:
 ## Systemd Example
 
 ```bash
-sudo install -D templates/systemd/stem-worker@.service \
+sudo install -D packages/stem/templates/systemd/stem-worker@.service \
   /etc/systemd/system/stem-worker@.service
-sudo install -D templates/etc/default/stem /etc/stem/stem.env
+sudo install -D packages/stem/templates/etc/default/stem /etc/stem/stem.env
 sudo install -d -o stem -g stem /var/lib/stem /var/log/stem /var/run/stem
 ```
 
@@ -80,8 +81,8 @@ logrotate snippet (for example, `/etc/logrotate.d/stem`) when journald is not us
 ## SysV Example
 
 ```bash
-sudo install -D templates/sysv/init.d/stem-worker /etc/init.d/stem-worker
-sudo install -D templates/etc/default/stem /etc/default/stem
+sudo install -D packages/stem/templates/sysv/init.d/stem-worker /etc/init.d/stem-worker
+sudo install -D packages/stem/templates/etc/default/stem /etc/default/stem
 sudo chmod 755 /etc/init.d/stem-worker
 sudo update-rc.d stem-worker defaults
 ```
@@ -108,12 +109,12 @@ Set `STEM_SCHEDULER_COMMAND` in the environment file and enable
 
 ## Docker Example
 
-`examples/daemonized_worker/` contains a Dockerfile and entrypoint that run
+`packages/stem/example/daemonized_worker/` contains a Dockerfile and entrypoint that run
 `stem worker multi` directly. Build and run from the repo root:
 
 ```
-docker build -f examples/daemonized_worker/Dockerfile -t stem-multi .
-docker run --rm -e STEM_WORKER_COMMAND="dart run examples/daemonized_worker/bin/worker.dart" stem-multi
+docker build -f packages/stem/example/daemonized_worker/Dockerfile -t stem-multi .
+docker run --rm -e STEM_WORKER_COMMAND="dart run packages/stem/example/daemonized_worker/bin/worker.dart" stem-multi
 ```
 
 Override `STEM_WORKER_*` environment variables to control nodes, PID/log

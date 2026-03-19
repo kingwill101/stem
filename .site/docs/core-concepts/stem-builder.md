@@ -5,8 +5,9 @@ sidebar_position: 15
 slug: /core-concepts/stem-builder
 ---
 
-`stem_builder` generates workflow/task registries and typed workflow starters
-from annotations, so you can avoid stringly-typed wiring.
+`stem_builder` generates workflow/task definitions, manifests, helper output,
+and typed workflow starters from annotations, so you can avoid stringly-typed
+wiring.
 
 This page focuses on the generator itself. For the workflow authoring model and
 durable runtime behavior, start with the top-level
@@ -66,14 +67,15 @@ dart run build_runner build --delete-conflicting-outputs
 Generated output (`workflow_defs.stem.g.dart`) includes:
 
 - `stemScripts`, `stemFlows`, `stemTasks`
-- `registerStemDefinitions(...)`
 - typed starters like `workflowApp.startUserSignup(...)`
 - `StemWorkflowNames` constants
 - convenience helpers such as `createStemGeneratedWorkflowApp(...)`
+- `registerStemDefinitions(...)` for advanced/manual integrations that still
+  need explicit registries
 
 ## Wire Into StemWorkflowApp
 
-Use the generated registries directly with `StemWorkflowApp`:
+Use the generated definitions/helpers directly with `StemWorkflowApp`:
 
 ```dart
 final workflowApp = await StemWorkflowApp.fromUrl(
@@ -102,6 +104,22 @@ final workflowApp = await StemWorkflowApp.create(
   scripts: stemScripts,
   flows: stemFlows,
   tasks: stemTasks,
+);
+```
+
+If you already centralize broker/backend wiring in a `StemClient`, prefer the
+shared-client path:
+
+```dart
+final client = await StemClient.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  tasks: stemTasks,
+);
+
+final workflowApp = await client.createWorkflowApp(
+  scripts: stemScripts,
+  flows: stemFlows,
 );
 ```
 

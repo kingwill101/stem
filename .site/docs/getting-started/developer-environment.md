@@ -138,6 +138,6 @@ start emitting events.
 - Keep the infrastructure running and head to
   [Observe & Operate](./observability-and-ops.md) to enable telemetry, inspect
   heartbeats, replay DLQs, and issue remote control commands.
-- Browse the runnable examples under `examples/` for Redis/Postgres,
-  mixed-cluster, autoscaling, scheduler observability, and signing-key rotation
-  drills you can adapt to your environment.
+- Browse the runnable examples under `packages/stem/example/` for
+  Redis/Postgres, mixed-cluster, autoscaling, scheduler observability, and
+  signing-key rotation drills you can adapt to your environment.

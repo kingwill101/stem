@@ -12,11 +12,12 @@ channel—all the pieces you need to operate Stem confidently.
 ## 1. Enable OpenTelemetry Export
 
 Stem emits metrics, traces, and structured logs out of the box. Point it at an
-OTLP endpoint (the repo ships a ready-made stack under `examples/otel_metrics/`):
+OTLP endpoint (the repo ships a ready-made stack under
+`packages/stem/example/otel_metrics/`):
 
 ```bash
 # Start the example collector, Prometheus, and Grafana stack.
-docker compose -f examples/otel_metrics/docker-compose.yml up
+docker compose -f packages/stem/example/otel_metrics/docker-compose.yml up
 
 # Export OTLP details for producers and workers.
 export STEM_OTLP_ENDPOINT=http://localhost:4318
@@ -163,5 +164,7 @@ checklists in [Prepare for Production](./production-checklist.md).
 
 If you want more hands-on drills:
 
-- Run `example/ops_health_suite` to practice `stem health` and `stem observe` flows.
-- Run `example/scheduler_observability` to watch drift metrics and schedule signals.
+- Run `packages/stem/example/ops_health_suite` to practice `stem health` and
+  `stem observe` flows.
+- Run `packages/stem/example/scheduler_observability` to watch drift metrics
+  and schedule signals.

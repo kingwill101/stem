@@ -115,8 +115,8 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
-      label: "Brokers & Backends",
-      items: ["brokers/overview", "brokers/caveats"],
+      label: "Brokers",
+      items: ["brokers/overview", "brokers/sqlite", "brokers/caveats"],
     },
   ],
 };

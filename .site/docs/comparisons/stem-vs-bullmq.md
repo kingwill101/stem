@@ -8,7 +8,7 @@ slug: /comparisons/stem-vs-bullmq
 This page is the canonical Stem comparison matrix for BullMQ-style features.
 It focuses on capability parity, not API-level compatibility.
 
-**As of:** February 24, 2026
+**As of:** March 18, 2026
 
 ## Status semantics
 

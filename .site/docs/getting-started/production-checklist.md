@@ -39,7 +39,7 @@ In code, wire the signer into both producers and workers:
 ```
 
 </TabItem>
-<TabItem value="registry" label="Tasks + storage">
+<TabItem value="bootstrap" label="Tasks + storage">
 
 ```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-registry
 
@@ -87,7 +87,7 @@ Use the repo’s helper script to generate local certificates or plug in the one
 issued by your platform:
 
 ```bash
-scripts/security/generate_tls_assets.sh --out tmp/tls
+packages/stem/scripts/security/generate_tls_assets.sh --out tmp/tls
 
 export STEM_TLS_CA_CERT=$PWD/tmp/tls/ca.pem
 export STEM_TLS_CLIENT_CERT=$PWD/tmp/tls/client.pem
@@ -102,12 +102,12 @@ Update Redis/Postgres URLs to include TLS if required (for example,
 
 ## 3. Supervise Processes with Managed Services
 
-Stem ships ready-to-use templates under `templates/systemd/` and
-`templates/sysv/`. Drop in environment files with your Stem variables and
-enable the services:
+Stem ships ready-to-use templates under `packages/stem/templates/systemd/` and
+`packages/stem/templates/sysv/`. Drop in environment files with your Stem
+variables and enable the services:
 
 ```bash
-sudo cp templates/systemd/stem-worker@.service /etc/systemd/system/
+sudo cp packages/stem/templates/systemd/stem-worker@.service /etc/systemd/system/
 sudo systemctl enable stem-worker@default.service
 sudo systemctl start stem-worker@default.service
 
@@ -139,7 +139,7 @@ stem worker diagnose --node web-1 \
 
 Before every deployment run through these guardrails:
 
-- **Quality gates** – run `example/quality_gates` (`just quality`) to execute
+- **Quality gates** – run `packages/stem/example/quality_gates` (`just quality`) to execute
   format, analyze, unit/chaos/perf tests, and coverage targets.
 - **Observability** – confirm Grafana dashboards (task success rate, latency
   p95, queue depth) and OpenTelemetry exporters are healthy.
@@ -150,8 +150,9 @@ Before every deployment run through these guardrails:
   `stem worker stats`) against staging to verify access.
 
 Document the results in your team’s runbook (see
-`docs/process/observability-runbook.md` and `docs/process/scheduler-parity.md`)
-so the production checklist stays auditable.
+`packages/stem/doc/process/observability-runbook.md` and
+`packages/stem/doc/process/scheduler-parity.md`) so the production checklist
+stays auditable.
 
 ## 5. Where to Go Next
 

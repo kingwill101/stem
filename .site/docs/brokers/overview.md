@@ -98,11 +98,12 @@ and limited fanout without SNS.
 
 - **Redis Streams** is the default. Enable persistence (AOF) and replicate to a
   hot standby for fault tolerance. Configure namespaces per environment with
-  ACLs. The `examples/redis_postgres_worker` sample pairs Redis with Postgres
-  for result storage.
+  ACLs. The `packages/stem/example/redis_postgres_worker` sample pairs Redis
+  with Postgres for result storage.
 - **Postgres** integrates tightly with the existing result backend for teams
-  already running Postgres. Leases are implemented via advisory locks; ensure
-  the connection pool matches expected concurrency.
+  already running Postgres. Delivery leases are tracked in queue rows (for
+  example via `locked_until`), so ensure the connection pool matches expected
+  concurrency.
 - **SQLite** is ideal for single-host development and demos. Use separate DB
   files for broker and backend; avoid producer writes to the backend.
 - **In-memory** adapters mirror the Redis API and are safe for smoke tests.
