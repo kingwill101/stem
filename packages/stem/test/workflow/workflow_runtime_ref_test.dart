@@ -554,13 +554,12 @@ void main() {
         final runId = await flow.ref0().start(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
-        final call = workflowApp.emitEventBuilder(
-          event: _userUpdatedEvent,
-          value: const _GreetingParams(name: 'bound'),
+        final call = _userUpdatedEvent.call(
+          const _GreetingParams(name: 'bound'),
         );
-        expect(call.build().topic, 'runtime.ref.event');
+        expect(call.topic, 'runtime.ref.event');
 
-        await call.emit();
+        await call.emit(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
         final result = await workflowApp.waitForCompletion<String>(

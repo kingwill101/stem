@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Deprecated `emitEventBuilder(...)` in favor of direct typed event calls via
+  `event.emit(...)` or `event.call(value).emit(...)`.
 - Deprecated the older workflow-start `startWith(...)` and
   `startAndWaitWith(...)` helpers in favor of direct `start(...)` and
   `startAndWait(...)` aliases.

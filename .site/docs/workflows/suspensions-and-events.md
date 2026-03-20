@@ -62,9 +62,8 @@ transport shape.
 
 When the topic and codec travel together in your codebase, prefer
 `WorkflowEventRef<T>.json(...)` for normal DTO payloads and keep
-`event.emit(emitter, dto)` as the happy path. `emitter.emitEventBuilder(
-event: ref, value: dto).emit()` and `event.call(value).emit(...)` remain
-available as lower-level variants.
+`event.emit(emitter, dto)` as the happy path. `event.call(value).emit(...)`
+remains available as the lower-level prebuilt-call variant.
 Pair that with `await event.wait(ctx)` or `awaitEventRef(...)`.
 
 ## Inspect waiting runs

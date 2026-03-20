@@ -99,9 +99,15 @@ extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
   }
 }
 
+@Deprecated(
+  'Use WorkflowEventRef.call(value) or event.emit(emitter, value) instead.',
+)
 /// Caller-bound typed workflow event emission call.
 class BoundWorkflowEventCall<T> {
   /// Creates a caller-bound typed workflow event emission call.
+  @Deprecated(
+    'Use WorkflowEventRef.call(value) or event.emit(emitter, value) instead.',
+  )
   const BoundWorkflowEventCall._({
     required WorkflowEventEmitter emitter,
     required WorkflowEventCall<T> call,
@@ -122,6 +128,7 @@ class BoundWorkflowEventCall<T> {
 /// workflow event emitter.
 extension WorkflowEventEmitterBuilderExtension on WorkflowEventEmitter {
   /// Creates a caller-bound typed workflow event call for [event] and [value].
+  @Deprecated('Use event.call(value) or event.emit(this, value) instead.')
   BoundWorkflowEventCall<T> emitEventBuilder<T>({
     required WorkflowEventRef<T> event,
     required T value,

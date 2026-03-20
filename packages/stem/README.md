@@ -1115,8 +1115,8 @@ backend metadata under `stem.unique.duplicates`.
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
   as the shortest typed event form and call `event.emit(emitter, dto)` as the
-  happy path. `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
-  `event.call(value).emit(...)` remain available as lower-level variants.
+  happy path. `event.call(value).emit(...)` remains available as the
+  lower-level prebuilt-call variant.
   Pair that with `await event.wait(ctx)` or `awaitEventRef(...)`. Event
   payloads still serialize onto the existing `Map<String, Object?>` wire
   format.
