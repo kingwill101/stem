@@ -68,10 +68,13 @@
   and checkpoint inspection paths can decode DTO payloads without manual
   casts.
 - Added `WorkflowRunView.resultJson(...)`,
-  `WorkflowRunView.suspensionPayloadJson(...)`, and
-  `WorkflowCheckpointView.valueJson(...)` plus their `...As(codec: ...)`
-  counterparts so dashboard/CLI workflow detail views can decode DTO payloads
-  without manual casts.
+  `WorkflowRunView.resultVersionedJson(...)`,
+  `WorkflowRunView.suspensionPayloadJson(...)`,
+  `WorkflowRunView.suspensionPayloadVersionedJson(...)`, and
+  `WorkflowCheckpointView.valueJson(...)` /
+  `valueVersionedJson(...)` plus their `...As(codec: ...)` counterparts so
+  dashboard/CLI workflow detail views can decode DTO payloads without manual
+  casts.
 - Added `WorkflowStepEvent.resultJson(...)` and `resultAs(codec: ...)` so
   workflow introspection consumers can decode DTO checkpoint results without
   manual casts.

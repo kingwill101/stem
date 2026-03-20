@@ -78,6 +78,23 @@ class WorkflowRunView {
     ).decode(stored);
   }
 
+  /// Decodes the final result payload with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Last error payload, if present.
   final Map<String, Object?>? lastError;
 
@@ -111,6 +128,28 @@ class WorkflowRunView {
     if (stored == null) return null;
     return PayloadCodec<TPayload>.json(
       decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the suspension payload with a version-aware JSON decoder, when
+  /// present.
+  TPayload? suspensionPayloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     ).decode(stored);
   }
@@ -205,6 +244,23 @@ class WorkflowCheckpointView {
     if (stored == null) return null;
     return PayloadCodec<TValue>.json(
       decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a version-aware JSON decoder.
+  TValue? valueVersionedJson<TValue>({
+    required int version,
+    required TValue Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     ).decode(stored);
   }

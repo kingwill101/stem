@@ -75,6 +75,28 @@ class WorkflowWatcher {
     ).decode(stored);
   }
 
+  /// Decodes the captured watcher payload with a version-aware JSON decoder,
+  /// when present.
+  TPayload? payloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Timestamp when suspension was recorded.
   DateTime? get suspendedAt => _dateFromJson(data['suspendedAt']);
 
@@ -158,6 +180,28 @@ class WorkflowWatcherResolution {
     if (stored == null) return null;
     return PayloadCodec<TPayload>.json(
       decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the resume payload with a version-aware JSON decoder, when
+  /// present.
+  TPayload? payloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     ).decode(stored);
   }

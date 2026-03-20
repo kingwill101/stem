@@ -190,6 +190,17 @@ void main() {
           'inv-1',
         ),
       );
+      expect(
+        watcher.payloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
       expect(watcher.suspendedAt, equals(DateTime.utc(2026, 2, 25, 0, 1)));
       expect(
         watcher.requestedResumeAt,
@@ -207,6 +218,17 @@ void main() {
       expect(
         resolution.payloadJson<_InvoicePayload>(
           decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        resolution.payloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
         ),
         isA<_InvoicePayload>().having(
           (value) => value.invoiceId,
@@ -246,6 +268,17 @@ void main() {
           'inv-3',
         ),
       );
+      expect(
+        step.valueVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-3',
+        ),
+      );
       expect(plain.baseName, equals('finalize'));
       expect(plain.iteration, isNull);
     });
@@ -277,8 +310,30 @@ void main() {
         ),
       );
       expect(
+        view.resultVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-4',
+        ),
+      );
+      expect(
         view.suspensionPayloadJson<_InvoicePayload>(
           decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-5',
+        ),
+      );
+      expect(
+        view.suspensionPayloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
         ),
         isA<_InvoicePayload>().having(
           (value) => value.invoiceId,
@@ -302,6 +357,17 @@ void main() {
 
       expect(
         view.valueJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-6',
+        ),
+      );
+      expect(
+        view.valueVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
         isA<_InvoicePayload>().having(
           (value) => value.invoiceId,
           'invoiceId',

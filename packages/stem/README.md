@@ -925,15 +925,18 @@ If you already have a raw `WorkflowResult<Object?>`, use
 stored workflow result without another cast/closure.
 If you are inspecting the underlying `RunState` directly, use
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
-`state.suspensionPayloadJson(...)`, or
+`state.resultVersionedJson(...)`, `state.suspensionPayloadJson(...)`,
+`state.suspensionPayloadVersionedJson(...)`, or
 `state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
 Workflow run detail views expose the same convenience surface via
 `runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
-`runView.suspensionPayloadJson(...)`, and
+`runView.resultVersionedJson(...)`, `runView.suspensionPayloadJson(...)`,
+`runView.suspensionPayloadVersionedJson(...)`, and
 `runView.suspensionPayloadAs(codec: ...)`.
 Checkpoint entries from `viewCheckpoints(...)` and
 `WorkflowCheckpointView.fromEntry(...)` expose the same surface via
-`entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
+`entry.valueJson(...)`, `entry.valueVersionedJson(...)`, and
+`entry.valueAs(codec: ...)`.
 Workflow introspection events expose matching helpers via
 `event.resultJson(...)` and `event.resultAs(codec: ...)`.
 For lower-level suspension directives, prefer `step.sleepJson(...)`,

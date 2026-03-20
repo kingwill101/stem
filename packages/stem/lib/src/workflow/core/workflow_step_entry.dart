@@ -52,6 +52,24 @@ class WorkflowStepEntry {
     ).decode(stored);
   }
 
+  /// Decodes the persisted checkpoint value with a version-aware JSON decoder,
+  /// when present.
+  TValue? valueVersionedJson<TValue>({
+    required int version,
+    required TValue Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Base step name without any auto-version suffix.
   String get baseName {
     final hashIndex = name.indexOf('#');
