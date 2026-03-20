@@ -884,6 +884,10 @@ if (result?.isCompleted == true) {
 }
 ```
 
+If you already have a raw `WorkflowResult<Object?>`, use
+`result.payloadJson(...)` or `result.payloadAs(codec: ...)` to decode the
+stored workflow result without another cast/closure.
+
 In the example above, these calls inside `run(...)`:
 
 ```dart
