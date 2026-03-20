@@ -94,6 +94,10 @@
 - Simplified the `otel_metrics` worker example to use
   `StemClient.inMemory(...)` and `createWorker(...)` so the producer-side ping
   loop no longer needs a raw `Stem` instance.
+- Simplified the production signing checklist snippet to use
+  `StemClient.create(...)` with in-memory factories and `createWorker(...)`,
+  and updated the docs tab copy to describe the shared client setup instead of
+  raw `Stem` wiring.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
