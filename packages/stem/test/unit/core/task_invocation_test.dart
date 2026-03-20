@@ -234,6 +234,25 @@ void main() {
     expect(enqueuer.lastNotBefore, scheduledAt);
   });
 
+  test('TaskInvocationContext.local spawn forwards notBefore', () async {
+    final enqueuer = _CapturingEnqueuer('task-1');
+    final TaskExecutionContext context = TaskInvocationContext.local(
+      id: 'root-task',
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+      enqueuer: enqueuer,
+    );
+    final scheduledAt = DateTime.now().add(const Duration(minutes: 5));
+
+    await context.spawn('child', notBefore: scheduledAt);
+
+    expect(enqueuer.lastNotBefore, scheduledAt);
+  });
+
   test('TaskInvocationContext.local throws when enqueuer missing', () async {
     final context = TaskInvocationContext.local(
       id: 'no-enqueuer',

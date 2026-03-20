@@ -73,6 +73,9 @@
 - Added `TaskExecutionContext.retry(...)` so typed task handlers can request
   retries through the shared task context surface instead of depending on
   concrete runtime classes.
+- Added `TaskExecutionContext.spawn(...)` so the shared task context surface
+  now covers the common follow-up enqueue alias, including `notBefore`
+  forwarding.
 - Updated task docs/snippets to prefer `TaskExecutionContext` for shared
   enqueue/workflow/event examples, leaving `TaskContext` and
   `TaskInvocationContext` only where the runtime distinction matters.

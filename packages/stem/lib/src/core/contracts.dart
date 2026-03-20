@@ -1877,6 +1877,17 @@ abstract interface class TaskExecutionContext
     Duration? timeLimit,
     Duration? softTimeLimit,
   });
+
+  /// Alias for [enqueue] when spawning follow-up work from the current task.
+  Future<String> spawn(
+    String name, {
+    Map<String, Object?> args,
+    Map<String, String> headers,
+    TaskOptions options,
+    DateTime? notBefore,
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  });
 }
 
 /// Shared task-progress helpers for execution contexts.
@@ -2126,12 +2137,14 @@ class TaskContext implements TaskExecutionContext {
   }
 
   /// Alias for [enqueue].
+  @override
   Future<String> spawn(
     String name, {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) {
     return enqueue(
@@ -2140,6 +2153,7 @@ class TaskContext implements TaskExecutionContext {
       headers: headers,
       meta: meta,
       options: options,
+      notBefore: notBefore,
       enqueueOptions: enqueueOptions,
     );
   }

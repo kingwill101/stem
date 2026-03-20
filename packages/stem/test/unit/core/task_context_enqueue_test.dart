@@ -97,6 +97,25 @@ void main() {
       expect(record.meta.containsKey(_parentAttemptKey), isFalse);
     });
 
+    test('spawn forwards notBefore', () async {
+      final enqueuer = _RecordingEnqueuer();
+      final TaskExecutionContext context = TaskContext(
+        id: 'parent-2b',
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+        enqueuer: enqueuer,
+      );
+      final scheduledAt = DateTime.now().add(const Duration(minutes: 1));
+
+      await context.spawn('tasks.child', notBefore: scheduledAt);
+
+      expect(enqueuer.last?.notBefore, scheduledAt);
+    });
+
     test('spawn delegates to enqueue semantics', () async {
       final enqueuer = _RecordingEnqueuer();
       final context = TaskContext(
@@ -406,6 +425,7 @@ class _RecordedEnqueue {
     required this.headers,
     required this.meta,
     required this.options,
+    required this.notBefore,
     required this.enqueueOptions,
   });
 
@@ -414,6 +434,7 @@ class _RecordedEnqueue {
   final Map<String, String> headers;
   final Map<String, Object?> meta;
   final TaskOptions options;
+  final DateTime? notBefore;
   final TaskEnqueueOptions? enqueueOptions;
 }
 
@@ -439,6 +460,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
         headers: Map<String, String>.from(headers),
         meta: Map<String, Object?>.from(meta),
         options: options,
+        notBefore: notBefore,
         enqueueOptions: enqueueOptions,
       ),
     );

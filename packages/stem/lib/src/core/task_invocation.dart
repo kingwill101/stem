@@ -631,11 +631,13 @@ class TaskInvocationContext implements TaskExecutionContext {
   }
 
   /// Alias for enqueue.
+  @override
   Future<String> spawn(
     String name, {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -644,6 +646,7 @@ class TaskInvocationContext implements TaskExecutionContext {
       args: args,
       headers: headers,
       options: options,
+      notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );
@@ -654,6 +657,7 @@ class TaskInvocationContext implements TaskExecutionContext {
   /// Throws a [TaskRetryRequest] which is intercepted by the worker to
   /// schedule the retry. Override retry policies/time limits per invocation
   /// by passing the optional parameters.
+  @override
   Future<void> retry({
     Duration? countdown,
     DateTime? eta,
