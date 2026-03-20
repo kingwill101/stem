@@ -304,6 +304,10 @@ final result = await HelloTask.definition
 print(result?.value);
 ```
 
+Treat `prepareEnqueue(...)` as the advanced path when you need to assemble
+headers, metadata, delay, priority, or other overrides incrementally. For the
+normal case, prefer direct `enqueue(...)` or `enqueueAndWait(...)`.
+
 ### Enqueue from inside a task
 
 Handlers can enqueue follow-up work using `TaskContext.enqueue` and request

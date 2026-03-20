@@ -81,8 +81,10 @@ When the persisted workflow result or suspension payload carries an explicit
 `runState.suspensionPayloadVersionedJson(...)` on the low-level snapshots.
 
 For workflows without start params, start directly from the flow or script
-itself with `start(...)`, `startAndWait(...)`, or `prepareStart()`.
-Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.
+itself with `start(...)` or `startAndWait(...)`. Keep `prepareStart()` for the
+rarer cases where you want to assemble overrides incrementally before
+dispatch. Use `ref0()` when another API specifically needs a
+`NoArgsWorkflowRef`.
 
 ## Wait for completion
 

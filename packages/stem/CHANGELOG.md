@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Clarified docs so direct `start(...)` / `startAndWait(...)` and
+  `enqueue(...)` / `enqueueAndWait(...)` are the default happy path, with
+  `prepareStart(...)` and `prepareEnqueue(...)` positioned as advanced
+  override builders.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.

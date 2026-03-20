@@ -100,7 +100,9 @@ final request = context.argsJson<InvoicePayload>(
 definitions can now create a fluent builder directly through
 `definition.prepareEnqueue(...)`. `TaskEnqueuer.prepareEnqueue(...)` remains
 available when you want the caller-bound variant that keeps the enqueue target
-attached to the builder.
+attached to the builder. Treat both `prepareEnqueue(...)` forms as the
+advanced override path; for the normal case, prefer direct
+`enqueue(...)` / `enqueueAndWait(...)`.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueue(...)` /
