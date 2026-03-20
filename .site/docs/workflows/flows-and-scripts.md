@@ -30,8 +30,8 @@ is that for script workflows those are **checkpoints**, not the plan itself.
 Manual flows can also derive a typed workflow ref from the definition:
 
 ```dart
-final approvalsRef = approvalsFlow.ref<({Map<String, Object?> draft})>(
-  encodeParams: (params) => <String, Object?>{'draft': params.draft},
+final approvalsRef = approvalsFlow.ref<Map<String, Object?>>(
+  encodeParams: (draft) => <String, Object?>{'draft': draft},
 );
 ```
 

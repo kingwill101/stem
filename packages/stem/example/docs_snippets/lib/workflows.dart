@@ -88,22 +88,8 @@ class ApprovalsFlow {
     },
   );
 
-  static final ref = flow.refWithCodec<({ApprovalDraft draft})>(
-    paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
-      encode: _encodeApprovalStart,
-      decode: _decodeApprovalStart,
-    ),
-  );
-}
-
-Object? _encodeApprovalStart(({ApprovalDraft draft}) value) {
-  return <String, Object?>{'draft': approvalDraftCodec.encode(value.draft)};
-}
-
-({ApprovalDraft draft}) _decodeApprovalStart(Object? payload) {
-  final map = Map<String, Object?>.from(payload as Map);
-  return (
-    draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
+  static final ref = flow.refWithCodec<ApprovalDraft>(
+    paramsCodec: approvalDraftCodec,
   );
 }
 
@@ -142,9 +128,7 @@ final retryDefinition = retryScript.definition;
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
   final runId = await ApprovalsFlow.ref.startWith(
     workflowApp,
-    (
-      draft: const ApprovalDraft(documentId: 'doc-42'),
-    ),
+    const ApprovalDraft(documentId: 'doc-42'),
     cancellationPolicy: const WorkflowCancellationPolicy(
       maxRunDuration: Duration(hours: 2),
       maxSuspendDuration: Duration(minutes: 30),

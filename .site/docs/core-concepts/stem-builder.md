@@ -89,7 +89,7 @@ final workflowApp = await StemWorkflowApp.fromUrl(
 await workflowApp.start();
 final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 ```
 

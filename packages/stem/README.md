@@ -433,18 +433,8 @@ const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
   ),
 );
 
-final approvalsRef = approvalsFlow.refWithCodec<({ApprovalDraft draft})>(
-  paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
-    encode: (value) => <String, Object?>{
-      'draft': approvalDraftCodec.encode(value.draft),
-    },
-    decode: (payload) {
-      final map = Map<String, Object?>.from(payload as Map);
-      return (
-        draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
-      );
-    },
-  ),
+final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(
+  paramsCodec: approvalDraftCodec,
 );
 
 final app = await StemWorkflowApp.fromUrl(
@@ -455,7 +445,7 @@ final app = await StemWorkflowApp.fromUrl(
 
 final runId = await approvalsRef.startWith(
   app,
-  (draft: const ApprovalDraft(documentId: 'doc-42')),
+  const ApprovalDraft(documentId: 'doc-42'),
 );
 
 final result = await approvalsRef.waitFor(app, runId);
@@ -580,10 +570,10 @@ Durable workflow contexts enqueue tasks directly:
 Child workflows belong in durable execution boundaries:
 
 - use
-  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
   inside flow steps
 - use
-  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
   inside script checkpoints
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
@@ -636,7 +626,7 @@ final app = await StemWorkflowApp.fromUrl(
 
 final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   app,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 print(result?.value);
 await app.close();
@@ -777,13 +767,11 @@ Generated annotated tasks use the same surface:
 ```dart
 final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWait(
   stem,
-  (
-    dispatch: EmailDispatch(
-      email: 'typed@example.com',
-      subject: 'Welcome',
-      body: 'Codec-backed DTO payloads',
-      tags: ['welcome'],
-    ),
+  EmailDispatch(
+    email: 'typed@example.com',
+    subject: 'Welcome',
+    body: 'Codec-backed DTO payloads',
+    tags: ['welcome'],
   ),
 );
 print(receipt?.value?.deliveryId);

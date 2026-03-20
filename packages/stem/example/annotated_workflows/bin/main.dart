@@ -22,9 +22,7 @@ Future<void> main() async {
 
   final scriptResult = await StemWorkflowDefinitions.script.startAndWaitWith(
     app,
-    (
-      request: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
-    ),
+    const WelcomeRequest(email: '  SomeEmail@Example.com  '),
     timeout: const Duration(seconds: 2),
   );
   print('Script result: ${jsonEncode(scriptResult?.value?.toJson())}');
@@ -48,9 +46,7 @@ Future<void> main() async {
   final contextResult = await StemWorkflowDefinitions.contextScript
       .startAndWaitWith(
     app,
-    (
-      request: const WelcomeRequest(email: '  ContextEmail@Example.com  '),
-    ),
+    const WelcomeRequest(email: '  ContextEmail@Example.com  '),
     timeout: const Duration(seconds: 2),
   );
   print('Context script result: ${jsonEncode(contextResult?.value?.toJson())}');
@@ -70,13 +66,11 @@ Future<void> main() async {
   final typedTaskResult = await StemTaskDefinitions.sendEmailTyped
       .enqueueAndWait(
     app,
-    (
-      dispatch: const EmailDispatch(
-        email: 'typed@example.com',
-        subject: 'Welcome',
-        body: 'Codec-backed DTO payloads',
-        tags: ['welcome', 'transactional', 'annotated'],
-      ),
+    const EmailDispatch(
+      email: 'typed@example.com',
+      subject: 'Welcome',
+      body: 'Codec-backed DTO payloads',
+      tags: ['welcome', 'transactional', 'annotated'],
     ),
     meta: const {'origin': 'annotated_workflows_example'},
     timeout: const Duration(seconds: 2),

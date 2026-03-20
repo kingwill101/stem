@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Flattened generated single-argument workflow/task definitions so one-field
+  annotated workflows/tasks emit direct typed refs instead of named-record
+  wrappers.
 - Switched generated output to a bundle-first surface with `stemModule`, `StemWorkflowDefinitions`, `StemTaskDefinitions`, generated typed wait helpers, and payload codec generation for DTO-backed workflow/task APIs.
 - Removed generated task-specific enqueue/wait extension APIs in favor of the
   shared `TaskCall.enqueue(...)` and `TaskDefinition.waitFor(...)` surface

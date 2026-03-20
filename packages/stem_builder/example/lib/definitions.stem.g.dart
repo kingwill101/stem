@@ -73,15 +73,14 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
 ];
 
 abstract final class StemWorkflowDefinitions {
-  static final WorkflowRef<({String name}), String> flow =
-      WorkflowRef<({String name}), String>(
-        name: "builder.example.flow",
-        encodeParams: (params) => <String, Object?>{"name": params.name},
-      );
-  static final WorkflowRef<({String email}), Map<String, Object?>> userSignup =
-      WorkflowRef<({String email}), Map<String, Object?>>(
+  static final WorkflowRef<String, String> flow = WorkflowRef<String, String>(
+    name: "builder.example.flow",
+    encodeParams: (params) => <String, Object?>{"name": params},
+  );
+  static final WorkflowRef<String, Map<String, Object?>> userSignup =
+      WorkflowRef<String, Map<String, Object?>>(
         name: "builder.example.user_signup",
-        encodeParams: (params) => <String, Object?>{"email": params.email},
+        encodeParams: (params) => <String, Object?>{"email": params},
       );
 }
 

@@ -1656,6 +1656,7 @@ class _RegistryEmitter {
               ? workflow.runValueParameters
               : workflow.steps.first.valueParameters;
       final usesNoArgsDefinition = valueParameters.isEmpty;
+      final singleParameter = _singleValueParameter(valueParameters);
       final refType =
           usesNoArgsDefinition
               ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
@@ -1667,25 +1668,21 @@ class _RegistryEmitter {
       buffer.writeln('  static final $refType $fieldName = $constructorType(');
       buffer.writeln('    name: ${_string(workflow.name)},');
       if (!usesNoArgsDefinition) {
-        if (workflow.kind == WorkflowKind.script) {
-          buffer.writeln('    encodeParams: (params) => <String, Object?>{');
-          for (final parameter in valueParameters) {
-            buffer.writeln(
-              '      ${_string(parameter.name)}: '
-              '${_encodeValueExpression('params.${parameter.name}', parameter)},',
-            );
-          }
-          buffer.writeln('    },');
+        buffer.writeln('    encodeParams: (params) => <String, Object?>{');
+        if (singleParameter != null) {
+          buffer.writeln(
+            '      ${_string(singleParameter.name)}: '
+            '${_encodeValueExpression('params', singleParameter)},',
+          );
         } else {
-          buffer.writeln('    encodeParams: (params) => <String, Object?>{');
           for (final parameter in valueParameters) {
             buffer.writeln(
               '      ${_string(parameter.name)}: '
               '${_encodeValueExpression('params.${parameter.name}', parameter)},',
             );
           }
-          buffer.writeln('    },');
         }
+        buffer.writeln('    },');
       }
       if (workflow.resultPayloadCodecTypeCode != null) {
         final codecField =
@@ -1933,6 +1930,7 @@ class _RegistryEmitter {
       final argsTypeCode = _taskArgsTypeCode(task);
       final usesNoArgsDefinition =
           !task.usesLegacyMapArgs && task.valueParameters.isEmpty;
+      final singleParameter = _singleValueParameter(task.valueParameters);
       if (usesNoArgsDefinition) {
         buffer.writeln(
           '  static final NoArgsTaskDefinition<${task.resultTypeCode}> $symbol = NoArgsTaskDefinition<${task.resultTypeCode}>(',
@@ -1947,11 +1945,18 @@ class _RegistryEmitter {
         buffer.writeln('    encodeArgs: (args) => args,');
       } else if (task.valueParameters.isNotEmpty) {
         buffer.writeln('    encodeArgs: (args) => <String, Object?>{');
-        for (final parameter in task.valueParameters) {
+        if (singleParameter != null) {
           buffer.writeln(
-            '      ${_string(parameter.name)}: '
-            '${_encodeValueExpression('args.${parameter.name}', parameter)},',
+            '      ${_string(singleParameter.name)}: '
+            '${_encodeValueExpression('args', singleParameter)},',
           );
+        } else {
+          for (final parameter in task.valueParameters) {
+            buffer.writeln(
+              '      ${_string(parameter.name)}: '
+              '${_encodeValueExpression('args.${parameter.name}', parameter)},',
+            );
+          }
         }
         buffer.writeln('    },');
       }
@@ -2147,6 +2152,10 @@ class _RegistryEmitter {
     if (task.valueParameters.isEmpty) {
       return '()';
     }
+    final singleParameter = _singleValueParameter(task.valueParameters);
+    if (singleParameter != null) {
+      return singleParameter.typeCode;
+    }
     final fields = task.valueParameters
         .map((parameter) => '${parameter.typeCode} ${parameter.name}')
         .join(', ');
@@ -2161,10 +2170,23 @@ class _RegistryEmitter {
     if (parameters.isEmpty) {
       return '()';
     }
+    final singleParameter = _singleValueParameter(parameters);
+    if (singleParameter != null) {
+      return singleParameter.typeCode;
+    }
     final fields = parameters
         .map((parameter) => '${parameter.typeCode} ${parameter.name}')
         .join(', ');
     return '({$fields})';
+  }
+
+  _ValueParameterInfo? _singleValueParameter(
+    List<_ValueParameterInfo> parameters,
+  ) {
+    if (parameters.length != 1) {
+      return null;
+    }
+    return parameters.single;
   }
 
   String _qualify(String alias, String symbol) {

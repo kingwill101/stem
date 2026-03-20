@@ -28,7 +28,7 @@ Future<void> main() async {
 
     final runId = await StemWorkflowDefinitions.flow.startWith(
       runtime,
-      (name: 'Stem Builder'),
+      'Stem Builder',
     );
     await runtime.executeRun(runId);
     final result = await StemWorkflowDefinitions.flow.waitFor(

@@ -111,9 +111,9 @@ Durable workflow contexts enqueue tasks directly:
 
 Child workflows should be started from durable boundaries:
 
-- `StemWorkflowDefinitions.someWorkflow.startWith(context, (...))`
+- `StemWorkflowDefinitions.someWorkflow.startWith(context, value)`
   inside flow steps
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
   inside script checkpoints
 
 Avoid starting child workflows directly from the raw
@@ -171,7 +171,7 @@ dart run build_runner build
 
 The generated part exports a bundle plus typed refs/definitions so you can
 avoid raw workflow-name and task-name strings (for example
-`StemWorkflowDefinitions.userSignup.startWith(workflowApp, (email: 'user@example.com'))`
+`StemWorkflowDefinitions.userSignup.startWith(workflowApp, 'user@example.com')`
 or `StemTaskDefinitions.builderExamplePing.enqueue(stem)`).
 
 Generated output includes:
@@ -198,7 +198,7 @@ final workflowApp = await StemWorkflowApp.fromUrl(
 
 final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 ```
 
@@ -258,7 +258,7 @@ The generated workflow refs work on `WorkflowRuntime` too:
 final runtime = workflowApp.runtime;
 final runId = await StemWorkflowDefinitions.userSignup.startWith(
   runtime,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 await runtime.executeRun(runId);
 ```

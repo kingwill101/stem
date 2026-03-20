@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Flattened single-argument generated workflow/task refs and helper calls so
+  one-field annotated workflows/tasks now use direct values instead of
+  synthetic named-record wrappers in generated APIs, examples, and docs.
 - Added `StemModule`, typed `WorkflowRef`/`WorkflowStartCall` helpers, and bundle-first `StemWorkflowApp`/`StemClient` composition for generated workflow and task definitions.
 - Added `PayloadCodec`, typed workflow resume helpers, codec-backed workflow checkpoint/result persistence, typed task result waiting, and typed workflow event emit helpers for DTO-shaped payloads.
 - Made `FlowContext` and `WorkflowScriptStepContext` implement `WorkflowCaller`

@@ -4,11 +4,11 @@ import '../domain/repository.dart';
 
 const checkoutWorkflowName = 'ecommerce.checkout';
 
-WorkflowRef<({String cartId}), Map<String, Object?>> checkoutWorkflowRef(
+WorkflowRef<String, Map<String, Object?>> checkoutWorkflowRef(
   Flow<Map<String, Object?>> flow,
 ) {
-  return flow.ref<({String cartId})>(
-    encodeParams: (params) => <String, Object?>{'cartId': params.cartId},
+  return flow.ref<String>(
+    encodeParams: (cartId) => <String, Object?>{'cartId': cartId},
   );
 }
 

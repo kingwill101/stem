@@ -226,22 +226,22 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
 abstract final class StemWorkflowDefinitions {
   static final NoArgsWorkflowRef<Map<String, Object?>?> flow =
       NoArgsWorkflowRef<Map<String, Object?>?>(name: "annotated.flow");
-  static final WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>
-  script = WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>(
-    name: "annotated.script",
-    encodeParams: (params) => <String, Object?>{
-      "request": StemPayloadCodecs.welcomeRequest.encode(params.request),
-    },
-    decodeResult: StemPayloadCodecs.welcomeWorkflowResult.decode,
-  );
-  static final WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>
-  contextScript = WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>(
-    name: "annotated.context_script",
-    encodeParams: (params) => <String, Object?>{
-      "request": StemPayloadCodecs.welcomeRequest.encode(params.request),
-    },
-    decodeResult: StemPayloadCodecs.contextCaptureResult.decode,
-  );
+  static final WorkflowRef<WelcomeRequest, WelcomeWorkflowResult> script =
+      WorkflowRef<WelcomeRequest, WelcomeWorkflowResult>(
+        name: "annotated.script",
+        encodeParams: (params) => <String, Object?>{
+          "request": StemPayloadCodecs.welcomeRequest.encode(params),
+        },
+        decodeResult: StemPayloadCodecs.welcomeWorkflowResult.decode,
+      );
+  static final WorkflowRef<WelcomeRequest, ContextCaptureResult> contextScript =
+      WorkflowRef<WelcomeRequest, ContextCaptureResult>(
+        name: "annotated.context_script",
+        encodeParams: (params) => <String, Object?>{
+          "request": StemPayloadCodecs.welcomeRequest.encode(params),
+        },
+        decodeResult: StemPayloadCodecs.contextCaptureResult.decode,
+      );
 }
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
@@ -278,17 +278,16 @@ abstract final class StemTaskDefinitions {
         defaultOptions: const TaskOptions(maxRetries: 1),
         metadata: const TaskMetadata(),
       );
-  static final TaskDefinition<({EmailDispatch dispatch}), EmailDeliveryReceipt>
-  sendEmailTyped =
-      TaskDefinition<({EmailDispatch dispatch}), EmailDeliveryReceipt>(
-        name: "send_email_typed",
-        encodeArgs: (args) => <String, Object?>{
-          "dispatch": StemPayloadCodecs.emailDispatch.encode(args.dispatch),
-        },
-        defaultOptions: const TaskOptions(maxRetries: 1),
-        metadata: const TaskMetadata(),
-        decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
-      );
+  static final TaskDefinition<EmailDispatch, EmailDeliveryReceipt>
+  sendEmailTyped = TaskDefinition<EmailDispatch, EmailDeliveryReceipt>(
+    name: "send_email_typed",
+    encodeArgs: (args) => <String, Object?>{
+      "dispatch": StemPayloadCodecs.emailDispatch.encode(args),
+    },
+    defaultOptions: const TaskOptions(maxRetries: 1),
+    metadata: const TaskMetadata(),
+    decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
+  );
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[

@@ -49,7 +49,7 @@ and wait operations:
 ```dart
 final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 ```
 
@@ -58,13 +58,11 @@ Annotated tasks use the same shared typed task surface:
 ```dart
 final result = await StemTaskDefinitions.sendEmailTyped.enqueueAndWait(
   workflowApp,
-  (
-    dispatch: EmailDispatch(
-      email: 'typed@example.com',
-      subject: 'Welcome',
-      body: 'Codec-backed DTO payloads',
-      tags: ['welcome'],
-    ),
+  EmailDispatch(
+    email: 'typed@example.com',
+    subject: 'Welcome',
+    body: 'Codec-backed DTO payloads',
+    tags: ['welcome'],
   ),
 );
 ```
@@ -137,9 +135,9 @@ This keeps one authoring model:
 
 When a workflow needs to start another workflow, do it from a durable boundary:
 
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
   inside flow steps
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
   inside checkpoint methods
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.

@@ -31,23 +31,13 @@ const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
   ),
 );
 
-final approvalsRef = approvalsFlow.refWithCodec<({ApprovalDraft draft})>(
-  paramsCodec: PayloadCodec<({ApprovalDraft draft})>(
-    encode: (value) => <String, Object?>{
-      'draft': approvalDraftCodec.encode(value.draft),
-    },
-    decode: (payload) {
-      final map = Map<String, Object?>.from(payload as Map);
-      return (
-        draft: approvalDraftCodec.decode(map['draft']) as ApprovalDraft,
-      );
-    },
-  ),
+final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(
+  paramsCodec: approvalDraftCodec,
 );
 
 final runId = await approvalsRef.startWith(
   workflowApp,
-  (draft: const ApprovalDraft(documentId: 'doc-42')),
+  const ApprovalDraft(documentId: 'doc-42'),
 );
 
 final result = await approvalsRef.waitFor(workflowApp, runId);
@@ -81,7 +71,7 @@ workflow-name strings and give you one typed handle for both start and wait:
 ```dart
 final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 ```
 
@@ -91,7 +81,7 @@ The same definitions work on `WorkflowRuntime` by passing the runtime as the
 ```dart
 final runId = await StemWorkflowDefinitions.userSignup.startWith(
   runtime,
-  (email: 'user@example.com'),
+  'user@example.com',
 );
 ```
 

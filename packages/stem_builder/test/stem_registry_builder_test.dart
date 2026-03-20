@@ -300,7 +300,7 @@ class DailyBillingWorkflow {
                 'helloFlow =',
               ),
               contains(
-                'static final WorkflowRef<({String tenant}), Object?> '
+                'static final WorkflowRef<String, Object?> '
                 'dailyBilling =',
               ),
             ]),
@@ -412,8 +412,8 @@ Future<String> sendEmail(EmailRequest request) async => request.email;
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains(
-              'static final TaskDefinition<({EmailRequest request}), String> emailSend =',
+              contains(
+              'static final TaskDefinition<EmailRequest, String> emailSend =',
             ),
             isNot(contains('enqueueEmailSend(')),
             isNot(contains('enqueueAndWaitEmailSend(')),
@@ -447,8 +447,8 @@ class SignupWorkflow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains(
-              'static final WorkflowRef<({String email}), String> signupWorkflow =',
+              contains(
+              'static final WorkflowRef<String, String> signupWorkflow =',
             ),
             isNot(contains('startSignupWorkflow(')),
             isNot(contains('startAndWaitSignupWorkflow(')),
@@ -484,8 +484,8 @@ class GreetingFlow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-            contains(
-              'static final WorkflowRef<({String name}), String> greetingFlow =',
+              contains(
+              'static final WorkflowRef<String, String> greetingFlow =',
             ),
             isNot(contains('startGreetingFlow(')),
             isNot(contains('startAndWaitGreetingFlow(')),
@@ -783,8 +783,8 @@ class SignupWorkflow {
               contains('_stemRequireArg(script.params, "email") as String'),
               contains('abstract final class StemWorkflowDefinitions'),
               contains(
-                'signupWorkflow = WorkflowRef<({String email}), '
-                'Map<String, Object?>>(',
+                'static final WorkflowRef<String, Map<String, Object?>> '
+                'signupWorkflow =',
               ),
               isNot(contains('extraParams')),
             ]),
@@ -1146,12 +1146,12 @@ Future<EmailRequest> dtoTask(
               contains('abstract final class StemPayloadCodecs'),
               contains('PayloadCodec<EmailRequest> emailRequest ='),
               contains(
-                'WorkflowRef<({EmailRequest request}), EmailRequest> script =',
+                'WorkflowRef<EmailRequest, EmailRequest> script =',
               ),
               contains('encode: (value) => value.toJson(),'),
               contains('EmailRequest.fromJson('),
               contains(
-                'StemPayloadCodecs.emailRequest.encode(params.request)',
+                'StemPayloadCodecs.emailRequest.encode(params)',
               ),
               contains('StemPayloadCodecs.emailRequest.decode('),
               contains(
