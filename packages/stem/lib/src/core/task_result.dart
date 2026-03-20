@@ -23,6 +23,20 @@ class TaskResult<T extends Object?> {
   /// Decoded payload when the task succeeded.
   final T? value;
 
+  /// Returns [value] or [fallback] when the task has no decoded result.
+  T valueOr(T fallback) => value ?? fallback;
+
+  /// Returns the decoded value, throwing when it is absent.
+  T requiredValue() {
+    final resolved = value;
+    if (resolved == null) {
+      throw StateError(
+        "Task '$taskId' does not have a decoded result value.",
+      );
+    }
+    return resolved;
+  }
+
   /// Raw payload stored by the backend (useful for debugging or manual casts).
   final Object? rawPayload;
 

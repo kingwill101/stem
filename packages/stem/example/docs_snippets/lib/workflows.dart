@@ -136,7 +136,7 @@ Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
   );
 
   if (result?.isCompleted == true) {
-    print('Workflow finished with ${result!.value}');
+    print('Workflow finished with ${result!.requiredValue()}');
   } else {
     print('Workflow state: ${result?.status}');
   }

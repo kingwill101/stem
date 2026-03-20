@@ -257,6 +257,32 @@ class TaskStatus {
   /// The payload associated with this task, if any.
   final Object? payload;
 
+  /// Returns the decoded payload value, or `null` when no payload is present.
+  ///
+  /// When [codec] is supplied, the stored durable payload is decoded through
+  /// that codec before being returned.
+  T? payloadValue<T>({PayloadCodec<T>? codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    if (codec != null) {
+      return codec.decode(stored);
+    }
+    return stored as T;
+  }
+
+  /// Returns the decoded payload value, or [fallback] when it is absent.
+  T payloadValueOr<T>(T fallback, {PayloadCodec<T>? codec}) {
+    return payloadValue<T>(codec: codec) ?? fallback;
+  }
+
+  /// Returns the decoded payload value, throwing when it is absent.
+  T requiredPayloadValue<T>({PayloadCodec<T>? codec}) {
+    if (payload == null) {
+      throw StateError("Task '$id' does not have a payload.");
+    }
+    return payloadValue<T>(codec: codec) as T;
+  }
+
   /// The error that occurred during task execution, if any.
   final TaskError? error;
 

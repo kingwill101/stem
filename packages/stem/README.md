@@ -862,7 +862,7 @@ their direct helpers or typed refs:
 
 ```dart
 final result = await ordersWorkflow.startAndWait(app);
-print(result.value?.total);
+print(result.requiredValue().total);
 ```
 
 `StemWorkflowApp.waitForCompletion<T>` is the low-level completion API for
@@ -876,7 +876,7 @@ final result = await app.waitForCompletion<OrderReceipt>(
   decode: (payload) => OrderReceipt.fromJson(payload! as Map<String, Object?>),
 );
 if (result?.isCompleted == true) {
-  print(result!.value?.total);
+  print(result!.requiredValue().total);
 } else if (result?.timedOut == true) {
   inspectSuspension(result?.state);
 }
@@ -909,7 +909,7 @@ final charge = await ChargeCustomer.definition.enqueueAndWait(
   ChargeArgs(orderId: '123'),
 );
 if (charge?.isSucceeded == true) {
-  print('Captured ${charge!.value!.total}');
+  print('Captured ${charge!.requiredValue().total}');
 } else if (charge?.isFailed == true) {
   log.severe('Charge failed: ${charge!.status.error}');
 }
@@ -930,7 +930,7 @@ final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWait(
     tags: ['welcome'],
   ),
 );
-print(receipt?.value?.deliveryId);
+print(receipt?.requiredValue().deliveryId);
 ```
 
 ### Typed canvas helpers
@@ -954,7 +954,7 @@ final dispatch = await canvas.group<OrderSummary>([
 
 dispatch.results.listen((result) {
   if (result.isSucceeded) {
-    dashboard.update(result.value!);
+    dashboard.update(result.requiredValue());
   }
 });
 

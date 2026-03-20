@@ -37,4 +37,44 @@ void main() {
 
     expect(cancelled.isCancelled, isTrue);
   });
+
+  test('TaskResult exposes typed value helpers', () {
+    final result = TaskResult<int>(
+      taskId: 'task-1',
+      status: TaskStatus(
+        id: 'task-1',
+        state: TaskState.succeeded,
+        attempt: 0,
+        payload: 42,
+      ),
+      value: 42,
+      rawPayload: 42,
+    );
+
+    expect(result.valueOr(7), 42);
+    expect(result.requiredValue(), 42);
+  });
+
+  test('TaskResult.requiredValue throws when value is absent', () {
+    final result = TaskResult<int>(
+      taskId: 'task-1',
+      status: TaskStatus(
+        id: 'task-1',
+        state: TaskState.failed,
+        attempt: 1,
+      ),
+    );
+
+    expect(
+      result.requiredValue,
+      throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('task-1'),
+          ),
+        ),
+      );
+    expect(result.valueOr(7), 7);
+  });
 }

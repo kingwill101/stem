@@ -51,6 +51,8 @@ Typed results flow through `TaskResult<TResult>` when you call
 `Stem.waitForTask<TResult>`, `Canvas.group<T>`, `Canvas.chain<T>`, or
 `Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
 lets you deserialize complex objects before they reach application code.
+Use `result.requiredValue()` when a completed task must have a decoded value
+and you want a fail-fast read instead of manual nullable handling.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you

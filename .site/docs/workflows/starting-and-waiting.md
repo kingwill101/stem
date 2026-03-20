@@ -90,6 +90,8 @@ polls the store until the run finishes or the caller times out.
 Use the returned `WorkflowResult<T>` when you need:
 
 - `value` for a completed run
+- `requiredValue()` when completion is already guaranteed and you want a
+  fail-fast typed read
 - `status` for partial progress
 - `timedOut` to decide whether to keep polling
 

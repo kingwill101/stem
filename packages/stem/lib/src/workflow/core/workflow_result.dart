@@ -46,6 +46,20 @@ class WorkflowResult<T extends Object?> {
   /// run completed successfully.
   final T? value;
 
+  /// Returns [value] or [fallback] when the workflow has no decoded result.
+  T valueOr(T fallback) => value ?? fallback;
+
+  /// Returns the decoded value, throwing when it is absent.
+  T requiredValue() {
+    final resolved = value;
+    if (resolved == null) {
+      throw StateError(
+        "Workflow run '$runId' does not have a decoded result value.",
+      );
+    }
+    return resolved;
+  }
+
   /// Untyped payload stored by the workflow, useful for legacy consumers or
   /// debugging scenarios.
   final Object? rawResult;

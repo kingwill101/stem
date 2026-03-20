@@ -1,5 +1,6 @@
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:test/test.dart';
 
@@ -150,6 +151,65 @@ void main() {
       expect(status.workflowSerializationFormat, equals('json'));
       expect(status.workflowSerializationVersion, equals('1'));
       expect(status.workflowStreamId, equals('invoice_run-123'));
+    });
+
+    test('payload helpers decode stored values', () {
+      final status = TaskStatus(
+        id: 'task-4',
+        state: TaskState.succeeded,
+        attempt: 0,
+        payload: const {'id': 'receipt-1'},
+      );
+      final codec = PayloadCodec<Map<String, Object?>>.map(
+        encode: (value) => value,
+        decode: (json) => json,
+        typeName: 'ReceiptMap',
+      );
+
+      expect(
+        status.payloadValue<Map<String, Object?>>(),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadValue<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadValueOr<Map<String, Object?>>(
+          const {'id': 'fallback'},
+          codec: codec,
+        ),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.requiredPayloadValue<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+    });
+
+    test('requiredPayloadValue throws when payload is absent', () {
+      final status = TaskStatus(
+        id: 'task-5',
+        state: TaskState.failed,
+        attempt: 1,
+      );
+
+      expect(
+        status.requiredPayloadValue<Map<String, Object?>>,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('task-5'),
+          ),
+        ),
+      );
+      expect(
+        status.payloadValueOr<Map<String, Object?>>(
+          const {'id': 'fallback'},
+        ),
+        equals(const {'id': 'fallback'}),
+      );
     });
   });
 

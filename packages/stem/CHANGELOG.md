@@ -2,6 +2,12 @@
 
 ## 0.1.1
 
+- Added typed task/workflow result readers:
+  `TaskStatus.payloadValue(...)`, `payloadValueOr(...)`,
+  `requiredPayloadValue(...)`, `TaskResult.valueOr(...)`,
+  `TaskResult.requiredValue()`, `WorkflowResult.valueOr(...)`, and
+  `WorkflowResult.requiredValue()` so low-level status reads and typed waits no
+  longer need manual nullable handling or raw payload casts.
 - Added `arg<T>()`, `argOr<T>()`, and `requiredArg<T>()` on `TaskContext` and
   `TaskInvocationContext`, and taught both contexts to retain the current
   task args so manual handlers and isolate entrypoints can read typed inputs
