@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Refreshed the cancellation-policy workflow example to use the fluent builder
+  `start(...)` alias instead of `startWith(...)`.
 - Refreshed the remaining simple workflow examples to use direct `start(...)`
   aliases instead of `startWith(...)` where no advanced overrides are needed.
 - Refreshed child-workflow examples and docs to prefer the direct
