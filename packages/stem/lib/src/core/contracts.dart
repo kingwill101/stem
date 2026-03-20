@@ -2110,6 +2110,38 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()` and `Type.fromJson(...)`.
+  factory TaskDefinition.withJsonCodec({
+    required String name,
+    required TArgs Function(Map<String, Object?> payload) decodeArgs,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    final resultCodec =
+        decodeResultJson == null
+            ? null
+            : PayloadCodec<TResult>.json(
+              decode: decodeResultJson,
+              typeName: resultTypeName ?? '$TResult',
+            );
+    return TaskDefinition<TArgs, TResult>.withPayloadCodec(
+      name: name,
+      argsCodec: PayloadCodec<TArgs>.json(
+        decode: decodeArgs,
+        typeName: argsTypeName ?? '$TArgs',
+      ),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgs<TResult>({
     required String name,

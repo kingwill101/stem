@@ -35,9 +35,10 @@ const _greetingResultCodec = PayloadCodec<_GreetingResult>.json(
   typeName: '_GreetingResult',
 );
 
-const _userUpdatedEvent = WorkflowEventRef<_GreetingParams>(
+final _userUpdatedEvent = WorkflowEventRef<_GreetingParams>.json(
   topic: 'runtime.ref.event',
-  codec: _greetingParamsCodec,
+  decode: _GreetingParams.fromJson,
+  typeName: '_GreetingParams',
 );
 
 void main() {
@@ -145,6 +146,36 @@ void main() {
         );
 
         expect(result?.value, 'hello codec');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('manual workflows can derive json-backed refs', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.json.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return 'hello $name';
+          });
+        },
+      );
+      final workflowRef = flow.refWithJsonCodec<_GreetingParams>(
+        decodeParams: _GreetingParams.fromJson,
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final result = await workflowRef.startAndWaitWith(
+          workflowApp.runtime,
+          const _GreetingParams(name: 'json'),
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello json');
       } finally {
         await workflowApp.shutdown();
       }

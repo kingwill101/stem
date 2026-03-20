@@ -160,9 +160,9 @@ Use the new typed wrapper when you want compile-time checking and shared metadat
 
 ```dart
 class HelloTask implements TaskHandler<void> {
-  static final definition = TaskDefinition<HelloArgs, void>.withPayloadCodec(
+  static final definition = TaskDefinition<HelloArgs, void>.withJsonCodec(
     name: 'demo.hello',
-    argsCodec: helloArgsCodec,
+    decodeArgs: HelloArgs.fromJson,
     metadata: TaskMetadata(description: 'Simple hello world example'),
   );
 
@@ -193,11 +193,6 @@ class HelloArgs {
   }
 }
 
-const helloArgsCodec = PayloadCodec<HelloArgs>.json(
-  decode: HelloArgs.fromJson,
-  typeName: 'HelloArgs',
-);
-
 Future<void> main() async {
   final client = await StemClient.fromUrl(
     'redis://localhost:6379',
@@ -224,11 +219,11 @@ Future<void> main() async {
 producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
 
-Use `TaskDefinition.withPayloadCodec(...)` when your manual task args are DTOs.
-Prefer `PayloadCodec<T>.json(...)` when the type already exposes `toJson()` and
-`Type.fromJson(...)`, and drop down to `PayloadCodec<T>.map(...)` only when
-you need a custom map encoder. Task args still need to encode to
-`Map<String, Object?>` because they are published as a map.
+Use `TaskDefinition.withJsonCodec(...)` when your manual task args are normal
+DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
+`TaskDefinition.withPayloadCodec(...)` only when you need a custom
+`PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`
+because they are published as a map.
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly. Prefer `enqueueAndWait(...)` when you only need
@@ -483,13 +478,8 @@ final approvalsFlow = Flow<String>(
   },
 );
 
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>.json(
-  decode: ApprovalDraft.fromJson,
-  typeName: 'ApprovalDraft',
-);
-
-final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(
-  paramsCodec: approvalDraftCodec,
+final approvalsRef = approvalsFlow.refWithJsonCodec<ApprovalDraft>(
+  decodeParams: ApprovalDraft.fromJson,
 );
 
 final app = await StemWorkflowApp.fromUrl(
@@ -522,9 +512,10 @@ final runId = await approvalsRef
     .startWith(app);
 ```
 
-Use `refWithCodec(...)` when your manual workflow start params are DTOs that
-already have a `PayloadCodec<T>`. The codec still needs to encode to
-`Map<String, Object?>` because workflow params are persisted as a map.
+Use `refWithJsonCodec(...)` when your manual workflow start params are normal
+DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to `refWithCodec(...)`
+when you need a custom `PayloadCodec<T>`. Workflow params still need to encode
+to `Map<String, Object?>` because they are persisted as a map.
 
 For workflows without start parameters, start directly from the flow or script
 itself:
@@ -1090,10 +1081,11 @@ backend metadata under `stem.unique.duplicates`.
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
 - When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
   `runtime.emitValue(...)` when you are intentionally using the low-level
-  runtime) with a `PayloadCodec<T>`, or bundle the topic and codec once in a
-  `WorkflowEventRef<T>` and use `event.emitWith(emitter, dto)` as the happy
-  path, with `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
-  `event.call(value).emitWith(...)` still available as lower-level variants.
+  runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
+  as the shortest typed event form and call `event.emitWith(emitter, dto)` as
+  the happy path. `emitter.emitEventBuilder(event: ref, value: dto).emit()`
+  and `event.call(value).emitWith(...)` remain available as lower-level
+  variants.
   Pair that with `await event.waitWith(ctx)` or `awaitEventRef(...)`. Event
   payloads still serialize onto the existing `Map<String, Object?>` wire
   format.

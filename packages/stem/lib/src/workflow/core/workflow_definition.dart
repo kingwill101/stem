@@ -316,6 +316,20 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and `Type.fromJson(...)`.
+  WorkflowRef<TParams, T> refWithJsonCodec<TParams>({
+    required TParams Function(Map<String, Object?> payload) decodeParams,
+    String? paramsTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.withJsonCodec(
+      name: name,
+      decodeParams: decodeParams,
+      decodeResult: (payload) => decodeResult(payload) as T,
+      paramsTypeName: paramsTypeName,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] from this definition.
   NoArgsWorkflowRef<T> ref0() {
     return NoArgsWorkflowRef<T>(

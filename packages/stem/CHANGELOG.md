@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `TaskDefinition.withJsonCodec(...)`, `refWithJsonCodec(...)`, and
+  `WorkflowEventRef<T>.json(...)` so manual DTO-backed tasks, workflows, and
+  typed workflow events no longer need a separate codec constant in the common
+  `toJson()` / `Type.fromJson(...)` case.
 - Added `PayloadCodec<T>.json(...)` as the shortest DTO helper for types that
   already expose `toJson()` and `Type.fromJson(...)`, while keeping
   `PayloadCodec<T>.map(...)` for custom map encoders.

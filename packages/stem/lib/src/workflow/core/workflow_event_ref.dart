@@ -26,6 +26,22 @@ class WorkflowEventRef<T> {
     this.codec,
   });
 
+  /// Creates a typed workflow event reference for DTO payloads that already
+  /// expose `toJson()` and `Type.fromJson(...)`.
+  factory WorkflowEventRef.json({
+    required String topic,
+    required T Function(Map<String, Object?> payload) decode,
+    String? typeName,
+  }) {
+    return WorkflowEventRef<T>(
+      topic: topic,
+      codec: PayloadCodec<T>.json(
+        decode: decode,
+        typeName: typeName,
+      ),
+    );
+  }
+
   /// Durable topic name used to suspend and resume workflow runs.
   final String topic;
 

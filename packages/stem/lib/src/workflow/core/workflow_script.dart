@@ -49,6 +49,18 @@ class WorkflowScript<T extends Object?> {
     return definition.refWithCodec<TParams>(paramsCodec: paramsCodec);
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and `Type.fromJson(...)`.
+  WorkflowRef<TParams, T> refWithJsonCodec<TParams>({
+    required TParams Function(Map<String, Object?> payload) decodeParams,
+    String? paramsTypeName,
+  }) {
+    return definition.refWithJsonCodec<TParams>(
+      decodeParams: decodeParams,
+      paramsTypeName: paramsTypeName,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] for scripts without start params.
   NoArgsWorkflowRef<T> ref0() {
     return definition.ref0();

@@ -58,8 +58,10 @@ final runId = await approvalsRef
     .startWith(workflowApp);
 ```
 
-`refWithCodec(...)` is the manual DTO path. The codec still needs to encode to
-`Map<String, Object?>` because workflow params are stored as a map.
+`refWithJsonCodec(...)` is the shortest manual DTO path when the type already
+has `toJson()` and `Type.fromJson(...)`. Use `refWithCodec(...)` when you need
+a custom `PayloadCodec<T>`. Workflow params still need to encode to
+`Map<String, Object?>` because they are stored as a map.
 
 For workflows without start params, start directly from the flow or script
 itself with `startWith(...)`, `startAndWaitWith(...)`, or `startBuilder()`.

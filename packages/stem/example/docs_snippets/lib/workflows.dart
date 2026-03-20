@@ -17,11 +17,6 @@ class ApprovalDraft {
   }
 }
 
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>.json(
-  decode: ApprovalDraft.fromJson,
-  typeName: 'ApprovalDraft',
-);
-
 // #region workflows-runtime
 Future<void> bootstrapWorkflowApp() async {
   // #region workflows-app-create
@@ -81,8 +76,8 @@ class ApprovalsFlow {
     },
   );
 
-  static final ref = flow.refWithCodec<ApprovalDraft>(
-    paramsCodec: approvalDraftCodec,
+  static final ref = flow.refWithJsonCodec<ApprovalDraft>(
+    decodeParams: ApprovalDraft.fromJson,
   );
 }
 

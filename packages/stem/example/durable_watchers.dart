@@ -1,12 +1,9 @@
 import 'package:stem/stem.dart';
 
-const shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>.json(
+final shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>.json(
+  topic: 'shipment.ready',
   decode: _ShipmentReadyEvent.fromJson,
   typeName: '_ShipmentReadyEvent',
-);
-const shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>(
-  topic: 'shipment.ready',
-  codec: shipmentReadyEventCodec,
 );
 
 /// Runs a workflow that suspends on `awaitEvent` and resumes once a payload is

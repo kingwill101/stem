@@ -58,16 +58,11 @@ class InvoicePayload {
   }
 }
 
-const invoicePayloadCodec = PayloadCodec<InvoicePayload>.json(
-  decode: InvoicePayload.fromJson,
-  typeName: 'InvoicePayload',
-);
-
 class PublishInvoiceTask extends TaskHandler<void> {
   static final definition =
-      TaskDefinition<InvoicePayload, bool>.withPayloadCodec(
+      TaskDefinition<InvoicePayload, bool>.withJsonCodec(
         name: 'invoice.publish',
-        argsCodec: invoicePayloadCodec,
+        decodeArgs: InvoicePayload.fromJson,
         metadata: const TaskMetadata(
           description: 'Publishes invoices downstream',
         ),

@@ -123,6 +123,28 @@ void main() {
       expect(backend.records.single.state, TaskState.queued);
     });
 
+    test('enqueueCall publishes json-backed task definitions', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<_CodecTaskArgs, Object?>.withJsonCodec(
+        name: 'sample.json.args',
+        decodeArgs: _CodecTaskArgs.fromJson,
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
+
+      final id = await stem.enqueueCall(
+        definition.call(const _CodecTaskArgs('encoded')),
+      );
+
+      expect(id, isNotEmpty);
+      expect(broker.published.single.envelope.name, 'sample.json.args');
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(broker.published.single.envelope.args, {'value': 'encoded'});
+      expect(backend.records.single.id, id);
+      expect(backend.records.single.state, TaskState.queued);
+    });
+
     test(
       'enqueueCall uses definition encoder metadata on producer-only paths',
       () async {
@@ -599,6 +621,10 @@ final _codecReceiptDefinition =
 
 class _CodecTaskArgs {
   const _CodecTaskArgs(this.value);
+
+  factory _CodecTaskArgs.fromJson(Map<String, Object?> payload) {
+    return _CodecTaskArgs(payload['value']! as String);
+  }
 
   final String value;
 

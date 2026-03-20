@@ -60,10 +60,11 @@ Typed event payloads still serialize to the existing `Map<String, Object?>`
 wire format. `emitValue(...)` is a DTO/codec convenience layer, not a new
 transport shape.
 
-When the topic and codec travel together in your codebase, prefer a typed
-`WorkflowEventRef<T>` and `event.emitWith(emitter, dto)` as the happy path.
-`emitter.emitEventBuilder(event: ref, value: dto).emit()` and
-`event.call(value).emitWith(...)` remain available as lower-level variants.
+When the topic and codec travel together in your codebase, prefer
+`WorkflowEventRef<T>.json(...)` for normal DTO payloads and keep
+`event.emitWith(emitter, dto)` as the happy path. `emitter.emitEventBuilder(
+event: ref, value: dto).emit()` and `event.call(value).emitWith(...)` remain
+available as lower-level variants.
 Pair that with `await event.waitWith(ctx)` or `awaitEventRef(...)`.
 
 ## Inspect waiting runs
