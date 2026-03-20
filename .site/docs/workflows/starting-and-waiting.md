@@ -46,6 +46,20 @@ final result = await approvalsRef.waitFor(workflowApp, runId);
 Use this path when you want the same typed start/wait surface as generated
 workflow refs, but the workflow itself is still hand-written.
 
+When you want to add advanced start options fluently, use the workflow start
+builder:
+
+```dart
+final runId = await approvalsRef
+    .startBuilder(const ApprovalDraft(documentId: 'doc-42'))
+    .parentRunId('parent-run')
+    .ttl(const Duration(hours: 1))
+    .cancellationPolicy(
+      const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
+    )
+    .startWith(workflowApp);
+```
+
 `refWithCodec(...)` is the manual DTO path. The codec still needs to encode to
 `Map<String, Object?>` because workflow params are stored as a map.
 

@@ -466,6 +466,20 @@ print(result?.value);
 await app.close();
 ```
 
+When you need advanced start options without dropping back to raw workflow
+names, use the fluent workflow start builder:
+
+```dart
+final runId = await approvalsRef
+    .startBuilder(const ApprovalDraft(documentId: 'doc-42'))
+    .parentRunId('parent-run')
+    .ttl(const Duration(hours: 1))
+    .cancellationPolicy(
+      const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
+    )
+    .startWith(app);
+```
+
 Use `refWithCodec(...)` when your manual workflow start params are DTOs that
 already have a `PayloadCodec<T>`. The codec still needs to encode to
 `Map<String, Object?>` because workflow params are persisted as a map.

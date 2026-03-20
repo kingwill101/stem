@@ -83,6 +83,11 @@ class WorkflowRef<TParams, TResult extends Object?> {
     );
   }
 
+  /// Creates a fluent builder for this workflow start.
+  WorkflowStartBuilder<TParams, TResult> startBuilder(TParams params) {
+    return WorkflowStartBuilder(definition: this, params: params);
+  }
+
   /// Decodes a final workflow result payload.
   TResult decode(Object? payload) {
     if (payload == null) {
@@ -168,6 +173,11 @@ class NoArgsWorkflowRef<TResult extends Object?> {
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
     );
+  }
+
+  /// Creates a fluent builder for this workflow start.
+  WorkflowStartBuilder<(), TResult> startBuilder() {
+    return asRef.startBuilder(());
   }
 
   /// Starts this workflow ref directly with [caller].
@@ -296,6 +306,52 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
   }
 }
 
+/// Fluent builder used to construct rich workflow start requests.
+class WorkflowStartBuilder<TParams, TResult extends Object?> {
+  /// Creates a fluent builder for workflow starts.
+  WorkflowStartBuilder({required this.definition, required this.params});
+
+  /// Workflow definition used to construct the start call.
+  final WorkflowRef<TParams, TResult> definition;
+
+  /// Typed parameters for the workflow invocation.
+  final TParams params;
+
+  String? _parentRunId;
+  Duration? _ttl;
+  WorkflowCancellationPolicy? _cancellationPolicy;
+
+  /// Sets the parent workflow run id for this start.
+  WorkflowStartBuilder<TParams, TResult> parentRunId(String parentRunId) {
+    _parentRunId = parentRunId;
+    return this;
+  }
+
+  /// Sets the retention TTL for this run.
+  WorkflowStartBuilder<TParams, TResult> ttl(Duration ttl) {
+    _ttl = ttl;
+    return this;
+  }
+
+  /// Sets the cancellation policy for this run.
+  WorkflowStartBuilder<TParams, TResult> cancellationPolicy(
+    WorkflowCancellationPolicy cancellationPolicy,
+  ) {
+    _cancellationPolicy = cancellationPolicy;
+    return this;
+  }
+
+  /// Builds the [WorkflowStartCall] with accumulated overrides.
+  WorkflowStartCall<TParams, TResult> build() {
+    return definition.call(
+      params,
+      parentRunId: _parentRunId,
+      ttl: _ttl,
+      cancellationPolicy: _cancellationPolicy,
+    );
+  }
+}
+
 /// Convenience helpers for dispatching prebuilt [WorkflowStartCall] instances.
 extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     on WorkflowStartCall<TParams, TResult> {
@@ -314,6 +370,29 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     return definition.waitFor(
       caller,
       runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+}
+
+/// Convenience helpers for dispatching [WorkflowStartBuilder] instances.
+extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
+    on WorkflowStartBuilder<TParams, TResult> {
+  /// Builds this workflow call and starts it with the provided [caller].
+  Future<String> startWith(WorkflowCaller caller) {
+    return build().startWith(caller);
+  }
+
+  /// Builds this workflow call, starts it with [caller], and waits for the
+  /// result.
+  Future<WorkflowResult<TResult>?> startAndWaitWith(
+    WorkflowCaller caller, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return build().startAndWaitWith(
+      caller,
       pollInterval: pollInterval,
       timeout: timeout,
     );

@@ -233,6 +233,72 @@ void main() {
       }
     });
 
+    test('workflow refs expose fluent start builders', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.builder.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.params['name'] as String? ?? 'world';
+            return 'hello $name';
+          });
+        },
+      );
+      final script = WorkflowScript<String>(
+        name: 'runtime.ref.builder.script',
+        run: (context) async => 'hello script',
+      );
+
+      final workflowRef = flow.ref<Map<String, Object?>>(
+        encodeParams: (params) => params,
+      );
+      final scriptRef = script.ref0();
+
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+        scripts: [script],
+      );
+      try {
+        await workflowApp.start();
+
+        final flowBuilder = workflowRef
+            .startBuilder(const {'name': 'builder'})
+            .ttl(const Duration(minutes: 5))
+            .parentRunId('parent-builder');
+        final builtFlowCall = flowBuilder.build();
+        final runId = await flowBuilder.startWith(workflowApp.runtime);
+        final result = await workflowRef.waitFor(
+          workflowApp.runtime,
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        final state = await workflowApp.getRun(runId);
+
+        expect(builtFlowCall.parentRunId, 'parent-builder');
+        expect(builtFlowCall.ttl, const Duration(minutes: 5));
+        expect(result?.value, 'hello builder');
+        expect(state?.parentRunId, 'parent-builder');
+
+        final scriptBuilder = scriptRef.startBuilder().cancellationPolicy(
+          const WorkflowCancellationPolicy(
+            maxRunDuration: Duration(seconds: 5),
+          ),
+        );
+        final builtScriptCall = scriptBuilder.build();
+        final oneShot = await scriptBuilder.startAndWaitWith(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(
+          builtScriptCall.cancellationPolicy?.maxRunDuration,
+          const Duration(seconds: 5),
+        );
+        expect(oneShot?.value, 'hello script');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('typed workflow events emit directly from the event ref', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.event.flow',

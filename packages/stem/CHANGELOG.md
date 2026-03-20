@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
+  `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
+  `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to
+  raw workflow-name APIs.
 - Updated the public annotated workflow example and workflow docs to keep
   context-aware script workflows on the direct annotated checkpoint path,
   removing the redundant outer `script.step(...)` wrapper from the happy path.
