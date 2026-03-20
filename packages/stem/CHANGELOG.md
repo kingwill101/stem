@@ -67,6 +67,9 @@
 - Simplified the best-practices docs snippet to use `StemApp.inMemory(...)`
   and a generic `TaskEnqueuer` helper instead of manually wiring `Stem` and
   `Worker` just to enqueue a single in-memory task.
+- Simplified the `microservice/enqueuer` HTTP service to use
+  `StemClient.create(...)` for publishing while keeping `Canvas` and the
+  autofill controller on the client-owned broker/backend instances.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
