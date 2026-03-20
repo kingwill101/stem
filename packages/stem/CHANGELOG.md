@@ -149,6 +149,8 @@
   registration no longer needs to reach through `workflowApp.runtime`.
 - Added `StemWorkflowApp.registerFlow(...)` and `registerScript(...)` so manual
   flow/script registration no longer needs to pass `.definition`.
+- Added `StemWorkflowApp.registerWorkflows(...)` so manual bulk definition
+  registration no longer needs repeated helper calls.
 - Added `StemWorkflowApp.registerFlows(...)` and `registerScripts(...)` so
   manual bulk registration no longer needs repeated helper calls.
 - Added `continuationQueue:` and `executionQueue:` to `StemWorkflowApp`

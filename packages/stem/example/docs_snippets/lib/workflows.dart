@@ -95,6 +95,10 @@ class ApprovalsFlow {
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
   workflowApp.registerFlows([ApprovalsFlow.flow]);
 }
+
+Future<void> registerWorkflowDefinition(StemWorkflowApp workflowApp) async {
+  workflowApp.registerWorkflows([ApprovalsFlow.flow.definition]);
+}
 // #endregion workflows-flow
 
 // #region workflows-script

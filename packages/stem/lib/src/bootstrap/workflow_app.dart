@@ -276,6 +276,11 @@ class StemWorkflowApp
     runtime.registerWorkflow(definition);
   }
 
+  /// Registers [definitions] into this app's workflow registry.
+  void registerWorkflows(Iterable<WorkflowDefinition> definitions) {
+    definitions.forEach(registerWorkflow);
+  }
+
   /// Registers [flow] into this app's workflow registry.
   void registerFlow(Flow flow) {
     registerWorkflow(flow.definition);

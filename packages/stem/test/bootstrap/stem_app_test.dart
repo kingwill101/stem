@@ -887,6 +887,31 @@ void main() {
       },
     );
 
+    test('StemWorkflowApp exposes bulk workflow registration helper', () async {
+      final definition = WorkflowDefinition<String>.flow(
+        name: 'workflow.register.definitions.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'definitions-register-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory();
+      try {
+        workflowApp.registerWorkflows([definition]);
+
+        final runId = await workflowApp.startWorkflow(
+          'workflow.register.definitions.helper',
+        );
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, equals('definitions-register-ok'));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',
