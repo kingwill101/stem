@@ -81,20 +81,19 @@ void main() {
     expect(call.encodeArgs(), containsPair('a', 1));
   });
 
-  test(
-    'TaskEnqueueBuilder.enqueueAndWait reuses typed result decoding',
-    () async {
+  test('TaskEnqueueBuilder.build composes with enqueueCall and typed waits', () async {
       final definition = TaskDefinition<Map<String, Object?>, String>(
         name: 'demo.task',
         encodeArgs: (args) => args,
         decodeResult: (payload) => 'decoded:$payload',
       );
       final caller = _RecordingTaskResultCaller();
-
-      final result = await TaskEnqueueBuilder(
+      final call = TaskEnqueueBuilder(
         definition: definition,
         args: const {'a': 1},
-      ).header('h1', 'v1').enqueueAndWait(caller);
+      ).header('h1', 'v1').build();
+      final taskId = await caller.enqueueCall(call);
+      final result = await call.definition.waitFor(caller, taskId);
 
       expect(caller.lastCall, isNotNull);
       expect(caller.lastCall!.name, 'demo.task');
@@ -104,7 +103,7 @@ void main() {
     },
   );
 
-  test('TaskEnqueuer.prepareEnqueue binds enqueue to the enqueuer', () async {
+  test('TaskEnqueuer.prepareEnqueue binds builder assembly to the enqueuer', () async {
     final enqueuer = _RecordingTaskEnqueuer();
     final definition = TaskDefinition<Map<String, Object?>, String>(
       name: 'demo.task',
@@ -112,11 +111,11 @@ void main() {
       decodeResult: (payload) => 'decoded:$payload',
     );
 
-    final taskId = await enqueuer
+    final builder = enqueuer
         .prepareEnqueue(definition: definition, args: const {'a': 1})
         .header('h1', 'v1')
-        .queue('critical')
-        .enqueue();
+        .queue('critical');
+    final taskId = await enqueuer.enqueueCall(builder.build());
 
     expect(taskId, 'task-1');
     expect(enqueuer.lastCall, isNotNull);
@@ -125,9 +124,7 @@ void main() {
     expect(enqueuer.lastCall!.resolveOptions().queue, 'critical');
   });
 
-  test(
-    'BoundTaskEnqueueBuilder.enqueueAndWait reuses typed result decoding',
-    () async {
+  test('BoundTaskEnqueueBuilder.build composes with typed waits', () async {
       final caller = _RecordingTaskResultCaller();
       final definition = TaskDefinition<Map<String, Object?>, String>(
         name: 'demo.task',
@@ -135,34 +132,18 @@ void main() {
         decodeResult: (payload) => 'decoded:$payload',
       );
 
-      final result = await caller
+      final builder = caller
           .prepareEnqueue(definition: definition, args: const {'a': 1})
-          .header('h1', 'v1')
-          .enqueueAndWait();
+          .header('h1', 'v1');
+      final call = builder.build();
+      final taskId = await caller.enqueueCall(call);
+      final result = await call.definition.waitFor(caller, taskId);
 
       expect(caller.lastCall, isNotNull);
       expect(caller.lastCall!.name, 'demo.task');
       expect(caller.lastCall!.headers, containsPair('h1', 'v1'));
       expect(caller.waitedTaskId, 'task-1');
       expect(result?.value, 'decoded:stored');
-    },
-  );
-
-  test(
-    'BoundTaskEnqueueBuilder.enqueueAndWait throws without a result caller',
-    () async {
-      final enqueuer = _RecordingTaskEnqueuer();
-      final definition = TaskDefinition<Map<String, Object?>, String>(
-        name: 'demo.task',
-        encodeArgs: (args) => args,
-      );
-
-      expect(
-        () => enqueuer
-            .prepareEnqueue(definition: definition, args: const {'a': 1})
-            .enqueueAndWait(),
-        throwsStateError,
-      );
     },
   );
 

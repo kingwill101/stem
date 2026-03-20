@@ -465,8 +465,10 @@
 - Reframed the producer docs to treat `TaskDefinition` and shared
   `TaskEnqueuer` surfaces as the happy path, keeping raw name-based enqueue as
   the lower-level interop option.
-- Added `TaskEnqueueBuilder.enqueueAndWait(...)` so fluent per-call task
-  overrides no longer require a separate manual wait step.
+- Tightened advanced builder dispatch so `TaskEnqueueBuilder` and
+  `WorkflowStartBuilder` now only build `TaskCall` / `WorkflowStartCall`
+  values; dispatch goes through direct `enqueue(...)` / `start(...)` helpers
+  or explicit `enqueueCall(...)` / `startWorkflowCall(...)`.
 - Added direct typed workflow event helper APIs so event refs can emit
   payloads without repeating raw topic strings or separate codecs.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /

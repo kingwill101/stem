@@ -400,38 +400,11 @@ class WorkflowStartBuilder<TParams, TResult extends Object?> {
   }
 }
 
-/// Convenience helpers for dispatching [WorkflowStartBuilder] instances.
-extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
-    on WorkflowStartBuilder<TParams, TResult> {
-  /// Builds this workflow call and starts it with the provided [caller].
-  Future<String> start(WorkflowCaller caller) {
-    return caller.startWorkflowCall(build());
-  }
-
-  /// Builds this workflow call, starts it with [caller], and waits for the
-  /// result.
-  Future<WorkflowResult<TResult>?> startAndWait(
-    WorkflowCaller caller, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    final call = build();
-    return caller.startWorkflowCall(call).then((runId) {
-      return call.definition.waitFor(
-        caller,
-        runId,
-        pollInterval: pollInterval,
-        timeout: timeout,
-      );
-    });
-  }
-}
-
 /// Caller-bound fluent workflow start builder.
 ///
 /// This mirrors the role `TaskInvocationContext.prepareEnqueue(...)` plays for
 /// tasks: a workflow-capable caller can create a fluent start request without
-/// pivoting back through the workflow ref for dispatch.
+/// pivoting back through the workflow ref.
 class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
   /// Creates a caller-bound workflow start builder.
   BoundWorkflowStartBuilder._({
@@ -466,21 +439,8 @@ class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
   /// Builds the [WorkflowStartCall] with accumulated overrides.
   WorkflowStartCall<TParams, TResult> build() => _builder.build();
 
-  /// Starts the built workflow call with the bound caller.
-  Future<String> start() => _builder.start(_caller);
-
-  /// Starts the built workflow call with the bound caller and waits for the
-  /// typed workflow result.
-  Future<WorkflowResult<TResult>?> startAndWait({
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return _builder.startAndWait(
-      _caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
+  /// Workflow caller attached to this builder.
+  WorkflowCaller get caller => _caller;
 }
 
 /// Convenience helpers for building typed workflow starts directly from a

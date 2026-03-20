@@ -3185,8 +3185,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 /// Caller-bound fluent task enqueue builder.
 ///
 /// This keeps the enqueue target attached to the builder so producers and
-/// contexts can stay on the enqueuer surface instead of bouncing back through
-/// `builder.enqueue(enqueuer)`.
+/// contexts can stay on the enqueuer surface while assembling a call.
 class BoundTaskEnqueueBuilder<TArgs, TResult> {
   /// Creates a caller-bound task enqueue builder.
   BoundTaskEnqueueBuilder({
@@ -3263,30 +3262,6 @@ class BoundTaskEnqueueBuilder<TArgs, TResult> {
   /// Builds the [TaskCall] with accumulated overrides.
   TaskCall<TArgs, TResult> build() => _builder.build();
 
-  Future<String> _enqueueBuiltCall(
-    TaskCall<TArgs, TResult> call, {
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
-    final scopeMeta = TaskEnqueueScope.currentMeta();
-    if (scopeMeta == null || scopeMeta.isEmpty) {
-      return enqueuer.enqueueCall(
-        call,
-        enqueueOptions: resolvedEnqueueOptions,
-      );
-    }
-    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
-    return enqueuer.enqueueCall(
-      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
-      enqueueOptions: resolvedEnqueueOptions,
-    );
-  }
-
-  /// Builds the call and enqueues it with the bound enqueuer.
-  Future<String> enqueue({TaskEnqueueOptions? enqueueOptions}) {
-    final call = build();
-    return _enqueueBuiltCall(call, enqueueOptions: enqueueOptions);
-  }
 }
 
 /// Convenience helpers for building typed enqueue requests directly from a task

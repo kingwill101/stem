@@ -312,7 +312,8 @@ print(result?.value);
 
 Treat `prepareEnqueue(...)` as the advanced path when you need to assemble
 headers, metadata, delay, priority, or other overrides incrementally. For the
-normal case, prefer direct `enqueue(...)` or `enqueueAndWait(...)`.
+normal case, prefer direct `enqueue(...)` or `enqueueAndWait(...)`. Builders
+now only produce `TaskCall`; dispatch those with `enqueueCall(...)`.
 
 ### Enqueue from inside a task
 

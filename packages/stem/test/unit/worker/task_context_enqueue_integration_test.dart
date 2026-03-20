@@ -221,7 +221,9 @@ void main() {
       await stem.enqueue(
         'tasks.primary.success',
         enqueueOptions: TaskEnqueueOptions(
-          link: [linkDefinition(const _ChildArgs('linked'))],
+          link: [
+            linkDefinition.prepareEnqueue(const _ChildArgs('linked')).build(),
+          ],
         ),
       );
 
@@ -278,7 +280,9 @@ void main() {
       await stem.enqueue(
         'tasks.primary.fail',
         enqueueOptions: TaskEnqueueOptions(
-          linkError: [linkDefinition(const _ChildArgs('linked'))],
+          linkError: [
+            linkDefinition.prepareEnqueue(const _ChildArgs('linked')).build(),
+          ],
         ),
       );
 
@@ -539,7 +543,7 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
     definition: _childDefinition,
     args: const _ChildArgs('from-isolate'),
   );
-  await builder.enqueue();
+  await context.enqueueCall(builder.build());
   return null;
 }
 

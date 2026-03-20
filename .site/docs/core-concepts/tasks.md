@@ -96,13 +96,13 @@ final request = context.argsJson<InvoicePayload>(
 );
 ```
 
-`TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and typed task
-definitions can now create a fluent builder directly through
-`definition.prepareEnqueue(...)`. `TaskEnqueuer.prepareEnqueue(...)` remains
-available when you want the caller-bound variant that keeps the enqueue target
-attached to the builder. Treat both `prepareEnqueue(...)` forms as the
-advanced override path; for the normal case, prefer direct
-`enqueue(...)` / `enqueueAndWait(...)`.
+`TaskEnqueueBuilder` now only builds a `TaskCall`. Typed task definitions can
+create that fluent builder directly through `definition.prepareEnqueue(...)`.
+`TaskEnqueuer.prepareEnqueue(...)` remains available when you want the
+caller-bound variant that keeps the enqueue target attached to the builder.
+Treat both `prepareEnqueue(...)` forms as the advanced override path, then
+dispatch the built call with `enqueueCall(...)`. For the normal case, prefer
+direct `enqueue(...)` / `enqueueAndWait(...)`.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueue(...)` /

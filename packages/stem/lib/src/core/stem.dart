@@ -1124,63 +1124,24 @@ class Stem implements TaskResultCaller {
   }
 }
 
-/// Convenience helpers for enqueuing [TaskEnqueueBuilder] instances.
-extension TaskEnqueueBuilderExtension<TArgs, TResult>
-    on TaskEnqueueBuilder<TArgs, TResult> {
-  /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueue(
-    TaskEnqueuer enqueuer, {
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    final call = build();
-    final scopeMeta = TaskEnqueueScope.currentMeta();
-    if (scopeMeta == null || scopeMeta.isEmpty) {
-      return enqueuer.enqueueCall(
-        call,
-        enqueueOptions: enqueueOptions ?? call.enqueueOptions,
-      );
-    }
-    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+Future<String> _enqueueBuiltTaskCall(
+  TaskEnqueuer enqueuer,
+  TaskCall<dynamic, dynamic> call, {
+  TaskEnqueueOptions? enqueueOptions,
+}) {
+  final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
+  final scopeMeta = TaskEnqueueScope.currentMeta();
+  if (scopeMeta == null || scopeMeta.isEmpty) {
     return enqueuer.enqueueCall(
-      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
-      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+      call,
+      enqueueOptions: resolvedEnqueueOptions,
     );
   }
-
-  /// Builds this request, enqueues it with [caller], and waits for the typed
-  /// task result.
-  Future<TaskResult<TResult>?> enqueueAndWait(
-    TaskResultCaller caller, {
-    Duration? timeout,
-    TaskEnqueueOptions? enqueueOptions,
-  }) async {
-    final taskId = await enqueue(
-      caller,
-      enqueueOptions: enqueueOptions,
-    );
-    return build().definition.waitFor(caller, taskId, timeout: timeout);
-  }
-}
-
-/// Convenience helpers for waiting on caller-bound task enqueue builders.
-extension BoundTaskEnqueueBuilderExtension<TArgs, TResult extends Object?>
-    on BoundTaskEnqueueBuilder<TArgs, TResult> {
-  /// Enqueues this bound request and waits for the typed task result.
-  Future<TaskResult<TResult>?> enqueueAndWait({
-    Duration? timeout,
-    TaskEnqueueOptions? enqueueOptions,
-  }) async {
-    final boundEnqueuer = enqueuer;
-    if (boundEnqueuer is! TaskResultCaller) {
-      throw StateError(
-        'BoundTaskEnqueueBuilder requires a TaskResultCaller to wait for '
-        'results',
-      );
-    }
-    final call = build();
-    final taskId = await enqueue(enqueueOptions: enqueueOptions);
-    return call.definition.waitFor(boundEnqueuer, taskId, timeout: timeout);
-  }
+  final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+  return enqueuer.enqueueCall(
+    call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+    enqueueOptions: resolvedEnqueueOptions,
+  );
 }
 
 
@@ -1213,7 +1174,11 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    return _enqueueBuiltTaskCall(
+      enqueuer,
+      builder.build(),
+      enqueueOptions: enqueueOptions,
+    );
   }
 
   /// Enqueues this typed task definition and waits for its typed result.
@@ -1243,10 +1208,17 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.enqueueAndWait(
+    final call = builder.build();
+    return _enqueueBuiltTaskCall(
       caller,
+      call,
       enqueueOptions: enqueueOptions,
-      timeout: timeout,
+    ).then(
+      (taskId) => call.definition.waitFor(
+        caller,
+        taskId,
+        timeout: timeout,
+      ),
     );
   }
 
@@ -1288,7 +1260,11 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    return _enqueueBuiltTaskCall(
+      enqueuer,
+      builder.build(),
+      enqueueOptions: enqueueOptions,
+    );
   }
 
   /// Waits for [taskId] using this definition's decoding rules.

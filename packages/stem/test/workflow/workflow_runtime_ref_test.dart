@@ -470,7 +470,9 @@ void main() {
             .ttl(const Duration(minutes: 5))
             .parentRunId('parent-builder');
         final builtFlowCall = flowBuilder.build();
-        final runId = await flowBuilder.start(workflowApp.runtime);
+        final runId = await workflowApp.runtime.startWorkflowCall(
+          builtFlowCall,
+        );
         final result = await workflowRef.waitFor(
           workflowApp.runtime,
           runId,
@@ -493,8 +495,12 @@ void main() {
               ),
             );
         final builtScriptCall = scriptBuilder.build();
-        final oneShot = await scriptBuilder.startAndWait(
+        final scriptRunId = await workflowApp.runtime.startWorkflowCall(
+          builtScriptCall,
+        );
+        final oneShot = await builtScriptCall.definition.waitFor(
           workflowApp.runtime,
+          scriptRunId,
           timeout: const Duration(seconds: 2),
         );
 
@@ -543,7 +549,9 @@ void main() {
             .ttl(const Duration(minutes: 5))
             .parentRunId('parent-bound');
         final builtFlowCall = flowBuilder.build();
-        final runId = await flowBuilder.start();
+        final runId = await workflowApp.runtime.startWorkflowCall(
+          builtFlowCall,
+        );
         final result = await workflowRef.waitFor(
           workflowApp.runtime,
           runId,
@@ -564,7 +572,12 @@ void main() {
               ),
             );
         final builtScriptCall = scriptBuilder.build();
-        final oneShot = await scriptBuilder.startAndWait(
+        final scriptRunId = await workflowApp.runtime.startWorkflowCall(
+          builtScriptCall,
+        );
+        final oneShot = await builtScriptCall.definition.waitFor(
+          workflowApp.runtime,
+          scriptRunId,
           timeout: const Duration(seconds: 2),
         );
 

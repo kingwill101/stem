@@ -254,7 +254,8 @@ void main() {
         args: const _ExampleArgs('hello'),
       );
 
-      await builder.queue('priority').priority(7).enqueue();
+      final call = builder.queue('priority').priority(7).build();
+      await enqueuer.enqueueCall(call);
 
       final record = enqueuer.last!;
       expect(record.name, equals('tasks.typed'));
@@ -343,13 +344,15 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final result = await context
+      final call = context
           .prepareStart(
             definition: definition,
             params: const {'value': 'child'},
           )
           .parentRunId('parent-task')
-          .startAndWait();
+          .build();
+      final runId = await context.startWorkflowCall(call);
+      final result = await call.definition.waitFor(context, runId);
 
       expect(workflows.lastWorkflowName, 'workflow.child');
       expect(workflows.lastWorkflowParams, {'value': 'child'});
