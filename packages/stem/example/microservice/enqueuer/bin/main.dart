@@ -135,7 +135,7 @@ Future<void> main(List<String> args) async {
     tasks: tasks,
   );
   final autoFill = _AutoFillController(
-    stem: client.stem,
+    enqueuer: client.stem,
     enabled: _boolFromEnv(
       Platform.environment['ENQUEUER_AUTOFILL_ENABLED'],
       defaultValue: true,
@@ -303,14 +303,14 @@ SecurityContext? _buildHttpSecurityContext() {
 
 class _AutoFillController {
   _AutoFillController({
-    required this.stem,
+    required this.enqueuer,
     required this.enabled,
     required this.interval,
     required this.batchSize,
     required this.failureEvery,
   });
 
-  final Stem stem;
+  final TaskEnqueuer enqueuer;
   final bool enabled;
   final Duration interval;
   final int batchSize;
@@ -371,7 +371,7 @@ class _AutoFillController {
     required bool shouldFail,
     Map<String, Object?> extraMeta = const {},
   }) {
-    return stem.enqueue(
+    return enqueuer.enqueue(
       spec.name,
       args: {
         'name': label,

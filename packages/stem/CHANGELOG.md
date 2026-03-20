@@ -73,6 +73,9 @@
 - Generalized the signing rotation docs snippet to target `TaskEnqueuer`
   instead of a concrete `Stem` producer so the example teaches the shared
   enqueue surface.
+- Generalized the microservice enqueuer's autofill controller to target
+  `TaskEnqueuer` instead of a concrete `Stem`, keeping the enqueue loop on the
+  shared producer surface.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
