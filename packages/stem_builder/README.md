@@ -112,7 +112,7 @@ Durable workflow contexts enqueue tasks directly:
 Child workflows should be started from durable boundaries:
 
 - `ref.startWith(context, value)` inside flow steps
-- `ref.startAndWaitWith(context, value)` inside script checkpoints
+- `ref.startAndWait(context, params: value)` inside script checkpoints
 - use `context.startWorkflowBuilder(...)` when you need advanced overrides like
   `ttl(...)` or `cancellationPolicy(...)`
 
@@ -196,9 +196,9 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
   workflowApp,
-  'user@example.com',
+  params: 'user@example.com',
 );
 ```
 

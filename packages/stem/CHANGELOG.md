@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Refreshed child-workflow examples and docs to prefer the direct
+  `startAndWait(...)` alias over `startAndWaitWith(...)` in the common case.
 - Refreshed the public workflow examples and docs snippets to prefer the direct
   `start(...)` alias over the older `startWith(...)` helper in the happy path.
 - Added `StemApp.registerTask(...)`, `registerTasks(...)`, `registerModule(...)`,

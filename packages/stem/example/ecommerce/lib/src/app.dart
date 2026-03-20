@@ -93,10 +93,9 @@ class EcommerceServer {
           final sku = payload['sku']?.toString() ?? '';
           final quantity = _toInt(payload['quantity']);
 
-          final result = await StemWorkflowDefinitions.addToCart
-              .startAndWaitWith(
+          final result = await StemWorkflowDefinitions.addToCart.startAndWait(
             workflowApp,
-            (cartId: cartId, sku: sku, quantity: quantity),
+            params: (cartId: cartId, sku: sku, quantity: quantity),
             timeout: const Duration(seconds: 4),
           );
 

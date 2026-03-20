@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Refreshed generated child-workflow examples and docs to prefer the direct
+  `startAndWait(...)` alias in the common case.
 - Switched generated DTO payload codecs to the shorter
   `PayloadCodec<T>.json(...)` form for types that already expose `toJson()` and
   `fromJson(...)`.

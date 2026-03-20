@@ -194,9 +194,9 @@ class AnnotatedFlowWorkflow {
     if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
     }
-    final childResult = await StemWorkflowDefinitions.script.startAndWaitWith(
+    final childResult = await StemWorkflowDefinitions.script.startAndWait(
       ctx,
-      const WelcomeRequest(email: 'flow-child@example.com'),
+      params: const WelcomeRequest(email: 'flow-child@example.com'),
       timeout: const Duration(seconds: 2),
     );
     return {
@@ -274,9 +274,9 @@ class AnnotatedContextScriptWorkflow {
     final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
-    final childResult = await StemWorkflowDefinitions.script.startAndWaitWith(
+    final childResult = await StemWorkflowDefinitions.script.startAndWait(
       ctx,
-      WelcomeRequest(email: normalizedEmail),
+      params: WelcomeRequest(email: normalizedEmail),
       timeout: const Duration(seconds: 2),
     );
     return ContextCaptureResult(
