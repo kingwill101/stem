@@ -20,6 +20,15 @@ class _GreetingResult {
     return _GreetingResult(message: json['message']! as String);
   }
 
+  factory _GreetingResult.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    return _GreetingResult(
+      message: '${json['message']! as String} v$version',
+    );
+  }
+
   final String message;
 
   Map<String, Object?> toJson() => {'message': message};
@@ -397,6 +406,50 @@ void main() {
 
           expect(flowResult?.value?.message, 'hello definition flow json');
           expect(scriptResult?.value?.message, 'hello definition script json');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'raw workflow definitions expose direct versioned json result helpers',
+      () async {
+        final flow = WorkflowDefinition<_GreetingResult>.flowVersionedJson(
+          name: 'runtime.ref.definition.versioned.result.flow',
+          version: 2,
+          decodeResult: _GreetingResult.fromVersionedJson,
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const _GreetingResult(message: 'hello flow'),
+            );
+          },
+        );
+        final script = WorkflowDefinition<_GreetingResult>.scriptVersionedJson(
+          name: 'runtime.ref.definition.versioned.result.script',
+          version: 2,
+          decodeResult: _GreetingResult.fromVersionedJson,
+          run: (context) async =>
+              const _GreetingResult(message: 'hello script'),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp.registerWorkflows([flow, script]);
+          await workflowApp.start();
+
+          final flowResult = await flow.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+          final scriptResult = await script.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(flowResult?.value?.message, 'hello flow v2');
+          expect(scriptResult?.value?.message, 'hello script v2');
         } finally {
           await workflowApp.shutdown();
         }

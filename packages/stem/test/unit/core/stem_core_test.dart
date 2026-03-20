@@ -478,6 +478,28 @@ void main() {
         expect(backend.records.single.id, id);
       },
     );
+
+    test(
+      'no-arg task definitions can derive versioned json-backed result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition.noArgsVersionedJson<_CodecReceipt>(
+          name: 'sample.no_args.versioned_json',
+          version: 2,
+          decodeResult: _CodecReceipt.fromVersionedJson,
+        );
+
+        final id = await definition.enqueue(stem);
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
   });
 
   group('TaskCall helpers', () {
@@ -629,6 +651,31 @@ void main() {
 
       expect(result?.value?.id, 'done');
       expect(result?.rawPayload, isA<_CodecReceipt>());
+    });
+
+    test('supports versioned no-arg task definitions', () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+      final definition = TaskDefinition.noArgsVersionedJson<_CodecReceipt>(
+        name: 'no-args.versioned.wait',
+        version: 2,
+        decodeResult: _CodecReceipt.fromVersionedJson,
+      );
+
+      await backend.set(
+        'task-no-args-versioned-wait',
+        TaskState.succeeded,
+        payload: {'id': 'done', PayloadCodec.versionKey: 2},
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+      );
+
+      final result = await definition.waitFor(
+        stem,
+        'task-no-args-versioned-wait',
+      );
+
+      expect(result?.value?.id, 'done-v2');
+      expect(result?.rawPayload, isA<Map<String, Object?>>());
     });
 
     test('enqueueAndWait supports no-arg task definitions', () async {

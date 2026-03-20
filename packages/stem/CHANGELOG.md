@@ -41,6 +41,11 @@
 - Removed `TaskCall.copyWith(...)` and `WorkflowStartCall.copyWith(...)`.
   Explicit transport objects are now built with their final overrides up
   front rather than mutated after construction.
+- Added versioned manual-result convenience constructors:
+  `TaskDefinition.noArgsVersionedJson(...)`,
+  `WorkflowDefinition.flowVersionedJson(...)`,
+  `WorkflowDefinition.scriptVersionedJson(...)`,
+  `Flow.versionedJson(...)`, and `WorkflowScript.versionedJson(...)`.
 - Removed no-args `buildCall()` / `buildStart()` transport wrappers in favor
   of the explicit typed surfaces:
   `definition.asDefinition.buildCall(())` and

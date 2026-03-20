@@ -245,6 +245,34 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Creates a flow-based workflow definition whose final result is a
+  /// versioned DTO-backed JSON payload.
+  factory WorkflowDefinition.flowVersionedJson({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
   /// Creates a script-based workflow definition.
   factory WorkflowDefinition.script({
     required String name,
@@ -336,6 +364,36 @@ class WorkflowDefinition<T extends Object?> {
       metadata: metadata,
       decodeResultJson: decodeResult,
       resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result is a
+  /// versioned DTO-backed JSON payload.
+  factory WorkflowDefinition.scriptVersionedJson({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
     );
   }
 

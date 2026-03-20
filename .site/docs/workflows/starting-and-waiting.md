@@ -74,8 +74,9 @@ Inside manual flow steps and script checkpoints, prefer
 
 If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 `WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
-case. Use `Flow.codec(...)` or `WorkflowScript.codec(...)` when the result
-needs a custom payload codec.
+case. Use `Flow.versionedJson(...)` / `WorkflowScript.versionedJson(...)` when
+the stored result should carry an explicit schema version. Use `Flow.codec(...)`
+or `WorkflowScript.codec(...)` when the result needs a custom payload codec.
 When the persisted workflow result or suspension payload carries an explicit
 `__stemPayloadVersion`, use `workflowResult.payloadVersionedJson(...)`,
 `runState.resultVersionedJson(...)`, or

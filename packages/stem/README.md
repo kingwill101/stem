@@ -284,9 +284,10 @@ await healthcheckDefinition.enqueue(stem);
 
 If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` in the
 common `toJson()` / `Type.fromJson(...)` case. Use
-`TaskDefinition.noArgsCodec(...)` when you need a custom payload codec. Both
-paths keep waiting helpers typed and advertise the right result encoder in task
-metadata.
+`TaskDefinition.noArgsVersionedJson(...)` when the stored result needs an
+explicit schema version, and `TaskDefinition.noArgsCodec(...)` when you need a
+custom payload codec. These paths keep waiting helpers typed and advertise the
+right result encoder in task metadata.
 
 When a DTO payload needs an explicit persisted schema version, prefer
 `PayloadCodec.versionedJson(...)`. It stores `__stemPayloadVersion` beside the
@@ -433,8 +434,10 @@ For late registration, prefer the app helpers:
 
 If you are registering raw `WorkflowDefinition` values directly, prefer
 `WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
-path and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` for custom
-result codecs.
+path, `WorkflowDefinition.flowVersionedJson(...)` /
+`.scriptVersionedJson(...)` when the stored result needs an explicit schema
+version, and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` for
+custom result codecs.
 
 ### Workflow script facade
 
@@ -607,9 +610,11 @@ params still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are persisted as JSON-shaped data.
 
 If a manual flow or script only needs DTO result decoding, prefer
-`Flow.json(...)` or `WorkflowScript.json(...)`. If the final result needs a
-custom codec, prefer `Flow.codec(...)` or `WorkflowScript.codec(...)` instead
-of passing `resultCodec:` to the base constructor.
+`Flow.json(...)` or `WorkflowScript.json(...)`. Use
+`Flow.versionedJson(...)` / `WorkflowScript.versionedJson(...)` when the stored
+result needs an explicit schema version. If the final result needs a custom
+codec, prefer `Flow.codec(...)` or `WorkflowScript.codec(...)` instead of
+passing `resultCodec:` to the base constructor.
 
 For workflows without start parameters, start directly from the flow or script
 itself:

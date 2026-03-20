@@ -72,8 +72,10 @@ runtime registry:
 
 If you are registering raw `WorkflowDefinition` values directly, prefer
 `WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
-path and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` when the
-result needs a custom codec.
+path, `WorkflowDefinition.flowVersionedJson(...)` /
+`.scriptVersionedJson(...)` when the stored result should carry an explicit
+schema version, and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)`
+when the result needs a custom codec.
 
 ## 5. Move to the right next page
 

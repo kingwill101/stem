@@ -109,7 +109,9 @@ instead. That gives you direct `enqueue(...)` /
 
 If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` when
 the result already has `toJson()` and `Type.fromJson(...)`. Use
-`TaskDefinition.noArgsCodec(...)` only when you need a custom payload codec.
+`TaskDefinition.noArgsVersionedJson(...)` when the stored result should carry
+an explicit schema version, and `TaskDefinition.noArgsCodec(...)` only when
+you need a custom payload codec.
 
 ## Configuring Retries
 

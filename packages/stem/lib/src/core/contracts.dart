@@ -2811,6 +2811,31 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Creates a typed task definition for handlers with no producer args whose
+  /// result is a versioned DTO-backed JSON value.
+  static NoArgsTaskDefinition<TResult> noArgsVersionedJson<TResult>({
+    required String name,
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version)
+    decodeResult,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: PayloadCodec<TResult>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$TResult',
+      ),
+    );
+  }
+
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgs<TResult>({
     required String name,
