@@ -47,7 +47,7 @@ Future<void> main() async {
       .startWith(app);
 
   // Drive the run until it suspends on the watcher.
-  await app.runtime.executeRun(runId);
+  await app.executeRun(runId);
 
   final watchers = await app.store.listWatchers(shipmentReadyEvent.topic);
   for (final watcher in watchers) {
@@ -62,7 +62,7 @@ Future<void> main() async {
     const _ShipmentReadyEvent(trackingId: 'ZX-42'),
   );
 
-  await app.runtime.executeRun(runId);
+  await app.executeRun(runId);
 
   final completed = await shipmentWorkflowRef.waitFor(app, runId);
   print('Workflow completed with result: ${completed?.value}');

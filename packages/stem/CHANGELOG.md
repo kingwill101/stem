@@ -135,6 +135,8 @@
   custom group ids no longer require a manual `backend.initGroup(...)` first.
 - Added `StemWorkflowApp.viewRunDetail(...)` so app-level workflow inspection
   no longer needs to reach through `workflowApp.runtime`.
+- Added `StemWorkflowApp.executeRun(...)` so examples and app code can drive a
+  workflow run directly without reaching through `workflowApp.runtime`.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

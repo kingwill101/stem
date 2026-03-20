@@ -709,6 +709,31 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes executeRun helper', () async {
+      final flow = Flow<String>(
+        name: 'workflow.execute.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'execute-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflow(
+          'workflow.execute.helper',
+        );
+        await workflowApp.executeRun(runId);
+
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'execute-ok');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'workflow codecs persist encoded checkpoints and decode typed results',
       () async {

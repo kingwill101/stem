@@ -27,7 +27,7 @@ Future<void> main() async {
   );
 
   final runId = await sleepLoopRef.startWith(app);
-  await app.runtime.executeRun(runId);
+  await app.executeRun(runId);
 
   // After the delay elapses, the runtime should resume without the step
   // manually inspecting resume data.
@@ -36,7 +36,7 @@ Future<void> main() async {
   for (final id in due) {
     final state = await app.store.get(id);
     await app.store.markResumed(id, data: state?.suspensionData);
-    await app.runtime.executeRun(id);
+    await app.executeRun(id);
   }
 
   final completed = await sleepLoopRef.waitFor(app, runId);

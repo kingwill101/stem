@@ -268,6 +268,15 @@ class StemWorkflowApp
     return runtime.viewRunDetail(runId);
   }
 
+  /// Executes the workflow run identified by [runId].
+  ///
+  /// This is a convenience wrapper over [WorkflowRuntime.executeRun] for
+  /// examples and application code that need direct run driving without
+  /// reaching through [runtime].
+  Future<void> executeRun(String runId) {
+    return runtime.executeRun(runId);
+  }
+
   /// Polls the workflow store until the run reaches a terminal state.
   ///
   /// When the workflow completes successfully the persisted result is surfaced
