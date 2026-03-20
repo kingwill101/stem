@@ -1,7 +1,6 @@
 // Observability snippets for documentation.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
-import 'package:contextual/contextual.dart';
 import 'package:stem/stem.dart';
 
 // #region observability-metrics
@@ -11,16 +10,12 @@ void configureMetrics() {
 // #endregion observability-metrics
 
 // #region observability-tracing
-Stem buildTracedStem(
-  Broker broker,
-  ResultBackend backend,
+Future<StemClient> buildTracedStem(
   Iterable<TaskHandler<Object?>> tasks,
 ) {
   // Configure OpenTelemetry globally; StemTracer.instance reads from it.
   final _ = StemTracer.instance;
-  return Stem(
-    broker: broker,
-    backend: backend,
+  return StemClient.inMemory(
     tasks: tasks,
   );
 }
@@ -80,9 +75,7 @@ Future<void> main() async {
     ),
   ];
 
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = buildTracedStem(broker, backend, tasks);
+  final client = await buildTracedStem(tasks);
 
   logTaskStart(
     Envelope(
@@ -90,7 +83,6 @@ Future<void> main() async {
       args: const {},
     ),
   );
-  await stem.enqueue('demo.trace', args: const {});
-  await backend.close();
-  await broker.close();
+  await client.enqueue('demo.trace', args: const {});
+  await client.close();
 }

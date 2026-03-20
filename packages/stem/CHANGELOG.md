@@ -88,6 +88,9 @@
 - Simplified the routing bootstrap docs snippet to use
   `StemClient.create(...)` and `createWorker(...)` instead of manually opening
   separate broker/backend pairs just to demonstrate routing subscription setup.
+- Simplified the observability tracing docs snippet to use
+  `StemClient.inMemory(...)` instead of manually wiring in-memory broker and
+  backend instances for the traced producer path.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
