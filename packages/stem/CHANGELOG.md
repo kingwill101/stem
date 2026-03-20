@@ -13,6 +13,10 @@
   caller-bound fluent task builder so producers and contexts can enqueue typed
   task calls directly from the enqueuer surface, with `enqueueAndWait()`
   available whenever that enqueuer also supports typed result waits.
+- Updated the public workflow event examples and docs to prefer
+  `emitEventBuilder(...).emit()` as the primary typed event emission path,
+  while keeping the older `emitWith(...)` variants documented as lower-level
+  alternatives.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

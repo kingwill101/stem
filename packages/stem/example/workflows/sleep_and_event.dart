@@ -48,7 +48,12 @@ Future<void> main() async {
     await Future<void>.delayed(const Duration(milliseconds: 50));
   }
 
-  await demoEvent.call({'message': 'event received'}).emitWith(app);
+  await app
+      .emitEventBuilder(
+        event: demoEvent,
+        value: const {'message': 'event received'},
+      )
+      .emit();
 
   final result = await sleepAndEventRef.waitFor(app, runId);
   print('Workflow $runId resumed and completed with: ${result?.value}');

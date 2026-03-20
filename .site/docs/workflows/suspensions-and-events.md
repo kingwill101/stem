@@ -67,8 +67,9 @@ transport shape.
 
 When the topic and codec travel together in your codebase, prefer a typed
 `WorkflowEventRef<T>` and `emitter.emitEventBuilder(event: ref, value: dto)
-.emit()`, `event.emitWith(...)`, or `event.call(value).emitWith(...)` together
-with `waitForEventRef(...)` or `awaitEventRef(...)`.
+.emit()` as the happy path. `event.emitWith(...)` and
+`event.call(value).emitWith(...)` remain available as lower-level variants.
+Pair that with `waitForEventRef(...)` or `awaitEventRef(...)`.
 
 ## Inspect waiting runs
 
