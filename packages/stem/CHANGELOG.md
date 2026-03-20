@@ -91,6 +91,9 @@
 - Simplified the observability tracing docs snippet to use
   `StemClient.inMemory(...)` instead of manually wiring in-memory broker and
   backend instances for the traced producer path.
+- Simplified the `otel_metrics` worker example to use
+  `StemClient.inMemory(...)` and `createWorker(...)` so the producer-side ping
+  loop no longer needs a raw `Stem` instance.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
