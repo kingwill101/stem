@@ -136,6 +136,44 @@ class RunState {
   /// Last error payload recorded for the run.
   final Map<String, Object?>? lastError;
 
+  /// Decodes the last error payload with [codec], when present.
+  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the last error payload with a JSON decoder, when present.
+  TError? lastErrorJson<TError>({
+    required TError Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the last error payload with a version-aware JSON decoder, when
+  /// present.
+  TError? lastErrorVersionedJson<TError>({
+    required int version,
+    required TError Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Suspension metadata stored for the waiting step.
   final Map<String, Object?>? suspensionData;
 
@@ -153,6 +191,85 @@ class RunState {
 
   /// Metadata recorded when the run is cancelled (automatic or manual).
   final Map<String, Object?>? cancellationData;
+
+  /// Decodes the runtime metadata payload with [codec].
+  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+    return codec.decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the runtime metadata payload with a JSON decoder.
+  TRuntime runtimeJson<TRuntime>({
+    required TRuntime Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the runtime metadata payload with a version-aware JSON decoder.
+  TRuntime runtimeVersionedJson<TRuntime>({
+    required int version,
+    required TRuntime Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the cancellation payload with [codec], when present.
+  TCancellation? cancellationDataAs<TCancellation>({
+    required PayloadCodec<TCancellation> codec,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the cancellation payload with a JSON decoder, when present.
+  TCancellation? cancellationDataJson<TCancellation>({
+    required TCancellation Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return PayloadCodec<TCancellation>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the cancellation payload with a version-aware JSON decoder, when
+  /// present.
+  TCancellation? cancellationDataVersionedJson<TCancellation>({
+    required int version,
+    required TCancellation Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return PayloadCodec<TCancellation>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   static const _unset = Object();
 

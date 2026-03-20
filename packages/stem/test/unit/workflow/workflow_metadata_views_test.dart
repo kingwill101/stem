@@ -108,6 +108,29 @@ void main() {
       expect(state.encryptionScope, equals('signed-envelope'));
       expect(state.encryptionEnabled, isTrue);
       expect(state.streamId, equals('invoice_run-2'));
+      expect(
+        state.runtimeJson<_RuntimePayload>(decode: _RuntimePayload.fromJson),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+      expect(
+        state.runtimeVersionedJson<_RuntimePayload>(
+          version: 2,
+          decode: _RuntimePayload.fromVersionedJson,
+        ),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
     });
 
     test('decodes raw result payloads as DTOs', () {
@@ -141,6 +164,56 @@ void main() {
           'invoiceId',
           'inv-2',
         ),
+      );
+    });
+
+    test('decodes last-error and cancellation payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-4',
+        workflow: 'invoice',
+        status: WorkflowStatus.cancelled,
+        cursor: 2,
+        params: const {'tenant': 'acme'},
+        createdAt: DateTime.utc(2026, 2, 25),
+        lastError: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'boom',
+        },
+        cancellationData: const {
+          PayloadCodec.versionKey: 2,
+          'reason': 'manual',
+        },
+      );
+
+      expect(
+        state.lastErrorJson<_WorkflowErrorPayload>(
+          decode: _WorkflowErrorPayload.fromJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        state.lastErrorVersionedJson<_WorkflowErrorPayload>(
+          version: 2,
+          decode: _WorkflowErrorPayload.fromVersionedJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        state.cancellationDataJson<_CancellationPayload>(
+          decode: _CancellationPayload.fromJson,
+        ),
+        isA<_CancellationPayload>()
+            .having((value) => value.reason, 'reason', 'manual'),
+      );
+      expect(
+        state.cancellationDataVersionedJson<_CancellationPayload>(
+          version: 2,
+          decode: _CancellationPayload.fromVersionedJson,
+        ),
+        isA<_CancellationPayload>()
+            .having((value) => value.reason, 'reason', 'manual'),
       );
     });
   });
@@ -291,9 +364,29 @@ void main() {
         workflow: 'invoice',
         status: WorkflowStatus.suspended,
         cursor: 2,
-        params: const {'tenant': 'acme'},
+        params: const {
+          'tenant': 'acme',
+          '__stem.workflow.runtime': {
+            PayloadCodec.versionKey: 2,
+            'workflowId': 'abc123',
+            'orchestrationQueue': 'workflow',
+            'continuationQueue': 'workflow-continue',
+            'executionQueue': 'workflow-step',
+            'serializationFormat': 'json',
+            'serializationVersion': '1',
+            'frameFormat': 'stem-envelope',
+            'frameVersion': '1',
+            'encryptionScope': 'signed-envelope',
+            'encryptionEnabled': true,
+            'streamId': 'invoice_run-2',
+          },
+        },
         createdAt: DateTime.utc(2026, 2, 25),
         result: const {'invoiceId': 'inv-4'},
+        lastError: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'boom',
+        },
         suspensionData: const {
           'type': 'event',
           'payload': {'invoiceId': 'inv-5'},
@@ -340,6 +433,44 @@ void main() {
           'invoiceId',
           'inv-5',
         ),
+      );
+      expect(
+        view.lastErrorJson<_WorkflowErrorPayload>(
+          decode: _WorkflowErrorPayload.fromJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        view.lastErrorVersionedJson<_WorkflowErrorPayload>(
+          version: 2,
+          decode: _WorkflowErrorPayload.fromVersionedJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        view.runtimeJson<_RuntimePayload>(decode: _RuntimePayload.fromJson),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+      expect(
+        view.runtimeVersionedJson<_RuntimePayload>(
+          version: 2,
+          decode: _RuntimePayload.fromVersionedJson,
+        ),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
       );
     });
 
@@ -394,4 +525,65 @@ class _InvoicePayload {
   }
 
   final String invoiceId;
+}
+
+class _RuntimePayload {
+  const _RuntimePayload({
+    required this.orchestrationQueue,
+    required this.streamId,
+  });
+
+  factory _RuntimePayload.fromJson(Map<String, dynamic> json) {
+    return _RuntimePayload(
+      orchestrationQueue: json['orchestrationQueue'] as String,
+      streamId: json['streamId'] as String,
+    );
+  }
+
+  factory _RuntimePayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _RuntimePayload.fromJson(json);
+  }
+
+  final String orchestrationQueue;
+  final String streamId;
+}
+
+class _WorkflowErrorPayload {
+  const _WorkflowErrorPayload({required this.message});
+
+  factory _WorkflowErrorPayload.fromJson(Map<String, dynamic> json) {
+    return _WorkflowErrorPayload(message: json['message'] as String);
+  }
+
+  factory _WorkflowErrorPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowErrorPayload.fromJson(json);
+  }
+
+  final String message;
+}
+
+class _CancellationPayload {
+  const _CancellationPayload({required this.reason});
+
+  factory _CancellationPayload.fromJson(Map<String, dynamic> json) {
+    return _CancellationPayload(reason: json['reason'] as String);
+  }
+
+  factory _CancellationPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _CancellationPayload.fromJson(json);
+  }
+
+  final String reason;
 }

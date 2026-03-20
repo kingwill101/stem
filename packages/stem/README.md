@@ -939,13 +939,15 @@ stored workflow result without another cast/closure.
 If you are inspecting the underlying `RunState` directly, use
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
 `state.resultVersionedJson(...)`, `state.suspensionPayloadJson(...)`,
-`state.suspensionPayloadVersionedJson(...)`, or
-`state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
+`state.suspensionPayloadVersionedJson(...)`,
+`state.lastErrorJson(...)`, `state.runtimeJson(...)`,
+`state.cancellationDataJson(...)`, or `state.suspensionPayloadAs(codec: ...)`
+instead of manual raw-map casts.
 Workflow run detail views expose the same convenience surface via
 `runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
 `runView.resultVersionedJson(...)`, `runView.suspensionPayloadJson(...)`,
-`runView.suspensionPayloadVersionedJson(...)`, and
-`runView.suspensionPayloadAs(codec: ...)`.
+`runView.suspensionPayloadVersionedJson(...)`, `runView.lastErrorJson(...)`,
+`runView.runtimeJson(...)`, and `runView.suspensionPayloadAs(codec: ...)`.
 Checkpoint entries from `viewCheckpoints(...)` and
 `WorkflowCheckpointView.fromEntry(...)` expose the same surface via
 `entry.valueJson(...)`, `entry.valueVersionedJson(...)`, and

@@ -98,11 +98,84 @@ class WorkflowRunView {
   /// Last error payload, if present.
   final Map<String, Object?>? lastError;
 
+  /// Decodes the last error payload with [codec], when present.
+  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the last error payload with a JSON decoder, when present.
+  TError? lastErrorJson<TError>({
+    required TError Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the last error payload with a version-aware JSON decoder, when
+  /// present.
+  TError? lastErrorVersionedJson<TError>({
+    required int version,
+    required TError Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Public user-supplied workflow params.
   final Map<String, Object?> params;
 
   /// Run-scoped runtime metadata (queues/channel/serialization framing).
   final Map<String, Object?> runtime;
+
+  /// Decodes the runtime metadata payload with [codec].
+  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+    return codec.decode(runtime);
+  }
+
+  /// Decodes the runtime metadata payload with a JSON decoder.
+  TRuntime runtimeJson<TRuntime>({
+    required TRuntime Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(runtime);
+  }
+
+  /// Decodes the runtime metadata payload with a version-aware JSON decoder.
+  TRuntime runtimeVersionedJson<TRuntime>({
+    required int version,
+    required TRuntime Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(runtime);
+  }
 
   /// Suspension payload, if run is suspended.
   final Map<String, Object?>? suspensionData;

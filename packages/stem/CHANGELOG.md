@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `RunState.lastErrorJson(...)`, `runtimeJson(...)`,
+  `cancellationDataJson(...)`, and the matching `WorkflowRunView` helpers so
+  workflow inspection surfaces can decode error, runtime, and cancellation
+  DTOs without raw map casts.
 - Added `WorkerHeartbeat.extrasJson(...)`,
   `extrasVersionedJson(...)`, and `extrasAs(codec: ...)` so persisted worker
   heartbeat metadata can decode DTO payloads without raw map casts.
