@@ -73,6 +73,18 @@ void main() {
       retry.attributes['nextRetryAt'],
       equals(DateTime.utc(2025).toIso8601String()),
     );
+
+    final success = TaskSuccessPayload(
+      envelope: envelope,
+      worker: worker,
+      result: const {'ok': true},
+    );
+    expect(
+      success.resultJson<_TaskResultPayload>(
+        decode: _TaskResultPayload.fromJson,
+      ),
+      isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
+    );
   });
 
   test('control command payload timestamps are frozen at creation', () {

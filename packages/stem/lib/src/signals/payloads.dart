@@ -336,6 +336,26 @@ class TaskSuccessPayload implements StemEvent {
   /// The result returned by the successful task.
   final Object? result;
 
+  /// Decodes the task result with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the task result with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   final DateTime _occurredAt;
 
   /// The unique identifier for the task.

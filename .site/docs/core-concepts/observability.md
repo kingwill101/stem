@@ -58,9 +58,9 @@ control-plane commands.
 
 ```
 
-When you inspect `TaskPostrunPayload` directly, prefer `payload.resultJson(...)`
-or `payload.resultAs(codec: ...)` over manual `payload.result as Map<String, Object?>`
-casts.
+When you inspect `TaskPostrunPayload` or `TaskSuccessPayload` directly, prefer
+`payload.resultJson(...)` or `payload.resultAs(codec: ...)` over manual
+`payload.result as Map<String, Object?>` casts.
 
 ## Workflow Introspection
 

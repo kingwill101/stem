@@ -57,6 +57,9 @@
 - Added `TaskPostrunPayload.resultJson(...)` and `resultAs(codec: ...)` so
   task lifecycle signal consumers can decode DTO task results without manual
   casts.
+- Added `TaskSuccessPayload.resultJson(...)` and `resultAs(codec: ...)` so
+  success-only task signal consumers can decode DTO task results without
+  manual casts.
 - Added `GroupStatus.resultValues<T>()`, `resultJson(...)`, and
   `resultAs(codec: ...)` so canvas/group status inspection can decode typed
   child results without manually mapping raw `TaskStatus.payload` values.
