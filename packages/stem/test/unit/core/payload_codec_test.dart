@@ -228,6 +228,68 @@ void main() {
       );
     });
   });
+
+  group('PayloadCodec.versionedMap', () {
+    test('encodes custom map payloads with a persisted schema version', () {
+      const codec = PayloadCodec<_VersionedCodecPayload>.versionedMap(
+        encode: _encodeVersionedCodecPayloadMap,
+        version: 4,
+        decode: _VersionedCodecPayload.fromVersionedJson,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      final payload = codec.encode(
+        const _VersionedCodecPayload(id: 'payload-map-v0', count: 12),
+      );
+
+      expect(payload, {
+        PayloadCodec.versionKey: 4,
+        'id': 'payload-map-v0',
+        'count': 12,
+        'legacy': true,
+      });
+    });
+
+    test('passes the stored schema version to the custom decoder', () {
+      const codec = PayloadCodec<_VersionedCodecPayload>.versionedMap(
+        encode: _encodeVersionedCodecPayloadMap,
+        version: 2,
+        decode: _VersionedCodecPayload.fromVersionedJson,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      final decoded = codec.decode({
+        PayloadCodec.versionKey: 7,
+        'id': 'payload-map-v1',
+        'count': 5,
+        'legacy': true,
+      });
+
+      expect(decoded.id, 'payload-map-v1');
+      expect(decoded.count, 5);
+      expect(decoded.decodedVersion, 7);
+    });
+
+    test('falls back to the configured default decode version', () {
+      const codec = PayloadCodec<_VersionedCodecPayload>.versionedMap(
+        encode: _encodeVersionedCodecPayloadMap,
+        version: 3,
+        defaultDecodeVersion: 1,
+        decode: _VersionedCodecPayload.fromVersionedJson,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      final decoded = codec.decode({
+        'id': 'payload-map-v2',
+        'count': 14,
+        'legacy': true,
+      });
+
+      expect(decoded.id, 'payload-map-v2');
+      expect(decoded.count, 14);
+      expect(decoded.decodedVersion, 1);
+    });
+  });
 }
 
 class _CodecPayload {
@@ -269,6 +331,11 @@ class _DynamicCodecPayload {
 }
 
 Object? _encodeCodecPayload(_CodecPayload value) => value.toJson();
+
+Object? _encodeVersionedCodecPayloadMap(_VersionedCodecPayload value) => {
+  ...value.toJson(),
+  'legacy': true,
+};
 
 class _NoJsonPayload {
   const _NoJsonPayload({required this.id});

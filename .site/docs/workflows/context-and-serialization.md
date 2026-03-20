@@ -153,6 +153,8 @@ If the DTO payload shape is expected to evolve, use
 `PayloadCodec<T>.versionedJson(...)`. That persists a reserved
 `__stemPayloadVersion` field beside the JSON payload and gives the decoder the
 stored version so it can read older shapes explicitly.
+Use `PayloadCodec<T>.versionedMap(...)` instead when the payload still needs a
+custom map encoder or a nonstandard version-aware decode function.
 
 For manual flows and scripts, prefer the typed workflow param helpers before
 dropping to raw map casts:

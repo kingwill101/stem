@@ -129,6 +129,8 @@
   require dropping down to raw payload-map helpers.
 - Added `PayloadCodec.versionedJson(...)` so DTO payload codecs can persist a
   schema version beside the JSON payload and decode older shapes explicitly.
+- Added `PayloadCodec.versionedMap(...)` for versioned DTO payloads that still
+  need a custom map encoder or a nonstandard version-aware decode shape.
 - Added versioned low-level DTO shortcuts:
   `TaskEnqueuer.enqueueVersionedJson(...)`,
   `WorkflowRuntime.startWorkflowVersionedJson(...)`,

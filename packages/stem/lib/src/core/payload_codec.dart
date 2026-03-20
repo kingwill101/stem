@@ -40,6 +40,35 @@ class PayloadCodec<T> {
        _defaultDecodeVersion = null,
        _typeName = typeName;
 
+  /// Creates a payload codec for map-backed DTO payloads that also persist a
+  /// schema [version].
+  ///
+  /// Use this when a payload shape is expected to evolve over time and the
+  /// decoder needs the stored schema version, but the payload still uses a
+  /// custom map encoder or a nonstandard decode shape:
+  ///
+  /// ```dart
+  /// const approvalCodec = PayloadCodec<Approval>.versionedMap(
+  ///   encode: (value) => value.toLegacyMap(),
+  ///   version: 2,
+  ///   defaultDecodeVersion: 1,
+  ///   decode: Approval.fromVersionedMap,
+  /// );
+  /// ```
+  const PayloadCodec.versionedMap({
+    required Object? Function(T value) encode,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) : _encode = encode,
+       _decode = null,
+       _decodeMap = null,
+       _decodeVersionedMap = decode,
+       _jsonVersion = version,
+       _defaultDecodeVersion = defaultDecodeVersion,
+       _typeName = typeName;
+
   /// Creates a payload codec for DTOs that expose `toJson()` and a matching
   /// typed decoder like `Type.fromJson(...)`.
   ///
