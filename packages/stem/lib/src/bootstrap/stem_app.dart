@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
@@ -58,6 +60,9 @@ class StemApp implements StemTaskApp {
   final List<Future<void> Function()> _disposers;
 
   bool _started = false;
+  Future<void>? _startFuture;
+
+  Future<void> _ensureStarted() => _started ? Future.value() : start();
 
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
@@ -70,7 +75,8 @@ class StemApp implements StemTaskApp {
     TaskOptions options = const TaskOptions(),
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
-  }) {
+  }) async {
+    await _ensureStarted();
     return stem.enqueue(
       name,
       args: args,
@@ -85,7 +91,8 @@ class StemApp implements StemTaskApp {
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
-  }) {
+  }) async {
+    await _ensureStarted();
     return stem.enqueueCall(call, enqueueOptions: enqueueOptions);
   }
 
@@ -94,7 +101,8 @@ class StemApp implements StemTaskApp {
     String taskId, {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
-  }) {
+  }) async {
+    await _ensureStarted();
     return stem.waitForTask(taskId, timeout: timeout, decode: decode);
   }
 
@@ -106,7 +114,8 @@ class StemApp implements StemTaskApp {
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,
-  }) {
+  }) async {
+    await _ensureStarted();
     return stem.waitForTaskDefinition(taskId, definition, timeout: timeout);
   }
 
@@ -123,8 +132,24 @@ class StemApp implements StemTaskApp {
   /// Starts the managed worker if it is not already running.
   Future<void> start() async {
     if (_started) return;
-    _started = true;
-    await worker.start();
+    final existing = _startFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _startFuture = completer.future;
+    try {
+      await worker.start();
+      _started = true;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _startFuture = null;
+      _started = false;
+      completer.completeError(error, stackTrace);
+      rethrow;
+    }
   }
 
   /// Shuts down the worker and disposes any managed resources.
@@ -133,6 +158,7 @@ class StemApp implements StemTaskApp {
       await disposer();
     }
     _started = false;
+    _startFuture = null;
   }
 
   /// Alias for [shutdown].
@@ -204,7 +230,13 @@ class StemApp implements StemTaskApp {
         module?.inferTaskWorkerSubscription(
           defaultQueue: workerConfig.queue,
           additionalTasks: tasks,
-        );
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: workerConfig.queue,
+          );
+        })();
 
     final worker = Worker(
       broker: brokerInstance,
@@ -410,7 +442,13 @@ class StemApp implements StemTaskApp {
         module?.inferTaskWorkerSubscription(
           defaultQueue: workerConfig.queue,
           additionalTasks: tasks,
-        );
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: workerConfig.queue,
+          );
+        })();
 
     final worker = Worker(
       broker: client.broker,

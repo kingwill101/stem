@@ -124,8 +124,9 @@ final taskApp = await StemApp.fromUrl(
 );
 ```
 
-Plain `StemApp` bootstrap infers task queue subscriptions from the bundled
-task handlers when `workerConfig.subscription` is omitted.
+Plain `StemApp` bootstrap infers task queue subscriptions from the bundled or
+explicitly supplied task handlers when `workerConfig.subscription` is omitted,
+and it lazy-starts on the first enqueue or wait call.
 
 If you already centralize broker/backend wiring in a `StemClient`, prefer the
 shared-client path:
@@ -141,8 +142,8 @@ final workflowApp = await client.createWorkflowApp();
 ```
 
 If you reuse an existing `StemApp`, its worker subscription remains your
-responsibility. The module-based queue inference only applies when the
-workflow app is creating the worker itself.
+responsibility. Workflow-side queue inference only applies when the workflow
+app is creating the worker itself.
 
 ## Parameter and Signature Rules
 

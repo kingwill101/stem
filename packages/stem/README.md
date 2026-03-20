@@ -656,8 +656,11 @@ final taskApp = await StemApp.fromUrl(
 );
 ```
 
-When you bootstrap a plain `StemApp` with `module: stemModule`, the worker
-infers task queue subscriptions from the bundled task handlers. Set
+`StemApp` lazy-starts its managed worker on the first enqueue or wait call, so
+you only need `await taskApp.start()` when you want explicit lifecycle control.
+
+When you bootstrap a plain `StemApp`, the worker infers task queue
+subscriptions from the bundled or explicitly supplied task handlers. Set
 `workerConfig.subscription` explicitly only when you need broader routing.
 
 If your service already owns a `StemApp`, reuse it:
@@ -673,7 +676,7 @@ final workflowApp = await client.createWorkflowApp();
 ```
 
 If you reuse an existing `StemApp`, its worker subscription stays authoritative.
-The module-based queue inference only applies when `StemWorkflowApp` is also
+Workflow-side queue inference only applies when `StemWorkflowApp` is also
 creating the worker.
 
 #### Mixing workflows and normal tasks

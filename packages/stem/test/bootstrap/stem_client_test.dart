@@ -74,7 +74,6 @@ void main() {
       );
 
       final app = await client.createApp();
-      await app.start();
 
       expect(
         app.registry.resolve('client.default-module.app-task'),
@@ -82,11 +81,11 @@ void main() {
       );
       expect(app.worker.subscription.queues, ['priority']);
 
-      final taskId = await app.stem.enqueue(
+      final taskId = await app.enqueue(
         'client.default-module.app-task',
         enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
       );
-      final result = await app.stem.waitForTask<String>(
+      final result = await app.waitForTask<String>(
         taskId,
         timeout: const Duration(seconds: 2),
       );
@@ -97,6 +96,61 @@ void main() {
       await client.close();
     },
   );
+
+  test('StemClient createApp lazy-starts on first enqueue', () async {
+    final client = await StemClient.inMemory(
+      tasks: [
+        FunctionTaskHandler<String>(
+          name: 'client.lazy-start',
+          entrypoint: (context, args) async => 'task-ok',
+          runInIsolate: false,
+        ),
+      ],
+    );
+
+    final app = await client.createApp();
+
+    final taskId = await app.enqueue('client.lazy-start');
+    final result = await app.waitForTask<String>(
+      taskId,
+      timeout: const Duration(seconds: 2),
+    );
+
+    expect(result?.value, 'task-ok');
+
+    await app.close();
+    await client.close();
+  });
+
+  test('StemClient createApp infers queues from explicit tasks', () async {
+    final client = await StemClient.inMemory();
+    final app = await client.createApp(
+      tasks: [
+        FunctionTaskHandler<String>(
+          name: 'client.explicit.queue',
+          options: const TaskOptions(queue: 'priority'),
+          entrypoint: (context, args) async => 'task-ok',
+          runInIsolate: false,
+        ),
+      ],
+    );
+
+    expect(app.worker.subscription.queues, ['priority']);
+
+    final taskId = await app.enqueue(
+      'client.explicit.queue',
+      enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+    );
+    final result = await app.waitForTask<String>(
+      taskId,
+      timeout: const Duration(seconds: 2),
+    );
+
+    expect(result?.value, 'task-ok');
+
+    await app.close();
+    await client.close();
+  });
 
   test(
     'StemClient createApp registers module tasks and infers queues',
@@ -112,16 +166,15 @@ void main() {
       final app = await client.createApp(
         module: StemModule(tasks: [moduleTask]),
       );
-      await app.start();
 
       expect(app.registry.resolve('client.module.app-task'), same(moduleTask));
       expect(app.worker.subscription.queues, ['priority']);
 
-      final taskId = await app.stem.enqueue(
+      final taskId = await app.enqueue(
         'client.module.app-task',
         enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
       );
-      final result = await app.stem.waitForTask<String>(
+      final result = await app.waitForTask<String>(
         taskId,
         timeout: const Duration(seconds: 2),
       );

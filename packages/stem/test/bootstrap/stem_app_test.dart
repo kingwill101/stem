@@ -14,14 +14,32 @@ void main() {
 
       final app = await StemApp.inMemory(tasks: [handler]);
       try {
-        await app.start();
-
-        final taskId = await app.stem.enqueue('test.echo');
+        final taskId = await app.enqueue('test.echo');
         final completed = await app.backend
             .watch(taskId)
             .firstWhere((status) => status.state == TaskState.succeeded)
             .timeout(const Duration(seconds: 1));
         expect(completed.state, TaskState.succeeded);
+      } finally {
+        await app.shutdown();
+      }
+    });
+
+    test('inMemory lazy-starts on first enqueue', () async {
+      final handler = FunctionTaskHandler<String>(
+        name: 'test.lazy-start',
+        entrypoint: (context, args) async => 'started',
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory(tasks: [handler]);
+      try {
+        final taskId = await app.enqueue('test.lazy-start');
+        final completed = await app.waitForTask<String>(
+          taskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(completed?.value, 'started');
       } finally {
         await app.shutdown();
       }
@@ -44,13 +62,11 @@ void main() {
           expect(app.registry.resolve('test.module.queue'), same(handler));
           expect(app.worker.subscription.queues, ['priority']);
 
-          await app.start();
-
-          final taskId = await app.stem.enqueue(
+          final taskId = await app.enqueue(
             'test.module.queue',
             enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
           );
-          final completed = await app.stem.waitForTask<String>(
+          final completed = await app.waitForTask<String>(
             taskId,
             timeout: const Duration(seconds: 2),
           );
@@ -60,6 +76,32 @@ void main() {
         }
       },
     );
+
+    test('inMemory infers queued subscriptions from explicit tasks', () async {
+      final handler = FunctionTaskHandler<String>(
+        name: 'test.explicit.queue',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'explicit-ok',
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory(tasks: [handler]);
+      try {
+        expect(app.worker.subscription.queues, ['priority']);
+
+        final taskId = await app.enqueue(
+          'test.explicit.queue',
+          enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+        );
+        final completed = await app.waitForTask<String>(
+          taskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(completed?.value, 'explicit-ok');
+      } finally {
+        await app.shutdown();
+      }
+    });
 
     test('inMemory applies worker config overrides', () async {
       final handler = FunctionTaskHandler<void>(
@@ -176,8 +218,7 @@ void main() {
         tasks: [handler],
       );
       try {
-        await app.start();
-        final taskId = await app.stem.enqueue('test.from-url');
+        final taskId = await app.enqueue('test.from-url');
         final completed = await app.backend
             .watch(taskId)
             .firstWhere((status) => status.state == TaskState.succeeded)

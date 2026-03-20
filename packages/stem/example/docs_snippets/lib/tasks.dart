@@ -244,13 +244,12 @@ class MyOtherEncoder extends TaskPayloadEncoder {
 
 Future<void> main() async {
   final app = await StemApp.inMemory(tasks: [EmailTask()]);
-  await app.start();
 
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'email.send',
     args: {'to': 'demo@example.com'},
   );
-  final result = await app.stem.waitForTask<void>(
+  final result = await app.waitForTask<void>(
     taskId,
     timeout: const Duration(seconds: 5),
   );

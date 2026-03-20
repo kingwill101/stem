@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Made `StemApp` lazy-start its managed worker on first enqueue/wait calls so
+  in-memory and module-backed task apps no longer need an explicit `start()`
+  in the common case.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

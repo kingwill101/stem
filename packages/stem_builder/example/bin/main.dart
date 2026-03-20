@@ -43,10 +43,9 @@ Future<void> main() async {
 
   final taskApp = await StemApp.inMemory(module: stemModule);
   try {
-    await taskApp.start();
     final taskResult = await StemTaskDefinitions.builderExamplePing
         .enqueueAndWait(
-      taskApp.stem,
+      taskApp,
       timeout: const Duration(seconds: 2),
     );
     print('\nNo-arg task result: ${taskResult?.value}');

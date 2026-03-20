@@ -129,15 +129,14 @@ class GenerateReportTask extends TaskHandler<String> {
 
 Future<void> enqueueTyped() async {
   final app = await StemApp.inMemory(tasks: [GenerateReportTask()]);
-  await app.start();
 
   final taskId = await GenerateReportTask.definition.enqueue(
-    app.stem,
+    app,
     const ReportPayload(reportId: 'monthly-2025-10'),
     options: const TaskOptions(priority: 5),
     headers: const {'x-requested-by': 'analytics'},
   );
-  final result = await app.stem.waitForTask<String>(taskId);
+  final result = await app.waitForTask<String>(taskId);
   print(result?.value);
   await app.close();
 }
