@@ -261,6 +261,15 @@ class StemWorkflowApp
   /// ```
   Future<RunState?> getRun(String runId) => store.get(runId);
 
+  /// Registers all tasks and workflows from [module] into this app.
+  ///
+  /// This is a convenience helper for manual registration flows that need to
+  /// attach generated definitions after bootstrap.
+  void registerModule(StemModule module) {
+    registerModuleTaskHandlers(app.registry, module.tasks);
+    module.registerInto(workflows: runtime.registry);
+  }
+
   /// Returns the normalized run view for [runId], or `null` if not found.
   Future<WorkflowRunView?> viewRun(String runId) {
     return runtime.viewRun(runId);
@@ -748,7 +757,8 @@ void _validateReusableStemApp(
   StemApp app,
   StemWorkerConfig workerConfig,
 ) {
-  final requiredQueues = workerConfig.subscription?.resolveQueues(
+  final requiredQueues =
+      workerConfig.subscription?.resolveQueues(
         workerConfig.queue,
       ) ??
       [workerConfig.queue];

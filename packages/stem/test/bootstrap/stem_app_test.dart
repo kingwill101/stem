@@ -730,6 +730,46 @@ void main() {
       }
     });
 
+    test(
+      'StemWorkflowApp registers module definitions after bootstrap',
+      () async {
+        final taskHandler = FunctionTaskHandler<String>.inline(
+          name: 'workflow.module.task',
+          entrypoint: (context, args) async => 'module-task-ok',
+        );
+        final flow = Flow<String>(
+          name: 'workflow.module.flow',
+          build: (builder) {
+            builder.step('hello', (ctx) async => 'module-flow-ok');
+          },
+        );
+        final module = StemModule(flows: [flow], tasks: [taskHandler]);
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp.registerModule(module);
+
+          expect(
+            workflowApp.app.registry.resolve('workflow.module.task'),
+            isNotNull,
+          );
+          expect(
+            workflowApp.runtime.registry.lookup('workflow.module.flow'),
+            isNotNull,
+          );
+
+          final runId = await workflowApp.startWorkflow('workflow.module.flow');
+          final workflowResult = await workflowApp.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(workflowResult?.value, equals('module-flow-ok'));
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',

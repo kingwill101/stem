@@ -142,6 +142,9 @@
   surface instead of reaching through `workflowApp.runtime`.
 - Added `StemWorkflowApp.workflowManifest()` so manifest inspection can stay on
   the app surface instead of reaching through `workflowApp.runtime`.
+- Added `StemWorkflowApp.registerModule(...)` so manual builder/module
+  registration no longer needs to reach through `app.runtime.registry` and
+  `app.app.registry`.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.
