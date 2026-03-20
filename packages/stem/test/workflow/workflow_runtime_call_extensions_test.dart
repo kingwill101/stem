@@ -2,9 +2,9 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('runtime workflow call extensions', () {
+  group('runtime workflow start call extensions', () {
     test(
-      'start/startAndWait/waitFor use typed workflow refs',
+      'prepareStart().build() start/startAndWait/waitFor use typed workflow refs',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -25,7 +25,8 @@ void main() {
           await workflowApp.start();
 
           final runId = await workflowRef
-              .call(const {'name': 'runtime'})
+              .prepareStart(const {'name': 'runtime'})
+              .build()
               .start(workflowApp.runtime);
           final waited = await workflowRef.waitFor(
             workflowApp.runtime,
@@ -36,7 +37,8 @@ void main() {
           expect(waited?.value, 'hello runtime');
 
           final oneShot = await workflowRef
-              .call(const {'name': 'inline'})
+              .prepareStart(const {'name': 'inline'})
+              .build()
               .startAndWait(
                 workflowApp.runtime,
                 timeout: const Duration(seconds: 2),

@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Removed `WorkflowRef.call(...)` as a duplicate workflow-start convenience.
+  The direct `start(...)` / `startAndWait(...)` helpers remain the happy path,
+  and `prepareStart(...).build()` remains the explicit prebuilt-call path.
 - Renamed read-side `...VersionedJson(...)` fallback args to
   `defaultVersion:` so decode helpers no longer imply they are choosing the
   persisted schema version on already-stored payloads.

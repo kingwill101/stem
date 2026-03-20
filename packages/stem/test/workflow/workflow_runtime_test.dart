@@ -156,7 +156,10 @@ void main() {
           name: 'parent.runtime.flow',
           build: (flow) {
             flow.step('spawn', (context) async {
-              return childRef.call(const {'value': 'spawned'}).start(context);
+              return childRef.start(
+                context,
+                params: const {'value': 'spawned'},
+              );
             });
           },
         ).definition,
@@ -201,9 +204,10 @@ void main() {
           ],
           run: (script) async {
             return script.step<String>('spawn', (context) async {
-              return childRef
-                  .call(const {'value': 'script-child'})
-                  .start(context);
+              return childRef.start(
+                context,
+                params: const {'value': 'script-child'},
+              );
             });
           },
         ).definition,
@@ -247,12 +251,11 @@ void main() {
             name: 'parent.runtime.wait.flow',
             build: (flow) {
               flow.step('spawn', (context) async {
-                final childResult = await childRef
-                    .call(const {'value': 'spawned'})
-                    .startAndWait(
-                      context,
-                      timeout: const Duration(seconds: 2),
-                    );
+                final childResult = await childRef.startAndWait(
+                  context,
+                  params: const {'value': 'spawned'},
+                  timeout: const Duration(seconds: 2),
+                );
                 return {
                   'childRunId': childResult?.runId,
                   'childValue': childResult?.value,
@@ -302,12 +305,11 @@ void main() {
               return script.step<Map<String, Object?>>('spawn', (
                 context,
               ) async {
-                final childResult = await childRef
-                    .call(const {'value': 'script-child'})
-                    .startAndWait(
-                      context,
-                      timeout: const Duration(seconds: 2),
-                    );
+                final childResult = await childRef.startAndWait(
+                  context,
+                  params: const {'value': 'script-child'},
+                  timeout: const Duration(seconds: 2),
+                );
                 return {
                   'childRunId': childResult?.runId,
                   'childValue': childResult?.value,

@@ -138,22 +138,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
     return Map<String, Object?>.from(payload);
   }
 
-  /// Builds a workflow start call from typed arguments.
-  WorkflowStartCall<TParams, TResult> call(
-    TParams params, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return WorkflowStartCall._(
-      definition: this,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-
   /// Creates a fluent builder for this workflow start.
   WorkflowStartBuilder<TParams, TResult> prepareStart(TParams params) {
     return WorkflowStartBuilder(definition: this, params: params);
@@ -179,8 +163,9 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return call(
-      params,
+    return WorkflowStartCall._(
+      definition: this,
+      params: params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
@@ -198,8 +183,9 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return call(
-      params,
+    return WorkflowStartCall._(
+      definition: this,
+      params: params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
@@ -403,8 +389,9 @@ class WorkflowStartBuilder<TParams, TResult extends Object?> {
 
   /// Builds the [WorkflowStartCall] with accumulated overrides.
   WorkflowStartCall<TParams, TResult> build() {
-    return definition.call(
-      params,
+    return WorkflowStartCall._(
+      definition: definition,
+      params: params,
       parentRunId: _parentRunId,
       ttl: _ttl,
       cancellationPolicy: _cancellationPolicy,

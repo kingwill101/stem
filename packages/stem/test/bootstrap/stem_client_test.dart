@@ -368,8 +368,9 @@ void main() {
     final app = await client.createWorkflowApp(flows: [flow]);
     await app.start();
 
-    final runId = await app.startWorkflowCall(
-      workflowRef.call(const {'name': 'ref'}),
+    final runId = await workflowRef.start(
+      app,
+      params: const {'name': 'ref'},
     );
     final result = await app.waitForWorkflowRef(
       runId,
@@ -443,11 +444,11 @@ void main() {
     final app = await client.createWorkflowApp(flows: [flow]);
     await app.start();
 
-    final result = await workflowRef
-        .call(
-          const {'name': 'one-shot'},
-        )
-        .startAndWait(app, timeout: const Duration(seconds: 2));
+    final result = await workflowRef.startAndWait(
+      app,
+      params: const {'name': 'one-shot'},
+      timeout: const Duration(seconds: 2),
+    );
 
     expect(result?.value, 'ok:one-shot');
 

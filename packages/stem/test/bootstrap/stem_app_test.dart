@@ -921,11 +921,10 @@ void main() {
 
       final workflowApp = await StemWorkflowApp.inMemory(flows: [moduleFlow]);
       try {
-        final runId = await workflowRef
-            .call(
-              const {'name': 'stem'},
-            )
-            .start(workflowApp);
+        final runId = await workflowRef.start(
+          workflowApp,
+          params: const {'name': 'stem'},
+        );
         final result = await workflowRef.waitFor(
           workflowApp,
           runId,
