@@ -17,6 +17,9 @@
   `enqueueBuilder(...)` and `enqueueNoArgsBuilder(...)`. The direct
   `prepareEnqueue(...)` and `prepareNoArgsEnqueue(...)` forms are now the only
   supported builder entrypoints.
+- Removed the deprecated `withJsonCodec(...)` / `refWithJsonCodec(...)`
+  compatibility helpers. The direct `json(...)` / `refJson(...)` forms are now
+  the only supported JSON shortcut APIs.
 - Replaced the older manual DTO helper names with direct forms:
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and

@@ -69,23 +69,6 @@ class WorkflowScript<T extends Object?> {
     );
   }
 
-  /// Builds a typed [WorkflowRef] for DTO params that already expose
-  /// `toJson()` and `Type.fromJson(...)`.
-  @Deprecated('Use refJson(...) instead.')
-  WorkflowRef<TParams, T> refWithJsonCodec<TParams>({
-    required TParams Function(Map<String, Object?> payload) decodeParams,
-    T Function(Map<String, Object?> payload)? decodeResultJson,
-    String? paramsTypeName,
-    String? resultTypeName,
-  }) {
-    return refJson<TParams>(
-      decodeParams: decodeParams,
-      decodeResultJson: decodeResultJson,
-      paramsTypeName: paramsTypeName,
-      resultTypeName: resultTypeName,
-    );
-  }
-
   /// Builds a typed [NoArgsWorkflowRef] for scripts without start params.
   NoArgsWorkflowRef<T> ref0() {
     return definition.ref0();

@@ -2141,31 +2141,6 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
-  /// Creates a typed task definition for DTO args that already expose
-  /// `toJson()` and `Type.fromJson(...)`.
-  @Deprecated('Use TaskDefinition.json(...) instead.')
-  factory TaskDefinition.withJsonCodec({
-    required String name,
-    required TArgs Function(Map<String, Object?> payload) decodeArgs,
-    TaskMetaBuilder<TArgs>? encodeMeta,
-    TaskOptions defaultOptions = const TaskOptions(),
-    TaskMetadata metadata = const TaskMetadata(),
-    TResult Function(Map<String, Object?> payload)? decodeResultJson,
-    String? argsTypeName,
-    String? resultTypeName,
-  }) {
-    return TaskDefinition<TArgs, TResult>.json(
-      name: name,
-      decodeArgs: decodeArgs,
-      encodeMeta: encodeMeta,
-      defaultOptions: defaultOptions,
-      metadata: metadata,
-      decodeResultJson: decodeResultJson,
-      argsTypeName: argsTypeName,
-      resultTypeName: resultTypeName,
-    );
-  }
-
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgs<TResult>({
     required String name,
