@@ -318,7 +318,7 @@ class ParentTask implements TaskHandler<String> {
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final result = await childWorkflow.startAndWaitWith(context);
+    final result = await childWorkflow.startAndWait(context);
     return result?.value ?? 'missing';
   }
 }
@@ -350,7 +350,7 @@ final app = await StemWorkflowApp.inMemory(
   flows: [demoWorkflow],
 );
 
-final runId = await demoWorkflow.startWith(app);
+final runId = await demoWorkflow.start(app);
 final result = await demoWorkflow.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
@@ -490,9 +490,9 @@ final app = await StemWorkflowApp.fromUrl(
   tasks: const [],
 );
 
-final runId = await approvalsRef.startWith(
+final runId = await approvalsRef.start(
   app,
-  const ApprovalDraft(documentId: 'doc-42'),
+  params: const ApprovalDraft(documentId: 'doc-42'),
 );
 
 final result = await approvalsRef.waitFor(app, runId);
@@ -511,7 +511,7 @@ final runId = await approvalsRef
     .cancellationPolicy(
       const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
     )
-    .startWith(app);
+    .start(app);
 ```
 
 Use `refWithJsonCodec(...)` when your manual workflow start params are normal
@@ -523,7 +523,7 @@ For workflows without start parameters, start directly from the flow or script
 itself:
 
 ```dart
-final runId = await healthcheckFlow.startWith(app);
+final runId = await healthcheckFlow.start(app);
 ```
 
 If you need to pass a no-args workflow through another API, `ref0()` still
@@ -633,7 +633,7 @@ Durable workflow contexts enqueue tasks directly:
 Child workflows belong in durable execution boundaries:
 
 - `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer `ref.startAndWaitWith(context, value)` inside
+  `WorkflowCaller`, so prefer `ref.startAndWait(context, params: value)` inside
   flow steps and script checkpoints
 - use `context.startWorkflowBuilder(...)` when you need advanced overrides like
   `ttl(...)` or `cancellationPolicy(...)`
@@ -686,9 +686,9 @@ final app = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
   app,
-  'user@example.com',
+  params: 'user@example.com',
 );
 print(result?.value);
 await app.close();
@@ -822,7 +822,7 @@ representing the value they produce. For workflows you define in code, prefer
 their direct helpers or typed refs:
 
 ```dart
-final result = await ordersWorkflow.startAndWaitWith(app);
+final result = await ordersWorkflow.startAndWait(app);
 print(result.value?.total);
 ```
 

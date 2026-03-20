@@ -7,7 +7,7 @@ Future<void> main() async {
   final client = await StemClient.inMemory(module: stemModule);
   final app = await client.createWorkflowApp();
 
-  final flowRunId = await StemWorkflowDefinitions.flow.startWith(app);
+  final flowRunId = await StemWorkflowDefinitions.flow.start(app);
   final flowResult = await StemWorkflowDefinitions.flow.waitFor(
     app,
     flowRunId,
@@ -19,9 +19,9 @@ Future<void> main() async {
     '${jsonEncode(flowResult?.value?['childResult'])}',
   );
 
-  final scriptResult = await StemWorkflowDefinitions.script.startAndWaitWith(
+  final scriptResult = await StemWorkflowDefinitions.script.startAndWait(
     app,
-    const WelcomeRequest(email: '  SomeEmail@Example.com  '),
+    params: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
     timeout: const Duration(seconds: 2),
   );
   print('Script result: ${jsonEncode(scriptResult?.value?.toJson())}');
@@ -43,11 +43,11 @@ Future<void> main() async {
   print('Script detail: ${jsonEncode(scriptDetail?.toJson())}');
 
   final contextResult = await StemWorkflowDefinitions.contextScript
-      .startAndWaitWith(
-    app,
-    const WelcomeRequest(email: '  ContextEmail@Example.com  '),
-    timeout: const Duration(seconds: 2),
-  );
+      .startAndWait(
+        app,
+        params: const WelcomeRequest(email: '  ContextEmail@Example.com  '),
+        timeout: const Duration(seconds: 2),
+      );
   print('Context script result: ${jsonEncode(contextResult?.value?.toJson())}');
 
   final contextDetail = await app.viewRunDetail(contextResult!.runId);
@@ -64,16 +64,16 @@ Future<void> main() async {
 
   final typedTaskResult = await StemTaskDefinitions.sendEmailTyped
       .enqueueAndWait(
-    app,
-    const EmailDispatch(
-      email: 'typed@example.com',
-      subject: 'Welcome',
-      body: 'Codec-backed DTO payloads',
-      tags: ['welcome', 'transactional', 'annotated'],
-    ),
-    meta: const {'origin': 'annotated_workflows_example'},
-    timeout: const Duration(seconds: 2),
-  );
+        app,
+        const EmailDispatch(
+          email: 'typed@example.com',
+          subject: 'Welcome',
+          body: 'Codec-backed DTO payloads',
+          tags: ['welcome', 'transactional', 'annotated'],
+        ),
+        meta: const {'origin': 'annotated_workflows_example'},
+        timeout: const Duration(seconds: 2),
+      );
   print('Typed task result: ${jsonEncode(typedTaskResult?.value?.toJson())}');
 
   await app.close();

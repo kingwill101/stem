@@ -47,9 +47,9 @@ Use the generated workflow refs when you want a single typed handle for start
 and wait operations:
 
 ```dart
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
   workflowApp,
-  'user@example.com',
+  params: 'user@example.com',
 );
 ```
 
@@ -132,7 +132,7 @@ This keeps one authoring model:
 When a workflow needs to start another workflow, do it from a durable boundary:
 
 - `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer `ref.startAndWaitWith(context, value)` inside
+  `WorkflowCaller`, so prefer `ref.startAndWait(context, params: value)` inside
   flow steps and checkpoint methods
 - use `context.startWorkflowBuilder(...)` only when you need advanced start
   overrides like `ttl(...)` or `cancellationPolicy(...)`

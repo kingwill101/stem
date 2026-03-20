@@ -272,11 +272,11 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowResult = await flow.startAndWaitWith(
+        final flowResult = await flow.startAndWait(
           workflowApp,
           timeout: const Duration(seconds: 2),
         );
-        final scriptRunId = await script.startWith(workflowApp.runtime);
+        final scriptRunId = await script.start(workflowApp.runtime);
         final scriptResult = await script.waitFor(
           workflowApp.runtime,
           scriptRunId,

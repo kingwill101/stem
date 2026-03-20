@@ -38,8 +38,9 @@ Depending on the context type, you can access:
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `idempotencyKey(...)`
-- direct child-workflow start helpers such as `ref.startWith(context, value)`
-  and `ref.startAndWaitWith(context, value)`
+- direct child-workflow start helpers such as
+  `ref.start(context, params: value)` and
+  `ref.startAndWait(context, params: value)`
 - direct task enqueue APIs because `FlowContext`,
   `WorkflowScriptStepContext`, and `TaskInvocationContext` all implement
   `TaskEnqueuer`
@@ -47,8 +48,8 @@ Depending on the context type, you can access:
 
 Child workflow starts belong in durable boundaries:
 
-- `ref.startWith(context, value)` inside flow steps
-- `ref.startAndWaitWith(context, value)` inside script checkpoints
+- `ref.start(context, params: value)` inside flow steps
+- `ref.startAndWait(context, params: value)` inside script checkpoints
 - `context.startWorkflowBuilder(...)` when you need advanced overrides like
   `ttl(...)` or `cancellationPolicy(...)`
 

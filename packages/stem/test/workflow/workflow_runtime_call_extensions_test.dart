@@ -52,46 +52,92 @@ void main() {
     test(
       'WorkflowRef direct helpers mirror WorkflowStartCall dispatch',
       () async {
-      final flow = Flow<String>(
-        name: 'runtime.extension.direct.flow',
-        build: (builder) {
-          builder.step('hello', (ctx) async {
-            final name = ctx.params['name'] as String? ?? 'world';
-            return 'hello $name';
-          });
-        },
-      );
-      final workflowRef = WorkflowRef<Map<String, Object?>, String>(
-        name: 'runtime.extension.direct.flow',
-        encodeParams: (params) => params,
-      );
-
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
-      try {
-        await workflowApp.start();
-
-        final runId = await workflowRef.startWith(
-          workflowApp.runtime,
-          const {'name': 'runtime'},
+        final flow = Flow<String>(
+          name: 'runtime.extension.direct.flow',
+          build: (builder) {
+            builder.step('hello', (ctx) async {
+              final name = ctx.params['name'] as String? ?? 'world';
+              return 'hello $name';
+            });
+          },
         );
-        final waited = await workflowRef.waitFor(
-          workflowApp.runtime,
-          runId,
-          timeout: const Duration(seconds: 2),
+        final workflowRef = WorkflowRef<Map<String, Object?>, String>(
+          name: 'runtime.extension.direct.flow',
+          encodeParams: (params) => params,
         );
 
-        expect(waited?.value, 'hello runtime');
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
 
-        final oneShot = await workflowRef.startAndWaitWith(
-          workflowApp.runtime,
-          const {'name': 'inline'},
-          timeout: const Duration(seconds: 2),
+          final runId = await workflowRef.startWith(
+            workflowApp.runtime,
+            const {'name': 'runtime'},
+          );
+          final waited = await workflowRef.waitFor(
+            workflowApp.runtime,
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(waited?.value, 'hello runtime');
+
+          final oneShot = await workflowRef.startAndWaitWith(
+            workflowApp.runtime,
+            const {'name': 'inline'},
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(oneShot?.value, 'hello inline');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'named workflow start aliases mirror the with-suffixed helpers',
+      () async {
+        final flow = Flow<String>(
+          name: 'runtime.extension.named.flow',
+          build: (builder) {
+            builder.step('hello', (ctx) async {
+              final name = ctx.params['name'] as String? ?? 'world';
+              return 'hello $name';
+            });
+          },
+        );
+        final workflowRef = WorkflowRef<Map<String, Object?>, String>(
+          name: 'runtime.extension.named.flow',
+          encodeParams: (params) => params,
         );
 
-        expect(oneShot?.value, 'hello inline');
-      } finally {
-        await workflowApp.shutdown();
-      }
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final runId = await workflowRef.start(
+            workflowApp.runtime,
+            params: const {'name': 'runtime'},
+          );
+          final waited = await workflowRef.waitFor(
+            workflowApp.runtime,
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(waited?.value, 'hello runtime');
+
+          final oneShot = await workflowRef.startAndWait(
+            workflowApp.runtime,
+            params: const {'name': 'inline'},
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(oneShot?.value, 'hello inline');
+        } finally {
+          await workflowApp.shutdown();
+        }
       },
     );
   });

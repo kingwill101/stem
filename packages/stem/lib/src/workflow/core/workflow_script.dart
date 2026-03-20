@@ -90,6 +90,21 @@ class WorkflowScript<T extends Object?> {
     );
   }
 
+  /// Starts this script directly when it does not accept start params.
+  Future<String> start(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWith(
+      caller,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Starts this script directly and waits for completion.
   Future<WorkflowResult<T>?> startAndWaitWith(
     WorkflowCaller caller, {
@@ -100,6 +115,25 @@ class WorkflowScript<T extends Object?> {
     Duration? timeout,
   }) {
     return ref0().startAndWaitWith(
+      caller,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  /// Starts this script directly and waits for completion.
+  Future<WorkflowResult<T>?> startAndWait(
+    WorkflowCaller caller, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return startAndWaitWith(
       caller,
       parentRunId: parentRunId,
       ttl: ttl,

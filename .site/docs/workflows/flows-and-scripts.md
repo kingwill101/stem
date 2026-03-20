@@ -36,7 +36,7 @@ final approvalsRef = approvalsFlow.ref<Map<String, Object?>>(
 ```
 
 When a flow has no start params, start directly from the flow itself with
-`flow.startWith(...)`, `flow.startAndWaitWith(...)`, or `flow.startBuilder()`.
+`flow.start(...)`, `flow.startAndWait(...)`, or `flow.startBuilder()`.
 Use `ref0()` only when another API specifically needs a `NoArgsWorkflowRef`.
 
 Use `Flow` when:
@@ -60,7 +60,7 @@ final retryRef = retryScript.ref<Map<String, Object?>>(
 ```
 
 When a script has no start params, start directly from the script itself with
-`retryScript.startWith(...)`, `retryScript.startAndWaitWith(...)`, or
+`retryScript.start(...)`, `retryScript.startAndWait(...)`, or
 `retryScript.startBuilder()`. Use `ref0()` only when another API specifically
 needs a `NoArgsWorkflowRef`.
 

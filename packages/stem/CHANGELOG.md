@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added named workflow start aliases `start(...)` and `startAndWait(...)` on
+  workflow refs, no-args workflow refs, manual `Flow` / `WorkflowScript`
+  wrappers, and workflow start calls/builders. The existing
+  `startWith(...)` / `startAndWaitWith(...)` helpers still work.
 - Added `StemModule.requiredTaskQueues()` and
   `StemModule.requiredWorkflowQueues(...)` so bundle queue requirements can be
   inspected directly before app/worker bootstrap.

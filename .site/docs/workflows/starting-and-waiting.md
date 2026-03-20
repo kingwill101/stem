@@ -33,9 +33,9 @@ final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(
   paramsCodec: approvalDraftCodec,
 );
 
-final runId = await approvalsRef.startWith(
+final runId = await approvalsRef.start(
   workflowApp,
-  const ApprovalDraft(documentId: 'doc-42'),
+  params: const ApprovalDraft(documentId: 'doc-42'),
 );
 
 final result = await approvalsRef.waitFor(workflowApp, runId);
@@ -55,7 +55,7 @@ final runId = await approvalsRef
     .cancellationPolicy(
       const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
     )
-    .startWith(workflowApp);
+    .start(workflowApp);
 ```
 
 `refWithJsonCodec(...)` is the shortest manual DTO path when the type already
@@ -68,14 +68,14 @@ definition constructor in the common `toJson()` / `Type.fromJson(...)` case.
 Use `resultCodec:` only when the result needs a custom payload codec.
 
 For workflows without start params, start directly from the flow or script
-itself with `startWith(...)`, `startAndWaitWith(...)`, or `startBuilder()`.
+itself with `start(...)`, `startAndWait(...)`, or `startBuilder()`.
 Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.
 
 ## Wait for completion
 
 For workflows defined in code, prefer direct workflow helpers or typed refs
-like `ordersFlow.startAndWaitWith(...)` and
-`StemWorkflowDefinitions.orders.startAndWaitWith(...)`.
+like `ordersFlow.startAndWait(...)` and
+`StemWorkflowDefinitions.orders.startAndWait(...)`.
 
 `waitForCompletion<T>` is the low-level completion API for name-based runs. It
 polls the store until the run finishes or the caller times out.
@@ -92,9 +92,9 @@ When you use `stem_builder`, generated workflow refs remove the raw
 workflow-name strings and give you one typed handle for both start and wait:
 
 ```dart
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
   workflowApp,
-  'user@example.com',
+  params: 'user@example.com',
 );
 ```
 
@@ -102,9 +102,9 @@ The same definitions work on `WorkflowRuntime` by passing the runtime as the
 `WorkflowCaller`:
 
 ```dart
-final runId = await StemWorkflowDefinitions.userSignup.startWith(
+final runId = await StemWorkflowDefinitions.userSignup.start(
   runtime,
-  'user@example.com',
+  params: 'user@example.com',
 );
 ```
 
