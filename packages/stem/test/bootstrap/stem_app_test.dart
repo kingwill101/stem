@@ -478,6 +478,35 @@ void main() {
       }
     });
 
+    test('startWorkflowJson encodes DTO params without a manual map', () async {
+      final flow = Flow<String>(
+        name: 'workflow.json.start',
+        build: (builder) {
+          builder.step(
+            'payload',
+            (ctx) async => ctx.requiredParam<String>('foo'),
+          );
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflowJson(
+          'workflow.json.start',
+          const _DemoPayload('bar'),
+        );
+        final run = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(runId, isNotEmpty);
+        expect(run?.requiredValue(), 'bar');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'waitForCompletion does not decode when workflow is cancelled',
       () async {
@@ -1321,6 +1350,8 @@ class _DemoPayload {
       _DemoPayload(json['foo']! as String);
 
   final String foo;
+
+  Map<String, Object?> toJson() => {'foo': foo};
 }
 
 const _demoPayloadCodec = PayloadCodec<_DemoPayload>(

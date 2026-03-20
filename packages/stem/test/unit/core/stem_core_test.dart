@@ -143,6 +143,26 @@ void main() {
       expect(backend.records.single.state, TaskState.queued);
     });
 
+    test('enqueueJson publishes DTO args without a manual map', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(
+        broker: broker,
+        backend: backend,
+        tasks: [const _StubTaskHandler()],
+      );
+
+      final id = await stem.enqueueJson(
+        'sample.task',
+        const _CodecTaskArgs('encoded'),
+      );
+
+      expect(id, isNotEmpty);
+      expect(broker.published.single.envelope.args, {'value': 'encoded'});
+      expect(backend.records.single.id, id);
+      expect(backend.records.single.state, TaskState.queued);
+    });
+
     test(
       'enqueueCall uses definition encoder metadata on producer-only paths',
       () async {

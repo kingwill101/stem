@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added low-level DTO shortcuts for name-based dispatch:
+  `TaskEnqueuer.enqueueJson(...)`, `WorkflowRuntime.startWorkflowJson(...)`,
+  and `StemWorkflowApp.startWorkflowJson(...)`, so dynamic task/workflow names
+  can still use `toJson()` inputs without hand-built maps.
 - Added `decodeJson:` shortcuts to the low-level
   `Stem.waitForTask<T>` and `StemWorkflowApp.waitForCompletion<T>` wait APIs,
   and propagated the same task wait shortcut through `StemApp` and

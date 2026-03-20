@@ -194,6 +194,37 @@ class StemWorkflowApp
     );
   }
 
+  /// Starts a workflow from a DTO that already exposes `toJson()`.
+  Future<String> startWorkflowJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    if (!_started) {
+      return start().then(
+        (_) => runtime.startWorkflowJson(
+          name,
+          paramsJson,
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+          typeName: typeName,
+        ),
+      );
+    }
+    return runtime.startWorkflowJson(
+      name,
+      paramsJson,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      typeName: typeName,
+    );
+  }
+
   /// Schedules a workflow run from a typed [WorkflowRef].
   @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(

@@ -2720,6 +2720,33 @@ class BoundTaskEnqueueBuilder<TArgs, TResult> {
 /// Convenience helpers for building typed enqueue requests directly from a task
 /// enqueuer.
 extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
+  /// Enqueues a name-based task from a DTO that already exposes `toJson()`.
+  Future<String> enqueueJson<T extends Object>(
+    String name,
+    T argsJson, {
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+    String? typeName,
+  }) {
+    return enqueue(
+      name,
+      args: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          argsJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
   /// Creates a caller-bound fluent builder for a typed task definition.
   BoundTaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,

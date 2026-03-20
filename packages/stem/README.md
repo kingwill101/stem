@@ -147,7 +147,7 @@ Future<void> main() async {
 
   final worker = await client.createWorker();
   unawaited(worker.start());
-  await client.enqueue('demo.hello', args: {'name': 'Stem'});
+  await client.enqueueJson('demo.hello', const HelloArgs(name: 'Stem'));
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
   await client.close();
@@ -469,8 +469,9 @@ The runtime shape is the same in every case:
 - bootstrap a `StemWorkflowApp`
 - pass `flows:`, `scripts:`, and `tasks:` directly
 - start runs with direct workflow helpers or generated workflow refs
-- use `startWorkflow(...)` / `waitForCompletion(...)` when names come from
-  config, CLI input, or other dynamic sources
+- use `startWorkflow(...)` / `startWorkflowJson(...)` /
+  `waitForCompletion(...)` when names come from config, CLI input, or other
+  dynamic sources
 
 You do not need to build task registries manually for normal workflow usage.
 
@@ -1185,6 +1186,10 @@ final runId = await workflowApp.startWorkflow(
   ),
 );
 ```
+
+When those low-level name-based paths already have DTO inputs, prefer
+`client.enqueueJson(...)` and `workflowApp.startWorkflowJson(...)` over
+hand-built map payloads.
 
 Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
 `postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace

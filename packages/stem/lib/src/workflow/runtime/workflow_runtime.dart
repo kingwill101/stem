@@ -214,6 +214,29 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     return runId;
   }
 
+  /// Persists a new workflow run from a DTO that already exposes `toJson()`.
+  Future<String> startWorkflowJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    return startWorkflow(
+      name,
+      params: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          paramsJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Starts a workflow from a typed [WorkflowRef].
   @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
