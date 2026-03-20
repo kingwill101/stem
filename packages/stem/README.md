@@ -944,6 +944,7 @@ If you are inspecting the underlying `RunState` directly, use
 `state.cancellationDataJson(...)`, or `state.suspensionPayloadAs(codec: ...)`
 instead of manual raw-map casts.
 Workflow run detail views expose the same convenience surface via
+`runView.paramsJson(...)`, `runView.paramsAs(codec: ...)`,
 `runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
 `runView.resultVersionedJson(...)`, `runView.suspensionPayloadJson(...)`,
 `runView.suspensionPayloadVersionedJson(...)`, `runView.lastErrorJson(...)`,
@@ -1032,6 +1033,9 @@ cast/closure.
 If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
 or `result.payloadAs(codec: ...)` to decode the stored task result DTO without
 another cast/closure.
+If you are inspecting a low-level `TaskError`, use `error.metaJson(...)`,
+`error.metaVersionedJson(...)`, or `error.metaAs(codec: ...)` instead of
+manual `error.meta[...]` casts.
 
 Generated annotated tasks use the same surface:
 

@@ -365,6 +365,8 @@ void main() {
         status: WorkflowStatus.suspended,
         cursor: 2,
         params: const {
+          PayloadCodec.versionKey: 2,
+          'invoiceId': 'inv-params',
           'tenant': 'acme',
           '__stem.workflow.runtime': {
             PayloadCodec.versionKey: 2,
@@ -394,6 +396,25 @@ void main() {
       );
       final view = WorkflowRunView.fromState(state);
 
+      expect(
+        view.paramsJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-params',
+        ),
+      );
+      expect(
+        view.paramsVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-params',
+        ),
+      );
       expect(
         view.resultJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
         isA<_InvoicePayload>().having(

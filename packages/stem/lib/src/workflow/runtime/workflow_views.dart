@@ -139,6 +139,37 @@ class WorkflowRunView {
   /// Public user-supplied workflow params.
   final Map<String, Object?> params;
 
+  /// Decodes the workflow params payload with [codec].
+  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+    return codec.decode(params);
+  }
+
+  /// Decodes the workflow params payload with a JSON decoder.
+  TParams paramsJson<TParams>({
+    required TParams Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(params);
+  }
+
+  /// Decodes the workflow params payload with a version-aware JSON decoder.
+  TParams paramsVersionedJson<TParams>({
+    required int version,
+    required TParams Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(params);
+  }
+
   /// Run-scoped runtime metadata (queues/channel/serialization framing).
   final Map<String, Object?> runtime;
 

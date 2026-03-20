@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `WorkflowRunView.paramsJson(...)`,
+  `paramsVersionedJson(...)`, and `paramsAs(codec: ...)` so workflow detail
+  views can decode stored workflow input DTOs without raw map casts.
 - Added `RunState.lastErrorJson(...)`, `runtimeJson(...)`,
   `cancellationDataJson(...)`, and the matching `WorkflowRunView` helpers so
   workflow inspection surfaces can decode error, runtime, and cancellation

@@ -105,6 +105,7 @@ If you are inspecting the underlying `RunState` directly, use
 `state.cancellationDataJson(...)`, or `state.suspensionPayloadAs(codec: ...)`
 instead of manual raw-map casts.
 Workflow run detail views expose the same convenience surface via
+`runView.paramsJson(...)`, `runView.paramsAs(codec: ...)`,
 `runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
 `runView.resultVersionedJson(...)`, `runView.suspensionPayloadJson(...)`,
 `runView.suspensionPayloadVersionedJson(...)`, `runView.lastErrorJson(...)`,
