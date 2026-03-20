@@ -160,7 +160,7 @@ Use the new typed wrapper when you want compile-time checking and shared metadat
 
 ```dart
 class HelloTask implements TaskHandler<void> {
-  static final definition = TaskDefinition<HelloArgs, void>.withJsonCodec(
+  static final definition = TaskDefinition<HelloArgs, void>.json(
     name: 'demo.hello',
     decodeArgs: HelloArgs.fromJson,
     metadata: TaskMetadata(description: 'Simple hello world example'),
@@ -219,7 +219,7 @@ Future<void> main() async {
 producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
 
-Use `TaskDefinition.withJsonCodec(...)` when your manual task args are normal
+Use `TaskDefinition.json(...)` when your manual task args are normal
 DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
 `TaskDefinition.withPayloadCodec(...)` only when you need a custom
 `PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`
@@ -480,7 +480,7 @@ final approvalsFlow = Flow<String>(
   },
 );
 
-final approvalsRef = approvalsFlow.refWithJsonCodec<ApprovalDraft>(
+final approvalsRef = approvalsFlow.refJson<ApprovalDraft>(
   decodeParams: ApprovalDraft.fromJson,
 );
 
@@ -514,8 +514,8 @@ final runId = await approvalsRef
     .start(app);
 ```
 
-Use `refWithJsonCodec(...)` when your manual workflow start params or final
-result are normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
+Use `refJson(...)` when your manual workflow start params or final result are
+normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
 `refWithCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
 still need to encode to `Map<String, Object?>` because they are persisted as a
 map.

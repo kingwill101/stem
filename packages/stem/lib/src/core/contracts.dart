@@ -2112,7 +2112,7 @@ class TaskDefinition<TArgs, TResult> {
 
   /// Creates a typed task definition for DTO args that already expose
   /// `toJson()` and `Type.fromJson(...)`.
-  factory TaskDefinition.withJsonCodec({
+  factory TaskDefinition.json({
     required String name,
     required TArgs Function(Map<String, Object?> payload) decodeArgs,
     TaskMetaBuilder<TArgs>? encodeMeta,
@@ -2121,7 +2121,7 @@ class TaskDefinition<TArgs, TResult> {
     TResult Function(Map<String, Object?> payload)? decodeResultJson,
     String? argsTypeName,
     String? resultTypeName,
-  }) {
+    }) {
     final resultCodec = decodeResultJson == null
         ? null
         : PayloadCodec<TResult>.json(
@@ -2138,6 +2138,31 @@ class TaskDefinition<TArgs, TResult> {
       defaultOptions: defaultOptions,
       metadata: metadata,
       resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()` and `Type.fromJson(...)`.
+  @Deprecated('Use TaskDefinition.json(...) instead.')
+  factory TaskDefinition.withJsonCodec({
+    required String name,
+    required TArgs Function(Map<String, Object?> payload) decodeArgs,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    return TaskDefinition<TArgs, TResult>.json(
+      name: name,
+      decodeArgs: decodeArgs,
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      decodeResultJson: decodeResultJson,
+      argsTypeName: argsTypeName,
+      resultTypeName: resultTypeName,
     );
   }
 

@@ -31,7 +31,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
 
   /// Creates a typed workflow reference for DTO params that already expose
   /// `toJson()` and `Type.fromJson(...)`.
-  factory WorkflowRef.withJsonCodec({
+  factory WorkflowRef.json({
     required String name,
     required TParams Function(Map<String, Object?> payload) decodeParams,
     TResult Function(Map<String, Object?> payload)? decodeResultJson,
@@ -53,6 +53,27 @@ class WorkflowRef<TParams, TResult extends Object?> {
       ),
       resultCodec: resultCodec,
       decodeResult: decodeResult,
+    );
+  }
+
+  /// Creates a typed workflow reference for DTO params that already expose
+  /// `toJson()` and `Type.fromJson(...)`.
+  @Deprecated('Use WorkflowRef.json(...) instead.')
+  factory WorkflowRef.withJsonCodec({
+    required String name,
+    required TParams Function(Map<String, Object?> payload) decodeParams,
+    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    TResult Function(Object? payload)? decodeResult,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, TResult>.json(
+      name: name,
+      decodeParams: decodeParams,
+      decodeResultJson: decodeResultJson,
+      decodeResult: decodeResult,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
     );
   }
 

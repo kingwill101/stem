@@ -52,7 +52,7 @@ Typed results flow through `TaskResult<TResult>` when you call
 `Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
 lets you deserialize complex objects before they reach application code.
 
-If your manual task args are DTOs, prefer `TaskDefinition.withJsonCodec(...)`
+If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()` and `Type.fromJson(...)`. Use
 `TaskDefinition.withPayloadCodec(...)` when you need a custom
 `PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`

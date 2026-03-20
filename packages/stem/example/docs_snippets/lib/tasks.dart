@@ -60,7 +60,7 @@ class InvoicePayload {
 
 class PublishInvoiceTask extends TaskHandler<void> {
   static final definition =
-      TaskDefinition<InvoicePayload, bool>.withJsonCodec(
+      TaskDefinition<InvoicePayload, bool>.json(
         name: 'invoice.publish',
         decodeArgs: InvoicePayload.fromJson,
         metadata: const TaskMetadata(

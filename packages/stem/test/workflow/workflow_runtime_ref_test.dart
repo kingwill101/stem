@@ -161,7 +161,7 @@ void main() {
           });
         },
       );
-      final workflowRef = flow.refWithJsonCodec<_GreetingParams>(
+      final workflowRef = flow.refJson<_GreetingParams>(
         decodeParams: _GreetingParams.fromJson,
       );
 
@@ -193,7 +193,7 @@ void main() {
             );
           },
         );
-        final workflowRef = flow.refWithJsonCodec<_GreetingParams>(
+        final workflowRef = flow.refJson<_GreetingParams>(
           decodeParams: _GreetingParams.fromJson,
           decodeResultJson: _GreetingResult.fromJson,
         );

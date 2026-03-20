@@ -127,7 +127,7 @@ void main() {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
-      final definition = TaskDefinition<_CodecTaskArgs, Object?>.withJsonCodec(
+      final definition = TaskDefinition<_CodecTaskArgs, Object?>.json(
         name: 'sample.json.args',
         decodeArgs: _CodecTaskArgs.fromJson,
         defaultOptions: const TaskOptions(queue: 'typed'),

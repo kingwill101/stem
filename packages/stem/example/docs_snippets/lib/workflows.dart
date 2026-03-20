@@ -76,7 +76,7 @@ class ApprovalsFlow {
     },
   );
 
-  static final ref = flow.refWithJsonCodec<ApprovalDraft>(
+  static final ref = flow.refJson<ApprovalDraft>(
     decodeParams: ApprovalDraft.fromJson,
   );
 }
