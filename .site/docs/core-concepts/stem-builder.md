@@ -222,8 +222,8 @@ app is creating the worker itself.
   - `WorkflowScriptContext? context` on `run(...)`
   - `WorkflowScriptStepContext? context` on the checkpoint method
 - DTO classes are supported when they provide:
-  - `Map<String, Object?> toJson()`
-  - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent named
+  - a string-keyed `toJson()` map (typically `Map<String, dynamic>`)
+  - `factory Type.fromJson(Map<String, dynamic> json)` or an equivalent named
     `fromJson` constructor
 - Typed task results can use the same DTO convention.
 - Workflow inputs, checkpoint values, and final workflow results can use the

@@ -69,9 +69,9 @@ class _ShipmentReadyEvent {
 
   final String trackingId;
 
-  Map<String, Object?> toJson() => {'trackingId': trackingId};
+  Map<String, dynamic> toJson() => {'trackingId': trackingId};
 
-  static _ShipmentReadyEvent fromJson(Map<String, Object?> json) {
+  static _ShipmentReadyEvent fromJson(Map<String, dynamic> json) {
     return _ShipmentReadyEvent(trackingId: json['trackingId'] as String);
   }
 }

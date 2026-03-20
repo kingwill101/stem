@@ -61,8 +61,8 @@ final runId = await approvalsRef
 `refJson(...)` is the shortest manual DTO path when the params or
 final result already have `toJson()` and `Type.fromJson(...)`. Use
 `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
-still need to encode to `Map<String, Object?>` because they are stored as a
-map.
+still need to encode to a string-keyed map (typically
+`Map<String, dynamic>`) because they are stored as JSON-shaped data.
 
 If a manual flow or script returns a DTO, prefer `decodeResultJson:` on the
 definition constructor in the common `toJson()` / `Type.fromJson(...)` case.

@@ -22,6 +22,25 @@ void main() {
       expect(decoded.count, 1);
     });
 
+    test('accepts DTO decoders that use Map<String, dynamic>', () {
+      const codec = PayloadCodec<_DynamicCodecPayload>.json(
+        decode: _DynamicCodecPayload.fromJson,
+        typeName: '_DynamicCodecPayload',
+      );
+
+      final payload = codec.encode(
+        const _DynamicCodecPayload(id: 'payload-dyn', count: 9),
+      );
+      final decoded = codec.decode(payload);
+
+      expect(payload, {
+        'id': 'payload-dyn',
+        'count': 9,
+      });
+      expect(decoded.id, 'payload-dyn');
+      expect(decoded.count, 9);
+    });
+
     test('rejects values without toJson with a clear error', () {
       const codec = PayloadCodec<_NoJsonPayload>.json(
         decode: _NoJsonPayload.fromJson,
@@ -87,7 +106,7 @@ void main() {
           isA<StateError>().having(
             (error) => error.message,
             'message',
-            contains('_CodecPayload payload must decode to Map<String, Object?>'),
+            contains('_CodecPayload payload must decode to a string-keyed map'),
           ),
         ),
       );
@@ -117,7 +136,7 @@ void main() {
 class _CodecPayload {
   const _CodecPayload({required this.id, required this.count});
 
-  factory _CodecPayload.fromJson(Map<String, Object?> json) {
+  factory _CodecPayload.fromJson(Map<String, dynamic> json) {
     return _CodecPayload(
       id: json['id']! as String,
       count: json['count']! as int,
@@ -133,12 +152,31 @@ class _CodecPayload {
   };
 }
 
+class _DynamicCodecPayload {
+  const _DynamicCodecPayload({required this.id, required this.count});
+
+  factory _DynamicCodecPayload.fromJson(Map<String, dynamic> json) {
+    return _DynamicCodecPayload(
+      id: json['id']! as String,
+      count: json['count']! as int,
+    );
+  }
+
+  final String id;
+  final int count;
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'count': count,
+  };
+}
+
 Object? _encodeCodecPayload(_CodecPayload value) => value.toJson();
 
 class _NoJsonPayload {
   const _NoJsonPayload({required this.id});
 
-  factory _NoJsonPayload.fromJson(Map<String, Object?> json) {
+  factory _NoJsonPayload.fromJson(Map<String, dynamic> json) {
     return _NoJsonPayload(id: json['id']! as String);
   }
 

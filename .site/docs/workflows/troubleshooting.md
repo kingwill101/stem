@@ -25,12 +25,12 @@ Check:
 - the topic passed to `WorkflowRuntime.emit(...)` / `emitValue(...)` or
   `workflowApp.emitValue(...)` matches the one passed to `awaitEvent(...)`
 - the run is still waiting on that topic
-- the payload encodes to a `Map<String, Object?>`
+- the payload encodes to a string-keyed map such as `Map<String, dynamic>`
 
 ## Serialization failures
 
 Do not pass arbitrary Dart objects across workflow or task boundaries. Encode
-domain objects as `Map<String, Object?>` or `List<Object?>` first.
+domain objects as string-keyed JSON-like maps or lists first.
 
 ## Logs only show `stem.workflow.run`
 

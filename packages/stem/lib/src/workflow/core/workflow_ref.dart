@@ -33,8 +33,8 @@ class WorkflowRef<TParams, TResult extends Object?> {
   /// `toJson()` and `Type.fromJson(...)`.
   factory WorkflowRef.json({
     required String name,
-    required TParams Function(Map<String, Object?> payload) decodeParams,
-    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    required TParams Function(Map<String, dynamic> payload) decodeParams,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     TResult Function(Object? payload)? decodeResult,
     String? paramsTypeName,
     String? resultTypeName,

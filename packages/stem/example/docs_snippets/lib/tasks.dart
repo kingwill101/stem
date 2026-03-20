@@ -51,9 +51,9 @@ class InvoicePayload {
   const InvoicePayload({required this.invoiceId});
   final String invoiceId;
 
-  Map<String, Object?> toJson() => {'invoiceId': invoiceId};
+  Map<String, dynamic> toJson() => {'invoiceId': invoiceId};
 
-  factory InvoicePayload.fromJson(Map<String, Object?> json) {
+  factory InvoicePayload.fromJson(Map<String, dynamic> json) {
     return InvoicePayload(invoiceId: json['invoiceId']! as String);
   }
 }

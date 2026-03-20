@@ -10,9 +10,9 @@ class ApprovalDraft {
 
   final String documentId;
 
-  Map<String, Object?> toJson() => {'documentId': documentId};
+  Map<String, dynamic> toJson() => {'documentId': documentId};
 
-  factory ApprovalDraft.fromJson(Map<String, Object?> json) {
+  factory ApprovalDraft.fromJson(Map<String, dynamic> json) {
     return ApprovalDraft(documentId: json['documentId'] as String);
   }
 }

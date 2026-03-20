@@ -166,8 +166,8 @@ parameters that are either:
 
 - serializable values (`String`, numbers, bools, `List<T>`, `Map<String, T>`)
 - codec-backed DTO classes that provide:
-  - `Map<String, Object?> toJson()`
-  - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent named
+  - a string-keyed `toJson()` map (typically `Map<String, dynamic>`)
+  - `factory Type.fromJson(Map<String, dynamic> json)` or an equivalent named
     `fromJson` constructor
 
 Typed task results can use the same DTO convention.

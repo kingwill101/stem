@@ -16,11 +16,11 @@ class PayloadCodec<T> {
     : typeName = null;
   const PayloadCodec.map({
     required this.encode,
-    required T Function(Map<String, Object?> payload) decode,
+    required T Function(Map<String, dynamic> payload) decode,
     this.typeName,
   }) : decode = _unsupportedDecode;
   const PayloadCodec.json({
-    required T Function(Map<String, Object?> payload) decode,
+    required T Function(Map<String, dynamic> payload) decode,
     this.typeName,
   }) : encode = _unsupportedEncode,
        decode = _unsupportedDecode;
@@ -1181,7 +1181,7 @@ class EmailRequest {
     'retries': retries,
   };
 
-  factory EmailRequest.fromJson(Map<String, Object?> json) => EmailRequest(
+  factory EmailRequest.fromJson(Map<String, dynamic> json) => EmailRequest(
     email: json['email'] as String,
     retries: json['retries'] as int,
   );

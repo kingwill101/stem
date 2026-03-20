@@ -54,8 +54,8 @@ class Flow<T extends Object?> {
   /// Builds a typed [WorkflowRef] for DTO params that already expose
   /// `toJson()` and `Type.fromJson(...)`.
   WorkflowRef<TParams, T> refJson<TParams>({
-    required TParams Function(Map<String, Object?> payload) decodeParams,
-    T Function(Map<String, Object?> payload)? decodeResultJson,
+    required TParams Function(Map<String, dynamic> payload) decodeParams,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? paramsTypeName,
     String? resultTypeName,
   }) {

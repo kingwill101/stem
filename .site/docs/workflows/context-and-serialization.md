@@ -90,9 +90,9 @@ class OrderRequest {
   final String id;
   final String customerId;
 
-  Map<String, Object?> toJson() => {'id': id, 'customerId': customerId};
+  Map<String, dynamic> toJson() => {'id': id, 'customerId': customerId};
 
-  factory OrderRequest.fromJson(Map<String, Object?> json) {
+  factory OrderRequest.fromJson(Map<String, dynamic> json) {
     return OrderRequest(
       id: json['id'] as String,
       customerId: json['customerId'] as String,
@@ -108,8 +108,8 @@ lowers into workflow/task definitions.
 
 The same rule applies to workflow resume events: `emitValue(...)` can take a
 typed DTO plus a `PayloadCodec<T>`, but the codec must still encode to a
-`Map<String, Object?>` because watcher persistence and event delivery are
-map-based today.
+string-keyed map because watcher persistence and event delivery are map-based
+today.
 
 For normal DTOs that expose `toJson()` and `Type.fromJson(...)`, prefer
 `PayloadCodec<T>.json(...)`. Drop down to `PayloadCodec<T>.map(...)` when you

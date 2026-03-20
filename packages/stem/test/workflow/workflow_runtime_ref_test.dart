@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 class _GreetingParams {
   const _GreetingParams({required this.name});
 
-  factory _GreetingParams.fromJson(Map<String, Object?> json) {
+  factory _GreetingParams.fromJson(Map<String, dynamic> json) {
     return _GreetingParams(name: json['name']! as String);
   }
 
@@ -16,7 +16,7 @@ class _GreetingParams {
 class _GreetingResult {
   const _GreetingResult({required this.message});
 
-  factory _GreetingResult.fromJson(Map<String, Object?> json) {
+  factory _GreetingResult.fromJson(Map<String, dynamic> json) {
     return _GreetingResult(message: json['message']! as String);
   }
 

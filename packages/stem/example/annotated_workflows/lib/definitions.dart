@@ -7,9 +7,9 @@ class WelcomeRequest {
 
   final String email;
 
-  Map<String, Object?> toJson() => {'email': email};
+  Map<String, dynamic> toJson() => {'email': email};
 
-  factory WelcomeRequest.fromJson(Map<String, Object?> json) {
+  factory WelcomeRequest.fromJson(Map<String, dynamic> json) {
     return WelcomeRequest(email: json['email'] as String);
   }
 }
@@ -27,14 +27,14 @@ class EmailDispatch {
   final String body;
   final List<String> tags;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'email': email,
     'subject': subject,
     'body': body,
     'tags': tags,
   };
 
-  factory EmailDispatch.fromJson(Map<String, Object?> json) {
+  factory EmailDispatch.fromJson(Map<String, dynamic> json) {
     return EmailDispatch(
       email: json['email'] as String,
       subject: json['subject'] as String,
@@ -59,9 +59,9 @@ class EmailDeliveryReceipt {
   final String email;
   final String subject;
   final List<String> tags;
-  final Map<String, Object?> meta;
+  final Map<String, dynamic> meta;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'taskId': taskId,
     'attempt': attempt,
     'email': email,
@@ -70,14 +70,14 @@ class EmailDeliveryReceipt {
     'meta': meta,
   };
 
-  factory EmailDeliveryReceipt.fromJson(Map<String, Object?> json) {
+  factory EmailDeliveryReceipt.fromJson(Map<String, dynamic> json) {
     return EmailDeliveryReceipt(
       taskId: json['taskId'] as String,
       attempt: json['attempt'] as int,
       email: json['email'] as String,
       subject: json['subject'] as String,
       tags: (json['tags'] as List<Object?>).cast<String>(),
-      meta: Map<String, Object?>.from(json['meta'] as Map),
+      meta: Map<String, dynamic>.from(json['meta'] as Map),
     );
   }
 }
@@ -91,12 +91,12 @@ class WelcomePreparation {
   final String normalizedEmail;
   final String subject;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'normalizedEmail': normalizedEmail,
     'subject': subject,
   };
 
-  factory WelcomePreparation.fromJson(Map<String, Object?> json) {
+  factory WelcomePreparation.fromJson(Map<String, dynamic> json) {
     return WelcomePreparation(
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
@@ -115,13 +115,13 @@ class WelcomeWorkflowResult {
   final String subject;
   final String followUp;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'normalizedEmail': normalizedEmail,
     'subject': subject,
     'followUp': followUp,
   };
 
-  factory WelcomeWorkflowResult.fromJson(Map<String, Object?> json) {
+  factory WelcomeWorkflowResult.fromJson(Map<String, dynamic> json) {
     return WelcomeWorkflowResult(
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
@@ -155,7 +155,7 @@ class ContextCaptureResult {
   final String childRunId;
   final WelcomeWorkflowResult childResult;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'workflow': workflow,
     'runId': runId,
     'stepName': stepName,
@@ -168,7 +168,7 @@ class ContextCaptureResult {
     'childResult': childResult.toJson(),
   };
 
-  factory ContextCaptureResult.fromJson(Map<String, Object?> json) {
+  factory ContextCaptureResult.fromJson(Map<String, dynamic> json) {
     return ContextCaptureResult(
       workflow: json['workflow'] as String,
       runId: json['runId'] as String,
@@ -180,7 +180,7 @@ class ContextCaptureResult {
       subject: json['subject'] as String,
       childRunId: json['childRunId'] as String,
       childResult: WelcomeWorkflowResult.fromJson(
-        Map<String, Object?>.from(json['childResult'] as Map),
+        Map<String, dynamic>.from(json['childResult'] as Map),
       ),
     );
   }

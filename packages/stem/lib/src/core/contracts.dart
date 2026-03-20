@@ -2110,11 +2110,11 @@ class TaskDefinition<TArgs, TResult> {
   /// `toJson()` and `Type.fromJson(...)`.
   factory TaskDefinition.json({
     required String name,
-    required TArgs Function(Map<String, Object?> payload) decodeArgs,
+    required TArgs Function(Map<String, dynamic> payload) decodeArgs,
     TaskMetaBuilder<TArgs>? encodeMeta,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
-    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     String? argsTypeName,
     String? resultTypeName,
     }) {
@@ -2144,7 +2144,7 @@ class TaskDefinition<TArgs, TResult> {
     TaskMetadata metadata = const TaskMetadata(),
     TaskResultDecoder<TResult>? decodeResult,
     PayloadCodec<TResult>? resultCodec,
-    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
     assert(

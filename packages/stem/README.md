@@ -186,9 +186,9 @@ class HelloArgs {
   const HelloArgs({required this.name});
   final String name;
 
-  Map<String, Object?> toJson() => {'name': name};
+  Map<String, dynamic> toJson() => {'name': name};
 
-  factory HelloArgs.fromJson(Map<String, Object?> json) {
+  factory HelloArgs.fromJson(Map<String, dynamic> json) {
     return HelloArgs(name: json['name']! as String);
   }
 }
@@ -222,8 +222,9 @@ to enqueue typed calls.
 Use `TaskDefinition.json(...)` when your manual task args are normal
 DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
 `TaskDefinition.codec(...)` only when you need a custom
-`PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`
-because they are published as a map.
+`PayloadCodec<T>`. Task args still need to encode to a string-keyed map
+(typically `Map<String, dynamic>`) because they are published as JSON-shaped
+data.
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly. Prefer `enqueueAndWait(...)` when you only need
@@ -517,8 +518,8 @@ final runId = await approvalsRef
 Use `refJson(...)` when your manual workflow start params or final result are
 normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
 `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
-still need to encode to `Map<String, Object?>` because they are persisted as a
-map.
+still need to encode to a string-keyed map (typically
+`Map<String, dynamic>`) because they are persisted as JSON-shaped data.
 
 For workflows without start parameters, start directly from the flow or script
 itself:
@@ -653,8 +654,8 @@ Serializable parameter rules for generated workflows and tasks are strict:
   - `List<T>` where `T` is serializable
   - `Map<String, T>` where `T` is serializable
   - DTO classes with:
-    - `Map<String, Object?> toJson()`
-    - `factory Type.fromJson(Map<String, Object?> json)` or an equivalent
+    - a string-keyed `toJson()` map (typically `Map<String, dynamic>`)
+    - `factory Type.fromJson(Map<String, dynamic> json)` or an equivalent
       named `fromJson` constructor
 - not supported directly:
   - optional/named business parameters on generated workflow/task entrypoints
@@ -1120,7 +1121,7 @@ backend metadata under `stem.unique.duplicates`.
   happy path. `event.call(value).emit(...)` remains available as the
   lower-level prebuilt-call variant.
   Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
-  the existing `Map<String, Object?>` wire format.
+  a string-keyed JSON-like map.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

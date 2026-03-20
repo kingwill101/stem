@@ -56,9 +56,8 @@ await workflowApp.emitValue(
 );
 ```
 
-Typed event payloads still serialize to the existing `Map<String, Object?>`
-wire format. `emitValue(...)` is a DTO/codec convenience layer, not a new
-transport shape.
+Typed event payloads still serialize to a string-keyed JSON-like map.
+`emitValue(...)` is a DTO/codec convenience layer, not a new transport shape.
 
 When the topic and codec travel together in your codebase, prefer
 `WorkflowEventRef<T>.json(...)` for normal DTO payloads and keep

@@ -42,7 +42,7 @@ class WorkflowEventRef<T> {
   /// expose `toJson()` and `Type.fromJson(...)`.
   factory WorkflowEventRef.json({
     required String topic,
-    required T Function(Map<String, Object?> payload) decode,
+    required T Function(Map<String, dynamic> payload) decode,
     String? typeName,
   }) {
     return WorkflowEventRef<T>.codec(

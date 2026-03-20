@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Relaxed JSON/codec DTO decoding helpers to accept `Map<String, dynamic>`
+  `fromJson(...)` signatures across manual task/workflow/event helpers and the
+  shared `PayloadCodec` surface. DTO payloads still persist as string-keyed
+  JSON-like maps.
 - Removed the deprecated workflow-event compatibility helpers:
   `emitWith(...)`, `emitEventBuilder(...)`, `waitForEventRef(...)`,
   `waitForEventRefValue(...)`, `awaitEventRef(...)`, `waitValueWith(...)`, and

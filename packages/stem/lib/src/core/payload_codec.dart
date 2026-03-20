@@ -27,7 +27,7 @@ class PayloadCodec<T> {
   /// ```
   const PayloadCodec.map({
     required Object? Function(T value) encode,
-    required T Function(Map<String, Object?> payload) decode,
+    required T Function(Map<String, dynamic> payload) decode,
     String? typeName,
   }) : _encode = encode,
        _decode = null,
@@ -45,7 +45,7 @@ class PayloadCodec<T> {
   /// );
   /// ```
   const PayloadCodec.json({
-    required T Function(Map<String, Object?> payload) decode,
+    required T Function(Map<String, dynamic> payload) decode,
     String? typeName,
   }) : _encode = _encodeJsonPayload,
        _decode = null,
@@ -54,7 +54,7 @@ class PayloadCodec<T> {
 
   final Object? Function(T value) _encode;
   final T Function(Object? payload)? _decode;
-  final T Function(Map<String, Object?> payload)? _decodeMap;
+  final T Function(Map<String, dynamic> payload)? _decodeMap;
   final String? _typeName;
 
   /// Converts a typed value into a durable payload representation.
@@ -67,7 +67,7 @@ class PayloadCodec<T> {
       return decode(payload);
     }
     final decodeMap = _decodeMap!;
-    return decodeMap(_payloadMap(payload, _typeName ?? '$T'));
+    return decodeMap(_payloadJsonMap(payload, _typeName ?? '$T'));
   }
 
   /// Converts an erased author-facing value into a durable payload.
@@ -86,7 +86,7 @@ class PayloadCodec<T> {
 Object? _encodeJsonPayload<T>(T value) {
   try {
     final payload = (value as dynamic).toJson();
-    return _payloadMap(payload, value.runtimeType.toString());
+    return _payloadJsonMap(payload, value.runtimeType.toString());
     // Dynamic `toJson()` probing is the purpose of this helper.
     // ignore: avoid_catching_errors
   } on NoSuchMethodError {
@@ -96,12 +96,15 @@ Object? _encodeJsonPayload<T>(T value) {
   }
 }
 
-Map<String, Object?> _payloadMap(Object? value, String typeName) {
+Map<String, dynamic> _payloadJsonMap(Object? value, String typeName) {
+  if (value is Map<String, dynamic>) {
+    return Map<String, dynamic>.from(value);
+  }
   if (value is Map<String, Object?>) {
-    return Map<String, Object?>.from(value);
+    return Map<String, dynamic>.from(value);
   }
   if (value is Map) {
-    final result = <String, Object?>{};
+    final result = <String, dynamic>{};
     for (final entry in value.entries) {
       final key = entry.key;
       if (key is! String) {
@@ -112,7 +115,7 @@ Map<String, Object?> _payloadMap(Object? value, String typeName) {
     return result;
   }
   throw StateError(
-    '$typeName payload must decode to Map<String, Object?>, got '
+    '$typeName payload must decode to a string-keyed map, got '
     '${value.runtimeType}.',
   );
 }
