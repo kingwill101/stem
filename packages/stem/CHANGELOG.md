@@ -145,6 +145,8 @@
 - Added `StemWorkflowApp.registerModule(...)` so manual builder/module
   registration no longer needs to reach through `app.runtime.registry` and
   `app.app.registry`.
+- Added `StemWorkflowApp.registerWorkflow(...)` so manual workflow definition
+  registration no longer needs to reach through `workflowApp.runtime`.
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.

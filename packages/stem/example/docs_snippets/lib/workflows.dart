@@ -93,7 +93,7 @@ class ApprovalsFlow {
 }
 
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
-  workflowApp.runtime.registerWorkflow(ApprovalsFlow.flow.definition);
+  workflowApp.registerWorkflow(ApprovalsFlow.flow.definition);
 }
 // #endregion workflows-flow
 

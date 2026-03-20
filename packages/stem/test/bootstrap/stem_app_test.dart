@@ -770,6 +770,31 @@ void main() {
       },
     );
 
+    test('StemWorkflowApp exposes workflow registration helper', () async {
+      final flow = Flow<String>(
+        name: 'workflow.register.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'register-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory();
+      try {
+        workflowApp.registerWorkflow(flow.definition);
+
+        final runId = await workflowApp.startWorkflow(
+          'workflow.register.helper',
+        );
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, equals('register-ok'));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',

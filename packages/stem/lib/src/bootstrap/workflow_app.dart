@@ -271,6 +271,11 @@ class StemWorkflowApp
     module.registerInto(workflows: runtime.registry);
   }
 
+  /// Registers [definition] into this app's workflow registry.
+  void registerWorkflow(WorkflowDefinition definition) {
+    runtime.registerWorkflow(definition);
+  }
+
   /// Returns the normalized run view for [runId], or `null` if not found.
   Future<WorkflowRunView?> viewRun(String runId) {
     return runtime.viewRun(runId);
