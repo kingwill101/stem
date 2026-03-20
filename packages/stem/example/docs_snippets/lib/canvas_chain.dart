@@ -36,7 +36,6 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
-  await app.start();
 
   final canvas = app.canvas;
   final chainResult = await canvas.chain([

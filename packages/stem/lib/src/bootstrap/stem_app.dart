@@ -31,11 +31,12 @@ class StemApp implements StemTaskApp {
     required this.worker,
     required List<Future<void> Function()> disposers,
   }) : _disposers = disposers {
-    canvas = Canvas(
+    canvas = _ManagedCanvas(
       broker: broker,
       backend: backend,
       registry: registry,
       encoderRegistry: stem.payloadEncoders,
+      onBeforeDispatch: _ensureStarted,
     );
   }
 
@@ -489,6 +490,66 @@ class StemApp implements StemTaskApp {
           await worker.shutdown();
         },
       ],
+    );
+  }
+}
+
+class _ManagedCanvas extends Canvas {
+  _ManagedCanvas({
+    required super.broker,
+    required super.backend,
+    required super.registry,
+    required super.encoderRegistry,
+    required Future<void> Function() onBeforeDispatch,
+  }) : _onBeforeDispatch = onBeforeDispatch;
+
+  final Future<void> Function() _onBeforeDispatch;
+
+  @override
+  Future<String> send(TaskSignature signature) async {
+    await _onBeforeDispatch();
+    return super.send(signature);
+  }
+
+  @override
+  Future<GroupDispatch<T>> group<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? groupId,
+  }) async {
+    await _onBeforeDispatch();
+    return super.group(signatures, groupId: groupId);
+  }
+
+  @override
+  Future<BatchSubmission> submitBatch<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? batchId,
+    Duration? ttl,
+  }) async {
+    await _onBeforeDispatch();
+    return super.submitBatch(signatures, batchId: batchId, ttl: ttl);
+  }
+
+  @override
+  Future<TaskChainResult<T>> chain<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    void Function(int index, TaskStatus status, T? value)? onStepCompleted,
+  }) async {
+    await _onBeforeDispatch();
+    return super.chain(signatures, onStepCompleted: onStepCompleted);
+  }
+
+  @override
+  Future<ChordResult<T>> chord<T extends Object?>({
+    required List<TaskSignature<T>> body,
+    required TaskSignature callback,
+    Duration pollInterval = const Duration(milliseconds: 100),
+  }) async {
+    await _onBeforeDispatch();
+    return super.chord(
+      body: body,
+      callback: callback,
+      pollInterval: pollInterval,
     );
   }
 }

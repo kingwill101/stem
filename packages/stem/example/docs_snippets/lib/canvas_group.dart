@@ -24,22 +24,20 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
-  await app.start();
 
   final canvas = app.canvas;
-  const groupHandle = 'squares-demo';
-  await canvas.group([
+  final dispatch = await canvas.group([
     task('square', args: <String, Object?>{'value': 2}),
     task('square', args: <String, Object?>{'value': 3}),
     task('square', args: <String, Object?>{'value': 4}),
-  ], groupId: groupHandle);
+  ]);
 
   await _waitFor(() async {
-    final status = await app.backend.getGroup(groupHandle);
+    final status = await app.backend.getGroup(dispatch.groupId);
     return status?.results.length == 3;
   });
 
-  final groupStatus = await app.backend.getGroup(groupHandle);
+  final groupStatus = await app.backend.getGroup(dispatch.groupId);
   final values = groupStatus?.results.values.map((s) => s.payload).toList();
   print('Group results: $values');
 

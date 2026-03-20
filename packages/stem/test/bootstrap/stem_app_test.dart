@@ -103,6 +103,29 @@ void main() {
       }
     });
 
+    test('inMemory lazy-starts for canvas dispatch', () async {
+      final handler = FunctionTaskHandler<int>(
+        name: 'test.canvas.double',
+        entrypoint: (context, args) async {
+          final value = args['value'] as int? ?? 0;
+          return value * 2;
+        },
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory(tasks: [handler]);
+      try {
+        final result = await app.canvas.chain<int>([
+          task('test.canvas.double', args: {'value': 21}),
+        ]);
+
+        expect(result.isCompleted, isTrue);
+        expect(result.value, 42);
+      } finally {
+        await app.shutdown();
+      }
+    });
+
     test('inMemory applies worker config overrides', () async {
       final handler = FunctionTaskHandler<void>(
         name: 'test.worker-config',

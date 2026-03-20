@@ -656,8 +656,9 @@ final taskApp = await StemApp.fromUrl(
 );
 ```
 
-`StemApp` lazy-starts its managed worker on the first enqueue or wait call, so
-you only need `await taskApp.start()` when you want explicit lifecycle control.
+`StemApp` lazy-starts its managed worker on the first enqueue, wait, or
+`app.canvas` dispatch call, so you only need `await taskApp.start()` when you
+want explicit lifecycle control.
 
 When you bootstrap a plain `StemApp`, the worker infers task queue
 subscriptions from the bundled or explicitly supplied task handlers. Set
