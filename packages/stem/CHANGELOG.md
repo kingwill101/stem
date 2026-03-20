@@ -45,6 +45,10 @@
   `StemApp`/`StemClient` for their producer examples, keeping low-level worker
   examples intact while reducing manual broker/backend wiring in the happy
   path.
+- Simplified the Postgres-backed enqueuer examples (`postgres_worker`,
+  `redis_postgres_worker`, and `postgres_tls`) to use `StemClient.create(...)`
+  with explicit broker/backend factories instead of hand-constructing `Stem`
+  for publishing.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

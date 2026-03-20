@@ -8,21 +8,12 @@ import 'package:stem_redis/stem_redis.dart';
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
 
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
-
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
       'STEM_RESULT_BACKEND_URL must be set for the Postgres TLS example.',
     );
   }
-
-  final backend = await PostgresResultBackend.connect(
-    connectionString: backendUrl,
-  );
 
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
@@ -32,16 +23,27 @@ Future<void> main(List<String> args) async {
     ),
   ];
 
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(
+        config.brokerUrl,
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => PostgresResultBackend.connect(
+        connectionString: backendUrl,
+      ),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 
   final regions = ['emea', 'amer', 'apac'];
   for (final region in regions) {
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'reports.generate',
       args: {'region': region},
       options: TaskOptions(queue: config.defaultQueue),
@@ -49,8 +51,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Enqueued TLS demo task $id for $region');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 FutureOr<Object?> _noop(

@@ -7,22 +7,12 @@ import 'package:stem_postgres/stem_postgres.dart';
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
 
-  final broker = await PostgresBroker.connect(
-    config.brokerUrl,
-    applicationName: 'stem-postgres-enqueuer',
-    tls: config.tls,
-  );
-
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
       'STEM_RESULT_BACKEND_URL must be set when using the Postgres example.',
     );
   }
-
-  final backend = await PostgresResultBackend.connect(
-    connectionString: backendUrl,
-  );
 
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
@@ -32,16 +22,28 @@ Future<void> main(List<String> args) async {
     ),
   ];
 
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => PostgresBroker.connect(
+        config.brokerUrl,
+        applicationName: 'stem-postgres-enqueuer',
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => PostgresResultBackend.connect(
+        connectionString: backendUrl,
+      ),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 
   final regions = ['us-east', 'eu-west', 'ap-south'];
   for (final region in regions) {
-    final taskId = await stem.enqueue(
+    final taskId = await client.enqueue(
       'report.generate',
       args: {'region': region},
       options: TaskOptions(queue: config.defaultQueue),
@@ -49,8 +51,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Enqueued report job $taskId for $region');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 FutureOr<Object?> _noopEntrypoint(
