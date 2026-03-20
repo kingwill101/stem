@@ -33,6 +33,27 @@ class Flow<T extends Object?> {
          resultTypeName: resultTypeName,
        );
 
+  /// Creates a flow definition whose final result is a DTO-backed JSON value.
+  factory Flow.json({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return Flow<T>(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
 

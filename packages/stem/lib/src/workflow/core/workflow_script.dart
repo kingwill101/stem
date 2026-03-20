@@ -35,6 +35,30 @@ class WorkflowScript<T extends Object?> {
          resultTypeName: resultTypeName,
        );
 
+  /// Creates a script definition whose final result is a DTO-backed JSON
+  /// value.
+  factory WorkflowScript.json({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return WorkflowScript<T>(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
 

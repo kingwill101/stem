@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `TaskDefinition.noArgsJson(...)`, `Flow.json(...)`, and
+  `WorkflowScript.json(...)` as the shortest manual DTO result helpers for the
+  common `toJson()` / `Type.fromJson(...)` path.
 - Relaxed manual `Flow(...)`, `WorkflowScript(...)`, and
   `WorkflowDefinition.flow(...)` / `.script(...)` `decodeResultJson:` helpers
   to accept `Map<String, dynamic>` DTO decoders, matching the newer

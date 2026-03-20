@@ -247,9 +247,9 @@ void main() {
     });
 
     test('manual workflows can derive json-backed result decoding', () async {
-      final flow = Flow<_GreetingResult>(
+      final flow = Flow<_GreetingResult>.json(
         name: 'runtime.ref.json.result.flow',
-        decodeResultJson: _GreetingResult.fromJson,
+        decodeResult: _GreetingResult.fromJson,
         build: (builder) {
           builder.step(
             'hello',
@@ -257,9 +257,9 @@ void main() {
           );
         },
       );
-      final script = WorkflowScript<_GreetingResult>(
+      final script = WorkflowScript<_GreetingResult>.json(
         name: 'runtime.ref.json.result.script',
-        decodeResultJson: _GreetingResult.fromJson,
+        decodeResult: _GreetingResult.fromJson,
         run: (context) async =>
             const _GreetingResult(message: 'hello script json'),
       );

@@ -64,9 +64,9 @@ final result already have `toJson()` and `Type.fromJson(...)`. Use
 still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are stored as JSON-shaped data.
 
-If a manual flow or script returns a DTO, prefer `decodeResultJson:` on the
-definition constructor in the common `toJson()` / `Type.fromJson(...)` case.
-Use `resultCodec:` only when the result needs a custom payload codec.
+If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
+`WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
+case. Use `resultCodec:` only when the result needs a custom payload codec.
 
 For workflows without start params, start directly from the flow or script
 itself with `start(...)`, `startAndWait(...)`, or `prepareStart()`.

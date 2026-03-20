@@ -248,10 +248,10 @@ final healthcheckDefinition = TaskDefinition.noArgs<void>(
 await healthcheckDefinition.enqueue(stem);
 ```
 
-If a no-arg task returns a DTO, prefer `decodeResultJson:` in the common
-`toJson()` / `Type.fromJson(...)` case. Use `resultCodec:` when you need a
-custom payload codec. Both paths keep waiting helpers typed and advertise the
-right result encoder in task metadata.
+If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` in the
+common `toJson()` / `Type.fromJson(...)` case. Use `TaskDefinition.noArgs(...)`
+with `resultCodec:` when you need a custom payload codec. Both paths keep
+waiting helpers typed and advertise the right result encoder in task metadata.
 
 You can also build requests fluently from the task definition itself:
 
@@ -520,6 +520,10 @@ normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
 `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
 still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are persisted as JSON-shaped data.
+
+If a manual flow or script only needs DTO result decoding, prefer
+`Flow.json(...)` or `WorkflowScript.json(...)` instead of passing
+`decodeResultJson:` to the base constructor.
 
 For workflows without start parameters, start directly from the flow or script
 itself:

@@ -349,9 +349,9 @@ void main() {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
         final stem = Stem(broker: broker, backend: backend);
-        final definition = TaskDefinition.noArgs<_CodecReceipt>(
+        final definition = TaskDefinition.noArgsJson<_CodecReceipt>(
           name: 'sample.no_args.json',
-          decodeResultJson: _CodecReceipt.fromJson,
+          decodeResult: _CodecReceipt.fromJson,
         );
 
         final id = await definition.enqueue(stem);
@@ -496,9 +496,9 @@ void main() {
     test('supports no-arg task definitions', () async {
       final backend = InMemoryResultBackend();
       final stem = Stem(broker: _RecordingBroker(), backend: backend);
-      final definition = TaskDefinition.noArgs<_CodecReceipt>(
+      final definition = TaskDefinition.noArgsJson<_CodecReceipt>(
         name: 'no-args.wait',
-        decodeResultJson: _CodecReceipt.fromJson,
+        decodeResult: _CodecReceipt.fromJson,
       );
 
       await backend.set(
