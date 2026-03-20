@@ -76,6 +76,9 @@
 - Generalized the microservice enqueuer's autofill controller to target
   `TaskEnqueuer` instead of a concrete `Stem`, keeping the enqueue loop on the
   shared producer surface.
+- Simplified the `encrypted_payload/docker` producer entrypoint to use
+  `StemClient.create(...)` instead of manually constructing a raw `Stem`
+  publisher inside the container example.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
