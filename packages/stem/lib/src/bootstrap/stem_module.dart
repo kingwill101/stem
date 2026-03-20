@@ -267,6 +267,25 @@ class StemModule {
     );
   }
 
+  /// Returns the explicit subscription required for workflow-capable workers.
+  RoutingSubscription requiredWorkflowSubscription({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = requiredWorkflowQueues(
+      workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      additionalTasks: additionalTasks,
+    );
+    if (queues.length == 1) {
+      return RoutingSubscription.singleQueue(queues.single);
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
   /// Infers a worker subscription from the bundled task handlers.
   ///
   /// Returns `null` when only the [workflowQueue] is needed, allowing the
@@ -316,6 +335,17 @@ class StemModule {
     Iterable<TaskHandler<Object?>> additionalTasks = const [],
   }) {
     return inferredTaskQueues(additionalTasks: additionalTasks);
+  }
+
+  /// Returns the explicit subscription required for task-only workers.
+  RoutingSubscription requiredTaskSubscription({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = requiredTaskQueues(additionalTasks: additionalTasks);
+    if (queues.length == 1) {
+      return RoutingSubscription.singleQueue(queues.single);
+    }
+    return RoutingSubscription(queues: queues);
   }
 
   /// Infers a worker subscription from bundled task handlers only.

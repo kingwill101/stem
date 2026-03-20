@@ -759,6 +759,16 @@ final queues = stemModule.requiredWorkflowQueues(
 print(queues);
 ```
 
+For low-level worker wiring, the module can also give you the exact
+subscription directly:
+
+```dart
+final subscription = stemModule.requiredWorkflowSubscription(
+  continuationQueue: 'workflow-continue',
+  executionQueue: 'workflow-step',
+);
+```
+
 If your service already owns a `StemApp`, reuse it:
 
 ```dart

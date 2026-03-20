@@ -128,6 +128,16 @@ final queues = stemModule.requiredWorkflowQueues(
 );
 ```
 
+If you are wiring a worker manually, the module can also give you the exact
+subscription directly:
+
+```dart
+final subscription = stemModule.requiredWorkflowSubscription(
+  continuationQueue: 'workflow-continue',
+  executionQueue: 'workflow-step',
+);
+```
+
 If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 

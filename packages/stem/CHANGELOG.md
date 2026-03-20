@@ -5,6 +5,10 @@
 - Added `StemModule.requiredTaskQueues()` and
   `StemModule.requiredWorkflowQueues(...)` so bundle queue requirements can be
   inspected directly before app/worker bootstrap.
+- Added `StemModule.requiredTaskSubscription()` and
+  `StemModule.requiredWorkflowSubscription(...)` so low-level worker wiring can
+  reuse the exact subscription implied by a module without rebuilding it by
+  hand.
 - Added `decodeResultJson:` shortcuts on manual `Flow`, `WorkflowScript`, and
   `TaskDefinition.noArgs(...)` definitions so common DTO result decoding no
   longer needs a separate `PayloadCodec<T>.json(...)` constant.

@@ -166,10 +166,29 @@ void main() {
 
       expect(module.requiredTaskQueues(), ['default', 'priority']);
       expect(
+        module.requiredTaskSubscription().queues,
+        ['default', 'priority'],
+      );
+      expect(
         module.requiredWorkflowQueues(
           continuationQueue: 'workflow-continue',
           executionQueue: 'workflow-step',
         ),
+        [
+          'default',
+          'priority',
+          'workflow',
+          'workflow-continue',
+          'workflow-step',
+        ],
+      );
+      expect(
+        module
+            .requiredWorkflowSubscription(
+              continuationQueue: 'workflow-continue',
+              executionQueue: 'workflow-step',
+            )
+            .queues,
         [
           'default',
           'priority',
