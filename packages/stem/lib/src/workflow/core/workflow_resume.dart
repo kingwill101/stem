@@ -265,6 +265,7 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
   }
 
   /// Registers an event wait using a typed [event] reference.
+  @Deprecated('Use event.wait(this, ...) instead.')
   Future<void> awaitEventRef<T>(
     WorkflowEventRef<T> event, {
     DateTime? deadline,

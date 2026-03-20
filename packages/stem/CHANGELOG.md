@@ -2,6 +2,7 @@
 
 ## 0.1.1
 
+- Deprecated script-step `awaitEventRef(...)` in favor of `await event.wait(ctx)`.
 - Deprecated context-side `waitForEventRef(...)` and
   `waitForEventRefValue(...)` in favor of `event.waitValue(ctx)` and
   `event.wait(ctx)`.

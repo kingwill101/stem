@@ -1117,9 +1117,8 @@ backend metadata under `stem.unique.duplicates`.
   as the shortest typed event form and call `event.emit(emitter, dto)` as the
   happy path. `event.call(value).emit(...)` remains available as the
   lower-level prebuilt-call variant.
-  Pair that with `await event.wait(ctx)` or `awaitEventRef(...)`. Event
-  payloads still serialize onto the existing `Map<String, Object?>` wire
-  format.
+  Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
+  the existing `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

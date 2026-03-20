@@ -539,7 +539,7 @@ void main() {
   });
 
   test(
-    'WorkflowScriptStepContext.awaitEventRef reuses the event topic',
+    'WorkflowEventRef.wait registers script-step waits before suspension',
     () async {
       const event = WorkflowEventRef<_ResumePayload>(
         topic: 'demo.event',
@@ -548,10 +548,13 @@ void main() {
       final deadline = DateTime.parse('2026-01-01T00:00:00Z');
       final context = _FakeWorkflowScriptStepContext();
 
-      await context.awaitEventRef(
-        event,
-        deadline: deadline,
-        data: const {'source': 'script'},
+      await expectLater(
+        () => event.wait(
+          context,
+          deadline: deadline,
+          data: const {'source': 'script'},
+        ),
+        throwsA(isA<WorkflowSuspensionSignal>()),
       );
 
       expect(context.awaitedTopics, ['demo.event']);
