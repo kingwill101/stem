@@ -354,14 +354,12 @@ final demoWorkflow = Flow<String>(
   },
 );
 
-final demoWorkflowRef = demoWorkflow.ref0();
-
 final app = await StemWorkflowApp.inMemory(
   flows: [demoWorkflow],
 );
 
-final runId = await demoWorkflowRef.startWith(app);
-final result = await demoWorkflowRef.waitFor(app, runId);
+final runId = await demoWorkflow.startWith(app);
+final result = await demoWorkflow.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
 
@@ -531,13 +529,15 @@ Use `refWithCodec(...)` when your manual workflow start params are DTOs that
 already have a `PayloadCodec<T>`. The codec still needs to encode to
 `Map<String, Object?>` because workflow params are persisted as a map.
 
-For workflows without start parameters, use `ref0()` and start directly from
-the no-args ref:
+For workflows without start parameters, start directly from the flow or script
+itself:
 
 ```dart
-final healthcheckRef = healthcheckFlow.ref0();
-final runId = await healthcheckRef.startWith(app);
+final runId = await healthcheckFlow.startWith(app);
 ```
+
+If you need to pass a no-args workflow through another API, `ref0()` still
+builds the explicit `NoArgsWorkflowRef`.
 
 #### Manual `WorkflowScript`
 

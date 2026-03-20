@@ -11,7 +11,6 @@ Future<void> main() async {
       flow.step('greet', (ctx) async => 'Redis-backed workflow');
     },
   );
-  final redisWorkflowRef = redisWorkflow.ref0();
   final app = await StemWorkflowApp.fromUrl(
     'redis://localhost:6379',
     adapters: const [StemRedisAdapter()],
@@ -23,8 +22,8 @@ Future<void> main() async {
   );
 
   try {
-    final runId = await redisWorkflowRef.startWith(app);
-    final result = await redisWorkflowRef.waitFor(app, runId);
+    final runId = await redisWorkflow.startWith(app);
+    final result = await redisWorkflow.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {
     await app.close();

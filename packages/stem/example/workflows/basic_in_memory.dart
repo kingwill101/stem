@@ -10,14 +10,13 @@ Future<void> main() async {
       flow.step('greet', (ctx) async => 'Hello Stem');
     },
   );
-  final basicHelloRef = basicHello.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [basicHello],
   );
 
-  final runId = await basicHelloRef.startWith(app);
-  final result = await basicHelloRef.waitFor(app, runId);
+  final runId = await basicHello.startWith(app);
+  final result = await basicHello.waitFor(app, runId);
   print('Workflow $runId finished with result: ${result?.value}');
 
   await app.close();

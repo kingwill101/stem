@@ -63,8 +63,9 @@ final runId = await approvalsRef
 `refWithCodec(...)` is the manual DTO path. The codec still needs to encode to
 `Map<String, Object?>` because workflow params are stored as a map.
 
-For workflows without start params, derive `ref0()` instead and start them
-directly from the no-args ref.
+For workflows without start params, start directly from the flow or script
+itself with `startWith(...)`, `startAndWaitWith(...)`, or `startBuilder()`.
+Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.
 
 ## Wait for completion
 

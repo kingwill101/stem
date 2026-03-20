@@ -24,15 +24,15 @@ Future<void> main() async {
       });
     },
   );
-  final reportsGenerateRef = reportsGenerate.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [reportsGenerate],
   );
 
-  final runId = await reportsGenerateRef
-      .call(
-        cancellationPolicy: const WorkflowCancellationPolicy(
+  final runId = await reportsGenerate
+      .startBuilder()
+      .cancellationPolicy(
+        const WorkflowCancellationPolicy(
           maxRunDuration: Duration(minutes: 10),
           maxSuspendDuration: Duration(seconds: 2),
         ),

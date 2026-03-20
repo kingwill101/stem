@@ -23,6 +23,10 @@
 - Added `TaskDefinition.enqueueBuilder(...)` /
   `NoArgsTaskDefinition.enqueueBuilder()` so typed tasks now expose the same
   definition-first fluent builder pattern as typed workflow refs.
+- Added direct no-args `startWith(...)`, `startAndWaitWith(...)`,
+  `startBuilder()`, and `waitFor(...)` helpers on manual `Flow` and
+  `WorkflowScript` definitions so simple workflows no longer need an extra
+  `ref0()` hop just to start or wait.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

@@ -13,13 +13,12 @@ Future<void> main() async {
       flow.step('tail', (ctx) async => ctx.previousResult);
     },
   );
-  final versionedWorkflowRef = versionedWorkflow.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [versionedWorkflow],
   );
 
-  final runId = await versionedWorkflowRef.startWith(app);
+  final runId = await versionedWorkflow.startWith(app);
   await app.executeRun(runId);
 
   // Rewind and execute again to append a new iteration checkpoint.
@@ -31,7 +30,7 @@ Future<void> main() async {
     print('${checkpoint.checkpointName}: ${checkpoint.value}');
   }
   print('Iterations executed: $iterations');
-  final completed = await versionedWorkflowRef.waitFor(app, runId);
+  final completed = await versionedWorkflow.waitFor(app, runId);
   print('Final result: ${completed?.value}');
 
   await app.close();

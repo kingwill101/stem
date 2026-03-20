@@ -195,7 +195,7 @@ void main() {
       }
     });
 
-    test('manual workflows can derive no-args refs', () async {
+    test('manual workflows expose direct no-args helpers', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.no-args.flow',
         build: (builder) {
@@ -207,9 +207,6 @@ void main() {
         run: (context) async => 'hello script',
       );
 
-      final flowRef = flow.ref0();
-      final scriptRef = script.ref0();
-
       final workflowApp = await StemWorkflowApp.inMemory(
         flows: [flow],
         scripts: [script],
@@ -217,12 +214,14 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowResult = await flowRef.startAndWaitWith(
+        final flowResult = await flow.startAndWaitWith(
           workflowApp,
           timeout: const Duration(seconds: 2),
         );
-        final scriptResult = await scriptRef.startAndWaitWith(
+        final scriptRunId = await script.startWith(workflowApp.runtime);
+        final scriptResult = await script.waitFor(
           workflowApp.runtime,
+          scriptRunId,
           timeout: const Duration(seconds: 2),
         );
 
@@ -251,8 +250,6 @@ void main() {
       final workflowRef = flow.ref<Map<String, Object?>>(
         encodeParams: (params) => params,
       );
-      final scriptRef = script.ref0();
-
       final workflowApp = await StemWorkflowApp.inMemory(
         flows: [flow],
         scripts: [script],
@@ -278,7 +275,7 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final scriptBuilder = scriptRef.startBuilder().cancellationPolicy(
+        final scriptBuilder = script.startBuilder().cancellationPolicy(
           const WorkflowCancellationPolicy(
             maxRunDuration: Duration(seconds: 5),
           ),

@@ -30,13 +30,12 @@ Future<void> main() async {
         });
     },
   );
-  final sleepAndEventRef = sleepAndEvent.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [sleepAndEvent],
   );
 
-  final runId = await sleepAndEventRef.startWith(app);
+  final runId = await sleepAndEvent.startWith(app);
 
   // Wait until the workflow is suspended before emitting the event to avoid
   // losing the signal.
@@ -55,7 +54,7 @@ Future<void> main() async {
       )
       .emit();
 
-  final result = await sleepAndEventRef.waitFor(app, runId);
+  final result = await sleepAndEvent.waitFor(app, runId);
   print('Workflow $runId resumed and completed with: ${result?.value}');
 
   await app.close();
