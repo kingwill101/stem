@@ -6,6 +6,9 @@
   `startNoArgsWorkflowBuilder(...)` plus a caller-bound fluent builder so
   workflow-capable contexts, apps, and runtimes can start child workflows with
   the same builder-first ergonomics already used for typed task enqueue.
+- Added `WorkflowEventEmitter.emitEventBuilder(...)` plus a caller-bound typed
+  event call so apps, runtimes, and task/workflow contexts can emit typed
+  workflow events without bouncing between emitter-first and ref-first styles.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

@@ -1066,10 +1066,10 @@ backend metadata under `stem.unique.duplicates`.
 - When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or bundle the topic and codec once in a
-  `WorkflowEventRef<T>` and use `event.emitWith(...)` or
-  `event.call(value).emitWith(...)` together with `waitForEventRef(...)` or
-  `awaitEventRef(...)`. Event payloads still serialize onto the existing
-  `Map<String, Object?>` wire format.
+  `WorkflowEventRef<T>` and use `emitter.emitEventBuilder(event: ref, value:
+  dto).emit()`, `event.emitWith(...)`, or `event.call(value).emitWith(...)`
+  together with `waitForEventRef(...)` or `awaitEventRef(...)`. Event payloads
+  still serialize onto the existing `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

@@ -70,3 +70,37 @@ extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
     return emitter.emitEvent(event, value);
   }
 }
+
+/// Caller-bound typed workflow event emission call.
+class BoundWorkflowEventCall<T> {
+  /// Creates a caller-bound typed workflow event emission call.
+  const BoundWorkflowEventCall._({
+    required WorkflowEventEmitter emitter,
+    required WorkflowEventCall<T> call,
+  }) : _emitter = emitter,
+       _call = call;
+
+  final WorkflowEventEmitter _emitter;
+  final WorkflowEventCall<T> _call;
+
+  /// Returns the prebuilt typed workflow event call.
+  WorkflowEventCall<T> build() => _call;
+
+  /// Emits the bound typed workflow event call.
+  Future<void> emit() => _call.emitWith(_emitter);
+}
+
+/// Convenience helpers for building typed workflow event calls directly from a
+/// workflow event emitter.
+extension WorkflowEventEmitterBuilderExtension on WorkflowEventEmitter {
+  /// Creates a caller-bound typed workflow event call for [event] and [value].
+  BoundWorkflowEventCall<T> emitEventBuilder<T>({
+    required WorkflowEventRef<T> event,
+    required T value,
+  }) {
+    return BoundWorkflowEventCall._(
+      emitter: this,
+      call: event.call(value),
+    );
+  }
+}

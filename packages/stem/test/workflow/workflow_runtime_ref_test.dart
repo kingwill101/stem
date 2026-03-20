@@ -446,5 +446,46 @@ void main() {
         }
       },
     );
+
+    test('workflow event emitters expose bound event calls', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.event.bound.flow',
+        build: (builder) {
+          builder.step('wait', (ctx) async {
+            final payload = ctx.waitForEventRef(_userUpdatedEvent);
+            if (payload == null) {
+              return null;
+            }
+            return 'hello ${payload.name}';
+          });
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final runId = await flow.ref0().startWith(workflowApp);
+        await workflowApp.runtime.executeRun(runId);
+
+        final call = workflowApp.emitEventBuilder(
+          event: _userUpdatedEvent,
+          value: const _GreetingParams(name: 'bound'),
+        );
+        expect(call.build().topic, 'runtime.ref.event');
+
+        await call.emit();
+        await workflowApp.runtime.executeRun(runId);
+
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello bound');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
   });
 }
