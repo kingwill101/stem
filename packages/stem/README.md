@@ -910,9 +910,15 @@ final unique = UniqueTaskCoordinator(
   defaultTtl: const Duration(minutes: 5),
 );
 
-final stem = Stem(
-  broker: broker,
-  backend: backend,
+final client = await StemClient.create(
+  broker: StemBrokerFactory(
+    create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
+    dispose: (broker) => broker.close(),
+  ),
+  backend: StemBackendFactory(
+    create: () => RedisResultBackend.connect('redis://localhost:6379/1'),
+    dispose: (backend) => backend.close(),
+  ),
   tasks: [OrdersSyncTask()],
   uniqueTaskCoordinator: unique,
 );
@@ -933,7 +939,7 @@ falls back to `visibilityTimeout` or its default TTL.
 Override the unique key when needed:
 
 ```dart
-final id = await stem.enqueue(
+final id = await client.enqueue(
   'orders.sync',
   args: {'id': 42},
   options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),

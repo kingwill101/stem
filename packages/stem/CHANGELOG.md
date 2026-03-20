@@ -113,6 +113,8 @@
 - Simplified the unique-task example to use `StemClient.create(...)` and
   `createWorker(...)` so the example stays focused on deduplication semantics
   instead of raw producer wiring.
+- Simplified the README unique-task deduplication snippet to use
+  `StemClient.create(...)` instead of a raw `Stem(...)` constructor example.
 - Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
   and rate-limit delay shared libraries after those demos moved to
   `StemClient`-based producers.
