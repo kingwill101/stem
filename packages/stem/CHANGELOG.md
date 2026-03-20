@@ -161,6 +161,8 @@
   low-level scenarios.
 - Refreshed workflow docs snippets to match the app-level workflow helper
   surface, including `resumeDueRuns(...)` guidance for fake-clock tests.
+- Documented the new bulk registration helpers and custom workflow queue
+  options in the README and workflow guide.
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.

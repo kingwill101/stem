@@ -323,6 +323,18 @@ print(result?.state.status); // WorkflowStatus.completed
 await app.shutdown();
 ```
 
+If you need separate workflow lanes, pass `continuationQueue:` and
+`executionQueue:` into the `StemWorkflowApp.*` bootstrap helpers. When
+`StemWorkflowApp` is creating the managed worker for you, those queue names are
+inferred into the worker subscription automatically.
+
+For late registration, prefer the app helpers:
+
+- `registerWorkflow(...)` / `registerWorkflows(...)`
+- `registerFlow(...)` / `registerFlows(...)`
+- `registerScript(...)` / `registerScripts(...)`
+- `registerModule(...)`
+
 ### Workflow script facade
 
 Prefer the high-level `WorkflowScript` facade when you want to author a

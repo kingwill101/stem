@@ -14,6 +14,11 @@ This is the quickest path to a working durable workflow in Stem.
 Pass normal task handlers through `tasks:` if the workflow also needs to
 enqueue regular Stem tasks.
 
+If you need separate workflow lanes, pass `continuationQueue:` and
+`executionQueue:` into the `StemWorkflowApp.*` bootstrap helpers. When the app
+is creating the managed worker for you, those queue names are inferred into
+the worker subscription automatically.
+
 ## 2. Start the managed worker
 
 ```dart title="bin/workflows.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-app-start
@@ -53,6 +58,14 @@ If your service already owns a `StemApp`, layer workflows on top of it with
 `stemApp.createWorkflowApp(...)`. That path reuses the current worker, so the
 underlying app must already subscribe to the workflow queue plus the task
 queues your workflows need.
+
+For late registration, use the app helpers instead of reaching through the
+runtime registry:
+
+- `registerWorkflow(...)` / `registerWorkflows(...)`
+- `registerFlow(...)` / `registerFlows(...)`
+- `registerScript(...)` / `registerScripts(...)`
+- `registerModule(...)`
 
 ## 5. Move to the right next page
 
