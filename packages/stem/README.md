@@ -619,6 +619,9 @@ If a manual flow or script only needs DTO result decoding, prefer
 result needs an explicit schema version. If the final result needs a custom
 codec, prefer `Flow.codec(...)` or `WorkflowScript.codec(...)` instead of
 passing `resultCodec:` to the base constructor.
+For manual typed refs, `refVersionedJson(...)` / `WorkflowRef.versionedJson(...)`
+also accept `decodeResultVersionedJson:` when the stored result should use the
+same explicit schema-version decode path.
 
 For workflows without start parameters, start directly from the flow or script
 itself:

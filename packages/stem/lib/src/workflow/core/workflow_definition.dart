@@ -500,7 +500,9 @@ class WorkflowDefinition<T extends Object?> {
     return WorkflowRef<TParams, T>.json(
       name: name,
       decodeResultJson: decodeResultJson,
-      decodeResult: (payload) => decodeResult(payload) as T,
+      decodeResult: decodeResultJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
       paramsTypeName: paramsTypeName,
       resultTypeName: resultTypeName,
     );
@@ -511,6 +513,9 @@ class WorkflowDefinition<T extends Object?> {
   WorkflowRef<TParams, T> refVersionedJson<TParams>({
     required int version,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
     String? paramsTypeName,
     String? resultTypeName,
   }) {
@@ -518,7 +523,12 @@ class WorkflowDefinition<T extends Object?> {
       name: name,
       version: version,
       decodeResultJson: decodeResultJson,
-      decodeResult: (payload) => decodeResult(payload) as T,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      decodeResult:
+          decodeResultJson == null && decodeResultVersionedJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
       paramsTypeName: paramsTypeName,
       resultTypeName: resultTypeName,
     );

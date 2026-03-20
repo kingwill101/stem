@@ -138,12 +138,17 @@ class Flow<T extends Object?> {
   WorkflowRef<TParams, T> refVersionedJson<TParams>({
     required int version,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
     String? paramsTypeName,
     String? resultTypeName,
   }) {
     return definition.refVersionedJson<TParams>(
       version: version,
       decodeResultJson: decodeResultJson,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
       paramsTypeName: paramsTypeName,
       resultTypeName: resultTypeName,
     );

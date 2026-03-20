@@ -3,6 +3,10 @@
 ## 0.1.1
 
 - Added `decodeResultVersionedJson:` to
+  `WorkflowRef.versionedJson(...)` / `refVersionedJson(...)` so manual typed
+  workflow refs can derive version-aware result decoding alongside versioned
+  params.
+- Added `decodeResultVersionedJson:` to
   `TaskDefinition.versionedJson(...)` so argful manual task definitions can
   derive version-aware result decoding and result-encoder metadata.
 - Refreshed runnable workflow/task examples to remove stale `.call(...)`

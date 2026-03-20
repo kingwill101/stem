@@ -220,12 +220,12 @@ void main() {
     test(
       'manual workflows can derive json-backed refs with result decoding',
       () async {
-        final flow = Flow<_GreetingResult>(
+        final flow = Flow<Object?>(
           name: 'runtime.ref.json.ref-result.flow',
           build: (builder) {
             builder.step(
               'hello',
-              (ctx) async => const _GreetingResult(message: 'hello ref json'),
+              (ctx) async => const {'message': 'hello ref json'},
             );
           },
         );
@@ -243,7 +243,10 @@ void main() {
             timeout: const Duration(seconds: 2),
           );
 
-          expect(result?.value?.message, 'hello ref json');
+          expect(
+            (result?.value as _GreetingResult?)?.message,
+            'hello ref json',
+          );
         } finally {
           await workflowApp.shutdown();
         }
@@ -450,6 +453,46 @@ void main() {
 
           expect(flowResult?.value?.message, 'hello flow v2');
           expect(scriptResult?.value?.message, 'hello script v2');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'manual workflows can derive versioned-json refs with result decoding',
+      () async {
+        final flow = Flow<Object?>(
+          name: 'runtime.ref.versioned-json.ref-result.flow',
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const {
+                'message': 'hello ref result',
+                PayloadCodec.versionKey: 2,
+              },
+            );
+          },
+        );
+        final workflowRef = flow.refVersionedJson<_GreetingParams>(
+          version: 2,
+          decodeResultVersionedJson: _GreetingResult.fromVersionedJson,
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final result = await workflowRef.startAndWait(
+            workflowApp.runtime,
+            params: const _GreetingParams(name: 'ignored'),
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(
+            (result?.value as _GreetingResult?)?.message,
+            'hello ref result v2',
+          );
         } finally {
           await workflowApp.shutdown();
         }
