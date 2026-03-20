@@ -90,6 +90,7 @@ void main() {
         state: TaskState.failed,
         attempt: 1,
         meta: const {
+          PayloadCodec.versionKey: 2,
           'task': 'email.send',
           'queue': 'critical',
           'namespace': 'acme',
@@ -120,6 +121,22 @@ void main() {
           'stem.workflow.serialization.version': '1',
           'stem.workflow.stream.id': 'invoice_run-123',
         },
+      );
+
+      expect(
+        status.metaJson<_TaskStatusMeta>(decode: _TaskStatusMeta.fromJson),
+        isA<_TaskStatusMeta>()
+            .having((value) => value.task, 'task', 'email.send')
+            .having((value) => value.queue, 'queue', 'critical'),
+      );
+      expect(
+        status.metaVersionedJson<_TaskStatusMeta>(
+          version: 2,
+          decode: _TaskStatusMeta.fromVersionedJson,
+        ),
+        isA<_TaskStatusMeta>()
+            .having((value) => value.task, 'task', 'email.send')
+            .having((value) => value.queue, 'queue', 'critical'),
       );
 
       expect(status.taskName, equals('email.send'));
@@ -715,5 +732,27 @@ class _ErrorMeta {
     return _ErrorMeta.fromJson(json);
   }
 
+  final String queue;
+}
+
+class _TaskStatusMeta {
+  const _TaskStatusMeta({required this.task, required this.queue});
+
+  factory _TaskStatusMeta.fromJson(Map<String, dynamic> json) {
+    return _TaskStatusMeta(
+      task: json['task'] as String,
+      queue: json['queue'] as String,
+    );
+  }
+
+  factory _TaskStatusMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TaskStatusMeta.fromJson(json);
+  }
+
+  final String task;
   final String queue;
 }

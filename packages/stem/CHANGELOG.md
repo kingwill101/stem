@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `TaskStatus.metaJson(...)`, `metaVersionedJson(...)`, and
+  `metaAs(codec: ...)` so low-level task status metadata can decode DTO
+  payloads without raw map casts.
 - Added `WorkflowWatcher.dataJson(...)`, `dataVersionedJson(...)`,
   `dataAs(codec: ...)`, and the matching `WorkflowWatcherResolution`
   `resumeData...` helpers so watcher inspection can decode full stored watcher

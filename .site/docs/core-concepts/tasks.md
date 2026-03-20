@@ -59,7 +59,9 @@ persists an explicit schema version.
 If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
 `status.payloadAs(codec: ...)` to decode the whole payload DTO without a
 separate cast/closure. Use `status.payloadVersionedJson(...)` when the stored
-payload carries an explicit `__stemPayloadVersion`.
+payload carries an explicit `__stemPayloadVersion`. If the whole task metadata
+map is one DTO, use `status.metaJson(...)` or `status.metaAs(codec: ...)`
+instead of manual `status.meta[...]` casts.
 If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
 or `result.payloadAs(codec: ...)` to decode the stored task result DTO
 without another cast/closure. Use `result.payloadVersionedJson(...)` for the

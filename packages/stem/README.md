@@ -1030,7 +1030,9 @@ Use `waitFor(...)` when you need to keep the task id for inspection or pass it
 through another boundary before waiting.
 If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
 `status.payloadAs(codec: ...)` to decode the whole payload DTO without another
-cast/closure.
+cast/closure. If the whole task metadata map is one DTO, use
+`status.metaJson(...)` or `status.metaAs(codec: ...)` instead of manual
+`status.meta[...]` casts.
 If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
 or `result.payloadAs(codec: ...)` to decode the stored task result DTO without
 another cast/closure.
