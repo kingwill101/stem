@@ -514,7 +514,7 @@ void main() {
       }
     });
 
-    test('workflow callers expose workflow start builders', () async {
+    test('workflow refs expose workflow start builders', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.bound.builder.flow',
         build: (builder) {
@@ -541,11 +541,8 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowBuilder = workflowApp.runtime
-            .prepareStart(
-              definition: workflowRef,
-              params: const {'name': 'builder'},
-            )
+        final flowBuilder = workflowRef
+            .prepareStart(const {'name': 'builder'})
             .ttl(const Duration(minutes: 5))
             .parentRunId('parent-bound');
         final builtFlowCall = flowBuilder.build();
@@ -564,8 +561,8 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-bound');
 
-        final scriptBuilder = workflowApp.runtime
-            .prepareStart(definition: scriptRef.asRef, params: ())
+        final scriptBuilder = scriptRef.asRef
+            .prepareStart(())
             .cancellationPolicy(
               const WorkflowCancellationPolicy(
                 maxRunDuration: Duration(seconds: 5),

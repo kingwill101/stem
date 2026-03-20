@@ -52,8 +52,7 @@ metadata, while exposing direct helpers and a fluent builder for overrides
 Typed helpers are also available on `Canvas` (`definition.toSignature`) so
 group/chain/chord APIs produce strongly typed `TaskResult<T>` streams. Need to
 tweak headers/meta/queue at call sites? Start from
-`definition.prepareEnqueue(args)`, or call `prepareEnqueue(...)` on an
-enqueuer/context when that is the surface you already have.
+`definition.prepareEnqueue(args)` when you need the advanced builder path.
 
 Raw task-name strings still work, but they are the lower-level interop path.
 Reach for them when the task name is truly dynamic or you are crossing a

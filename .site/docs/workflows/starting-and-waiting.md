@@ -167,7 +167,7 @@ final result = await StemWorkflowDefinitions.userSignup.startAndWait(
 If you still need the run identifier for inspection or operator tooling, read
 it from `result.runId`.
 
-Keep `context.prepareStart(...)` for the rarer cases where you want to
+Keep `ref.prepareStart(params)` for the rarer cases where you want to
 assemble a start request incrementally before dispatch.
 
 ## Parent runs and TTL

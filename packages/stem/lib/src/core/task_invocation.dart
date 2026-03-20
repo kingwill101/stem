@@ -845,14 +845,6 @@ class TaskInvocationContext implements TaskExecutionContext {
     return delegate.emitEvent(event, value);
   }
 
-  /// Build a fluent enqueue request for this invocation.
-  TaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
-    required TaskDefinition<TArgs, TResult> definition,
-    required TArgs args,
-  }) {
-    return TaskEnqueueBuilder(definition: definition, args: args);
-  }
-
   /// Alias for enqueue.
   @override
   Future<String> spawn(

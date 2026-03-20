@@ -233,26 +233,13 @@ void main() {
   group('TaskInvocationContext builder', () {
     test('supports fluent enqueue builder API', () async {
       final enqueuer = _RecordingEnqueuer();
-      final context = TaskInvocationContext.local(
-        id: 'invocation-1',
-        headers: const {},
-        meta: const {},
-        attempt: 0,
-        heartbeat: () {},
-        extendLease: (_) async {},
-        progress: (_, {data}) async {},
-        enqueuer: enqueuer,
-      );
 
       final definition = TaskDefinition<_ExampleArgs, void>(
         name: 'tasks.typed',
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final builder = context.prepareEnqueue(
-        definition: definition,
-        args: const _ExampleArgs('hello'),
-      );
+      final builder = definition.prepareEnqueue(const _ExampleArgs('hello'));
 
       final call = builder.queue('priority').priority(7).build();
       await enqueuer.enqueueCall(call);
@@ -344,11 +331,8 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final call = context
-          .prepareStart(
-            definition: definition,
-            params: const {'value': 'child'},
-          )
+      final call = definition
+          .prepareStart(const {'value': 'child'})
           .parentRunId('parent-task')
           .build();
       final runId = await context.startWorkflowCall(call);

@@ -400,20 +400,6 @@ class WorkflowStartBuilder<TParams, TResult extends Object?> {
   }
 }
 
-/// Convenience helpers for building typed workflow starts directly from a
-/// workflow-capable caller.
-extension WorkflowCallerBuilderExtension on WorkflowCaller {
-  /// Creates a fluent start builder for a typed workflow ref.
-  WorkflowStartBuilder<TParams, TResult>
-  prepareStart<TParams, TResult extends Object?>({
-    required WorkflowRef<TParams, TResult> definition,
-    required TParams params,
-  }) {
-    return definition.prepareStart(params);
-  }
-
-}
-
 /// Convenience helpers for waiting on typed workflow refs using a generic
 /// [WorkflowCaller].
 extension WorkflowRefExtension<TParams, TResult extends Object?>

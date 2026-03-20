@@ -3242,14 +3242,6 @@ extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
     );
   }
 
-  /// Creates a fluent builder for a typed task definition.
-  TaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
-    required TaskDefinition<TArgs, TResult> definition,
-    required TArgs args,
-  }) {
-    return TaskEnqueueBuilder(definition: definition, args: args);
-  }
-
 }
 
 /// Retry strategy used to compute the next backoff delay.

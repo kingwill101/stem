@@ -106,7 +106,7 @@ void main() {
   );
 
   test(
-    'TaskEnqueuer.prepareEnqueue binds builder assembly to the enqueuer',
+    'TaskEnqueueBuilder.build preserves enqueuer dispatch semantics',
     () async {
     final enqueuer = _RecordingTaskEnqueuer();
     final definition = TaskDefinition<Map<String, Object?>, String>(
@@ -115,8 +115,8 @@ void main() {
       decodeResult: (payload) => 'decoded:$payload',
     );
 
-    final builder = enqueuer
-        .prepareEnqueue(definition: definition, args: const {'a': 1})
+    final builder = definition
+        .prepareEnqueue(const {'a': 1})
         .header('h1', 'v1')
         .queue('critical');
     final taskId = await enqueuer.enqueueCall(builder.build());
@@ -128,9 +128,7 @@ void main() {
     expect(enqueuer.lastCall!.resolveOptions().queue, 'critical');
   });
 
-  test(
-    'TaskEnqueuer.prepareEnqueue builders compose with typed waits',
-    () async {
+  test('TaskEnqueueBuilder composes with typed waits', () async {
       final caller = _RecordingTaskResultCaller();
       final definition = TaskDefinition<Map<String, Object?>, String>(
         name: 'demo.task',
@@ -138,8 +136,8 @@ void main() {
         decodeResult: (payload) => 'decoded:$payload',
       );
 
-      final builder = caller
-          .prepareEnqueue(definition: definition, args: const {'a': 1})
+      final builder = definition
+          .prepareEnqueue(const {'a': 1})
           .header('h1', 'v1');
       final call = builder.build();
       final taskId = await caller.enqueueCall(call);
