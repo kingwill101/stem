@@ -20,6 +20,8 @@
 - Removed the deprecated `withJsonCodec(...)` / `refWithJsonCodec(...)`
   compatibility helpers. The direct `json(...)` / `refJson(...)` forms are now
   the only supported JSON shortcut APIs.
+- Removed the legacy `SimpleTaskRegistry` compatibility alias. Use
+  `InMemoryTaskRegistry` directly.
 - Replaced the older manual DTO helper names with direct forms:
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and
