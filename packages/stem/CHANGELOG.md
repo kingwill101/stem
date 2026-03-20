@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Added `PayloadCodec.versionedJson(...)` so DTO payload codecs can persist a
+  schema version beside the JSON payload and decode older shapes explicitly.
 - Added low-level DTO shortcuts for name-based dispatch:
   `TaskEnqueuer.enqueueJson(...)`, `WorkflowRuntime.startWorkflowJson(...)`,
   `StemWorkflowApp.startWorkflowJson(...)`, `WorkflowRuntime.emitJson(...)`,

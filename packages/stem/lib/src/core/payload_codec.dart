@@ -12,6 +12,9 @@ class PayloadCodec<T> {
   }) : _encode = encode,
        _decode = decode,
        _decodeMap = null,
+       _decodeVersionedMap = null,
+       _jsonVersion = null,
+       _defaultDecodeVersion = null,
        _typeName = null;
 
   /// Creates a payload codec for DTOs that serialize to a durable map payload.
@@ -32,6 +35,9 @@ class PayloadCodec<T> {
   }) : _encode = encode,
        _decode = null,
        _decodeMap = decode,
+       _decodeVersionedMap = null,
+       _jsonVersion = null,
+       _defaultDecodeVersion = null,
        _typeName = typeName;
 
   /// Creates a payload codec for DTOs that expose `toJson()` and a matching
@@ -50,11 +56,46 @@ class PayloadCodec<T> {
   }) : _encode = _encodeJsonPayload,
        _decode = null,
        _decodeMap = decode,
+       _decodeVersionedMap = null,
+       _jsonVersion = null,
+       _defaultDecodeVersion = null,
        _typeName = typeName;
+
+  /// Creates a JSON DTO codec that also persists a schema version.
+  ///
+  /// Use this when a payload shape is expected to evolve over time and the
+  /// decoder needs to know which persisted schema version it is reading.
+  ///
+  /// ```dart
+  /// const approvalCodec = PayloadCodec<Approval>.versionedJson(
+  ///   version: 2,
+  ///   defaultDecodeVersion: 1,
+  ///   decode: Approval.fromVersionedJson,
+  /// );
+  /// ```
+  const PayloadCodec.versionedJson({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) : _encode = _encodeJsonPayload,
+       _decode = null,
+       _decodeMap = null,
+       _decodeVersionedMap = decode,
+       _jsonVersion = version,
+       _defaultDecodeVersion = defaultDecodeVersion,
+       _typeName = typeName;
+
+  /// Reserved key used to persist payload schema versions for versioned codecs.
+  static const String versionKey = '__stemPayloadVersion';
 
   final Object? Function(T value) _encode;
   final T Function(Object? payload)? _decode;
   final T Function(Map<String, dynamic> payload)? _decodeMap;
+  final T Function(Map<String, dynamic> payload, int version)?
+  _decodeVersionedMap;
+  final int? _jsonVersion;
+  final int? _defaultDecodeVersion;
   final String? _typeName;
 
   /// Encodes a DTO to the string-keyed map shape required by task/workflow
@@ -77,13 +118,33 @@ class PayloadCodec<T> {
   }
 
   /// Converts a typed value into a durable payload representation.
-  Object? encode(T value) => _encode(value);
+  Object? encode(T value) {
+    final encoded = _encode(value);
+    final version = _jsonVersion;
+    if (version == null) return encoded;
+    final json = _payloadJsonMap(encoded, _typeName ?? '$T');
+    return <String, dynamic>{
+      versionKey: version,
+      ...json,
+    };
+  }
 
   /// Reconstructs a typed value from a durable payload representation.
   T decode(Object? payload) {
     final decode = _decode;
     if (decode != null) {
       return decode(payload);
+    }
+    final decodeVersionedMap = _decodeVersionedMap;
+    if (decodeVersionedMap != null) {
+      final json = _payloadJsonMap(payload, _typeName ?? '$T');
+      final version = _payloadVersion(
+        json,
+        defaultVersion: _defaultDecodeVersion ?? _jsonVersion ?? 1,
+        typeName: _typeName ?? '$T',
+      );
+      final normalized = Map<String, dynamic>.from(json)..remove(versionKey);
+      return decodeVersionedMap(normalized, version);
     }
     final decodeMap = _decodeMap!;
     return decodeMap(_payloadJsonMap(payload, _typeName ?? '$T'));
@@ -136,6 +197,25 @@ Map<String, dynamic> _payloadJsonMap(Object? value, String typeName) {
   throw StateError(
     '$typeName payload must decode to a string-keyed map, got '
     '${value.runtimeType}.',
+  );
+}
+
+int _payloadVersion(
+  Map<String, dynamic> payload, {
+  required int defaultVersion,
+  required String typeName,
+}) {
+  final rawVersion = payload[PayloadCodec.versionKey];
+  if (rawVersion == null) return defaultVersion;
+  if (rawVersion is int) return rawVersion;
+  if (rawVersion is num) return rawVersion.toInt();
+  if (rawVersion is String) {
+    final parsed = int.tryParse(rawVersion);
+    if (parsed != null) return parsed;
+  }
+  throw StateError(
+    '$typeName payload version must be an int-compatible value, got '
+    '${rawVersion.runtimeType}.',
   );
 }
 
