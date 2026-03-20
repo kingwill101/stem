@@ -90,6 +90,48 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
       typeName: typeName,
     );
   }
+
+  /// Returns the decoded workflow parameter DTO list for [key], or `null`.
+  List<T>? paramListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.valueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded workflow parameter DTO list for [key], or [fallback].
+  List<T> paramListJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.valueListJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded workflow parameter DTO list for [key], throwing when
+  /// absent.
+  List<T> requiredParamListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.requiredValueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
 }
 
 /// Context provided to each script checkpoint invocation. Mirrors

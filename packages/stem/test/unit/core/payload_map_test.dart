@@ -124,6 +124,43 @@ void main() {
 
       expect(drafts.map((draft) => draft.documentId), ['doc-42', 'doc-99']);
     });
+
+    test('valueListJson decodes DTO lists without a codec constant', () {
+      final payload = <String, Object?>{
+        'drafts': const [
+          <String, Object?>{'documentId': 'doc-42'},
+          <String, Object?>{'documentId': 'doc-99'},
+        ],
+      };
+
+      final drafts = payload.valueListJson<_ApprovalDraft>(
+        'drafts',
+        decode: _ApprovalDraft.fromJson,
+      );
+
+      expect(
+        drafts?.map((draft) => draft.documentId).toList(),
+        ['doc-42', 'doc-99'],
+      );
+    });
+
+    test('requiredValueListJson throws for missing payload keys', () {
+      const payload = <String, Object?>{'name': 'Stem'};
+
+      expect(
+        () => payload.requiredValueListJson<_ApprovalDraft>(
+          'drafts',
+          decode: _ApprovalDraft.fromJson,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            "Missing required payload key 'drafts'.",
+          ),
+        ),
+      );
+    });
   });
 }
 

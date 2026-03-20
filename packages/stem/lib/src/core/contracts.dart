@@ -1797,6 +1797,47 @@ extension TaskInputContextArgs on TaskInputContext {
       typeName: typeName,
     );
   }
+
+  /// Returns the decoded task arg DTO list for [key], or `null`.
+  List<T>? argListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO list for [key], or [fallback].
+  List<T> argListJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueListJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO list for [key], throwing when absent.
+  List<T> requiredArgListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.requiredValueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
 }
 
 /// Context passed to handler implementations during execution.

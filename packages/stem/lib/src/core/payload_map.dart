@@ -104,4 +104,52 @@ extension PayloadMapX on Map<String, Object?> {
     }
     return valueList<T>(key, codec: codec)!;
   }
+
+  /// Returns the decoded DTO list value for [key], or `null` when it is
+  /// absent.
+  List<T>? valueListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = this[key];
+    if (payload == null) return null;
+    final values = payload as List;
+    final codec = PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    );
+    return List<T>.unmodifiable(values.map(codec.decode));
+  }
+
+  /// Returns the decoded DTO list value for [key], or [fallback] when absent.
+  List<T> valueListJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return valueListJson<T>(
+          key,
+          decode: decode,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Returns the decoded DTO list value for [key], throwing when absent.
+  List<T> requiredValueListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    if (!containsKey(key) || this[key] == null) {
+      throw StateError("Missing required payload key '$key'.");
+    }
+    return valueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    )!;
+  }
 }

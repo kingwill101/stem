@@ -38,6 +38,8 @@ Depending on the context type, you can access:
   params
 - `paramJson<T>()` / `requiredParamJson<T>()` for nested DTO params without a
   separate codec constant
+- `paramListJson<T>()` / `requiredParamListJson<T>()` for lists of nested DTO
+  params without a separate codec constant
 - `previousValue<T>()` / `requiredPreviousValue<T>()` for typed access to the
   prior step or checkpoint result
 - `previousJson<T>()` / `requiredPreviousJson<T>()` for prior DTO results
