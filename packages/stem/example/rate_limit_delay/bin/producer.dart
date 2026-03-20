@@ -11,14 +11,18 @@ Future<void> main() async {
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
   final tasks = buildTasks();
   final routing = buildRoutingRegistry();
-  final stem = buildStem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => connectBroker(brokerUrl),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => connectBackend(backendUrl),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     routing: routing,
   );
 
@@ -45,7 +49,7 @@ Future<void> main() async {
     );
     final appliedPriority = route.effectivePriority(priority);
 
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       taskName(),
       args: {
         'job': i + 1,
@@ -75,7 +79,6 @@ Future<void> main() async {
   stdout.writeln('[producer] all jobs queued. Waiting 5s before shutdown...');
   await Future<void>.delayed(const Duration(seconds: 5));
 
-  await broker.close();
-  await backend.close();
+  await client.close();
   stdout.writeln('[producer] done.');
 }

@@ -79,6 +79,9 @@
 - Simplified the `encrypted_payload/docker` producer entrypoint to use
   `StemClient.create(...)` instead of manually constructing a raw `Stem`
   publisher inside the container example.
+- Simplified the `rate_limit_delay` producer example to use
+  `StemClient.create(...)` with its existing broker/backend helpers instead of
+  building a raw `Stem` producer for the delayed enqueue loop.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
