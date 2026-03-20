@@ -98,8 +98,8 @@ void logActiveSigningKey() {
 // #endregion signing-rotation-producer-active-key
 
 // #region signing-rotation-producer-enqueue
-Future<void> enqueueDuringRotation(Stem stem) async {
-  await stem.enqueue(
+Future<void> enqueueDuringRotation(TaskEnqueuer enqueuer) async {
+  await enqueuer.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
   );
