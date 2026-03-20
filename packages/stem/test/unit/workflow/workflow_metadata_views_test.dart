@@ -98,6 +98,17 @@ void main() {
       );
 
       expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(
+        state.paramsJson<_TenantPayload>(decode: _TenantPayload.fromJson),
+        isA<_TenantPayload>().having((value) => value.tenant, 'tenant', 'acme'),
+      );
+      expect(
+        state.paramsVersionedJson<_TenantPayload>(
+          version: 2,
+          decode: _TenantPayload.fromVersionedJson,
+        ),
+        isA<_TenantPayload>().having((value) => value.tenant, 'tenant', 'acme'),
+      );
       expect(state.orchestrationQueue, equals('workflow'));
       expect(state.continuationQueue, equals('workflow-continue'));
       expect(state.executionQueue, equals('workflow-step'));
@@ -546,6 +557,24 @@ class _InvoicePayload {
   }
 
   final String invoiceId;
+}
+
+class _TenantPayload {
+  const _TenantPayload({required this.tenant});
+
+  factory _TenantPayload.fromJson(Map<String, dynamic> json) {
+    return _TenantPayload(tenant: json['tenant'] as String);
+  }
+
+  factory _TenantPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TenantPayload.fromJson(json);
+  }
+
+  final String tenant;
 }
 
 class _RuntimePayload {

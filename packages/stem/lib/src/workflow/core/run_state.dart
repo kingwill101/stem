@@ -76,6 +76,37 @@ class RunState {
   Map<String, Object?> get workflowParams =>
       WorkflowRunRuntimeMetadata.stripFromParams(params);
 
+  /// Decodes the workflow params payload with [codec].
+  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+    return codec.decode(workflowParams);
+  }
+
+  /// Decodes the workflow params payload with a JSON decoder.
+  TParams paramsJson<TParams>({
+    required TParams Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(workflowParams);
+  }
+
+  /// Decodes the workflow params payload with a version-aware JSON decoder.
+  TParams paramsVersionedJson<TParams>({
+    required int version,
+    required TParams Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(workflowParams);
+  }
+
   /// Run-scoped runtime metadata.
   WorkflowRunRuntimeMetadata get runtimeMetadata =>
       WorkflowRunRuntimeMetadata.fromParams(params);

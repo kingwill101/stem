@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `RunState.paramsJson(...)`, `paramsVersionedJson(...)`, and
+  `paramsAs(codec: ...)` so low-level workflow run snapshots can decode
+  stored workflow input DTOs without raw map casts.
 - Added `TaskError.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so low-level task failure metadata can decode DTO
   payloads without raw map casts.

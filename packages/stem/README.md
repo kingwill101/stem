@@ -937,6 +937,7 @@ If you already have a raw `WorkflowResult<Object?>`, use
 `result.payloadJson(...)` or `result.payloadAs(codec: ...)` to decode the
 stored workflow result without another cast/closure.
 If you are inspecting the underlying `RunState` directly, use
+`state.paramsJson(...)`, `state.paramsAs(codec: ...)`,
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
 `state.resultVersionedJson(...)`, `state.suspensionPayloadJson(...)`,
 `state.suspensionPayloadVersionedJson(...)`,
