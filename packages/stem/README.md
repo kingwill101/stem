@@ -255,14 +255,16 @@ the result and the task metadata advertises the right result encoder.
 You can also build requests fluently with the `TaskEnqueueBuilder`:
 
 ```dart
-final taskId = await TaskEnqueueBuilder(
+final result = await TaskEnqueueBuilder(
   definition: HelloTask.definition,
   args: const HelloArgs(name: 'Tenant A'),
 )
   ..header('x-tenant', 'tenant-a')
   ..priority(5)
   ..delay(const Duration(seconds: 30))
-  .enqueue(stem);
+  .enqueueAndWait(stem);
+
+print(result?.value);
 ```
 
 ### Enqueue from inside a task

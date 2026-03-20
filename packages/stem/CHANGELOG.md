@@ -8,6 +8,8 @@
 - Reframed the producer docs to treat `TaskDefinition` and shared
   `TaskEnqueuer` surfaces as the happy path, keeping raw name-based enqueue as
   the lower-level interop option.
+- Added `TaskEnqueueBuilder.enqueueAndWait(...)` so fluent per-call task
+  overrides no longer require a separate manual wait step.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
   `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
   `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to

@@ -37,8 +37,8 @@ routing, retry behavior, timeouts, and isolation.
 Stem ships with `TaskDefinition<TArgs, TResult>` so producers get compile-time
 checks for required arguments and result types. A definition bundles the task
 name, argument encoder, optional metadata, and default `TaskOptions`. Build a
-call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
-or `Canvas` helpers. For the common path, use the direct
+call with `.call(args)` or `TaskEnqueueBuilder` and hand it to any
+`TaskResultCaller` / `TaskEnqueuer` surface. For the common path, use the direct
 `definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
 helpers and drop down to `.call(args)` only when you need a reusable prebuilt
 request:
@@ -56,6 +56,9 @@ If your manual task args are DTOs, prefer
 `TaskDefinition.withPayloadCodec(...)` over hand-written `encodeArgs` maps. The
 codec still needs to encode to `Map<String, Object?>` because task args are
 published as a map.
+
+`TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, so fluent per-call
+overrides no longer force a separate manual wait step.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueue(...)` /

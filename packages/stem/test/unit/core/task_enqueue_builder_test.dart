@@ -63,6 +63,29 @@ void main() {
     expect(call.options?.priority, 9);
   });
 
+  test(
+    'TaskEnqueueBuilder.enqueueAndWait reuses typed result decoding',
+    () async {
+      final definition = TaskDefinition<Map<String, Object?>, String>(
+        name: 'demo.task',
+        encodeArgs: (args) => args,
+        decodeResult: (payload) => 'decoded:$payload',
+      );
+      final caller = _RecordingTaskResultCaller();
+
+      final result = await TaskEnqueueBuilder(
+        definition: definition,
+        args: const {'a': 1},
+      ).header('h1', 'v1').enqueueAndWait(caller);
+
+      expect(caller.lastCall, isNotNull);
+      expect(caller.lastCall!.name, 'demo.task');
+      expect(caller.lastCall!.headers, containsPair('h1', 'v1'));
+      expect(caller.waitedTaskId, 'task-1');
+      expect(result?.value, 'decoded:stored');
+    },
+  );
+
   test('TaskCall.copyWith updates headers and meta', () {
     final definition = TaskDefinition<Map<String, Object?>, Object?>(
       name: 'demo.task',
@@ -100,21 +123,21 @@ void main() {
   test(
     'NoArgsTaskDefinition.enqueue uses the TaskEnqueuer surface',
     () async {
-    final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
-    final enqueuer = _RecordingTaskEnqueuer();
+      final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+      final enqueuer = _RecordingTaskEnqueuer();
 
-    final taskId = await definition.enqueue(
-      enqueuer,
-      headers: const {'h': 'v'},
-      meta: const {'m': 1},
-    );
+      final taskId = await definition.enqueue(
+        enqueuer,
+        headers: const {'h': 'v'},
+        meta: const {'m': 1},
+      );
 
-    expect(taskId, 'task-1');
-    expect(enqueuer.lastCall, isNotNull);
-    expect(enqueuer.lastCall!.name, 'demo.no_args');
-    expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
-    expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
-    expect(enqueuer.lastCall!.meta, containsPair('m', 1));
+      expect(taskId, 'task-1');
+      expect(enqueuer.lastCall, isNotNull);
+      expect(enqueuer.lastCall!.name, 'demo.no_args');
+      expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
+      expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
+      expect(enqueuer.lastCall!.meta, containsPair('m', 1));
     },
   );
 }
@@ -142,5 +165,45 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
   }) async {
     lastCall = call;
     return 'task-1';
+  }
+}
+
+class _RecordingTaskResultCaller extends _RecordingTaskEnqueuer
+    implements TaskResultCaller {
+  String? waitedTaskId;
+
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) async => null;
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) async => null;
+
+  @override
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+  }) async {
+    waitedTaskId = taskId;
+    return TaskResult<TResult>(
+      taskId: taskId,
+      status: TaskStatus(id: taskId, state: TaskState.succeeded, attempt: 0),
+      value: decode?.call('stored'),
+      rawPayload: 'stored',
+    );
+  }
+
+  @override
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  }) async {
+    return waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: definition.decodeResult,
+    );
   }
 }

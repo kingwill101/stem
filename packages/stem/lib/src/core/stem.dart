@@ -1103,6 +1103,21 @@ extension TaskEnqueueBuilderExtension<TArgs, TResult>
       call.copyWith(meta: Map.unmodifiable(mergedMeta)),
     );
   }
+
+  /// Builds this request, enqueues it with [caller], and waits for the typed
+  /// task result.
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller, {
+    Duration? timeout,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final call = build();
+    final taskId = await call.enqueue(
+      caller,
+      enqueueOptions: enqueueOptions,
+    );
+    return call.definition.waitFor(caller, taskId, timeout: timeout);
+  }
 }
 
 /// Convenience helpers for dispatching prebuilt [TaskCall] instances.
