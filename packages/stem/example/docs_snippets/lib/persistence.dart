@@ -9,9 +9,11 @@ import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
+final demoTaskDefinition = TaskDefinition.noArgs<void>(name: 'demo');
+
 final demoTasks = [
   FunctionTaskHandler<void>(
-    name: 'demo',
+    name: demoTaskDefinition.name,
     entrypoint: (context, args) async {
       print('Handled demo task');
       return null;
@@ -26,7 +28,7 @@ Future<void> connectInMemoryBackend() async {
     backend: StemBackendFactory.inMemory(),
     tasks: demoTasks,
   );
-  await client.enqueue('demo', args: {});
+  await demoTaskDefinition.enqueue(client);
   await client.close();
 }
 // #endregion persistence-backend-in-memory
@@ -44,7 +46,7 @@ Future<void> connectRedisBackend() async {
     ),
     tasks: demoTasks,
   );
-  await client.enqueue('demo', args: {});
+  await demoTaskDefinition.enqueue(client);
   await client.close();
 }
 // #endregion persistence-backend-redis
@@ -64,7 +66,7 @@ Future<void> connectPostgresBackend() async {
     ),
     tasks: demoTasks,
   );
-  await client.enqueue('demo', args: {});
+  await demoTaskDefinition.enqueue(client);
   await client.close();
 }
 // #endregion persistence-backend-postgres
@@ -82,7 +84,7 @@ Future<void> connectSqliteBackend() async {
     ),
     tasks: demoTasks,
   );
-  await client.enqueue('demo', args: {});
+  await demoTaskDefinition.enqueue(client);
   await client.close();
 }
 // #endregion persistence-backend-sqlite

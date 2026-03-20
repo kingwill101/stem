@@ -36,6 +36,8 @@
 - Updated the remaining no-input producer examples to prefer
   `TaskDefinition.noArgs(...)` over raw empty-map publishes where the task
   already has a stable typed definition.
+- Updated the persistence and signals docs snippets to use the same no-input
+  task-definition helpers instead of raw empty-map enqueue calls.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with
