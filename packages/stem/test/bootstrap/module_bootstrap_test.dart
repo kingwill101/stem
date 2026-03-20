@@ -149,6 +149,36 @@ void main() {
         ),
       );
     });
+
+    test('exposes explicit queue inspection helpers', () {
+      final taskA = FunctionTaskHandler<String>(
+        name: 'module.queues.task.a',
+        entrypoint: (context, args) async => 'a',
+        runInIsolate: false,
+      );
+      final taskB = FunctionTaskHandler<String>(
+        name: 'module.queues.task.b',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'b',
+        runInIsolate: false,
+      );
+      final module = StemModule(tasks: [taskA, taskB]);
+
+      expect(module.requiredTaskQueues(), ['default', 'priority']);
+      expect(
+        module.requiredWorkflowQueues(
+          continuationQueue: 'workflow-continue',
+          executionQueue: 'workflow-step',
+        ),
+        [
+          'default',
+          'priority',
+          'workflow',
+          'workflow-continue',
+          'workflow-step',
+        ],
+      );
+    });
   });
 
   group('module bootstrap', () {

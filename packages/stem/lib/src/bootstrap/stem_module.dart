@@ -247,6 +247,26 @@ class StemModule {
     return queues.toList(growable: false);
   }
 
+  /// Returns the queues required to run workflow orchestration plus bundled
+  /// tasks.
+  ///
+  /// This is the explicit inspection helper for workflow-capable workers.
+  /// Bootstrap helpers use the same queue set when inferring workflow worker
+  /// subscriptions from a module.
+  List<String> requiredWorkflowQueues({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    return inferredWorkerQueues(
+      workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      additionalTasks: additionalTasks,
+    );
+  }
+
   /// Infers a worker subscription from the bundled task handlers.
   ///
   /// Returns `null` when only the [workflowQueue] is needed, allowing the
@@ -285,6 +305,17 @@ class StemModule {
     tasks.forEach(addTaskQueue);
     additionalTasks.forEach(addTaskQueue);
     return queues.toList(growable: false);
+  }
+
+  /// Returns the queues required by bundled task handlers only.
+  ///
+  /// This is the explicit inspection helper for task-only workers. Bootstrap
+  /// helpers use the same queue set when inferring plain worker subscriptions
+  /// from a module.
+  List<String> requiredTaskQueues({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    return inferredTaskQueues(additionalTasks: additionalTasks);
   }
 
   /// Infers a worker subscription from bundled task handlers only.

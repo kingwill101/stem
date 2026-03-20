@@ -746,6 +746,19 @@ final app = await StemWorkflowApp.inMemory(
 );
 ```
 
+If you want to inspect what a bundled module will require before bootstrapping,
+use `requiredTaskQueues()` for task-only workers and
+`requiredWorkflowQueues(...)` for workflow-capable workers:
+
+```dart
+final queues = stemModule.requiredWorkflowQueues(
+  continuationQueue: 'workflow-continue',
+  executionQueue: 'workflow-step',
+);
+
+print(queues);
+```
+
 If your service already owns a `StemApp`, reuse it:
 
 ```dart

@@ -118,6 +118,16 @@ final workflowApp = await StemWorkflowApp.inMemory(
 );
 ```
 
+When debugging bootstrap wiring, inspect the queue set a bundle implies before
+you create the app:
+
+```dart
+final queues = stemModule.requiredWorkflowQueues(
+  continuationQueue: 'workflow-continue',
+  executionQueue: 'workflow-step',
+);
+```
+
 If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 
