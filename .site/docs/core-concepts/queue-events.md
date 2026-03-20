@@ -23,8 +23,9 @@ Use this when you need lightweight event streams for domain notifications
 All events are delivered as `QueueCustomEvent`, which implements `StemEvent`.
 Use `event.payloadValue(...)` / `event.requiredPayloadValue(...)` to read typed
 payload fields instead of repeating raw `payload['key']` casts.
-If one queue event maps to one DTO, use `event.payloadJson(...)` or
-`event.payloadAs(codec: ...)` to decode the whole payload in one step.
+If one queue event maps to one DTO, use `event.payloadJson(...)`,
+`event.payloadVersionedJson(...)`, or `event.payloadAs(codec: ...)` to decode
+the whole payload in one step.
 
 ## Producer + Listener
 

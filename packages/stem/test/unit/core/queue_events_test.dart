@@ -151,7 +151,8 @@ void main() {
     });
 
     test(
-      'emitVersionedJson publishes DTO payloads with a persisted schema version',
+      'emitVersionedJson publishes DTO payloads with a persisted schema '
+      'version',
       () async {
         final listener = QueueEvents(
           broker: broker,
@@ -180,6 +181,15 @@ void main() {
           'orderId': 'o-3',
           'status': 'versioned',
         });
+        expect(
+          event.payloadVersionedJson<_QueueEventPayload>(
+            version: 2,
+            decode: _QueueEventPayload.fromVersionedJson,
+          ),
+          isA<_QueueEventPayload>()
+              .having((value) => value.orderId, 'orderId', 'o-3')
+              .having((value) => value.status, 'status', 'versioned'),
+        );
       },
     );
 
@@ -209,6 +219,17 @@ class _QueueEventPayload {
   });
 
   factory _QueueEventPayload.fromJson(Map<String, dynamic> json) {
+    return _QueueEventPayload(
+      orderId: json['orderId'] as String,
+      status: json['status'] as String,
+    );
+  }
+
+  factory _QueueEventPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _QueueEventPayload(
       orderId: json['orderId'] as String,
       status: json['status'] as String,
