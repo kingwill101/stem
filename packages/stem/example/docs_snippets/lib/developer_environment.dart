@@ -114,14 +114,25 @@ Future<void> runCanvasFlows(
 
 // #region dev-env-status
 Future<void> inspectChordStatus(String chordId) async {
-  final backend = await RedisResultBackend.connect(
-    _resolveRedisUrl(
-      Platform.environment['STEM_BROKER_URL']!,
-      Platform.environment['STEM_RESULT_BACKEND_URL'],
-      1,
+  final config = StemConfig.fromEnvironment(Platform.environment);
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => RedisResultBackend.connect(
+        _resolveRedisUrl(
+          config.brokerUrl,
+          config.resultBackendUrl,
+          1,
+        ),
+        tls: config.tls,
+      ),
+      dispose: (backend) => backend.close(),
     ),
   );
-  final status = await backend.get(chordId);
+  final status = await client.getTaskStatus(chordId);
   print('Chord completion state: ${status?.state}');
 }
 // #endregion dev-env-status

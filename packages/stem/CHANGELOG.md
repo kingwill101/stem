@@ -121,6 +121,9 @@
 - Added `getTaskStatus(...)` / `getGroupStatus(...)` to the shared
   `TaskResultCaller` surface so apps and clients can inspect task/group state
   without reaching into the raw result backend.
+- Updated the developer environment and canvas docs to use the shared status
+  helpers as the default status-inspection path, keeping raw backend reads as
+  low-level guidance only.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

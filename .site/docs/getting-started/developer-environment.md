@@ -115,7 +115,7 @@ pipelines and query progress from any process:
 
 ```
 
-Later, you can monitor status from any machine:
+Later, you can monitor status from any machine with a lightweight client:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-status
 
