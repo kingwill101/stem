@@ -312,17 +312,13 @@ final childWorkflow = Flow<String>(
   },
 );
 
-final childWorkflowRef = childWorkflow.ref0();
-
 class ParentTask implements TaskHandler<String> {
   @override
   String get name => 'demo.parent';
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final result = await context
-        .startNoArgsWorkflowBuilder(definition: childWorkflowRef)
-        .startAndWait();
+    final result = await childWorkflow.startBuilder().startAndWaitWith(context);
     return result?.value ?? 'missing';
   }
 }

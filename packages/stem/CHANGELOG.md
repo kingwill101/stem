@@ -38,6 +38,9 @@
   already has a stable typed definition.
 - Updated the persistence and signals docs snippets to use the same no-input
   task-definition helpers instead of raw empty-map enqueue calls.
+- Updated the manual child-workflow docs to prefer
+  `childFlow.startBuilder().startAndWaitWith(context)` over creating a
+  temporary `ref0()` only to start a no-args child run.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with
