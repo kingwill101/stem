@@ -250,12 +250,12 @@ class InlineCoordinatorTask extends TaskHandler<void> {
       publishConnection: const {'adapter': 'sqlite'},
       producer: const {'app': 'task-context-mixed'},
       link: [
-        linkSuccessDefinition.call(
+        linkSuccessDefinition.buildCall(
           <String, Object?>{'runId': runId, 'source': 'link'},
         ),
       ],
       linkError: [
-        linkErrorDefinition.call(
+        linkErrorDefinition.buildCall(
           <String, Object?>{'runId': runId, 'source': 'link_error'},
         ),
       ],

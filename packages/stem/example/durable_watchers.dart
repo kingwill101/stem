@@ -36,9 +36,10 @@ Future<void> main() async {
     scripts: [shipmentWorkflow],
   );
 
-  final runId = await shipmentWorkflowRef
-      .call(const {'orderId': 'A-123'})
-      .start(app);
+  final runId = await shipmentWorkflowRef.start(
+    app,
+    params: const {'orderId': 'A-123'},
+  );
 
   // Drive the run until it suspends on the watcher.
   await app.executeRun(runId);

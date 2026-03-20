@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Refreshed runnable workflow/task examples to remove stale `.call(...)`
+  transport usage and prefer the narrowed direct `start(...)` /
+  `buildCall(...)` surfaces.
 - Removed `WorkflowRef.call(...)` as a duplicate workflow-start convenience.
   The direct `start(...)` / `startAndWait(...)` helpers remain the happy path,
   and `buildStart(...)` remains the explicit prebuilt-call path.
