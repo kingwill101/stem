@@ -94,8 +94,13 @@ If you are inspecting the underlying `RunState` directly, use
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
 `state.suspensionPayloadJson(...)`, or
 `state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
-Checkpoint entries from `viewCheckpoints(...)` expose the same convenience
-surface via `entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
+Workflow run detail views expose the same convenience surface via
+`runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
+`runView.suspensionPayloadJson(...)`, and
+`runView.suspensionPayloadAs(codec: ...)`.
+Checkpoint entries from `viewCheckpoints(...)` and
+`WorkflowCheckpointView.fromEntry(...)` expose the same surface via
+`entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
 
 Use the returned `WorkflowResult<T>` when you need:
 

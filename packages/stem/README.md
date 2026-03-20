@@ -500,13 +500,14 @@ final approvalsFlow = Flow<String>(
     });
 
     flow.step('manager-review', (ctx) async {
-      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+      final resume = ctx.waitForEventValueJson<ApprovalDecision>(
         'approvals.manager',
+        decode: ApprovalDecision.fromJson,
       );
       if (resume == null) {
         return null;
       }
-      return resume['approvedBy'] as String?;
+      return resume.approvedBy;
     });
 
     flow.step('finalize', (ctx) async {
@@ -581,13 +582,14 @@ final billingRetryScript = WorkflowScript(
   name: 'billing.retry-script',
   run: (script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+      final resume = ctx.waitForEventValueJson<ChargePrepared>(
         'billing.charge.prepared',
+        decode: ChargePrepared.fromJson,
       );
       if (resume == null) {
         return 'pending';
       }
-      return resume['chargeId'] as String;
+      return resume.chargeId;
     });
 
     return script.step<String>('confirm', (ctx) async {
@@ -901,8 +903,13 @@ If you are inspecting the underlying `RunState` directly, use
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
 `state.suspensionPayloadJson(...)`, or
 `state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
-Checkpoint entries from `viewCheckpoints(...)` now expose the same convenience
-surface via `entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
+Workflow run detail views expose the same convenience surface via
+`runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
+`runView.suspensionPayloadJson(...)`, and
+`runView.suspensionPayloadAs(codec: ...)`.
+Checkpoint entries from `viewCheckpoints(...)` and
+`WorkflowCheckpointView.fromEntry(...)` expose the same surface via
+`entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
 
 In the example above, these calls inside `run(...)`:
 

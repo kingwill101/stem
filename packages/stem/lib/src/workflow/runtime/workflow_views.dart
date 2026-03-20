@@ -1,3 +1,4 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
@@ -11,11 +12,11 @@ class WorkflowRunView {
     required this.status,
     required this.cursor,
     required this.createdAt,
+    required this.params,
+    required this.runtime,
     this.updatedAt,
     this.result,
     this.lastError,
-    required this.params,
-    required this.runtime,
     this.suspensionData,
   });
 
@@ -57,6 +58,26 @@ class WorkflowRunView {
   /// Final result payload when completed.
   final Object? result;
 
+  /// Decodes the final result payload with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the final result payload with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Last error payload, if present.
   final Map<String, Object?>? lastError;
 
@@ -68,6 +89,31 @@ class WorkflowRunView {
 
   /// Suspension payload, if run is suspended.
   final Map<String, Object?>? suspensionData;
+
+  /// Resume payload delivered to the suspended run, when present.
+  Object? get suspensionPayload => suspensionData?['payload'];
+
+  /// Decodes the suspension payload with [codec], when present.
+  TPayload? suspensionPayloadAs<TPayload>({
+    required PayloadCodec<TPayload> codec,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension payload with a JSON decoder, when present.
+  TPayload? suspensionPayloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Serializes this view into JSON.
   Map<String, Object?> toJson() {
@@ -95,8 +141,8 @@ class WorkflowCheckpointView {
     required this.workflow,
     required this.checkpointName,
     required this.baseCheckpointName,
-    this.iteration,
     required this.position,
+    this.iteration,
     this.completedAt,
     this.value,
   });
@@ -142,6 +188,26 @@ class WorkflowCheckpointView {
 
   /// Persisted checkpoint value.
   final Object? value;
+
+  /// Decodes the persisted checkpoint value with [codec].
+  TValue? valueAs<TValue>({required PayloadCodec<TValue> codec}) {
+    final stored = value;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a JSON decoder.
+  TValue? valueJson<TValue>({
+    required TValue Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Serializes this view into JSON.
   Map<String, Object?> toJson() {

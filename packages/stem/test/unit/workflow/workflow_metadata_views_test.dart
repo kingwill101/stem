@@ -228,6 +228,66 @@ void main() {
       expect(plain.iteration, isNull);
     });
   });
+
+  group('Workflow view decode helpers', () {
+    test('decodes run results and suspension payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-view-1',
+        workflow: 'invoice',
+        status: WorkflowStatus.suspended,
+        cursor: 2,
+        params: const {'tenant': 'acme'},
+        createdAt: DateTime.utc(2026, 2, 25),
+        result: const {'invoiceId': 'inv-4'},
+        suspensionData: const {
+          'type': 'event',
+          'payload': {'invoiceId': 'inv-5'},
+        },
+      );
+      final view = WorkflowRunView.fromState(state);
+
+      expect(
+        view.resultJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-4',
+        ),
+      );
+      expect(
+        view.suspensionPayloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-5',
+        ),
+      );
+    });
+
+    test('decodes checkpoint values as DTOs', () {
+      const entry = WorkflowStepEntry(
+        name: 'approval#1',
+        value: {'invoiceId': 'inv-6'},
+        position: 1,
+      );
+      final view = WorkflowCheckpointView.fromEntry(
+        runId: 'run-view-2',
+        workflow: 'invoice',
+        entry: entry,
+      );
+
+      expect(
+        view.valueJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-6',
+        ),
+      );
+    });
+  });
 }
 
 class _InvoicePayload {

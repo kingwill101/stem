@@ -46,6 +46,11 @@
   `WorkflowStepEntry.valueJson(...)` / `valueAs(codec: ...)` so raw watcher
   and checkpoint inspection paths can decode DTO payloads without manual
   casts.
+- Added `WorkflowRunView.resultJson(...)`,
+  `WorkflowRunView.suspensionPayloadJson(...)`, and
+  `WorkflowCheckpointView.valueJson(...)` plus their `...As(codec: ...)`
+  counterparts so dashboard/CLI workflow detail views can decode DTO payloads
+  without manual casts.
 - Added `GroupStatus.resultValues<T>()`, `resultJson(...)`, and
   `resultAs(codec: ...)` so canvas/group status inspection can decode typed
   child results without manually mapping raw `TaskStatus.payload` values.
