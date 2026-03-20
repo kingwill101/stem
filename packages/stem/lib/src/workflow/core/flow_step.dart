@@ -50,6 +50,19 @@ class FlowStep {
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
+  /// Rehydrates a flow step from serialized JSON.
+  factory FlowStep.fromJson(Map<String, Object?> json) {
+    return FlowStep(
+      name: json['name']?.toString() ?? '',
+      title: json['title']?.toString(),
+      kind: _kindFromJson(json['kind']),
+      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
+      autoVersion: json['autoVersion'] == true,
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+      handler: (_) async {},
+    );
+  }
+
   /// Creates a step definition backed by a typed [valueCodec].
   static FlowStep typed<T>({
     required String name,
@@ -71,19 +84,6 @@ class FlowStep {
       kind: kind,
       taskNames: taskNames,
       metadata: metadata,
-    );
-  }
-
-  /// Rehydrates a flow step from serialized JSON.
-  factory FlowStep.fromJson(Map<String, Object?> json) {
-    return FlowStep(
-      name: json['name']?.toString() ?? '',
-      title: json['title']?.toString(),
-      kind: _kindFromJson(json['kind']),
-      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
-      autoVersion: json['autoVersion'] == true,
-      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
-      handler: (_) async {},
     );
   }
 
@@ -166,18 +166,6 @@ class FlowStepControl {
     Map<String, Object?>? data,
   }) => FlowStepControl._(FlowControlType.sleep, delay: duration, data: data);
 
-  /// Suspend the run until [duration] elapses with a DTO payload.
-  static FlowStepControl sleepJson<T>(
-    Duration duration,
-    T value, {
-    String? typeName,
-  }) => FlowStepControl.sleep(
-    duration,
-    data: Map<String, Object?>.from(
-      PayloadCodec.encodeJsonMap(value, typeName: typeName),
-    ),
-  );
-
   /// Suspend the run until an event with [topic] arrives.
   factory FlowStepControl.awaitTopic(
     String topic, {
@@ -188,6 +176,22 @@ class FlowStepControl {
     topic: topic,
     deadline: deadline,
     data: data,
+  );
+
+  /// Continue execution without suspending.
+  factory FlowStepControl.continueRun() =>
+      FlowStepControl._(FlowControlType.continueRun);
+
+  /// Suspend the run until [duration] elapses with a DTO payload.
+  static FlowStepControl sleepJson<T>(
+    Duration duration,
+    T value, {
+    String? typeName,
+  }) => FlowStepControl.sleep(
+    duration,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
   );
 
   /// Suspend the run until an event with [topic] arrives with a DTO payload.
@@ -203,10 +207,6 @@ class FlowStepControl {
       PayloadCodec.encodeJsonMap(value, typeName: typeName),
     ),
   );
-
-  /// Continue execution without suspending.
-  factory FlowStepControl.continueRun() =>
-      FlowStepControl._(FlowControlType.continueRun);
 
   /// Control type emitted by the step.
   final FlowControlType type;

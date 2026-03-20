@@ -29,7 +29,6 @@ void main() {
       Object? progressData;
       final context = TaskContext(
         id: 'parent-0b',
-        args: const {},
         attempt: 0,
         headers: const {},
         meta: const {},

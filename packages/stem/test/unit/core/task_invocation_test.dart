@@ -145,22 +145,25 @@ void main() {
     expect(context.argOr<String>('tenant', 'global'), equals('global'));
   });
 
-  test('TaskInvocationContext.local reports progress with JSON DTO payloads', () async {
-    Object? progressData;
-    final context = TaskInvocationContext.local(
-      id: 'task-1b',
-      headers: const {},
-      meta: const {},
+  test(
+    'TaskInvocationContext.local reports progress with JSON DTO payloads',
+    () async {
+      Object? progressData;
+      final context = TaskInvocationContext.local(
+        id: 'task-1b',
+        headers: const {},
+        meta: const {},
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
       progress: (_, {Map<String, Object?>? data}) async => progressData = data,
     );
 
-    await context.progressJson(25, const _ProgressUpdate(stage: 'warming'));
+      await context.progressJson(25, const _ProgressUpdate(stage: 'warming'));
 
-    expect(progressData, equals(const {'stage': 'warming'}));
-  });
+      expect(progressData, equals(const {'stage': 'warming'}));
+    },
+  );
 
   test('TaskInvocationContext.local merges headers/meta and lineage', () async {
     final enqueuer = _CapturingEnqueuer('task-1');

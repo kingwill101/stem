@@ -1,5 +1,5 @@
-import 'package:stem/src/core/stem_event.dart';
 import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/stem_event.dart';
 
 /// Enumerates workflow step event types emitted by the runtime.
 enum WorkflowStepEventType {
