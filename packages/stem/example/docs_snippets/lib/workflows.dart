@@ -17,6 +17,30 @@ class ApprovalDraft {
   }
 }
 
+class ApprovalDecision {
+  const ApprovalDecision({required this.approvedBy});
+
+  final String approvedBy;
+
+  Map<String, dynamic> toJson() => {'approvedBy': approvedBy};
+
+  factory ApprovalDecision.fromJson(Map<String, dynamic> json) {
+    return ApprovalDecision(approvedBy: json['approvedBy'] as String);
+  }
+}
+
+class ChargePrepared {
+  const ChargePrepared({required this.chargeId});
+
+  final String chargeId;
+
+  Map<String, dynamic> toJson() => {'chargeId': chargeId};
+
+  factory ChargePrepared.fromJson(Map<String, dynamic> json) {
+    return ChargePrepared(chargeId: json['chargeId'] as String);
+  }
+}
+
 // #region workflows-runtime
 Future<void> bootstrapWorkflowApp() async {
   // #region workflows-app-create
@@ -63,13 +87,14 @@ class ApprovalsFlow {
       });
 
       flow.step('manager-review', (ctx) async {
-        final resume = ctx.waitForEventValue<Map<String, Object?>>(
+        final resume = ctx.waitForEventValueJson<ApprovalDecision>(
           'approvals.manager',
+          decode: ApprovalDecision.fromJson,
         );
         if (resume == null) {
           return null;
         }
-        return resume.value<String>('approvedBy');
+        return resume.approvedBy;
       });
 
       flow.step('finalize', (ctx) async {
@@ -96,13 +121,14 @@ final retryScript = WorkflowScript(
   name: 'billing.retry-script',
   run: (script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+      final resume = ctx.waitForEventValueJson<ChargePrepared>(
         'billing.charge.prepared',
+        decode: ChargePrepared.fromJson,
       );
       if (resume == null) {
         return 'pending';
       }
-      return resume.requiredValue<String>('chargeId');
+      return resume.chargeId;
     });
 
     final receipt = await script.step<String>('confirm', (ctx) async {
@@ -180,13 +206,14 @@ class ApprovalsAnnotatedWorkflow {
   @WorkflowStep(name: 'manager-review')
   Future<String?> managerReview({FlowContext? context}) async {
     final ctx = context!;
-    final resume = ctx.waitForEventValue<Map<String, Object?>>(
+    final resume = ctx.waitForEventValueJson<ApprovalDecision>(
       'approvals.manager',
+      decode: ApprovalDecision.fromJson,
     );
     if (resume == null) {
       return null;
     }
-    return resume.value<String>('approvedBy');
+    return resume.approvedBy;
   }
 
   @WorkflowStep()
@@ -202,13 +229,14 @@ class BillingRetryAnnotatedWorkflow {
   Future<String> run({WorkflowScriptContext? context}) async {
     final script = context!;
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.waitForEventValue<Map<String, Object?>>(
+      final resume = ctx.waitForEventValueJson<ChargePrepared>(
         'billing.charge.prepared',
+        decode: ChargePrepared.fromJson,
       );
       if (resume == null) {
         return 'pending';
       }
-      return resume.requiredValue<String>('chargeId');
+      return resume.chargeId;
     });
 
     return script.step<String>('confirm', (ctx) async {
