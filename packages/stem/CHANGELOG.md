@@ -32,6 +32,9 @@
 - Simplified the Redis producer examples in `retry_task` and `signals_demo` to
   use `StemClient.fromUrl(...)` instead of manually creating a broker and raw
   `Stem` producer just to enqueue tasks.
+- Simplified the TLS-aware `autoscaling_demo` and `ops_health_suite` producer
+  examples to use `StemClient.create(...)` with broker/backend factories
+  instead of hand-constructing `Stem` for publishing.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

@@ -5,10 +5,18 @@ import 'package:stem_autoscaling_demo/shared.dart';
 
 Future<void> main() async {
   final config = StemConfig.fromEnvironment();
-  final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
-  final backend = await connectBackend(backendUrl, tls: config.tls);
-  final tasks = buildTasks();
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => connectBroker(config.brokerUrl, tls: config.tls),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => connectBackend(backendUrl, tls: config.tls),
+      dispose: (backend) => backend.close(),
+    ),
+    tasks: buildTasks(),
+  );
 
   final taskCount = _parseInt('TASKS', fallback: 48, min: 1);
   final burst = _parseInt('BURST', fallback: 12, min: 1);
@@ -21,7 +29,6 @@ Future<void> main() async {
     'tasks=$taskCount burst=$burst pauseMs=$pauseMs durationMs=$durationMs',
   );
 
-  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
   const options = TaskOptions(queue: autoscaleQueue);
 
   if (initialDelayMs > 0) {
@@ -30,7 +37,7 @@ Future<void> main() async {
 
   for (var i = 0; i < taskCount; i += 1) {
     final label = 'job-${i + 1}';
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'autoscale.work',
       options: options,
       args: {'label': label, 'durationMs': durationMs},
@@ -41,8 +48,7 @@ Future<void> main() async {
     }
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 int _parseInt(String key, {required int fallback, int min = 0}) {
