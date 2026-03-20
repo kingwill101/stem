@@ -32,6 +32,7 @@ import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
+import 'package:stem/src/workflow/runtime/workflow_views.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
 ///
@@ -258,6 +259,14 @@ class StemWorkflowApp
   /// }
   /// ```
   Future<RunState?> getRun(String runId) => store.get(runId);
+
+  /// Returns the combined run + checkpoint detail view for [runId].
+  ///
+  /// This is a convenience wrapper over [WorkflowRuntime.viewRunDetail] so
+  /// callers do not need to reach through [runtime] for common inspection.
+  Future<WorkflowRunDetailView?> viewRunDetail(String runId) {
+    return runtime.viewRunDetail(runId);
+  }
 
   /// Polls the workflow store until the run reaches a terminal state.
   ///

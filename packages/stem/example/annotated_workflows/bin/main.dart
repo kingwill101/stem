@@ -26,7 +26,7 @@ Future<void> main() async {
   );
   print('Script result: ${jsonEncode(scriptResult?.value?.toJson())}');
 
-  final scriptDetail = await app.runtime.viewRunDetail(scriptResult!.runId);
+  final scriptDetail = await app.viewRunDetail(scriptResult!.runId);
   final scriptCheckpoints = scriptDetail?.checkpoints
       .map((checkpoint) => checkpoint.baseCheckpointName)
       .join(' -> ');
@@ -50,7 +50,7 @@ Future<void> main() async {
   );
   print('Context script result: ${jsonEncode(contextResult?.value?.toJson())}');
 
-  final contextDetail = await app.runtime.viewRunDetail(contextResult!.runId);
+  final contextDetail = await app.viewRunDetail(contextResult!.runId);
   final contextCheckpoints = contextDetail?.checkpoints
       .map((checkpoint) => checkpoint.baseCheckpointName)
       .join(' -> ');

@@ -167,7 +167,7 @@ class EcommerceServer {
         return _json(200, {'order': order});
       })
       ..get('/runs/<runId>', (Request request, String runId) async {
-        final detail = await workflowApp.runtime.viewRunDetail(runId);
+        final detail = await workflowApp.viewRunDetail(runId);
         if (detail == null) {
           return _error(404, 'Workflow run not found.', {'runId': runId});
         }

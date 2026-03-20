@@ -63,7 +63,7 @@ void main() {
         expect((await app.getTaskStatus(taskId))?.state, TaskState.succeeded);
 
         final dispatch = await app.canvas.group<String>([
-          task('test.status.task', args: const {}),
+          task('test.status.task'),
         ]);
         try {
           final groupStatus = await _waitForGroupStatus(
@@ -679,6 +679,31 @@ void main() {
         );
 
         expect(result?.value, 'hello stem');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('StemWorkflowApp exposes run detail helper', () async {
+      final flow = Flow<String>(
+        name: 'workflow.detail.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'detail-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflow('workflow.detail.helper');
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'detail-ok');
+
+        final detail = await workflowApp.viewRunDetail(runId);
+        expect(detail, isNotNull);
+        expect(detail!.run.runId, equals(runId));
       } finally {
         await workflowApp.shutdown();
       }
