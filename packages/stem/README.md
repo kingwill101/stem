@@ -318,7 +318,7 @@ class ParentTask implements TaskHandler<String> {
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final result = await childWorkflow.startBuilder().startAndWaitWith(context);
+    final result = await childWorkflow.startAndWaitWith(context);
     return result?.value ?? 'missing';
   }
 }

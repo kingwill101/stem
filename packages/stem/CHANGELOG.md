@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Updated the remaining README child-workflow snippet to use the direct
+  no-args helper `childWorkflow.startAndWaitWith(context)` instead of an
+  unnecessary `startBuilder()` hop.
 - Updated the public workflow docs and annotated workflow example to prefer
   direct child-workflow helpers like `ref.startAndWaitWith(context, value)` in
   durable boundaries, keeping `startWorkflowBuilder(...)` for advanced
