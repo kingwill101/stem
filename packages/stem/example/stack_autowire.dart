@@ -61,12 +61,11 @@ Future<void> main() async {
   );
 
   try {
-    await app.start();
     await workflowApp.start();
     await beat.start();
 
-    await app.stem.enqueue('demo.ping');
-    await Future<void>.delayed(const Duration(seconds: 1));
+    final taskId = await app.enqueue('demo.ping');
+    await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 1));
   } finally {
     await beat.stop();
     await workflowApp.shutdown();

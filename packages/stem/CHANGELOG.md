@@ -17,6 +17,9 @@
 - Updated the client-backed workflow examples to attach `stemModule` at
   `StemClient` creation time and then call `createWorkflowApp()` without
   repeating the bundle.
+- Updated the `stack_autowire` example to use `StemApp` lazy-start and the
+  high-level `app.enqueue(...)` / `app.waitForTask(...)` surface instead of
+  manually starting the task app and dropping to `app.stem`.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
