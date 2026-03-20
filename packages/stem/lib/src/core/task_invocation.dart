@@ -845,15 +845,12 @@ class TaskInvocationContext implements TaskExecutionContext {
     return delegate.emitEvent(event, value);
   }
 
-  /// Build a caller-bound fluent enqueue request for this invocation.
-  BoundTaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
+  /// Build a fluent enqueue request for this invocation.
+  TaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,
     required TArgs args,
   }) {
-    return BoundTaskEnqueueBuilder(
-      enqueuer: this,
-      builder: TaskEnqueueBuilder(definition: definition, args: args),
-    );
+    return TaskEnqueueBuilder(definition: definition, args: args);
   }
 
   /// Alias for enqueue.

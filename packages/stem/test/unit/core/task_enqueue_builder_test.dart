@@ -81,7 +81,9 @@ void main() {
     expect(call.encodeArgs(), containsPair('a', 1));
   });
 
-  test('TaskEnqueueBuilder.build composes with enqueueCall and typed waits', () async {
+  test(
+    'TaskEnqueueBuilder.build composes with enqueueCall and typed waits',
+    () async {
       final definition = TaskDefinition<Map<String, Object?>, String>(
         name: 'demo.task',
         encodeArgs: (args) => args,
@@ -103,7 +105,9 @@ void main() {
     },
   );
 
-  test('TaskEnqueuer.prepareEnqueue binds builder assembly to the enqueuer', () async {
+  test(
+    'TaskEnqueuer.prepareEnqueue binds builder assembly to the enqueuer',
+    () async {
     final enqueuer = _RecordingTaskEnqueuer();
     final definition = TaskDefinition<Map<String, Object?>, String>(
       name: 'demo.task',
@@ -124,7 +128,9 @@ void main() {
     expect(enqueuer.lastCall!.resolveOptions().queue, 'critical');
   });
 
-  test('BoundTaskEnqueueBuilder.build composes with typed waits', () async {
+  test(
+    'TaskEnqueuer.prepareEnqueue builders compose with typed waits',
+    () async {
       final caller = _RecordingTaskResultCaller();
       final definition = TaskDefinition<Map<String, Object?>, String>(
         name: 'demo.task',

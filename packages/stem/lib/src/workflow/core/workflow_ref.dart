@@ -400,62 +400,16 @@ class WorkflowStartBuilder<TParams, TResult extends Object?> {
   }
 }
 
-/// Caller-bound fluent workflow start builder.
-///
-/// This mirrors the role `TaskInvocationContext.prepareEnqueue(...)` plays for
-/// tasks: a workflow-capable caller can create a fluent start request without
-/// pivoting back through the workflow ref.
-class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
-  /// Creates a caller-bound workflow start builder.
-  BoundWorkflowStartBuilder._({
-    required WorkflowCaller caller,
-    required WorkflowStartBuilder<TParams, TResult> builder,
-  }) : _caller = caller,
-       _builder = builder;
-
-  final WorkflowCaller _caller;
-  final WorkflowStartBuilder<TParams, TResult> _builder;
-
-  /// Sets the parent workflow run id for this start.
-  BoundWorkflowStartBuilder<TParams, TResult> parentRunId(String parentRunId) {
-    _builder.parentRunId(parentRunId);
-    return this;
-  }
-
-  /// Sets the retention TTL for this run.
-  BoundWorkflowStartBuilder<TParams, TResult> ttl(Duration ttl) {
-    _builder.ttl(ttl);
-    return this;
-  }
-
-  /// Sets the cancellation policy for this run.
-  BoundWorkflowStartBuilder<TParams, TResult> cancellationPolicy(
-    WorkflowCancellationPolicy cancellationPolicy,
-  ) {
-    _builder.cancellationPolicy(cancellationPolicy);
-    return this;
-  }
-
-  /// Builds the [WorkflowStartCall] with accumulated overrides.
-  WorkflowStartCall<TParams, TResult> build() => _builder.build();
-
-  /// Workflow caller attached to this builder.
-  WorkflowCaller get caller => _caller;
-}
-
 /// Convenience helpers for building typed workflow starts directly from a
 /// workflow-capable caller.
 extension WorkflowCallerBuilderExtension on WorkflowCaller {
-  /// Creates a caller-bound fluent start builder for a typed workflow ref.
-  BoundWorkflowStartBuilder<TParams, TResult>
+  /// Creates a fluent start builder for a typed workflow ref.
+  WorkflowStartBuilder<TParams, TResult>
   prepareStart<TParams, TResult extends Object?>({
     required WorkflowRef<TParams, TResult> definition,
     required TParams params,
   }) {
-    return BoundWorkflowStartBuilder._(
-      caller: this,
-      builder: definition.prepareStart(params),
-    );
+    return definition.prepareStart(params);
   }
 
 }

@@ -514,7 +514,7 @@ void main() {
       }
     });
 
-    test('workflow callers expose bound workflow builders', () async {
+    test('workflow callers expose workflow start builders', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.bound.builder.flow',
         build: (builder) {
