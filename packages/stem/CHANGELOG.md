@@ -5,6 +5,9 @@
 - Added `awaitEventRef(...)` on flow and script checkpoint resume helpers so
   typed `WorkflowEventRef<T>` values now cover both the common wait-for-value
   path and the lower-level suspend-first path.
+- Reframed the producer docs to treat `TaskDefinition` and shared
+  `TaskEnqueuer` surfaces as the happy path, keeping raw name-based enqueue as
+  the lower-level interop option.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
   `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
   `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to
