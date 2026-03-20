@@ -131,6 +131,8 @@
   stemApp: ...)` reuse `stemApp.module` by default while failing fast when the
   reused worker does not actually cover the workflow/task queues the runtime
   needs.
+- Made `Canvas.group(..., groupId: ...)` auto-initialize missing groups so
+  custom group ids no longer require a manual `backend.initGroup(...)` first.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

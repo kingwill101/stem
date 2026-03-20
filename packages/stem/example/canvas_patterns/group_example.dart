@@ -21,7 +21,6 @@ Future<void> main() async {
     ),
   );
   const groupHandle = 'squares-demo';
-  await app.backend.initGroup(GroupDescriptor(id: groupHandle, expected: 3));
   final dispatch = await app.canvas.group<int>([
     task<int>('square', args: <String, Object?>{'value': 2}),
     task<int>('square', args: <String, Object?>{'value': 3}),
