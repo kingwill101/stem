@@ -108,6 +108,10 @@
 - Added `ProgressSignal.dataValue(...)`, `requiredDataValue(...)`,
   `dataJson(...)`, and `dataAs(codec: ...)` so raw task-progress signal
   consumers can decode structured progress metadata without raw map casts.
+- Added `ProgressSignal.payloadJson(...)`,
+  `payloadVersionedJson(...)`, and `payloadAs(codec: ...)` so raw task
+  progress inspection can decode a whole DTO payload without field-by-field
+  map reads.
 - Added `TaskExecutionContext` as the shared task-side execution surface for
   `TaskContext` and `TaskInvocationContext`, and taught `stem_builder` to
   accept it directly in annotated task definitions.

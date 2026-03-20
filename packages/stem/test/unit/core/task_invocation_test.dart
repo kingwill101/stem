@@ -248,6 +248,8 @@ void main() {
     const signal = ProgressSignal(
       50,
       data: {
+        PayloadCodec.versionKey: 2,
+        'stage': 'warming',
         'step': 2,
         'update': {'stage': 'warming'},
       },
@@ -266,6 +268,21 @@ void main() {
     expect(
       signal.dataVersionedJson<_ProgressUpdate>(
         'update',
+        version: 2,
+        decode: _ProgressUpdate.fromVersionedJson,
+      ),
+      isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
+    );
+    expect(
+      signal.payloadAs<_ProgressUpdate>(codec: _progressUpdateCodec),
+      isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
+    );
+    expect(
+      signal.payloadJson<_ProgressUpdate>(decode: _ProgressUpdate.fromJson),
+      isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
+    );
+    expect(
+      signal.payloadVersionedJson<_ProgressUpdate>(
         version: 2,
         decode: _ProgressUpdate.fromVersionedJson,
       ),

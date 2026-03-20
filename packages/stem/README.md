@@ -338,8 +338,10 @@ class ParentTask implements TaskHandler<void> {
 
 If you inspect raw task progress signals, prefer
 `signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`,
-`signal.dataAs('key', codec: ...)`, or `signal.dataValue<T>('key')` over
-manual `signal.data?['key']` casts.
+`signal.dataAs('key', codec: ...)`, or `signal.dataValue<T>('key')` for keyed
+reads, and `signal.payloadJson(...)`,
+`signal.payloadVersionedJson(...)`, or `signal.payloadAs(codec: ...)` when the
+entire progress payload is one DTO.
 Shared `TaskExecutionContext` implementations also expose
 `context.retry(...)`, so typed annotated tasks can request retries without
 depending on a concrete task runtime class.

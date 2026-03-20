@@ -144,7 +144,9 @@ every retry signal and shows how the strategy interacts with broker timings.
   retry policy overrides.
 - when you inspect a raw `ProgressSignal`, prefer
   `signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`, or
-  `signal.dataValue<T>('key')` over manual `signal.data?['key']` casts.
+  `signal.dataValue<T>('key')` for keyed reads, or
+  `signal.payloadJson(...)`, `signal.payloadVersionedJson(...)`, and
+  `signal.payloadAs(codec: ...)` when the whole progress payload is one DTO.
 
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.

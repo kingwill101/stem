@@ -112,6 +112,13 @@ class ProgressSignal extends TaskInvocationSignal {
     return payload.value<T>(key, codec: codec);
   }
 
+  /// Decodes the full progress payload as a typed DTO with [codec].
+  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
   /// Decodes the progress metadata value for [key] as a typed DTO from JSON.
   T? dataJson<T>(
     String key, {
@@ -125,6 +132,19 @@ class ProgressSignal extends TaskInvocationSignal {
       decode: decode,
       typeName: typeName,
     );
+  }
+
+  /// Decodes the full progress payload as a typed DTO from JSON.
+  T? payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
   }
 
   /// Decodes the progress metadata value for [key] as a typed DTO from
@@ -148,6 +168,23 @@ class ProgressSignal extends TaskInvocationSignal {
       ).decode(json),
       typeName: typeName,
     );
+  }
+
+  /// Decodes the full progress payload as a typed DTO from version-aware JSON.
+  T? payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
   }
 }
 
