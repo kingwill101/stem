@@ -277,6 +277,10 @@ When a DTO payload needs an explicit persisted schema version, prefer
 `PayloadCodec.versionedJson(...)`. It stores `__stemPayloadVersion` beside the
 JSON payload and passes the persisted version into the decoder so you can keep
 older payloads readable while newer producers emit the latest shape.
+The same pattern now carries through the low-level readback helpers:
+`status.payloadVersionedJson(...)`, `result.payloadVersionedJson(...)`,
+`workflowResult.payloadVersionedJson(...)`, and
+`runState.resultVersionedJson(...)`.
 
 You can also build requests fluently from the task definition itself:
 

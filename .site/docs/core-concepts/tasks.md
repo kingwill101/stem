@@ -57,10 +57,12 @@ For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
 `decodeJson:` over a manual raw-payload cast.
 If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
 `status.payloadAs(codec: ...)` to decode the whole payload DTO without a
-separate cast/closure.
+separate cast/closure. Use `status.payloadVersionedJson(...)` when the stored
+payload carries an explicit `__stemPayloadVersion`.
 If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
 or `result.payloadAs(codec: ...)` to decode the stored task result DTO
-without another cast/closure.
+without another cast/closure. Use `result.payloadVersionedJson(...)` for the
+same versioned DTO path on persisted task results.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.versionedJson(...)`

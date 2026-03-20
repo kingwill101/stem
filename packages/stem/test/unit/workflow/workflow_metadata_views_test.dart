@@ -59,6 +59,17 @@ void main() {
           'inv-1',
         ),
       );
+      expect(
+        state.suspensionPayloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
     });
 
     test('exposes runtime queue and serialization metadata', () {
@@ -113,6 +124,17 @@ void main() {
       expect(
         state.resultJson<_InvoicePayload>(
           decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-2',
+        ),
+      );
+      expect(
+        state.resultVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
         ),
         isA<_InvoicePayload>().having(
           (value) => value.invoiceId,
@@ -294,6 +316,14 @@ class _InvoicePayload {
   const _InvoicePayload({required this.invoiceId});
 
   factory _InvoicePayload.fromJson(Map<String, dynamic> json) {
+    return _InvoicePayload(invoiceId: json['invoiceId'] as String);
+  }
+
+  factory _InvoicePayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _InvoicePayload(invoiceId: json['invoiceId'] as String);
   }
 

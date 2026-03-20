@@ -195,6 +195,13 @@ void main() {
         ),
         isA<_ReceiptPayload>().having((value) => value.id, 'id', 'receipt-1'),
       );
+      expect(
+        status.payloadVersionedJson<_ReceiptPayload>(
+          version: 2,
+          decode: _ReceiptPayload.fromVersionedJson,
+        ),
+        isA<_ReceiptPayload>().having((value) => value.id, 'id', 'receipt-1'),
+      );
     });
 
     test('requiredPayloadValue throws when payload is absent', () {
@@ -293,6 +300,16 @@ void main() {
       expect(
         dtoStatus.resultJson<_GroupReceipt>(
           decode: _GroupReceipt.fromJson,
+        ),
+        {
+          'task-1': isA<_GroupReceipt>()
+              .having((value) => value.id, 'id', 'receipt-1'),
+        },
+      );
+      expect(
+        dtoStatus.resultVersionedJson<_GroupReceipt>(
+          version: 2,
+          decode: _GroupReceipt.fromVersionedJson,
         ),
         {
           'task-1': isA<_GroupReceipt>()
@@ -471,6 +488,14 @@ class _GroupReceipt {
     return _GroupReceipt(id: json['id'] as String);
   }
 
+  factory _GroupReceipt.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _GroupReceipt(id: json['id'] as String);
+  }
+
   final String id;
 }
 
@@ -478,6 +503,14 @@ class _ReceiptPayload {
   const _ReceiptPayload({required this.id});
 
   factory _ReceiptPayload.fromJson(Map<String, dynamic> json) {
+    return _ReceiptPayload(id: json['id'] as String);
+  }
+
+  factory _ReceiptPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _ReceiptPayload(id: json['id'] as String);
   }
 

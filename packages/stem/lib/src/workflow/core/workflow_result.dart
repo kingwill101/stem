@@ -81,6 +81,24 @@ class WorkflowResult<T extends Object?> {
     ).decode(stored);
   }
 
+  /// Decodes the raw persisted workflow result with a version-aware JSON
+  /// decoder.
+  TResult? payloadVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = rawResult;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Untyped payload stored by the workflow, useful for legacy consumers or
   /// debugging scenarios.
   final Object? rawResult;

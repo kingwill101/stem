@@ -18,6 +18,11 @@
 - Added direct `versionedJson(...)` shortcuts for manual task definitions,
   workflow refs, and workflow event refs so evolving DTO payloads do not need
   a separate `PayloadCodec.versionedJson(...)` constant in the common case.
+- Added versioned DTO decode helpers across low-level result snapshots:
+  `TaskStatus.payloadVersionedJson(...)`, `TaskResult.payloadVersionedJson(...)`,
+  `WorkflowResult.payloadVersionedJson(...)`, `GroupStatus.resultVersionedJson(...)`,
+  `RunState.resultVersionedJson(...)`, and
+  `RunState.suspensionPayloadVersionedJson(...)`.
 - Added low-level DTO shortcuts for name-based dispatch:
   `TaskEnqueuer.enqueueJson(...)`, `WorkflowRuntime.startWorkflowJson(...)`,
   `StemWorkflowApp.startWorkflowJson(...)`, `WorkflowRuntime.emitJson(...)`,

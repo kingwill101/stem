@@ -58,6 +58,24 @@ class TaskResult<T extends Object?> {
     ).decode(stored);
   }
 
+  /// Decodes the raw persisted task payload with a version-aware JSON
+  /// decoder.
+  TResult? payloadVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = rawPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Raw payload stored by the backend (useful for debugging or manual casts).
   final Object? rawPayload;
 

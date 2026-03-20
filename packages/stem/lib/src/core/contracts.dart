@@ -290,6 +290,24 @@ class TaskStatus {
     ).decode(stored);
   }
 
+  /// Decodes the entire payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Returns the decoded payload value, or [fallback] when it is absent.
   T payloadValueOr<T>(T fallback, {PayloadCodec<T>? codec}) {
     return payloadValue<T>(codec: codec) ?? fallback;
@@ -3233,6 +3251,25 @@ class GroupStatus {
       for (final entry in results.entries)
         entry.key: entry.value.payloadJson(
           decode: decode,
+          typeName: typeName,
+        ),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with a version-aware
+  /// JSON decoder.
+  Map<String, T?> resultVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadVersionedJson(
+          version: version,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
           typeName: typeName,
         ),
     });

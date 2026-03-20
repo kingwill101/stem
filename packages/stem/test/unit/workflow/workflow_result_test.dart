@@ -79,6 +79,14 @@ void main() {
       isA<_WorkflowReceipt>()
           .having((value) => value.id, 'id', 'receipt-1'),
     );
+    expect(
+      result.payloadVersionedJson<_WorkflowReceipt>(
+        version: 2,
+        decode: _WorkflowReceipt.fromVersionedJson,
+      ),
+      isA<_WorkflowReceipt>()
+          .having((value) => value.id, 'id', 'receipt-1'),
+    );
   });
 
   test('WorkflowResult.requiredValue throws when value is absent', () {
@@ -115,6 +123,14 @@ class _WorkflowReceipt {
   const _WorkflowReceipt({required this.id});
 
   factory _WorkflowReceipt.fromJson(Map<String, dynamic> json) {
+    return _WorkflowReceipt(id: json['id'] as String);
+  }
+
+  factory _WorkflowReceipt.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _WorkflowReceipt(id: json['id'] as String);
   }
 

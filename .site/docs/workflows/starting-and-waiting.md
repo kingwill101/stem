@@ -75,6 +75,10 @@ If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 `WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
 case. Use `Flow.codec(...)` or `WorkflowScript.codec(...)` when the result
 needs a custom payload codec.
+When the persisted workflow result or suspension payload carries an explicit
+`__stemPayloadVersion`, use `workflowResult.payloadVersionedJson(...)`,
+`runState.resultVersionedJson(...)`, or
+`runState.suspensionPayloadVersionedJson(...)` on the low-level snapshots.
 
 For workflows without start params, start directly from the flow or script
 itself with `start(...)`, `startAndWait(...)`, or `prepareStart()`.

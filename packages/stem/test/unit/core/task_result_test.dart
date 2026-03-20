@@ -83,6 +83,13 @@ void main() {
       ),
       isA<_TaskReceipt>().having((value) => value.id, 'id', 'receipt-1'),
     );
+    expect(
+      result.payloadVersionedJson<_TaskReceipt>(
+        version: 2,
+        decode: _TaskReceipt.fromVersionedJson,
+      ),
+      isA<_TaskReceipt>().having((value) => value.id, 'id', 'receipt-1'),
+    );
   });
 
   test('TaskResult.requiredValue throws when value is absent', () {
@@ -113,6 +120,14 @@ class _TaskReceipt {
   const _TaskReceipt({required this.id});
 
   factory _TaskReceipt.fromJson(Map<String, dynamic> json) {
+    return _TaskReceipt(id: json['id'] as String);
+  }
+
+  factory _TaskReceipt.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _TaskReceipt(id: json['id'] as String);
   }
 
