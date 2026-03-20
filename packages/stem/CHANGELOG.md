@@ -152,6 +152,9 @@
 - Added `continuationQueue:` and `executionQueue:` to `StemWorkflowApp`
   bootstrap helpers so custom workflow channel wiring no longer needs manual
   `WorkflowRuntime` construction.
+- Clarified the README workflow guidance to prefer `StemWorkflowApp`
+  helpers in the happy path and reserve direct `WorkflowRuntime` usage for
+  low-level scenarios.
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.

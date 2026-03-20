@@ -261,7 +261,8 @@ If you reuse an existing `StemApp`, its worker subscription stays in charge.
 Workflow-side queue inference only applies when `StemWorkflowApp` is creating
 the worker for you.
 
-The generated workflow refs work on `WorkflowRuntime` too:
+When you are intentionally using the low-level `WorkflowRuntime`, the
+generated workflow refs work there too:
 
 ```dart
 final runtime = workflowApp.runtime;
@@ -269,7 +270,7 @@ final runId = await StemWorkflowDefinitions.userSignup.startWith(
   runtime,
   'user@example.com',
 );
-await runtime.executeRun(runId);
+await workflowApp.executeRun(runId);
 ```
 
 Annotated tasks also get generated definitions:

@@ -13,6 +13,8 @@
 - Refreshed generated child-workflow examples and docs to use the unified
   `startWith(...)` / `startAndWaitWith(...)` helper surface inside durable
   workflow contexts.
+- Clarified the builder README to treat direct `WorkflowRuntime` usage as a
+  low-level path and prefer app helpers for the common case.
 - Added typed workflow starter generation and app helper output for annotated
   workflow/task definitions.
 - Switched generated output to per-file `part` generation using `.stem.g.dart`

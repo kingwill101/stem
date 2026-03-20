@@ -993,11 +993,12 @@ backend metadata under `stem.unique.duplicates`.
 
 - Awaited events behave the same way: the emitted payload is delivered via
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
-- When you have a DTO event, emit it through `runtime.emitValue(...)` /
-  `workflowApp.emitValue(...)` with a `PayloadCodec<T>`, or bundle the topic
-  and codec once in a `WorkflowEventRef<T>` and use `event.emitWith(...)`
-  together with `waitForEventRef(...)`. Event payloads still serialize onto the
-  existing `Map<String, Object?>` wire format.
+- When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
+  `runtime.emitValue(...)` when you are intentionally using the low-level
+  runtime) with a `PayloadCodec<T>`, or bundle the topic and codec once in a
+  `WorkflowEventRef<T>` and use `event.emitWith(...)` together with
+  `waitForEventRef(...)`. Event payloads still serialize onto the existing
+  `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so
@@ -1021,7 +1022,7 @@ flow.step(
   },
 );
 
-final runId = await runtime.startWorkflow(
+final runId = await workflowApp.startWorkflow(
   'demo.workflow',
   params: const {'userId': '42'},
   cancellationPolicy: const WorkflowCancellationPolicy(
