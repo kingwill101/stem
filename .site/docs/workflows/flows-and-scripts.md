@@ -36,9 +36,9 @@ final approvalsRef = approvalsFlow.ref<Map<String, Object?>>(
 ```
 
 When a flow has no start params, start directly from the flow itself with
-`flow.start(...)` or `flow.startAndWait(...)`. Keep `flow.prepareStart()` for
-the rarer cases where you want to assemble overrides incrementally before
-dispatch.
+`flow.start(...)` or `flow.startAndWait(...)`. Keep
+`flow.ref0().prepareStart()` for the rarer cases where you want to assemble
+overrides incrementally before dispatch.
 Use `ref0()` only when another API specifically needs a `NoArgsWorkflowRef`.
 
 Use `Flow` when:
@@ -63,8 +63,8 @@ final retryRef = retryScript.ref<Map<String, Object?>>(
 
 When a script has no start params, start directly from the script itself with
 `retryScript.start(...)` or `retryScript.startAndWait(...)`. Keep
-`retryScript.prepareStart()` for the rarer cases where you want to assemble
-overrides incrementally before dispatch. Use `ref0()` only when another API
+`retryScript.ref0().prepareStart()` for the rarer cases where you want to
+assemble overrides incrementally before dispatch. Use `ref0()` only when another API
 specifically needs a `NoArgsWorkflowRef`.
 
 Use `WorkflowScript` when:

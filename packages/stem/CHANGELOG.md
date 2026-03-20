@@ -275,12 +275,12 @@
   `PayloadCodec.json(...)` and `refJson(...)` surfaces.
 - Renamed the caller-bound advanced child-workflow helpers from
   `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` to
-  `prepareStart(...)` / `prepareNoArgsStart(...)` so the caller side aligns
-  with task-side `prepareEnqueue(...)` and ref-side `prepareStart(...)`.
+  `prepareStart(...)` so the caller side aligns with task-side
+  `prepareEnqueue(...)` and ref-side `prepareStart(...)`.
 - Renamed the advanced workflow-ref builder entrypoints from `startBuilder(...)`
-  / `startBuilder()` to `prepareStart(...)` / `prepareStart()` on
-  `WorkflowRef`, `NoArgsWorkflowRef`, `Flow`, and `WorkflowScript` so the
-  workflow side aligns with task-side `prepareEnqueue(...)`.
+  / `startBuilder()` to `prepareStart(...)` on `WorkflowRef` and
+  `NoArgsWorkflowRef` so the workflow side aligns with task-side
+  `prepareEnqueue(...)`.
 - Relaxed JSON/codec DTO decoding helpers to accept `Map<String, dynamic>`
   `fromJson(...)` signatures across manual task/workflow/event helpers and the
   shared `PayloadCodec` surface. DTO payloads still persist as string-keyed

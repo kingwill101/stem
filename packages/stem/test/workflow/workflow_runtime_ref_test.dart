@@ -483,7 +483,7 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final scriptBuilder = script.prepareStart().cancellationPolicy(
+        final scriptBuilder = script.ref0().prepareStart().cancellationPolicy(
           const WorkflowCancellationPolicy(
             maxRunDuration: Duration(seconds: 5),
           ),
@@ -553,7 +553,7 @@ void main() {
         expect(state?.parentRunId, 'parent-bound');
 
         final scriptBuilder = workflowApp.runtime
-            .prepareNoArgsStart(definition: scriptRef)
+            .prepareStart(definition: scriptRef.asRef, params: ())
             .cancellationPolicy(
               const WorkflowCancellationPolicy(
                 maxRunDuration: Duration(seconds: 5),

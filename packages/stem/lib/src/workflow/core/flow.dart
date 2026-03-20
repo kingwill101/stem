@@ -126,11 +126,6 @@ class Flow<T extends Object?> {
     return definition.ref0();
   }
 
-  /// Creates a fluent start builder for flows without start params.
-  WorkflowStartBuilder<(), T> prepareStart() {
-    return ref0().prepareStart();
-  }
-
   /// Starts this flow directly when it does not accept start params.
   Future<String> start(
     WorkflowCaller caller, {

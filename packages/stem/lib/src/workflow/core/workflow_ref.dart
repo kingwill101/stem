@@ -532,16 +532,6 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
     );
   }
 
-  /// Creates a caller-bound fluent start builder for a no-args workflow ref.
-  BoundWorkflowStartBuilder<(), TResult>
-  prepareNoArgsStart<TResult extends Object?>({
-    required NoArgsWorkflowRef<TResult> definition,
-  }) {
-    return BoundWorkflowStartBuilder._(
-      caller: this,
-      builder: definition.prepareStart(),
-    );
-  }
 }
 
 /// Convenience helpers for waiting on typed workflow refs using a generic
