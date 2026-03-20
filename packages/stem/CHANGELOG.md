@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Renamed the caller-bound advanced child-workflow helpers from
+  `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` to
+  `prepareStart(...)` / `prepareNoArgsStart(...)` so the caller side aligns
+  with task-side `prepareEnqueue(...)` and ref-side `prepareStart(...)`.
 - Renamed the advanced workflow-ref builder entrypoints from `startBuilder(...)`
   / `startBuilder()` to `prepareStart(...)` / `prepareStart()` on
   `WorkflowRef`, `NoArgsWorkflowRef`, `Flow`, and `WorkflowScript` so the

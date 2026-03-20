@@ -492,7 +492,7 @@ class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
 extension WorkflowCallerBuilderExtension on WorkflowCaller {
   /// Creates a caller-bound fluent start builder for a typed workflow ref.
   BoundWorkflowStartBuilder<TParams, TResult>
-  prepareWorkflowStart<TParams, TResult extends Object?>({
+  prepareStart<TParams, TResult extends Object?>({
     required WorkflowRef<TParams, TResult> definition,
     required TParams params,
   }) {
@@ -504,7 +504,7 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
 
   /// Creates a caller-bound fluent start builder for a no-args workflow ref.
   BoundWorkflowStartBuilder<(), TResult>
-  prepareNoArgsWorkflowStart<TResult extends Object?>({
+  prepareNoArgsStart<TResult extends Object?>({
     required NoArgsWorkflowRef<TResult> definition,
   }) {
     return BoundWorkflowStartBuilder._(
