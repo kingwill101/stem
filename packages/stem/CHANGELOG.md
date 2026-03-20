@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `StemApp.registerTask(...)`, `registerTasks(...)`, `registerModule(...)`,
+  and `registerModules(...)` so plain task apps now have the same late
+  registration ergonomics as `StemWorkflowApp`.
 - Added `decodeResultJson:` support to manual `refWithJsonCodec(...)` helpers
   on `WorkflowDefinition`, `Flow`, and `WorkflowScript`, so DTO result
   decoding can now live entirely on the typed workflow ref path.

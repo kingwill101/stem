@@ -118,6 +118,22 @@ final workflowApp = await StemWorkflowApp.inMemory(
 );
 ```
 
+The same bundle-first path works for plain task apps too:
+
+```dart
+final taskApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  module: stemModule,
+);
+```
+
+If you need to attach generated or hand-written task definitions after
+bootstrap, use the app helpers:
+
+- `registerTask(...)` / `registerTasks(...)`
+- `registerModule(...)` / `registerModules(...)`
+
 When debugging bootstrap wiring, inspect the queue set a bundle implies before
 you create the app:
 

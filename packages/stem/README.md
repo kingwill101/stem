@@ -723,6 +723,12 @@ final taskApp = await StemApp.fromUrl(
 `app.canvas` dispatch call, so you only need `await taskApp.start()` when you
 want explicit lifecycle control.
 
+For late registration on the plain task side, prefer the app helpers instead
+of reaching through the registry:
+
+- `registerTask(...)` / `registerTasks(...)`
+- `registerModule(...)` / `registerModules(...)`
+
 When you bootstrap a plain `StemApp`, the worker infers task queue
 subscriptions from the bundled or explicitly supplied task handlers. Set
 `workerConfig.subscription` explicitly only when you need broader routing.

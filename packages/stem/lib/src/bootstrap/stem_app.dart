@@ -72,6 +72,28 @@ class StemApp implements StemTaskApp {
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
 
+  /// Registers [handler] with the underlying registry.
+  void registerTask(TaskHandler<Object?> handler) => register(handler);
+
+  /// Registers [handlers] with the underlying registry.
+  void registerTasks(Iterable<TaskHandler<Object?>> handlers) {
+    handlers.forEach(register);
+  }
+
+  /// Registers all task handlers from [module] into this app.
+  void registerModule(StemModule module) {
+    registerTasks(module.tasks);
+  }
+
+  /// Registers all task handlers from [modules] into this app.
+  void registerModules(Iterable<StemModule> modules) {
+    final merged = StemModule.combine(modules: modules);
+    if (merged == null) {
+      return;
+    }
+    registerModule(merged);
+  }
+
   @override
   Future<String> enqueue(
     String name, {

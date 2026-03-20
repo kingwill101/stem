@@ -159,6 +159,57 @@ void main() {
       }
     });
 
+    test('StemApp exposes task registration helpers', () async {
+      final directHandler = FunctionTaskHandler<String>(
+        name: 'test.register.direct',
+        entrypoint: (context, args) async => 'direct-ok',
+        runInIsolate: false,
+      );
+      final moduleHandler = FunctionTaskHandler<String>(
+        name: 'test.register.module',
+        entrypoint: (context, args) async => 'module-ok',
+        runInIsolate: false,
+      );
+      final extraHandler = FunctionTaskHandler<String>(
+        name: 'test.register.extra',
+        entrypoint: (context, args) async => 'extra-ok',
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory();
+      try {
+        app
+          ..registerTask(directHandler)
+          ..registerModule(StemModule(tasks: [moduleHandler]))
+          ..registerModules([
+            StemModule(tasks: [extraHandler]),
+          ]);
+
+        final directTaskId = await app.enqueue('test.register.direct');
+        final directResult = await app.waitForTask<String>(
+          directTaskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(directResult?.value, 'direct-ok');
+
+        final moduleTaskId = await app.enqueue('test.register.module');
+        final moduleResult = await app.waitForTask<String>(
+          moduleTaskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(moduleResult?.value, 'module-ok');
+
+        final extraTaskId = await app.enqueue('test.register.extra');
+        final extraResult = await app.waitForTask<String>(
+          extraTaskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(extraResult?.value, 'extra-ok');
+      } finally {
+        await app.shutdown();
+      }
+    });
+
     test('inMemory applies worker config overrides', () async {
       final handler = FunctionTaskHandler<void>(
         name: 'test.worker-config',
