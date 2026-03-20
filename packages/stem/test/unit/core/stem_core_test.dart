@@ -35,6 +35,47 @@ void main() {
       expect(copy.queue, equals('emails'));
       expect(copy.meta, equals({'foo': 'bar'}));
     });
+
+    test('decodes whole args and meta DTO payloads', () {
+      final envelope = Envelope(
+        name: 'example',
+        args: const {
+          PayloadCodec.versionKey: 2,
+          'value': 42,
+        },
+        meta: const {
+          PayloadCodec.versionKey: 2,
+          'label': 'queued',
+        },
+      );
+
+      expect(
+        envelope.argsJson<_EnvelopeArgs>(decode: _EnvelopeArgs.fromJson).value,
+        42,
+      );
+      expect(
+        envelope
+            .argsVersionedJson<_EnvelopeArgs>(
+              version: 2,
+              decode: _EnvelopeArgs.fromVersionedJson,
+            )
+            .value,
+        42,
+      );
+      expect(
+        envelope.metaJson<_EnvelopeMeta>(decode: _EnvelopeMeta.fromJson).label,
+        'queued',
+      );
+      expect(
+        envelope
+            .metaVersionedJson<_EnvelopeMeta>(
+              version: 2,
+              decode: _EnvelopeMeta.fromVersionedJson,
+            )
+            .label,
+        'queued',
+      );
+    });
   });
 
   group('StemConfig', () {
@@ -746,6 +787,42 @@ class _CodecReceipt {
   final String id;
 
   Map<String, Object?> toJson() => {'id': id};
+}
+
+class _EnvelopeArgs {
+  const _EnvelopeArgs(this.value);
+
+  factory _EnvelopeArgs.fromJson(Map<String, dynamic> json) {
+    return _EnvelopeArgs(json['value'] as int);
+  }
+
+  factory _EnvelopeArgs.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _EnvelopeArgs.fromJson(json);
+  }
+
+  final int value;
+}
+
+class _EnvelopeMeta {
+  const _EnvelopeMeta(this.label);
+
+  factory _EnvelopeMeta.fromJson(Map<String, dynamic> json) {
+    return _EnvelopeMeta(json['label'] as String);
+  }
+
+  factory _EnvelopeMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _EnvelopeMeta.fromJson(json);
+  }
+
+  final String label;
 }
 
 const _codecReceiptCodec = PayloadCodec<_CodecReceipt>.json(

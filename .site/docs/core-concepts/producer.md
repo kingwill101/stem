@@ -60,6 +60,9 @@ Reach for them when the task name is truly dynamic or you are crossing a
 boundary that does not have the generated/manual `TaskDefinition`. When those
 calls already have DTO args, prefer `enqueuer.enqueueJson(...)` over
 hand-building an `args` map.
+If you later inspect the raw `Envelope`, prefer `envelope.argsJson(...)`,
+`envelope.argsVersionedJson(...)`, `envelope.metaJson(...)`, or
+`envelope.metaVersionedJson(...)` over manual map casts.
 
 ## Enqueue options
 

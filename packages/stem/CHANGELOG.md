@@ -154,6 +154,9 @@
   `ctx.requiredParamJson(...)`, and shared `valueJson(...)` /
   `requiredValueJson(...)` helpers so nested DTO payload fields no longer need
   a separate `PayloadCodec<T>` constant.
+- Added `Envelope.argsJson(...)`, `argsVersionedJson(...)`, `metaJson(...)`,
+  and `metaVersionedJson(...)` so low-level producer and signal code can
+  decode whole envelope DTO payloads without dropping to raw maps.
 - Added `valueVersionedJson(...)`, `requiredValueVersionedJson(...)`,
   `valueListVersionedJson(...)`, and
   `requiredValueListVersionedJson(...)` to the shared payload-map helpers so
