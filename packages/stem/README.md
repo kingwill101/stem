@@ -244,15 +244,20 @@ final workflowParams = ctx.paramsAs<ApprovalDraft>(
   codec: approvalDraftCodec,
 );
 final versionedParams = ctx.paramsVersionedJson<ApprovalDraft>(
-  version: 2,
+  defaultVersion: 2,
   decode: ApprovalDraft.fromVersionedJson,
 );
 final nestedDraft = ctx.paramVersionedJson<ApprovalDraft>(
   'draft',
-  version: 2,
+  defaultVersion: 2,
   decode: ApprovalDraft.fromVersionedJson,
 );
 ```
+
+For read-side `...VersionedJson(...)` helpers, `defaultVersion:` is only the
+fallback used when an older stored payload does not already include
+`__stemPayloadVersion`. Keep `version:` for write-side helpers that are
+actually persisting a new schema version.
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly. Prefer `enqueueAndWait(...)` when you only need

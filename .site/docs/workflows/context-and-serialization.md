@@ -67,6 +67,9 @@ Depending on the context type, you can access:
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `takeResumeJson<T>(...)` or `takeResumeVersionedJson<T>(...)` for DTO
   event-driven resumes without a separate codec constant
+- for read-side `...VersionedJson(...)` helpers, `defaultVersion:` is only the
+  fallback used when an older stored payload does not already carry
+  `__stemPayloadVersion`
 - `idempotencyKey(...)`
 - direct child-workflow start helpers such as
   `ref.start(context, params: value)` and

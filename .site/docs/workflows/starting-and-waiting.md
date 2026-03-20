@@ -80,6 +80,8 @@ When the persisted workflow result or suspension payload carries an explicit
 `__stemPayloadVersion`, use `workflowResult.payloadVersionedJson(...)`,
 `runState.resultVersionedJson(...)`, or
 `runState.suspensionPayloadVersionedJson(...)` on the low-level snapshots.
+Those read-side helpers take `defaultVersion:` as the fallback for older
+payloads that do not yet carry a stored version marker.
 
 For workflows without start params, start directly from the flow or script
 itself with `start(...)` or `startAndWait(...)`. Keep `prepareStart()` for the

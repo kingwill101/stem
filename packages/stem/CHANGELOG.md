@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Renamed read-side `...VersionedJson(...)` fallback args to
+  `defaultVersion:` so decode helpers no longer imply they are choosing the
+  persisted schema version on already-stored payloads.
 - Refreshed runnable task examples/docs to prefer direct `enqueue(...)` and
   `enqueueAndWait(...)` with named overrides over `prepareEnqueue(...)` when
   no incremental builder assembly is needed.
