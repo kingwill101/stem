@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `WorkflowDefinition.flowJson(...)` and
+  `WorkflowDefinition.scriptJson(...)` so the raw definition path has the same
+  direct DTO-result helper as `Flow.json(...)` and `WorkflowScript.json(...)`.
 - Added `TaskDefinition.noArgsJson(...)`, `Flow.json(...)`, and
   `WorkflowScript.json(...)` as the shortest manual DTO result helpers for the
   common `toJson()` / `Type.fromJson(...)` path.

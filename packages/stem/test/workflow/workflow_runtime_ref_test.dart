@@ -287,6 +287,49 @@ void main() {
       }
     });
 
+    test(
+      'raw workflow definitions expose direct json result helpers',
+      () async {
+      final flow = WorkflowDefinition<_GreetingResult>.flowJson(
+        name: 'runtime.ref.definition.json.result.flow',
+        decodeResult: _GreetingResult.fromJson,
+        build: (builder) {
+          builder.step(
+            'hello',
+            (ctx) async =>
+                const _GreetingResult(message: 'hello definition flow json'),
+          );
+        },
+      );
+      final script = WorkflowDefinition<_GreetingResult>.scriptJson(
+        name: 'runtime.ref.definition.json.result.script',
+        decodeResult: _GreetingResult.fromJson,
+        run: (context) async =>
+            const _GreetingResult(message: 'hello definition script json'),
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory();
+      try {
+        workflowApp.registerWorkflows([flow, script]);
+        await workflowApp.start();
+
+        final flowResult = await flow.ref0().startAndWait(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
+        final scriptResult = await script.ref0().startAndWait(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(flowResult?.value?.message, 'hello definition flow json');
+        expect(scriptResult?.value?.message, 'hello definition script json');
+      } finally {
+        await workflowApp.shutdown();
+      }
+      },
+    );
+
     test('manual workflows expose direct no-args helpers', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.no-args.flow',

@@ -203,6 +203,28 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Creates a flow-based workflow definition whose final result is a DTO
+  /// backed by a JSON payload.
+  factory WorkflowDefinition.flowJson({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Creates a script-based workflow definition.
   factory WorkflowDefinition.script({
     required String name,
@@ -248,6 +270,30 @@ class WorkflowDefinition<T extends Object?> {
       scriptBody: run,
       resultEncoder: resultEncoder,
       resultDecoder: resultDecoder,
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result is a DTO
+  /// backed by a JSON payload.
+  factory WorkflowDefinition.scriptJson({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
     );
   }
 

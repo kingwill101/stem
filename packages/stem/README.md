@@ -371,6 +371,10 @@ For late registration, prefer the app helpers:
 - `registerScript(...)` / `registerScripts(...)`
 - `registerModule(...)`
 
+If you are registering raw `WorkflowDefinition` values directly, prefer
+`WorkflowDefinition.flowJson(...)` and `WorkflowDefinition.scriptJson(...)`
+when the final result is a normal DTO with `toJson()` and `Type.fromJson(...)`.
+
 ### Workflow script facade
 
 Prefer the high-level `WorkflowScript` facade when you want to author a

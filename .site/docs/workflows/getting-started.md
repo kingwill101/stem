@@ -70,6 +70,10 @@ runtime registry:
 - `registerScript(...)` / `registerScripts(...)`
 - `registerModule(...)` / `registerModules(...)`
 
+If you are registering raw `WorkflowDefinition` values directly, prefer
+`WorkflowDefinition.flowJson(...)` and `WorkflowDefinition.scriptJson(...)`
+for the common DTO-result path.
+
 ## 5. Move to the right next page
 
 - If you need a mental model first, read [Flows and Scripts](./flows-and-scripts.md).
