@@ -11,13 +11,17 @@ Future<void> main() async {
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
   final tasks = buildTasks();
-  final stem = buildStem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => connectBroker(brokerUrl),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => connectBackend(backendUrl),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
   );
 
   final invoices = List.generate(
@@ -29,7 +33,7 @@ Future<void> main() async {
       '[producer] enqueueing invoices $invoices (all expected to fail first)');
   // #region dlq-producer-enqueue
   for (final invoice in invoices) {
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       taskName(),
       args: {
         'invoiceId': invoice,
@@ -49,7 +53,6 @@ Future<void> main() async {
   stdout.writeln('[producer] jobs queued. Waiting 3s before exit...');
   await Future<void>.delayed(const Duration(seconds: 3));
 
-  await broker.close();
-  await backend.close();
+  await client.close();
   stdout.writeln('[producer] done.');
 }

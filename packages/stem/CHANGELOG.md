@@ -82,6 +82,9 @@
 - Simplified the `rate_limit_delay` producer example to use
   `StemClient.create(...)` with its existing broker/backend helpers instead of
   building a raw `Stem` producer for the delayed enqueue loop.
+- Simplified the `dlq_sandbox` producer example to use
+  `StemClient.create(...)` with its existing broker/backend helpers instead of
+  building a raw `Stem` producer for the dead-letter sandbox.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
