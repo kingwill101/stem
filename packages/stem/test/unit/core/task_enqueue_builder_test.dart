@@ -128,6 +128,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {

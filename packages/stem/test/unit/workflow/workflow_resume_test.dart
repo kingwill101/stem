@@ -349,6 +349,7 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     final delegate = _enqueuer;
@@ -361,6 +362,7 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
       headers: headers,
       meta: meta,
       options: options,
+      notBefore: notBefore,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -448,6 +450,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     lastName = name;
@@ -467,6 +470,7 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
       headers: call.headers,
       meta: call.meta,
       options: call.resolveOptions(),
+      notBefore: call.notBefore,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
   }

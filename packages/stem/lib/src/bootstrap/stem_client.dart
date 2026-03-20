@@ -154,6 +154,7 @@ abstract class StemClient implements TaskResultCaller {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -162,6 +163,7 @@ abstract class StemClient implements TaskResultCaller {
       args: args,
       headers: headers,
       options: options,
+      notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );

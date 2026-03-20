@@ -4493,6 +4493,7 @@ class Worker {
                   signal.request.enqueueOptions!.cast<String, Object?>(),
                 )
               : null;
+          final notBefore = signal.request.notBefore;
           final enqueuer = _enqueuer;
           if (enqueuer == null) {
             signal.replyPort.send(
@@ -4505,6 +4506,7 @@ class Worker {
             args: signal.request.args,
             headers: signal.request.headers,
             options: options,
+            notBefore: notBefore,
             meta: signal.request.meta,
             enqueueOptions: enqueueOptions,
           );

@@ -82,6 +82,7 @@ class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskA
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -90,6 +91,7 @@ class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskA
       args: args,
       headers: headers,
       options: options,
+      notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );

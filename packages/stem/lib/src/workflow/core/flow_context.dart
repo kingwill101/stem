@@ -165,6 +165,7 @@ class FlowContext implements TaskEnqueuer, WorkflowCaller {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     final delegate = enqueuer;
@@ -177,6 +178,7 @@ class FlowContext implements TaskEnqueuer, WorkflowCaller {
       headers: headers,
       meta: meta,
       options: options,
+      notBefore: notBefore,
       enqueueOptions: enqueueOptions,
     );
   }

@@ -1645,6 +1645,7 @@ abstract class TaskEnqueuer {
     Map<String, Object?> args,
     Map<String, String> headers,
     TaskOptions options,
+    DateTime? notBefore,
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
   });
@@ -1735,6 +1736,7 @@ class TaskContext implements TaskEnqueuer {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     final delegate = enqueuer;
@@ -1762,6 +1764,7 @@ class TaskContext implements TaskEnqueuer {
       args: args,
       headers: mergedHeaders,
       options: options,
+      notBefore: notBefore,
       meta: mergedMeta,
       enqueueOptions: enqueueOptions,
     );

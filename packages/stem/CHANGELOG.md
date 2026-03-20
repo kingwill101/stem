@@ -38,6 +38,9 @@
 - Simplified the `worker_control_lab` and `progress_heartbeat` producer
   examples to use `StemClient.create(...)` with their existing connection
   helpers instead of manually wiring `Stem`.
+- Added `notBefore` support to the shared `TaskEnqueuer` surface so
+  `StemClient`, `StemApp`, workflow contexts, and task contexts can publish
+  delayed tasks without dropping down to raw `Stem`.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

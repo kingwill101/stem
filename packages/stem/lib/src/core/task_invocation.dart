@@ -97,6 +97,7 @@ class TaskEnqueueRequest {
     required this.args,
     required this.headers,
     required this.options,
+    this.notBefore,
     required this.meta,
     this.enqueueOptions,
   });
@@ -115,6 +116,9 @@ class TaskEnqueueRequest {
 
   /// Task metadata.
   final Map<String, Object?> meta;
+
+  /// Optional delay before execution.
+  final DateTime? notBefore;
 
   /// Enqueue options.
   final Map<String, Object?>? enqueueOptions;
@@ -241,6 +245,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -269,6 +274,7 @@ class TaskInvocationContext implements TaskEnqueuer {
       args: args,
       headers: mergedHeaders,
       options: options,
+      notBefore: notBefore,
       meta: mergedMeta,
       enqueueOptions: enqueueOptions,
     );
@@ -379,6 +385,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -391,6 +398,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
           args: args,
           headers: headers,
           options: options.toJson(),
+          notBefore: notBefore,
           meta: meta,
           enqueueOptions: enqueueOptions?.toJson(),
         ),

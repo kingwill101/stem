@@ -85,6 +85,7 @@ abstract class WorkflowScriptStepContext
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   });
 

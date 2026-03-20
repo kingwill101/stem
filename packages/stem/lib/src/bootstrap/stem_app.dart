@@ -74,6 +74,7 @@ class StemApp implements StemTaskApp {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -83,6 +84,7 @@ class StemApp implements StemTaskApp {
       args: args,
       headers: headers,
       options: options,
+      notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );

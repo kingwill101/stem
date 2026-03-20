@@ -1861,6 +1861,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     final delegate = enqueuer;
@@ -1873,6 +1874,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
       headers: headers,
       meta: meta,
       options: options,
+      notBefore: notBefore,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -1966,6 +1968,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -1980,6 +1983,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
       args: args,
       headers: headers,
       options: resolvedOptions,
+      notBefore: notBefore,
       meta: mergedMeta,
       enqueueOptions: enqueueOptions,
     );

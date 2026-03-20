@@ -247,6 +247,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -273,6 +274,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
       args: call.encodeArgs(),
       headers: call.headers,
       options: call.resolveOptions(),
+      notBefore: call.notBefore,
       meta: call.meta,
       enqueueOptions: enqueueOptions,
     );

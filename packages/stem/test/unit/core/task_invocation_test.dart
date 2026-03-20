@@ -12,6 +12,7 @@ class _CapturingEnqueuer implements TaskEnqueuer {
   Map<String, Object?>? lastMeta;
   TaskEnqueueOptions? lastOptions;
   TaskCall<dynamic, dynamic>? lastCall;
+  DateTime? lastNotBefore;
 
   @override
   Future<String> enqueue(
@@ -19,12 +20,14 @@ class _CapturingEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     lastHeaders = headers;
     lastMeta = meta;
     lastOptions = enqueueOptions;
+    lastNotBefore = notBefore;
     return _taskId;
   }
 
@@ -65,6 +68,25 @@ void main() {
     expect(enqueuer.lastMeta, containsPair('m2', 'v2'));
     expect(enqueuer.lastMeta, containsPair('stem.parentTaskId', 'root-task'));
     expect(enqueuer.lastMeta, containsPair('stem.parentAttempt', 2));
+  });
+
+  test('TaskInvocationContext.local forwards notBefore', () async {
+    final enqueuer = _CapturingEnqueuer('task-1');
+    final context = TaskInvocationContext.local(
+      id: 'root-task',
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+      enqueuer: enqueuer,
+    );
+    final scheduledAt = DateTime.now().add(const Duration(minutes: 5));
+
+    await context.enqueue('child', notBefore: scheduledAt);
+
+    expect(enqueuer.lastNotBefore, scheduledAt);
   });
 
   test('TaskInvocationContext.local throws when enqueuer missing', () async {
