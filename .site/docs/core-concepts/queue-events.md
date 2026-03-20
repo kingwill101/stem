@@ -26,6 +26,9 @@ payload fields instead of repeating raw `payload['key']` casts.
 If one queue event maps to one DTO, use `event.payloadJson(...)`,
 `event.payloadVersionedJson(...)`, or `event.payloadAs(codec: ...)` to decode
 the whole payload in one step.
+If the whole queue-event metadata map is one DTO, use `event.metaJson(...)`,
+`event.metaVersionedJson(...)`, or `event.metaAs(codec: ...)` instead of
+manual `event.meta[...]` casts.
 
 ## Producer + Listener
 

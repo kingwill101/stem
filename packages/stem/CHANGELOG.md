@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
+  `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
+  without raw map casts.
 - Added `TaskStatus.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so low-level task status metadata can decode DTO
   payloads without raw map casts.

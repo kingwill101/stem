@@ -46,6 +46,38 @@ class QueueCustomEvent implements StemEvent {
   /// Additional metadata supplied by the publisher.
   final Map<String, Object?> meta;
 
+  /// Decodes the full event metadata payload with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full event metadata payload with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full event metadata payload with a version-aware JSON
+  /// decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
   /// Returns the decoded payload value for [key], or `null` when it is absent.
   T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
     return payload.value<T>(key, codec: codec);

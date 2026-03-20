@@ -40,7 +40,7 @@ void main() {
         'order.created',
         payload: const {'orderId': 'o-1'},
         headers: const {'x-source': 'test'},
-        meta: const {'tenant': 'acme'},
+        meta: const {PayloadCodec.versionKey: 2, 'tenant': 'acme'},
       );
 
       final event = await received;
@@ -50,6 +50,25 @@ void main() {
       expect(event.requiredPayloadValue<String>('orderId'), 'o-1');
       expect(event.headers['x-source'], 'test');
       expect(event.meta['tenant'], 'acme');
+      expect(
+        event.metaJson<_QueueEventMeta>(decode: _QueueEventMeta.fromJson),
+        isA<_QueueEventMeta>().having(
+          (value) => value.tenant,
+          'tenant',
+          'acme',
+        ),
+      );
+      expect(
+        event.metaVersionedJson<_QueueEventMeta>(
+          version: 2,
+          decode: _QueueEventMeta.fromVersionedJson,
+        ),
+        isA<_QueueEventMeta>().having(
+          (value) => value.tenant,
+          'tenant',
+          'acme',
+        ),
+      );
     });
 
     test('ignores events from other queues', () async {
@@ -243,4 +262,22 @@ class _QueueEventPayload {
     'orderId': orderId,
     'status': status,
   };
+}
+
+class _QueueEventMeta {
+  const _QueueEventMeta({required this.tenant});
+
+  factory _QueueEventMeta.fromJson(Map<String, dynamic> json) {
+    return _QueueEventMeta(tenant: json['tenant'] as String);
+  }
+
+  factory _QueueEventMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _QueueEventMeta.fromJson(json);
+  }
+
+  final String tenant;
 }
