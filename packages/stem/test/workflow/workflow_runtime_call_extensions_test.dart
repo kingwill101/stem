@@ -2,9 +2,9 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('runtime workflow start call extensions', () {
+  group('runtime workflow start call dispatch', () {
     test(
-      'prepareStart().build() start/startAndWait/waitFor use typed workflow refs',
+      'prepareStart().build() can be dispatched through WorkflowCaller',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -24,10 +24,9 @@ void main() {
         try {
           await workflowApp.start();
 
-          final runId = await workflowRef
-              .prepareStart(const {'name': 'runtime'})
-              .build()
-              .start(workflowApp.runtime);
+          final runId = await workflowApp.runtime.startWorkflowCall(
+            workflowRef.prepareStart(const {'name': 'runtime'}).build(),
+          );
           final waited = await workflowRef.waitFor(
             workflowApp.runtime,
             runId,
@@ -36,13 +35,17 @@ void main() {
 
           expect(waited?.value, 'hello runtime');
 
-          final oneShot = await workflowRef
+          final inlineCall = workflowRef
               .prepareStart(const {'name': 'inline'})
-              .build()
-              .startAndWait(
-                workflowApp.runtime,
-                timeout: const Duration(seconds: 2),
-              );
+              .build();
+          final inlineRunId = await workflowApp.runtime.startWorkflowCall(
+            inlineCall,
+          );
+          final oneShot = await workflowRef.waitFor(
+            workflowApp.runtime,
+            inlineRunId,
+            timeout: const Duration(seconds: 2),
+          );
 
           expect(oneShot?.value, 'hello inline');
         } finally {
@@ -52,7 +55,7 @@ void main() {
     );
 
     test(
-      'WorkflowRef direct helpers mirror WorkflowStartCall dispatch',
+      'WorkflowRef direct helpers mirror WorkflowCaller startWorkflowCall',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.direct.flow',

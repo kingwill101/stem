@@ -163,13 +163,15 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return WorkflowStartCall._(
+    return caller.startWorkflowCall(
+      WorkflowStartCall._(
       definition: this,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).start(caller);
+      ),
+    );
   }
 
   /// Starts this workflow ref with [caller] and waits for the result using
@@ -183,17 +185,21 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return WorkflowStartCall._(
+    final call = WorkflowStartCall._(
       definition: this,
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).startAndWait(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
     );
+    return caller.startWorkflowCall(call).then((runId) {
+      return call.definition.waitFor(
+        caller,
+        runId,
+        pollInterval: pollInterval,
+        timeout: timeout,
+      );
+    });
   }
 }
 
@@ -394,38 +400,12 @@ class WorkflowStartBuilder<TParams, TResult extends Object?> {
   }
 }
 
-/// Convenience helpers for dispatching prebuilt [WorkflowStartCall] instances.
-extension WorkflowStartCallExtension<TParams, TResult extends Object?>
-    on WorkflowStartCall<TParams, TResult> {
-  /// Starts this typed workflow call with the provided [caller].
-  Future<String> start(WorkflowCaller caller) {
-    return caller.startWorkflowCall(this);
-  }
-
-  /// Starts this typed workflow call with [caller] and waits for the result.
-  Future<WorkflowResult<TResult>?> startAndWait(
-    WorkflowCaller caller, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    final runIdFuture = start(caller);
-    return runIdFuture.then((runId) {
-      return definition.waitFor(
-        caller,
-        runId,
-        pollInterval: pollInterval,
-        timeout: timeout,
-      );
-    });
-  }
-}
-
 /// Convenience helpers for dispatching [WorkflowStartBuilder] instances.
 extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
     on WorkflowStartBuilder<TParams, TResult> {
   /// Builds this workflow call and starts it with the provided [caller].
   Future<String> start(WorkflowCaller caller) {
-    return build().start(caller);
+    return caller.startWorkflowCall(build());
   }
 
   /// Builds this workflow call, starts it with [caller], and waits for the
@@ -435,11 +415,15 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return build().startAndWait(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
+    final call = build();
+    return caller.startWorkflowCall(call).then((runId) {
+      return call.definition.waitFor(
+        caller,
+        runId,
+        pollInterval: pollInterval,
+        timeout: timeout,
+      );
+    });
   }
 }
 

@@ -12,6 +12,10 @@
   The direct `enqueue(...)` / `enqueueAndWait(...)` helpers remain the happy
   path, and `prepareEnqueue(args).build()` remains the explicit prebuilt-call
   path.
+- Removed the `TaskCall.enqueue(...)` / `enqueueAndWait(...)` and
+  `WorkflowStartCall.start(...)` / `startAndWait(...)` dispatch wrappers.
+  Prebuilt transport objects now dispatch explicitly through
+  `TaskEnqueuer.enqueueCall(...)` and `WorkflowCaller.startWorkflowCall(...)`.
 - Renamed read-side `...VersionedJson(...)` fallback args to
   `defaultVersion:` so decode helpers no longer imply they are choosing the
   persisted schema version on already-stored payloads.

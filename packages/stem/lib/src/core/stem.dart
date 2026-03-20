@@ -1128,15 +1128,22 @@ class Stem implements TaskResultCaller {
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
   /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueue(TaskEnqueuer enqueuer) {
+  Future<String> enqueue(
+    TaskEnqueuer enqueuer, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
     final call = build();
     final scopeMeta = TaskEnqueueScope.currentMeta();
     if (scopeMeta == null || scopeMeta.isEmpty) {
-      return enqueuer.enqueueCall(call);
+      return enqueuer.enqueueCall(
+        call,
+        enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+      );
     }
     final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
     return enqueuer.enqueueCall(
       call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
   }
 
@@ -1147,12 +1154,11 @@ extension TaskEnqueueBuilderExtension<TArgs, TResult>
     Duration? timeout,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    final call = build();
-    final taskId = await call.enqueue(
+    final taskId = await enqueue(
       caller,
       enqueueOptions: enqueueOptions,
     );
-    return call.definition.waitFor(caller, taskId, timeout: timeout);
+    return build().definition.waitFor(caller, taskId, timeout: timeout);
   }
 }
 
@@ -1177,39 +1183,6 @@ extension BoundTaskEnqueueBuilderExtension<TArgs, TResult extends Object?>
   }
 }
 
-/// Convenience helpers for dispatching prebuilt [TaskCall] instances.
-extension TaskCallExtension<TArgs, TResult extends Object?>
-    on TaskCall<TArgs, TResult> {
-  /// Enqueues this typed call with the provided [enqueuer].
-  ///
-  /// Ambient [TaskEnqueueScope] metadata is merged the same way as the fluent
-  /// [TaskEnqueueBuilder] helper so producers and task contexts behave
-  /// consistently.
-  Future<String> enqueue(
-    TaskEnqueuer enqueuer, {
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    final scopeMeta = TaskEnqueueScope.currentMeta();
-    if (scopeMeta == null || scopeMeta.isEmpty) {
-      return enqueuer.enqueueCall(this, enqueueOptions: enqueueOptions);
-    }
-    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(meta);
-    return enqueuer.enqueueCall(
-      copyWith(meta: Map.unmodifiable(mergedMeta)),
-      enqueueOptions: enqueueOptions,
-    );
-  }
-
-  /// Enqueues this call on [caller] and waits for the typed task result.
-  Future<TaskResult<TResult>?> enqueueAndWait(
-    TaskResultCaller caller, {
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) async {
-    final taskId = await enqueue(caller, enqueueOptions: enqueueOptions);
-    return definition.waitFor(caller, taskId, timeout: timeout);
-  }
-}
 
 /// Convenience helpers for waiting on typed task definitions.
 extension TaskDefinitionExtension<TArgs, TResult extends Object?>
@@ -1240,7 +1213,7 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.build().enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    return builder.enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Enqueues this typed task definition and waits for its typed result.
@@ -1270,7 +1243,7 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.build().enqueueAndWait(
+    return builder.enqueueAndWait(
       caller,
       enqueueOptions: enqueueOptions,
       timeout: timeout,
@@ -1315,7 +1288,7 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     if (enqueueOptions != null) {
       builder.enqueueOptions(enqueueOptions);
     }
-    return builder.build().enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    return builder.enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Waits for [taskId] using this definition's decoding rules.
