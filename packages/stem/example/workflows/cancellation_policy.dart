@@ -29,15 +29,13 @@ Future<void> main() async {
     flows: [reportsGenerate],
   );
 
-  final runId = await reportsGenerate
-      .prepareStart()
-      .cancellationPolicy(
-        const WorkflowCancellationPolicy(
-          maxRunDuration: Duration(minutes: 10),
-          maxSuspendDuration: Duration(seconds: 2),
-        ),
-      )
-      .start(app);
+  final runId = await reportsGenerate.start(
+    app,
+    cancellationPolicy: const WorkflowCancellationPolicy(
+      maxRunDuration: Duration(minutes: 10),
+      maxSuspendDuration: Duration(seconds: 2),
+    ),
+  );
 
   // Wait a bit longer than the policy allows so the auto-cancel can trigger.
   await Future<void>.delayed(const Duration(seconds: 4));

@@ -44,18 +44,19 @@ final result = await approvalsRef.waitFor(workflowApp, runId);
 Use this path when you want the same typed start/wait surface as generated
 workflow refs, but the workflow itself is still hand-written.
 
-When you want to add advanced start options fluently, use the workflow start
-builder:
+When you want to add advanced start options, keep using the direct typed ref
+helpers:
 
 ```dart
-final runId = await approvalsRef
-    .prepareStart(const ApprovalDraft(documentId: 'doc-42'))
-    .parentRunId('parent-run')
-    .ttl(const Duration(hours: 1))
-    .cancellationPolicy(
-      const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
-    )
-    .start(workflowApp);
+final runId = await approvalsRef.start(
+  workflowApp,
+  params: const ApprovalDraft(documentId: 'doc-42'),
+  parentRunId: 'parent-run',
+  ttl: const Duration(hours: 1),
+  cancellationPolicy: const WorkflowCancellationPolicy(
+    maxRuntime: Duration(minutes: 10),
+  ),
+);
 ```
 
 `refJson(...)` is the shortest manual DTO path when the params already have

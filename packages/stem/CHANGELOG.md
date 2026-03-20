@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Refreshed workflow examples/docs to prefer direct `start(...)` named
+  overrides over `prepareStart(...)` when no incremental builder assembly is
+  needed.
 - Clarified docs so direct `start(...)` / `startAndWait(...)` and
   `enqueue(...)` / `enqueueAndWait(...)` are the default happy path, with
   `prepareStart(...)` and `prepareEnqueue(...)` positioned as advanced

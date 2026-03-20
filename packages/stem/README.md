@@ -576,17 +576,18 @@ await app.close();
 ```
 
 When you need advanced start options without dropping back to raw workflow
-names, use the fluent workflow start builder:
+names, keep using the direct typed ref helpers:
 
 ```dart
-final runId = await approvalsRef
-    .prepareStart(const ApprovalDraft(documentId: 'doc-42'))
-    .parentRunId('parent-run')
-    .ttl(const Duration(hours: 1))
-    .cancellationPolicy(
-      const WorkflowCancellationPolicy(maxRuntime: Duration(minutes: 10)),
-    )
-    .start(app);
+final runId = await approvalsRef.start(
+  app,
+  params: const ApprovalDraft(documentId: 'doc-42'),
+  parentRunId: 'parent-run',
+  ttl: const Duration(hours: 1),
+  cancellationPolicy: const WorkflowCancellationPolicy(
+    maxRuntime: Duration(minutes: 10),
+  ),
+);
 ```
 
 Use `refJson(...)` when your manual workflow start params are DTOs with
