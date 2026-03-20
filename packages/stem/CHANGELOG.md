@@ -132,6 +132,11 @@
   `ctx.requiredParamJson(...)`, and shared `valueJson(...)` /
   `requiredValueJson(...)` helpers so nested DTO payload fields no longer need
   a separate `PayloadCodec<T>` constant.
+- Added `valueVersionedJson(...)`, `requiredValueVersionedJson(...)`,
+  `valueListVersionedJson(...)`, and
+  `requiredValueListVersionedJson(...)` to the shared payload-map helpers so
+  nested versioned DTO payloads no longer need custom per-surface decode
+  plumbing.
 - Added `previousJson(...)`, `requiredPreviousJson(...)`,
   `takeResumeJson(...)`, `waitForEventValueJson(...)`, and
   `waitForEventJson(...)` so workflow steps and checkpoints can decode prior

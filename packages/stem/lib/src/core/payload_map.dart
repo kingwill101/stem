@@ -42,6 +42,25 @@ extension PayloadMapX on Map<String, Object?> {
     ).decode(payload);
   }
 
+  /// Decodes the value for [key] as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? valueVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = this[key];
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Decodes the value for [key] as a typed DTO, or [fallback] when absent.
   T valueJsonOr<T>(
     String key,
@@ -69,6 +88,47 @@ extension PayloadMapX on Map<String, Object?> {
     return valueJson<T>(
       key,
       decode: decode,
+      typeName: typeName,
+    ) as T;
+  }
+
+  /// Decodes the value for [key] as a version-aware typed DTO, or [fallback]
+  /// when absent.
+  T valueVersionedJsonOr<T>(
+    String key,
+    T fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return valueVersionedJson<T>(
+          key,
+          version: version,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Decodes the value for [key] as a version-aware typed DTO, throwing when
+  /// absent.
+  T requiredValueVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    if (!containsKey(key) || this[key] == null) {
+      throw StateError("Missing required payload key '$key'.");
+    }
+    return valueVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     ) as T;
   }
@@ -122,6 +182,27 @@ extension PayloadMapX on Map<String, Object?> {
     return List<T>.unmodifiable(values.map(codec.decode));
   }
 
+  /// Returns the decoded version-aware DTO list value for [key], or `null`
+  /// when it is absent.
+  List<T>? valueListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = this[key];
+    if (payload == null) return null;
+    final values = payload as List;
+    final codec = PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+    return List<T>.unmodifiable(values.map(codec.decode));
+  }
+
   /// Returns the decoded DTO list value for [key], or [fallback] when absent.
   List<T> valueListJsonOr<T>(
     String key,
@@ -149,6 +230,47 @@ extension PayloadMapX on Map<String, Object?> {
     return valueListJson<T>(
       key,
       decode: decode,
+      typeName: typeName,
+    )!;
+  }
+
+  /// Returns the decoded version-aware DTO list value for [key], or
+  /// [fallback] when absent.
+  List<T> valueListVersionedJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return valueListVersionedJson<T>(
+          key,
+          version: version,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Returns the decoded version-aware DTO list value for [key], throwing when
+  /// absent.
+  List<T> requiredValueListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    if (!containsKey(key) || this[key] == null) {
+      throw StateError("Missing required payload key '$key'.");
+    }
+    return valueListVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     )!;
   }

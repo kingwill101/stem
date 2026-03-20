@@ -58,6 +58,23 @@ void main() {
       expect(draft?.documentId, 'doc-42');
     });
 
+    test('valueVersionedJson decodes DTO values without a codec constant', () {
+      final payload = <String, Object?>{
+        'draft': const <String, Object?>{
+          PayloadCodec.versionKey: 2,
+          'documentId': 'doc-42',
+        },
+      };
+
+      final draft = payload.valueVersionedJson<_ApprovalDraft>(
+        'draft',
+        version: 2,
+        decode: _ApprovalDraft.fromVersionedJson,
+      );
+
+      expect(draft?.documentId, 'doc-42');
+    });
+
     test('requiredValueJson throws for missing payload keys', () {
       const payload = <String, Object?>{'name': 'Stem'};
 
@@ -144,6 +161,35 @@ void main() {
       );
     });
 
+    test(
+      'valueListVersionedJson decodes DTO lists without a codec constant',
+      () {
+        final payload = <String, Object?>{
+          'drafts': const [
+            <String, Object?>{
+              PayloadCodec.versionKey: 2,
+              'documentId': 'doc-42',
+            },
+            <String, Object?>{
+              PayloadCodec.versionKey: 2,
+              'documentId': 'doc-99',
+            },
+          ],
+        };
+
+        final drafts = payload.valueListVersionedJson<_ApprovalDraft>(
+          'drafts',
+          version: 2,
+          decode: _ApprovalDraft.fromVersionedJson,
+        );
+
+        expect(
+          drafts?.map((draft) => draft.documentId).toList(),
+          ['doc-42', 'doc-99'],
+        );
+      },
+    );
+
     test('requiredValueListJson throws for missing payload keys', () {
       const payload = <String, Object?>{'name': 'Stem'};
 
@@ -172,6 +218,14 @@ class _ApprovalDraft {
   const _ApprovalDraft({required this.documentId});
 
   factory _ApprovalDraft.fromJson(Map<String, dynamic> json) {
+    return _ApprovalDraft(documentId: json['documentId'] as String);
+  }
+
+  factory _ApprovalDraft.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _ApprovalDraft(documentId: json['documentId'] as String);
   }
 
