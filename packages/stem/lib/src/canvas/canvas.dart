@@ -934,13 +934,20 @@ extension TaskDefinitionCanvasX<TArgs, TResult extends Object?>
     Map<String, Object?>? meta,
     TResult Function(Object? payload)? decode,
   }) {
-    final call = this.call(
-      args,
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-    );
+    final builder = prepareEnqueue(args);
+    if (headers.isNotEmpty) {
+      builder.headers(headers);
+    }
+    if (options != null) {
+      builder.options(options);
+    }
+    if (notBefore != null) {
+      builder.notBefore(notBefore);
+    }
+    if (meta != null) {
+      builder.metadata(meta);
+    }
+    final call = builder.build();
     return task<TResult>(
       name,
       args: call.encodeArgs(),

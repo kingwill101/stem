@@ -1224,14 +1224,23 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     Map<String, Object?>? meta,
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    return call(
-      args,
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    final builder = prepareEnqueue(args);
+    if (headers.isNotEmpty) {
+      builder.headers(headers);
+    }
+    if (options != null) {
+      builder.options(options);
+    }
+    if (notBefore != null) {
+      builder.notBefore(notBefore);
+    }
+    if (meta != null) {
+      builder.metadata(meta);
+    }
+    if (enqueueOptions != null) {
+      builder.enqueueOptions(enqueueOptions);
+    }
+    return builder.build().enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Enqueues this typed task definition and waits for its typed result.
@@ -1245,14 +1254,23 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     TaskEnqueueOptions? enqueueOptions,
     Duration? timeout,
   }) {
-    return call(
-      args,
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueueAndWait(
+    final builder = prepareEnqueue(args);
+    if (headers.isNotEmpty) {
+      builder.headers(headers);
+    }
+    if (options != null) {
+      builder.options(options);
+    }
+    if (notBefore != null) {
+      builder.notBefore(notBefore);
+    }
+    if (meta != null) {
+      builder.metadata(meta);
+    }
+    if (enqueueOptions != null) {
+      builder.enqueueOptions(enqueueOptions);
+    }
+    return builder.build().enqueueAndWait(
       caller,
       enqueueOptions: enqueueOptions,
       timeout: timeout,
@@ -1281,16 +1299,23 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     Map<String, Object?>? meta,
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    return asDefinition
-        .call(
-          (),
-          headers: headers,
-          options: options,
-          notBefore: notBefore,
-          meta: meta,
-          enqueueOptions: enqueueOptions,
-        )
-        .enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    final builder = asDefinition.prepareEnqueue(());
+    if (headers.isNotEmpty) {
+      builder.headers(headers);
+    }
+    if (options != null) {
+      builder.options(options);
+    }
+    if (notBefore != null) {
+      builder.notBefore(notBefore);
+    }
+    if (meta != null) {
+      builder.metadata(meta);
+    }
+    if (enqueueOptions != null) {
+      builder.enqueueOptions(enqueueOptions);
+    }
+    return builder.build().enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Waits for [taskId] using this definition's decoding rules.

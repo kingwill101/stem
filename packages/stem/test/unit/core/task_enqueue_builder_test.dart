@@ -171,11 +171,11 @@ void main() {
       name: 'demo.task',
       encodeArgs: (args) => args,
     );
-    final call = definition.call(
-      const {'a': 1},
-      headers: const {'h': 'v'},
-      meta: const {'m': 1},
-    );
+    final call = definition
+        .prepareEnqueue(const {'a': 1})
+        .headers(const {'h': 'v'})
+        .metadata(const {'m': 1})
+        .build();
 
     final updated = call.copyWith(
       headers: const {'h2': 'v2'},

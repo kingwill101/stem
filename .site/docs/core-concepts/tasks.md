@@ -36,12 +36,12 @@ routing, retry behavior, timeouts, and isolation.
 
 Stem ships with `TaskDefinition<TArgs, TResult>` so producers get compile-time
 checks for required arguments and result types. A definition bundles the task
-name, argument encoder, optional metadata, and default `TaskOptions`. Build a
-call with `.call(args)` or `TaskEnqueueBuilder` and hand it to any
-`TaskResultCaller` / `TaskEnqueuer` surface. For the common path, use the direct
+name, argument encoder, optional metadata, and default `TaskOptions`. For the
+common path, use the direct
 `definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
-helpers and drop down to `.call(args)` only when you need a reusable prebuilt
-request:
+helpers. When you need a reusable prebuilt request, use
+`definition.prepareEnqueue(args).build()` and hand the resulting `TaskCall` to
+any `TaskResultCaller` / `TaskEnqueuer` surface:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-typed-definition
 

@@ -375,7 +375,7 @@ void main() {
         const TaskDefinition<Map<String, Object?>, Object?>(
           name: 'demo',
           encodeArgs: _encodeArgs,
-        ).call(const {'a': 1}),
+        ).prepareEnqueue(const {'a': 1}).build(),
       ),
       throwsA(isA<StateError>()),
     );
@@ -400,11 +400,11 @@ void main() {
         name: 'demo.call',
         encodeArgs: (args) => args,
       );
-      final call = definition.call(
-        const {'value': 1},
-        headers: const {'h2': 'v2'},
-        meta: const {'m2': 'v2'},
-      );
+      final call = definition
+          .prepareEnqueue(const {'value': 1})
+          .headers(const {'h2': 'v2'})
+          .metadata(const {'m2': 'v2'})
+          .build();
 
       await context.enqueueCall(call);
 

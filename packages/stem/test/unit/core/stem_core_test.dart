@@ -131,7 +131,9 @@ void main() {
           defaultOptions: const TaskOptions(queue: 'typed'),
         );
 
-        final id = await stem.enqueueCall(definition.call((value: 'ok')));
+        final id = await stem.enqueueCall(
+          definition.prepareEnqueue((value: 'ok')).build(),
+        );
 
         expect(id, isNotEmpty);
         expect(broker.published.single.envelope.name, 'sample.typed');
@@ -152,7 +154,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.call(const _CodecTaskArgs('encoded')),
+        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
       );
 
       expect(id, isNotEmpty);
@@ -173,7 +175,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.call(const _CodecTaskArgs('encoded')),
+        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
       );
 
       expect(id, isNotEmpty);
@@ -195,7 +197,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.call(const _CodecTaskArgs('encoded')),
+        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
       );
 
       expect(id, isNotEmpty);
@@ -282,7 +284,7 @@ void main() {
         );
 
         final id = await stem.enqueueCall(
-          definition.call((value: 'encoded')),
+          definition.prepareEnqueue((value: 'encoded')).build(),
         );
 
         expect(
@@ -310,7 +312,7 @@ void main() {
         );
 
         final id = await stem.enqueueCall(
-          definition.call(const _CodecTaskArgs('encoded')),
+          definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
         );
 
         expect(
@@ -518,7 +520,7 @@ void main() {
       );
 
       final taskId = await TaskEnqueueScope.run({'traceId': 'scope-1'}, () {
-        return definition.call((value: 'ok')).enqueue(stem);
+        return definition.enqueue(stem, (value: 'ok'));
       });
 
       expect(taskId, isNotEmpty);
@@ -549,9 +551,11 @@ void main() {
         }),
       );
 
-      final result = await definition
-          .call((value: 'ok'))
-          .enqueueAndWait(stem, timeout: const Duration(seconds: 1));
+      final result = await definition.enqueueAndWait(
+        stem,
+        (value: 'ok'),
+        timeout: const Duration(seconds: 1),
+      );
 
       expect(result?.isSucceeded, isTrue);
       expect(result?.value, 'done');

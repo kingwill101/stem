@@ -2930,8 +2930,7 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
-  /// Build a typed call which can be passed to `Stem.enqueueCall`.
-  TaskCall<TArgs, TResult> call(
+  TaskCall<TArgs, TResult> _buildCall(
     TArgs args, {
     Map<String, String> headers = const {},
     TaskOptions? options,
@@ -3164,7 +3163,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 
   /// Builds the [TaskCall] with accumulated overrides.
   TaskCall<TArgs, TResult> build() {
-    final base = definition(args);
+    final base = definition._buildCall(args);
     final mergedHeaders = Map<String, String>.from(base.headers);
     if (_headers != null) {
       mergedHeaders.addAll(_headers!);

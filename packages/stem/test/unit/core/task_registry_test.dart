@@ -201,7 +201,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final call = definition(_Args(42));
+      final call = definition.prepareEnqueue(_Args(42)).build();
       expect(call.name, 'demo.task');
       expect(call.encodeArgs(), {'value': 42});
       expect(call.resolveOptions(), const TaskOptions());
@@ -219,12 +219,12 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final call = definition(
-        _Args(99),
-        headers: {'x-id': 'abc'},
-        options: const TaskOptions(queue: 'custom'),
-        meta: const {'source': 'test'},
-      );
+      final call = definition
+          .prepareEnqueue(_Args(99))
+          .headers({'x-id': 'abc'})
+          .options(const TaskOptions(queue: 'custom'))
+          .metadata(const {'source': 'test'})
+          .build();
 
       final id = await stem.enqueueCall(call);
       expect(id, isNotEmpty);
