@@ -967,6 +967,12 @@ Workflow lifecycle signals expose matching metadata helpers on
 Low-level `FlowStepControl` objects expose matching suspension metadata
 helpers via `control.dataJson(...)`, `control.dataVersionedJson(...)`, and
 `control.dataAs(codec: ...)`.
+Workflow execution contexts expose the same version-aware decode path for
+prior step results and resume/event payloads via
+`step.requiredPreviousVersionedJson(...)`,
+`step.takeResumeVersionedJson(...)`,
+`step.waitForEventValueVersionedJson(...)`, and
+`step.waitForEventVersionedJson(...)`.
 
 In the example above, these calls inside `run(...)`:
 

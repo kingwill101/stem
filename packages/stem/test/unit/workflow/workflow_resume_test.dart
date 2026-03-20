@@ -76,6 +76,39 @@ void main() {
   });
 
   test(
+    'FlowContext.takeResumeVersionedJson decodes versioned DTO payloads',
+    () {
+      final context = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'approved',
+        },
+      );
+
+      final value = context.takeResumeVersionedJson<_ResumePayload>(
+        version: 2,
+        decode: _ResumePayload.fromVersionedJson,
+      );
+
+      expect(value, isNotNull);
+      expect(value!.message, 'approved');
+      expect(
+        context.takeResumeVersionedJson<_ResumePayload>(
+          version: 2,
+          decode: _ResumePayload.fromVersionedJson,
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test(
     'WorkflowExecutionContext.previousValue reads typed previous results',
     () {
       final flowContext = FlowContext(
@@ -258,6 +291,30 @@ void main() {
     },
   );
 
+  test(
+    'WorkflowExecutionContext.requiredPreviousVersionedJson decodes DTO values',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'tail',
+        params: const {},
+        previousResult: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'approved',
+        },
+        stepIndex: 1,
+      );
+
+      final value = flowContext.requiredPreviousVersionedJson<_ResumePayload>(
+        version: 2,
+        decode: _ResumePayload.fromVersionedJson,
+      );
+
+      expect(value.message, 'approved');
+    },
+  );
+
   test('FlowContext.sleepUntilResumed suspends once then resumes', () {
     final firstContext = FlowContext(
       workflow: 'demo',
@@ -411,6 +468,58 @@ void main() {
         'demo.event',
         decode: _ResumePayload.fromJson,
       );
+
+      expect(resumed, isNotNull);
+      expect(resumed!.message, 'approved');
+      expect(resumedContext.takeControl(), isNull);
+    },
+  );
+
+  test(
+    'FlowContext.waitForEventValueVersionedJson registers watcher '
+    'then decodes DTO payload',
+    () {
+      final firstContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      final firstResult =
+          firstContext.waitForEventValueVersionedJson<_ResumePayload>(
+            'demo.event',
+            version: 2,
+            decode: _ResumePayload.fromVersionedJson,
+          );
+
+      expect(firstResult, isNull);
+      final control = firstContext.takeControl();
+      expect(control, isNotNull);
+      expect(control!.type, FlowControlType.waitForEvent);
+      expect(control.topic, 'demo.event');
+
+      final resumedContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'approved',
+        },
+      );
+
+      final resumed =
+          resumedContext.waitForEventValueVersionedJson<_ResumePayload>(
+            'demo.event',
+            version: 2,
+            decode: _ResumePayload.fromVersionedJson,
+          );
 
       expect(resumed, isNotNull);
       expect(resumed!.message, 'approved');
@@ -577,6 +686,59 @@ void main() {
         resumed.waitForEventJson<_ResumePayload>(
           topic: 'demo.event',
           decode: _ResumePayload.fromJson,
+        ),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'FlowContext.waitForEventVersionedJson uses named args and resumes '
+    'with DTO payload',
+    () {
+      final waiting = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      expect(
+        () => waiting.waitForEventVersionedJson<_ResumePayload>(
+          topic: 'demo.event',
+          version: 2,
+          decode: _ResumePayload.fromVersionedJson,
+        ),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(waiting.takeControl()?.topic, 'demo.event');
+
+      final resumed = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'approved',
+        },
+      );
+
+      expect(
+        resumed.waitForEventVersionedJson<_ResumePayload>(
+          topic: 'demo.event',
+          version: 2,
+          decode: _ResumePayload.fromVersionedJson,
         ),
         completion(
           isA<_ResumePayload>().having(

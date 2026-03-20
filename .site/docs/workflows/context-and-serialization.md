@@ -46,12 +46,14 @@ Depending on the context type, you can access:
   separate codec constant
 - `previousValue<T>()` / `requiredPreviousValue<T>()` for typed access to the
   prior step or checkpoint result
-- `previousJson<T>()` / `requiredPreviousJson<T>()` for prior DTO results
-  without a separate codec constant
+- `previousJson<T>()`, `previousVersionedJson<T>()`,
+  `requiredPreviousJson<T>()`, or `requiredPreviousVersionedJson<T>()` for
+  prior DTO results without a separate codec constant
 - `sleepUntilResumed(...)` for common sleep/retry loops
 - `waitForEventValue<T>(...)` for common event waits
-- `waitForEventValueJson<T>(...)` for DTO event waits without a separate codec
-  constant
+- `waitForEventValueJson<T>(...)` or
+  `waitForEventValueVersionedJson<T>(...)` for DTO event waits without a
+  separate codec constant
 - `event.awaitOn(step)` when a flow deliberately wants the lower-level
   `FlowStepControl` suspend-first path on a typed event ref
 - `sleepJson(...)`, `sleepVersionedJson(...)`, `awaitEventJson(...)`,
@@ -63,8 +65,8 @@ Depending on the context type, you can access:
   `FlowStepControl` directly
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
-- `takeResumeJson<T>(...)` for DTO event-driven resumes without a separate
-  codec constant
+- `takeResumeJson<T>(...)` or `takeResumeVersionedJson<T>(...)` for DTO
+  event-driven resumes without a separate codec constant
 - `idempotencyKey(...)`
 - direct child-workflow start helpers such as
   `ref.start(context, params: value)` and
@@ -183,9 +185,9 @@ Prefer the higher-level helpers first:
   continue on resume
 - `waitForEventValue<T>(...)` when the step/checkpoint is waiting on one event
 
-Drop down to `takeResumeData()`, `takeResumeValue<T>(...)`, or
-`takeResumeJson<T>(...)` only when you need custom branching around resume
-payloads.
+Drop down to `takeResumeData()`, `takeResumeValue<T>(...)`,
+`takeResumeJson<T>(...)`, or `takeResumeVersionedJson<T>(...)` only when you
+need custom branching around resume payloads.
 
 The runnable `annotated_workflows` example demonstrates both the context-aware
 and plain serializable forms.

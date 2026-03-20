@@ -354,4 +354,59 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
     }
     return value;
   }
+
+  /// Returns the decoded prior step/checkpoint value as a versioned typed DTO,
+  /// or `null`.
+  T? previousVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final value = previousResult;
+    if (value == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(value);
+  }
+
+  /// Returns the decoded prior step/checkpoint versioned DTO, or [fallback].
+  T previousVersionedJsonOr<T>(
+    T fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return previousVersionedJson<T>(
+          version: version,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Returns the decoded prior step/checkpoint versioned DTO, throwing when
+  /// absent.
+  T requiredPreviousVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final value = previousVersionedJson<T>(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+    if (value == null) {
+      throw StateError('WorkflowExecutionContext.previousResult is null.');
+    }
+    return value;
+  }
 }

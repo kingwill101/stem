@@ -41,6 +41,23 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
     ).decode(payload);
   }
 
+  /// Returns the next resume payload as a versioned typed DTO and consumes it.
+  T? takeResumeVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = takeResumeData();
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Suspends the current step on the first invocation and
   /// returns `true` once the step resumes.
   ///
@@ -142,6 +159,34 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
     return null;
   }
 
+  /// Returns the next event payload as a versioned typed DTO when the step has
+  /// resumed, or registers an event wait and returns `null` on the first
+  /// invocation.
+  T? waitForEventValueVersionedJson<T>(
+    String topic, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = takeResumeVersionedJson<T>(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+    if (payload != null) {
+      return payload;
+    }
+    final pending = waitForTopic(topic, deadline: deadline, data: data);
+    if (pending is Future<void>) {
+      unawaited(pending);
+    }
+    return null;
+  }
+
   /// Suspends until [topic] is emitted, then returns the resumed payload.
   Future<T> waitForEvent<T>({
     required String topic,
@@ -167,6 +212,30 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
   }) async {
     final payload = takeResumeJson<T>(
       decode: decode,
+      typeName: typeName,
+    );
+    if (payload != null) {
+      return payload;
+    }
+    await waitForTopic(topic, deadline: deadline, data: data);
+    throw const WorkflowSuspensionSignal();
+  }
+
+  /// Suspends until [topic] is emitted, then returns the resumed versioned DTO
+  /// payload.
+  Future<T> waitForEventVersionedJson<T>({
+    required String topic,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) async {
+    final payload = takeResumeVersionedJson<T>(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     );
     if (payload != null) {

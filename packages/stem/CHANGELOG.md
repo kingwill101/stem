@@ -20,6 +20,11 @@
   `WorkflowRuntime.emitVersionedJson(...)`,
   `StemWorkflowApp.emitVersionedJson(...)`, and
   `QueueEventsProducer.emitVersionedJson(...)`.
+- Added versioned workflow resume/result decode helpers:
+  `WorkflowExecutionContext.previousVersionedJson(...)`,
+  `WorkflowResumeContext.takeResumeVersionedJson(...)`,
+  `waitForEventValueVersionedJson(...)`, and
+  `waitForEventVersionedJson(...)`.
 - Added `decodeVersionedJson:` to the low-level
   `Stem.waitForTask<T>`, `StemApp.waitForTask<T>`,
   `StemClient.waitForTask<T>`, `StemWorkflowApp.waitForCompletion<T>`, and
