@@ -1,7 +1,9 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -14,7 +16,8 @@ import 'package:stem/src/workflow/core/workflow_ref.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext implements WorkflowChildCallerContext, TaskEnqueuer {
+class FlowContext
+    implements WorkflowChildCallerContext, TaskEnqueuer, WorkflowCaller {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -191,5 +194,60 @@ class FlowContext implements WorkflowChildCallerContext, TaskEnqueuer {
       throw StateError('FlowContext has no enqueuer configured');
     }
     return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  /// Starts a typed child workflow using the workflow-scoped caller.
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts a prebuilt child workflow call using the workflow-scoped caller.
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.startWorkflowCall(call);
+  }
+
+  /// Waits for a typed child workflow run using the workflow-scoped caller.
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
   }
 }

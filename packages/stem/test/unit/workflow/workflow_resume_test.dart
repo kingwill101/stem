@@ -2,7 +2,10 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:test/test.dart';
@@ -276,11 +279,14 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   _FakeWorkflowScriptStepContext({
     Object? resumeData,
     TaskEnqueuer? enqueuer,
+    WorkflowCaller? workflows,
   }) : _resumeData = resumeData,
-       _enqueuer = enqueuer;
+       _enqueuer = enqueuer,
+       _workflows = workflows;
 
   Object? _resumeData;
   final TaskEnqueuer? _enqueuer;
+  final WorkflowCaller? _workflows;
   final List<String> awaitedTopics = <String>[];
   final List<Duration> sleepCalls = <Duration>[];
 
@@ -288,7 +294,7 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   TaskEnqueuer? get enqueuer => _enqueuer;
 
   @override
-  Never? get workflows => null;
+  WorkflowCaller? get workflows => _workflows;
 
   @override
   int get iteration => 0;
@@ -369,6 +375,64 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
       throw StateError('WorkflowScriptStepContext has no enqueuer configured');
     }
     return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final caller = _workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) async {
+    final caller = _workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final caller = _workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
   }
 }
 

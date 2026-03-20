@@ -158,7 +158,7 @@ void main() {
             flow.step('spawn', (context) async {
               return childRef
                   .call(const {'value': 'spawned'})
-                  .startWithContext(context);
+                  .startWith(context);
             });
           },
         ).definition,
@@ -205,7 +205,7 @@ void main() {
             return script.step<String>('spawn', (context) async {
               return childRef
                   .call(const {'value': 'script-child'})
-                  .startWithContext(context);
+                  .startWith(context);
             });
           },
         ).definition,
@@ -225,7 +225,7 @@ void main() {
   });
 
   test(
-    'flow context workflows startAndWaitWithContext waits for child result',
+    'flow contexts can startAndWait for child workflows directly',
     () async {
       final childRef = WorkflowRef<Map<String, Object?>, String>(
         name: 'child.runtime.wait.flow',
@@ -251,7 +251,7 @@ void main() {
               flow.step('spawn', (context) async {
                 final childResult = await childRef
                     .call(const {'value': 'spawned'})
-                    .startAndWaitWithContext(
+                    .startAndWaitWith(
                       context,
                       timeout: const Duration(seconds: 2),
                     );
@@ -277,7 +277,7 @@ void main() {
   );
 
   test(
-    'script checkpoint workflows startAndWaitWithContext waits for child result',
+    'script checkpoints can startAndWait for child workflows directly',
     () async {
       final childRef = WorkflowRef<Map<String, Object?>, String>(
         name: 'child.runtime.wait.script',
@@ -306,7 +306,7 @@ void main() {
               ) async {
                 final childResult = await childRef
                     .call(const {'value': 'script-child'})
-                    .startAndWaitWithContext(
+                    .startAndWaitWith(
                       context,
                       timeout: const Duration(seconds: 2),
                     );

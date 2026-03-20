@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
@@ -30,7 +32,7 @@ abstract class WorkflowScriptContext {
 /// Context provided to each script checkpoint invocation. Mirrors
 /// [FlowContext] but tailored for the facade helpers.
 abstract class WorkflowScriptStepContext
-    implements WorkflowChildCallerContext, TaskEnqueuer {
+    implements WorkflowChildCallerContext, TaskEnqueuer, WorkflowCaller {
   /// Name of the workflow currently executing.
   String get workflow;
 
@@ -91,5 +93,28 @@ abstract class WorkflowScriptStepContext
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
+  });
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  });
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  );
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
   });
 }

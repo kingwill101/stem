@@ -1886,6 +1886,64 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     }
     return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
   }
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 /// Enqueuer that prefixes workflow step metadata onto spawned tasks.

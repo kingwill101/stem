@@ -76,9 +76,7 @@ void main() {
     },
   );
 
-  test(
-    'startWithContext throws when child workflow support is unavailable',
-    () {
+  test('startWith throws when workflow caller support is unavailable', () {
       final context = FlowContext(
         workflow: 'demo',
         runId: 'run-4',
@@ -93,14 +91,14 @@ void main() {
       );
 
       expect(
-        () => childRef.startWithContext(context, const {'value': 'x'}),
+        () => childRef.startWith(context, const {'value': 'x'}),
         throwsStateError,
       );
     },
   );
 
   test(
-    'startAndWaitWithContext throws when child workflow support is unavailable',
+    'startAndWaitWith throws when workflow caller support is unavailable',
     () {
       final context = FlowContext(
         workflow: 'demo',
@@ -116,7 +114,7 @@ void main() {
       );
 
       expect(
-        () => childRef.startAndWaitWithContext(
+        () => childRef.startAndWaitWith(
           context,
           const {'value': 'x'},
         ),

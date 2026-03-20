@@ -195,7 +195,7 @@ class AnnotatedFlowWorkflow {
       return null;
     }
     final childResult = await StemWorkflowDefinitions.script
-        .startAndWaitWithContext(
+        .startAndWaitWith(
           ctx,
           (request: const WelcomeRequest(email: 'flow-child@example.com')),
           timeout: const Duration(seconds: 2),
@@ -280,7 +280,7 @@ class AnnotatedContextScriptWorkflow {
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
     final childResult = await StemWorkflowDefinitions.script
-        .startAndWaitWithContext(
+        .startAndWaitWith(
           ctx,
           (request: WelcomeRequest(email: normalizedEmail)),
           timeout: const Duration(seconds: 2),
