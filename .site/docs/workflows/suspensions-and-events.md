@@ -66,8 +66,9 @@ wire format. `emitValue(...)` is a DTO/codec convenience layer, not a new
 transport shape.
 
 When the topic and codec travel together in your codebase, prefer a typed
-`WorkflowEventRef<T>` and `event.emitWith(...)` together with
-`waitForEventRef(...)` or `awaitEventRef(...)`.
+`WorkflowEventRef<T>` and `event.emitWith(...)` or
+`event.call(value).emitWith(...)` together with `waitForEventRef(...)` or
+`awaitEventRef(...)`.
 
 ## Inspect waiting runs
 

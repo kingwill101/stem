@@ -10,6 +10,9 @@
   the lower-level interop option.
 - Added `TaskEnqueueBuilder.enqueueAndWait(...)` so fluent per-call task
   overrides no longer require a separate manual wait step.
+- Added `WorkflowEventRef.call(value)` plus `WorkflowEventCall.emitWith(...)`
+  so typed workflow events now have the same prebuilt-call ergonomics as tasks
+  and workflow starts.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
   `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
   `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to

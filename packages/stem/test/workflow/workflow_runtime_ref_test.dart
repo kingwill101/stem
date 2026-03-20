@@ -336,5 +336,45 @@ void main() {
         await workflowApp.shutdown();
       }
     });
+
+    test(
+      'typed workflow event calls emit from the prebuilt call surface',
+      () async {
+        final flow = Flow<String>(
+          name: 'runtime.ref.event.call.flow',
+          build: (builder) {
+            builder.step('wait', (ctx) async {
+              final payload = ctx.waitForEventRef(_userUpdatedEvent);
+              if (payload == null) {
+                return null;
+              }
+              return 'hello ${payload.name}';
+            });
+          },
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final runId = await flow.ref0().startWith(workflowApp);
+          await workflowApp.runtime.executeRun(runId);
+
+          await _userUpdatedEvent
+              .call(const _GreetingParams(name: 'call'))
+              .emitWith(workflowApp);
+          await workflowApp.runtime.executeRun(runId);
+
+          final result = await workflowApp.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(result?.value, 'hello call');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
   });
 }

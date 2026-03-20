@@ -31,6 +31,28 @@ class WorkflowEventRef<T> {
 
   /// Optional codec for encoding and decoding event payloads.
   final PayloadCodec<T>? codec;
+
+  /// Builds a typed event emission call from [value].
+  WorkflowEventCall<T> call(T value) {
+    return WorkflowEventCall._(event: this, value: value);
+  }
+}
+
+/// Typed event emission request built from a [WorkflowEventRef].
+class WorkflowEventCall<T> {
+  const WorkflowEventCall._({
+    required this.event,
+    required this.value,
+  });
+
+  /// Reference used to build this event emission.
+  final WorkflowEventRef<T> event;
+
+  /// Typed event payload.
+  final T value;
+
+  /// Durable topic name derived from [event].
+  String get topic => event.topic;
 }
 
 /// Convenience helpers for dispatching typed workflow events.
@@ -38,5 +60,13 @@ extension WorkflowEventRefExtension<T> on WorkflowEventRef<T> {
   /// Emits this typed event with the provided [emitter].
   Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
     return emitter.emitEvent(this, value);
+  }
+}
+
+/// Convenience helpers for dispatching prebuilt [WorkflowEventCall] instances.
+extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
+  /// Emits this typed event with the provided [emitter].
+  Future<void> emitWith(WorkflowEventEmitter emitter) {
+    return emitter.emitEvent(event, value);
   }
 }
