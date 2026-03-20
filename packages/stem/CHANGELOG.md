@@ -64,6 +64,9 @@
   `requiredMetadataValue(...)`, `metadataJson(...)`, and
   `metadataAs(codec: ...)` so workflow lifecycle signal consumers can decode
   structured metadata without raw map casts.
+- Added `ProgressSignal.dataValue(...)`, `requiredDataValue(...)`,
+  `dataJson(...)`, and `dataAs(codec: ...)` so raw task-progress signal
+  consumers can decode structured progress metadata without raw map casts.
 - Added `TaskExecutionContext` as the shared task-side execution surface for
   `TaskContext` and `TaskInvocationContext`, and taught `stem_builder` to
   accept it directly in annotated task definitions.

@@ -124,6 +124,8 @@ every retry signal and shows how the strategy interacts with broker timings.
 - `context.progress(percent, data: {...})` – emit progress signals for UI hooks.
 - `context.progressJson(percent, dto)` – emit DTO progress payloads without
   hand-built maps.
+- when you inspect a raw `ProgressSignal`, prefer `signal.dataJson('key', ...)`
+  or `signal.dataValue<T>('key')` over manual `signal.data?['key']` casts.
 
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.

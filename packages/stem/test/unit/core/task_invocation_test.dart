@@ -148,7 +148,7 @@ void main() {
   test(
     'TaskInvocationContext.local reports progress with JSON DTO payloads',
     () async {
-      Object? progressData;
+      ProgressSignal? progressSignal;
       final TaskExecutionContext context = TaskInvocationContext.local(
         id: 'task-1b',
         headers: const {},
@@ -156,15 +156,37 @@ void main() {
         attempt: 0,
         heartbeat: () {},
         extendLease: (_) async {},
-        progress: (_, {Map<String, Object?>? data}) async =>
-            progressData = data,
+        progress: (percent, {Map<String, Object?>? data}) async {
+          progressSignal = ProgressSignal(percent, data: data);
+        },
       );
 
       await context.progressJson(25, const _ProgressUpdate(stage: 'warming'));
 
-      expect(progressData, equals(const {'stage': 'warming'}));
+      expect(progressSignal?.data, equals(const {'stage': 'warming'}));
     },
   );
+
+  test('ProgressSignal exposes typed progress metadata helpers', () {
+    const signal = ProgressSignal(
+      50,
+      data: {
+        'step': 2,
+        'update': {'stage': 'warming'},
+      },
+    );
+
+    expect(signal.dataValue<int>('step'), 2);
+    expect(signal.dataValueOr<String>('missing', 'fallback'), 'fallback');
+    expect(signal.requiredDataValue<int>('step'), 2);
+    expect(
+      signal.dataJson<_ProgressUpdate>(
+        'update',
+        decode: _ProgressUpdate.fromJson,
+      ),
+      isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
+    );
+  });
 
   test('TaskInvocationContext.local merges headers/meta and lineage', () async {
     final enqueuer = _CapturingEnqueuer('task-1');
@@ -556,6 +578,10 @@ class _WorkflowEventPayload {
 
 class _ProgressUpdate {
   const _ProgressUpdate({required this.stage});
+
+  factory _ProgressUpdate.fromJson(Map<String, dynamic> json) {
+    return _ProgressUpdate(stage: json['stage'] as String);
+  }
 
   final String stage;
 

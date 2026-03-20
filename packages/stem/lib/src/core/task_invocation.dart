@@ -38,6 +38,7 @@ import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
@@ -80,6 +81,51 @@ class ProgressSignal extends TaskInvocationSignal {
 
   /// Optional progress metadata.
   final Map<String, Object?>? data;
+
+  /// Returns the decoded progress metadata value for [key], or `null`.
+  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded progress metadata value for [key], or [fallback].
+  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded progress metadata value for [key], throwing if absent.
+  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) {
+      throw StateError('Progress signal does not include metadata.');
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO with [codec].
+  T? dataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO from JSON.
+  T? dataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
 }
 
 /// Request to enqueue a task from an isolate.
