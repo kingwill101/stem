@@ -20,9 +20,7 @@ Future<void> main() async {
           return 'awake';
         })
         ..step('await-event', (ctx) async {
-          final payload = await ctx.waitForEvent<Map<String, Object?>>(
-            topic: demoEvent.topic,
-          );
+          final payload = await demoEvent.waitWith(ctx);
           return payload['message'];
         });
     },

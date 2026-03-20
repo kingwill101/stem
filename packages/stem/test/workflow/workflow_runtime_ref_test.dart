@@ -371,7 +371,7 @@ void main() {
         name: 'runtime.ref.event.flow',
         build: (builder) {
           builder.step('wait', (ctx) async {
-            final payload = ctx.waitForEventRef(_userUpdatedEvent);
+            final payload = _userUpdatedEvent.waitValueWith(ctx);
             if (payload == null) {
               return null;
             }
@@ -411,10 +411,7 @@ void main() {
           name: 'runtime.ref.event.call.flow',
           build: (builder) {
             builder.step('wait', (ctx) async {
-              final payload = ctx.waitForEventRef(_userUpdatedEvent);
-              if (payload == null) {
-                return null;
-              }
+              final payload = await _userUpdatedEvent.waitWith(ctx);
               return 'hello ${payload.name}';
             });
           },
@@ -449,7 +446,7 @@ void main() {
         name: 'runtime.ref.event.bound.flow',
         build: (builder) {
           builder.step('wait', (ctx) async {
-            final payload = ctx.waitForEventRef(_userUpdatedEvent);
+            final payload = _userUpdatedEvent.waitValueWith(ctx);
             if (payload == null) {
               return null;
             }

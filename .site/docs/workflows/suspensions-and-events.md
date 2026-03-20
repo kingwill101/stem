@@ -32,7 +32,7 @@ Typical flow:
    `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
    a payload
 4. the runtime resumes the run and exposes the payload through
-   `waitForEvent(...)`, `waitForEventRefValue(...)`, or the lower-level
+   `waitForEvent(...)`, `event.waitWith(ctx)`, or the lower-level
    `takeResumeData()` / `takeResumeValue<T>(codec: ...)`
 
 For the common "wait for one event and continue" case, prefer:
@@ -64,8 +64,7 @@ When the topic and codec travel together in your codebase, prefer a typed
 `WorkflowEventRef<T>` and `event.emitWith(emitter, dto)` as the happy path.
 `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
 `event.call(value).emitWith(...)` remain available as lower-level variants.
-Pair that with `await ctx.waitForEventRefValue(event: ref)` or
-`awaitEventRef(...)`.
+Pair that with `await event.waitWith(ctx)` or `awaitEventRef(...)`.
 
 ## Inspect waiting runs
 

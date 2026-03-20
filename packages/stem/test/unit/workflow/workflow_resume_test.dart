@@ -449,6 +449,97 @@ void main() {
   );
 
   test(
+    'WorkflowEventRef.waitValueWith delegates to both flow and script '
+    'contexts',
+    () {
+      const event = WorkflowEventRef<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      );
+
+      final flowWaiting = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      expect(event.waitValueWith(flowWaiting), isNull);
+      expect(flowWaiting.takeControl()?.topic, 'demo.event');
+
+      final flowResumed = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {'message': 'approved'},
+      );
+      expect(event.waitValueWith(flowResumed)?.message, 'approved');
+
+      final scriptWaiting = _FakeWorkflowScriptStepContext();
+      expect(event.waitValueWith(scriptWaiting), isNull);
+      expect(scriptWaiting.awaitedTopics, ['demo.event']);
+    },
+  );
+
+  test(
+    'WorkflowEventRef.waitWith delegates to both flow and script contexts',
+    () {
+      const event = WorkflowEventRef<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      );
+
+      final flowWaiting = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      expect(
+        () => event.waitWith(flowWaiting),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(flowWaiting.takeControl()?.topic, 'demo.event');
+
+      final scriptResumed = _FakeWorkflowScriptStepContext(
+        resumeData: const {'message': 'approved'},
+      );
+      expect(
+        event.waitWith(scriptResumed),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('WorkflowEventRef wait helpers reject unsupported waiter types', () {
+    const event = WorkflowEventRef<_ResumePayload>(
+      topic: 'demo.event',
+      codec: _resumePayloadCodec,
+    );
+
+    expect(
+      () => event.waitValueWith('invalid'),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      () => event.waitWith('invalid'),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test(
     'WorkflowScriptStepContext.awaitEventRef reuses the event topic',
     () async {
       const event = WorkflowEventRef<_ResumePayload>(

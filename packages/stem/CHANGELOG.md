@@ -7,6 +7,9 @@
   `await ctx.waitForEvent(topic: ...)`, and
   `await ctx.waitForEventRefValue(event: ...)` for both flow steps and script
   checkpoints.
+- Added direct typed workflow event wait helpers:
+  `await event.waitWith(ctx)` and `event.waitValueWith(ctx)` so typed workflow
+  events now stay on the ref surface for both emit and wait paths.
 - Added `StemModule.combine(...)` plus `modules:` support across `StemApp`,
   `StemWorkflowApp`, and `StemClient` bootstrap helpers so multi-module apps
   no longer need to pre-merge bundles manually at every call site.

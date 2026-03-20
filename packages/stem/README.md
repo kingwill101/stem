@@ -422,6 +422,8 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `await step.sleepFor(duration: ...)` is the expression-style sleep path.
 - `await step.waitForEvent(topic: ..., codec: ...)` is the expression-style
   event wait path.
+- `await event.waitWith(step)` keeps typed event waits on the
+  `WorkflowEventRef<T>` surface.
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
@@ -1094,9 +1096,9 @@ backend metadata under `stem.unique.duplicates`.
   `WorkflowEventRef<T>` and use `event.emitWith(emitter, dto)` as the happy
   path, with `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
   `event.call(value).emitWith(...)` still available as lower-level variants.
-  Pair that with `await ctx.waitForEventRefValue(event: ref)` or
-  `awaitEventRef(...)`. Event payloads still serialize onto the existing
-  `Map<String, Object?>` wire format.
+  Pair that with `await event.waitWith(ctx)` or `awaitEventRef(...)`. Event
+  payloads still serialize onto the existing `Map<String, Object?>` wire
+  format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so
