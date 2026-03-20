@@ -2875,6 +2875,60 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Creates a typed task definition for custom map args that persist a schema
+  /// [version] beside the payload.
+  factory TaskDefinition.versionedMap({
+    required String name,
+    required Object? Function(TArgs args) encodeArgs,
+    required int version,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final argsCodec = PayloadCodec<TArgs>.versionedMap(
+      encode: encodeArgs,
+      version: version,
+      decode: (payload, _) => throw UnsupportedError(
+        'TaskDefinition.versionedMap($name) only uses the args codec for '
+        'encoding. Decoding is not supported at the definition layer.',
+      ),
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: argsTypeName ?? '$TArgs',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: version,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: resultTypeName ?? '$TResult',
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
+    return TaskDefinition<TArgs, TResult>.codec(
+      name: name,
+      argsCodec: argsCodec,
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgsCodec<TResult>({
     required String name,

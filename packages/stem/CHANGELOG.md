@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `TaskDefinition.versionedMap(...)` for custom map task args that
+  should still persist `__stemPayloadVersion`, including the same
+  version-aware stored-result decoding options as `versionedJson(...)`.
 - Added `WorkflowEventRef.versionedMap(...)` and
   `WorkflowRef.versionedMap(...)` plus the matching
   `refVersionedMap(...)` helpers on `Flow`, `WorkflowScript`, and

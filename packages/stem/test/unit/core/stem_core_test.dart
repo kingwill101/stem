@@ -212,6 +212,35 @@ void main() {
       expect(backend.records.single.state, TaskState.queued);
     });
 
+    test('enqueueCall publishes versioned-map task definitions', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<_CodecTaskArgs, Object?>.versionedMap(
+        name: 'sample.versioned.map.args',
+        version: 3,
+        encodeArgs: (args) => {'legacy_value': args.value},
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
+
+      final id = await stem.enqueueCall(
+        definition.buildCall(const _CodecTaskArgs('encoded')),
+      );
+
+      expect(id, isNotEmpty);
+      expect(
+        broker.published.single.envelope.name,
+        'sample.versioned.map.args',
+      );
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(broker.published.single.envelope.args, {
+        PayloadCodec.versionKey: 3,
+        'legacy_value': 'encoded',
+      });
+      expect(backend.records.single.id, id);
+      expect(backend.records.single.state, TaskState.queued);
+    });
+
     test('enqueueJson publishes DTO args without a manual map', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
@@ -333,6 +362,31 @@ void main() {
               version: 2,
               decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
             );
+
+        final id = await stem.enqueueCall(
+          definition.buildCall(const _CodecTaskArgs('encoded')),
+        );
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+
+    test(
+      'versioned map task definitions can derive versioned result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedMap(
+          name: 'sample.versioned_map.result',
+          version: 2,
+          encodeArgs: (args) => {'legacy_value': args.value},
+          decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
+        );
 
         final id = await stem.enqueueCall(
           definition.buildCall(const _CodecTaskArgs('encoded')),
