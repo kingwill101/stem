@@ -1,5 +1,5 @@
 // Canvas group example for documentation.
-// ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
+// ignore_for_file: avoid_print
 
 import 'dart:async';
 
@@ -12,7 +12,7 @@ Future<void> main() async {
       FunctionTaskHandler<int>(
         name: 'square',
         entrypoint: (context, args) async {
-          final value = args['value'] as int;
+          final value = args.requiredValue<int>('value');
           await Future<void>.delayed(const Duration(milliseconds: 50));
           return value * value;
         },
@@ -38,7 +38,7 @@ Future<void> main() async {
   });
 
   final groupStatus = await app.getGroupStatus(dispatch.groupId);
-  final values = groupStatus?.results.values.map((s) => s.payload).toList();
+  final values = groupStatus?.resultValues<int>().values.toList();
   print('Group results: $values');
 
   await app.close();

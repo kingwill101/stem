@@ -75,8 +75,9 @@ the runtime layer, read the raw backend directly.
 - `Canvas.chord` preserves the original signature order when building
   `chordResults`, so you can map results back to inputs deterministically.
 - `StemApp.getGroupStatus(...)` and `StemClient.getGroupStatus(...)` return the
-  latest status for each child task. Low-level integrations can still read the
-  raw backend directly.
+  latest status for each child task. Use `status.resultValues<T>()` for scalar
+  child results or `status.resultJson(...)` / `status.resultAs(codec: ...)` for
+  DTO payloads before dropping down to raw backend reads.
 
 ## Removal semantics
 

@@ -2952,6 +2952,39 @@ class GroupStatus {
   /// Additional metadata for the group.
   final Map<String, Object?> meta;
 
+  /// Returns the decoded payload value for each collected child result.
+  ///
+  /// When [codec] is supplied, each stored durable payload is decoded through
+  /// that codec before being returned.
+  Map<String, T?> resultValues<T>({PayloadCodec<T>? codec}) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadValue<T>(codec: codec),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with [codec].
+  Map<String, T?> resultAs<T>({required PayloadCodec<T> codec}) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadAs(codec: codec),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with a JSON decoder.
+  Map<String, T?> resultJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadJson(
+          decode: decode,
+          typeName: typeName,
+        ),
+    });
+  }
+
   /// The number of completed results.
   int get completed => results.length;
 

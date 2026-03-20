@@ -993,6 +993,12 @@ final chordResult = await canvas.chord<double>(
 print('Body results: ${chordResult.values}');
 ```
 
+If you later inspect the aggregate backend record via
+`StemApp.getGroupStatus(...)` or `StemClient.getGroupStatus(...)`, use
+`status.resultValues<T>()` for scalar child results or
+`status.resultJson(...)` / `status.resultAs(codec: ...)` for DTO payloads
+instead of manually mapping `status.results.values`.
+
 ### Task payload encoders
 
 By default Stem stores handler arguments/results exactly as provided (JSON-friendly

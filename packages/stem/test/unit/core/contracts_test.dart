@@ -239,6 +239,69 @@ void main() {
     });
   });
 
+  group('GroupStatus', () {
+    test('exposes typed child-result decode helpers', () {
+      final codec = PayloadCodec<Map<String, Object?>>.map(
+        encode: (value) => value,
+        decode: (json) => json,
+        typeName: 'ReceiptMap',
+      );
+      final scalarStatus = GroupStatus(
+        id: 'grp-1',
+        expected: 2,
+        results: {
+          'task-1': TaskStatus(
+            id: 'task-1',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: 7,
+          ),
+          'task-2': TaskStatus(
+            id: 'task-2',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: 9,
+          ),
+        },
+      );
+      final dtoStatus = GroupStatus(
+        id: 'grp-2',
+        expected: 1,
+        results: {
+          'task-1': TaskStatus(
+            id: 'task-1',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: const {'id': 'receipt-1'},
+          ),
+        },
+      );
+
+      expect(
+        scalarStatus.resultValues<int>(),
+        equals({
+          'task-1': 7,
+          'task-2': 9,
+        }),
+      );
+      expect(
+        dtoStatus.resultAs<Map<String, Object?>>(codec: codec),
+        equals({
+          'task-1': const {'id': 'receipt-1'},
+        }),
+      );
+      expect(
+        dtoStatus.resultJson<_GroupReceipt>(
+          decode: _GroupReceipt.fromJson,
+        ),
+        {
+          'task-1': isA<_GroupReceipt>()
+              .having((value) => value.id, 'id', 'receipt-1'),
+        },
+      );
+    });
+  });
+
   group('DeadLetterEntry', () {
     test('round trips through json', () {
       final entry = DeadLetterEntry(
@@ -399,6 +462,16 @@ void main() {
     expect(error.toString(), contains('expected: 1'));
     expect(error.toString(), contains('actual: 2'));
   });
+}
+
+class _GroupReceipt {
+  const _GroupReceipt({required this.id});
+
+  factory _GroupReceipt.fromJson(Map<String, dynamic> json) {
+    return _GroupReceipt(id: json['id'] as String);
+  }
+
+  final String id;
 }
 
 class _ReceiptPayload {

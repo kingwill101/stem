@@ -46,6 +46,9 @@
   `WorkflowStepEntry.valueJson(...)` / `valueAs(codec: ...)` so raw watcher
   and checkpoint inspection paths can decode DTO payloads without manual
   casts.
+- Added `GroupStatus.resultValues<T>()`, `resultJson(...)`, and
+  `resultAs(codec: ...)` so canvas/group status inspection can decode typed
+  child results without manually mapping raw `TaskStatus.payload` values.
 - Added `arg<T>()`, `argOr<T>()`, and `requiredArg<T>()` on `TaskContext` and
   `TaskInvocationContext`, and taught both contexts to retain the current
   task args so manual handlers and isolate entrypoints can read typed inputs
