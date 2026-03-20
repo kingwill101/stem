@@ -952,7 +952,16 @@ Checkpoint entries from `viewCheckpoints(...)` and
 `entry.valueAs(codec: ...)`.
 Workflow introspection events expose matching helpers via
 `event.resultJson(...)`, `event.resultVersionedJson(...)`, and
-`event.resultAs(codec: ...)`.
+`event.resultAs(codec: ...)`, plus metadata helpers via
+`event.metadataJson('key', ...)`, `event.metadataVersionedJson('key', ...)`,
+`event.metadataAs('key', codec: ...)`, `event.metadataPayloadJson(...)`, and
+`event.metadataPayloadVersionedJson(...)`. Worker events expose matching typed helpers on
+`WorkerEvent.data` via `event.dataJson(...)`,
+`event.dataVersionedJson(...)`, and `event.dataAs(codec: ...)`. Control
+command completion signals expose the same surface on `response` and `error`
+via `payload.responseJson(...)`, `payload.responseVersionedJson(...)`,
+`payload.responseAs(codec: ...)`, `payload.errorJson(...)`,
+`payload.errorVersionedJson(...)`, and `payload.errorAs(codec: ...)`.
 For lower-level suspension directives, prefer `step.sleepJson(...)`,
 `step.sleepVersionedJson(...)`, `step.awaitEventJson(...)`,
 `step.awaitEventVersionedJson(...)`, and

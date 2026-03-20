@@ -2,6 +2,18 @@
 
 ## 0.1.1
 
+- Added `WorkflowStepEvent.metadataJson(...)`,
+  `metadataVersionedJson(...)`, `metadataPayloadJson(...)`, and the matching
+  `WorkflowRuntimeEvent` helpers so workflow introspection metadata can decode
+  DTOs without raw map casts.
+- Added `WorkerEvent.dataJson(...)`, `dataVersionedJson(...)`, and
+  `dataAs(codec: ...)` so worker observability events can decode structured
+  event data without raw map casts.
+- Added `ControlCommandCompletedPayload.responseJson(...)`,
+  `responseVersionedJson(...)`, `responseAs(codec: ...)`, `errorJson(...)`,
+  `errorVersionedJson(...)`, and `errorAs(codec: ...)` so control command
+  result signals can decode structured response and error payloads without
+  raw map plumbing.
 - Added `TaskExecutionContext.argsAs(...)`, `argsJson(...)`,
   `argsVersionedJson(...)`, `WorkflowExecutionContext.paramsAs(...)`,
   `paramsJson(...)`, `paramsVersionedJson(...)`, and the same full-payload

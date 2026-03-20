@@ -97,6 +97,17 @@ When a completed step or checkpoint carries a DTO payload, prefer
 `event.resultJson(...)`, `event.resultVersionedJson(...)`, or
 `event.resultAs(codec: ...)` over manual
 `event.result as Map<String, Object?>` casts.
+Step and runtime introspection events also expose typed metadata helpers via
+`event.metadataJson('key', ...)`, `event.metadataVersionedJson('key', ...)`,
+`event.metadataAs('key', codec: ...)`, `event.metadataPayloadJson(...)`, and
+`event.metadataPayloadVersionedJson(...)`.
+When worker events carry structured `data`, prefer `event.dataJson(...)`,
+`event.dataVersionedJson(...)`, or `event.dataAs(codec: ...)` over manual
+`event.data!['key']` casts. For completed control commands, use
+`payload.responseJson(...)`, `payload.responseVersionedJson(...)`,
+`payload.responseAs(codec: ...)`, `payload.errorJson(...)`,
+`payload.errorVersionedJson(...)`, or `payload.errorAs(codec: ...)` instead of
+walking raw `response` / `error` maps.
 
 ## Logging
 

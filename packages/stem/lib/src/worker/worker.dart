@@ -106,6 +106,8 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/stem_event.dart';
@@ -4771,6 +4773,67 @@ class WorkerEvent implements StemEvent {
 
   /// Additional data for the event.
   final Map<String, Object?>? data;
+
+  /// Returns the decoded data value for [key], or `null` when absent.
+  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded data value for [key], or [fallback] when absent.
+  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded data value for [key], throwing when absent.
+  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) {
+      throw StateError('WorkerEvent.data does not contain "$key".');
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the full data payload as a typed DTO with [codec].
+  T? dataAs<T>({required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full data payload as a typed DTO with a JSON decoder.
+  T? dataJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full data payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? dataVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   @override
   String get eventName => 'worker.${type.name}';

@@ -2,6 +2,7 @@ import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:test/test.dart';
 
@@ -187,6 +188,71 @@ void main() {
       ),
     );
   });
+
+  test('control command payload exposes typed response and error helpers', () {
+    const worker = WorkerInfo(
+      id: 'worker-1',
+      queues: ['default'],
+      broadcasts: [],
+    );
+    final command = ControlCommandMessage(
+      requestId: 'req-2',
+      type: 'pause',
+      targets: const ['*'],
+    );
+    final payload = ControlCommandCompletedPayload(
+      worker: worker,
+      command: command,
+      status: 'error',
+      response: const {
+        PayloadCodec.versionKey: 2,
+        'queue': 'priority',
+        'paused': true,
+      },
+      error: const {
+        PayloadCodec.versionKey: 2,
+        'code': 'pause_failed',
+        'message': 'already paused',
+      },
+    );
+
+    expect(payload.responseValue<String>('queue'), 'priority');
+    expect(payload.responseValueOr<String>('missing', 'fallback'), 'fallback');
+    expect(payload.requiredResponseValue<bool>('paused'), isTrue);
+    expect(
+      payload.responseJson<_ControlResponse>(decode: _ControlResponse.fromJson),
+      isA<_ControlResponse>()
+          .having((value) => value.queue, 'queue', 'priority')
+          .having((value) => value.paused, 'paused', isTrue),
+    );
+    expect(
+      payload.responseVersionedJson<_ControlResponse>(
+        version: 2,
+        decode: _ControlResponse.fromVersionedJson,
+      ),
+      isA<_ControlResponse>()
+          .having((value) => value.queue, 'queue', 'priority')
+          .having((value) => value.paused, 'paused', isTrue),
+    );
+    expect(payload.errorValue<String>('code'), 'pause_failed');
+    expect(payload.errorValueOr<String>('missing', 'fallback'), 'fallback');
+    expect(payload.requiredErrorValue<String>('message'), 'already paused');
+    expect(
+      payload.errorJson<_ControlError>(decode: _ControlError.fromJson),
+      isA<_ControlError>()
+          .having((value) => value.code, 'code', 'pause_failed')
+          .having((value) => value.message, 'message', 'already paused'),
+    );
+    expect(
+      payload.errorVersionedJson<_ControlError>(
+        version: 2,
+        decode: _ControlError.fromVersionedJson,
+      ),
+      isA<_ControlError>()
+          .having((value) => value.code, 'code', 'pause_failed')
+          .having((value) => value.message, 'message', 'already paused'),
+    );
+  });
 }
 
 class _TaskResultPayload {
@@ -248,4 +314,48 @@ class _WorkflowRunEnvelope {
 
   final int attempt;
   final bool approved;
+}
+
+class _ControlResponse {
+  const _ControlResponse({required this.queue, required this.paused});
+
+  factory _ControlResponse.fromJson(Map<String, dynamic> json) {
+    return _ControlResponse(
+      queue: json['queue'] as String,
+      paused: json['paused'] as bool,
+    );
+  }
+
+  factory _ControlResponse.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ControlResponse.fromJson(json);
+  }
+
+  final String queue;
+  final bool paused;
+}
+
+class _ControlError {
+  const _ControlError({required this.code, required this.message});
+
+  factory _ControlError.fromJson(Map<String, dynamic> json) {
+    return _ControlError(
+      code: json['code'] as String,
+      message: json['message'] as String,
+    );
+  }
+
+  factory _ControlError.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ControlError.fromJson(json);
+  }
+
+  final String code;
+  final String message;
 }
