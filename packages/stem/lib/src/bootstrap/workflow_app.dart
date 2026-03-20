@@ -490,6 +490,8 @@ class StemWorkflowApp
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
@@ -508,6 +510,8 @@ class StemWorkflowApp
       workerConfig,
       module: effectiveModule,
       tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
     );
     final appInstance =
         stemApp ??
@@ -540,6 +544,8 @@ class StemWorkflowApp
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       queue: resolvedWorkerConfig.queue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       registry: workflowRegistry,
       introspectionSink: introspectionSink,
     );
@@ -588,6 +594,8 @@ class StemWorkflowApp
     Iterable<WorkflowScript> scripts = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
@@ -608,6 +616,8 @@ class StemWorkflowApp
       storeFactory: WorkflowStoreFactory.inMemory(),
       eventBusFactory: WorkflowEventBusFactory.inMemory(),
       workerConfig: workerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: workflowRegistry,
@@ -636,6 +646,8 @@ class StemWorkflowApp
     Iterable<StemStoreAdapter> adapters = const [],
     StemStoreOverrides overrides = const StemStoreOverrides(),
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     bool uniqueTasks = false,
     Duration uniqueTaskDefaultTtl = const Duration(minutes: 5),
     String uniqueTaskNamespace = 'stem:unique',
@@ -656,6 +668,8 @@ class StemWorkflowApp
       workerConfig,
       module: module,
       tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
     );
     final stack = StemStack.fromUrl(
       url,
@@ -693,6 +707,8 @@ class StemWorkflowApp
         storeFactory: stack.workflowStore,
         eventBusFactory: eventBusFactory,
         workerConfig: resolvedWorkerConfig,
+        continuationQueue: continuationQueue,
+        executionQueue: executionQueue,
         pollInterval: pollInterval,
         leaseExtension: leaseExtension,
         workflowRegistry: workflowRegistry,
@@ -726,6 +742,8 @@ class StemWorkflowApp
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
@@ -734,6 +752,8 @@ class StemWorkflowApp
       workerConfig,
       module: module,
       tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
     );
     final appInstance = await StemApp.fromClient(
       client,
@@ -748,6 +768,8 @@ class StemWorkflowApp
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
       workerConfig: resolvedWorkerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: client.workflowRegistry,
@@ -772,6 +794,8 @@ extension StemAppWorkflowExtension on StemApp {
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
@@ -787,6 +811,8 @@ extension StemAppWorkflowExtension on StemApp {
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
       workerConfig: workerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: workflowRegistry,
@@ -843,6 +869,8 @@ StemWorkerConfig _resolveWorkflowWorkerConfig(
   StemWorkerConfig workerConfig, {
   StemModule? module,
   Iterable<TaskHandler<Object?>> tasks = const [],
+  String? continuationQueue,
+  String? executionQueue,
 }) {
   if (workerConfig.subscription != null) {
     return workerConfig;
@@ -851,12 +879,16 @@ StemWorkerConfig _resolveWorkflowWorkerConfig(
   final inferredSubscription =
       module?.inferWorkerSubscription(
         workflowQueue: workerConfig.queue,
+        continuationQueue: continuationQueue,
+        executionQueue: executionQueue,
         additionalTasks: tasks,
       ) ??
       (() {
         final tempModule = StemModule(tasks: tasks);
         return tempModule.inferWorkerSubscription(
           workflowQueue: workerConfig.queue,
+          continuationQueue: continuationQueue,
+          executionQueue: executionQueue,
         );
       })();
 

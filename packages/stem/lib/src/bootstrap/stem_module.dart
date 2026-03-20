@@ -93,12 +93,24 @@ class StemModule {
   /// runnable when the inferred queues are used to bootstrap a worker.
   List<String> inferredWorkerQueues({
     String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
     Iterable<TaskHandler<Object?>> additionalTasks = const [],
   }) {
     final queues = SplayTreeSet<String>();
     final normalizedWorkflowQueue = workflowQueue.trim();
     if (normalizedWorkflowQueue.isNotEmpty) {
       queues.add(normalizedWorkflowQueue);
+    }
+    final normalizedContinuationQueue = continuationQueue?.trim();
+    if (normalizedContinuationQueue != null &&
+        normalizedContinuationQueue.isNotEmpty) {
+      queues.add(normalizedContinuationQueue);
+    }
+    final normalizedExecutionQueue = executionQueue?.trim();
+    if (normalizedExecutionQueue != null &&
+        normalizedExecutionQueue.isNotEmpty) {
+      queues.add(normalizedExecutionQueue);
     }
 
     void addTaskQueue(TaskHandler<Object?> handler) {
@@ -119,10 +131,14 @@ class StemModule {
   /// worker's default queue configuration to remain unchanged.
   RoutingSubscription? inferWorkerSubscription({
     String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
     Iterable<TaskHandler<Object?>> additionalTasks = const [],
   }) {
     final queues = inferredWorkerQueues(
       workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       additionalTasks: additionalTasks,
     );
     if (queues.length <= 1) {
