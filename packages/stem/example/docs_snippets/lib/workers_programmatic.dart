@@ -1,4 +1,5 @@
 // Programmatic worker and producer examples for documentation.
+// These snippets intentionally cover the lower-level embedding surface.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'dart:async';

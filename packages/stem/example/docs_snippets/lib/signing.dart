@@ -1,4 +1,5 @@
 // Signing examples for documentation.
+// These snippets intentionally show the lower-level producer/worker/Beat wiring.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'dart:async';

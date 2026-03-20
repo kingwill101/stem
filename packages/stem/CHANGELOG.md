@@ -121,6 +121,9 @@
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.
+- Clarified in the worker-programmatic and signing docs that the remaining raw
+  `Stem` examples are intentionally the lower-level embedding path, not the
+  default happy path.
 - Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
   and rate-limit delay shared libraries after those demos moved to
   `StemClient`-based producers.

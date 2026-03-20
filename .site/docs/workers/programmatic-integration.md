@@ -9,6 +9,10 @@ Use Stem's Dart APIs to embed task production and processing inside your
 application services. This guide focuses on the two core roles: **producer**
 (enqueuer) and **worker**.
 
+This page is intentionally about the lower-level embedding surface. If you want
+the default happy path, prefer `StemClient`, `StemApp`, or `StemWorkflowApp`
+and come here only when you need direct runtime composition.
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -40,7 +44,8 @@ import TabItem from '@theme/TabItem';
 
 ### Tips
 
-- Always reuse a `Stem` instance rather than creating one per request.
+- Always reuse the producer runtime (`StemClient`, `StemApp`, or raw `Stem`)
+  rather than constructing one per request.
 - Use `TaskOptions` to set queue, retries, timeouts, and isolation.
 - Add custom metadata via the `meta` argument for observability or downstream
   processing.
