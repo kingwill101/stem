@@ -319,9 +319,8 @@ Shared `TaskExecutionContext` implementations also expose
 depending on a concrete task runtime class.
 
 When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
-`TaskExecutionContext` implementations like `TaskContext` and
-`TaskInvocationContext` can also start typed child workflows
-and emit typed workflow events:
+`TaskExecutionContext` can also start typed child workflows and emit typed
+workflow events:
 
 ```dart
 final childWorkflow = Flow<String>(

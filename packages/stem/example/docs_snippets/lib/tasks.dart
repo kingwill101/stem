@@ -97,7 +97,7 @@ Future<void> runTypedDefinitionExample() async {
 // #endregion tasks-typed-definition
 
 // #region tasks-context-enqueue
-Future<void> enqueueFromContext(TaskContext context) async {
+Future<void> enqueueFromContext(TaskExecutionContext context) async {
   await context.enqueue(
     'tasks.child',
     args: {'id': '123'},
@@ -129,7 +129,7 @@ final childDefinition = TaskDefinition<ChildArgs, void>(
 );
 
 // #region tasks-invocation-builder
-Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
+Future<void> enqueueWithBuilder(TaskExecutionContext context) async {
   await childDefinition
       .prepareEnqueue(const ChildArgs('value'))
       .queue('critical')
@@ -144,7 +144,7 @@ Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
           ),
         ),
       )
-      .enqueue(invocation);
+      .enqueue(context);
 }
 // #endregion tasks-invocation-builder
 

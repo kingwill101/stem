@@ -73,6 +73,9 @@
 - Added `TaskExecutionContext.retry(...)` so typed task handlers can request
   retries through the shared task context surface instead of depending on
   concrete runtime classes.
+- Updated task docs/snippets to prefer `TaskExecutionContext` for shared
+  enqueue/workflow/event examples, leaving `TaskContext` and
+  `TaskInvocationContext` only where the runtime distinction matters.
 - Added `FlowStepControl.dataJson(...)` and `dataAs(codec: ...)` so
   lower-level suspension control objects can decode DTO metadata without
   manual casts.

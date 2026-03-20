@@ -142,14 +142,14 @@ final tenant = context.argOr<String>('tenant', 'global');
 
 See the `packages/stem/example/task_context_mixed` demo for a runnable sample that exercises
 inline + isolate enqueue, TaskRetryPolicy overrides, and enqueue options.
-The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory TaskContext and
-TaskInvocationContext patterns without external dependencies.
+The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory
+`TaskExecutionContext` patterns without external dependencies.
 
 ### Enqueue from a running task
 
-Use `TaskContext.enqueue`/`spawn` to schedule follow-up work with the same
-defaults as `Stem.enqueue`. For isolate entrypoints, `TaskInvocationContext`
-exposes the same API plus the fluent builder.
+Use `TaskExecutionContext.enqueue`/`spawn` to schedule follow-up work with the
+same defaults as `Stem.enqueue`. Concrete runtimes like `TaskContext` and
+`TaskInvocationContext` expose the same API.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-context-enqueue
 
@@ -162,15 +162,15 @@ Inside isolate entrypoints:
 ```
 
 When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
-both `TaskContext` and `TaskInvocationContext` also implement
-`WorkflowCaller`, so handlers and isolate entrypoints can start or wait for
+`TaskExecutionContext` also implements `WorkflowCaller`, so handlers and
+isolate entrypoints can start or wait for
 typed child workflows without dropping to raw workflow-name APIs. For manual
 flows and scripts, prefer `childFlow.startAndWait(context)` or
 `childWorkflowRef.startAndWait(context, params: value)` for the simple case.
 Use a builder only when you need advanced overrides.
 
-Those same contexts also implement `WorkflowEventEmitter`, so tasks can resume
-waiting workflows through `emitValue(...)` or typed `WorkflowEventRef<T>`
+That same shared task context also implements `WorkflowEventEmitter`, so tasks
+can resume waiting workflows through `emitValue(...)` or typed `WorkflowEventRef<T>`
 instances when a workflow runtime is attached.
 
 ### Retry from a running task
