@@ -266,7 +266,7 @@ Future<void> main() async {
 
   final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
 
-  final runId = await demoFlow.startWith(app);
+  final runId = await demoFlow.start(app);
   final result = await demoFlow.waitFor(
     app,
     runId,

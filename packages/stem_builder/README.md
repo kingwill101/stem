@@ -171,7 +171,10 @@ dart run build_runner build
 
 The generated part exports a bundle plus typed refs/definitions so you can
 avoid raw workflow-name and task-name strings (for example
-`StemWorkflowDefinitions.userSignup.startWith(workflowApp, 'user@example.com')`
+`StemWorkflowDefinitions.userSignup.start(
+workflowApp,
+params: 'user@example.com',
+)`
 or `StemTaskDefinitions.builderExamplePing.enqueue(stem)`).
 
 Generated output includes:
@@ -266,9 +269,9 @@ generated workflow refs work there too:
 
 ```dart
 final runtime = workflowApp.runtime;
-final runId = await StemWorkflowDefinitions.userSignup.startWith(
+final runId = await StemWorkflowDefinitions.userSignup.start(
   runtime,
-  'user@example.com',
+  params: 'user@example.com',
 );
 await workflowApp.executeRun(runId);
 ```

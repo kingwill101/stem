@@ -130,7 +130,10 @@ class EcommerceServer {
       })
       ..post('/checkout/<cartId>', (Request request, String cartId) async {
         try {
-          final runId = await checkoutWorkflow.call(cartId).startWith(workflowApp);
+          final runId = await checkoutWorkflow.start(
+            workflowApp,
+            params: cartId,
+          );
 
           final result = await checkoutWorkflow.waitFor(
             workflowApp,

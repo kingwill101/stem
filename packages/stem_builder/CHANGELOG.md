@@ -2,6 +2,8 @@
 
 ## 0.1.0
 
+- Refreshed the builder README examples to prefer direct `start(...)` aliases
+  in the common case.
 - Refreshed generated child-workflow examples and docs to prefer the direct
   `startAndWait(...)` alias in the common case.
 - Switched generated DTO payload codecs to the shorter

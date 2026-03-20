@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Refreshed the remaining simple workflow examples to use direct `start(...)`
+  aliases instead of `startWith(...)` where no advanced overrides are needed.
 - Refreshed child-workflow examples and docs to prefer the direct
   `startAndWait(...)` alias over `startAndWaitWith(...)` in the common case.
 - Refreshed the public workflow examples and docs snippets to prefer the direct
