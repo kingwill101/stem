@@ -38,6 +38,11 @@
   `suspensionPayloadJson(...)`, and `suspensionPayloadAs(codec: ...)` so raw
   workflow-store inspection paths can decode DTO payloads without manual
   casts.
+- Added `WorkflowWatcher.payloadJson(...)`, `payloadAs(codec: ...)`,
+  `WorkflowWatcherResolution.payloadJson(...)`, `payloadAs(codec: ...)`, and
+  `WorkflowStepEntry.valueJson(...)` / `valueAs(codec: ...)` so raw watcher
+  and checkpoint inspection paths can decode DTO payloads without manual
+  casts.
 - Added `arg<T>()`, `argOr<T>()`, and `requiredArg<T>()` on `TaskContext` and
   `TaskInvocationContext`, and taught both contexts to retain the current
   task args so manual handlers and isolate entrypoints can read typed inputs

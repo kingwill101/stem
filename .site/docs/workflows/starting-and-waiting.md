@@ -94,6 +94,8 @@ If you are inspecting the underlying `RunState` directly, use
 `state.resultJson(...)`, `state.resultAs(codec: ...)`,
 `state.suspensionPayloadJson(...)`, or
 `state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
+Checkpoint entries from `viewCheckpoints(...)` expose the same convenience
+surface via `entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
 
 Use the returned `WorkflowResult<T>` when you need:
 

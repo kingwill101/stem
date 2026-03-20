@@ -48,7 +48,13 @@ Future<void> main() async {
     print(
       'Run ${watcher.runId} waiting on ${watcher.topic} (step ${watcher.stepName})',
     );
+    final payload = watcher.payloadJson<_ShipmentReadyEvent>(
+      decode: _ShipmentReadyEvent.fromJson,
+    );
     print('Watcher metadata: ${watcher.data}');
+    if (payload != null) {
+      print('Watcher payload DTO: ${payload.trackingId}');
+    }
   }
 
   await shipmentReadyEvent.emit(

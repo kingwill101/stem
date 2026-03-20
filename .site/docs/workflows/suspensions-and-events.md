@@ -23,6 +23,8 @@ await ctx.sleepFor(duration: const Duration(milliseconds: 200));
 
 `awaitEvent(topic, deadline: ...)` records a durable watcher. External code can
 resume those runs through the runtime API by emitting a payload for the topic.
+When you inspect watcher entries directly, use `watcher.payloadJson(...)` or
+`watcher.payloadAs(codec: ...)` instead of manual raw-map casts.
 
 Typical flow:
 

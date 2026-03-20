@@ -1,4 +1,5 @@
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/payload_codec.dart';
 
 /// Describes a workflow event watcher registered by the runtime.
 class WorkflowWatcher {
@@ -53,6 +54,26 @@ class WorkflowWatcher {
 
   /// Effective payload snapshot captured at suspension time.
   Object? get payload => data['payload'];
+
+  /// Decodes the captured watcher payload with [codec], when present.
+  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the captured watcher payload with a JSON decoder, when present.
+  TPayload? payloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when suspension was recorded.
   DateTime? get suspendedAt => _dateFromJson(data['suspendedAt']);
@@ -120,6 +141,26 @@ class WorkflowWatcherResolution {
 
   /// Resume payload delivered to workflow step.
   Object? get payload => resumeData['payload'];
+
+  /// Decodes the resume payload with [codec], when present.
+  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the resume payload with a JSON decoder, when present.
+  TPayload? payloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when event delivery was recorded.
   DateTime? get deliveredAt => _dateFromJson(resumeData['deliveredAt']);

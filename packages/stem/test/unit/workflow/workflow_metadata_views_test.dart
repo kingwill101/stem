@@ -158,6 +158,16 @@ void main() {
       expect(watcher.iteration, equals(2));
       expect(watcher.iterationStep, equals('approval#2'));
       expect(watcher.payload, equals(const {'invoiceId': 'inv-1'}));
+      expect(
+        watcher.payloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
       expect(watcher.suspendedAt, equals(DateTime.utc(2026, 2, 25, 0, 1)));
       expect(
         watcher.requestedResumeAt,
@@ -173,6 +183,16 @@ void main() {
       expect(resolution.iterationStep, equals('approval#2'));
       expect(resolution.payload, equals(const {'invoiceId': 'inv-1'}));
       expect(
+        resolution.payloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
         resolution.deliveredAt,
         equals(DateTime.utc(2026, 2, 25, 0, 1, 30)),
       );
@@ -183,7 +203,7 @@ void main() {
     test('parses base name and iteration suffix', () {
       const step = WorkflowStepEntry(
         name: 'approval#3',
-        value: 'ok',
+        value: {'invoiceId': 'inv-3'},
         position: 2,
       );
       const plain = WorkflowStepEntry(
@@ -194,6 +214,16 @@ void main() {
 
       expect(step.baseName, equals('approval'));
       expect(step.iteration, equals(3));
+      expect(
+        step.valueJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-3',
+        ),
+      );
       expect(plain.baseName, equals('finalize'));
       expect(plain.iteration, isNull);
     });
