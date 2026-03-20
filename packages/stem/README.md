@@ -1292,8 +1292,6 @@ backend metadata under `stem.unique.duplicates`.
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)` /
   `WorkflowEventRef<T>.versionedJson(...)` as the shortest typed event forms
   and call `event.emit(emitter, dto)` as the happy path.
-  `event.call(value).emit(...)` remains available as the lower-level
-  prebuilt-call variant.
   Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
   a string-keyed JSON-like map.
 - Only return values you want persisted. If a handler returns `null`, the

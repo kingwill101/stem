@@ -288,9 +288,9 @@
 - Removed the deprecated workflow-event compatibility helpers:
   `emitWith(...)`, `emitEventBuilder(...)`, `waitForEventRef(...)`,
   `waitForEventRefValue(...)`, `awaitEventRef(...)`, `waitValueWith(...)`, and
-  `waitWith(...)`. The direct `event.emit(...)`, `event.call(...).emit(...)`,
-  `event.wait(...)`, `event.waitValue(...)`, and `event.awaitOn(...)` surfaces
-  are now the only supported forms.
+  `waitWith(...)`. The direct `event.emit(...)`, `event.wait(...)`,
+  `event.waitValue(...)`, and `event.awaitOn(...)` surfaces are now the only
+  supported forms.
 - Removed the deprecated workflow-start compatibility helpers:
   `startWith(...)`, `startAndWaitWith(...)`, `startWorkflowBuilder(...)`, and
   `startNoArgsWorkflowBuilder(...)`. The direct `start(...)`,
@@ -322,7 +322,7 @@
   `waitForEventRefValue(...)` in favor of `event.waitValue(ctx)` and
   `event.wait(ctx)`.
 - Deprecated `emitEventBuilder(...)` in favor of direct typed event calls via
-  `event.emit(...)` or `event.call(value).emit(...)`.
+  `event.emit(...)`.
 - Deprecated the older workflow-start `startWith(...)` and
   `startAndWaitWith(...)` helpers in favor of direct `start(...)` and
   `startAndWait(...)` aliases.
@@ -453,9 +453,8 @@
   the lower-level interop option.
 - Added `TaskEnqueueBuilder.enqueueAndWait(...)` so fluent per-call task
   overrides no longer require a separate manual wait step.
-- Added `WorkflowEventRef.call(value)` plus `WorkflowEventCall.emitWith(...)`
-  so typed workflow events now have the same prebuilt-call ergonomics as tasks
-  and workflow starts.
+- Added direct typed workflow event helper APIs so event refs can emit
+  payloads without repeating raw topic strings or separate codecs.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
   `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
   `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to

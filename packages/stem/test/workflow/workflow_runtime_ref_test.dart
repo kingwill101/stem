@@ -632,9 +632,10 @@ void main() {
           final runId = await flow.ref0().start(workflowApp);
           await workflowApp.runtime.executeRun(runId);
 
-          await _userUpdatedEvent
-              .call(const _GreetingParams(name: 'call'))
-              .emit(workflowApp);
+          await _userUpdatedEvent.emit(
+            workflowApp,
+            const _GreetingParams(name: 'call'),
+          );
           await workflowApp.runtime.executeRun(runId);
 
           final result = await workflowApp.waitForCompletion<String>(
@@ -670,12 +671,12 @@ void main() {
         final runId = await flow.ref0().start(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
-        final call = _userUpdatedEvent.call(
+        expect(_userUpdatedEvent.topic, 'runtime.ref.event');
+
+        await _userUpdatedEvent.emit(
+          workflowApp,
           const _GreetingParams(name: 'bound'),
         );
-        expect(call.topic, 'runtime.ref.event');
-
-        await call.emit(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
         final result = await workflowApp.waitForCompletion<String>(
