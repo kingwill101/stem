@@ -21,63 +21,69 @@ final demoTasks = [
 
 // #region persistence-backend-in-memory
 Future<void> connectInMemoryBackend() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory.inMemory(),
+    backend: StemBackendFactory.inMemory(),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await client.enqueue('demo', args: {});
+  await client.close();
 }
 // #endregion persistence-backend-in-memory
 
 // #region persistence-backend-redis
 Future<void> connectRedisBackend() async {
-  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => RedisResultBackend.connect('redis://localhost:6379/1'),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await client.enqueue('demo', args: {});
+  await client.close();
 }
 // #endregion persistence-backend-redis
 
 // #region persistence-backend-postgres
 Future<void> connectPostgresBackend() async {
-  final backend = await PostgresResultBackend.connect(
-    connectionString: 'postgres://postgres:postgres@localhost:5432/stem',
-  );
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => PostgresResultBackend.connect(
+        connectionString: 'postgres://postgres:postgres@localhost:5432/stem',
+      ),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await client.enqueue('demo', args: {});
+  await client.close();
 }
 // #endregion persistence-backend-postgres
 
 // #region persistence-backend-sqlite
 Future<void> connectSqliteBackend() async {
-  final broker = await SqliteBroker.open(File('stem_broker.sqlite'));
-  final backend = await SqliteResultBackend.open(File('stem_backend.sqlite'));
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => SqliteBroker.open(File('stem_broker.sqlite')),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => SqliteResultBackend.open(File('stem_backend.sqlite')),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await client.enqueue('demo', args: {});
+  await client.close();
 }
 // #endregion persistence-backend-sqlite
 

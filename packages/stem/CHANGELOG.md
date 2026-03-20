@@ -98,6 +98,9 @@
   `StemClient.create(...)` with in-memory factories and `createWorker(...)`,
   and updated the docs tab copy to describe the shared client setup instead of
   raw `Stem` wiring.
+- Simplified the persistence backend docs snippets to use
+  `StemClient.create(...)` while still showing the explicit in-memory, Redis,
+  Postgres, and SQLite backend choices.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
