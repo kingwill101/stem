@@ -443,8 +443,9 @@ The runtime shape is the same in every case:
 
 - bootstrap a `StemWorkflowApp`
 - pass `flows:`, `scripts:`, and `tasks:` directly
-- start runs with `startWorkflow(...)` or generated workflow refs
-- wait with `waitForCompletion(...)`
+- start runs with direct workflow helpers or generated workflow refs
+- use `startWorkflow(...)` / `waitForCompletion(...)` when names come from
+  config, CLI input, or other dynamic sources
 
 You do not need to build task registries manually for normal workflow usage.
 
@@ -779,9 +780,17 @@ That split is the intended model:
 ### Typed workflow completion
 
 All workflow definitions (flows and scripts) accept an optional type argument
-representing the value they produce. `StemWorkflowApp.waitForCompletion<T>`
-exposes the decoded value along with the raw `RunState`, letting you work with
-domain models without manual casts:
+representing the value they produce. For workflows you define in code, prefer
+their direct helpers or typed refs:
+
+```dart
+final result = await ordersWorkflow.startAndWaitWith(app);
+print(result.value?.total);
+```
+
+`StemWorkflowApp.waitForCompletion<T>` is the low-level completion API for
+name-based runs. It exposes the decoded value along with the raw `RunState`,
+letting you work with domain models without manual casts:
 
 ```dart
 final runId = await app.startWorkflow('orders.workflow');

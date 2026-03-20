@@ -69,8 +69,12 @@ Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.
 
 ## Wait for completion
 
-`waitForCompletion<T>` polls the store until the run finishes or the caller
-times out.
+For workflows defined in code, prefer direct workflow helpers or typed refs
+like `ordersFlow.startAndWaitWith(...)` and
+`StemWorkflowDefinitions.orders.startAndWaitWith(...)`.
+
+`waitForCompletion<T>` is the low-level completion API for name-based runs. It
+polls the store until the run finishes or the caller times out.
 
 Use the returned `WorkflowResult<T>` when you need:
 

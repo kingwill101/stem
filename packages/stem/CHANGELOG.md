@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Clarified the workflow docs so direct workflow helpers and generated refs are
+  the default path, while `startWorkflow(...)` / `waitForCompletion(...)` are
+  explicitly documented as the low-level name-driven APIs.
 - Added `WorkflowCaller.startWorkflowBuilder(...)` /
   `startNoArgsWorkflowBuilder(...)` plus a caller-bound fluent builder so
   workflow-capable contexts, apps, and runtimes can start child workflows with

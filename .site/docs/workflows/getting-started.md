@@ -31,7 +31,10 @@ not need to manually register the internal `stem.workflow.run` task.
 
 If you prefer a minimal example, `startWorkflow(...)` also lazy-starts the
 runtime and managed worker on first use. Explicit `start()` is still the better
-choice when you want deterministic application lifecycle control.
+choice when you want deterministic application lifecycle control. Use that
+name-based API when workflow names come from config or external input. For
+workflows you define in code, prefer direct workflow helpers or generated
+workflow refs.
 
 ## 3. Start a run and wait for the result
 
