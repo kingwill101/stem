@@ -222,7 +222,7 @@ void main() {
         'tasks.primary.success',
         enqueueOptions: TaskEnqueueOptions(
           link: [
-            linkDefinition.prepareEnqueue(const _ChildArgs('linked')).build(),
+            linkDefinition.buildCall(const _ChildArgs('linked')),
           ],
         ),
       );
@@ -281,7 +281,7 @@ void main() {
         'tasks.primary.fail',
         enqueueOptions: TaskEnqueueOptions(
           linkError: [
-            linkDefinition.prepareEnqueue(const _ChildArgs('linked')).build(),
+            linkDefinition.buildCall(const _ChildArgs('linked')),
           ],
         ),
       );
@@ -539,10 +539,10 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
-  final builder = _childDefinition.prepareEnqueue(
+  final call = _childDefinition.buildCall(
     const _ChildArgs('from-isolate'),
   );
-  await context.enqueueCall(builder.build());
+  await context.enqueueCall(call);
   return null;
 }
 

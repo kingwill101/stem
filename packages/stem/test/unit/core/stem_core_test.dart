@@ -131,9 +131,7 @@ void main() {
           defaultOptions: const TaskOptions(queue: 'typed'),
         );
 
-        final id = await stem.enqueueCall(
-          definition.prepareEnqueue((value: 'ok')).build(),
-        );
+        final id = await stem.enqueueCall(definition.buildCall((value: 'ok')));
 
         expect(id, isNotEmpty);
         expect(broker.published.single.envelope.name, 'sample.typed');
@@ -154,7 +152,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
+        definition.buildCall(const _CodecTaskArgs('encoded')),
       );
 
       expect(id, isNotEmpty);
@@ -175,7 +173,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
+        definition.buildCall(const _CodecTaskArgs('encoded')),
       );
 
       expect(id, isNotEmpty);
@@ -197,7 +195,7 @@ void main() {
       );
 
       final id = await stem.enqueueCall(
-        definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
+        definition.buildCall(const _CodecTaskArgs('encoded')),
       );
 
       expect(id, isNotEmpty);
@@ -284,7 +282,7 @@ void main() {
         );
 
         final id = await stem.enqueueCall(
-          definition.prepareEnqueue((value: 'encoded')).build(),
+          definition.buildCall((value: 'encoded')),
         );
 
         expect(
@@ -312,7 +310,7 @@ void main() {
         );
 
         final id = await stem.enqueueCall(
-          definition.prepareEnqueue(const _CodecTaskArgs('encoded')).build(),
+          definition.buildCall(const _CodecTaskArgs('encoded')),
         );
 
         expect(

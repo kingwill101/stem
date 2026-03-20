@@ -230,8 +230,8 @@ void main() {
     });
   });
 
-  group('TaskInvocationContext builder', () {
-    test('supports fluent enqueue builder API', () async {
+  group('TaskInvocationContext explicit task calls', () {
+    test('supports explicit enqueue call overrides', () async {
       final enqueuer = _RecordingEnqueuer();
 
       final definition = TaskDefinition<_ExampleArgs, void>(
@@ -239,9 +239,10 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final builder = definition.prepareEnqueue(const _ExampleArgs('hello'));
-
-      final call = builder.queue('priority').priority(7).build();
+      final call = definition.buildCall(
+        const _ExampleArgs('hello'),
+        options: const TaskOptions(queue: 'priority', priority: 7),
+      );
       await enqueuer.enqueueCall(call);
 
       final record = enqueuer.last!;

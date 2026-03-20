@@ -41,6 +41,9 @@
 - Removed `WorkflowRef.prepareStart(...)` and `WorkflowStartBuilder`; the
   explicit workflow transport path now uses `buildStart(...)` plus
   `copyWith(...)` when advanced overrides are needed.
+- Removed `TaskDefinition.prepareEnqueue(...)` and `TaskEnqueueBuilder`; the
+  explicit task transport path now uses `buildCall(...)` plus `copyWith(...)`
+  when advanced overrides are needed.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.

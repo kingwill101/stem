@@ -33,7 +33,6 @@ library;
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/payload_map.dart';
@@ -2953,11 +2952,6 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
-  /// Creates a fluent enqueue builder from this definition and [args].
-  TaskEnqueueBuilder<TArgs, TResult> prepareEnqueue(TArgs args) {
-    return TaskEnqueueBuilder(definition: this, args: args);
-  }
-
   /// Encodes arguments into a JSON-ready map.
   Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
 
@@ -3089,114 +3083,6 @@ class TaskCall<TArgs, TResult> {
       notBefore: notBefore ?? this.notBefore,
       meta: meta ?? this.meta,
       enqueueOptions: enqueueOptions ?? this.enqueueOptions,
-    );
-  }
-}
-
-/// Fluent builder used to construct rich enqueue requests.
-///
-/// Build a [TaskCall] and dispatch it via `TaskEnqueuer.enqueueCall`.
-class TaskEnqueueBuilder<TArgs, TResult> {
-  /// Creates a fluent builder for enqueue calls.
-  TaskEnqueueBuilder({required this.definition, required this.args});
-
-  /// Task definition used to construct the call.
-  final TaskDefinition<TArgs, TResult> definition;
-
-  /// Typed arguments for the task invocation.
-  final TArgs args;
-
-  Map<String, String>? _headers;
-  TaskOptions? _optionsOverride;
-  DateTime? _notBefore;
-  Map<String, Object?>? _meta;
-  TaskEnqueueOptions? _enqueueOptions;
-
-  /// Replaces headers entirely.
-  TaskEnqueueBuilder<TArgs, TResult> headers(Map<String, String> headers) {
-    _headers = Map<String, String>.from(headers);
-    return this;
-  }
-
-  /// Adds or overrides a single header entry.
-  TaskEnqueueBuilder<TArgs, TResult> header(String key, String value) {
-    final current = Map<String, String>.from(_headers ?? const {});
-    current[key] = value;
-    _headers = current;
-    return this;
-  }
-
-  /// Replaces metadata entirely.
-  TaskEnqueueBuilder<TArgs, TResult> metadata(Map<String, Object?> meta) {
-    _meta = Map<String, Object?>.from(meta);
-    return this;
-  }
-
-  /// Adds or overrides a metadata entry.
-  TaskEnqueueBuilder<TArgs, TResult> meta(String key, Object? value) {
-    final current = Map<String, Object?>.from(_meta ?? const {});
-    current[key] = value;
-    _meta = current;
-    return this;
-  }
-
-  /// Replaces the options for this call.
-  TaskEnqueueBuilder<TArgs, TResult> options(TaskOptions options) {
-    _optionsOverride = options;
-    return this;
-  }
-
-  /// Sets the queue for this enqueue.
-  TaskEnqueueBuilder<TArgs, TResult> queue(String queue) {
-    final base = _optionsOverride ?? definition.defaultOptions;
-    _optionsOverride = base.copyWith(queue: queue);
-    return this;
-  }
-
-  /// Sets the priority for this enqueue.
-  TaskEnqueueBuilder<TArgs, TResult> priority(int priority) {
-    final base = _optionsOverride ?? definition.defaultOptions;
-    _optionsOverride = base.copyWith(priority: priority);
-    return this;
-  }
-
-  /// Sets the earliest execution time.
-  TaskEnqueueBuilder<TArgs, TResult> notBefore(DateTime instant) {
-    _notBefore = instant;
-    return this;
-  }
-
-  /// Sets a relative delay before execution.
-  TaskEnqueueBuilder<TArgs, TResult> delay(Duration duration) {
-    _notBefore = stemNow().add(duration);
-    return this;
-  }
-
-  /// Replaces the enqueue options for this call.
-  TaskEnqueueBuilder<TArgs, TResult> enqueueOptions(
-    TaskEnqueueOptions options,
-  ) {
-    _enqueueOptions = options;
-    return this;
-  }
-
-  /// Builds the [TaskCall] with accumulated overrides.
-  TaskCall<TArgs, TResult> build() {
-    final base = definition.buildCall(args);
-    final mergedHeaders = Map<String, String>.from(base.headers);
-    if (_headers != null) {
-      mergedHeaders.addAll(_headers!);
-    }
-    final mergedMeta = Map<String, Object?>.from(base.meta);
-    if (_meta != null) {
-      mergedMeta.addAll(_meta!);
-    }
-    return base.copyWith(
-      headers: Map.unmodifiable(mergedHeaders),
-      options: _optionsOverride ?? base.options,
-      notBefore: _notBefore ?? base.notBefore,
-      meta: Map.unmodifiable(mergedMeta),
-      enqueueOptions: _enqueueOptions ?? base.enqueueOptions,
     );
   }
 }

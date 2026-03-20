@@ -130,21 +130,19 @@ final childDefinition = TaskDefinition<ChildArgs, void>(
 
 // #region tasks-invocation-builder
 Future<void> enqueueWithBuilder(TaskExecutionContext context) async {
-  await childDefinition
-      .prepareEnqueue(const ChildArgs('value'))
-      .queue('critical')
-      .priority(9)
-      .delay(const Duration(seconds: 5))
-      .enqueueOptions(
-        const TaskEnqueueOptions(
-          retry: true,
-          retryPolicy: TaskRetryPolicy(
-            backoff: true,
-            defaultDelay: Duration(seconds: 1),
-          ),
-        ),
-      )
-      .enqueue(context);
+  final call = childDefinition.buildCall(
+    const ChildArgs('value'),
+    options: const TaskOptions(queue: 'critical', priority: 9),
+    notBefore: DateTime.now().add(const Duration(seconds: 5)),
+    enqueueOptions: const TaskEnqueueOptions(
+      retry: true,
+      retryPolicy: TaskRetryPolicy(
+        backoff: true,
+        defaultDelay: Duration(seconds: 1),
+      ),
+    ),
+  );
+  await context.enqueueCall(call);
 }
 // #endregion tasks-invocation-builder
 

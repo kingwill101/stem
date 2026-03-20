@@ -1158,25 +1158,16 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     Map<String, Object?>? meta,
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    final builder = prepareEnqueue(args);
-    if (headers.isNotEmpty) {
-      builder.headers(headers);
-    }
-    if (options != null) {
-      builder.options(options);
-    }
-    if (notBefore != null) {
-      builder.notBefore(notBefore);
-    }
-    if (meta != null) {
-      builder.metadata(meta);
-    }
-    if (enqueueOptions != null) {
-      builder.enqueueOptions(enqueueOptions);
-    }
     return _enqueueBuiltTaskCall(
       enqueuer,
-      builder.build(),
+      buildCall(
+        args,
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
       enqueueOptions: enqueueOptions,
     );
   }
@@ -1192,23 +1183,14 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     TaskEnqueueOptions? enqueueOptions,
     Duration? timeout,
   }) {
-    final builder = prepareEnqueue(args);
-    if (headers.isNotEmpty) {
-      builder.headers(headers);
-    }
-    if (options != null) {
-      builder.options(options);
-    }
-    if (notBefore != null) {
-      builder.notBefore(notBefore);
-    }
-    if (meta != null) {
-      builder.metadata(meta);
-    }
-    if (enqueueOptions != null) {
-      builder.enqueueOptions(enqueueOptions);
-    }
-    final call = builder.build();
+    final call = buildCall(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
     return _enqueueBuiltTaskCall(
       caller,
       call,
@@ -1244,25 +1226,15 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     Map<String, Object?>? meta,
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    final builder = asDefinition.prepareEnqueue(());
-    if (headers.isNotEmpty) {
-      builder.headers(headers);
-    }
-    if (options != null) {
-      builder.options(options);
-    }
-    if (notBefore != null) {
-      builder.notBefore(notBefore);
-    }
-    if (meta != null) {
-      builder.metadata(meta);
-    }
-    if (enqueueOptions != null) {
-      builder.enqueueOptions(enqueueOptions);
-    }
     return _enqueueBuiltTaskCall(
       enqueuer,
-      builder.build(),
+      buildCall(
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
       enqueueOptions: enqueueOptions,
     );
   }

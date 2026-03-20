@@ -237,25 +237,21 @@ void main() {
     });
   });
 
-  group('TaskEnqueueBuilder', () {
-    test('builds TaskCall with overrides', () {
+  group('TaskCall', () {
+    test('buildCall plus copyWith builds TaskCall with overrides', () {
       final definition = TaskDefinition<_Args, void>(
         name: 'demo.task',
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final builder =
-          TaskEnqueueBuilder<_Args, void>(
-              definition: definition,
-              args: _Args(7),
-            )
-            ..header('x-id', 'abc')
-            ..meta('source', 'test')
-            ..priority(5)
-            ..queue('fast')
-            ..delay(const Duration(seconds: 1));
-
-      final call = builder.build();
+      final call = definition.buildCall(
+        _Args(7),
+      ).copyWith(
+        headers: const {'x-id': 'abc'},
+        meta: const {'source': 'test'},
+        options: const TaskOptions(priority: 5, queue: 'fast'),
+        notBefore: stemNow().add(const Duration(seconds: 1)),
+      );
       expect(call.headers['x-id'], 'abc');
       expect(call.meta['source'], 'test');
       expect(call.resolveOptions().priority, 5);

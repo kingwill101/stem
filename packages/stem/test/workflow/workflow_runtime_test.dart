@@ -1623,10 +1623,10 @@ void main() {
         name: 'meta.builder.workflow',
         build: (flow) {
           flow.step('dispatch', (context) async {
-            final call = TaskEnqueueBuilder(
-              definition: definition,
-              args: const <String, Object?>{},
-            ).meta('origin', 'builder').build();
+            final call = definition.buildCall(
+              const <String, Object?>{},
+              meta: const {'origin': 'builder'},
+            );
             await stem.enqueueCall(call);
             return 'done';
           });
