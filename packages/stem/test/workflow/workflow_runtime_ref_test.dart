@@ -350,7 +350,7 @@ void main() {
         await workflowApp.start();
 
         final flowBuilder = workflowRef
-            .startBuilder(const {'name': 'builder'})
+            .prepareStart(const {'name': 'builder'})
             .ttl(const Duration(minutes: 5))
             .parentRunId('parent-builder');
         final builtFlowCall = flowBuilder.build();
@@ -367,7 +367,7 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final scriptBuilder = script.startBuilder().cancellationPolicy(
+        final scriptBuilder = script.prepareStart().cancellationPolicy(
           const WorkflowCancellationPolicy(
             maxRunDuration: Duration(seconds: 5),
           ),

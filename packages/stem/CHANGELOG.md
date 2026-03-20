@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Renamed the advanced workflow-ref builder entrypoints from `startBuilder(...)`
+  / `startBuilder()` to `prepareStart(...)` / `prepareStart()` on
+  `WorkflowRef`, `NoArgsWorkflowRef`, `Flow`, and `WorkflowScript` so the
+  workflow side aligns with task-side `prepareEnqueue(...)`.
 - Relaxed JSON/codec DTO decoding helpers to accept `Map<String, dynamic>`
   `fromJson(...)` signatures across manual task/workflow/event helpers and the
   shared `PayloadCodec` surface. DTO payloads still persist as string-keyed

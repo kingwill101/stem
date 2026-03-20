@@ -75,8 +75,8 @@ class WorkflowScript<T extends Object?> {
   }
 
   /// Creates a fluent start builder for scripts without start params.
-  WorkflowStartBuilder<(), T> startBuilder() {
-    return ref0().startBuilder();
+  WorkflowStartBuilder<(), T> prepareStart() {
+    return ref0().prepareStart();
   }
 
   /// Starts this script directly when it does not accept start params.

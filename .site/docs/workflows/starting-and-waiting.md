@@ -49,7 +49,7 @@ builder:
 
 ```dart
 final runId = await approvalsRef
-    .startBuilder(const ApprovalDraft(documentId: 'doc-42'))
+    .prepareStart(const ApprovalDraft(documentId: 'doc-42'))
     .parentRunId('parent-run')
     .ttl(const Duration(hours: 1))
     .cancellationPolicy(
@@ -69,7 +69,7 @@ definition constructor in the common `toJson()` / `Type.fromJson(...)` case.
 Use `resultCodec:` only when the result needs a custom payload codec.
 
 For workflows without start params, start directly from the flow or script
-itself with `start(...)`, `startAndWait(...)`, or `startBuilder()`.
+itself with `start(...)`, `startAndWait(...)`, or `prepareStart()`.
 Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.
 
 ## Wait for completion

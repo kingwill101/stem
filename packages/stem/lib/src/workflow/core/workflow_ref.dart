@@ -111,7 +111,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
   }
 
   /// Creates a fluent builder for this workflow start.
-  WorkflowStartBuilder<TParams, TResult> startBuilder(TParams params) {
+  WorkflowStartBuilder<TParams, TResult> prepareStart(TParams params) {
     return WorkflowStartBuilder(definition: this, params: params);
   }
 
@@ -204,8 +204,8 @@ class NoArgsWorkflowRef<TResult extends Object?> {
   }
 
   /// Creates a fluent builder for this workflow start.
-  WorkflowStartBuilder<(), TResult> startBuilder() {
-    return asRef.startBuilder(());
+  WorkflowStartBuilder<(), TResult> prepareStart() {
+    return asRef.prepareStart(());
   }
 
   /// Starts this workflow ref directly with [caller].
@@ -498,7 +498,7 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
   }) {
     return BoundWorkflowStartBuilder._(
       caller: this,
-      builder: definition.startBuilder(params),
+      builder: definition.prepareStart(params),
     );
   }
 
@@ -509,7 +509,7 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
   }) {
     return BoundWorkflowStartBuilder._(
       caller: this,
-      builder: definition.startBuilder(),
+      builder: definition.prepareStart(),
     );
   }
 

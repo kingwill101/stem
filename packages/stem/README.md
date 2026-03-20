@@ -506,7 +506,7 @@ names, use the fluent workflow start builder:
 
 ```dart
 final runId = await approvalsRef
-    .startBuilder(const ApprovalDraft(documentId: 'doc-42'))
+    .prepareStart(const ApprovalDraft(documentId: 'doc-42'))
     .parentRunId('parent-run')
     .ttl(const Duration(hours: 1))
     .cancellationPolicy(

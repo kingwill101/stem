@@ -30,7 +30,7 @@ Future<void> main() async {
   );
 
   final runId = await reportsGenerate
-      .startBuilder()
+      .prepareStart()
       .cancellationPolicy(
         const WorkflowCancellationPolicy(
           maxRunDuration: Duration(minutes: 10),
