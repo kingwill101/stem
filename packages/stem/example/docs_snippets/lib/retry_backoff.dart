@@ -6,8 +6,10 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 class FlakyTask extends TaskHandler<void> {
+  static final definition = TaskDefinition.noArgs<void>(name: 'demo.flaky');
+
   @override
-  String get name => 'demo.flaky';
+  String get name => definition.name;
 
   // #region retry-backoff-task-options
   @override
@@ -65,7 +67,7 @@ Future<void> main() async {
     workerConfig: workerConfig,
   );
 
-  final taskId = await app.enqueue('demo.flaky');
+  final taskId = await FlakyTask.definition.enqueue(app);
   await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 5));
 
   await app.close();

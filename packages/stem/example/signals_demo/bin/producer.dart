@@ -23,8 +23,8 @@ Future<void> main() async {
       'tasks.hello',
       args: {'name': 'from-producer'},
     );
-    await client.enqueue('tasks.flaky');
-    await client.enqueue('tasks.always_fail');
+    await flakyTaskDefinition.enqueue(client);
+    await alwaysFailTaskDefinition.enqueue(client);
   });
 
   void scheduleShutdown(ProcessSignal signal) async {

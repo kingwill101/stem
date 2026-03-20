@@ -52,6 +52,7 @@ void logTaskStart(Envelope envelope) {
 
 final metrics = MetricsCollector();
 final heartbeatGauge = GaugeMetric();
+final traceTaskDefinition = TaskDefinition.noArgs<void>(name: 'demo.trace');
 
 class MetricsCollector {
   void recordRetry({required Duration delay}) {}
@@ -67,7 +68,7 @@ Future<void> main() async {
 
   final tasks = [
     FunctionTaskHandler<void>(
-      name: 'demo.trace',
+      name: traceTaskDefinition.name,
       entrypoint: (context, args) async {
         print('Tracing demo task');
         return null;
@@ -79,10 +80,10 @@ Future<void> main() async {
 
   logTaskStart(
     Envelope(
-      name: 'demo.trace',
+      name: traceTaskDefinition.name,
       args: const {},
     ),
   );
-  await client.enqueue('demo.trace', args: const {});
+  await traceTaskDefinition.enqueue(client);
   await client.close();
 }

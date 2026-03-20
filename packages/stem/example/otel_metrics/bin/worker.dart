@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 
+final pingDefinition = TaskDefinition.noArgs<void>(name: 'metrics.ping');
+
 Future<void> main() async {
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<void>(
-      name: 'metrics.ping',
+      name: pingDefinition.name,
       entrypoint: (context, _) async {
         // Simulate a bit of work.
         await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -43,6 +45,6 @@ Future<void> main() async {
   );
 
   Timer.periodic(const Duration(seconds: 1), (_) async {
-    await client.enqueue('metrics.ping');
+    await pingDefinition.enqueue(client);
   });
 }

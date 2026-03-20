@@ -33,6 +33,9 @@
 - Updated the remaining no-args workflow examples and docs snippets to use the
   new direct `Flow.startWith(...)` / `Flow.waitFor(...)` helpers instead of
   creating a temporary `ref0()` only to start and wait.
+- Updated the remaining no-input producer examples to prefer
+  `TaskDefinition.noArgs(...)` over raw empty-map publishes where the task
+  already has a stable typed definition.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with
