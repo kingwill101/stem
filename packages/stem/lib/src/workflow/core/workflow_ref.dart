@@ -219,11 +219,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
 
   static Map<String, Object?> _encodeParams(() _) => const <String, Object?>{};
 
-  /// Creates a fluent builder for this workflow start.
-  WorkflowStartBuilder<(), TResult> prepareStart() {
-    return asRef.prepareStart(());
-  }
-
   /// Starts this workflow ref directly with [caller].
   Future<String> start(
     WorkflowCaller caller, {

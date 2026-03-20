@@ -5,6 +5,9 @@
 - Removed `WorkflowRef.call(...)` as a duplicate workflow-start convenience.
   The direct `start(...)` / `startAndWait(...)` helpers remain the happy path,
   and `prepareStart(...).build()` remains the explicit prebuilt-call path.
+- Removed `NoArgsWorkflowRef.prepareStart()` as a duplicate no-args builder
+  wrapper. Use direct `start(...)` / `startAndWait(...)` for the happy path,
+  or `ref0().asRef.prepareStart(())` when you need an explicit prebuilt call.
 - Renamed read-side `...VersionedJson(...)` fallback args to
   `defaultVersion:` so decode helpers no longer imply they are choosing the
   persisted schema version on already-stored payloads.

@@ -483,11 +483,15 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final scriptBuilder = script.ref0().prepareStart().cancellationPolicy(
-          const WorkflowCancellationPolicy(
-            maxRunDuration: Duration(seconds: 5),
-          ),
-        );
+        final scriptBuilder = script
+            .ref0()
+            .asRef
+            .prepareStart(())
+            .cancellationPolicy(
+              const WorkflowCancellationPolicy(
+                maxRunDuration: Duration(seconds: 5),
+              ),
+            );
         final builtScriptCall = scriptBuilder.build();
         final oneShot = await scriptBuilder.startAndWait(
           workflowApp.runtime,
