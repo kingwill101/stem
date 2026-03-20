@@ -131,7 +131,7 @@ Future<void> main(List<String> args) async {
   // #endregion signing-producer-stem
   final canvas = client.createCanvas(tasks: tasks);
   final autoFill = _AutoFillController(
-    enqueuer: client.stem,
+    enqueuer: client,
     enabled: _boolFromEnv(
       Platform.environment['ENQUEUER_AUTOFILL_ENABLED'],
       defaultValue: true,

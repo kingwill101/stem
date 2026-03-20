@@ -570,12 +570,10 @@ Durable workflow contexts enqueue tasks directly:
 
 Child workflows belong in durable execution boundaries:
 
-- use
+- `FlowContext` and `WorkflowScriptStepContext` both implement
+  `WorkflowCaller`, so use
   `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
-  inside flow steps
-- use
-  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
-  inside script checkpoints
+  inside flow steps and script checkpoints
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
 

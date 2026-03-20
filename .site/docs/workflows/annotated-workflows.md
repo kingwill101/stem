@@ -135,10 +135,10 @@ This keeps one authoring model:
 
 When a workflow needs to start another workflow, do it from a durable boundary:
 
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
-  inside flow steps
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
-  inside checkpoint methods
+- `FlowContext` and `WorkflowScriptStepContext` both implement
+  `WorkflowCaller`, so use
+  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
+  inside flow steps and checkpoint methods
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 

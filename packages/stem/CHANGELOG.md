@@ -118,6 +118,9 @@
 - Added `StemClient.createCanvas()` so shared-client setups can reuse the
   client-owned broker/backend/registry for canvas dispatch without manually
   constructing `Canvas(...)`.
+- Removed the remaining `client.stem` leak from the microservice enqueuer
+  example and clarified in the README/docs that `FlowContext` and
+  `WorkflowScriptStepContext` share the same child-workflow helper surface.
 - Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
   and rate-limit delay shared libraries after those demos moved to
   `StemClient`-based producers.
