@@ -256,7 +256,7 @@ You can also build requests fluently from the task definition itself:
 
 ```dart
 final result = await HelloTask.definition
-    .enqueueBuilder(const HelloArgs(name: 'Tenant A'))
+    .prepareEnqueue(const HelloArgs(name: 'Tenant A'))
     .header('x-tenant', 'tenant-a')
     .priority(5)
     .delay(const Duration(seconds: 30))

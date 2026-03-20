@@ -133,7 +133,7 @@ final childDefinition = TaskDefinition<ChildArgs, void>(
 // #region tasks-invocation-builder
 Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
   await childDefinition
-      .enqueueBuilder(const ChildArgs('value'))
+      .prepareEnqueue(const ChildArgs('value'))
       .queue('critical')
       .priority(9)
       .delay(const Duration(seconds: 5))

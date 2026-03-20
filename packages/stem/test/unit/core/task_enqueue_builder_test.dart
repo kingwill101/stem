@@ -63,14 +63,14 @@ void main() {
     expect(call.options?.priority, 9);
   });
 
-  test('TaskDefinition.enqueueBuilder creates a fluent builder', () {
+  test('TaskDefinition.prepareEnqueue creates a fluent builder', () {
     final definition = TaskDefinition<Map<String, Object?>, Object?>(
       name: 'demo.task',
       encodeArgs: (args) => args,
     );
 
     final call = definition
-        .enqueueBuilder(const {'a': 1})
+        .prepareEnqueue(const {'a': 1})
         .priority(7)
         .header('h1', 'v1')
         .build();
@@ -104,7 +104,7 @@ void main() {
     },
   );
 
-  test('TaskEnqueuer.enqueueBuilder binds enqueue to the enqueuer', () async {
+  test('TaskEnqueuer.prepareEnqueue binds enqueue to the enqueuer', () async {
     final enqueuer = _RecordingTaskEnqueuer();
     final definition = TaskDefinition<Map<String, Object?>, String>(
       name: 'demo.task',
@@ -113,7 +113,7 @@ void main() {
     );
 
     final taskId = await enqueuer
-        .enqueueBuilder(definition: definition, args: const {'a': 1})
+        .prepareEnqueue(definition: definition, args: const {'a': 1})
         .header('h1', 'v1')
         .queue('critical')
         .enqueue();
@@ -136,7 +136,7 @@ void main() {
       );
 
       final result = await caller
-          .enqueueBuilder(definition: definition, args: const {'a': 1})
+          .prepareEnqueue(definition: definition, args: const {'a': 1})
           .header('h1', 'v1')
           .enqueueAndWait();
 
@@ -159,7 +159,7 @@ void main() {
 
       expect(
         () => enqueuer
-            .enqueueBuilder(definition: definition, args: const {'a': 1})
+            .prepareEnqueue(definition: definition, args: const {'a': 1})
             .enqueueAndWait(),
         throwsStateError,
       );
@@ -200,10 +200,10 @@ void main() {
     expect(call.meta, containsPair('m', 1));
   });
 
-  test('NoArgsTaskDefinition.enqueueBuilder creates a fluent builder', () {
+  test('NoArgsTaskDefinition.prepareEnqueue creates a fluent builder', () {
     final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-    final call = definition.enqueueBuilder().priority(4).build();
+    final call = definition.prepareEnqueue().priority(4).build();
 
     expect(call.name, 'demo.no_args');
     expect(call.resolveOptions().priority, 4);

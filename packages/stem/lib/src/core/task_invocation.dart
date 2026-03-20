@@ -560,7 +560,16 @@ class TaskInvocationContext
   }
 
   /// Build a caller-bound fluent enqueue request for this invocation.
+  @Deprecated('Use prepareEnqueue(definition: ..., args: ...) instead.')
   BoundTaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
+    required TaskDefinition<TArgs, TResult> definition,
+    required TArgs args,
+  }) {
+    return prepareEnqueue(definition: definition, args: args);
+  }
+
+  /// Build a caller-bound fluent enqueue request for this invocation.
+  BoundTaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,
     required TArgs args,
   }) {

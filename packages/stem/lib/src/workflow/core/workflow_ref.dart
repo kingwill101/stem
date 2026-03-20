@@ -550,7 +550,7 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
 
 /// Caller-bound fluent workflow start builder.
 ///
-/// This mirrors the role `TaskInvocationContext.enqueueBuilder(...)` plays for
+/// This mirrors the role `TaskInvocationContext.prepareEnqueue(...)` plays for
 /// tasks: a workflow-capable caller can create a fluent start request without
 /// pivoting back through the workflow ref for dispatch.
 class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {

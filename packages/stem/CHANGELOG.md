@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `prepareEnqueue(...)` / `prepareNoArgsEnqueue(...)` as the clearer
+  task-side names for advanced enqueue builders, and deprecated the older
+  `enqueueBuilder(...)` / `enqueueNoArgsBuilder(...)` aliases.
 - Added `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` as the
   clearer names for caller-bound workflow start builders, and deprecated the
   older `startWorkflowBuilder(...)` / `startNoArgsWorkflowBuilder(...)`

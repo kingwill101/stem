@@ -66,7 +66,7 @@ FutureOr<Object?> invocationParentEntrypoint(
   Map<String, Object?> args,
 ) async {
   await childDefinition
-      .enqueueBuilder(const ChildArgs('from-invocation-builder'))
+      .prepareEnqueue(const ChildArgs('from-invocation-builder'))
       .priority(5)
       .delay(const Duration(milliseconds: 100))
       .enqueue(context);

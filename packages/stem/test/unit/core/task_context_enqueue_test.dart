@@ -197,7 +197,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final builder = context.enqueueBuilder(
+      final builder = context.prepareEnqueue(
         definition: definition,
         args: const _ExampleArgs('hello'),
       );

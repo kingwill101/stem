@@ -60,7 +60,7 @@ because they are published as a map.
 
 `TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and typed task
 definitions can now create a fluent builder directly through
-`definition.enqueueBuilder(...)`. `TaskEnqueuer.enqueueBuilder(...)` remains
+`definition.prepareEnqueue(...)`. `TaskEnqueuer.prepareEnqueue(...)` remains
 available when you want the caller-bound variant that keeps the enqueue target
 attached to the builder.
 

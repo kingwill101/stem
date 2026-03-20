@@ -307,11 +307,11 @@ FutureOr<Object?> isolateChildEntrypoint(
   );
 
   await context
-      .enqueueBuilder(
+      .prepareEnqueue(
         definition: auditDefinition,
         args: AuditArgs(
           runId: runId,
-          message: 'isolate child used enqueueBuilder',
+          message: 'isolate child used prepareEnqueue',
         ),
       )
       .header('x-child', 'isolate')
