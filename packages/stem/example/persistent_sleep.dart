@@ -20,13 +20,12 @@ Future<void> main() async {
       });
     },
   );
-  final sleepLoopRef = sleepLoop.ref0();
 
   final app = await StemWorkflowApp.inMemory(
     flows: [sleepLoop],
   );
 
-  final runId = await sleepLoopRef.startWith(app);
+  final runId = await sleepLoop.startWith(app);
   await app.executeRun(runId);
 
   // After the delay elapses, the runtime should resume without the step
@@ -37,7 +36,7 @@ Future<void> main() async {
     await app.executeRun(id);
   }
 
-  final completed = await sleepLoopRef.waitFor(app, runId);
+  final completed = await sleepLoop.waitFor(app, runId);
   print('Workflow completed with result: ${completed?.value}');
   await app.close();
 }

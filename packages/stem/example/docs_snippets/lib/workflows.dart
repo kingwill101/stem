@@ -274,12 +274,11 @@ Future<void> main() async {
       flow.step('hello', (ctx) async => 'done');
     },
   );
-  final demoFlowRef = demoFlow.ref0();
 
   final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
 
-  final runId = await demoFlowRef.startWith(app);
-  final result = await demoFlowRef.waitFor(
+  final runId = await demoFlow.startWith(app);
+  final result = await demoFlow.waitFor(
     app,
     runId,
     timeout: const Duration(seconds: 5),

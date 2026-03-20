@@ -30,6 +30,9 @@
 - Updated the public typed task examples to prefer `enqueueAndWait(...)` as the
   happy path when callers only need the final typed result, while keeping
   `waitFor(...)` documented for task-id-driven inspection flows.
+- Updated the remaining no-args workflow examples and docs snippets to use the
+  new direct `Flow.startWith(...)` / `Flow.waitFor(...)` helpers instead of
+  creating a temporary `ref0()` only to start and wait.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with
