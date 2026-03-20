@@ -2,6 +2,12 @@
 
 ## 0.1.1
 
+- Removed the deprecated workflow-event compatibility helpers:
+  `emitWith(...)`, `emitEventBuilder(...)`, `waitForEventRef(...)`,
+  `waitForEventRefValue(...)`, `awaitEventRef(...)`, `waitValueWith(...)`, and
+  `waitWith(...)`. The direct `event.emit(...)`, `event.call(...).emit(...)`,
+  `event.wait(...)`, `event.waitValue(...)`, and `event.awaitOn(...)` surfaces
+  are now the only supported forms.
 - Replaced the older manual DTO helper names with direct forms:
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and

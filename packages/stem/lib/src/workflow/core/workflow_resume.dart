@@ -114,51 +114,6 @@ extension FlowContextResumeValues on FlowContext {
     awaitEvent(topic, deadline: deadline, data: data);
     throw const WorkflowSuspensionSignal();
   }
-
-  /// Returns the next event payload from [event] when the step has resumed, or
-  /// registers an event wait and returns `null` on the first invocation.
-  @Deprecated('Use event.waitValue(this, ...) instead.')
-  T? waitForEventRef<T>(
-    WorkflowEventRef<T> event, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return waitForEventValue<T>(
-      event.topic,
-      deadline: deadline,
-      data: data,
-      codec: event.codec,
-    );
-  }
-
-  /// Suspends until [event] is emitted, then returns the decoded payload.
-  @Deprecated('Use event.wait(this, ...) instead.')
-  Future<T> waitForEventRefValue<T>({
-    required WorkflowEventRef<T> event,
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return waitForEvent<T>(
-      topic: event.topic,
-      deadline: deadline,
-      data: data,
-      codec: event.codec,
-    );
-  }
-
-  /// Registers an event wait using a typed [event] reference.
-  @Deprecated('Use event.awaitOn(this, ...) instead.')
-  FlowStepControl awaitEventRef<T>(
-    WorkflowEventRef<T> event, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return awaitEvent(
-      event.topic,
-      deadline: deadline,
-      data: data,
-    );
-  }
 }
 
 /// Typed resume helpers for durable script checkpoints.
@@ -232,52 +187,6 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
     await awaitEvent(topic, deadline: deadline, data: data);
     throw const WorkflowSuspensionSignal();
   }
-
-  /// Returns the next event payload from [event] when the checkpoint has
-  /// resumed, or registers an event wait and returns `null` on the first
-  /// invocation.
-  @Deprecated('Use event.waitValue(this, ...) instead.')
-  T? waitForEventRef<T>(
-    WorkflowEventRef<T> event, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return waitForEventValue<T>(
-      event.topic,
-      deadline: deadline,
-      data: data,
-      codec: event.codec,
-    );
-  }
-
-  /// Suspends until [event] is emitted, then returns the decoded payload.
-  @Deprecated('Use event.wait(this, ...) instead.')
-  Future<T> waitForEventRefValue<T>({
-    required WorkflowEventRef<T> event,
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return waitForEvent<T>(
-      topic: event.topic,
-      deadline: deadline,
-      data: data,
-      codec: event.codec,
-    );
-  }
-
-  /// Registers an event wait using a typed [event] reference.
-  @Deprecated('Use event.wait(this, ...) instead.')
-  Future<void> awaitEventRef<T>(
-    WorkflowEventRef<T> event, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return awaitEvent(
-      event.topic,
-      deadline: deadline,
-      data: data,
-    );
-  }
 }
 
 /// Direct typed wait helpers on [WorkflowEventRef].
@@ -332,19 +241,6 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
     );
   }
 
-  /// Registers an event wait and returns the resumed payload on the legacy
-  /// null-then-resume path.
-  ///
-  /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
-  @Deprecated('Use waitValue(waiter, ...) instead.')
-  T? waitValueWith(
-    Object waiter, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return waitValue(waiter, deadline: deadline, data: data);
-  }
-
   /// Suspends until this event is emitted, then returns the decoded payload.
   ///
   /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
@@ -375,17 +271,5 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
       'WorkflowEventRef.wait requires a FlowContext or '
           'WorkflowScriptStepContext.',
     );
-  }
-
-  /// Suspends until this event is emitted, then returns the decoded payload.
-  ///
-  /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
-  @Deprecated('Use wait(waiter, ...) instead.')
-  Future<T> waitWith(
-    Object waiter, {
-    DateTime? deadline,
-    Map<String, Object?>? data,
-  }) {
-    return wait(waiter, deadline: deadline, data: data);
   }
 }

@@ -89,12 +89,6 @@ extension WorkflowEventRefExtension<T> on WorkflowEventRef<T> {
   Future<void> emit(WorkflowEventEmitter emitter, T value) {
     return emitter.emitEvent(this, value);
   }
-
-  /// Emits this typed event with the provided [emitter].
-  @Deprecated('Use emit(emitter, value) instead.')
-  Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
-    return emit(emitter, value);
-  }
 }
 
 /// Convenience helpers for dispatching prebuilt [WorkflowEventCall] instances.
@@ -102,52 +96,5 @@ extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
   /// Emits this typed event with the provided [emitter].
   Future<void> emit(WorkflowEventEmitter emitter) {
     return emitter.emitEvent(event, value);
-  }
-
-  /// Emits this typed event with the provided [emitter].
-  @Deprecated('Use emit(emitter) instead.')
-  Future<void> emitWith(WorkflowEventEmitter emitter) {
-    return emit(emitter);
-  }
-}
-
-@Deprecated(
-  'Use WorkflowEventRef.call(value) or event.emit(emitter, value) instead.',
-)
-/// Caller-bound typed workflow event emission call.
-class BoundWorkflowEventCall<T> {
-  /// Creates a caller-bound typed workflow event emission call.
-  @Deprecated(
-    'Use WorkflowEventRef.call(value) or event.emit(emitter, value) instead.',
-  )
-  const BoundWorkflowEventCall._({
-    required WorkflowEventEmitter emitter,
-    required WorkflowEventCall<T> call,
-  }) : _emitter = emitter,
-       _call = call;
-
-  final WorkflowEventEmitter _emitter;
-  final WorkflowEventCall<T> _call;
-
-  /// Returns the prebuilt typed workflow event call.
-  WorkflowEventCall<T> build() => _call;
-
-  /// Emits the bound typed workflow event call.
-  Future<void> emit() => _call.emit(_emitter);
-}
-
-/// Convenience helpers for building typed workflow event calls directly from a
-/// workflow event emitter.
-extension WorkflowEventEmitterBuilderExtension on WorkflowEventEmitter {
-  /// Creates a caller-bound typed workflow event call for [event] and [value].
-  @Deprecated('Use event.call(value) or event.emit(this, value) instead.')
-  BoundWorkflowEventCall<T> emitEventBuilder<T>({
-    required WorkflowEventRef<T> event,
-    required T value,
-  }) {
-    return BoundWorkflowEventCall._(
-      emitter: this,
-      call: event.call(value),
-    );
   }
 }
