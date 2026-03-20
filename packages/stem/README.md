@@ -311,6 +311,9 @@ final childWorkflow = Flow<String>(
     flow.step('complete', (ctx) async => 'done');
   },
 );
+const childReadyEvent = WorkflowEventRef<Map<String, Object?>>(
+  topic: 'demo.child.workflow.ready',
+);
 
 class ParentTask implements TaskHandler<String> {
   @override
@@ -329,10 +332,7 @@ class NotifyTask implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await context.emitValue(
-      'demo.child.workflow.ready',
-      {'status': 'ready'},
-    );
+    await childReadyEvent.emitWith(context, {'status': 'ready'});
   }
 }
 ```
@@ -1073,8 +1073,8 @@ backend metadata under `stem.unique.duplicates`.
 - When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or bundle the topic and codec once in a
-  `WorkflowEventRef<T>` and use `emitter.emitEventBuilder(event: ref, value:
-  dto).emit()` as the happy path, with `event.emitWith(...)` and
+  `WorkflowEventRef<T>` and use `event.emitWith(emitter, dto)` as the happy
+  path, with `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
   `event.call(value).emitWith(...)` still available as lower-level variants.
   Pair that with `waitForEventRef(...)` or `awaitEventRef(...)`. Event
   payloads still serialize onto the existing `Map<String, Object?>` wire

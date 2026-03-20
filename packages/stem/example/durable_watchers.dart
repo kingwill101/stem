@@ -57,12 +57,10 @@ Future<void> main() async {
     print('Watcher metadata: ${watcher.data}');
   }
 
-  await app
-      .emitEventBuilder(
-        event: shipmentReadyEvent,
-        value: const _ShipmentReadyEvent(trackingId: 'ZX-42'),
-      )
-      .emit();
+  await shipmentReadyEvent.emitWith(
+    app,
+    const _ShipmentReadyEvent(trackingId: 'ZX-42'),
+  );
 
   await app.executeRun(runId);
 

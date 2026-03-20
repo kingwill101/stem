@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Updated the public workflow event examples and docs to prefer the direct
+  typed ref helper `event.emitWith(emitter, value)` for simple event emission,
+  leaving bound event builders and prebuilt calls as lower-level variants.
 - Updated the remaining README child-workflow snippet to use the direct
   no-args helper `childWorkflow.startAndWaitWith(context)` instead of an
   unnecessary `startBuilder()` hop.
