@@ -317,6 +317,15 @@ class StemWorkflowApp
     return runtime.executeRun(runId);
   }
 
+  /// Rewinds [runId] to [checkpointName] and marks it runnable again.
+  ///
+  /// This is a convenience wrapper for replay-oriented workflows that need to
+  /// resume execution from an earlier persisted checkpoint.
+  Future<void> rewindToCheckpoint(String runId, String checkpointName) async {
+    await store.rewindToStep(runId, checkpointName);
+    await store.markRunning(runId);
+  }
+
   /// Polls the workflow store until the run reaches a terminal state.
   ///
   /// When the workflow completes successfully the persisted result is surfaced

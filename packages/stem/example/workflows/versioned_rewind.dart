@@ -23,13 +23,12 @@ Future<void> main() async {
   await app.executeRun(runId);
 
   // Rewind and execute again to append a new iteration checkpoint.
-  await app.store.rewindToStep(runId, 'repeat');
-  await app.store.markRunning(runId);
+  await app.rewindToCheckpoint(runId, 'repeat');
   await app.executeRun(runId);
 
-  final entries = await app.store.listSteps(runId);
-  for (final entry in entries) {
-    print('${entry.name}: ${entry.value}');
+  final checkpoints = await app.viewCheckpoints(runId);
+  for (final checkpoint in checkpoints) {
+    print('${checkpoint.checkpointName}: ${checkpoint.value}');
   }
   print('Iterations executed: $iterations');
   final completed = await versionedWorkflowRef.waitFor(app, runId);

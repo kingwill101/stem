@@ -829,6 +829,39 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes rewind helper', () async {
+      final iterations = <int>[];
+      final flow = Flow<String>(
+        name: 'workflow.rewind.helper',
+        build: (builder) {
+          builder
+            ..step('repeat', (ctx) async {
+              iterations.add(ctx.iteration);
+              return 'iteration-${ctx.iteration}';
+            }, autoVersion: true)
+            ..step('tail', (ctx) async => ctx.previousResult! as String);
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflow('workflow.rewind.helper');
+        await workflowApp.executeRun(runId);
+
+        await workflowApp.rewindToCheckpoint(runId, 'repeat');
+        await workflowApp.executeRun(runId);
+
+        final checkpoints = await workflowApp.viewCheckpoints(runId);
+        expect(
+          checkpoints.map((checkpoint) => checkpoint.checkpointName),
+          containsAll(['repeat#0', 'tail']),
+        );
+        expect(iterations, equals([0, 0]));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'workflow codecs persist encoded checkpoints and decode typed results',
       () async {
