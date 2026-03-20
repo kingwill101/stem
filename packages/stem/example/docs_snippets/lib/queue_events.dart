@@ -16,7 +16,10 @@ Future<void> queueEventsProducerListener(Broker broker) async {
   await listener.start();
 
   final subscription = listener.on('order.created').listen((event) {
-    print('Order created: ${event.requiredPayloadValue<String>('orderId')}');
+    final created = event.payloadJson<_OrderCreatedEvent>(
+      decode: _OrderCreatedEvent.fromJson,
+    );
+    print('Order created: ${created.orderId}');
     print('Trace id: ${event.headers['x-trace-id']}');
   });
 
@@ -51,10 +54,16 @@ Future<void> queueEventsFanout(Broker broker) async {
   await listenerB.start();
 
   final subscriptionA = listenerA.events.listen((event) {
-    print('A saw ${event.name}');
+    final updated = event.payloadJson<_OrderUpdatedEvent>(
+      decode: _OrderUpdatedEvent.fromJson,
+    );
+    print('A saw ${event.name} for ${updated.id}');
   });
   final subscriptionB = listenerB.events.listen((event) {
-    print('B saw ${event.name}');
+    final updated = event.payloadJson<_OrderUpdatedEvent>(
+      decode: _OrderUpdatedEvent.fromJson,
+    );
+    print('B saw ${event.name} for ${updated.id}');
   });
 
   await producer.emitJson(
@@ -75,6 +84,10 @@ Future<void> queueEventsFanout(Broker broker) async {
 class _OrderCreatedEvent {
   const _OrderCreatedEvent({required this.orderId});
 
+  factory _OrderCreatedEvent.fromJson(Map<String, dynamic> json) {
+    return _OrderCreatedEvent(orderId: json['orderId'] as String);
+  }
+
   final String orderId;
 
   Map<String, Object?> toJson() => {'orderId': orderId};
@@ -82,6 +95,10 @@ class _OrderCreatedEvent {
 
 class _OrderUpdatedEvent {
   const _OrderUpdatedEvent({required this.id});
+
+  factory _OrderUpdatedEvent.fromJson(Map<String, dynamic> json) {
+    return _OrderUpdatedEvent(id: json['id'] as String);
+  }
 
   final String id;
 

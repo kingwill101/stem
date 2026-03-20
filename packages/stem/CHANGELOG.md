@@ -14,6 +14,9 @@
   `payloadValueOr(...)`, and `requiredPayloadValue(...)` so queue-event
   consumers can decode typed payload fields without raw `payload['key']`
   casts.
+- Added `QueueCustomEvent.payloadJson(...)` and `payloadAs(codec: ...)` so
+  queue-event consumers can decode whole DTO payloads without rebuilding them
+  field by field.
 - Added `decodeJson:` shortcuts to the low-level
   `Stem.waitForTask<T>` and `StemWorkflowApp.waitForCompletion<T>` wait APIs,
   and propagated the same task wait shortcut through `StemApp` and

@@ -140,6 +140,14 @@ void main() {
       expect(event.id, eventId);
       expect(event.requiredPayloadValue<String>('orderId'), 'o-2');
       expect(event.payloadValueOr<String>('status', 'pending'), 'shipped');
+      expect(
+        event.payloadJson<_QueueEventPayload>(
+          decode: _QueueEventPayload.fromJson,
+        ),
+        isA<_QueueEventPayload>()
+            .having((value) => value.orderId, 'orderId', 'o-2')
+            .having((value) => value.status, 'status', 'shipped'),
+      );
     });
 
     test('validates queue and event names', () async {
@@ -166,6 +174,13 @@ class _QueueEventPayload {
     required this.orderId,
     required this.status,
   });
+
+  factory _QueueEventPayload.fromJson(Map<String, dynamic> json) {
+    return _QueueEventPayload(
+      orderId: json['orderId'] as String,
+      status: json['status'] as String,
+    );
+  }
 
   final String orderId;
   final String status;

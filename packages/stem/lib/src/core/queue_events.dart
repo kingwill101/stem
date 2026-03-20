@@ -51,6 +51,22 @@ class QueueCustomEvent implements StemEvent {
     return payload.value<T>(key, codec: codec);
   }
 
+  /// Decodes the entire payload as a typed DTO with [codec].
+  T payloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(payload);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a JSON decoder.
+  T payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Returns the decoded payload value for [key], or [fallback] when absent.
   T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
     return payload.valueOr<T>(key, fallback, codec: codec);
