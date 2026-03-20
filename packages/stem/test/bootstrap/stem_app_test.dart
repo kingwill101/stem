@@ -508,6 +508,42 @@ void main() {
     });
 
     test(
+      'startWorkflowVersionedJson encodes DTO params with a persisted schema version',
+      () async {
+        final flow = Flow<String>(
+          name: 'workflow.versioned.json.start',
+          build: (builder) {
+            builder.step(
+              'payload',
+              (ctx) async => ctx.requiredParam<String>('foo'),
+            );
+          },
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          final runId = await workflowApp.startWorkflowVersionedJson(
+            'workflow.versioned.json.start',
+            const _DemoPayload('bar'),
+            version: 2,
+          );
+          final runState = await workflowApp.getRun(runId);
+          final run = await workflowApp.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(runId, isNotEmpty);
+          expect(runState?.params, containsPair(PayloadCodec.versionKey, 2));
+          expect(runState?.params, containsPair('foo', 'bar'));
+          expect(run?.requiredValue(), 'bar');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
       'emitJson resumes runs with DTO payloads without a manual map',
       () async {
         const demoPayloadCodec = PayloadCodec<_DemoPayload>.json(
@@ -549,6 +585,57 @@ void main() {
 
           expect(runId, isNotEmpty);
           expect(run?.requiredValue(), 'baz');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'emitVersionedJson resumes runs with versioned DTO payloads',
+      () async {
+        const demoPayloadCodec = PayloadCodec<_DemoPayload>.json(
+          decode: _DemoPayload.fromJson,
+        );
+        final flow = Flow<String?>(
+          name: 'workflow.versioned.json.emit',
+          build: (builder) {
+            builder.step<String?>(
+              'wait',
+              (ctx) async {
+                final resume = ctx.takeResumeValue<_DemoPayload>(
+                  codec: demoPayloadCodec,
+                );
+                if (resume == null) {
+                  ctx.awaitEvent('workflow.versioned.json.emit.topic');
+                  return null;
+                }
+                return resume.foo;
+              },
+            );
+          },
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          final runId = await workflowApp.startWorkflow(
+            'workflow.versioned.json.emit',
+          );
+          await workflowApp.executeRun(runId);
+
+          await workflowApp.emitVersionedJson(
+            'workflow.versioned.json.emit.topic',
+            const _DemoPayload('qux'),
+            version: 2,
+          );
+
+          final run = await workflowApp.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(runId, isNotEmpty);
+          expect(run?.requiredValue(), 'qux');
         } finally {
           await workflowApp.shutdown();
         }

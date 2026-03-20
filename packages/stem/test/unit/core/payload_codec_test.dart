@@ -61,6 +61,20 @@ void main() {
   });
 
   group('PayloadCodec.versionedJson', () {
+    test('encodes DTOs to versioned JSON maps without a codec instance', () {
+      final payload = PayloadCodec.encodeVersionedJsonMap(
+        const _VersionedCodecPayload(id: 'payload-v-encode', count: 6),
+        version: 4,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      expect(payload, {
+        PayloadCodec.versionKey: 4,
+        'id': 'payload-v-encode',
+        'count': 6,
+      });
+    });
+
     test('encodes DTOs with a persisted schema version', () {
       const codec = PayloadCodec<_VersionedCodecPayload>.versionedJson(
         version: 2,

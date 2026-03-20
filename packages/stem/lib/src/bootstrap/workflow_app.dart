@@ -225,6 +225,41 @@ class StemWorkflowApp
     );
   }
 
+  /// Starts a workflow from a DTO and stores a schema [version] beside the
+  /// JSON payload.
+  Future<String> startWorkflowVersionedJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    required int version,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    if (!_started) {
+      return start().then(
+        (_) => runtime.startWorkflowVersionedJson(
+          name,
+          paramsJson,
+          version: version,
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+          typeName: typeName,
+        ),
+      );
+    }
+    return runtime.startWorkflowVersionedJson(
+      name,
+      paramsJson,
+      version: version,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      typeName: typeName,
+    );
+  }
+
   /// Schedules a workflow run from a typed [WorkflowRef].
   @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
@@ -263,6 +298,22 @@ class StemWorkflowApp
     return runtime.emitJson(
       topic,
       payloadJson,
+      typeName: typeName,
+    );
+  }
+
+  /// Emits a DTO-backed external event and stores a schema [version] beside
+  /// the JSON payload.
+  Future<void> emitVersionedJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    required int version,
+    String? typeName,
+  }) {
+    return runtime.emitVersionedJson(
+      topic,
+      payloadJson,
+      version: version,
       typeName: typeName,
     );
   }
@@ -599,8 +650,7 @@ class StemWorkflowApp
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
     final effectiveModule =
-        StemModule.combine(module: module, modules: modules) ??
-        stemApp?.module;
+        StemModule.combine(module: module, modules: modules) ?? stemApp?.module;
     final moduleTasks =
         effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final moduleWorkflowDefinitions =

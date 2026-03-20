@@ -178,6 +178,32 @@ class QueueEventsProducer {
       meta: meta,
     );
   }
+
+  /// Emits [eventName] using a DTO payload and stores a schema [version]
+  /// beside the JSON payload.
+  Future<String> emitVersionedJson<T extends Object>(
+    String queue,
+    String eventName,
+    T payloadJson, {
+    required int version,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    String? typeName,
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          payloadJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      meta: meta,
+    );
+  }
 }
 
 /// Listens for queue-scoped custom events emitted by [QueueEventsProducer].

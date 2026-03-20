@@ -108,6 +108,19 @@ class PayloadCodec<T> {
     return _payloadJsonMap(payload, typeName ?? value.runtimeType.toString());
   }
 
+  /// Encodes a DTO to a string-keyed map and persists a schema [version]
+  /// alongside the payload.
+  static Map<String, dynamic> encodeVersionedJsonMap<T>(
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return <String, dynamic>{
+      versionKey: version,
+      ...encodeJsonMap(value, typeName: typeName),
+    };
+  }
+
   /// Normalizes a durable payload into the string-keyed JSON map shape used by
   /// DTO-style decoders.
   static Map<String, dynamic> decodeJsonMap(

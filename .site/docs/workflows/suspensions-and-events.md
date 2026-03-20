@@ -49,9 +49,10 @@ final payload = await ctx.waitForEventJson<PaymentConfirmed>(
 ## Emit resume events
 
 Use `WorkflowRuntime.emit(...)` / `WorkflowRuntime.emitJson(...)` /
-`WorkflowRuntime.emitValue(...)` (or the app wrappers
-`workflowApp.emitJson(...)` / `workflowApp.emitValue(...)`) instead of
-hand-editing store state:
+`WorkflowRuntime.emitVersionedJson(...)` / `WorkflowRuntime.emitValue(...)`
+(or the app wrappers `workflowApp.emitJson(...)` /
+`workflowApp.emitVersionedJson(...)` / `workflowApp.emitValue(...)`) instead
+of hand-editing store state:
 
 ```dart
 await workflowApp.emitJson(
@@ -61,8 +62,8 @@ await workflowApp.emitJson(
 ```
 
 Typed event payloads still serialize to a string-keyed JSON-like map.
-`emitJson(...)` and `emitValue(...)` are DTO/codec convenience layers, not a
-new transport shape.
+`emitJson(...)`, `emitVersionedJson(...)`, and `emitValue(...)` are
+DTO/codec convenience layers, not a new transport shape.
 
 When the topic and codec travel together in your codebase, prefer
 `WorkflowEventRef<T>.json(...)` for normal DTO payloads and keep

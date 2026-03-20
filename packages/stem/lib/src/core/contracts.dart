@@ -2945,6 +2945,36 @@ extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
     );
   }
 
+  /// Enqueues a name-based task from a DTO and persists a schema [version]
+  /// beside the JSON payload.
+  Future<String> enqueueVersionedJson<T extends Object>(
+    String name,
+    T argsJson, {
+    required int version,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+    String? typeName,
+  }) {
+    return enqueue(
+      name,
+      args: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          argsJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
   /// Creates a caller-bound fluent builder for a typed task definition.
   BoundTaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,

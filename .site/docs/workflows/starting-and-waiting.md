@@ -153,7 +153,8 @@ assemble a start request incrementally before dispatch.
 
 ## Parent runs and TTL
 
-`WorkflowRuntime.startWorkflow(...)` and `startWorkflowJson(...)` also support:
+`WorkflowRuntime.startWorkflow(...)`, `startWorkflowJson(...)`, and
+`startWorkflowVersionedJson(...)` also support:
 
 - `parentRunId` when one workflow needs to track provenance from another run
 - `ttl` when you want run metadata to expire after a bounded retention period

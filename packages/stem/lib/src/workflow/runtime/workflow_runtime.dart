@@ -237,6 +237,32 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     );
   }
 
+  /// Persists a new workflow run from a DTO and stores a schema [version]
+  /// beside the JSON payload.
+  Future<String> startWorkflowVersionedJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    required int version,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    return startWorkflow(
+      name,
+      params: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          paramsJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Starts a workflow from a typed [WorkflowRef].
   @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
@@ -372,6 +398,26 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       Map<String, Object?>.from(
         PayloadCodec.encodeJsonMap(
           payloadJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+    );
+  }
+
+  /// Emits a DTO-backed external event and stores a schema [version] beside
+  /// the JSON payload.
+  Future<void> emitVersionedJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    required int version,
+    String? typeName,
+  }) {
+    return emit(
+      topic,
+      Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          payloadJson,
+          version: version,
           typeName: typeName ?? '$T',
         ),
       ),

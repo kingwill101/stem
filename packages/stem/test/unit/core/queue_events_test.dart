@@ -150,6 +150,39 @@ void main() {
       );
     });
 
+    test(
+      'emitVersionedJson publishes DTO payloads with a persisted schema version',
+      () async {
+        final listener = QueueEvents(
+          broker: broker,
+          queue: 'orders',
+          consumerName: 'orders-listener-versioned',
+        );
+        await listener.start();
+        addTearDown(listener.close);
+
+        final received = listener
+            .on('order.versioned')
+            .first
+            .timeout(const Duration(seconds: 5));
+
+        final eventId = await producer.emitVersionedJson(
+          'orders',
+          'order.versioned',
+          const _QueueEventPayload(orderId: 'o-3', status: 'versioned'),
+          version: 2,
+        );
+
+        final event = await received;
+        expect(event.id, eventId);
+        expect(event.payload, {
+          PayloadCodec.versionKey: 2,
+          'orderId': 'o-3',
+          'status': 'versioned',
+        });
+      },
+    );
+
     test('validates queue and event names', () async {
       expect(
         () => producer.emit('', 'evt'),

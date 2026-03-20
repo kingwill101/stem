@@ -67,7 +67,9 @@ when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you
 need a custom
 `PayloadCodec<T>`. Task args still need to encode to a string-keyed map
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
-data.
+data. For low-level name-based enqueue APIs, use `enqueueVersionedJson(...)`
+when the DTO schema is expected to evolve and the payload should persist an
+explicit `__stemPayloadVersion`.
 
 For manual handlers, prefer the typed payload readers on the argument map
 instead of repeating raw casts:

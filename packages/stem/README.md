@@ -1219,7 +1219,8 @@ backend metadata under `stem.unique.duplicates`.
 - Awaited events behave the same way: the emitted payload is delivered via
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
 - When you have a DTO event, emit it through `workflowApp.emitJson(...)` /
-  `workflowApp.emitValue(...)` (or `runtime.emitJson(...)` /
+  `workflowApp.emitVersionedJson(...)` / `workflowApp.emitValue(...)` (or
+  `runtime.emitJson(...)` / `runtime.emitVersionedJson(...)` /
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
   as the shortest typed event form and call `event.emit(emitter, dto)` as the
@@ -1261,8 +1262,11 @@ final runId = await workflowApp.startWorkflow(
 ```
 
 When those low-level name-based paths already have DTO inputs, prefer
-`client.enqueueJson(...)` and `workflowApp.startWorkflowJson(...)` over
-hand-built map payloads.
+`client.enqueueJson(...)` / `client.enqueueVersionedJson(...)` and
+`workflowApp.startWorkflowJson(...)` / `workflowApp.startWorkflowVersionedJson(...)`
+over hand-built map payloads. Use the versioned forms when the DTO schema is
+expected to evolve and you want the payload to persist an explicit
+`__stemPayloadVersion`.
 
 Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
 `postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace

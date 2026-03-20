@@ -8,6 +8,13 @@
   code can decode an entire DTO input without field-by-field map plumbing.
 - Added `PayloadCodec.versionedJson(...)` so DTO payload codecs can persist a
   schema version beside the JSON payload and decode older shapes explicitly.
+- Added versioned low-level DTO shortcuts:
+  `TaskEnqueuer.enqueueVersionedJson(...)`,
+  `WorkflowRuntime.startWorkflowVersionedJson(...)`,
+  `StemWorkflowApp.startWorkflowVersionedJson(...)`,
+  `WorkflowRuntime.emitVersionedJson(...)`,
+  `StemWorkflowApp.emitVersionedJson(...)`, and
+  `QueueEventsProducer.emitVersionedJson(...)`.
 - Added low-level DTO shortcuts for name-based dispatch:
   `TaskEnqueuer.enqueueJson(...)`, `WorkflowRuntime.startWorkflowJson(...)`,
   `StemWorkflowApp.startWorkflowJson(...)`, `WorkflowRuntime.emitJson(...)`,

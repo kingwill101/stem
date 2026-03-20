@@ -156,9 +156,7 @@ void main() {
           name: 'parent.runtime.flow',
           build: (flow) {
             flow.step('spawn', (context) async {
-              return childRef
-                  .call(const {'value': 'spawned'})
-                  .start(context);
+              return childRef.call(const {'value': 'spawned'}).start(context);
             });
           },
         ).definition,
@@ -720,6 +718,56 @@ void main() {
     },
   );
 
+  test(
+    'emitVersionedJson resumes flows with versioned DTO payloads',
+    () async {
+      _UserUpdatedEvent? observedPayload;
+
+      runtime.registerWorkflow(
+        Flow(
+          name: 'event.versioned.json.workflow',
+          build: (flow) {
+            flow.step<String?>(
+              'wait',
+              (context) async {
+                final resume = context.takeResumeValue<_UserUpdatedEvent>(
+                  codec: _userUpdatedEventCodec,
+                );
+                if (resume == null) {
+                  context.awaitEvent('user.updated.versioned.json');
+                  return null;
+                }
+                observedPayload = resume;
+                return resume.id;
+              },
+            );
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow(
+        'event.versioned.json.workflow',
+      );
+      await runtime.executeRun(runId);
+
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.versioned.json');
+
+      await runtime.emitVersionedJson(
+        'user.updated.versioned.json',
+        const _UserUpdatedEvent(id: 'user-json-2'),
+        version: 2,
+      );
+      await runtime.executeRun(runId);
+
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(observedPayload?.id, 'user-json-2');
+      expect(completed?.result, 'user-json-2');
+    },
+  );
+
   test('emitEvent resumes flows with typed workflow event refs', () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.codec(
       topic: 'user.updated.ref',
@@ -1139,43 +1187,46 @@ void main() {
     expect(completed?.result, 'user-42');
   });
 
-  test('script waitForEvent uses named args and resumes with payload', () async {
-    Map<String, Object?>? resumePayload;
+  test(
+    'script waitForEvent uses named args and resumes with payload',
+    () async {
+      Map<String, Object?>? resumePayload;
 
-    runtime.registerWorkflow(
-      WorkflowScript(
-        name: 'script.event.expression',
-        run: (script) async {
-          final result = await script.step('wait', (step) async {
-            final payload = await step.waitForEvent<Map<String, Object?>>(
-              topic: 'user.updated.expression.script',
-            );
-            resumePayload = payload;
-            return payload['id'];
-          });
-          return result;
-        },
-      ).definition,
-    );
+      runtime.registerWorkflow(
+        WorkflowScript(
+          name: 'script.event.expression',
+          run: (script) async {
+            final result = await script.step('wait', (step) async {
+              final payload = await step.waitForEvent<Map<String, Object?>>(
+                topic: 'user.updated.expression.script',
+              );
+              resumePayload = payload;
+              return payload['id'];
+            });
+            return result;
+          },
+        ).definition,
+      );
 
-    final runId = await runtime.startWorkflow('script.event.expression');
-    await runtime.executeRun(runId);
+      final runId = await runtime.startWorkflow('script.event.expression');
+      await runtime.executeRun(runId);
 
-    final suspended = await store.get(runId);
-    expect(suspended?.status, WorkflowStatus.suspended);
-    expect(suspended?.waitTopic, 'user.updated.expression.script');
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.expression.script');
 
-    await runtime.emit(
-      'user.updated.expression.script',
-      const {'id': 'user-43'},
-    );
-    await runtime.executeRun(runId);
+      await runtime.emit(
+        'user.updated.expression.script',
+        const {'id': 'user-43'},
+      );
+      await runtime.executeRun(runId);
 
-    final completed = await store.get(runId);
-    expect(completed?.status, WorkflowStatus.completed);
-    expect(resumePayload?['id'], 'user-43');
-    expect(completed?.result, 'user-43');
-  });
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(resumePayload?['id'], 'user-43');
+      expect(completed?.result, 'user-43');
+    },
+  );
 
   test('script autoVersion step persists sequential checkpoints', () async {
     final iterations = <int>[];
