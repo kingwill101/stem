@@ -29,7 +29,7 @@ const approvalDraftCodec = PayloadCodec<ApprovalDraft>.json(
   typeName: 'ApprovalDraft',
 );
 
-final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(
+final approvalsRef = approvalsFlow.refCodec<ApprovalDraft>(
   paramsCodec: approvalDraftCodec,
 );
 
@@ -60,7 +60,7 @@ final runId = await approvalsRef
 
 `refJson(...)` is the shortest manual DTO path when the params or
 final result already have `toJson()` and `Type.fromJson(...)`. Use
-`refWithCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
+`refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
 still need to encode to `Map<String, Object?>` because they are stored as a
 map.
 

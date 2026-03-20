@@ -2,9 +2,10 @@
 
 ## 0.1.1
 
-- Added direct `TaskDefinition.json(...)`, `WorkflowRef.json(...)`, and
-  `refJson(...)` helpers for the common DTO path, and deprecated the older
-  `withJsonCodec(...)` / `refWithJsonCodec(...)` names.
+- Replaced the older manual DTO helper names with direct forms:
+  `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
+  `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and
+  `refCodec(...)`.
 - Added `prepareEnqueue(...)` / `prepareNoArgsEnqueue(...)` as the clearer
   task-side names for advanced enqueue builders, and deprecated the older
   `enqueueBuilder(...)` / `enqueueNoArgsBuilder(...)` aliases.

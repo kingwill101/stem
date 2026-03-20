@@ -2092,7 +2092,7 @@ class TaskDefinition<TArgs, TResult> {
        _encodeMeta = encodeMeta;
 
   /// Creates a typed task definition backed by payload codecs.
-  factory TaskDefinition.withPayloadCodec({
+  factory TaskDefinition.codec({
     required String name,
     required PayloadCodec<TArgs> argsCodec,
     TaskMetaBuilder<TArgs>? encodeMeta,
@@ -2128,7 +2128,7 @@ class TaskDefinition<TArgs, TResult> {
             decode: decodeResultJson,
             typeName: resultTypeName ?? '$TResult',
           );
-    return TaskDefinition<TArgs, TResult>.withPayloadCodec(
+    return TaskDefinition<TArgs, TResult>.codec(
       name: name,
       argsCodec: PayloadCodec<TArgs>.json(
         decode: decodeArgs,
@@ -2230,7 +2230,7 @@ class TaskDefinition<TArgs, TResult> {
         final key = entry.key;
         if (key is! String) {
           throw StateError(
-            'TaskDefinition.withPayloadCodec($taskName) requires payload keys '
+            'TaskDefinition.codec($taskName) requires payload keys '
             'to be strings, got ${key.runtimeType}.',
           );
         }
@@ -2239,7 +2239,7 @@ class TaskDefinition<TArgs, TResult> {
       return normalized;
     }
     throw StateError(
-      'TaskDefinition.withPayloadCodec($taskName) must encode args to '
+      'TaskDefinition.codec($taskName) must encode args to '
       'Map<String, Object?>, got ${payload.runtimeType}.',
     );
   }

@@ -45,10 +45,10 @@ class Flow<T extends Object?> {
   }
 
   /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
-  WorkflowRef<TParams, T> refWithCodec<TParams>({
+  WorkflowRef<TParams, T> refCodec<TParams>({
     required PayloadCodec<TParams> paramsCodec,
   }) {
-    return definition.refWithCodec<TParams>(paramsCodec: paramsCodec);
+    return definition.refCodec<TParams>(paramsCodec: paramsCodec);
   }
 
   /// Builds a typed [WorkflowRef] for DTO params that already expose

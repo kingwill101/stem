@@ -674,7 +674,7 @@ void main() {
   });
 
   test('emitEvent resumes flows with typed workflow event refs', () async {
-    final event = WorkflowEventRef<_UserUpdatedEvent>(
+    final event = WorkflowEventRef<_UserUpdatedEvent>.codec(
       topic: 'user.updated.ref',
       codec: _userUpdatedEventCodec,
     );

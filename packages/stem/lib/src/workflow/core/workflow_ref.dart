@@ -16,7 +16,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
   });
 
   /// Creates a typed workflow reference backed by payload codecs.
-  factory WorkflowRef.withPayloadCodec({
+  factory WorkflowRef.codec({
     required String name,
     required PayloadCodec<TParams> paramsCodec,
     PayloadCodec<TResult>? resultCodec,
@@ -45,7 +45,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
             decode: decodeResultJson,
             typeName: resultTypeName ?? '$TResult',
           );
-    return WorkflowRef<TParams, TResult>.withPayloadCodec(
+    return WorkflowRef<TParams, TResult>.codec(
       name: name,
       paramsCodec: PayloadCodec<TParams>.json(
         decode: decodeParams,
@@ -101,7 +101,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
         final key = entry.key;
         if (key is! String) {
           throw StateError(
-            'WorkflowRef.withPayloadCodec($workflowName) requires payload '
+            'WorkflowRef.codec($workflowName) requires payload '
             'keys to be strings, got ${key.runtimeType}.',
           );
         }
@@ -110,7 +110,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
       return normalized;
     }
     throw StateError(
-      'WorkflowRef.withPayloadCodec($workflowName) must encode params to '
+      'WorkflowRef.codec($workflowName) must encode params to '
       'Map<String, Object?>, got ${payload.runtimeType}.',
     );
   }

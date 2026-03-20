@@ -54,7 +54,7 @@ lets you deserialize complex objects before they reach application code.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()` and `Type.fromJson(...)`. Use
-`TaskDefinition.withPayloadCodec(...)` when you need a custom
+`TaskDefinition.codec(...)` when you need a custom
 `PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`
 because they are published as a map.
 

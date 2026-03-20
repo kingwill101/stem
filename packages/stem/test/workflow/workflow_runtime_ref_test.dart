@@ -131,7 +131,7 @@ void main() {
           });
         },
       );
-      final workflowRef = flow.refWithCodec<_GreetingParams>(
+      final workflowRef = flow.refCodec<_GreetingParams>(
         paramsCodec: _greetingParamsCodec,
       );
 
@@ -226,7 +226,7 @@ void main() {
           });
         },
       );
-      final workflowRef = flow.refWithCodec<_GreetingParams>(
+      final workflowRef = flow.refCodec<_GreetingParams>(
         paramsCodec: _greetingParamsCodec,
       );
 

@@ -221,7 +221,7 @@ to enqueue typed calls.
 
 Use `TaskDefinition.json(...)` when your manual task args are normal
 DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
-`TaskDefinition.withPayloadCodec(...)` only when you need a custom
+`TaskDefinition.codec(...)` only when you need a custom
 `PayloadCodec<T>`. Task args still need to encode to `Map<String, Object?>`
 because they are published as a map.
 
@@ -516,7 +516,7 @@ final runId = await approvalsRef
 
 Use `refJson(...)` when your manual workflow start params or final result are
 normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
-`refWithCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
+`refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
 still need to encode to `Map<String, Object?>` because they are persisted as a
 map.
 

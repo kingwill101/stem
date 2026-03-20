@@ -104,8 +104,7 @@ void main() {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
-      final definition =
-          TaskDefinition<_CodecTaskArgs, Object?>.withPayloadCodec(
+      final definition = TaskDefinition<_CodecTaskArgs, Object?>.codec(
             name: 'sample.codec.args',
             argsCodec: _codecTaskArgsCodec,
             defaultOptions: const TaskOptions(queue: 'typed'),
@@ -189,8 +188,7 @@ void main() {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
         final stem = Stem(broker: broker, backend: backend);
-        final definition =
-            TaskDefinition<_CodecTaskArgs, _CodecReceipt>.withPayloadCodec(
+        final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.codec(
               name: 'sample.codec.result',
               argsCodec: _codecTaskArgsCodec,
               resultCodec: _codecReceiptCodec,
