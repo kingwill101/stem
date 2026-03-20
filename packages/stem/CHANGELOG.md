@@ -127,6 +127,10 @@
 - Simplified the `canvas_patterns` examples to use `StemApp.inMemory(...)`,
   `app.canvas`, and the shared task/group status helpers instead of manual
   broker/backend/worker wiring.
+- Added `StemApp.createWorkflowApp(...)` and made `StemWorkflowApp.create(
+  stemApp: ...)` reuse `stemApp.module` by default while failing fast when the
+  reused worker does not actually cover the workflow/task queues the runtime
+  needs.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

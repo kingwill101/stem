@@ -399,16 +399,16 @@ class StemWorkflowApp
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
-    final moduleTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final effectiveModule = module ?? stemApp?.module;
+    final moduleTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final moduleWorkflowDefinitions =
-        module?.workflowDefinitions ?? const <WorkflowDefinition>[];
-    final resolvedWorkerConfig = stemApp == null
-        ? _resolveWorkflowWorkerConfig(
-            workerConfig,
-            module: module,
-            tasks: tasks,
-          )
-        : workerConfig;
+        effectiveModule?.workflowDefinitions ?? const <WorkflowDefinition>[];
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: effectiveModule,
+      tasks: tasks,
+    );
     final appInstance =
         stemApp ??
         await StemApp.create(
@@ -420,6 +420,12 @@ class StemWorkflowApp
           argsEncoder: argsEncoder,
           additionalEncoders: additionalEncoders,
         );
+    if (stemApp != null) {
+      _validateReusableStemApp(
+        appInstance,
+        resolvedWorkerConfig,
+      );
+    }
 
     final storeFactoryInstance =
         storeFactory ?? WorkflowStoreFactory.inMemory();
@@ -648,6 +654,88 @@ class StemWorkflowApp
       introspectionSink: introspectionSink,
     );
   }
+}
+
+/// Convenience helpers for layering workflows onto an existing [StemApp].
+extension StemAppWorkflowExtension on StemApp {
+  /// Creates a workflow app on top of this shared task app.
+  ///
+  /// This reuses the existing broker/backend/worker wiring, so the current
+  /// worker must already subscribe to the workflow queue and any task queues
+  /// required by the supplied module or tasks.
+  Future<StemWorkflowApp> createWorkflowApp({
+    StemModule? module,
+    Iterable<WorkflowDefinition> workflows = const [],
+    Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    WorkflowStoreFactory? storeFactory,
+    WorkflowEventBusFactory? eventBusFactory,
+    StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
+  }) {
+    return StemWorkflowApp.create(
+      module: module ?? this.module,
+      workflows: workflows,
+      flows: flows,
+      scripts: scripts,
+      tasks: tasks,
+      stemApp: this,
+      storeFactory: storeFactory,
+      eventBusFactory: eventBusFactory,
+      workerConfig: workerConfig,
+      pollInterval: pollInterval,
+      leaseExtension: leaseExtension,
+      workflowRegistry: workflowRegistry,
+      introspectionSink: introspectionSink,
+    );
+  }
+}
+
+void _validateReusableStemApp(
+  StemApp app,
+  StemWorkerConfig workerConfig,
+) {
+  final requiredQueues = workerConfig.subscription?.resolveQueues(
+        workerConfig.queue,
+      ) ??
+      [workerConfig.queue];
+  final workerQueues = app.worker.subscriptionQueues.toSet();
+  final missingQueues = requiredQueues
+      .map((queue) => queue.trim())
+      .where((queue) => queue.isNotEmpty)
+      .where((queue) => !workerQueues.contains(queue))
+      .toList(growable: false);
+
+  final requiredBroadcasts =
+      workerConfig.subscription?.broadcastChannels ?? const <String>[];
+  final workerBroadcasts = app.worker.subscriptionBroadcasts.toSet();
+  final missingBroadcasts = requiredBroadcasts
+      .map((channel) => channel.trim())
+      .where((channel) => channel.isNotEmpty)
+      .where((channel) => !workerBroadcasts.contains(channel))
+      .toList(growable: false);
+
+  if (missingQueues.isEmpty && missingBroadcasts.isEmpty) {
+    return;
+  }
+
+  final details = <String>[
+    if (missingQueues.isNotEmpty) 'queues=${missingQueues.join(",")}',
+    if (missingBroadcasts.isNotEmpty)
+      'broadcasts=${missingBroadcasts.join(",")}',
+  ].join(' ');
+
+  throw StateError(
+    'StemWorkflowApp.create(stemApp: ...) requires the reused StemApp worker '
+    'to already subscribe to the workflow/runtime queues it needs ($details). '
+    'Create the StemApp with a matching workerConfig.subscription, or use '
+    'StemClient.createWorkflowApp(...) / StemWorkflowApp.inMemory(...) so '
+    'subscriptions can be inferred automatically.',
+  );
 }
 
 StemWorkerConfig _resolveWorkflowWorkerConfig(

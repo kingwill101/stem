@@ -37,5 +37,6 @@ The generated bundle is the default integration surface:
 
 - `StemWorkflowApp.inMemory(module: stemModule)`
 - `StemWorkflowApp.fromUrl(..., module: stemModule)`
-- `StemWorkflowApp.create(stemApp: ..., module: stemModule)`
+- `stemApp.createWorkflowApp()` when the shared app already covers the workflow
+  queue
 - `StemClient.fromUrl(..., module: stemModule)` + `createWorkflowApp()`

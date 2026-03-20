@@ -24,6 +24,7 @@ abstract interface class StemTaskApp implements TaskResultCaller {}
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
 class StemApp implements StemTaskApp {
   StemApp._({
+    required this.module,
     required this.registry,
     required this.broker,
     required this.backend,
@@ -42,6 +43,9 @@ class StemApp implements StemTaskApp {
 
   /// Task registry containing all registered handlers.
   final TaskRegistry registry;
+
+  /// Optional default bundle registered into this app.
+  final StemModule? module;
 
   /// Active broker instance used by the helper.
   final Broker broker;
@@ -290,6 +294,7 @@ class StemApp implements StemTaskApp {
     ];
 
     return StemApp._(
+      module: module,
       registry: taskRegistry,
       broker: brokerInstance,
       backend: encodedBackend,
@@ -446,13 +451,15 @@ class StemApp implements StemTaskApp {
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
   }) async {
-    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final effectiveModule = module ?? client.module;
+    final bundledTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final allTasks = [...bundledTasks, ...tasks];
     final taskRegistry = client.taskRegistry;
     registerModuleTaskHandlers(taskRegistry, allTasks);
     final inferredSubscription =
         workerConfig.subscription ??
-        module?.inferTaskWorkerSubscription(
+        effectiveModule?.inferTaskWorkerSubscription(
           defaultQueue: workerConfig.queue,
           additionalTasks: tasks,
         ) ??
@@ -492,6 +499,7 @@ class StemApp implements StemTaskApp {
     );
 
     return StemApp._(
+      module: effectiveModule,
       registry: taskRegistry,
       broker: client.broker,
       backend: client.backend,

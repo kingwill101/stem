@@ -50,7 +50,9 @@ Use `StemClient` when one service wants to own broker, backend, and workflow
 setup in one place. The clean path there is `client.createWorkflowApp(...)`.
 
 If your service already owns a `StemApp`, layer workflows on top of it with
-`StemWorkflowApp.create(stemApp: ..., flows: ..., scripts: ..., tasks: ...)`.
+`stemApp.createWorkflowApp(...)`. That path reuses the current worker, so the
+underlying app must already subscribe to the workflow queue plus the task
+queues your workflows need.
 
 ## 5. Move to the right next page
 

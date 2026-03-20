@@ -214,13 +214,20 @@ final stemApp = await StemApp.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
   module: stemModule,
+  workerConfig: StemWorkerConfig(
+    queue: 'workflow',
+    subscription: RoutingSubscription(
+      queues: ['workflow', 'default'],
+    ),
+  ),
 );
 
-final workflowApp = await StemWorkflowApp.create(
-  stemApp: stemApp,
-  module: stemModule,
-);
+final workflowApp = await stemApp.createWorkflowApp();
 ```
+
+That shared-app path only works when the existing `StemApp` worker already
+subscribes to the workflow queue plus any task queues the workflows need.
+If you want subscription inference, prefer `StemClient.createWorkflowApp()`.
 
 For task-only services, use the same bundle directly with `StemApp`:
 
