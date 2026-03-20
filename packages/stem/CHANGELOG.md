@@ -138,6 +138,9 @@
   `StemWorkflowApp.startWorkflowValue(...)` so dynamic workflow names can start
   typed DTO-backed runs through an explicit `PayloadCodec<T>` without
   hand-built param maps.
+- Added `QueueEventsProducer.emitValue(...)` so queue-scoped custom events can
+  publish typed payloads through an explicit `PayloadCodec<T>` without
+  hand-built maps.
 - Added versioned low-level DTO shortcuts:
   `TaskEnqueuer.enqueueVersionedJson(...)`,
   `WorkflowRuntime.startWorkflowVersionedJson(...)`,

@@ -170,6 +170,53 @@ void main() {
     });
 
     test(
+      'emitValue publishes typed payloads through the supplied codec',
+      () async {
+      final listener = QueueEvents(
+        broker: broker,
+        queue: 'orders',
+        consumerName: 'orders-listener-codec',
+      );
+      await listener.start();
+      addTearDown(listener.close);
+
+      final received = listener
+          .on('order.codec')
+          .first
+          .timeout(const Duration(seconds: 5));
+
+      final eventId = await producer.emitValue(
+        'orders',
+        'order.codec',
+        const _QueueEventPayload(orderId: 'o-2b', status: 'codec'),
+        codec: const PayloadCodec<_QueueEventPayload>.map(
+          encode: _encodeQueueEventPayloadMap,
+          decode: _QueueEventPayload.fromJson,
+          typeName: '_QueueEventPayload',
+        ),
+      );
+
+      final event = await received;
+      expect(event.id, eventId);
+      expect(event.requiredPayloadValue<String>('orderId'), 'o-2b');
+      expect(event.requiredPayloadValue<String>('status'), 'codec');
+      expect(event.requiredPayloadValue<String>('kind'), 'custom');
+      expect(
+        event.payloadAs<_QueueEventPayload>(
+          codec: const PayloadCodec<_QueueEventPayload>.map(
+            encode: _encodeQueueEventPayloadMap,
+            decode: _QueueEventPayload.fromJson,
+            typeName: '_QueueEventPayload',
+          ),
+        ),
+        isA<_QueueEventPayload>()
+            .having((value) => value.orderId, 'orderId', 'o-2b')
+            .having((value) => value.status, 'status', 'codec'),
+      );
+      },
+    );
+
+    test(
       'emitVersionedJson publishes DTO payloads with a persisted schema '
       'version',
       () async {
@@ -263,6 +310,11 @@ class _QueueEventPayload {
     'status': status,
   };
 }
+
+Object? _encodeQueueEventPayloadMap(_QueueEventPayload value) => {
+  ...value.toJson(),
+  'kind': 'custom',
+};
 
 class _QueueEventMeta {
   const _QueueEventMeta({required this.tenant});

@@ -227,6 +227,27 @@ class QueueEventsProducer {
     );
   }
 
+  /// Emits [eventName] using a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> emitValue<T>(
+    String queue,
+    String eventName,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: _encodeQueueEventValue(queue, eventName, value, codec: codec),
+      headers: headers,
+      meta: meta,
+    );
+  }
+
   /// Emits [eventName] using a DTO payload and stores a schema [version]
   /// beside the JSON payload.
   Future<String> emitVersionedJson<T extends Object>(
@@ -252,6 +273,36 @@ class QueueEventsProducer {
       meta: meta,
     );
   }
+}
+
+Map<String, Object?> _encodeQueueEventValue<T>(
+  String queue,
+  String eventName,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Queue event payload for $queue/$eventName must use string keys, '
+          'got ${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Queue event payload for $queue/$eventName must encode to '
+    'Map<String, Object?>, got ${payload.runtimeType}.',
+  );
 }
 
 /// Listens for queue-scoped custom events emitted by [QueueEventsProducer].

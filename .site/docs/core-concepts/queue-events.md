@@ -14,6 +14,7 @@ Use this when you need lightweight event streams for domain notifications
 ## API Surface
 
 - `QueueEventsProducer.emit(queue, eventName, payload, headers, meta)`
+- `QueueEventsProducer.emitValue(queue, eventName, value, codec, headers, meta)`
 - `QueueEventsProducer.emitJson(queue, eventName, dto, headers, meta)`
 - `QueueEventsProducer.emitVersionedJson(queue, eventName, dto, version, headers, meta)`
 - `QueueEvents.start()` / `QueueEvents.close()`
@@ -48,6 +49,9 @@ Multiple listeners on the same queue receive each emitted event.
 
 - Events are queue-scoped: listeners receive only events for their configured
   queue.
+- `emitValue(...)` is the codec-backed path when the payload should be
+  authored as a typed object but still use a custom map encoder or explicit
+  `PayloadCodec<T>`.
 - `emitJson(...)` is the DTO convenience path when the payload already exposes
   `toJson()`.
 - `emitVersionedJson(...)` is the same convenience path when the payload
