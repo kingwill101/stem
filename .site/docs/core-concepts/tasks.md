@@ -53,9 +53,11 @@ Typed results flow through `TaskResult<TResult>` when you call
 lets you deserialize complex objects before they reach application code.
 
 If your manual task args are DTOs, prefer
-`TaskDefinition.withPayloadCodec(...)` over hand-written `encodeArgs` maps. The
-codec still needs to encode to `Map<String, Object?>` because task args are
-published as a map.
+`TaskDefinition.withPayloadCodec(...)` over hand-written `encodeArgs` maps.
+Prefer `PayloadCodec<T>.json(...)` when the type already has `toJson()` and
+`Type.fromJson(...)`, and use `PayloadCodec<T>.map(...)` when you need a
+custom map encoder. Task args still need to encode to `Map<String, Object?>`
+because they are published as a map.
 
 `TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and typed task
 definitions can now create a fluent builder directly through

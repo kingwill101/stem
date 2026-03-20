@@ -16,7 +16,8 @@ class PayloadCodec<T> {
 
   /// Creates a payload codec for DTOs that serialize to a durable map payload.
   ///
-  /// This is the common author-facing case for workflow/task DTOs:
+  /// Use this when you need a custom map encoder or a decode function that is
+  /// not the usual `Type.fromJson(...)` shape:
   ///
   /// ```dart
   /// const approvalCodec = PayloadCodec<Approval>.map(
@@ -29,6 +30,24 @@ class PayloadCodec<T> {
     required T Function(Map<String, Object?> payload) decode,
     String? typeName,
   }) : _encode = encode,
+       _decode = null,
+       _decodeMap = decode,
+       _typeName = typeName;
+
+  /// Creates a payload codec for DTOs that expose `toJson()` and a matching
+  /// typed decoder like `Type.fromJson(...)`.
+  ///
+  /// This is the shortest happy path for common DTO payloads:
+  ///
+  /// ```dart
+  /// const approvalCodec = PayloadCodec<Approval>.json(
+  ///   decode: Approval.fromJson,
+  /// );
+  /// ```
+  const PayloadCodec.json({
+    required T Function(Map<String, Object?> payload) decode,
+    String? typeName,
+  }) : _encode = _encodeJsonPayload,
        _decode = null,
        _decodeMap = decode,
        _typeName = typeName;
@@ -61,6 +80,19 @@ class PayloadCodec<T> {
   Object? decodeDynamic(Object? payload) {
     if (payload == null) return null;
     return decode(payload);
+  }
+}
+
+Object? _encodeJsonPayload<T>(T value) {
+  try {
+    final payload = (value as dynamic).toJson();
+    return _payloadMap(payload, value.runtimeType.toString());
+    // Dynamic `toJson()` probing is the purpose of this helper.
+    // ignore: avoid_catching_errors
+  } on NoSuchMethodError {
+    throw StateError(
+      '${value.runtimeType} must expose toJson() to use PayloadCodec.json.',
+    );
   }
 }
 

@@ -1534,9 +1534,9 @@ class _RecordingLogDriver extends LogDriver {
   }
 }
 
-final _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>(
-  encode: (value) => value.toJson(),
+const _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>.json(
   decode: _UserUpdatedEvent.fromJson,
+  typeName: '_UserUpdatedEvent',
 );
 
 class _UserUpdatedEvent {
@@ -1546,8 +1546,7 @@ class _UserUpdatedEvent {
 
   Map<String, Object?> toJson() => {'id': id};
 
-  static _UserUpdatedEvent fromJson(Object? payload) {
-    final json = payload! as Map<String, Object?>;
+  static _UserUpdatedEvent fromJson(Map<String, Object?> json) {
     return _UserUpdatedEvent(id: json['id'] as String);
   }
 }

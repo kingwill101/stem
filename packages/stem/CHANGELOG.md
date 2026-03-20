@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `PayloadCodec<T>.json(...)` as the shortest DTO helper for types that
+  already expose `toJson()` and `Type.fromJson(...)`, while keeping
+  `PayloadCodec<T>.map(...)` for custom map encoders.
 - Added `PayloadCodec<T>.map(...)` so map-shaped workflow/task DTO codecs no
   longer need handwritten `Object?` decode wrappers, and refreshed the public
   typed payload docs/examples around the new helper.

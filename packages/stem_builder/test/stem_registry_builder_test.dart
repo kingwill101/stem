@@ -19,10 +19,16 @@ class PayloadCodec<T> {
     required T Function(Map<String, Object?> payload) decode,
     this.typeName,
   }) : decode = _unsupportedDecode;
+  const PayloadCodec.json({
+    required T Function(Map<String, Object?> payload) decode,
+    this.typeName,
+  }) : encode = _unsupportedEncode,
+       decode = _unsupportedDecode;
   final Object? Function(T value) encode;
   final T Function(Object? payload) decode;
   final String? typeName;
 
+  static Object? _unsupportedEncode<T>(T value) => throw UnimplementedError();
   static T _unsupportedDecode<T>(Object? payload) => throw UnimplementedError();
 }
 
@@ -1210,11 +1216,10 @@ Future<EmailRequest> dtoTask(
             allOf([
               contains('abstract final class StemPayloadCodecs'),
               contains('PayloadCodec<EmailRequest> emailRequest ='),
-              contains('PayloadCodec<EmailRequest>.map('),
+              contains('PayloadCodec<EmailRequest>.json('),
               contains(
                 'WorkflowRef<EmailRequest, EmailRequest> script =',
               ),
-              contains('encode: (value) => value.toJson(),'),
               contains('decode: EmailRequest.fromJson,'),
               contains('typeName: "EmailRequest",'),
               contains(

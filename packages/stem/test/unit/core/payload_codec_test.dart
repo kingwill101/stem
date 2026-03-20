@@ -2,6 +2,45 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('PayloadCodec.json', () {
+    test('encodes and decodes DTOs via toJson/fromJson', () {
+      const codec = PayloadCodec<_CodecPayload>.json(
+        decode: _CodecPayload.fromJson,
+        typeName: '_CodecPayload',
+      );
+
+      final payload = codec.encode(
+        const _CodecPayload(id: 'payload-0', count: 1),
+      );
+      final decoded = codec.decode(payload);
+
+      expect(payload, {
+        'id': 'payload-0',
+        'count': 1,
+      });
+      expect(decoded.id, 'payload-0');
+      expect(decoded.count, 1);
+    });
+
+    test('rejects values without toJson with a clear error', () {
+      const codec = PayloadCodec<_NoJsonPayload>.json(
+        decode: _NoJsonPayload.fromJson,
+        typeName: '_NoJsonPayload',
+      );
+
+      expect(
+        () => codec.encode(const _NoJsonPayload(id: 'missing')),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('_NoJsonPayload must expose toJson()'),
+          ),
+        ),
+      );
+    });
+  });
+
   group('PayloadCodec.map', () {
     test('decodes typed DTO payloads from durable maps', () {
       const codec = PayloadCodec<_CodecPayload>.map(
@@ -95,3 +134,13 @@ class _CodecPayload {
 }
 
 Object? _encodeCodecPayload(_CodecPayload value) => value.toJson();
+
+class _NoJsonPayload {
+  const _NoJsonPayload({required this.id});
+
+  factory _NoJsonPayload.fromJson(Map<String, Object?> json) {
+    return _NoJsonPayload(id: json['id']! as String);
+  }
+
+  final String id;
+}

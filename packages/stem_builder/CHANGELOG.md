@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Switched generated DTO payload codecs to the shorter
+  `PayloadCodec<T>.json(...)` form for types that already expose `toJson()` and
+  `fromJson(...)`.
 - Switched generated DTO payload codecs to `PayloadCodec<T>.map(...)`, removing
   the old emitted map-normalization helper and the need for handwritten
   `Object?` decode wrappers in generated output.

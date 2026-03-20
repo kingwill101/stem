@@ -1,11 +1,10 @@
 import 'package:stem/stem.dart';
 
-final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>.map(
-  encode: (value) => value.toJson(),
+const shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>.json(
   decode: _ShipmentReadyEvent.fromJson,
   typeName: '_ShipmentReadyEvent',
 );
-final shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>(
+const shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>(
   topic: 'shipment.ready',
   codec: shipmentReadyEventCodec,
 );
@@ -75,8 +74,7 @@ class _ShipmentReadyEvent {
 
   Map<String, Object?> toJson() => {'trackingId': trackingId};
 
-  static _ShipmentReadyEvent fromJson(Object? payload) {
-    final json = payload! as Map<String, Object?>;
+  static _ShipmentReadyEvent fromJson(Map<String, Object?> json) {
     return _ShipmentReadyEvent(trackingId: json['trackingId'] as String);
   }
 }

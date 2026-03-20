@@ -5,38 +5,32 @@ part of 'definitions.dart';
 
 abstract final class StemPayloadCodecs {
   static final PayloadCodec<WelcomeWorkflowResult> welcomeWorkflowResult =
-      PayloadCodec<WelcomeWorkflowResult>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<WelcomeWorkflowResult>.json(
         decode: WelcomeWorkflowResult.fromJson,
         typeName: "WelcomeWorkflowResult",
       );
   static final PayloadCodec<WelcomeRequest> welcomeRequest =
-      PayloadCodec<WelcomeRequest>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<WelcomeRequest>.json(
         decode: WelcomeRequest.fromJson,
         typeName: "WelcomeRequest",
       );
   static final PayloadCodec<WelcomePreparation> welcomePreparation =
-      PayloadCodec<WelcomePreparation>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<WelcomePreparation>.json(
         decode: WelcomePreparation.fromJson,
         typeName: "WelcomePreparation",
       );
   static final PayloadCodec<ContextCaptureResult> contextCaptureResult =
-      PayloadCodec<ContextCaptureResult>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<ContextCaptureResult>.json(
         decode: ContextCaptureResult.fromJson,
         typeName: "ContextCaptureResult",
       );
   static final PayloadCodec<EmailDispatch> emailDispatch =
-      PayloadCodec<EmailDispatch>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<EmailDispatch>.json(
         decode: EmailDispatch.fromJson,
         typeName: "EmailDispatch",
       );
   static final PayloadCodec<EmailDeliveryReceipt> emailDeliveryReceipt =
-      PayloadCodec<EmailDeliveryReceipt>.map(
-        encode: (value) => value.toJson(),
+      PayloadCodec<EmailDeliveryReceipt>.json(
         decode: EmailDeliveryReceipt.fromJson,
         typeName: "EmailDeliveryReceipt",
       );

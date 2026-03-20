@@ -58,13 +58,10 @@ class InvoicePayload {
   }
 }
 
-const invoicePayloadCodec = PayloadCodec<InvoicePayload>.map(
-  encode: _encodeInvoicePayload,
+const invoicePayloadCodec = PayloadCodec<InvoicePayload>.json(
   decode: InvoicePayload.fromJson,
   typeName: 'InvoicePayload',
 );
-
-Object? _encodeInvoicePayload(InvoicePayload value) => value.toJson();
 
 class PublishInvoiceTask extends TaskHandler<void> {
   static final definition =

@@ -193,8 +193,7 @@ class HelloArgs {
   }
 }
 
-const helloArgsCodec = PayloadCodec<HelloArgs>.map(
-  encode: (value) => value.toJson(),
+const helloArgsCodec = PayloadCodec<HelloArgs>.json(
   decode: HelloArgs.fromJson,
   typeName: 'HelloArgs',
 );
@@ -225,9 +224,11 @@ Future<void> main() async {
 producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
 
-Use `TaskDefinition.withPayloadCodec(...)` when your manual task args are DTOs
-that already have a `PayloadCodec<T>`. The codec still needs to encode to
-`Map<String, Object?>` because task args are published as a map.
+Use `TaskDefinition.withPayloadCodec(...)` when your manual task args are DTOs.
+Prefer `PayloadCodec<T>.json(...)` when the type already exposes `toJson()` and
+`Type.fromJson(...)`, and drop down to `PayloadCodec<T>.map(...)` only when
+you need a custom map encoder. Task args still need to encode to
+`Map<String, Object?>` because they are published as a map.
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly. Prefer `enqueueAndWait(...)` when you only need
@@ -482,8 +483,7 @@ final approvalsFlow = Flow<String>(
   },
 );
 
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>.map(
-  encode: (value) => value.toJson(),
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>.json(
   decode: ApprovalDraft.fromJson,
   typeName: 'ApprovalDraft',
 );

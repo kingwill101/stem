@@ -1356,8 +1356,7 @@ class _RegistryEmitter {
       final typeCode = entry.key;
       final symbol = entry.value;
       buffer.writeln('  static final PayloadCodec<$typeCode> $symbol =');
-      buffer.writeln('      PayloadCodec<$typeCode>.map(');
-      buffer.writeln('        encode: (value) => value.toJson(),');
+      buffer.writeln('      PayloadCodec<$typeCode>.json(');
       buffer.writeln(
         '        decode: $typeCode.fromJson,',
       );

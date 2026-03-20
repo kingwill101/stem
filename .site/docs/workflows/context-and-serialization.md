@@ -106,8 +106,9 @@ typed DTO plus a `PayloadCodec<T>`, but the codec must still encode to a
 `Map<String, Object?>` because watcher persistence and event delivery are
 map-based today.
 
-For map-shaped DTOs, prefer `PayloadCodec<T>.map(...)` over hand-written
-`Object?` decode wrappers.
+For normal DTOs that expose `toJson()` and `Type.fromJson(...)`, prefer
+`PayloadCodec<T>.json(...)`. Drop down to `PayloadCodec<T>.map(...)` when you
+need a custom map encoder or a nonstandard decode function.
 
 ## Practical rule
 
