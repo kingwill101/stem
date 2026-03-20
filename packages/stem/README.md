@@ -1004,7 +1004,8 @@ backend metadata under `stem.unique.duplicates`.
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
 - When you have a DTO event, emit it through `runtime.emitValue(...)` /
   `workflowApp.emitValue(...)` with a `PayloadCodec<T>`, or bundle the topic
-  and codec once in a `WorkflowEventRef<T>` and use `emitEvent(...)` /
+  and codec once in a `WorkflowEventRef<T>` and use
+  `event.emitWithApp(...)` / `event.emitWithRuntime(...)` together with
   `waitForEventRef(...)`. Event payloads still serialize onto the existing
   `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the

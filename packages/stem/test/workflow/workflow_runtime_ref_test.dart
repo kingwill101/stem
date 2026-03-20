@@ -35,6 +35,11 @@ const _greetingResultCodec = PayloadCodec<_GreetingResult>(
   decode: _decodeGreetingResult,
 );
 
+const _userUpdatedEvent = WorkflowEventRef<_GreetingParams>(
+  topic: 'runtime.ref.event',
+  codec: _greetingParamsCodec,
+);
+
 Object? _encodeGreetingParams(_GreetingParams value) => value.toJson();
 
 _GreetingParams _decodeGreetingParams(Object? payload) {
@@ -223,6 +228,44 @@ void main() {
 
         expect(flowResult?.value, 'hello flow');
         expect(scriptResult?.value, 'hello script');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('typed workflow events emit directly from the event ref', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.event.flow',
+        build: (builder) {
+          builder.step('wait', (ctx) async {
+            final payload = ctx.waitForEventRef(_userUpdatedEvent);
+            if (payload == null) {
+              return null;
+            }
+            return 'hello ${payload.name}';
+          });
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final runId = await flow.ref0().startWithApp(workflowApp);
+        await workflowApp.runtime.executeRun(runId);
+
+        await _userUpdatedEvent.emitWithApp(
+          workflowApp,
+          const _GreetingParams(name: 'event'),
+        );
+        await workflowApp.runtime.executeRun(runId);
+
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello event');
       } finally {
         await workflowApp.shutdown();
       }
