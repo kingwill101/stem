@@ -53,8 +53,8 @@ Future<void> bootstrapWorkflowRuntime() async {
 
 // #region workflows-client
 Future<void> bootstrapWorkflowClient() async {
-  final client = await StemClient.fromUrl('memory://');
-  final app = await client.createWorkflowApp(module: stemModule);
+  final client = await StemClient.fromUrl('memory://', module: stemModule);
+  final app = await client.createWorkflowApp();
   await app.close();
   await client.close();
 }

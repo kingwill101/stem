@@ -14,6 +14,9 @@
 - Updated the public snippets and annotated workflow example to use the
   high-level app surfaces directly, dropping unnecessary `start()` calls and
   `app.stem` hops in the common in-memory and workflow happy paths.
+- Updated the client-backed workflow examples to attach `stemModule` at
+  `StemClient` creation time and then call `createWorkflowApp()` without
+  repeating the bundle.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

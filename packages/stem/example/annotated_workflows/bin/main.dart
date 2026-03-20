@@ -4,8 +4,8 @@ import 'package:stem/stem.dart';
 import 'package:stem_annotated_workflows/definitions.dart';
 
 Future<void> main() async {
-  final client = await StemClient.inMemory();
-  final app = await client.createWorkflowApp(module: stemModule);
+  final client = await StemClient.inMemory(module: stemModule);
+  final app = await client.createWorkflowApp();
 
   final flowRunId = await StemWorkflowDefinitions.flow.startWith(app);
   final flowResult = await StemWorkflowDefinitions.flow.waitFor(
