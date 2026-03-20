@@ -11,14 +11,17 @@ Future<void> main() async {
     FunctionTaskHandler<String>(
       name: 'enrich.user',
       entrypoint: (context, args) async {
-        final prev = context.meta['chainPrevResult'] as String? ?? 'Friend';
+        final prev = context.meta.valueOr<String>('chainPrevResult', 'Friend');
         return '$prev Lovelace';
       },
     ),
     FunctionTaskHandler<Object?>(
       name: 'send.email',
       entrypoint: (context, args) async {
-        final fullName = context.meta['chainPrevResult'] as String? ?? 'Friend';
+        final fullName = context.meta.valueOr<String>(
+          'chainPrevResult',
+          'Friend',
+        );
         print('Sending email to $fullName');
         return null;
       },

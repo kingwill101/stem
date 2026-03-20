@@ -8,17 +8,16 @@ Future<void> main() async {
       name: 'fetch.metric',
       entrypoint: (context, args) async {
         await Future<void>.delayed(const Duration(milliseconds: 40));
-        return args['value'] as int;
+        return args.requiredValue<int>('value');
       },
     ),
     FunctionTaskHandler<Object?>(
       name: 'aggregate.metric',
       entrypoint: (context, args) async {
-        final values =
-            (context.meta['chordResults'] as List?)
-                ?.whereType<int>()
-                .toList() ??
-            const [];
+        final values = context.meta.valueListOr<int>(
+          'chordResults',
+          const [],
+        );
         final sum = values.fold<int>(0, (a, b) => a + b);
         print('Aggregated result: $sum');
         return null;

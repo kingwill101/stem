@@ -16,7 +16,8 @@ explicit `await app.start()`.
 ## Chains
 
 Chains execute tasks serially. Each step receives the previous result via
-`context.meta['chainPrevResult']`.
+`context.meta`, so prefer typed reads like
+`context.meta.valueOr<String>('chainPrevResult', 'fallback')` over raw casts.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chain.dart#canvas-chain
 
@@ -48,8 +49,10 @@ state:
 
 ## Chords
 
-Chords combine a group with a callback. Once all body tasks succeed, the callback
-runs with `context.meta['chordResults']` populated.
+Chords combine a group with a callback. Once all body tasks succeed, the
+callback runs with `context.meta['chordResults']` populated. Prefer
+`context.meta.valueListOr<T>('chordResults', const [])` over manual list casts
+when reading those results.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chord.dart#canvas-chord
 

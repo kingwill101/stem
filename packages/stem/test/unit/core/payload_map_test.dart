@@ -44,6 +44,55 @@ void main() {
 
       expect(draft.documentId, 'doc-42');
     });
+
+    test('valueList reads typed scalar lists', () {
+      const payload = <String, Object?>{
+        'scores': [1, 2, 3],
+      };
+
+      expect(payload.valueList<int>('scores'), [1, 2, 3]);
+      expect(payload.valueList<int>('missing'), isNull);
+    });
+
+    test('valueListOr returns fallback for missing lists', () {
+      const payload = <String, Object?>{
+        'scores': [1, 2, 3],
+      };
+
+      expect(payload.valueListOr<int>('scores', const [9]), [1, 2, 3]);
+      expect(payload.valueListOr<int>('missing', const [9]), [9]);
+    });
+
+    test('requiredValueList throws for missing payload keys', () {
+      const payload = <String, Object?>{'name': 'Stem'};
+
+      expect(
+        () => payload.requiredValueList<String>('labels'),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            "Missing required payload key 'labels'.",
+          ),
+        ),
+      );
+    });
+
+    test('requiredValueList decodes codec-backed DTO lists', () {
+      final payload = <String, Object?>{
+        'drafts': const [
+          <String, Object?>{'documentId': 'doc-42'},
+          <String, Object?>{'documentId': 'doc-99'},
+        ],
+      };
+
+      final drafts = payload.requiredValueList<_ApprovalDraft>(
+        'drafts',
+        codec: _approvalDraftCodec,
+      );
+
+      expect(drafts.map((draft) => draft.documentId), ['doc-42', 'doc-99']);
+    });
   });
 }
 

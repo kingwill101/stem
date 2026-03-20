@@ -1,5 +1,5 @@
 // Canvas chain example for documentation.
-// ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
+// ignore_for_file: avoid_print
 
 import 'dart:async';
 
@@ -16,15 +16,20 @@ Future<void> main() async {
       FunctionTaskHandler<String>(
         name: 'enrich.user',
         entrypoint: (context, args) async {
-          final prev = context.meta['chainPrevResult'] as String? ?? 'Friend';
+          final prev = context.meta.valueOr<String>(
+            'chainPrevResult',
+            'Friend',
+          );
           return '$prev Lovelace';
         },
       ),
       FunctionTaskHandler<Object?>(
         name: 'send.email',
         entrypoint: (context, args) async {
-          final fullName =
-              context.meta['chainPrevResult'] as String? ?? 'Friend';
+          final fullName = context.meta.valueOr<String>(
+            'chainPrevResult',
+            'Friend',
+          );
           print('Sending email to $fullName');
           return null;
         },

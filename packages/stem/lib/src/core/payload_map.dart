@@ -27,4 +27,36 @@ extension PayloadMapX on Map<String, Object?> {
     }
     return value<T>(key, codec: codec) as T;
   }
+
+  /// Returns the decoded list value for [key], or `null` when it is absent.
+  ///
+  /// When [codec] is supplied, each stored durable payload is decoded through
+  /// that codec before being returned.
+  List<T>? valueList<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = this[key];
+    if (payload == null) return null;
+    final values = payload as List;
+    if (codec != null) {
+      return List<T>.unmodifiable(values.map(codec.decode));
+    }
+    return List<T>.unmodifiable(values.cast<T>());
+  }
+
+  /// Returns the decoded list value for [key], or [fallback] when it is
+  /// absent.
+  List<T> valueListOr<T>(
+    String key,
+    List<T> fallback, {
+    PayloadCodec<T>? codec,
+  }) {
+    return valueList<T>(key, codec: codec) ?? fallback;
+  }
+
+  /// Returns the decoded list value for [key], throwing when it is missing.
+  List<T> requiredValueList<T>(String key, {PayloadCodec<T>? codec}) {
+    if (!containsKey(key) || this[key] == null) {
+      throw StateError("Missing required payload key '$key'.");
+    }
+    return valueList<T>(key, codec: codec)!;
+  }
 }
