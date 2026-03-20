@@ -132,22 +132,21 @@ class HelloTask implements TaskHandler<void> {
 }
 
 Future<void> main() async {
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-
-  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://localhost:6379/1',
+    ),
     tasks: [HelloTask()],
   );
 
+  final worker = await client.createWorker();
   unawaited(worker.start());
-  await stem.enqueue('demo.hello', args: {'name': 'Stem'});
+  await client.enqueue('demo.hello', args: {'name': 'Stem'});
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 ```
 
@@ -198,25 +197,24 @@ const helloArgsCodec = PayloadCodec<HelloArgs>(
 );
 
 Future<void> main() async {
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-
-  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://localhost:6379/1',
+    ),
     tasks: [HelloTask()],
   );
 
+  final worker = await client.createWorker();
   unawaited(worker.start());
   await HelloTask.definition.enqueue(
-    stem,
+    client,
     const HelloArgs(name: 'Stem'),
   );
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 ```
 

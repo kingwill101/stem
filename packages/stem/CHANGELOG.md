@@ -101,6 +101,9 @@
 - Simplified the persistence backend docs snippets to use
   `StemClient.create(...)` while still showing the explicit in-memory, Redis,
   Postgres, and SQLite backend choices.
+- Simplified the README Redis task examples to use `StemClient.fromUrl(...)`
+  and `createWorker(...)` instead of manually wiring raw `Stem` and `Worker`
+  instances in the happy path.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
