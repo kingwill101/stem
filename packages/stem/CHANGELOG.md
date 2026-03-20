@@ -29,6 +29,9 @@
   `enqueue(...)` / `enqueueAndWait(...)` are the default happy path, with
   `prepareStart(...)` and `prepareEnqueue(...)` positioned as advanced
   override builders.
+- Removed the caller/context `prepareStart(...)` and `prepareEnqueue(...)`
+  wrapper entrypoints so the advanced builder path now hangs directly off
+  `WorkflowRef` and `TaskDefinition`.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.
