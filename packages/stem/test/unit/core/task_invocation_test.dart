@@ -215,6 +215,35 @@ void main() {
     },
   );
 
+  test(
+    'TaskInvocationContext.local reports progress with versioned DTO payloads',
+    () async {
+      ProgressSignal? progressSignal;
+      final TaskExecutionContext context = TaskInvocationContext.local(
+        id: 'task-1c',
+        headers: const {},
+        meta: const {},
+        attempt: 0,
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (percent, {Map<String, Object?>? data}) async {
+          progressSignal = ProgressSignal(percent, data: data);
+        },
+      );
+
+      await context.progressVersionedJson(
+        25,
+        const _ProgressUpdate(stage: 'warming'),
+        version: 2,
+      );
+
+      expect(progressSignal?.data, equals(const {
+        PayloadCodec.versionKey: 2,
+        'stage': 'warming',
+      }));
+    },
+  );
+
   test('ProgressSignal exposes typed progress metadata helpers', () {
     const signal = ProgressSignal(
       50,

@@ -138,6 +138,8 @@ every retry signal and shows how the strategy interacts with broker timings.
 - `context.progress(percent, data: {...})` – emit progress signals for UI hooks.
 - `context.progressJson(percent, dto)` – emit DTO progress payloads without
   hand-built maps.
+- `context.progressVersionedJson(percent, dto, version: n)` – emit DTO progress
+  payloads with an explicit persisted schema version.
 - `context.retry(...)` – request an immediate retry with optional per-call
   retry policy overrides.
 - when you inspect a raw `ProgressSignal`, prefer

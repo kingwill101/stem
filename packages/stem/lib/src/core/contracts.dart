@@ -2063,6 +2063,25 @@ extension TaskExecutionContextProgressX on TaskExecutionContext {
       ),
     );
   }
+
+  /// Report progress with a versioned JSON-serializable DTO payload.
+  Future<void> progressVersionedJson<T>(
+    double percentComplete,
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return progress(
+      percentComplete,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
 }
 
 /// Context passed to handler implementations during execution.

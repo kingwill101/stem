@@ -162,6 +162,8 @@
 - Added `TaskContext.progressJson(...)` and
   `TaskInvocationContext.progressJson(...)` so task progress updates can emit
   DTO payloads without hand-built maps.
+- Added `TaskExecutionContext.progressVersionedJson(...)` so task progress
+  updates can persist an explicit DTO schema version alongside the payload.
 - Added `sleepJson(...)`, `sleepVersionedJson(...)`,
   `awaitEventJson(...)`, `awaitEventVersionedJson(...)`, and
   `FlowStepControl.awaitTopicJson(...)` so lower-level flow/script suspension
