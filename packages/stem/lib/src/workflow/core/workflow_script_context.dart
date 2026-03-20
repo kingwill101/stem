@@ -152,6 +152,62 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
     );
   }
 
+  /// Returns the decoded version-aware workflow parameter DTO for [key], or
+  /// `null`.
+  T? paramVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.valueVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware workflow parameter DTO for [key], or
+  /// [fallback].
+  T paramVersionedJsonOr<T>(
+    String key,
+    T fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.valueVersionedJsonOr<T>(
+      key,
+      fallback,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware workflow parameter DTO for [key],
+  /// throwing when absent.
+  T requiredParamVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.requiredValueVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
   /// Returns the decoded workflow parameter DTO list for [key], or `null`.
   List<T>? paramListJson<T>(
     String key, {
@@ -190,6 +246,62 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
     return params.requiredValueListJson<T>(
       key,
       decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware workflow parameter DTO list for [key],
+  /// or `null`.
+  List<T>? paramListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.valueListVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware workflow parameter DTO list for [key],
+  /// or [fallback].
+  List<T> paramListVersionedJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.valueListVersionedJsonOr<T>(
+      key,
+      fallback,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware workflow parameter DTO list for [key],
+  /// throwing when absent.
+  List<T> requiredParamListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return params.requiredValueListVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     );
   }

@@ -1847,6 +1847,60 @@ extension TaskInputContextArgs on TaskInputContext {
     );
   }
 
+  /// Returns the decoded version-aware task arg DTO for [key], or `null`.
+  T? argVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO for [key], or [fallback].
+  T argVersionedJsonOr<T>(
+    String key,
+    T fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueVersionedJsonOr<T>(
+      key,
+      fallback,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO for [key], throwing when
+  /// absent.
+  T requiredArgVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.requiredValueVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
   /// Returns the decoded task arg DTO list for [key], or `null`.
   List<T>? argListJson<T>(
     String key, {
@@ -1884,6 +1938,61 @@ extension TaskInputContextArgs on TaskInputContext {
     return args.requiredValueListJson<T>(
       key,
       decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], or `null`.
+  List<T>? argListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueListVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], or
+  /// [fallback].
+  List<T> argListVersionedJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueListVersionedJsonOr<T>(
+      key,
+      fallback,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], throwing
+  /// when absent.
+  List<T> requiredArgListVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.requiredValueListVersionedJson<T>(
+      key,
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     );
   }

@@ -140,12 +140,26 @@ void main() {
         workflow: 'demo',
         runId: 'run-1',
         stepName: 'draft',
-        params: const {'message': 'approved'},
+        params: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'approved',
+          'payload': {
+            PayloadCodec.versionKey: 2,
+            'message': 'approved',
+          },
+        },
         previousResult: null,
         stepIndex: 0,
       );
       final scriptContext = _FakeWorkflowScriptContext(
-        params: const {'message': 'queued'},
+        params: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'queued',
+          'payload': {
+            PayloadCodec.versionKey: 2,
+            'message': 'queued',
+          },
+        },
       );
 
       expect(
@@ -166,6 +180,16 @@ void main() {
         'approved',
       );
       expect(
+        flowContext
+            .paramVersionedJson<_ResumePayload>(
+              'payload',
+              version: 2,
+              decode: _ResumePayload.fromVersionedJson,
+            )
+            ?.message,
+        'approved',
+      );
+      expect(
         scriptContext
             .paramsAs<_ResumePayload>(codec: _resumePayloadCodec)
             .message,
@@ -178,6 +202,16 @@ void main() {
               decode: _ResumePayload.fromVersionedJson,
             )
             .message,
+        'queued',
+      );
+      expect(
+        scriptContext
+            .paramVersionedJson<_ResumePayload>(
+              'payload',
+              version: 2,
+              decode: _ResumePayload.fromVersionedJson,
+            )
+            ?.message,
         'queued',
       );
     },

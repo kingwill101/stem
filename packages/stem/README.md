@@ -247,6 +247,11 @@ final versionedParams = ctx.paramsVersionedJson<ApprovalDraft>(
   version: 2,
   decode: ApprovalDraft.fromVersionedJson,
 );
+final nestedDraft = ctx.paramVersionedJson<ApprovalDraft>(
+  'draft',
+  version: 2,
+  decode: ApprovalDraft.fromVersionedJson,
+);
 ```
 
 For typed task calls, the definition and call objects now expose the common

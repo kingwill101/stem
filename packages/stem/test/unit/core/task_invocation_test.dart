@@ -148,7 +148,14 @@ void main() {
   test('TaskExecutionContext decodes whole task arg DTOs', () {
     final TaskExecutionContext context = TaskInvocationContext.local(
       id: 'task-1a',
-      args: const {'stage': 'warming'},
+      args: const {
+        PayloadCodec.versionKey: 2,
+        'stage': 'warming',
+        'update': {
+          PayloadCodec.versionKey: 2,
+          'stage': 'warming',
+        },
+      },
       headers: const {},
       meta: const {},
       attempt: 0,
@@ -172,6 +179,16 @@ void main() {
             decode: _ProgressUpdate.fromVersionedJson,
           )
           .stage,
+      'warming',
+    );
+    expect(
+      context
+          .argVersionedJson<_ProgressUpdate>(
+            'update',
+            version: 2,
+            decode: _ProgressUpdate.fromVersionedJson,
+          )
+          ?.stage,
       'warming',
     );
   });

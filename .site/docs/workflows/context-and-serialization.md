@@ -38,10 +38,12 @@ Depending on the context type, you can access:
   params
 - `paramsAs(codec: ...)`, `paramsJson<T>()`, or `paramsVersionedJson<T>()`
   for decoding the full workflow start payload as one DTO
-- `paramJson<T>()` / `requiredParamJson<T>()` for nested DTO params without a
+- `paramJson<T>()`, `paramVersionedJson<T>()`, or
+  `requiredParamJson<T>()` for nested DTO params without a separate codec
+  constant
+- `paramListJson<T>()`, `paramListVersionedJson<T>()`, or
+  `requiredParamListJson<T>()` for lists of nested DTO params without a
   separate codec constant
-- `paramListJson<T>()` / `requiredParamListJson<T>()` for lists of nested DTO
-  params without a separate codec constant
 - `previousValue<T>()` / `requiredPreviousValue<T>()` for typed access to the
   prior step or checkpoint result
 - `previousJson<T>()` / `requiredPreviousJson<T>()` for prior DTO results
@@ -70,6 +72,8 @@ Depending on the context type, you can access:
   `TaskExecutionContext` both implement `TaskEnqueuer`
 - `argsAs(codec: ...)`, `argsJson<T>()`, or `argsVersionedJson<T>()` for
   decoding the full task-arg payload as one DTO inside manual task handlers
+- `argJson<T>()`, `argVersionedJson<T>()`, `argListJson<T>()`, or
+  `argListVersionedJson<T>()` when only one nested arg entry needs DTO decode
 - task metadata like `id`, `attempt`, `meta`
 
 Child workflow starts belong in durable boundaries:

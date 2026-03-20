@@ -7,6 +7,10 @@
   `paramsJson(...)`, `paramsVersionedJson(...)`, and the same full-payload
   helpers on `WorkflowScriptContext`, so manual task/workflow code can decode
   an entire DTO input without field-by-field map plumbing.
+- Added `argVersionedJson(...)`, `argListVersionedJson(...)`,
+  `paramVersionedJson(...)`, and `paramListVersionedJson(...)` on the shared
+  task/workflow context helpers so nested versioned DTO fields no longer
+  require dropping down to raw payload-map helpers.
 - Added `PayloadCodec.versionedJson(...)` so DTO payload codecs can persist a
   schema version beside the JSON payload and decode older shapes explicitly.
 - Added versioned low-level DTO shortcuts:
