@@ -2220,6 +2220,11 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Creates a fluent enqueue builder from this definition and [args].
+  TaskEnqueueBuilder<TArgs, TResult> enqueueBuilder(TArgs args) {
+    return TaskEnqueueBuilder(definition: this, args: args);
+  }
+
   /// Encodes arguments into a JSON-ready map.
   Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
 
@@ -2287,6 +2292,11 @@ class NoArgsTaskDefinition<TResult> {
       meta: meta,
       enqueueOptions: enqueueOptions,
     );
+  }
+
+  /// Creates a fluent enqueue builder for this no-args task definition.
+  TaskEnqueueBuilder<(), TResult> enqueueBuilder() {
+    return asDefinition.enqueueBuilder(());
   }
 
   /// Decodes a persisted payload into a typed result.

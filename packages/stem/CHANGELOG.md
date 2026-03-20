@@ -20,6 +20,9 @@
 - Updated the public no-input task examples to prefer
   `TaskDefinition.noArgs(...)` plus typed `enqueue()` / `enqueueAndWait()`
   helpers instead of reintroducing raw task-name strings in the happy path.
+- Added `TaskDefinition.enqueueBuilder(...)` /
+  `NoArgsTaskDefinition.enqueueBuilder()` so typed tasks now expose the same
+  definition-first fluent builder pattern as typed workflow refs.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

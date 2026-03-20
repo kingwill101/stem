@@ -63,6 +63,24 @@ void main() {
     expect(call.options?.priority, 9);
   });
 
+  test('TaskDefinition.enqueueBuilder creates a fluent builder', () {
+    final definition = TaskDefinition<Map<String, Object?>, Object?>(
+      name: 'demo.task',
+      encodeArgs: (args) => args,
+    );
+
+    final call = definition
+        .enqueueBuilder(const {'a': 1})
+        .priority(7)
+        .header('h1', 'v1')
+        .build();
+
+    expect(call.name, 'demo.task');
+    expect(call.resolveOptions().priority, 7);
+    expect(call.headers, containsPair('h1', 'v1'));
+    expect(call.encodeArgs(), containsPair('a', 1));
+  });
+
   test(
     'TaskEnqueueBuilder.enqueueAndWait reuses typed result decoding',
     () async {
@@ -180,6 +198,16 @@ void main() {
     expect(call.encodeArgs(), isEmpty);
     expect(call.headers, containsPair('h', 'v'));
     expect(call.meta, containsPair('m', 1));
+  });
+
+  test('NoArgsTaskDefinition.enqueueBuilder creates a fluent builder', () {
+    final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+
+    final call = definition.enqueueBuilder().priority(4).build();
+
+    expect(call.name, 'demo.no_args');
+    expect(call.resolveOptions().priority, 4);
+    expect(call.encodeArgs(), isEmpty);
   });
 
   test(
