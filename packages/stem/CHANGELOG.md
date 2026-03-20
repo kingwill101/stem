@@ -26,6 +26,9 @@
 - Simplified the `task_usage_patterns` example to use `StemApp.inMemory(...)`
   instead of manually wiring `Broker`, `Worker`, and `Stem` just to demonstrate
   typed task-definition enqueue and wait helpers.
+- Simplified `example/stem_example.dart` and the getting-started docs that
+  embed it to use `StemApp.fromUrl(...)` plus typed wait helpers instead of
+  manually wiring broker/backend/worker instances.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

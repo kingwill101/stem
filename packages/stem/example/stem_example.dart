@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
@@ -47,27 +46,29 @@ class HelloArgs {
 
 Future<void> main() async {
   // #region getting-started-runtime-setup
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-
-  final stem = Stem(broker: broker, backend: backend, tasks: [HelloTask()]);
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.fromUrl(
+    'redis://localhost:6379',
     tasks: [HelloTask()],
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(backend: 'redis://localhost:6379/1'),
   );
   // #endregion getting-started-runtime-setup
 
   // #region getting-started-enqueue
-  unawaited(worker.start());
   // Map-based enqueue for quick scripts or one-off calls.
-  await stem.enqueue('demo.hello', args: {'name': 'Stem'});
+  final taskId = await app.enqueue('demo.hello', args: {'name': 'Stem'});
+  await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 2));
 
   // Typed helper with TaskDefinition for compile-time safety.
-  await HelloTask.definition(const HelloArgs(name: 'Stem')).enqueue(stem);
-  await Future<void>.delayed(const Duration(seconds: 1));
-  await worker.shutdown();
-  await broker.close();
-  await backend.close();
+  final typedTaskId = await HelloTask.definition.enqueue(
+    app,
+    const HelloArgs(name: 'Stem'),
+  );
+  await HelloTask.definition.waitFor(
+    app,
+    typedTaskId,
+    timeout: const Duration(seconds: 2),
+  );
+  await app.close();
   // #endregion getting-started-enqueue
 }
