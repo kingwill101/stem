@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `decodeResultVersionedJson:` to `TaskDefinition.json(...)` so manual
+  task definitions can keep unversioned DTO args while decoding a
+  version-aware stored result.
 - Added `decodeResultVersionedJson:` to
   `WorkflowRef.versionedJson(...)` / `refVersionedJson(...)` so manual typed
   workflow refs can derive version-aware result decoding alongside versioned

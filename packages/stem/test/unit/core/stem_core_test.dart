@@ -347,6 +347,30 @@ void main() {
     );
 
     test(
+      'json task definitions can derive versioned result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.json(
+          name: 'sample.json.result.versioned',
+          decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
+          defaultDecodeVersion: 2,
+        );
+
+        final id = await stem.enqueueCall(
+          definition.buildCall(const _CodecTaskArgs('encoded')),
+        );
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+
+    test(
       'enqueueCall publishes no-arg definitions without fake empty maps',
       () async {
         final broker = _RecordingBroker();
@@ -724,6 +748,33 @@ void main() {
       final result = await definition.waitFor(
         stem,
         'task-args-versioned-wait',
+      );
+
+      expect(result?.value?.id, 'done-v2');
+      expect(result?.rawPayload, isA<Map<String, Object?>>());
+    });
+
+    test(
+      'supports json argful task definitions with versioned results',
+      () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+      final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.json(
+        name: 'args.json.versioned.wait',
+        decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
+        defaultDecodeVersion: 2,
+      );
+
+      await backend.set(
+        'task-args-json-versioned-wait',
+        TaskState.succeeded,
+        payload: {'id': 'done', PayloadCodec.versionKey: 2},
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+      );
+
+      final result = await definition.waitFor(
+        stem,
+        'task-args-json-versioned-wait',
       );
 
       expect(result?.value?.id, 'done-v2');

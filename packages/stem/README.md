@@ -226,6 +226,9 @@ explicit `__stemPayloadVersion`. Drop down to `TaskDefinition.codec(...)` only
 when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
 string-keyed map (typically `Map<String, dynamic>`) because they are published
 as JSON-shaped data.
+If the args stay unversioned but the stored result carries an explicit schema
+version, `TaskDefinition.json(...)` also accepts
+`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
 
 For manual handlers, use the context arg helpers or the typed payload readers
 on the raw map instead of repeating casts. For workflows, use the context
