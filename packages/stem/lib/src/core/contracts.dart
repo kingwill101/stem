@@ -1910,11 +1910,55 @@ abstract class TaskEnqueuer {
     TaskEnqueueOptions? enqueueOptions,
   });
 
+  /// Enqueue a dynamic-name task using a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers,
+    TaskOptions options,
+    DateTime? notBefore,
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  });
+
   /// Enqueue a typed task call.
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   });
+}
+
+Map<String, Object?> _encodeEnqueuedValue<T>(
+  String taskName,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $taskName must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $taskName must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
 }
 
 /// Provides ambient metadata for task enqueue operations.
@@ -2385,6 +2429,28 @@ class TaskContext implements TaskExecutionContext {
       options: options,
       notBefore: notBefore,
       meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeEnqueuedValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -2920,28 +2986,7 @@ class TaskDefinition<TArgs, TResult> {
     PayloadCodec<T> codec,
     T args,
   ) {
-    final payload = codec.encode(args);
-    if (payload is Map<String, Object?>) {
-      return Map<String, Object?>.from(payload);
-    }
-    if (payload is Map) {
-      final normalized = <String, Object?>{};
-      for (final entry in payload.entries) {
-        final key = entry.key;
-        if (key is! String) {
-          throw StateError(
-            'TaskDefinition.codec($taskName) requires payload keys '
-            'to be strings, got ${key.runtimeType}.',
-          );
-        }
-        normalized[key] = entry.value;
-      }
-      return normalized;
-    }
-    throw StateError(
-      'TaskDefinition.codec($taskName) must encode args to '
-      'Map<String, Object?>, got ${payload.runtimeType}.',
-    );
+    return _encodeEnqueuedValue(taskName, args, codec: codec);
   }
 
   static Map<String, Object?> _encodeJsonArgs<T>(T args, String typeName) {

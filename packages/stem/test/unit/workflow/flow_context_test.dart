@@ -250,4 +250,44 @@ class _RecordingEnqueuer implements TaskEnqueuer {
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
   }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeFlowTaskArgs(name, value, codec: codec),
+      headers: headers,
+      meta: meta,
+      options: options,
+      notBefore: notBefore,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+Map<String, Object?> _encodeFlowTaskArgs<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    return payload.map((key, value) => MapEntry(key.toString(), value));
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
 }

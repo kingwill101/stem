@@ -136,6 +136,35 @@ void main() {
       expect(enqueuer.records.single.args, equals({'value': 42}));
     });
 
+    test('enqueueValue encodes typed payloads through the supplied codec', () async {
+      final enqueuer = _RecordingEnqueuer();
+      final context = TaskContext(
+        id: 'parent-3b',
+        attempt: 1,
+        headers: const {'x-trace-id': 'trace-2'},
+        meta: const {'tenant': 'acme'},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+        enqueuer: enqueuer,
+      );
+
+      await context.enqueueValue(
+        'tasks.child',
+        const _InvitePayload(email: 'ops@example.com'),
+        codec: const PayloadCodec<_InvitePayload>.json(
+          decode: _InvitePayload.fromJson,
+          typeName: '_InvitePayload',
+        ),
+      );
+
+      final record = enqueuer.last!;
+      expect(record.args, equals({'email': 'ops@example.com'}));
+      expect(record.meta[_parentTaskIdKey], equals('parent-3b'));
+      expect(record.meta[_parentAttemptKey], equals(1));
+      expect(record.headers['x-trace-id'], equals('trace-2'));
+    });
+
     test('merges headers/meta overrides with defaults', () async {
       final enqueuer = _RecordingEnqueuer();
       final context = TaskContext(
@@ -470,6 +499,60 @@ class _RecordingEnqueuer implements TaskEnqueuer {
       enqueueOptions: enqueueOptions,
     );
   }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeTestTaskArgs(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+Map<String, Object?> _encodeTestTaskArgs<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    return payload.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
+}
+
+class _InvitePayload {
+  const _InvitePayload({required this.email});
+
+  factory _InvitePayload.fromJson(Map<String, dynamic> json) {
+    return _InvitePayload(email: json['email']! as String);
+  }
+
+  final String email;
+
+  Map<String, Object?> toJson() => {'email': email};
 }
 
 class _RecordingWorkflowCaller implements WorkflowCaller {

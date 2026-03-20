@@ -8,6 +8,7 @@ import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
@@ -108,6 +109,30 @@ class StemApp implements StemTaskApp {
     return stem.enqueue(
       name,
       args: args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    await _ensureStarted();
+    return stem.enqueueValue(
+      name,
+      value,
+      codec: codec,
       headers: headers,
       options: options,
       notBefore: notBefore,

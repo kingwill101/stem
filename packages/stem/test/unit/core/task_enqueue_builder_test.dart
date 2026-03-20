@@ -232,6 +232,20 @@ class _RecordingTaskEnqueuer implements TaskEnqueuer {
     lastCall = call;
     return 'task-1';
   }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    throw UnimplementedError('enqueueValue is not used in this test');
+  }
 }
 
 class _RecordingTaskResultCaller extends _RecordingTaskEnqueuer

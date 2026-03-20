@@ -108,6 +108,29 @@ class StemWorkflowApp
   }
 
   @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueueValue(
+      name,
+      value,
+      codec: codec,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,

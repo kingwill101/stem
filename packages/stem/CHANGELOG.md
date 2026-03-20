@@ -131,6 +131,9 @@
   schema version beside the JSON payload and decode older shapes explicitly.
 - Added `PayloadCodec.versionedMap(...)` for versioned DTO payloads that still
   need a custom map encoder or a nonstandard version-aware decode shape.
+- Added `TaskEnqueuer.enqueueValue(...)` across producers and task/workflow
+  execution contexts so dynamic task names can still enqueue typed DTO payloads
+  through an explicit `PayloadCodec<T>` without hand-built arg maps.
 - Added versioned low-level DTO shortcuts:
   `TaskEnqueuer.enqueueVersionedJson(...)`,
   `WorkflowRuntime.startWorkflowVersionedJson(...)`,
@@ -157,10 +160,10 @@
   `RunState.resultVersionedJson(...)`, and
   `RunState.suspensionPayloadVersionedJson(...)`.
 - Added low-level DTO shortcuts for name-based dispatch:
-  `TaskEnqueuer.enqueueJson(...)`, `WorkflowRuntime.startWorkflowJson(...)`,
+  `WorkflowRuntime.startWorkflowJson(...)`,
   `StemWorkflowApp.startWorkflowJson(...)`, `WorkflowRuntime.emitJson(...)`,
-  and `StemWorkflowApp.emitJson(...)`, so dynamic task, workflow, and
-  workflow-event names can still use `toJson()` inputs without hand-built
+  and `StemWorkflowApp.emitJson(...)`, so dynamic workflow names and
+  workflow-event topics can still use `toJson()` inputs without hand-built
   maps.
 - Added `QueueEventsProducer.emitJson(...)` so queue-scoped custom events can
   publish DTO payloads without hand-built maps.
