@@ -122,6 +122,8 @@ every retry signal and shows how the strategy interacts with broker timings.
 - `context.heartbeat()` – extend the lease to avoid timeouts.
 - `context.extendLease(Duration by)` – request additional processing time.
 - `context.progress(percent, data: {...})` – emit progress signals for UI hooks.
+- `context.progressJson(percent, dto)` – emit DTO progress payloads without
+  hand-built maps.
 
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.

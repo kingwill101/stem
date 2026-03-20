@@ -85,6 +85,9 @@
   `argListJson(...)`, and `paramListJson(...)` so nested DTO lists can be
   decoded directly from durable payload maps without separate codec constants
   or manual list mapping.
+- Added `TaskContext.progressJson(...)` and
+  `TaskInvocationContext.progressJson(...)` so task progress updates can emit
+  DTO payloads without hand-built maps.
 - Added `valueList<T>()`, `valueListOr(...)`, and `requiredValueList(...)` to
   the shared payload-map helpers so canvas chains/chords and other meta-driven
   paths can decode typed list payloads without manual list casts.

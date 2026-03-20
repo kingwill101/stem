@@ -1890,6 +1890,18 @@ class TaskContext
   })
   progress;
 
+  /// Report progress with a JSON-serializable DTO payload.
+  Future<void> progressJson<T>(double percentComplete, T value, {
+    String? typeName,
+  }) {
+    return progress(
+      percentComplete,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
   /// Optional enqueuer for scheduling additional tasks.
   final TaskEnqueuer? enqueuer;
 

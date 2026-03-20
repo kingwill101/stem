@@ -402,6 +402,18 @@ class TaskInvocationContext
   Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
       _progress(percentComplete, data: data);
 
+  /// Report progress with a JSON-serializable DTO payload.
+  Future<void> progressJson<T>(double percentComplete, T value, {
+    String? typeName,
+  }) {
+    return progress(
+      percentComplete,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
   /// Enqueue a task from within a task invocation.
   ///
   /// Headers and metadata from this context are merged into the enqueue

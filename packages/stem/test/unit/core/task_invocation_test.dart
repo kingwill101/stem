@@ -145,6 +145,23 @@ void main() {
     expect(context.argOr<String>('tenant', 'global'), equals('global'));
   });
 
+  test('TaskInvocationContext.local reports progress with JSON DTO payloads', () async {
+    Object? progressData;
+    final context = TaskInvocationContext.local(
+      id: 'task-1b',
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async => progressData = data,
+    );
+
+    await context.progressJson(25, const _ProgressUpdate(stage: 'warming'));
+
+    expect(progressData, equals(const {'stage': 'warming'}));
+  });
+
   test('TaskInvocationContext.local merges headers/meta and lineage', () async {
     final enqueuer = _CapturingEnqueuer('task-1');
     final context = TaskInvocationContext.local(
@@ -531,6 +548,14 @@ class _WorkflowEventPayload {
   const _WorkflowEventPayload(this.value);
 
   final String value;
+}
+
+class _ProgressUpdate {
+  const _ProgressUpdate({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
 }
 
 const PayloadCodec<_WorkflowEventPayload> _eventPayloadCodec =

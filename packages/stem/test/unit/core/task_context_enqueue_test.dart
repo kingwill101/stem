@@ -25,6 +25,24 @@ void main() {
       expect(context.argOr<String>('tenant', 'global'), equals('global'));
     });
 
+    test('reports progress with JSON DTO payloads', () async {
+      Object? progressData;
+      final context = TaskContext(
+        id: 'parent-0b',
+        args: const {},
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async => progressData = data,
+      );
+
+      await context.progressJson(50, const _ProgressUpdate(stage: 'warming'));
+
+      expect(progressData, equals(const {'stage': 'warming'}));
+    });
+
     test('propagates headers/meta and lineage by default', () async {
       final enqueuer = _RecordingEnqueuer();
       final context = TaskContext(
@@ -367,6 +385,14 @@ void main() {
       );
     });
   });
+}
+
+class _ProgressUpdate {
+  const _ProgressUpdate({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
 }
 
 class _ExampleArgs {
