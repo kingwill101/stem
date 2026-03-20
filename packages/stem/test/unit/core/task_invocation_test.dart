@@ -145,6 +145,28 @@ void main() {
     expect(context.argOr<String>('tenant', 'global'), equals('global'));
   });
 
+  test('TaskExecutionContext decodes whole task arg DTOs', () {
+    final TaskExecutionContext context = TaskInvocationContext.local(
+      id: 'task-1a',
+      args: const {'stage': 'warming'},
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+    );
+
+    expect(
+      context.argsJson<_ProgressUpdate>(decode: _ProgressUpdate.fromJson).stage,
+      'warming',
+    );
+    expect(
+      context.argsAs<_ProgressUpdate>(codec: _progressUpdateCodec).stage,
+      'warming',
+    );
+  });
+
   test(
     'TaskInvocationContext.local reports progress with JSON DTO payloads',
     () async {
@@ -606,6 +628,10 @@ class _ProgressUpdate {
 
   Map<String, dynamic> toJson() => {'stage': stage};
 }
+
+const _progressUpdateCodec = PayloadCodec<_ProgressUpdate>.json(
+  decode: _ProgressUpdate.fromJson,
+);
 
 const PayloadCodec<_WorkflowEventPayload> _eventPayloadCodec =
     PayloadCodec<_WorkflowEventPayload>(

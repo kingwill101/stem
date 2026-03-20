@@ -1742,6 +1742,22 @@ abstract interface class TaskInputContext {
 
 /// Typed read helpers for task invocation args.
 extension TaskInputContextArgs on TaskInputContext {
+  /// Decodes the full task-argument payload through [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full task-argument payload as a DTO.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Returns the decoded task arg for [key], or `null`.
   T? arg<T>(String key, {PayloadCodec<T>? codec}) {
     return args.value<T>(key, codec: codec);

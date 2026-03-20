@@ -44,6 +44,22 @@ abstract interface class WorkflowExecutionContext
 
 /// Typed read helpers for workflow start parameters.
 extension WorkflowExecutionContextParams on WorkflowExecutionContext {
+  /// Decodes the full workflow start-parameter payload through [codec].
+  T paramsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(params);
+  }
+
+  /// Decodes the full workflow start-parameter payload as a DTO.
+  T paramsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(params);
+  }
+
   /// Returns the decoded workflow parameter for [key], or `null`.
   T? param<T>(String key, {PayloadCodec<T>? codec}) {
     return params.value<T>(key, codec: codec);

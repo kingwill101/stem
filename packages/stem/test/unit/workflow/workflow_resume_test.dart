@@ -119,7 +119,9 @@ void main() {
     'WorkflowScriptContext.requiredParam decodes codec-backed workflow params',
     () {
       final context = _FakeWorkflowScriptContext(
-        params: const {'payload': {'message': 'approved'}},
+        params: const {
+          'payload': {'message': 'approved'},
+        },
       );
 
       final value = context.requiredParam<_ResumePayload>(
@@ -128,6 +130,38 @@ void main() {
       );
 
       expect(value.message, 'approved');
+    },
+  );
+
+  test(
+    'workflow contexts decode whole workflow param DTOs',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'draft',
+        params: const {'message': 'approved'},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final scriptContext = _FakeWorkflowScriptContext(
+        params: const {'message': 'queued'},
+      );
+
+      expect(
+        flowContext
+            .paramsJson<_ResumePayload>(
+              decode: _ResumePayload.fromJson,
+            )
+            .message,
+        'approved',
+      );
+      expect(
+        scriptContext
+            .paramsAs<_ResumePayload>(codec: _resumePayloadCodec)
+            .message,
+        'queued',
+      );
     },
   );
 

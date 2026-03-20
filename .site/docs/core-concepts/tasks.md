@@ -77,6 +77,15 @@ final customerId = args.requiredValue<String>('customerId');
 final tenant = args.valueOr<String>('tenant', 'global');
 ```
 
+When the whole task arg payload is one DTO, prefer decoding it directly from
+the execution context:
+
+```dart
+final request = context.argsJson<InvoicePayload>(
+  decode: InvoicePayload.fromJson,
+);
+```
+
 `TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and typed task
 definitions can now create a fluent builder directly through
 `definition.prepareEnqueue(...)`. `TaskEnqueuer.prepareEnqueue(...)` remains

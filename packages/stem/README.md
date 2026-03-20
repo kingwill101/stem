@@ -236,6 +236,12 @@ final draft = ctx.requiredParam<ApprovalDraft>(
   'draft',
   codec: approvalDraftCodec,
 );
+final taskArgs = context.argsJson<InvoicePayload>(
+  decode: InvoicePayload.fromJson,
+);
+final workflowParams = ctx.paramsAs<ApprovalDraft>(
+  codec: approvalDraftCodec,
+);
 ```
 
 For typed task calls, the definition and call objects now expose the common
