@@ -609,7 +609,7 @@ class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
 extension WorkflowCallerBuilderExtension on WorkflowCaller {
   /// Creates a caller-bound fluent start builder for a typed workflow ref.
   BoundWorkflowStartBuilder<TParams, TResult>
-  startWorkflowBuilder<TParams, TResult extends Object?>({
+  prepareWorkflowStart<TParams, TResult extends Object?>({
     required WorkflowRef<TParams, TResult> definition,
     required TParams params,
   }) {
@@ -619,15 +619,37 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
     );
   }
 
+  /// Creates a caller-bound fluent start builder for a typed workflow ref.
+  @Deprecated('Use prepareWorkflowStart(...) instead.')
+  BoundWorkflowStartBuilder<TParams, TResult>
+  startWorkflowBuilder<TParams, TResult extends Object?>({
+    required WorkflowRef<TParams, TResult> definition,
+    required TParams params,
+  }) {
+    return prepareWorkflowStart(
+      definition: definition,
+      params: params,
+    );
+  }
+
   /// Creates a caller-bound fluent start builder for a no-args workflow ref.
   BoundWorkflowStartBuilder<(), TResult>
-  startNoArgsWorkflowBuilder<TResult extends Object?>({
+  prepareNoArgsWorkflowStart<TResult extends Object?>({
     required NoArgsWorkflowRef<TResult> definition,
   }) {
     return BoundWorkflowStartBuilder._(
       caller: this,
       builder: definition.startBuilder(),
     );
+  }
+
+  /// Creates a caller-bound fluent start builder for a no-args workflow ref.
+  @Deprecated('Use prepareNoArgsWorkflowStart(...) instead.')
+  BoundWorkflowStartBuilder<(), TResult>
+  startNoArgsWorkflowBuilder<TResult extends Object?>({
+    required NoArgsWorkflowRef<TResult> definition,
+  }) {
+    return prepareNoArgsWorkflowStart(definition: definition);
   }
 }
 

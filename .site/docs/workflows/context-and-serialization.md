@@ -54,7 +54,7 @@ Child workflow starts belong in durable boundaries:
 - `ref.startAndWait(context, params: value)` inside script checkpoints
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to those
   helpers for the normal override cases
-- keep `context.startWorkflowBuilder(...)` for incremental-call assembly when
+- keep `context.prepareWorkflowStart(...)` for incremental-call assembly when
   you genuinely need to build the start request step by step
 
 Do not treat the raw `WorkflowScriptContext` body as a safe place for child

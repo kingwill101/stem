@@ -416,7 +416,7 @@ void main() {
         await workflowApp.start();
 
         final flowBuilder = workflowApp.runtime
-            .startWorkflowBuilder(
+            .prepareWorkflowStart(
               definition: workflowRef,
               params: const {'name': 'builder'},
             )
@@ -437,7 +437,7 @@ void main() {
         expect(state?.parentRunId, 'parent-bound');
 
         final scriptBuilder = workflowApp.runtime
-            .startNoArgsWorkflowBuilder(definition: scriptRef)
+            .prepareNoArgsWorkflowStart(definition: scriptRef)
             .cancellationPolicy(
               const WorkflowCancellationPolicy(
                 maxRunDuration: Duration(seconds: 5),

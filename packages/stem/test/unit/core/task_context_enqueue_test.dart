@@ -292,7 +292,7 @@ void main() {
       );
 
       final result = await context
-          .startWorkflowBuilder(
+          .prepareWorkflowStart(
             definition: definition,
             params: const {'value': 'child'},
           )

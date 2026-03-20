@@ -115,7 +115,7 @@ Child workflows should be started from durable boundaries:
 - `ref.startAndWait(context, params: value)` inside script checkpoints
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
-- keep `context.startWorkflowBuilder(...)` for the rarer incremental-call
+- keep `context.prepareWorkflowStart(...)` for the rarer incremental-call
   cases where you actually want to build the start request step by step
 
 Avoid starting child workflows directly from the raw

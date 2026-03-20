@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` as the
+  clearer names for caller-bound workflow start builders, and deprecated the
+  older `startWorkflowBuilder(...)` / `startNoArgsWorkflowBuilder(...)`
+  aliases.
 - Added `event.awaitOn(step)` for the low-level flow-control event wait path,
   and deprecated `FlowContext.awaitEventRef(...)`.
 - Deprecated script-step `awaitEventRef(...)` in favor of `await event.wait(ctx)`.
