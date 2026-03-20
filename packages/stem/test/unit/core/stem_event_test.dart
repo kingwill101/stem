@@ -61,6 +61,17 @@ void main() {
           'ch_123',
         ),
       );
+      expect(
+        event.resultVersionedJson<_ChargeResult>(
+          version: 2,
+          decode: _ChargeResult.fromVersionedJson,
+        ),
+        isA<_ChargeResult>().having(
+          (value) => value.chargeId,
+          'chargeId',
+          'ch_123',
+        ),
+      );
     });
   });
 }
@@ -69,6 +80,14 @@ class _ChargeResult {
   const _ChargeResult({required this.chargeId});
 
   factory _ChargeResult.fromJson(Map<String, dynamic> json) {
+    return _ChargeResult(chargeId: json['chargeId'] as String);
+  }
+
+  factory _ChargeResult.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _ChargeResult(chargeId: json['chargeId'] as String);
   }
 

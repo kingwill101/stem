@@ -78,6 +78,24 @@ class WorkflowStepEvent implements StemEvent {
     ).decode(stored);
   }
 
+  /// Decodes the step result payload with a version-aware JSON decoder, when
+  /// present.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Optional error message for failed steps.
   final String? error;
 

@@ -75,9 +75,10 @@
   `valueVersionedJson(...)` plus their `...As(codec: ...)` counterparts so
   dashboard/CLI workflow detail views can decode DTO payloads without manual
   casts.
-- Added `WorkflowStepEvent.resultJson(...)` and `resultAs(codec: ...)` so
-  workflow introspection consumers can decode DTO checkpoint results without
-  manual casts.
+- Added `WorkflowStepEvent.resultJson(...)`,
+  `resultVersionedJson(...)`, and `resultAs(codec: ...)` so workflow
+  introspection consumers can decode DTO checkpoint results without manual
+  casts.
 - Added `TaskPostrunPayload.resultJson(...)`,
   `resultVersionedJson(...)`, and `resultAs(codec: ...)` so task lifecycle
   signal consumers can decode DTO task results without manual casts.

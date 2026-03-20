@@ -939,7 +939,8 @@ Checkpoint entries from `viewCheckpoints(...)` and
 `entry.valueJson(...)`, `entry.valueVersionedJson(...)`, and
 `entry.valueAs(codec: ...)`.
 Workflow introspection events expose matching helpers via
-`event.resultJson(...)` and `event.resultAs(codec: ...)`.
+`event.resultJson(...)`, `event.resultVersionedJson(...)`, and
+`event.resultAs(codec: ...)`.
 For lower-level suspension directives, prefer `step.sleepJson(...)`,
 `step.awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)` over
 hand-built maps.

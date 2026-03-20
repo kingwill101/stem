@@ -91,7 +91,8 @@ class LoggingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
 ```
 
 When a completed step or checkpoint carries a DTO payload, prefer
-`event.resultJson(...)` or `event.resultAs(codec: ...)` over manual
+`event.resultJson(...)`, `event.resultVersionedJson(...)`, or
+`event.resultAs(codec: ...)` over manual
 `event.result as Map<String, Object?>` casts.
 
 ## Logging
