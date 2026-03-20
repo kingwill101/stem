@@ -255,6 +255,38 @@ class TaskEnqueueRequest {
   /// Task arguments.
   final Map<String, Object?> args;
 
+  /// Decodes the full task args payload as a typed DTO with [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from JSON.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from version-aware
+  /// JSON.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Task headers.
   final Map<String, String> headers;
 
@@ -263,6 +295,38 @@ class TaskEnqueueRequest {
 
   /// Task metadata.
   final Map<String, Object?> meta;
+
+  /// Decodes the full task metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full task metadata payload as a typed DTO from JSON.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full task metadata payload as a typed DTO from version-aware
+  /// JSON.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// Optional delay before execution.
   final DateTime? notBefore;
@@ -299,6 +363,38 @@ class StartWorkflowRequest {
 
   /// Encoded workflow params.
   final Map<String, Object?> params;
+
+  /// Decodes the full workflow params payload as a typed DTO with [codec].
+  T paramsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(params);
+  }
+
+  /// Decodes the full workflow params payload as a typed DTO from JSON.
+  T paramsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(params);
+  }
+
+  /// Decodes the full workflow params payload as a typed DTO from version-aware
+  /// JSON.
+  T paramsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(params);
+  }
 
   /// Optional parent workflow run id.
   final String? parentRunId;
@@ -353,6 +449,44 @@ class WaitForWorkflowResponse {
   /// Serialized workflow result payload.
   final Map<String, Object?>? result;
 
+  /// Decodes the workflow result payload as a typed DTO with [codec].
+  T? resultAs<T>({required PayloadCodec<T> codec}) {
+    final payload = result;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the workflow result payload as a typed DTO from JSON.
+  T? resultJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = result;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the workflow result payload as a typed DTO from version-aware
+  /// JSON.
+  T? resultVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = result;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Error message when workflow wait fails.
   final String? error;
 }
@@ -370,6 +504,38 @@ class EmitWorkflowEventRequest {
 
   /// Encoded workflow event payload.
   final Map<String, Object?> payload;
+
+  /// Decodes the full workflow event payload as a typed DTO with [codec].
+  T payloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full workflow event payload as a typed DTO from JSON.
+  T payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full workflow event payload as a typed DTO from version-aware
+  /// JSON.
+  T payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 }
 
 /// Response payload for isolate workflow event emit requests.

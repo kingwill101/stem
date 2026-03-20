@@ -469,6 +469,63 @@ void main() {
     ]);
   });
 
+  test('isolate bridge payloads expose typed DTO decode helpers', () {
+    const enqueue = TaskEnqueueRequest(
+      name: 'task.demo',
+      args: {PayloadCodec.versionKey: 2, 'stage': 'warming'},
+      headers: {'x-trace-id': 'trace-1'},
+      options: {},
+      meta: {PayloadCodec.versionKey: 2, 'label': 'queued'},
+    );
+    const start = StartWorkflowRequest(
+      workflowName: 'workflow.demo',
+      params: {PayloadCodec.versionKey: 2, 'value': 'child'},
+    );
+    const wait = WaitForWorkflowResponse(
+      result: {PayloadCodec.versionKey: 2, 'value': 'done'},
+    );
+    const emit = EmitWorkflowEventRequest(
+      topic: 'workflow.ready',
+      payload: {PayloadCodec.versionKey: 2, 'value': 'event'},
+    );
+
+    expect(
+      enqueue.argsVersionedJson<_ProgressUpdate>(
+        version: 2,
+        decode: _ProgressUpdate.fromVersionedJson,
+      ).stage,
+      'warming',
+    );
+    expect(
+      enqueue.metaVersionedJson<_QueueLabel>(
+        version: 2,
+        decode: _QueueLabel.fromVersionedJson,
+      ).label,
+      'queued',
+    );
+    expect(
+      start.paramsVersionedJson<_WorkflowStartPayload>(
+        version: 2,
+        decode: _WorkflowStartPayload.fromVersionedJson,
+      ).value,
+      'child',
+    );
+    expect(
+      wait.resultVersionedJson<_WorkflowResultPayload>(
+        version: 2,
+        decode: _WorkflowResultPayload.fromVersionedJson,
+      )?.value,
+      'done',
+    );
+    expect(
+      emit.payloadVersionedJson<_WorkflowEventPayload>(
+        version: 2,
+        decode: _WorkflowEventPayload.fromVersionedJson,
+      ).value,
+      'event',
+    );
+  });
+
   test('TaskInvocationContext.remote sends control signals', () async {
     final control = ReceivePort();
     addTearDown(control.close);
@@ -693,6 +750,56 @@ void main() {
 
 class _WorkflowEventPayload {
   const _WorkflowEventPayload(this.value);
+
+  factory _WorkflowEventPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowEventPayload(json['value'] as String);
+  }
+
+  final String value;
+}
+
+class _QueueLabel {
+  const _QueueLabel(this.label);
+
+  factory _QueueLabel.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _QueueLabel(json['label'] as String);
+  }
+
+  final String label;
+}
+
+class _WorkflowStartPayload {
+  const _WorkflowStartPayload(this.value);
+
+  factory _WorkflowStartPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowStartPayload(json['value'] as String);
+  }
+
+  final String value;
+}
+
+class _WorkflowResultPayload {
+  const _WorkflowResultPayload(this.value);
+
+  factory _WorkflowResultPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowResultPayload(json['value'] as String);
+  }
 
   final String value;
 }

@@ -157,6 +157,12 @@
 - Added `Envelope.argsJson(...)`, `argsVersionedJson(...)`, `metaJson(...)`,
   and `metaVersionedJson(...)` so low-level producer and signal code can
   decode whole envelope DTO payloads without dropping to raw maps.
+- Added typed DTO readers on isolate bridge payloads like
+  `TaskEnqueueRequest.argsVersionedJson(...)`,
+  `StartWorkflowRequest.paramsVersionedJson(...)`,
+  `WaitForWorkflowResponse.resultVersionedJson(...)`, and
+  `EmitWorkflowEventRequest.payloadVersionedJson(...)` so low-level
+  cross-isolate helpers no longer need manual map casts.
 - Added `valueVersionedJson(...)`, `requiredValueVersionedJson(...)`,
   `valueListVersionedJson(...)`, and
   `requiredValueListVersionedJson(...)` to the shared payload-map helpers so
