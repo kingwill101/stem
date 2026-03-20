@@ -865,7 +865,7 @@ void main() {
   test('emitEvent resumes flows with versioned-map workflow event refs', () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.versionedMap(
       topic: 'user.updated.versioned.map.ref',
-      encode: (value) => value.toLegacyMap(),
+      encode: (value) => {'user_id': value.id},
       version: 3,
       decode: _UserUpdatedEvent.fromVersionedMap,
       typeName: '_UserUpdatedEvent',
@@ -1741,8 +1741,6 @@ class _UserUpdatedEvent {
   final String id;
 
   Map<String, Object?> toJson() => {'id': id};
-
-  Map<String, Object?> toLegacyMap() => {'user_id': id};
 
   static _UserUpdatedEvent fromJson(Map<String, Object?> json) {
     return _UserUpdatedEvent(id: json['id'] as String);

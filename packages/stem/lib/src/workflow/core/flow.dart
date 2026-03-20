@@ -101,6 +101,36 @@ class Flow<T extends Object?> {
     );
   }
 
+  /// Creates a flow definition whose final result is a versioned custom map
+  /// payload.
+  factory Flow.versionedMap({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required Object? Function(T value) encodeResult,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return Flow<T>(
+      name: name,
+      build: build,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedMap(
+        encode: encodeResult,
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
   /// The constructed workflow definition.
   final WorkflowDefinition<T> definition;
 

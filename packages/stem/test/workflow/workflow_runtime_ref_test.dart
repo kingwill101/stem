@@ -29,6 +29,15 @@ class _GreetingResult {
     );
   }
 
+  factory _GreetingResult.fromVersionedMap(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    return _GreetingResult(
+      message: '${json['legacy_message']! as String} v$version',
+    );
+  }
+
   final String message;
 
   Map<String, Object?> toJson() => {'message': message};
@@ -48,8 +57,6 @@ class _LegacyGreetingParams {
   const _LegacyGreetingParams({required this.name});
 
   final String name;
-
-  Map<String, Object?> toLegacyMap() => {'display_name': name};
 
   static _LegacyGreetingParams fromVersionedMap(
     Map<String, dynamic> json,
@@ -248,7 +255,7 @@ void main() {
       );
       final workflowRef = flow.refVersionedMap<_LegacyGreetingParams>(
         version: 3,
-        encodeParams: (params) => params.toLegacyMap(),
+        encodeParams: (params) => {'display_name': params.name},
       );
 
       final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
@@ -544,6 +551,52 @@ void main() {
 
           expect(flowResult?.value?.message, 'hello flow v2');
           expect(scriptResult?.value?.message, 'hello script v2');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'raw workflow definitions expose direct versioned map result helpers',
+      () async {
+        final flow = WorkflowDefinition<_GreetingResult>.flowVersionedMap(
+          name: 'runtime.ref.definition.versioned.map.result.flow',
+          version: 3,
+          encodeResult: (value) => {'legacy_message': value.message},
+          decodeResult: _GreetingResult.fromVersionedMap,
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const _GreetingResult(message: 'hello flow'),
+            );
+          },
+        );
+        final script = WorkflowDefinition<_GreetingResult>.scriptVersionedMap(
+          name: 'runtime.ref.definition.versioned.map.result.script',
+          version: 3,
+          encodeResult: (value) => {'legacy_message': value.message},
+          decodeResult: _GreetingResult.fromVersionedMap,
+          run: (context) async =>
+              const _GreetingResult(message: 'hello script'),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp.registerWorkflows([flow, script]);
+          await workflowApp.start();
+
+          final flowResult = await flow.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+          final scriptResult = await script.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(flowResult?.value?.message, 'hello flow v3');
+          expect(scriptResult?.value?.message, 'hello script v3');
         } finally {
           await workflowApp.shutdown();
         }

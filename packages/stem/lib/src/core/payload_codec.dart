@@ -49,7 +49,7 @@ class PayloadCodec<T> {
   ///
   /// ```dart
   /// const approvalCodec = PayloadCodec<Approval>.versionedMap(
-  ///   encode: (value) => value.toLegacyMap(),
+  ///   encode: (value) => {'legacy_status': value.status},
   ///   version: 2,
   ///   defaultDecodeVersion: 1,
   ///   decode: Approval.fromVersionedMap,

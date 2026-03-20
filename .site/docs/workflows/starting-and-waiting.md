@@ -83,6 +83,8 @@ If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 case. Use `Flow.versionedJson(...)` / `WorkflowScript.versionedJson(...)` when
 the stored result should carry an explicit schema version. Use `Flow.codec(...)`
 or `WorkflowScript.codec(...)` when the result needs a custom payload codec.
+If the result still needs a custom map encoder plus an explicit stored schema
+version, use `Flow.versionedMap(...)` / `WorkflowScript.versionedMap(...)`.
 For manual typed refs, `refVersionedJson(...)` / `WorkflowRef.versionedJson(...)`
 also accept `decodeResultVersionedJson:` when the stored result should carry an
 explicit schema version.
