@@ -120,6 +120,11 @@ Inside isolate entrypoints:
 
 ```
 
+When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
+both `TaskContext` and `TaskInvocationContext` also implement
+`WorkflowCaller`, so handlers and isolate entrypoints can start or wait for
+typed child workflows without dropping to raw workflow-name APIs.
+
 ### Retry from a running task
 
 Handlers can request a retry directly from the context:

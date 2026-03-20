@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Made `TaskContext` and `TaskInvocationContext` implement
+  `WorkflowCaller` when a workflow runtime is attached, so inline handlers and
+  isolate entrypoints can start and wait for typed child workflows directly.
 - Added `awaitEventRef(...)` on flow and script checkpoint resume helpers so
   typed `WorkflowEventRef<T>` values now cover both the common wait-for-value
   path and the lower-level suspend-first path.

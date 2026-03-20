@@ -37,6 +37,9 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Signature for task entrypoints that can run inside isolate executors.
 typedef TaskEntrypoint =
@@ -89,6 +92,30 @@ class EnqueueTaskSignal extends TaskInvocationSignal {
   final SendPort replyPort;
 }
 
+/// Request to start a workflow from an isolate.
+class StartWorkflowSignal extends TaskInvocationSignal {
+  /// Creates a workflow start request signal.
+  const StartWorkflowSignal(this.request, this.replyPort);
+
+  /// Workflow start request payload.
+  final StartWorkflowRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
+/// Request to wait for a workflow from an isolate.
+class WaitForWorkflowSignal extends TaskInvocationSignal {
+  /// Creates a workflow wait request signal.
+  const WaitForWorkflowSignal(this.request, this.replyPort);
+
+  /// Workflow wait request payload.
+  final WaitForWorkflowRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
 /// Enqueue request payload for isolate communication.
 class TaskEnqueueRequest {
   /// Creates an enqueue request payload.
@@ -97,8 +124,8 @@ class TaskEnqueueRequest {
     required this.args,
     required this.headers,
     required this.options,
-    this.notBefore,
     required this.meta,
+    this.notBefore,
     this.enqueueOptions,
   });
 
@@ -136,8 +163,82 @@ class TaskEnqueueResponse {
   final String? error;
 }
 
+/// Workflow start request payload for isolate communication.
+class StartWorkflowRequest {
+  /// Creates a workflow start request payload.
+  const StartWorkflowRequest({
+    required this.workflowName,
+    required this.params,
+    this.parentRunId,
+    this.ttlMs,
+    this.cancellationPolicy,
+  });
+
+  /// Workflow name to start.
+  final String workflowName;
+
+  /// Encoded workflow params.
+  final Map<String, Object?> params;
+
+  /// Optional parent workflow run id.
+  final String? parentRunId;
+
+  /// Optional run TTL in milliseconds.
+  final int? ttlMs;
+
+  /// Optional serialized cancellation policy.
+  final Map<String, Object?>? cancellationPolicy;
+}
+
+/// Response payload for isolate workflow start requests.
+class StartWorkflowResponse {
+  /// Creates a workflow start response payload.
+  const StartWorkflowResponse({this.runId, this.error});
+
+  /// Started workflow run id on success.
+  final String? runId;
+
+  /// Error message when workflow start fails.
+  final String? error;
+}
+
+/// Workflow wait request payload for isolate communication.
+class WaitForWorkflowRequest {
+  /// Creates a workflow wait request payload.
+  const WaitForWorkflowRequest({
+    required this.runId,
+    required this.workflowName,
+    this.pollIntervalMs,
+    this.timeoutMs,
+  });
+
+  /// Workflow run id to wait on.
+  final String runId;
+
+  /// Workflow name used for result decoding.
+  final String workflowName;
+
+  /// Poll interval in milliseconds.
+  final int? pollIntervalMs;
+
+  /// Timeout in milliseconds.
+  final int? timeoutMs;
+}
+
+/// Response payload for isolate workflow wait requests.
+class WaitForWorkflowResponse {
+  /// Creates a workflow wait response payload.
+  const WaitForWorkflowResponse({this.result, this.error});
+
+  /// Serialized workflow result payload.
+  final Map<String, Object?>? result;
+
+  /// Error message when workflow wait fails.
+  final String? error;
+}
+
 /// Context exposed to task entrypoints regardless of execution environment.
-class TaskInvocationContext implements TaskEnqueuer {
+class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
     required String id,
@@ -152,6 +253,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     })
     progress,
     TaskEnqueuer? enqueuer,
+    WorkflowCaller? workflows,
   }) => TaskInvocationContext._(
     id: id,
     headers: headers,
@@ -161,6 +263,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     extendLease: extendLease,
     progress: progress,
     enqueuer: enqueuer,
+    workflows: workflows,
   );
 
   /// Context implementation used when executing inside a worker isolate.
@@ -180,6 +283,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     progress: (percent, {data}) async =>
         controlPort.send(ProgressSignal(percent, data: data)),
     enqueuer: _RemoteTaskEnqueuer(controlPort),
+    workflows: _RemoteWorkflowCaller(controlPort),
   );
 
   /// Internal constructor shared by local and isolate contexts.
@@ -196,10 +300,12 @@ class TaskInvocationContext implements TaskEnqueuer {
     })
     progress,
     TaskEnqueuer? enqueuer,
+    WorkflowCaller? workflows,
   }) : _heartbeat = heartbeat,
        _extendLease = extendLease,
        _progress = progress,
-       _enqueuer = enqueuer;
+       _enqueuer = enqueuer,
+       _workflows = workflows;
 
   /// The unique identifier of the task.
   final String id;
@@ -223,6 +329,9 @@ class TaskInvocationContext implements TaskEnqueuer {
 
   /// Optional delegate used to enqueue tasks from within the invocation.
   final TaskEnqueuer? _enqueuer;
+
+  /// Optional delegate used to start child workflows from the invocation.
+  final WorkflowCaller? _workflows;
 
   /// Notify the worker that the task is still running.
   void heartbeat() => _heartbeat();
@@ -316,6 +425,64 @@ class TaskInvocationContext implements TaskEnqueuer {
     return delegate.enqueueCall(
       mergedCall,
       enqueueOptions: resolvedEnqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
     );
   }
 
@@ -430,5 +597,99 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
       meta: call.meta,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
+  }
+}
+
+class _RemoteWorkflowCaller implements WorkflowCaller {
+  _RemoteWorkflowCaller(this._controlPort);
+
+  final SendPort _controlPort;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      StartWorkflowSignal(
+        StartWorkflowRequest(
+          workflowName: definition.name,
+          params: definition.encodeParams(params),
+          parentRunId: parentRunId,
+          ttlMs: ttl?.inMilliseconds,
+          cancellationPolicy: cancellationPolicy?.toJson(),
+        ),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is StartWorkflowResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      return response.runId ?? '';
+    }
+    throw StateError('Unexpected workflow start response: $response');
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return startWorkflowRef(
+      call.definition,
+      call.params,
+      parentRunId: call.parentRunId,
+      ttl: call.ttl,
+      cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      WaitForWorkflowSignal(
+        WaitForWorkflowRequest(
+          runId: runId,
+          workflowName: definition.name,
+          pollIntervalMs: pollInterval.inMilliseconds,
+          timeoutMs: timeout?.inMilliseconds,
+        ),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is WaitForWorkflowResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      final resultJson = response.result;
+      if (resultJson == null) {
+        return null;
+      }
+      final raw = WorkflowResult<Object?>.fromJson(resultJson);
+      return WorkflowResult<TResult>(
+        runId: raw.runId,
+        status: raw.status,
+        state: raw.state,
+        value: raw.rawResult == null ? null : definition.decode(raw.rawResult),
+        rawResult: raw.rawResult,
+        timedOut: raw.timedOut,
+      );
+    }
+    throw StateError('Unexpected workflow wait response: $response');
   }
 }

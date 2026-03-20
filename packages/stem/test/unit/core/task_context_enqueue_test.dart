@@ -211,6 +211,69 @@ void main() {
       expect(record.options.priority, equals(7));
     });
   });
+
+  group('TaskContext workflows', () {
+    test(
+      'delegates typed child workflow starts to the configured caller',
+      () async {
+        final workflows = _RecordingWorkflowCaller();
+        final context = TaskContext(
+          id: 'parent-workflow-task',
+          attempt: 0,
+          headers: const {},
+          meta: const {},
+          heartbeat: () {},
+          extendLease: (_) async {},
+          progress: (_, {data}) async {},
+          workflows: workflows,
+        );
+        final definition = WorkflowRef<Map<String, Object?>, String>(
+          name: 'workflow.child',
+          encodeParams: (params) => params,
+        );
+
+        final runId = await context.startWorkflowRef(
+          definition,
+          const {'value': 'child'},
+        );
+        final result = await context.waitForWorkflowRef(
+          runId,
+          definition,
+        );
+
+        expect(runId, 'run-1');
+        expect(workflows.lastWorkflowName, 'workflow.child');
+        expect(workflows.lastWorkflowParams, {'value': 'child'});
+        expect(workflows.waitedRunId, 'run-1');
+        expect(result?.value, 'child-result');
+      },
+    );
+
+    test('throws when no workflow caller is configured', () {
+      final context = TaskContext(
+        id: 'no-workflows',
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+      final definition = WorkflowRef<Map<String, Object?>, String>(
+        name: 'workflow.child',
+        encodeParams: (params) => params,
+      );
+
+      expect(
+        () => context.startWorkflowRef(definition, const {'value': 'child'}),
+        throwsStateError,
+      );
+      expect(
+        () => context.waitForWorkflowRef('run-1', definition),
+        throwsStateError,
+      );
+    });
+  });
 }
 
 class _ExampleArgs {
@@ -277,6 +340,64 @@ class _RecordingEnqueuer implements TaskEnqueuer {
       notBefore: call.notBefore,
       meta: call.meta,
       enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+class _RecordingWorkflowCaller implements WorkflowCaller {
+  String? lastWorkflowName;
+  Map<String, Object?>? lastWorkflowParams;
+  String? waitedRunId;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    lastWorkflowName = definition.name;
+    lastWorkflowParams = definition.encodeParams(params);
+    return 'run-1';
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return startWorkflowRef(
+      call.definition,
+      call.params,
+      parentRunId: call.parentRunId,
+      ttl: call.ttl,
+      cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    waitedRunId = runId;
+    return WorkflowResult<TResult>(
+      runId: runId,
+      status: WorkflowStatus.completed,
+      state: RunState(
+        id: runId,
+        workflow: definition.name,
+        status: WorkflowStatus.completed,
+        cursor: 0,
+        params: const {},
+        createdAt: DateTime.utc(2026),
+        result: 'child-result',
+      ),
+      value: definition.decode('child-result'),
+      rawResult: 'child-result',
     );
   }
 }

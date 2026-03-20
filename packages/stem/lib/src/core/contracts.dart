@@ -40,6 +40,9 @@ import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -1683,7 +1686,7 @@ class TaskEnqueueScope {
 }
 
 /// Context passed to handler implementations during execution.
-class TaskContext implements TaskEnqueuer {
+class TaskContext implements TaskEnqueuer, WorkflowCaller {
   /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
@@ -1694,6 +1697,7 @@ class TaskContext implements TaskEnqueuer {
     required this.extendLease,
     required this.progress,
     this.enqueuer,
+    this.workflows,
   });
 
   /// The unique identifier of the task.
@@ -1723,6 +1727,9 @@ class TaskContext implements TaskEnqueuer {
 
   /// Optional enqueuer for scheduling additional tasks.
   final TaskEnqueuer? enqueuer;
+
+  /// Optional workflow caller for starting child workflows.
+  final WorkflowCaller? workflows;
 
   /// Enqueue a task with default context propagation.
   ///
@@ -1808,6 +1815,58 @@ class TaskContext implements TaskEnqueuer {
     return delegate.enqueueCall(
       mergedCall,
       enqueueOptions: resolvedEnqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
     );
   }
 

@@ -569,6 +569,7 @@ class StemWorkflowApp
       appInstance.registry,
       [...moduleTasks, ...tasks],
     );
+    appInstance.worker.workflows = runtime;
     appInstance.register(runtime.workflowRunnerHandler());
 
     [

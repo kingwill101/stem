@@ -123,6 +123,8 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Shutdown modes for workers.
 ///
@@ -270,6 +272,8 @@ class Worker {
   ///   is created and populated from [tasks].
   /// - [enqueuer]: [Stem] instance for spawning child tasks from handlers.
   ///   Created automatically if not provided.
+  /// - [workflows]: Optional workflow caller used when task handlers need to
+  ///   start or wait for child workflows.
   /// - [rateLimiter]: Enforces per-task rate limits. Rate limits are defined
   ///   on individual handlers via [TaskOptions.rateLimit].
   /// - [middleware]: List of middleware for intercepting task lifecycle events.
@@ -304,6 +308,7 @@ class Worker {
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     Stem? enqueuer,
+    WorkflowCaller? workflows,
     RateLimiter? rateLimiter,
     List<Middleware> middleware = const [],
     RevokeStore? revokeStore,
@@ -330,6 +335,7 @@ class Worker {
   }) : this._(
          broker: broker,
          enqueuer: enqueuer,
+         workflows: workflows,
          registry: _resolveTaskRegistry(registry, tasks),
          backend: backend,
          rateLimiter: rateLimiter,
@@ -362,6 +368,7 @@ class Worker {
     required this.registry,
     required this.backend,
     required Stem? enqueuer,
+    this.workflows,
     this.rateLimiter,
     this.middleware = const [],
     this.revokeStore,
@@ -425,7 +432,6 @@ class Worker {
           signer: signer,
           encoderRegistry: payloadEncoders,
         );
-
     _maxConcurrency = this.concurrency;
 
     final autoscaleMax =
@@ -550,6 +556,10 @@ class Worker {
 
   /// Enqueuer used by task contexts for spawning new work.
   Stem? _enqueuer;
+
+  /// Workflow caller used by task contexts for child workflow operations.
+  /// Active workflow caller used by task handlers, if configured.
+  WorkflowCaller? workflows;
 
   static final math.Random _random = math.Random();
 
@@ -968,6 +978,7 @@ class Worker {
             _reportProgress(envelope, progress, data: data);
           },
           enqueuer: _enqueuer,
+          workflows: workflows,
         );
 
         await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
@@ -1938,7 +1949,7 @@ class Worker {
           envelope,
           extra: {
             'error': error.message,
-            if (error.keyId != null) 'keyId': error.keyId!,
+            if (error.keyId != null) 'keyId': error.keyId,
           },
         ),
       ),
@@ -4516,8 +4527,74 @@ class Worker {
             TaskEnqueueResponse(error: error.toString()),
           );
         }
+      } else if (signal is StartWorkflowSignal) {
+        try {
+          final workflows = this.workflows;
+          if (workflows == null) {
+            signal.replyPort.send(
+              const StartWorkflowResponse(
+                error: 'No workflow caller configured',
+              ),
+            );
+            return;
+          }
+          final runId = await workflows.startWorkflowRef(
+            _workerWorkflowRef(signal.request.workflowName),
+            signal.request.params,
+            parentRunId: signal.request.parentRunId,
+            ttl: signal.request.ttlMs == null
+                ? null
+                : Duration(milliseconds: signal.request.ttlMs!),
+            cancellationPolicy: WorkflowCancellationPolicy.fromJson(
+              signal.request.cancellationPolicy,
+            ),
+          );
+          signal.replyPort.send(StartWorkflowResponse(runId: runId));
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            StartWorkflowResponse(error: error.toString()),
+          );
+        }
+      } else if (signal is WaitForWorkflowSignal) {
+        try {
+          final workflows = this.workflows;
+          if (workflows == null) {
+            signal.replyPort.send(
+              const WaitForWorkflowResponse(
+                error: 'No workflow caller configured',
+              ),
+            );
+            return;
+          }
+          final result = await workflows.waitForWorkflowRef(
+            signal.request.runId,
+            _workerWorkflowRef(signal.request.workflowName),
+            pollInterval: signal.request.pollIntervalMs == null
+                ? const Duration(milliseconds: 100)
+                : Duration(milliseconds: signal.request.pollIntervalMs!),
+            timeout: signal.request.timeoutMs == null
+                ? null
+                : Duration(milliseconds: signal.request.timeoutMs!),
+          );
+          signal.replyPort.send(
+            WaitForWorkflowResponse(
+              result: result?.toJson(),
+            ),
+          );
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            WaitForWorkflowResponse(error: error.toString()),
+          );
+        }
       }
     };
+  }
+
+  WorkflowRef<Map<String, Object?>, Object?> _workerWorkflowRef(String name) {
+    return WorkflowRef<Map<String, Object?>, Object?>(
+      name: name,
+      encodeParams: (params) => params,
+    );
   }
 
   /// Lazily creates or returns the worker isolate pool.

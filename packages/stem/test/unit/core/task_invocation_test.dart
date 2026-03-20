@@ -2,6 +2,11 @@ import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/task_invocation.dart';
+import 'package:stem/src/workflow/core/run_state.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:test/test.dart';
 
 class _CapturingEnqueuer implements TaskEnqueuer {
@@ -39,6 +44,64 @@ class _CapturingEnqueuer implements TaskEnqueuer {
     lastCall = call;
     lastOptions = enqueueOptions;
     return _taskId;
+  }
+}
+
+class _CapturingWorkflowCaller implements WorkflowCaller {
+  String? lastWorkflowName;
+  Map<String, Object?>? lastWorkflowParams;
+  String? waitedRunId;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    lastWorkflowName = definition.name;
+    lastWorkflowParams = definition.encodeParams(params);
+    return 'run-1';
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return startWorkflowRef(
+      call.definition,
+      call.params,
+      parentRunId: call.parentRunId,
+      ttl: call.ttl,
+      cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    waitedRunId = runId;
+    return WorkflowResult<TResult>(
+      runId: runId,
+      status: WorkflowStatus.completed,
+      state: RunState(
+        id: runId,
+        workflow: definition.name,
+        status: WorkflowStatus.completed,
+        cursor: 0,
+        params: const {},
+        createdAt: DateTime.utc(2026),
+        result: 'workflow-result',
+      ),
+      value: definition.decode('workflow-result'),
+      rawResult: 'workflow-result',
+    );
   }
 }
 
@@ -150,6 +213,36 @@ void main() {
     },
   );
 
+  test('TaskInvocationContext.local delegates typed workflow calls', () async {
+    final workflows = _CapturingWorkflowCaller();
+    final context = TaskInvocationContext.local(
+      id: 'root-task',
+      headers: const {},
+      meta: const {},
+      attempt: 1,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+      workflows: workflows,
+    );
+    final definition = WorkflowRef<Map<String, Object?>, String>(
+      name: 'workflow.child',
+      encodeParams: (params) => params,
+    );
+
+    final runId = await context.startWorkflowRef(
+      definition,
+      const {'value': 'child'},
+    );
+    final result = await context.waitForWorkflowRef(runId, definition);
+
+    expect(runId, 'run-1');
+    expect(workflows.lastWorkflowName, 'workflow.child');
+    expect(workflows.lastWorkflowParams, {'value': 'child'});
+    expect(workflows.waitedRunId, 'run-1');
+    expect(result?.value, 'workflow-result');
+  });
+
   test('TaskInvocationContext.remote sends control signals', () async {
     final control = ReceivePort();
     addTearDown(control.close);
@@ -187,6 +280,63 @@ void main() {
     expect(signals.any((signal) => signal is EnqueueTaskSignal), isTrue);
   });
 
+  test(
+    'TaskInvocationContext.remote proxies workflow start and wait',
+    () async {
+      final control = ReceivePort();
+      addTearDown(control.close);
+
+      control.listen((message) {
+        if (message is StartWorkflowSignal) {
+          message.replyPort.send(
+            const StartWorkflowResponse(runId: 'remote-run'),
+          );
+        } else if (message is WaitForWorkflowSignal) {
+          message.replyPort.send(
+            WaitForWorkflowResponse(
+              result: WorkflowResult<Object?>(
+                runId: message.request.runId,
+                status: WorkflowStatus.completed,
+                state: RunState(
+                  id: message.request.runId,
+                  workflow: message.request.workflowName,
+                  status: WorkflowStatus.completed,
+                  cursor: 0,
+                  params: const {},
+                  createdAt: DateTime.utc(2026),
+                  result: 'workflow-result',
+                ),
+                value: 'workflow-result',
+                rawResult: 'workflow-result',
+              ).toJson(),
+            ),
+          );
+        }
+      });
+
+      final context = TaskInvocationContext.remote(
+        id: 'remote-task',
+        controlPort: control.sendPort,
+        headers: const {},
+        meta: const {},
+        attempt: 0,
+      );
+      final definition = WorkflowRef<Map<String, Object?>, String>(
+        name: 'workflow.child',
+        encodeParams: (params) => params,
+      );
+
+      final runId = await context.startWorkflowRef(
+        definition,
+        const {'value': 'child'},
+      );
+      final result = await context.waitForWorkflowRef(runId, definition);
+
+      expect(runId, 'remote-run');
+      expect(result?.value, 'workflow-result');
+    },
+  );
+
   test('TaskInvocationContext.remote surfaces enqueue errors', () async {
     final control = ReceivePort();
     addTearDown(control.close);
@@ -207,6 +357,36 @@ void main() {
 
     await expectLater(
       () => context.enqueue('demo.remote'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test('TaskInvocationContext.remote surfaces workflow errors', () async {
+    final control = ReceivePort();
+    addTearDown(control.close);
+
+    control.listen((message) {
+      if (message is StartWorkflowSignal) {
+        message.replyPort.send(
+          const StartWorkflowResponse(error: 'workflow nope'),
+        );
+      }
+    });
+
+    final context = TaskInvocationContext.remote(
+      id: 'remote-task',
+      controlPort: control.sendPort,
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+    );
+    final definition = WorkflowRef<Map<String, Object?>, String>(
+      name: 'workflow.child',
+      encodeParams: (params) => params,
+    );
+
+    await expectLater(
+      () => context.startWorkflowRef(definition, const {'value': 'child'}),
       throwsA(isA<StateError>()),
     );
   });

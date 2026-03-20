@@ -299,6 +299,31 @@ class ParentTask implements TaskHandler<void> {
 }
 ```
 
+When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
+`TaskContext` and `TaskInvocationContext` can also start typed child workflows:
+
+```dart
+final childWorkflow = Flow<String>(
+  name: 'demo.child.workflow',
+  build: (flow) {
+    flow.step('complete', (ctx) async => 'done');
+  },
+);
+
+final childWorkflowRef = childWorkflow.ref0();
+
+class ParentTask implements TaskHandler<String> {
+  @override
+  String get name => 'demo.parent';
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    final result = await childWorkflowRef.startAndWaitWith(context);
+    return result?.value ?? 'missing';
+  }
+}
+```
+
 ### Bootstrap helpers
 
 Spin up a full runtime in one call using the bootstrap APIs:

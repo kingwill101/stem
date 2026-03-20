@@ -13,6 +13,15 @@ final _childDefinition = TaskDefinition<_ChildArgs, void>(
   encodeArgs: (args) => {'value': args.value},
 );
 
+final Flow<String> _childWorkflow = Flow<String>(
+  name: 'tasks.child.workflow',
+  build: (flow) {
+    flow.step('complete', (context) async => 'workflow-child');
+  },
+);
+
+final NoArgsWorkflowRef<String> _childWorkflowRef = _childWorkflow.ref0();
+
 void main() {
   group('TaskInvocationContext enqueue', () {
     test('enqueues from isolate entrypoint using builder', () async {
@@ -55,6 +64,24 @@ void main() {
 
       await worker.shutdown();
       broker.dispose();
+    });
+
+    test('starts child workflows from isolate entrypoints', () async {
+      final app = await StemWorkflowApp.inMemory(
+        tasks: [_IsolateStartWorkflowTask()],
+        flows: [_childWorkflow],
+      );
+
+      final taskId = await app.enqueue('tasks.isolate.start.workflow');
+      final result = await app.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 3),
+      );
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.value, equals('workflow-child'));
+
+      await app.close();
     });
   });
 
@@ -453,4 +480,34 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
   );
   await builder.enqueue(context);
   return null;
+}
+
+class _IsolateStartWorkflowTask implements TaskHandler<String> {
+  @override
+  String get name => 'tasks.isolate.start.workflow';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => _isolateStartWorkflowEntrypoint;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    return '';
+  }
+}
+
+FutureOr<Object?> _isolateStartWorkflowEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  final result = await _childWorkflowRef.startAndWaitWith(
+    context,
+    timeout: const Duration(seconds: 2),
+  );
+  return result?.value;
 }
