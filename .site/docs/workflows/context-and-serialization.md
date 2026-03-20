@@ -38,8 +38,9 @@ Depending on the context type, you can access:
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `idempotencyKey(...)`
-- `workflows` for typed child-workflow starts from durable step/checkpoint
-  contexts
+- direct child-workflow start helpers such as
+  `StemWorkflowDefinitions.someWorkflow.startWith(context, (...))` and
+  `startAndWaitWith(context, (...))`
 - direct task enqueue APIs because `FlowContext`,
   `WorkflowScriptStepContext`, and `TaskInvocationContext` all implement
   `TaskEnqueuer`
@@ -47,8 +48,10 @@ Depending on the context type, you can access:
 
 Child workflow starts belong in durable boundaries:
 
-- `FlowContext.workflows` inside flow steps
-- `WorkflowScriptStepContext.workflows` inside script checkpoints
+- `StemWorkflowDefinitions.someWorkflow.startWith(context, (...))` inside flow
+  steps
+- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, (...))`
+  inside script checkpoints
 
 Do not treat the raw `WorkflowScriptContext` body as a safe place for child
 starts or other replay-sensitive side effects.

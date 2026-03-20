@@ -16,8 +16,7 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext
-    implements WorkflowChildCallerContext, TaskEnqueuer, WorkflowCaller {
+class FlowContext implements TaskEnqueuer, WorkflowCaller {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -59,7 +58,6 @@ class FlowContext
   final TaskEnqueuer? enqueuer;
 
   /// Optional typed workflow caller for spawning child workflows.
-  @override
   final WorkflowCaller? workflows;
   final WorkflowClock _clock;
 

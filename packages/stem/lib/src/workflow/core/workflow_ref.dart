@@ -111,22 +111,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
     ).startWith(caller);
   }
 
-  /// Starts this workflow ref directly with a workflow child-caller [context].
-  Future<String> startWithContext(
-    WorkflowChildCallerContext context,
-    TParams params, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return call(
-      params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startWithContext(context);
-  }
-
   /// Starts this workflow ref with [caller] and waits for the result.
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller,
@@ -144,29 +128,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
       cancellationPolicy: cancellationPolicy,
     ).startAndWaitWith(
       caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
-
-  /// Starts this workflow ref with a workflow child-caller [context] and
-  /// waits for the result.
-  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
-    WorkflowChildCallerContext context,
-    TParams params, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return call(
-      params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startAndWaitWithContext(
-      context,
       pollInterval: pollInterval,
       timeout: timeout,
     );
@@ -223,20 +184,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     ).startWith(caller);
   }
 
-  /// Starts this workflow ref directly with a workflow child-caller [context].
-  Future<String> startWithContext(
-    WorkflowChildCallerContext context, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return call(
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startWithContext(context);
-  }
-
   /// Starts this workflow ref with [caller] and waits for the result.
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller, {
@@ -252,27 +199,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
       cancellationPolicy: cancellationPolicy,
     ).startAndWaitWith(
       caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
-
-  /// Starts this workflow ref with a workflow child-caller [context] and waits
-  /// for the result.
-  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
-    WorkflowChildCallerContext context, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return call(
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startAndWaitWithContext(
-      context,
       pollInterval: pollInterval,
       timeout: timeout,
     );
@@ -321,12 +247,6 @@ abstract interface class WorkflowCaller {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   });
-}
-
-/// Shared contract for contexts that can spawn child workflows.
-abstract interface class WorkflowChildCallerContext {
-  /// Optional typed workflow caller for spawning child workflows.
-  WorkflowCaller? get workflows;
 }
 
 /// Typed start request built from a [WorkflowRef].
@@ -384,17 +304,6 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     return caller.startWorkflowCall(this);
   }
 
-  /// Starts this typed workflow call with a workflow child-caller [context].
-  Future<String> startWithContext(WorkflowChildCallerContext context) {
-    final caller = context.workflows;
-    if (caller == null) {
-      throw StateError(
-        'This workflow context does not support starting child workflows.',
-      );
-    }
-    return startWith(caller);
-  }
-
   /// Starts this typed workflow call with [caller] and waits for the result.
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller, {
@@ -405,26 +314,6 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     return definition.waitForWith(
       caller,
       runId,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
-
-  /// Starts this typed workflow call with a workflow child-caller [context]
-  /// and waits for the result.
-  Future<WorkflowResult<TResult>?> startAndWaitWithContext(
-    WorkflowChildCallerContext context, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    final caller = context.workflows;
-    if (caller == null) {
-      throw StateError(
-        'This workflow context does not support starting child workflows.',
-      );
-    }
-    return startAndWaitWith(
-      caller,
       pollInterval: pollInterval,
       timeout: timeout,
     );

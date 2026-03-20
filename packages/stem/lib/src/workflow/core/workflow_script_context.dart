@@ -32,7 +32,7 @@ abstract class WorkflowScriptContext {
 /// Context provided to each script checkpoint invocation. Mirrors
 /// [FlowContext] but tailored for the facade helpers.
 abstract class WorkflowScriptStepContext
-    implements WorkflowChildCallerContext, TaskEnqueuer, WorkflowCaller {
+    implements TaskEnqueuer, WorkflowCaller {
   /// Name of the workflow currently executing.
   String get workflow;
 
@@ -76,7 +76,6 @@ abstract class WorkflowScriptStepContext
   TaskEnqueuer? get enqueuer;
 
   /// Optional typed workflow caller for spawning child workflows.
-  @override
   WorkflowCaller? get workflows;
 
   @override

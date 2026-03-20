@@ -8,6 +8,10 @@
   directly so child workflows can start and wait through
   `WorkflowStartCall.startWith(...)` / `startAndWaitWith(...)` without special
   context-only helper variants.
+- Removed the redundant `startWithContext(...)` /
+  `startAndWaitWithContext(...)` workflow-ref helpers and the separate
+  `WorkflowChildCallerContext` contract so child workflow starts consistently
+  target the direct `WorkflowCaller` surface.
 - Simplified generated annotated task usage so `StemTaskDefinitions.*` is the
   canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
   `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated
