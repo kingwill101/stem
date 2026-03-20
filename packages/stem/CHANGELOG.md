@@ -31,6 +31,9 @@
 - Added `TaskStatus.payloadJson(...)` and `payloadAs(codec: ...)` so existing
   raw task-status reads can decode whole DTO payloads without another
   cast/closure.
+- Added `TaskResult.payloadJson(...)` and `payloadAs(codec: ...)` so raw typed
+  task-wait results can decode whole DTO payloads without another
+  cast/closure.
 - Added `WorkflowResult.payloadJson(...)` and `payloadAs(codec: ...)` so raw
   workflow completion results can decode whole DTO payloads without another
   cast/closure.

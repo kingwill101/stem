@@ -1,4 +1,5 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_result.dart';
 import 'package:test/test.dart';
 
@@ -55,6 +56,35 @@ void main() {
     expect(result.requiredValue(), 42);
   });
 
+  test('TaskResult exposes raw payload decode helpers', () {
+    final codec = PayloadCodec<Map<String, Object?>>.map(
+      encode: (value) => value,
+      decode: (json) => json,
+      typeName: 'ReceiptMap',
+    );
+    final result = TaskResult<Object?>(
+      taskId: 'task-1',
+      status: TaskStatus(
+        id: 'task-1',
+        state: TaskState.succeeded,
+        attempt: 0,
+        payload: const {'id': 'receipt-1'},
+      ),
+      rawPayload: const {'id': 'receipt-1'},
+    );
+
+    expect(
+      result.payloadAs<Map<String, Object?>>(codec: codec),
+      equals(const {'id': 'receipt-1'}),
+    );
+    expect(
+      result.payloadJson<_TaskReceipt>(
+        decode: _TaskReceipt.fromJson,
+      ),
+      isA<_TaskReceipt>().having((value) => value.id, 'id', 'receipt-1'),
+    );
+  });
+
   test('TaskResult.requiredValue throws when value is absent', () {
     final result = TaskResult<int>(
       taskId: 'task-1',
@@ -77,4 +107,14 @@ void main() {
       );
     expect(result.valueOr(7), 7);
   });
+}
+
+class _TaskReceipt {
+  const _TaskReceipt({required this.id});
+
+  factory _TaskReceipt.fromJson(Map<String, dynamic> json) {
+    return _TaskReceipt(id: json['id'] as String);
+  }
+
+  final String id;
 }

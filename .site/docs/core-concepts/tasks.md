@@ -58,6 +58,9 @@ For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
 If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
 `status.payloadAs(codec: ...)` to decode the whole payload DTO without a
 separate cast/closure.
+If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
+or `result.payloadAs(codec: ...)` to decode the stored task result DTO
+without another cast/closure.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you

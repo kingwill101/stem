@@ -1,4 +1,5 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart' show Stem;
 import 'package:stem/stem.dart' show Stem;
 
@@ -35,6 +36,26 @@ class TaskResult<T extends Object?> {
       );
     }
     return resolved;
+  }
+
+  /// Decodes the raw persisted task payload with [codec].
+  TResult? payloadAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = rawPayload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the raw persisted task payload with a JSON decoder.
+  TResult? payloadJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = rawPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
   }
 
   /// Raw payload stored by the backend (useful for debugging or manual casts).
