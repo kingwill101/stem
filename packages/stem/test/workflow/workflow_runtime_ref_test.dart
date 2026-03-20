@@ -486,7 +486,8 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final builtScriptCall = script.ref0().buildStart(
+        final builtScriptCall = script.ref0().asRef.buildStart(
+          params: (),
           cancellationPolicy: const WorkflowCancellationPolicy(
             maxRunDuration: Duration(seconds: 5),
           ),
@@ -558,7 +559,8 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-bound');
 
-        final builtScriptCall = scriptRef.buildStart(
+        final builtScriptCall = scriptRef.asRef.buildStart(
+          params: (),
           cancellationPolicy: const WorkflowCancellationPolicy(
             maxRunDuration: Duration(seconds: 5),
           ),

@@ -164,10 +164,11 @@ void main() {
       expect(updated.meta['m2'], 2);
     });
 
-    test('NoArgsTaskDefinition.buildCall builds an empty payload call', () {
+    test('NoArgsTaskDefinition.asDefinition.buildCall builds an empty call', () {
       final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-      final call = definition.buildCall(
+      final call = definition.asDefinition.buildCall(
+        (),
         headers: const {'h': 'v'},
         meta: const {'m': 1},
       );
@@ -178,10 +179,11 @@ void main() {
       expect(call.meta, containsPair('m', 1));
     });
 
-    test('NoArgsTaskDefinition.buildCall accepts direct overrides', () {
+    test('NoArgsTaskDefinition.asDefinition.buildCall accepts overrides', () {
       final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-      final call = definition.buildCall(
+      final call = definition.asDefinition.buildCall(
+        (),
         options: const TaskOptions(priority: 4),
       );
 
@@ -270,19 +272,6 @@ class _RecordingTaskResultCaller extends _RecordingTaskEnqueuer
       ),
       value: value,
       rawPayload: 'stored',
-    );
-  }
-
-  @override
-  Future<TaskResult<TResult>?> waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) {
-    return waitForTask<TResult>(
-      taskId,
-      timeout: timeout,
-      decode: (payload) => definition.decode(payload) as TResult,
     );
   }
 }

@@ -86,7 +86,7 @@ payloads that do not yet carry a stored version marker.
 For workflows without start params, start directly from the flow or script
 itself with `start(...)` or `startAndWait(...)`. When you need an explicit
 low-level transport object for `startWorkflowCall(...)`, build it with
-`ref0().buildStart(...)`. Treat `WorkflowStartCall` as the explicit low-level
+`ref0().asRef.buildStart(params: ())`. Treat `WorkflowStartCall` as the explicit low-level
 transport object, not the normal happy path. Use `ref0()` when another API
 specifically needs a `NoArgsWorkflowRef`.
 

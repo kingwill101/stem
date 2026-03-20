@@ -213,17 +213,6 @@ abstract class StemClient implements TaskResultCaller {
     );
   }
 
-  /// Waits for a task result using a typed [definition] for decoding.
-  @override
-  Future<TaskResult<TResult>?>
-  waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) {
-    return stem.waitForTaskDefinition(taskId, definition, timeout: timeout);
-  }
-
   /// Payload encoder registry used for task args/results.
   TaskPayloadEncoderRegistry get encoderRegistry;
 

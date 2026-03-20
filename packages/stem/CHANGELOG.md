@@ -4,14 +4,14 @@
 
 - Removed `WorkflowRef.call(...)` as a duplicate workflow-start convenience.
   The direct `start(...)` / `startAndWait(...)` helpers remain the happy path,
-  and `prepareStart(...).build()` remains the explicit prebuilt-call path.
+  and `buildStart(...)` remains the explicit prebuilt-call path.
 - Removed `NoArgsWorkflowRef.prepareStart()` as a duplicate no-args builder
   wrapper. Use direct `start(...)` / `startAndWait(...)` for the happy path,
-  or `ref0().asRef.prepareStart(())` when you need an explicit prebuilt call.
+  or `ref0().asRef.buildStart(params: ())` when you need an explicit prebuilt
+  call.
 - Removed `TaskDefinition.call(...)` as a duplicate task-enqueue convenience.
   The direct `enqueue(...)` / `enqueueAndWait(...)` helpers remain the happy
-  path, and `prepareEnqueue(args).build()` remains the explicit prebuilt-call
-  path.
+  path, and `buildCall(args, ...)` remains the explicit prebuilt-call path.
 - Removed the `TaskCall.enqueue(...)` / `enqueueAndWait(...)` and
   `WorkflowStartCall.start(...)` / `startAndWait(...)` dispatch wrappers.
   Prebuilt transport objects now dispatch explicitly through
@@ -27,10 +27,10 @@
   needed.
 - Clarified docs so direct `start(...)` / `startAndWait(...)` and
   `enqueue(...)` / `enqueueAndWait(...)` are the default happy path, with
-  `prepareStart(...)` and `prepareEnqueue(...)` positioned as advanced
-  override builders.
+  `buildStart(...)` and `buildCall(...)` positioned as the explicit advanced
+  transport path.
 - Removed the caller/context `prepareStart(...)` and `prepareEnqueue(...)`
-  wrapper entrypoints so the advanced builder path now hangs directly off
+  wrapper entrypoints so the explicit transport path now hangs directly off
   `WorkflowRef` and `TaskDefinition`.
 - Clarified docs so `TaskCall` and `WorkflowStartCall` are described as the
   explicit low-level transport path, not peer happy-path APIs beside direct
@@ -38,6 +38,10 @@
 - Added direct `buildCall(...)` / `buildStart(...)` helpers on task/workflow
   definitions so the explicit transport path no longer requires
   `prepare...().build()` when all overrides are already known.
+- Removed no-args `buildCall()` / `buildStart()` transport wrappers in favor
+  of the explicit typed surfaces:
+  `definition.asDefinition.buildCall(())` and
+  `ref0().asRef.buildStart(params: ())`.
 - Removed `WorkflowRef.prepareStart(...)` and `WorkflowStartBuilder`; the
   explicit workflow transport path now uses `buildStart(...)` plus
   `copyWith(...)` when advanced overrides are needed.

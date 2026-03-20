@@ -657,7 +657,7 @@ void main() {
     });
   });
 
-  group('Stem.waitForTaskDefinition', () {
+  group('TaskDefinition.waitFor', () {
     test('does not double decode codec-backed terminal results', () async {
       final backend = _codecAwareBackend();
       final stem = _codecAwareStem(backend);
@@ -669,9 +669,9 @@ void main() {
         meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
       );
 
-      final result = await stem.waitForTaskDefinition(
+      final result = await _codecReceiptDefinition.waitFor(
+        stem,
         'task-terminal',
-        _codecReceiptDefinition,
       );
 
       expect(result?.value?.id, 'receipt-terminal');
@@ -693,9 +693,9 @@ void main() {
         }),
       );
 
-      final result = await stem.waitForTaskDefinition(
+      final result = await _codecReceiptDefinition.waitFor(
+        stem,
         'task-watched',
-        _codecReceiptDefinition,
         timeout: const Duration(seconds: 1),
       );
 

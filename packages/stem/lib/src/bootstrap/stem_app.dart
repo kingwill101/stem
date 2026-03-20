@@ -156,17 +156,6 @@ class StemApp implements StemTaskApp {
     );
   }
 
-  @override
-  Future<TaskResult<TResult>?>
-  waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) async {
-    await _ensureStarted();
-    return stem.waitForTaskDefinition(taskId, definition, timeout: timeout);
-  }
-
   void _insertAutoDisposers(
     List<Future<void> Function()> autoDisposers,
   ) {

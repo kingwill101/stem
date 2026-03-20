@@ -92,14 +92,6 @@ abstract interface class TaskResultCaller implements TaskEnqueuer {
     TResult Function(Map<String, dynamic> payload, int version)?
     decodeVersionedJson,
   });
-
-  /// Waits for [taskId] using a typed [definition] for result decoding.
-  Future<TaskResult<TResult>?>
-  waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  });
 }
 
 /// Facade used by producer applications to enqueue tasks.
@@ -609,39 +601,6 @@ class Stem implements TaskResultCaller {
     return completer.future;
   }
 
-  /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
-  @override
-  Future<TaskResult<TResult>?>
-  waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) {
-    return waitForTask<TResult>(
-      taskId,
-      timeout: timeout,
-      decode: (payload) {
-        TResult? value;
-        try {
-          value = definition.decode(payload);
-        } on Object {
-          if (payload is TResult) {
-            value = payload;
-          } else {
-            rethrow;
-          }
-        }
-        if (value == null && null is! TResult) {
-          throw StateError(
-            'Task definition "${definition.name}" decoded a null result '
-            'for non-nullable type $TResult.',
-          );
-        }
-        return value as TResult;
-      },
-    );
-  }
-
   /// Executes the enqueue middleware chain in order.
   Future<void> _runEnqueueMiddleware(
     Envelope envelope,
@@ -1144,6 +1103,29 @@ Future<String> _enqueueBuiltTaskCall(
   );
 }
 
+TResult _decodeTaskDefinitionResult<TArgs, TResult extends Object?>(
+  TaskDefinition<TArgs, TResult> definition,
+  Object? payload,
+) {
+  TResult? value;
+  try {
+    value = definition.decode(payload);
+  } on Object {
+    if (payload is TResult) {
+      value = payload;
+    } else {
+      rethrow;
+    }
+  }
+  if (value == null && null is! TResult) {
+    throw StateError(
+      'Task definition "${definition.name}" decoded a null result '
+      'for non-nullable type $TResult.',
+    );
+  }
+  return value as TResult;
+}
+
 
 /// Convenience helpers for waiting on typed task definitions.
 extension TaskDefinitionExtension<TArgs, TResult extends Object?>
@@ -1210,7 +1192,11 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     String taskId, {
     Duration? timeout,
   }) {
-    return caller.waitForTaskDefinition(taskId, this, timeout: timeout);
+    return caller.waitForTask<TResult>(
+      taskId,
+      timeout: timeout,
+      decode: (payload) => _decodeTaskDefinitionResult(this, payload),
+    );
   }
 }
 
@@ -1228,7 +1214,8 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
   }) {
     return _enqueueBuiltTaskCall(
       enqueuer,
-      buildCall(
+      asDefinition.buildCall(
+        (),
         headers: headers,
         options: options,
         notBefore: notBefore,
@@ -1245,7 +1232,7 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     String taskId, {
     Duration? timeout,
   }) {
-    return caller.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
+    return asDefinition.waitFor(caller, taskId, timeout: timeout);
   }
 
   /// Enqueues this no-arg task definition and waits for the typed result.

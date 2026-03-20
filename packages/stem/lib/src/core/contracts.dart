@@ -3006,23 +3006,6 @@ class NoArgsTaskDefinition<TResult> {
   /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) => asDefinition.decode(payload);
 
-  /// Builds an explicit [TaskCall] for this no-arg task definition.
-  TaskCall<(), TResult> buildCall({
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return asDefinition.buildCall(
-      (),
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    );
-  }
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].

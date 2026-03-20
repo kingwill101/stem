@@ -9,7 +9,6 @@ import 'package:stem/src/core/contracts.dart'
     show
         GroupStatus,
         TaskCall,
-        TaskDefinition,
         TaskEnqueueOptions,
         TaskHandler,
         TaskOptions,
@@ -142,16 +141,6 @@ class StemWorkflowApp
       decodeJson: decodeJson,
       decodeVersionedJson: decodeVersionedJson,
     );
-  }
-
-  @override
-  Future<TaskResult<TResult>?>
-  waitForTaskDefinition<TArgs, TResult extends Object?>(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) {
-    return app.waitForTaskDefinition(taskId, definition, timeout: timeout);
   }
 
   /// Schedules a workflow run.

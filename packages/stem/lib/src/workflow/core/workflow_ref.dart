@@ -270,20 +270,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     );
   }
 
-  /// Builds an explicit [WorkflowStartCall] for this no-args workflow ref.
-  WorkflowStartCall<(), TResult> buildStart({
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return asRef.buildStart(
-      params: (),
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-
   /// Decodes a final workflow result payload.
   TResult decode(Object? payload) => asRef.decode(payload);
 
