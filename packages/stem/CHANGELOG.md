@@ -23,6 +23,9 @@
 - Updated the uniqueness snippet to show raw `app.enqueue(...)` inheriting
   handler-declared queue and uniqueness defaults, while still demonstrating
   explicit uniqueness-key overrides without manual worker startup.
+- Simplified the `task_usage_patterns` example to use `StemApp.inMemory(...)`
+  instead of manually wiring `Broker`, `Worker`, and `Stem` just to demonstrate
+  typed task-definition enqueue and wait helpers.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

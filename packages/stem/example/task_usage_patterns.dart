@@ -85,26 +85,19 @@ Future<void> main() async {
     ),
   ];
 
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.inMemory(
     tasks: tasks,
-    consumerName: 'example-worker',
+    workerConfig: const StemWorkerConfig(consumerName: 'example-worker'),
   );
-  final stem = Stem(broker: broker, backend: backend, tasks: tasks);
 
-  unawaited(worker.start());
-
-  await stem.enqueue('tasks.parent', args: const {});
-  await stem.enqueue('tasks.invocation_parent', args: const {});
+  await app.enqueue('tasks.parent', args: const {});
+  await app.enqueue('tasks.invocation_parent', args: const {});
   final directTaskId = await childDefinition.enqueue(
-    stem,
+    app,
     const ChildArgs('direct-call'),
   );
   final directResult = await childDefinition.waitFor(
-    stem,
+    app,
     directTaskId,
     timeout: const Duration(seconds: 1),
   );
@@ -113,7 +106,7 @@ Future<void> main() async {
   print('[direct] result=${directResult?.value}');
 
   final inlineResult = await childDefinition.enqueueAndWait(
-    stem,
+    app,
     const ChildArgs('inline-wait'),
     timeout: const Duration(seconds: 1),
   );
@@ -121,8 +114,5 @@ Future<void> main() async {
   // ignore: avoid_print
   print('[inline] result=${inlineResult?.value}');
 
-  await Future<void>.delayed(const Duration(seconds: 1));
-  await worker.shutdown();
-  await backend.close();
-  await broker.close();
+  await app.close();
 }
