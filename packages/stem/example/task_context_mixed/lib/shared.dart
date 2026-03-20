@@ -306,19 +306,17 @@ FutureOr<Object?> isolateChildEntrypoint(
     '[isolate_child] id=${context.id} attempt=${context.attempt} runId=$runId',
   );
 
-  await context
-      .prepareEnqueue(
-        definition: auditDefinition,
-        args: AuditArgs(
-          runId: runId,
-          message: 'isolate child used prepareEnqueue',
-        ),
-      )
-      .header('x-child', 'isolate')
-      .meta('origin', 'isolate-child')
-      .delay(const Duration(milliseconds: 200))
-      .enqueueOptions(const TaskEnqueueOptions(shadow: 'audit-shadow'))
-      .enqueue();
+  await auditDefinition.enqueue(
+    context,
+    AuditArgs(
+      runId: runId,
+      message: 'isolate child used direct enqueue',
+    ),
+    headers: const {'x-child': 'isolate'},
+    meta: const {'origin': 'isolate-child'},
+    notBefore: stemNow().add(const Duration(milliseconds: 200)),
+    enqueueOptions: const TaskEnqueueOptions(shadow: 'audit-shadow'),
+  );
   return 'isolate-ok';
 }
 

@@ -294,12 +294,13 @@ The same pattern now carries through the low-level readback helpers:
 You can also build requests fluently from the task definition itself:
 
 ```dart
-final result = await HelloTask.definition
-    .prepareEnqueue(const HelloArgs(name: 'Tenant A'))
-    .header('x-tenant', 'tenant-a')
-    .priority(5)
-    .delay(const Duration(seconds: 30))
-    .enqueueAndWait(stem);
+final result = await HelloTask.definition.enqueueAndWait(
+  stem,
+  const HelloArgs(name: 'Tenant A'),
+  headers: const {'x-tenant': 'tenant-a'},
+  options: const TaskOptions(priority: 5),
+  notBefore: stemNow().add(const Duration(seconds: 30)),
+);
 
 print(result?.value);
 ```

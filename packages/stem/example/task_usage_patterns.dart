@@ -65,11 +65,12 @@ FutureOr<Object?> invocationParentEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
-  await childDefinition
-      .prepareEnqueue(const ChildArgs('from-invocation-builder'))
-      .priority(5)
-      .delay(const Duration(milliseconds: 100))
-      .enqueue(context);
+  await childDefinition.enqueue(
+    context,
+    const ChildArgs('from-invocation-builder'),
+    options: const TaskOptions(priority: 5),
+    notBefore: stemNow().add(const Duration(milliseconds: 100)),
+  );
   return null;
 }
 

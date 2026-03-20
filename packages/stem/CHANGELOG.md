@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Refreshed runnable task examples/docs to prefer direct `enqueue(...)` and
+  `enqueueAndWait(...)` with named overrides over `prepareEnqueue(...)` when
+  no incremental builder assembly is needed.
 - Refreshed workflow examples/docs to prefer direct `start(...)` named
   overrides over `prepareStart(...)` when no incremental builder assembly is
   needed.
