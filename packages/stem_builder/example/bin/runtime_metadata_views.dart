@@ -29,16 +29,16 @@ Future<void> main() async {
       runtime,
       'runtime metadata',
     );
-    await runtime.executeRun(flowRunId);
+    await app.executeRun(flowRunId);
 
     final scriptRunId = await StemWorkflowDefinitions.userSignup
         .startWith(
           runtime,
           'dev@stem.dev',
         );
-    await runtime.executeRun(scriptRunId);
+    await app.executeRun(scriptRunId);
 
-    final runViews = await runtime.listRunViews(limit: 10);
+    final runViews = await app.listRunViews(limit: 10);
     print('\n--- Run views ---');
     print(
       const JsonEncoder.withIndent(
@@ -46,8 +46,8 @@ Future<void> main() async {
       ).convert(runViews.map((view) => view.toJson()).toList()),
     );
 
-    final flowDetail = await runtime.viewRunDetail(flowRunId);
-    final scriptDetail = await runtime.viewRunDetail(scriptRunId);
+    final flowDetail = await app.viewRunDetail(flowRunId);
+    final scriptDetail = await app.viewRunDetail(scriptRunId);
 
     print('\n--- Flow run detail ---');
     print(const JsonEncoder.withIndent('  ').convert(flowDetail?.toJson()));

@@ -137,6 +137,9 @@
   no longer needs to reach through `workflowApp.runtime`.
 - Added `StemWorkflowApp.executeRun(...)` so examples and app code can drive a
   workflow run directly without reaching through `workflowApp.runtime`.
+- Added `StemWorkflowApp.viewRun(...)`, `viewCheckpoints(...)`, and
+  `listRunViews(...)` so app-level workflow inspection can stay on the app
+  surface instead of reaching through `workflowApp.runtime`.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

@@ -709,6 +709,40 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes run view helpers', () async {
+      final flow = Flow<String>(
+        name: 'workflow.views.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'views-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflow('workflow.views.helper');
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'views-ok');
+
+        final runView = await workflowApp.viewRun(runId);
+        expect(runView, isNotNull);
+        expect(runView!.runId, equals(runId));
+
+        final checkpoints = await workflowApp.viewCheckpoints(runId);
+        expect(checkpoints, hasLength(1));
+        expect(checkpoints.single.baseCheckpointName, equals('hello'));
+
+        final runViews = await workflowApp.listRunViews(
+          workflow: 'workflow.views.helper',
+        );
+        expect(runViews.map((view) => view.runId), contains(runId));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('StemWorkflowApp exposes executeRun helper', () async {
       final flow = Flow<String>(
         name: 'workflow.execute.helper',

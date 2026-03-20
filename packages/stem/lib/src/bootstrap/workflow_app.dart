@@ -260,12 +260,37 @@ class StemWorkflowApp
   /// ```
   Future<RunState?> getRun(String runId) => store.get(runId);
 
+  /// Returns the normalized run view for [runId], or `null` if not found.
+  Future<WorkflowRunView?> viewRun(String runId) {
+    return runtime.viewRun(runId);
+  }
+
+  /// Returns persisted checkpoint views for [runId].
+  Future<List<WorkflowCheckpointView>> viewCheckpoints(String runId) {
+    return runtime.viewCheckpoints(runId);
+  }
+
   /// Returns the combined run + checkpoint detail view for [runId].
   ///
   /// This is a convenience wrapper over [WorkflowRuntime.viewRunDetail] so
   /// callers do not need to reach through [runtime] for common inspection.
   Future<WorkflowRunDetailView?> viewRunDetail(String runId) {
     return runtime.viewRunDetail(runId);
+  }
+
+  /// Returns normalized workflow run views filtered by workflow/status.
+  Future<List<WorkflowRunView>> listRunViews({
+    String? workflow,
+    WorkflowStatus? status,
+    int limit = 50,
+    int offset = 0,
+  }) {
+    return runtime.listRunViews(
+      workflow: workflow,
+      status: status,
+      limit: limit,
+      offset: offset,
+    );
   }
 
   /// Executes the workflow run identified by [runId].
