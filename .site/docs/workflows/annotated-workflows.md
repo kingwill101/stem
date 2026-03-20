@@ -134,8 +134,10 @@ When a workflow needs to start another workflow, do it from a durable boundary:
 - `FlowContext` and `WorkflowScriptStepContext` both implement
   `WorkflowCaller`, so prefer `ref.startAndWait(context, params: value)` inside
   flow steps and checkpoint methods
-- use `context.startWorkflowBuilder(...)` only when you need advanced start
-  overrides like `ttl(...)` or `cancellationPolicy(...)`
+- pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
+  `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
+- keep `context.startWorkflowBuilder(...)` for the rarer incremental-call
+  cases where you actually want to build the start request step by step
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 

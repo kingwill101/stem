@@ -111,20 +111,22 @@ final runId = await StemWorkflowDefinitions.userSignup.start(
 
 When you already have a `WorkflowCaller` like `FlowContext`,
 `WorkflowScriptStepContext`, `WorkflowRuntime`, or `StemWorkflowApp`, prefer
-the caller-bound fluent builder:
+the direct typed ref helpers, even when you need start overrides:
 
 ```dart
-final result = await context
-    .startWorkflowBuilder(
-      definition: StemWorkflowDefinitions.userSignup,
-      params: 'user@example.com',
-    )
-    .ttl(const Duration(hours: 1))
-    .startAndWait(timeout: const Duration(seconds: 5));
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
+  context,
+  params: 'user@example.com',
+  ttl: const Duration(hours: 1),
+  timeout: const Duration(seconds: 5),
+);
 ```
 
 If you still need the run identifier for inspection or operator tooling, read
 it from `result.runId`.
+
+Keep `context.startWorkflowBuilder(...)` for the rarer cases where you want to
+assemble a start request incrementally before dispatch.
 
 ## Parent runs and TTL
 
