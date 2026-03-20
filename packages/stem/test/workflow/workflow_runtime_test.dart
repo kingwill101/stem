@@ -862,6 +862,54 @@ void main() {
     expect(completed?.result, 'user-versioned-ref-2');
   });
 
+  test('emitEvent resumes flows with versioned-map workflow event refs', () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedMap(
+      topic: 'user.updated.versioned.map.ref',
+      encode: (value) => value.toLegacyMap(),
+      version: 3,
+      decode: _UserUpdatedEvent.fromVersionedMap,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.versioned.map.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.versioned.map.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-versioned-map-ref'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-versioned-map-ref-v3');
+    expect(completed?.result, 'user-versioned-map-ref-v3');
+  });
+
   test('emit persists payload before worker resumes execution', () async {
     runtime.registerWorkflow(
       Flow(
@@ -1694,6 +1742,8 @@ class _UserUpdatedEvent {
 
   Map<String, Object?> toJson() => {'id': id};
 
+  Map<String, Object?> toLegacyMap() => {'user_id': id};
+
   static _UserUpdatedEvent fromJson(Map<String, Object?> json) {
     return _UserUpdatedEvent(id: json['id'] as String);
   }
@@ -1704,5 +1754,13 @@ class _UserUpdatedEvent {
   ) {
     expect(version, 2);
     return _UserUpdatedEvent(id: json['id'] as String);
+  }
+
+  static _UserUpdatedEvent fromVersionedMap(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 3);
+    return _UserUpdatedEvent(id: '${json['user_id'] as String}-v$version');
   }
 }

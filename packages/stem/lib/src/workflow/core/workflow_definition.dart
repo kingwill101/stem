@@ -540,6 +540,34 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for custom map params that persist a schema
+  /// [version] beside the payload.
+  WorkflowRef<TParams, T> refVersionedMap<TParams>({
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedMap(
+      name: name,
+      encodeParams: encodeParams,
+      version: version,
+      decodeResultJson: decodeResultJson,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      decodeResult:
+          decodeResultJson == null && decodeResultVersionedJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] from this definition.
   NoArgsWorkflowRef<T> ref0() {
     return NoArgsWorkflowRef<T>(

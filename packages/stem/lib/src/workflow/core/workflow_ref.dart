@@ -109,6 +109,56 @@ class WorkflowRef<TParams, TResult extends Object?> {
     );
   }
 
+  /// Creates a typed workflow reference for custom map params that persist a
+  /// schema [version] beside the payload.
+  factory WorkflowRef.versionedMap({
+    required String name,
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    TResult Function(Object? payload)? decodeResult,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final paramsCodec = PayloadCodec<TParams>.versionedMap(
+      encode: encodeParams,
+      version: version,
+      decode: (payload, _) => throw UnsupportedError(
+        'WorkflowRef.versionedMap($name) only uses the params codec for '
+        'encoding. Decoding is not supported at the ref layer.',
+      ),
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: paramsTypeName ?? '$TParams',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: version,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: resultTypeName ?? '$TResult',
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
+    return WorkflowRef<TParams, TResult>.codec(
+      name: name,
+      paramsCodec: paramsCodec,
+      resultCodec: resultCodec,
+      decodeResult: decodeResult,
+    );
+  }
+
   /// Registered workflow name.
   final String name;
 

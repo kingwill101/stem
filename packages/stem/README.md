@@ -624,6 +624,8 @@ to evolve and the persisted params should store `__stemPayloadVersion`. Drop
 down to `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow
 params still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are persisted as JSON-shaped data.
+If the params need a custom map encoder and still need an explicit stored
+schema version, use `refVersionedMap(...)` / `WorkflowRef.versionedMap(...)`.
 If the params stay unversioned but the stored result carries an explicit schema
 version, `refJson(...)` / `WorkflowRef.json(...)` also accept
 `decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
@@ -1318,7 +1320,8 @@ backend metadata under `stem.unique.duplicates`.
   `runtime.emitJson(...)` / `runtime.emitVersionedJson(...)` /
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)` /
-  `WorkflowEventRef<T>.versionedJson(...)` as the shortest typed event forms
+  `WorkflowEventRef<T>.versionedJson(...)` /
+  `WorkflowEventRef<T>.versionedMap(...)` as the shortest typed event forms
   and call `event.emit(emitter, dto)` as the happy path.
   Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
   a string-keyed JSON-like map.

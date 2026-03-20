@@ -44,6 +44,23 @@ const _greetingResultCodec = PayloadCodec<_GreetingResult>.json(
   typeName: '_GreetingResult',
 );
 
+class _LegacyGreetingParams {
+  const _LegacyGreetingParams({required this.name});
+
+  final String name;
+
+  Map<String, Object?> toLegacyMap() => {'display_name': name};
+
+  static _LegacyGreetingParams fromVersionedMap(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    return _LegacyGreetingParams(
+      name: '${json['display_name']! as String} v$version',
+    );
+  }
+}
+
 final _userUpdatedEvent = WorkflowEventRef<_GreetingParams>.json(
   topic: 'runtime.ref.event',
   decode: _GreetingParams.fromJson,
@@ -212,6 +229,39 @@ void main() {
         );
 
         expect(result?.value, 'hello json v2');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test('manual workflows can derive versioned-map refs', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.versioned-map.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final params = ctx.paramsVersionedJson<_LegacyGreetingParams>(
+              decode: _LegacyGreetingParams.fromVersionedMap,
+            );
+            return 'hello ${params.name}';
+          });
+        },
+      );
+      final workflowRef = flow.refVersionedMap<_LegacyGreetingParams>(
+        version: 3,
+        encodeParams: (params) => params.toLegacyMap(),
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final result = await workflowRef.startAndWait(
+          workflowApp.runtime,
+          params: const _LegacyGreetingParams(name: 'map'),
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello map v3');
       } finally {
         await workflowApp.shutdown();
       }

@@ -2,6 +2,11 @@
 
 ## 0.1.1
 
+- Added `WorkflowEventRef.versionedMap(...)` and
+  `WorkflowRef.versionedMap(...)` plus the matching
+  `refVersionedMap(...)` helpers on `Flow`, `WorkflowScript`, and
+  `WorkflowDefinition` for custom map payloads that still persist
+  `__stemPayloadVersion`.
 - Added `decodeResultVersionedJson:` to
   `WorkflowRef.json(...)` / `refJson(...)` so manual typed workflow refs can
   keep unversioned params while decoding a version-aware stored result.

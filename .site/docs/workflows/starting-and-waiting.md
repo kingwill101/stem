@@ -66,6 +66,8 @@ carry an explicit `__stemPayloadVersion`. Use `refCodec(...)` when you need a
 custom `PayloadCodec<T>`. Workflow params still need to encode to a
 string-keyed map (typically `Map<String, dynamic>`) because they are stored as
 JSON-shaped data.
+If the params need a custom map encoder and still need an explicit stored
+schema version, use `refVersionedMap(...)` / `WorkflowRef.versionedMap(...)`.
 
 Inside manual flow steps and script checkpoints, prefer
 `ctx.param<T>()` / `ctx.requiredParam<T>()` for workflow start params and

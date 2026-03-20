@@ -74,6 +74,28 @@ class WorkflowEventRef<T> {
     );
   }
 
+  /// Creates a typed workflow event reference for custom map payloads that
+  /// persist a schema [version] beside the payload.
+  factory WorkflowEventRef.versionedMap({
+    required String topic,
+    required Object? Function(T value) encode,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return WorkflowEventRef<T>.codec(
+      topic: topic,
+      codec: PayloadCodec<T>.versionedMap(
+        encode: encode,
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ),
+    );
+  }
+
   /// Durable topic name used to suspend and resume workflow runs.
   final String topic;
 
