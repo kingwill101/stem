@@ -29,6 +29,7 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/core/workflow_watcher.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
@@ -324,6 +325,11 @@ class StemWorkflowApp
   Future<void> rewindToCheckpoint(String runId, String checkpointName) async {
     await store.rewindToStep(runId, checkpointName);
     await store.markRunning(runId);
+  }
+
+  /// Lists event watchers registered for [topic].
+  Future<List<WorkflowWatcher>> listWatchers(String topic) {
+    return store.listWatchers(topic);
   }
 
   /// Polls the workflow store until the run reaches a terminal state.

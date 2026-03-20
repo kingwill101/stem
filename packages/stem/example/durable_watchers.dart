@@ -49,7 +49,7 @@ Future<void> main() async {
   // Drive the run until it suspends on the watcher.
   await app.executeRun(runId);
 
-  final watchers = await app.store.listWatchers(shipmentReadyEvent.topic);
+  final watchers = await app.listWatchers(shipmentReadyEvent.topic);
   for (final watcher in watchers) {
     print(
       'Run ${watcher.runId} waiting on ${watcher.topic} (step ${watcher.stepName})',

@@ -148,6 +148,8 @@
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.
+- Added `StemWorkflowApp.listWatchers(...)` so event-watcher inspection no
+  longer needs to reach through `app.store`.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

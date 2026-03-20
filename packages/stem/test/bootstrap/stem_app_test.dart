@@ -862,6 +862,39 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes watcher helper', () async {
+      final script = WorkflowScript<String>(
+        name: 'workflow.watchers.helper',
+        run: (script) async {
+          final payload = await script.step<String>('wait', (step) async {
+            await step.awaitEvent(
+              'watchers.helper.topic',
+              deadline: DateTime.now().add(const Duration(minutes: 5)),
+            );
+            return 'waiting';
+          });
+          return payload;
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+      try {
+        final runId = await workflowApp.startWorkflow(
+          'workflow.watchers.helper',
+        );
+        await workflowApp.executeRun(runId);
+
+        final watchers = await workflowApp.listWatchers(
+          'watchers.helper.topic',
+        );
+        expect(watchers, hasLength(1));
+        expect(watchers.single.runId, equals(runId));
+        expect(watchers.single.stepName, equals('wait'));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'workflow codecs persist encoded checkpoints and decode typed results',
       () async {
