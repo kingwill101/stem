@@ -46,17 +46,17 @@ extension PayloadMapX on Map<String, Object?> {
   /// decoder.
   T? valueVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final payload = this[key];
     if (payload == null) return null;
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(payload);
   }
@@ -97,14 +97,14 @@ extension PayloadMapX on Map<String, Object?> {
   T valueVersionedJsonOr<T>(
     String key,
     T fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return valueVersionedJson<T>(
           key,
-          version: version,
+          defaultVersion: defaultVersion,
           decode: decode,
           defaultDecodeVersion: defaultDecodeVersion,
           typeName: typeName,
@@ -116,8 +116,8 @@ extension PayloadMapX on Map<String, Object?> {
   /// absent.
   T requiredValueVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
@@ -126,7 +126,7 @@ extension PayloadMapX on Map<String, Object?> {
     }
     return valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -186,8 +186,8 @@ extension PayloadMapX on Map<String, Object?> {
   /// when it is absent.
   List<T>? valueListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
@@ -195,9 +195,9 @@ extension PayloadMapX on Map<String, Object?> {
     if (payload == null) return null;
     final values = payload as List;
     final codec = PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     );
     return List<T>.unmodifiable(values.map(codec.decode));
@@ -239,14 +239,14 @@ extension PayloadMapX on Map<String, Object?> {
   List<T> valueListVersionedJsonOr<T>(
     String key,
     List<T> fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return valueListVersionedJson<T>(
           key,
-          version: version,
+          defaultVersion: defaultVersion,
           decode: decode,
           defaultDecodeVersion: defaultDecodeVersion,
           typeName: typeName,
@@ -258,8 +258,8 @@ extension PayloadMapX on Map<String, Object?> {
   /// absent.
   List<T> requiredValueListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
@@ -268,7 +268,7 @@ extension PayloadMapX on Map<String, Object?> {
     }
     return valueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,

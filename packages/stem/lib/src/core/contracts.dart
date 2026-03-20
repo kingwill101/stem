@@ -1970,15 +1970,15 @@ extension TaskInputContextArgs on TaskInputContext {
 
   /// Decodes the full task-argument payload as a version-aware DTO.
   T argsVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(args);
   }
@@ -2042,14 +2042,14 @@ extension TaskInputContextArgs on TaskInputContext {
   /// Returns the decoded version-aware task arg DTO for [key], or `null`.
   T? argVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -2060,15 +2060,15 @@ extension TaskInputContextArgs on TaskInputContext {
   T argVersionedJsonOr<T>(
     String key,
     T fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.valueVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -2079,14 +2079,14 @@ extension TaskInputContextArgs on TaskInputContext {
   /// absent.
   T requiredArgVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.requiredValueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -2137,14 +2137,14 @@ extension TaskInputContextArgs on TaskInputContext {
   /// Returns the decoded version-aware task arg DTO list for [key], or `null`.
   List<T>? argListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.valueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -2156,15 +2156,15 @@ extension TaskInputContextArgs on TaskInputContext {
   List<T> argListVersionedJsonOr<T>(
     String key,
     List<T> fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.valueListVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -2175,14 +2175,14 @@ extension TaskInputContextArgs on TaskInputContext {
   /// when absent.
   List<T> requiredArgListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return args.requiredValueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,

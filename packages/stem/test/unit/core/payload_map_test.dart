@@ -68,7 +68,7 @@ void main() {
 
       final draft = payload.valueVersionedJson<_ApprovalDraft>(
         'draft',
-        version: 2,
+        defaultVersion: 2,
         decode: _ApprovalDraft.fromVersionedJson,
       );
 
@@ -179,7 +179,7 @@ void main() {
 
         final drafts = payload.valueListVersionedJson<_ApprovalDraft>(
           'drafts',
-          version: 2,
+          defaultVersion: 2,
           decode: _ApprovalDraft.fromVersionedJson,
         );
 

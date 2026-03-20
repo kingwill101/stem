@@ -136,8 +136,8 @@ class WorkflowStepEvent implements StemEvent {
   /// JSON decoder.
   T? metadataVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
@@ -145,7 +145,7 @@ class WorkflowStepEvent implements StemEvent {
     if (payload == null) return null;
     return payload.valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -175,17 +175,17 @@ class WorkflowStepEvent implements StemEvent {
   /// Decodes the full metadata payload as a typed DTO with a version-aware
   /// JSON decoder.
   T? metadataPayloadVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final payload = metadata;
     if (payload == null) return null;
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(payload);
   }
@@ -267,8 +267,8 @@ class WorkflowRuntimeEvent implements StemEvent {
   /// JSON decoder.
   T? metadataVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
@@ -276,7 +276,7 @@ class WorkflowRuntimeEvent implements StemEvent {
     if (payload == null) return null;
     return payload.valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -306,17 +306,17 @@ class WorkflowRuntimeEvent implements StemEvent {
   /// Decodes the full metadata payload as a typed DTO with a version-aware
   /// JSON decoder.
   T? metadataPayloadVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final payload = metadata;
     if (payload == null) return null;
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(payload);
   }

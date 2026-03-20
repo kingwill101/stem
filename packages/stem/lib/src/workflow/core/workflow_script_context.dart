@@ -122,15 +122,15 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// Decodes the full workflow start-parameter payload as a version-aware
   /// DTO.
   T paramsVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(params);
   }
@@ -196,14 +196,14 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// `null`.
   T? paramVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -215,15 +215,15 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   T paramVersionedJsonOr<T>(
     String key,
     T fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -234,14 +234,14 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// throwing when absent.
   T requiredParamVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.requiredValueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -294,14 +294,14 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// or `null`.
   List<T>? paramListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -313,15 +313,15 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   List<T> paramListVersionedJsonOr<T>(
     String key,
     List<T> fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueListVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -332,14 +332,14 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// throwing when absent.
   List<T> requiredParamListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.requiredValueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,

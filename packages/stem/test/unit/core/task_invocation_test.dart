@@ -175,7 +175,7 @@ void main() {
     expect(
       context
           .argsVersionedJson<_ProgressUpdate>(
-            version: 2,
+            defaultVersion: 2,
             decode: _ProgressUpdate.fromVersionedJson,
           )
           .stage,
@@ -185,7 +185,7 @@ void main() {
       context
           .argVersionedJson<_ProgressUpdate>(
             'update',
-            version: 2,
+            defaultVersion: 2,
             decode: _ProgressUpdate.fromVersionedJson,
           )
           ?.stage,

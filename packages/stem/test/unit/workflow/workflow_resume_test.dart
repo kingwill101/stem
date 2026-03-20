@@ -92,7 +92,7 @@ void main() {
       );
 
       final value = context.takeResumeVersionedJson<_ResumePayload>(
-        version: 2,
+        defaultVersion: 2,
         decode: _ResumePayload.fromVersionedJson,
       );
 
@@ -100,7 +100,7 @@ void main() {
       expect(value!.message, 'approved');
       expect(
         context.takeResumeVersionedJson<_ResumePayload>(
-          version: 2,
+          defaultVersion: 2,
           decode: _ResumePayload.fromVersionedJson,
         ),
         isNull,
@@ -206,7 +206,7 @@ void main() {
       expect(
         flowContext
             .paramsVersionedJson<_ResumePayload>(
-              version: 2,
+              defaultVersion: 2,
               decode: _ResumePayload.fromVersionedJson,
             )
             .message,
@@ -216,7 +216,7 @@ void main() {
         flowContext
             .paramVersionedJson<_ResumePayload>(
               'payload',
-              version: 2,
+              defaultVersion: 2,
               decode: _ResumePayload.fromVersionedJson,
             )
             ?.message,
@@ -231,7 +231,7 @@ void main() {
       expect(
         scriptContext
             .paramsVersionedJson<_ResumePayload>(
-              version: 2,
+              defaultVersion: 2,
               decode: _ResumePayload.fromVersionedJson,
             )
             .message,
@@ -241,7 +241,7 @@ void main() {
         scriptContext
             .paramVersionedJson<_ResumePayload>(
               'payload',
-              version: 2,
+              defaultVersion: 2,
               decode: _ResumePayload.fromVersionedJson,
             )
             ?.message,
@@ -307,7 +307,7 @@ void main() {
       );
 
       final value = flowContext.requiredPreviousVersionedJson<_ResumePayload>(
-        version: 2,
+        defaultVersion: 2,
         decode: _ResumePayload.fromVersionedJson,
       );
 
@@ -491,7 +491,7 @@ void main() {
       final firstResult =
           firstContext.waitForEventValueVersionedJson<_ResumePayload>(
             'demo.event',
-            version: 2,
+            defaultVersion: 2,
             decode: _ResumePayload.fromVersionedJson,
           );
 
@@ -517,7 +517,7 @@ void main() {
       final resumed =
           resumedContext.waitForEventValueVersionedJson<_ResumePayload>(
             'demo.event',
-            version: 2,
+            defaultVersion: 2,
             decode: _ResumePayload.fromVersionedJson,
           );
 
@@ -714,7 +714,7 @@ void main() {
       expect(
         () => waiting.waitForEventVersionedJson<_ResumePayload>(
           topic: 'demo.event',
-          version: 2,
+          defaultVersion: 2,
           decode: _ResumePayload.fromVersionedJson,
         ),
         throwsA(isA<WorkflowSuspensionSignal>()),
@@ -737,7 +737,7 @@ void main() {
       expect(
         resumed.waitForEventVersionedJson<_ResumePayload>(
           topic: 'demo.event',
-          version: 2,
+          defaultVersion: 2,
           decode: _ResumePayload.fromVersionedJson,
         ),
         completion(

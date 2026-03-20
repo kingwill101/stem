@@ -63,15 +63,15 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// Decodes the full workflow start-parameter payload as a version-aware
   /// DTO.
   T paramsVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(params);
   }
@@ -137,14 +137,14 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// `null`.
   T? paramVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -156,15 +156,15 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   T paramVersionedJsonOr<T>(
     String key,
     T fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -175,14 +175,14 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// throwing when absent.
   T requiredParamVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.requiredValueVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -235,14 +235,14 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// or `null`.
   List<T>? paramListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -254,15 +254,15 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   List<T> paramListVersionedJsonOr<T>(
     String key,
     List<T> fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.valueListVersionedJsonOr<T>(
       key,
       fallback,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -273,14 +273,14 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   /// throwing when absent.
   List<T> requiredParamListVersionedJson<T>(
     String key, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return params.requiredValueListVersionedJson<T>(
       key,
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -358,17 +358,17 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
   /// Returns the decoded prior step/checkpoint value as a versioned typed DTO,
   /// or `null`.
   T? previousVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final value = previousResult;
     if (value == null) return null;
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(value);
   }
@@ -376,13 +376,13 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
   /// Returns the decoded prior step/checkpoint versioned DTO, or [fallback].
   T previousVersionedJsonOr<T>(
     T fallback, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     return previousVersionedJson<T>(
-          version: version,
+          defaultVersion: defaultVersion,
           decode: decode,
           defaultDecodeVersion: defaultDecodeVersion,
           typeName: typeName,
@@ -393,13 +393,13 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
   /// Returns the decoded prior step/checkpoint versioned DTO, throwing when
   /// absent.
   T requiredPreviousVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final value = previousVersionedJson<T>(
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,

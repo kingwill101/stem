@@ -43,17 +43,17 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
 
   /// Returns the next resume payload as a versioned typed DTO and consumes it.
   T? takeResumeVersionedJson<T>({
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final payload = takeResumeData();
     if (payload == null) return null;
     return PayloadCodec<T>.versionedJson(
-      version: version,
+      version: defaultVersion,
       decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
       typeName: typeName,
     ).decode(payload);
   }
@@ -164,15 +164,15 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
   /// invocation.
   T? waitForEventValueVersionedJson<T>(
     String topic, {
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     DateTime? deadline,
     Map<String, Object?>? data,
     int? defaultDecodeVersion,
     String? typeName,
   }) {
     final payload = takeResumeVersionedJson<T>(
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
@@ -225,15 +225,15 @@ extension WorkflowResumeContextValues on WorkflowResumeContext {
   /// payload.
   Future<T> waitForEventVersionedJson<T>({
     required String topic,
-    required int version,
     required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
     DateTime? deadline,
     Map<String, Object?>? data,
     int? defaultDecodeVersion,
     String? typeName,
   }) async {
     final payload = takeResumeVersionedJson<T>(
-      version: version,
+      defaultVersion: defaultVersion,
       decode: decode,
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
