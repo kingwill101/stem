@@ -26,7 +26,7 @@ void main() {
 
           final runId = await workflowRef
               .call(const {'name': 'runtime'})
-              .startWith(workflowApp.runtime);
+              .start(workflowApp.runtime);
           final waited = await workflowRef.waitFor(
             workflowApp.runtime,
             runId,
@@ -37,7 +37,7 @@ void main() {
 
           final oneShot = await workflowRef
               .call(const {'name': 'inline'})
-              .startAndWaitWith(
+              .startAndWait(
                 workflowApp.runtime,
                 timeout: const Duration(seconds: 2),
               );
@@ -70,9 +70,9 @@ void main() {
         try {
           await workflowApp.start();
 
-          final runId = await workflowRef.startWith(
+          final runId = await workflowRef.start(
             workflowApp.runtime,
-            const {'name': 'runtime'},
+            params: const {'name': 'runtime'},
           );
           final waited = await workflowRef.waitFor(
             workflowApp.runtime,
@@ -82,9 +82,9 @@ void main() {
 
           expect(waited?.value, 'hello runtime');
 
-          final oneShot = await workflowRef.startAndWaitWith(
+          final oneShot = await workflowRef.startAndWait(
             workflowApp.runtime,
-            const {'name': 'inline'},
+            params: const {'name': 'inline'},
             timeout: const Duration(seconds: 2),
           );
 

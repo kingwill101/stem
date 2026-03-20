@@ -447,7 +447,7 @@ void main() {
         .call(
           const {'name': 'one-shot'},
         )
-        .startAndWaitWith(app, timeout: const Duration(seconds: 2));
+        .startAndWait(app, timeout: const Duration(seconds: 2));
 
     expect(result?.value, 'ok:one-shot');
 

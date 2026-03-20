@@ -158,7 +158,7 @@ void main() {
             flow.step('spawn', (context) async {
               return childRef
                   .call(const {'value': 'spawned'})
-                  .startWith(context);
+                  .start(context);
             });
           },
         ).definition,
@@ -205,7 +205,7 @@ void main() {
             return script.step<String>('spawn', (context) async {
               return childRef
                   .call(const {'value': 'script-child'})
-                  .startWith(context);
+                  .start(context);
             });
           },
         ).definition,
@@ -251,7 +251,7 @@ void main() {
               flow.step('spawn', (context) async {
                 final childResult = await childRef
                     .call(const {'value': 'spawned'})
-                    .startAndWaitWith(
+                    .startAndWait(
                       context,
                       timeout: const Duration(seconds: 2),
                     );
@@ -306,7 +306,7 @@ void main() {
               ) async {
                 final childResult = await childRef
                     .call(const {'value': 'script-child'})
-                    .startAndWaitWith(
+                    .startAndWait(
                       context,
                       timeout: const Duration(seconds: 2),
                     );

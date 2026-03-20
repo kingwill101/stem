@@ -120,7 +120,7 @@ void main() {
         flows: [_waitingWorkflow],
       );
 
-      final runId = await _waitingWorkflowRef.startWith(app);
+      final runId = await _waitingWorkflowRef.start(app);
       final taskId = await app.enqueue('tasks.isolate.emit.workflow.event');
 
       final taskResult = await app.waitForTask<void>(
@@ -566,7 +566,7 @@ FutureOr<Object?> _isolateStartWorkflowEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
-  final result = await _childWorkflowRef.startAndWaitWith(
+  final result = await _childWorkflowRef.startAndWait(
     context,
     timeout: const Duration(seconds: 2),
   );

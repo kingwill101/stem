@@ -91,7 +91,7 @@ void main() {
       );
 
       expect(
-        () => childRef.startWith(context, const {'value': 'x'}),
+        () => childRef.start(context, params: const {'value': 'x'}),
         throwsStateError,
       );
     },
@@ -114,9 +114,9 @@ void main() {
       );
 
       expect(
-        () => childRef.startAndWaitWith(
+        () => childRef.startAndWait(
           context,
-          const {'value': 'x'},
+          params: const {'value': 'x'},
         ),
         throwsStateError,
       );

@@ -25,9 +25,9 @@ Future<void> main() async {
     print('\nRuntime manifest:');
     print(const JsonEncoder.withIndent('  ').convert(runtimeManifest));
 
-    final runId = await StemWorkflowDefinitions.flow.startWith(
+    final runId = await StemWorkflowDefinitions.flow.start(
       app,
-      'Stem Builder',
+      params: 'Stem Builder',
     );
     await app.executeRun(runId);
     final result = await StemWorkflowDefinitions.flow.waitFor(

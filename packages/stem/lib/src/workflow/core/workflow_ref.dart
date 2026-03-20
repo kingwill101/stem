@@ -128,6 +128,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
   }
 
   /// Starts this workflow ref directly with [caller].
+  @Deprecated('Use start(caller, params: ...) instead.')
   Future<String> startWith(
     WorkflowCaller caller,
     TParams params, {
@@ -151,16 +152,16 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return startWith(
-      caller,
+    return call(
       params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    );
+    ).start(caller);
   }
 
   /// Starts this workflow ref with [caller] and waits for the result.
+  @Deprecated('Use startAndWait(caller, params: ...) instead.')
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller,
     TParams params, {
@@ -175,7 +176,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).startAndWaitWith(
+    ).startAndWait(
       caller,
       pollInterval: pollInterval,
       timeout: timeout,
@@ -193,12 +194,13 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return startAndWaitWith(
-      caller,
+    return call(
       params,
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
+    ).startAndWait(
+      caller,
       pollInterval: pollInterval,
       timeout: timeout,
     );
@@ -247,6 +249,7 @@ class NoArgsWorkflowRef<TResult extends Object?> {
   }
 
   /// Starts this workflow ref directly with [caller].
+  @Deprecated('Use start(caller, ...) instead.')
   Future<String> startWith(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -267,15 +270,15 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return startWith(
-      caller,
+    return call(
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    );
+    ).start(caller);
   }
 
   /// Starts this workflow ref with [caller] and waits for the result.
+  @Deprecated('Use startAndWait(caller, ...) instead.')
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -288,7 +291,7 @@ class NoArgsWorkflowRef<TResult extends Object?> {
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).startAndWaitWith(
+    ).startAndWait(
       caller,
       pollInterval: pollInterval,
       timeout: timeout,
@@ -304,11 +307,12 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return startAndWaitWith(
-      caller,
+    return call(
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
+    ).startAndWait(
+      caller,
       pollInterval: pollInterval,
       timeout: timeout,
     );
@@ -457,12 +461,13 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     on WorkflowStartCall<TParams, TResult> {
   /// Starts this typed workflow call with the provided [caller].
   Future<String> start(WorkflowCaller caller) {
-    return startWith(caller);
+    return caller.startWorkflowCall(this);
   }
 
   /// Starts this typed workflow call with the provided [caller].
+  @Deprecated('Use start(caller) instead.')
   Future<String> startWith(WorkflowCaller caller) {
-    return caller.startWorkflowCall(this);
+    return start(caller);
   }
 
   /// Starts this typed workflow call with [caller] and waits for the result.
@@ -471,20 +476,25 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return startAndWaitWith(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
+    final runIdFuture = start(caller);
+    return runIdFuture.then((runId) {
+      return definition.waitFor(
+        caller,
+        runId,
+        pollInterval: pollInterval,
+        timeout: timeout,
+      );
+    });
   }
 
   /// Starts this typed workflow call with [caller] and waits for the result.
+  @Deprecated('Use startAndWait(caller, ...) instead.')
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller, {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) async {
-    final runId = await startWith(caller);
+    final runId = await start(caller);
     return definition.waitFor(
       caller,
       runId,
@@ -499,12 +509,13 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
     on WorkflowStartBuilder<TParams, TResult> {
   /// Builds this workflow call and starts it with the provided [caller].
   Future<String> start(WorkflowCaller caller) {
-    return startWith(caller);
+    return build().start(caller);
   }
 
   /// Builds this workflow call and starts it with the provided [caller].
+  @Deprecated('Use start(caller) instead.')
   Future<String> startWith(WorkflowCaller caller) {
-    return build().startWith(caller);
+    return start(caller);
   }
 
   /// Builds this workflow call, starts it with [caller], and waits for the
@@ -514,7 +525,7 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return startAndWaitWith(
+    return build().startAndWait(
       caller,
       pollInterval: pollInterval,
       timeout: timeout,
@@ -523,12 +534,13 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
 
   /// Builds this workflow call, starts it with [caller], and waits for the
   /// result.
+  @Deprecated('Use startAndWait(caller, ...) instead.')
   Future<WorkflowResult<TResult>?> startAndWaitWith(
     WorkflowCaller caller, {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return build().startAndWaitWith(
+    return startAndWait(
       caller,
       pollInterval: pollInterval,
       timeout: timeout,
@@ -576,7 +588,7 @@ class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
   WorkflowStartCall<TParams, TResult> build() => _builder.build();
 
   /// Starts the built workflow call with the bound caller.
-  Future<String> start() => _builder.startWith(_caller);
+  Future<String> start() => _builder.start(_caller);
 
   /// Starts the built workflow call with the bound caller and waits for the
   /// typed workflow result.
@@ -584,7 +596,7 @@ class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return _builder.startAndWaitWith(
+    return _builder.startAndWait(
       _caller,
       pollInterval: pollInterval,
       timeout: timeout,

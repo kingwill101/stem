@@ -78,6 +78,7 @@ class Flow<T extends Object?> {
   }
 
   /// Starts this flow directly when it does not accept start params.
+  @Deprecated('Use start(caller, ...) instead.')
   Future<String> startWith(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -99,7 +100,7 @@ class Flow<T extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return startWith(
+    return ref0().start(
       caller,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -108,6 +109,7 @@ class Flow<T extends Object?> {
   }
 
   /// Starts this flow directly and waits for completion.
+  @Deprecated('Use startAndWait(caller, ...) instead.')
   Future<WorkflowResult<T>?> startAndWaitWith(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -135,7 +137,7 @@ class Flow<T extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return startAndWaitWith(
+    return ref0().startAndWait(
       caller,
       parentRunId: parentRunId,
       ttl: ttl,

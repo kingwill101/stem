@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Deprecated the older workflow-start `startWith(...)` and
+  `startAndWaitWith(...)` helpers in favor of direct `start(...)` and
+  `startAndWait(...)` aliases.
 - Deprecated the older workflow-event `emitWith(...)`, `waitWith(...)`, and
   `waitValueWith(...)` helpers in favor of the direct `emit(...)`, `wait(...)`,
   and `waitValue(...)` aliases.
