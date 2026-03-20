@@ -19,14 +19,16 @@ Future<void> main() async {
     '[producer] broker=$brokerUrl backend=$backendUrl long=$longCount quick=$quickCount',
   );
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
-  final tasks = buildTasks();
-
-  final stem = Stem(
-    broker: broker,
-    tasks: tasks,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => connectBroker(brokerUrl),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => connectBackend(backendUrl),
+      dispose: (backend) => backend.close(),
+    ),
+    tasks: buildTasks(),
   );
 
   final ids = <String>[];
@@ -34,7 +36,7 @@ Future<void> main() async {
 
   for (var i = 0; i < longCount; i += 1) {
     final label = 'long-${i + 1}';
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'control.long',
       options: taskOptions,
       args: {'label': label, 'steps': steps},
@@ -45,7 +47,7 @@ Future<void> main() async {
 
   for (var i = 0; i < quickCount; i += 1) {
     final label = 'quick-${i + 1}';
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'control.quick',
       options: taskOptions,
       args: {'label': label},
@@ -60,6 +62,5 @@ Future<void> main() async {
     stdout.writeln('[producer] wrote ${ids.length} task ids to ${file.path}');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
