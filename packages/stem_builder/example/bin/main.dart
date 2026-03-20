@@ -18,8 +18,7 @@ Future<void> main() async {
 
   final app = await StemWorkflowApp.inMemory(module: stemModule);
   try {
-    final runtime = app.runtime;
-    final runtimeManifest = runtime
+    final runtimeManifest = app
         .workflowManifest()
         .map((entry) => entry.toJson())
         .toList(growable: false);
@@ -27,10 +26,10 @@ Future<void> main() async {
     print(const JsonEncoder.withIndent('  ').convert(runtimeManifest));
 
     final runId = await StemWorkflowDefinitions.flow.startWith(
-      runtime,
+      app,
       'Stem Builder',
     );
-    await runtime.executeRun(runId);
+    await app.executeRun(runId);
     final result = await StemWorkflowDefinitions.flow.waitFor(
       app,
       runId,

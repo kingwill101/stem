@@ -30,6 +30,7 @@ import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 import 'package:stem/src/workflow/runtime/workflow_views.dart';
@@ -291,6 +292,11 @@ class StemWorkflowApp
       limit: limit,
       offset: offset,
     );
+  }
+
+  /// Returns the manifest entries for workflows registered with this app.
+  List<WorkflowManifestEntry> workflowManifest() {
+    return runtime.workflowManifest();
   }
 
   /// Executes the workflow run identified by [runId].

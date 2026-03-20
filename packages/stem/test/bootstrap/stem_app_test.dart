@@ -709,6 +709,27 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes workflow manifest helper', () async {
+      final flow = Flow<String>(
+        name: 'workflow.manifest.helper',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'manifest-ok');
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final manifest = workflowApp.workflowManifest();
+        final entry = manifest.singleWhere(
+          (item) => item.name == 'workflow.manifest.helper',
+        );
+        expect(entry.kind, equals(WorkflowDefinitionKind.flow));
+        expect(entry.steps.single.name, equals('hello'));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',
