@@ -219,11 +219,12 @@ producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
 
 Use `TaskDefinition.json(...)` when your manual task args are normal
-DTOs with `toJson()`. Drop down to `TaskDefinition.codec(...)` only when you
-need a custom
-`PayloadCodec<T>`. Task args still need to encode to a string-keyed map
-(typically `Map<String, dynamic>`) because they are published as JSON-shaped
-data.
+DTOs with `toJson()`. Use `TaskDefinition.versionedJson(...)` when the DTO
+schema is expected to evolve and the published payload should persist an
+explicit `__stemPayloadVersion`. Drop down to `TaskDefinition.codec(...)` only
+when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
+string-keyed map (typically `Map<String, dynamic>`) because they are published
+as JSON-shaped data.
 
 For manual handlers, use the context arg helpers or the typed payload readers
 on the raw map instead of repeating casts. For workflows, use the context
@@ -570,10 +571,11 @@ final runId = await approvalsRef
 
 Use `refJson(...)` when your manual workflow start params are DTOs with
 `toJson()`, or when the final result also needs a `Type.fromJson(...)`
-decoder. Drop down to `refCodec(...)` when you need a custom
-`PayloadCodec<T>`. Workflow params still need to encode to a string-keyed map
-(typically `Map<String, dynamic>`) because they are persisted as JSON-shaped
-data.
+decoder. Use `refVersionedJson(...)` when the start payload schema is expected
+to evolve and the persisted params should store `__stemPayloadVersion`. Drop
+down to `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow
+params still need to encode to a string-keyed map (typically
+`Map<String, dynamic>`) because they are persisted as JSON-shaped data.
 
 If a manual flow or script only needs DTO result decoding, prefer
 `Flow.json(...)` or `WorkflowScript.json(...)`. If the final result needs a
@@ -1222,10 +1224,11 @@ backend metadata under `stem.unique.duplicates`.
   `workflowApp.emitVersionedJson(...)` / `workflowApp.emitValue(...)` (or
   `runtime.emitJson(...)` / `runtime.emitVersionedJson(...)` /
   `runtime.emitValue(...)` when you are intentionally using the low-level
-  runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
-  as the shortest typed event form and call `event.emit(emitter, dto)` as the
-  happy path. `event.call(value).emit(...)` remains available as the
-  lower-level prebuilt-call variant.
+  runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)` /
+  `WorkflowEventRef<T>.versionedJson(...)` as the shortest typed event forms
+  and call `event.emit(emitter, dto)` as the happy path.
+  `event.call(value).emit(...)` remains available as the lower-level
+  prebuilt-call variant.
   Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
   a string-keyed JSON-like map.
 - Only return values you want persisted. If a handler returns `null`, the

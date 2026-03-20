@@ -63,13 +63,13 @@ or `result.payloadAs(codec: ...)` to decode the stored task result DTO
 without another cast/closure.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
-when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you
-need a custom
-`PayloadCodec<T>`. Task args still need to encode to a string-keyed map
-(typically `Map<String, dynamic>`) because they are published as JSON-shaped
-data. For low-level name-based enqueue APIs, use `enqueueVersionedJson(...)`
-when the DTO schema is expected to evolve and the payload should persist an
-explicit `__stemPayloadVersion`.
+when the type already has `toJson()`. Use `TaskDefinition.versionedJson(...)`
+when the payload schema is expected to evolve and the published payload should
+persist an explicit `__stemPayloadVersion`. Use `TaskDefinition.codec(...)`
+when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
+string-keyed map (typically `Map<String, dynamic>`) because they are published
+as JSON-shaped data. For low-level name-based enqueue APIs, use
+`enqueueVersionedJson(...)` for the same versioned DTO path.
 
 For manual handlers, prefer the typed payload readers on the argument map
 instead of repeating raw casts:

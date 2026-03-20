@@ -66,9 +66,11 @@ Typed event payloads still serialize to a string-keyed JSON-like map.
 DTO/codec convenience layers, not a new transport shape.
 
 When the topic and codec travel together in your codebase, prefer
-`WorkflowEventRef<T>.json(...)` for normal DTO payloads and keep
-`event.emit(emitter, dto)` as the happy path. `event.call(value).emit(...)`
-remains available as the lower-level prebuilt-call variant.
+`WorkflowEventRef<T>.json(...)` for normal DTO payloads,
+`WorkflowEventRef<T>.versionedJson(...)` when the payload schema should carry
+an explicit `__stemPayloadVersion`, and keep `event.emit(emitter, dto)` as the
+happy path. `event.call(value).emit(...)` remains available as the lower-level
+prebuilt-call variant.
 Pair that with `await event.wait(ctx)`. If you are writing a flow and
 deliberately want the lower-level `FlowStepControl` path, use
 `event.awaitOn(step)` instead of dropping back to a raw topic string.

@@ -2391,6 +2391,38 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  factory TaskDefinition.versionedJson({
+    required String name,
+    required int version,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    final resultCodec = decodeResultJson == null
+        ? null
+        : PayloadCodec<TResult>.json(
+            decode: decodeResultJson,
+            typeName: resultTypeName ?? '$TResult',
+          );
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeVersionedJsonArgs(
+        args,
+        version: version,
+        typeName: argsTypeName ?? '$TArgs',
+      ),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgsCodec<TResult>({
     required String name,
@@ -2504,6 +2536,19 @@ class TaskDefinition<TArgs, TResult> {
   static Map<String, Object?> _encodeJsonArgs<T>(T args, String typeName) {
     final payload = PayloadCodec.encodeJsonMap(
       args,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
+  }
+
+  static Map<String, Object?> _encodeVersionedJsonArgs<T>(
+    T args, {
+    required int version,
+    required String typeName,
+  }) {
+    final payload = PayloadCodec.encodeVersionedJsonMap(
+      args,
+      version: version,
       typeName: typeName,
     );
     return Map<String, Object?>.from(payload);

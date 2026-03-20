@@ -179,6 +179,35 @@ void main() {
       }
     });
 
+    test('manual workflows can derive versioned-json refs', () async {
+      final flow = Flow<String>(
+        name: 'runtime.ref.versioned-json.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async {
+            final name = ctx.requiredParam<String>('name');
+            final version = ctx.requiredParam<int>(PayloadCodec.versionKey);
+            return 'hello $name v$version';
+          });
+        },
+      );
+      final workflowRef = flow.refVersionedJson<_GreetingParams>(version: 2);
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        await workflowApp.start();
+
+        final result = await workflowRef.startAndWait(
+          workflowApp.runtime,
+          params: const _GreetingParams(name: 'json'),
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'hello json v2');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'manual workflows can derive json-backed refs with result decoding',
       () async {

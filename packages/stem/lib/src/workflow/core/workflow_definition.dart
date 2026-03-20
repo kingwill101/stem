@@ -448,6 +448,24 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  WorkflowRef<TParams, T> refVersionedJson<TParams>({
+    required int version,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedJson(
+      name: name,
+      version: version,
+      decodeResultJson: decodeResultJson,
+      decodeResult: (payload) => decodeResult(payload) as T,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] from this definition.
   NoArgsWorkflowRef<T> ref0() {
     return NoArgsWorkflowRef<T>(

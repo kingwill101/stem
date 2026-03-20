@@ -143,6 +143,31 @@ void main() {
       expect(backend.records.single.state, TaskState.queued);
     });
 
+    test('enqueueCall publishes versioned-json task definitions', () async {
+      final broker = _RecordingBroker();
+      final backend = _RecordingBackend();
+      final stem = Stem(broker: broker, backend: backend);
+      final definition = TaskDefinition<_CodecTaskArgs, Object?>.versionedJson(
+        name: 'sample.versioned.json.args',
+        version: 2,
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
+
+      final id = await stem.enqueueCall(
+        definition.call(const _CodecTaskArgs('encoded')),
+      );
+
+      expect(id, isNotEmpty);
+      expect(broker.published.single.envelope.name, 'sample.versioned.json.args');
+      expect(broker.published.single.envelope.queue, 'typed');
+      expect(broker.published.single.envelope.args, {
+        PayloadCodec.versionKey: 2,
+        'value': 'encoded',
+      });
+      expect(backend.records.single.id, id);
+      expect(backend.records.single.state, TaskState.queued);
+    });
+
     test('enqueueJson publishes DTO args without a manual map', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();

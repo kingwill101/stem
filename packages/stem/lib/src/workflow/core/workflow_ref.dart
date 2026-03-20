@@ -52,6 +52,33 @@ class WorkflowRef<TParams, TResult extends Object?> {
     );
   }
 
+  /// Creates a typed workflow reference for DTO params that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  factory WorkflowRef.versionedJson({
+    required String name,
+    required int version,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Object? payload)? decodeResult,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    final resultCodec = decodeResultJson == null
+        ? null
+        : PayloadCodec<TResult>.json(
+            decode: decodeResultJson,
+            typeName: resultTypeName ?? '$TResult',
+          );
+    return WorkflowRef<TParams, TResult>(
+      name: name,
+      encodeParams: (params) => _encodeVersionedJsonParams(
+        params,
+        version: version,
+        typeName: paramsTypeName ?? '$TParams',
+      ),
+      decodeResult: decodeResult ?? resultCodec?.decode,
+    );
+  }
+
   /// Registered workflow name.
   final String name;
 
@@ -93,6 +120,19 @@ class WorkflowRef<TParams, TResult extends Object?> {
   static Map<String, Object?> _encodeJsonParams<T>(T params, String typeName) {
     final payload = PayloadCodec.encodeJsonMap(
       params,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
+  }
+
+  static Map<String, Object?> _encodeVersionedJsonParams<T>(
+    T params, {
+    required int version,
+    required String typeName,
+  }) {
+    final payload = PayloadCodec.encodeVersionedJsonMap(
+      params,
+      version: version,
       typeName: typeName,
     );
     return Map<String, Object?>.from(payload);

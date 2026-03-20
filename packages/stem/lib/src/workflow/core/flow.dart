@@ -105,6 +105,22 @@ class Flow<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  WorkflowRef<TParams, T> refVersionedJson<TParams>({
+    required int version,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return definition.refVersionedJson<TParams>(
+      version: version,
+      decodeResultJson: decodeResultJson,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Builds a typed [NoArgsWorkflowRef] for flows without start params.
   NoArgsWorkflowRef<T> ref0() {
     return definition.ref0();

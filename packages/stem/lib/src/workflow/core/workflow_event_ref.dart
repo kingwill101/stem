@@ -54,6 +54,26 @@ class WorkflowEventRef<T> {
     );
   }
 
+  /// Creates a typed workflow event reference for DTO payloads that already
+  /// expose `toJson()` and persist a schema [version] beside the payload.
+  factory WorkflowEventRef.versionedJson({
+    required String topic,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return WorkflowEventRef<T>.codec(
+      topic: topic,
+      codec: PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ),
+    );
+  }
+
   /// Durable topic name used to suspend and resume workflow runs.
   final String topic;
 

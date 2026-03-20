@@ -813,6 +813,53 @@ void main() {
     expect(completed?.result, 'user-typed-2');
   });
 
+  test('emitEvent resumes flows with versioned-json workflow event refs', () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJson(
+      topic: 'user.updated.versioned.ref',
+      version: 2,
+      decode: _UserUpdatedEvent.fromVersionedJson,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.versioned.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.versioned.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-versioned-ref-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-versioned-ref-2');
+    expect(completed?.result, 'user-versioned-ref-2');
+  });
+
   test('emit persists payload before worker resumes execution', () async {
     runtime.registerWorkflow(
       Flow(
@@ -1645,6 +1692,14 @@ class _UserUpdatedEvent {
   Map<String, Object?> toJson() => {'id': id};
 
   static _UserUpdatedEvent fromJson(Map<String, Object?> json) {
+    return _UserUpdatedEvent(id: json['id'] as String);
+  }
+
+  static _UserUpdatedEvent fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _UserUpdatedEvent(id: json['id'] as String);
   }
 }
