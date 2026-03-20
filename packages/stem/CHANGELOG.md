@@ -110,6 +110,9 @@
 - Simplified the developer-environment bootstrap snippet to use a shared
   `StemClient` plus `createWorker(...)` while keeping the explicit Redis
   adapter configuration visible.
+- Simplified the unique-task example to use `StemClient.create(...)` and
+  `createWorker(...)` so the example stays focused on deduplication semantics
+  instead of raw producer wiring.
 - Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
   and rate-limit delay shared libraries after those demos moved to
   `StemClient`-based producers.
