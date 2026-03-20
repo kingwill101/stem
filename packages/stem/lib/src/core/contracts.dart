@@ -624,6 +624,39 @@ class TaskError {
   /// Additional metadata for this error.
   final Map<String, Object?> meta;
 
+  /// Decodes the full error metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full error metadata payload as a typed DTO with a JSON
+  /// decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full error metadata payload as a typed DTO with a
+  /// version-aware JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
   /// Serializes the error metadata to JSON.
   Map<String, Object?> toJson() => {
     'type': type,

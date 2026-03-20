@@ -204,6 +204,29 @@ void main() {
       );
     });
 
+    test('error metadata helpers decode structured values', () {
+      const error = TaskError(
+        type: 'Boom',
+        message: 'fail',
+        meta: {
+          PayloadCodec.versionKey: 2,
+          'queue': 'default',
+        },
+      );
+
+      expect(
+        error.metaJson<_ErrorMeta>(decode: _ErrorMeta.fromJson),
+        isA<_ErrorMeta>().having((value) => value.queue, 'queue', 'default'),
+      );
+      expect(
+        error.metaVersionedJson<_ErrorMeta>(
+          version: 2,
+          decode: _ErrorMeta.fromVersionedJson,
+        ),
+        isA<_ErrorMeta>().having((value) => value.queue, 'queue', 'default'),
+      );
+    });
+
     test('requiredPayloadValue throws when payload is absent', () {
       final status = TaskStatus(
         id: 'task-5',
@@ -675,4 +698,22 @@ class _ScheduleMeta {
   }
 
   final String source;
+}
+
+class _ErrorMeta {
+  const _ErrorMeta({required this.queue});
+
+  factory _ErrorMeta.fromJson(Map<String, dynamic> json) {
+    return _ErrorMeta(queue: json['queue'] as String);
+  }
+
+  factory _ErrorMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ErrorMeta.fromJson(json);
+  }
+
+  final String queue;
 }
