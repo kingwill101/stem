@@ -615,6 +615,9 @@ to evolve and the persisted params should store `__stemPayloadVersion`. Drop
 down to `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow
 params still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are persisted as JSON-shaped data.
+If the params stay unversioned but the stored result carries an explicit schema
+version, `refJson(...)` / `WorkflowRef.json(...)` also accept
+`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
 
 If a manual flow or script only needs DTO result decoding, prefer
 `Flow.json(...)` or `WorkflowScript.json(...)`. Use

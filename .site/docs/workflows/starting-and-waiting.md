@@ -72,6 +72,10 @@ Inside manual flow steps and script checkpoints, prefer
 `ctx.previousValue<T>()` / `ctx.requiredPreviousValue<T>()` over repeating raw
 `previousResult as ...` casts.
 
+If the params stay unversioned but the stored result carries an explicit schema
+version, `refJson(...)` / `WorkflowRef.json(...)` also accept
+`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
+
 If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 `WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
 case. Use `Flow.versionedJson(...)` / `WorkflowScript.versionedJson(...)` when

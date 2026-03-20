@@ -253,6 +253,47 @@ void main() {
       },
     );
 
+    test(
+      'manual workflows can derive json-backed refs with versioned result'
+      ' decoding',
+      () async {
+        final flow = Flow<Object?>(
+          name: 'runtime.ref.json.versioned-result.flow',
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const {
+                'message': 'hello ref json versioned',
+                PayloadCodec.versionKey: 2,
+              },
+            );
+          },
+        );
+        final workflowRef = flow.refJson<_GreetingParams>(
+          decodeResultVersionedJson: _GreetingResult.fromVersionedJson,
+          defaultDecodeVersion: 2,
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final result = await workflowRef.startAndWait(
+            workflowApp.runtime,
+            params: const _GreetingParams(name: 'ignored'),
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(
+            (result?.value as _GreetingResult?)?.message,
+            'hello ref json versioned v2',
+          );
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('codec-backed refs preserve workflow result decoding', () async {
       final flow = Flow<_GreetingResult>.codec(
         name: 'runtime.ref.codec.result.flow',

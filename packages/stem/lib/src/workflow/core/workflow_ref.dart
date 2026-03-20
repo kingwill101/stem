@@ -34,16 +34,31 @@ class WorkflowRef<TParams, TResult extends Object?> {
   factory WorkflowRef.json({
     required String name,
     TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
     TResult Function(Object? payload)? decodeResult,
     String? paramsTypeName,
     String? resultTypeName,
   }) {
-    final resultCodec = decodeResultJson == null
-        ? null
-        : PayloadCodec<TResult>.json(
-            decode: decodeResultJson,
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: defaultDecodeVersion ?? 1,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
             typeName: resultTypeName ?? '$TResult',
-          );
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
     return WorkflowRef<TParams, TResult>(
       name: name,
       encodeParams: (params) =>
