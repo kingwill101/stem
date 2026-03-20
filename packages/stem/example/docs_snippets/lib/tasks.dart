@@ -94,24 +94,18 @@ class PublishInvoiceTask extends TaskHandler<void> {
 }
 
 Future<void> runTypedDefinitionExample() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.inMemory(
     tasks: [PublishInvoiceTask()],
   );
 
-  final taskId = await PublishInvoiceTask.definition.enqueue(
-    stem,
+  final result = await PublishInvoiceTask.definition.enqueueAndWait(
+    app,
     const InvoicePayload(invoiceId: 'inv_42'),
   );
-  final result = await stem.waitForTask<bool>(taskId);
   if (result?.isSucceeded == true) {
     print('Invoice published');
   }
-  await backend.close();
-  await broker.close();
+  await app.close();
 }
 // #endregion tasks-typed-definition
 

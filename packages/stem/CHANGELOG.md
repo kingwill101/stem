@@ -58,6 +58,9 @@
 - Simplified the `image_processor` HTTP API example to use
   `StemClient.create(...)` with Redis broker/result backend factories instead
   of manually constructing a raw `Stem` publisher service.
+- Simplified the typed task-definition docs snippet to use
+  `StemApp.inMemory(...)` and `definition.enqueueAndWait(...)` instead of
+  manually wiring in-memory broker/backend instances and raw result waits.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
