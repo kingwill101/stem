@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Refreshed the public workflow examples and docs snippets to prefer the direct
+  `start(...)` alias over the older `startWith(...)` helper in the happy path.
 - Added `StemApp.registerTask(...)`, `registerTasks(...)`, `registerModule(...)`,
   and `registerModules(...)` so plain task apps now have the same late
   registration ergonomics as `StemWorkflowApp`.

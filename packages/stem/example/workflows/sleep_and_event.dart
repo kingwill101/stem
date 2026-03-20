@@ -30,7 +30,7 @@ Future<void> main() async {
     flows: [sleepAndEvent],
   );
 
-  final runId = await sleepAndEvent.startWith(app);
+  final runId = await sleepAndEvent.start(app);
 
   // Wait until the workflow is suspended before emitting the event to avoid
   // losing the signal.

@@ -22,7 +22,7 @@ Future<void> main() async {
   );
 
   try {
-    final runId = await redisWorkflow.startWith(app);
+    final runId = await redisWorkflow.start(app);
     final result = await redisWorkflow.waitFor(app, runId);
     print('Workflow $runId finished with result: ${result?.value}');
   } finally {

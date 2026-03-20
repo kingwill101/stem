@@ -15,7 +15,7 @@ Future<void> main() async {
     flows: [basicHello],
   );
 
-  final runId = await basicHello.startWith(app);
+  final runId = await basicHello.start(app);
   final result = await basicHello.waitFor(app, runId);
   print('Workflow $runId finished with result: ${result?.value}');
 

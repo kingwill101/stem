@@ -122,9 +122,9 @@ Future<void> registerScript(StemWorkflowApp workflowApp) async {
 
 // #region workflows-run
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
-  final runId = await ApprovalsFlow.ref.startWith(
+  final runId = await ApprovalsFlow.ref.start(
     workflowApp,
-    const ApprovalDraft(documentId: 'doc-42'),
+    params: const ApprovalDraft(documentId: 'doc-42'),
     cancellationPolicy: const WorkflowCancellationPolicy(
       maxRunDuration: Duration(hours: 2),
       maxSuspendDuration: Duration(minutes: 30),

@@ -38,7 +38,7 @@ Future<void> main() async {
 
   final runId = await shipmentWorkflowRef
       .call(const {'orderId': 'A-123'})
-      .startWith(app);
+      .start(app);
 
   // Drive the run until it suspends on the watcher.
   await app.executeRun(runId);
