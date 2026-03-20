@@ -157,8 +157,26 @@ void main() {
         'approved',
       );
       expect(
+        flowContext
+            .paramsVersionedJson<_ResumePayload>(
+              version: 2,
+              decode: _ResumePayload.fromVersionedJson,
+            )
+            .message,
+        'approved',
+      );
+      expect(
         scriptContext
             .paramsAs<_ResumePayload>(codec: _resumePayloadCodec)
+            .message,
+        'queued',
+      );
+      expect(
+        scriptContext
+            .paramsVersionedJson<_ResumePayload>(
+              version: 2,
+              decode: _ResumePayload.fromVersionedJson,
+            )
             .message,
         'queued',
       );
@@ -871,6 +889,14 @@ class _ResumePayload {
   const _ResumePayload({required this.message});
 
   factory _ResumePayload.fromJson(Map<String, Object?> json) {
+    return _ResumePayload(message: json['message']! as String);
+  }
+
+  factory _ResumePayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _ResumePayload(message: json['message']! as String);
   }
 

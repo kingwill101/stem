@@ -243,6 +243,10 @@ final taskArgs = context.argsJson<InvoicePayload>(
 final workflowParams = ctx.paramsAs<ApprovalDraft>(
   codec: approvalDraftCodec,
 );
+final versionedParams = ctx.paramsVersionedJson<ApprovalDraft>(
+  version: 2,
+  decode: ApprovalDraft.fromVersionedJson,
+);
 ```
 
 For typed task calls, the definition and call objects now expose the common

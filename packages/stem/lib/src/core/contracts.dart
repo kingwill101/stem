@@ -1776,6 +1776,21 @@ extension TaskInputContextArgs on TaskInputContext {
     ).decode(args);
   }
 
+  /// Decodes the full task-argument payload as a version-aware DTO.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Returns the decoded task arg for [key], or `null`.
   T? arg<T>(String key, {PayloadCodec<T>? codec}) {
     return args.value<T>(key, codec: codec);

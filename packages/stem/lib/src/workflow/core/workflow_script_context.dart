@@ -79,6 +79,22 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
     ).decode(params);
   }
 
+  /// Decodes the full workflow start-parameter payload as a version-aware
+  /// DTO.
+  T paramsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(params);
+  }
+
   /// Returns the decoded workflow parameter for [key], or `null`.
   T? param<T>(String key, {PayloadCodec<T>? codec}) {
     return params.value<T>(key, codec: codec);

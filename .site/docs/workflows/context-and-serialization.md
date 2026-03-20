@@ -36,8 +36,8 @@ Depending on the context type, you can access:
 - workflow params and previous results
 - `param<T>()` / `requiredParam<T>()` for typed access to workflow start
   params
-- `paramsAs(codec: ...)` / `paramsJson<T>()` for decoding the full workflow
-  start payload as one DTO
+- `paramsAs(codec: ...)`, `paramsJson<T>()`, or `paramsVersionedJson<T>()`
+  for decoding the full workflow start payload as one DTO
 - `paramJson<T>()` / `requiredParamJson<T>()` for nested DTO params without a
   separate codec constant
 - `paramListJson<T>()` / `requiredParamListJson<T>()` for lists of nested DTO
@@ -68,8 +68,8 @@ Depending on the context type, you can access:
   `ref.startAndWait(context, params: value)`
 - direct task enqueue APIs because `WorkflowExecutionContext` and
   `TaskExecutionContext` both implement `TaskEnqueuer`
-- `argsAs(codec: ...)` / `argsJson<T>()` for decoding the full task-arg
-  payload as one DTO inside manual task handlers
+- `argsAs(codec: ...)`, `argsJson<T>()`, or `argsVersionedJson<T>()` for
+  decoding the full task-arg payload as one DTO inside manual task handlers
 - task metadata like `id`, `attempt`, `meta`
 
 Child workflow starts belong in durable boundaries:

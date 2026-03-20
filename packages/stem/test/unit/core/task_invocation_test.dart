@@ -165,6 +165,15 @@ void main() {
       context.argsAs<_ProgressUpdate>(codec: _progressUpdateCodec).stage,
       'warming',
     );
+    expect(
+      context
+          .argsVersionedJson<_ProgressUpdate>(
+            version: 2,
+            decode: _ProgressUpdate.fromVersionedJson,
+          )
+          .stage,
+      'warming',
+    );
   });
 
   test(
