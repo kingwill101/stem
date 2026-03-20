@@ -887,6 +887,10 @@ if (result?.isCompleted == true) {
 If you already have a raw `WorkflowResult<Object?>`, use
 `result.payloadJson(...)` or `result.payloadAs(codec: ...)` to decode the
 stored workflow result without another cast/closure.
+If you are inspecting the underlying `RunState` directly, use
+`state.resultJson(...)`, `state.resultAs(codec: ...)`,
+`state.suspensionPayloadJson(...)`, or
+`state.suspensionPayloadAs(codec: ...)` instead of manual raw-map casts.
 
 In the example above, these calls inside `run(...)`:
 

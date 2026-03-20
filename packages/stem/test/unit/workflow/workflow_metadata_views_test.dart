@@ -49,6 +49,16 @@ void main() {
         state.suspensionPayload,
         equals(const <String, Object?>{'invoiceId': 'inv-1'}),
       );
+      expect(
+        state.suspensionPayloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
     });
 
     test('exposes runtime queue and serialization metadata', () {
@@ -87,6 +97,29 @@ void main() {
       expect(state.encryptionScope, equals('signed-envelope'));
       expect(state.encryptionEnabled, isTrue);
       expect(state.streamId, equals('invoice_run-2'));
+    });
+
+    test('decodes raw result payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-3',
+        workflow: 'invoice',
+        status: WorkflowStatus.completed,
+        cursor: 2,
+        params: const {'tenant': 'acme'},
+        createdAt: DateTime.utc(2026, 2, 25),
+        result: const {'invoiceId': 'inv-2'},
+      );
+
+      expect(
+        state.resultJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-2',
+        ),
+      );
     });
   });
 
@@ -153,7 +186,11 @@ void main() {
         value: 'ok',
         position: 2,
       );
-      const plain = WorkflowStepEntry(name: 'finalize', value: null, position: 3);
+      const plain = WorkflowStepEntry(
+        name: 'finalize',
+        value: null,
+        position: 3,
+      );
 
       expect(step.baseName, equals('approval'));
       expect(step.iteration, equals(3));
@@ -161,4 +198,14 @@ void main() {
       expect(plain.iteration, isNull);
     });
   });
+}
+
+class _InvoicePayload {
+  const _InvoicePayload({required this.invoiceId});
+
+  factory _InvoicePayload.fromJson(Map<String, dynamic> json) {
+    return _InvoicePayload(invoiceId: json['invoiceId'] as String);
+  }
+
+  final String invoiceId;
 }

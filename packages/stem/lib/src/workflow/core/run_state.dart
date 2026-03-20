@@ -1,4 +1,5 @@
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -89,6 +90,26 @@ class RunState {
   /// Final result payload when the run completes.
   final Object? result;
 
+  /// Decodes the final result payload with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the final result payload with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Topic that the run is currently waiting on, if any.
   final String? waitTopic;
 
@@ -157,6 +178,28 @@ class RunState {
 
   /// Resume payload delivered to the suspended run, when present.
   Object? get suspensionPayload => suspensionData?['payload'];
+
+  /// Decodes the suspension payload with [codec], when present.
+  TPayload? suspensionPayloadAs<TPayload>({
+    required PayloadCodec<TPayload> codec,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension payload with a JSON decoder, when present.
+  TPayload? suspensionPayloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when a matching event was delivered for this suspension.
   DateTime? get suspensionDeliveredAt =>

@@ -34,6 +34,10 @@
 - Added `WorkflowResult.payloadJson(...)` and `payloadAs(codec: ...)` so raw
   workflow completion results can decode whole DTO payloads without another
   cast/closure.
+- Added `RunState.resultJson(...)`, `resultAs(codec: ...)`,
+  `suspensionPayloadJson(...)`, and `suspensionPayloadAs(codec: ...)` so raw
+  workflow-store inspection paths can decode DTO payloads without manual
+  casts.
 - Added `arg<T>()`, `argOr<T>()`, and `requiredArg<T>()` on `TaskContext` and
   `TaskInvocationContext`, and taught both contexts to retain the current
   task args so manual handlers and isolate entrypoints can read typed inputs
