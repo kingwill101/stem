@@ -503,6 +503,28 @@ void main() {
     },
   );
 
+  test(
+    'WorkflowScriptStepContext JSON suspension helpers encode DTO payloads',
+    () async {
+      final context = _FakeWorkflowScriptStepContext();
+
+      await context.sleepJson(
+        const Duration(seconds: 2),
+        const _SuspensionPayload(stage: 'sleeping'),
+      );
+      await context.awaitEventJson(
+        'topic',
+        const _SuspensionPayload(stage: 'waiting'),
+        deadline: DateTime.parse('2025-01-01T00:00:00Z'),
+      );
+
+      expect(context.sleepCalls, equals([const Duration(seconds: 2)]));
+      expect(context.awaitedTopics, equals(['topic']));
+      expect(context.awaitedData, equals(const {'stage': 'waiting'}));
+      expect(context.awaitedDeadline, DateTime.parse('2025-01-01T00:00:00Z'));
+    },
+  );
+
   test('WorkflowEventRef.awaitOn reuses the event topic for flows', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
@@ -1047,6 +1069,14 @@ class _FakeWorkflowScriptContext implements WorkflowScriptContext {
   }) {
     return Future<T>.error(UnimplementedError());
   }
+}
+
+class _SuspensionPayload {
+  const _SuspensionPayload({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
 }
 
 class _RecordingTaskEnqueuer implements TaskEnqueuer {

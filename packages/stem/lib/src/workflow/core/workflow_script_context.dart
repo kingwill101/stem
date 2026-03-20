@@ -32,6 +32,35 @@ abstract class WorkflowScriptContext {
   });
 }
 
+/// Low-level suspension helpers for workflow script checkpoints.
+extension WorkflowScriptStepSuspensionJson on WorkflowScriptStepContext {
+  /// Suspends the workflow for [duration] with a JSON-serializable DTO payload.
+  Future<void> sleepJson<T>(Duration duration, T value, {String? typeName}) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Suspends the workflow until [topic] arrives with a DTO payload.
+  Future<void> awaitEventJson<T>(
+    String topic,
+    T value, {
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+}
+
 /// Typed read helpers for workflow start parameters in script run methods.
 extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// Returns the decoded workflow parameter for [key], or `null`.

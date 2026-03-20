@@ -51,6 +51,31 @@ void main() {
     expect(second, isNull);
   });
 
+  test('FlowContext JSON suspension helpers encode DTO payloads', () {
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-2b',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 1,
+    );
+
+    final sleep = context.sleepJson(
+      const Duration(seconds: 3),
+      const _SuspensionPayload(stage: 'sleeping'),
+    );
+    final wait = context.awaitEventJson(
+      'topic',
+      const _SuspensionPayload(stage: 'waiting'),
+      deadline: DateTime.parse('2025-01-01T00:00:00Z'),
+    );
+
+    expect(sleep.data, equals(const {'stage': 'sleeping'}));
+    expect(wait.data, equals(const {'stage': 'waiting'}));
+    expect(wait.deadline, DateTime.parse('2025-01-01T00:00:00Z'));
+  });
+
   test(
     'FlowContext resume data is consumed and idempotency key derives scope',
     () {
@@ -159,6 +184,14 @@ void main() {
 
     expect(() => context.enqueue('tasks.child'), throwsStateError);
   });
+}
+
+class _SuspensionPayload {
+  const _SuspensionPayload({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
 }
 
 class _RecordingEnqueuer implements TaskEnqueuer {

@@ -166,6 +166,18 @@ class FlowStepControl {
     Map<String, Object?>? data,
   }) => FlowStepControl._(FlowControlType.sleep, delay: duration, data: data);
 
+  /// Suspend the run until [duration] elapses with a DTO payload.
+  static FlowStepControl sleepJson<T>(
+    Duration duration,
+    T value, {
+    String? typeName,
+  }) => FlowStepControl.sleep(
+    duration,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
+  );
+
   /// Suspend the run until an event with [topic] arrives.
   factory FlowStepControl.awaitTopic(
     String topic, {
@@ -176,6 +188,20 @@ class FlowStepControl {
     topic: topic,
     deadline: deadline,
     data: data,
+  );
+
+  /// Suspend the run until an event with [topic] arrives with a DTO payload.
+  static FlowStepControl awaitTopicJson<T>(
+    String topic,
+    T value, {
+    DateTime? deadline,
+    String? typeName,
+  }) => FlowStepControl.awaitTopic(
+    topic,
+    deadline: deadline,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
   );
 
   /// Continue execution without suspending.

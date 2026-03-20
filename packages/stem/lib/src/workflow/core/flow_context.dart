@@ -1,4 +1,5 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
@@ -106,6 +107,16 @@ class FlowContext implements WorkflowExecutionContext {
     return _control!;
   }
 
+  /// Suspends the workflow for [duration] with a JSON-serializable DTO payload.
+  FlowStepControl sleepJson<T>(Duration duration, T value, {String? typeName}) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
   /// Suspends the workflow until an event with [topic] is emitted.
   ///
   /// When the event bus resumes the run, the payload is made available via
@@ -122,6 +133,22 @@ class FlowContext implements WorkflowExecutionContext {
       data: data,
     );
     return _control!;
+  }
+
+  /// Suspends the workflow until [topic] arrives with a DTO payload.
+  FlowStepControl awaitEventJson<T>(
+    String topic,
+    T value, {
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
   }
 
   @override

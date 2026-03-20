@@ -40,8 +40,9 @@ Typical flow:
 For the common "wait for one event and continue" case, prefer:
 
 ```dart
-final payload = await ctx.waitForEvent<Map<String, Object?>>(
+final payload = await ctx.waitForEventJson<PaymentConfirmed>(
   topic: 'orders.payment.confirmed',
+  decode: PaymentConfirmed.fromJson,
 );
 ```
 
@@ -70,6 +71,9 @@ remains available as the lower-level prebuilt-call variant.
 Pair that with `await event.wait(ctx)`. If you are writing a flow and
 deliberately want the lower-level `FlowStepControl` path, use
 `event.awaitOn(step)` instead of dropping back to a raw topic string.
+For low-level sleep/event directives that still need DTO metadata, use
+`step.sleepJson(...)`, `step.awaitEventJson(...)`, or
+`FlowStepControl.awaitTopicJson(...)` instead of hand-built maps.
 
 ## Inspect waiting runs
 

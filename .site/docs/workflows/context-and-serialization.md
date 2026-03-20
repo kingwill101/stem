@@ -50,6 +50,9 @@ Depending on the context type, you can access:
   constant
 - `event.awaitOn(step)` when a flow deliberately wants the lower-level
   `FlowStepControl` suspend-first path on a typed event ref
+- `sleepJson(...)`, `awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)`
+  when lower-level suspension directives still need DTO metadata without a
+  separate codec constant
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `takeResumeJson<T>(...)` for DTO event-driven resumes without a separate

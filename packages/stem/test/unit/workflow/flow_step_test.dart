@@ -23,4 +23,28 @@ void main() {
     final cont = FlowStepControl.continueRun();
     expect(cont.type, FlowControlType.continueRun);
   });
+
+  test('FlowStepControl JSON factories encode DTO payloads', () {
+    final sleep = FlowStepControl.sleepJson(
+      const Duration(seconds: 5),
+      const _SuspensionPayload(stage: 'sleeping'),
+    );
+    final wait = FlowStepControl.awaitTopicJson(
+      'topic',
+      const _SuspensionPayload(stage: 'waiting'),
+      deadline: DateTime.parse('2025-01-01T00:00:00Z'),
+    );
+
+    expect(sleep.data, equals(const {'stage': 'sleeping'}));
+    expect(wait.data, equals(const {'stage': 'waiting'}));
+    expect(wait.deadline, DateTime.parse('2025-01-01T00:00:00Z'));
+  });
+}
+
+class _SuspensionPayload {
+  const _SuspensionPayload({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
 }
