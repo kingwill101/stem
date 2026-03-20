@@ -55,6 +55,9 @@
 - Simplified the `task_context_mixed` enqueue example to use
   `StemClient.create(...)` with its existing SQLite broker helper instead of
   manually creating a raw `Stem` producer for task submission.
+- Simplified the `image_processor` HTTP API example to use
+  `StemClient.create(...)` with Redis broker/result backend factories instead
+  of manually constructing a raw `Stem` publisher service.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
