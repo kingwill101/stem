@@ -124,6 +124,9 @@
 - Updated the developer environment and canvas docs to use the shared status
   helpers as the default status-inspection path, keeping raw backend reads as
   low-level guidance only.
+- Simplified the `canvas_patterns` examples to use `StemApp.inMemory(...)`,
+  `app.canvas`, and the shared task/group status helpers instead of manual
+  broker/backend/worker wiring.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

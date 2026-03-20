@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
       name: 'fetch.user',
@@ -27,34 +25,29 @@ Future<void> main() async {
     ),
   ];
 
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.inMemory(
     tasks: tasks,
-    consumerName: 'chain-worker',
-    concurrency: 1,
-    prefetchMultiplier: 1,
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'chain-worker',
+      concurrency: 1,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
-
-  final canvas = Canvas(broker: broker, backend: backend, tasks: tasks);
-  final chainResult = await canvas.chain<Object?>([
+  final chainResult = await app.canvas.chain<Object?>([
     task('fetch.user'),
     task('enrich.user'),
     task('send.email'),
   ]);
 
   await _waitFor(() async {
-    final status = await backend.get(chainResult.finalTaskId);
+    final status = await app.getTaskStatus(chainResult.finalTaskId);
     return status?.state == TaskState.succeeded;
   });
 
-  final status = await backend.get(chainResult.finalTaskId);
+  final status = await app.getTaskStatus(chainResult.finalTaskId);
   print('Chain completed with state: ${status?.state}');
 
-  await worker.shutdown();
-  await backend.close();
-  await broker.close();
+  await app.shutdown();
 }
 
 Future<void> _waitFor(
