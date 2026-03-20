@@ -46,6 +46,7 @@ import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -664,11 +665,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         );
         resumeData = null;
         dynamic result;
+        var suspendedBySignal = false;
         try {
           result = await TaskEnqueueScope.run(
             stepMeta,
             () async => await step.handler(context),
           );
+        } on WorkflowSuspensionSignal {
+          suspendedBySignal = true;
         } on _WorkflowLeaseLost {
           return;
         } catch (error, stack) {
@@ -820,6 +824,12 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
             );
           }
           return;
+        }
+        if (suspendedBySignal) {
+          throw StateError(
+            'Flow step "${step.name}" threw WorkflowSuspensionSignal without '
+            'scheduling a suspension control.',
+          );
         }
 
         final storedResult = step.encodeValue(result);
@@ -1551,12 +1561,15 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       ),
       workflows: _ChildWorkflowCaller(runtime: runtime, parentRunId: runId),
     );
-    T result;
+    late final T result;
+    var suspendedBySignal = false;
     try {
       result = await TaskEnqueueScope.run(
         stepMeta,
         () async => await handler(stepContext),
       );
+    } on WorkflowSuspensionSignal {
+      suspendedBySignal = true;
     } catch (error, stack) {
       await runtime._recordStepEvent(
         WorkflowStepEventType.failed,
@@ -1574,6 +1587,12 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         await _suspend(control, name, iteration);
         throw const _WorkflowScriptSuspended();
       }
+    }
+    if (suspendedBySignal) {
+      throw StateError(
+        'Script checkpoint "$name" threw WorkflowSuspensionSignal without '
+        'scheduling a suspension control.',
+      );
     }
 
     final storedResult = declaredCheckpoint?.encodeValue(result) ?? result;

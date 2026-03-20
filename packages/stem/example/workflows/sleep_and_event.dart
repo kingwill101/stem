@@ -16,16 +16,13 @@ Future<void> main() async {
     build: (flow) {
       flow
         ..step('initial', (ctx) async {
-          if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
-            return null;
-          }
+          await ctx.sleepFor(duration: const Duration(milliseconds: 200));
           return 'awake';
         })
         ..step('await-event', (ctx) async {
-          final payload = ctx.waitForEventRef(demoEvent);
-          if (payload == null) {
-            return null;
-          }
+          final payload = await ctx.waitForEvent<Map<String, Object?>>(
+            topic: demoEvent.topic,
+          );
           return payload['message'];
         });
     },

@@ -518,6 +518,46 @@ void main() {
     expect(completed?.result, 'resumed');
   });
 
+  test('sleepFor suspends and resumes without manual guards', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'sleep.expression.workflow',
+        build: (flow) {
+          flow
+            ..step('wait', (context) async {
+              await context.sleepFor(
+                duration: const Duration(milliseconds: 20),
+              );
+              return 'slept';
+            })
+            ..step(
+              'complete',
+              (context) async => '${context.previousResult}-done',
+            );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('sleep.expression.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.resumeAt, isNotNull);
+
+    clock.advance(const Duration(milliseconds: 30));
+    final due = await store.dueRuns(clock.now());
+    for (final id in due) {
+      final state = await store.get(id);
+      await store.markResumed(id, data: state?.suspensionData);
+      await runtime.executeRun(id);
+    }
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(completed?.result, 'slept-done');
+  });
+
   test('awaitEvent suspends and resumes with payload', () async {
     String? observedPayload;
 
@@ -552,6 +592,40 @@ void main() {
     final completed = await store.get(runId);
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload, 'user-123');
+  });
+
+  test('waitForEvent suspends and resumes with payload', () async {
+    String? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.expression.workflow',
+        build: (flow) {
+          flow.step('wait', (context) async {
+            final payload = await context.waitForEvent<Map<String, Object?>>(
+              topic: 'user.updated.expression',
+            );
+            observedPayload = payload['id'] as String?;
+            return payload['id'];
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.expression.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, 'user.updated.expression');
+
+    await runtime.emit('user.updated.expression', const {'id': 'user-789'});
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload, 'user-789');
+    expect(completed?.result, 'user-789');
   });
 
   test('emitValue resumes flows with codec-backed DTO payloads', () async {
@@ -1016,6 +1090,44 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(resumePayload?['id'], 'user-42');
     expect(completed?.result, 'user-42');
+  });
+
+  test('script waitForEvent uses named args and resumes with payload', () async {
+    Map<String, Object?>? resumePayload;
+
+    runtime.registerWorkflow(
+      WorkflowScript(
+        name: 'script.event.expression',
+        run: (script) async {
+          final result = await script.step('wait', (step) async {
+            final payload = await step.waitForEvent<Map<String, Object?>>(
+              topic: 'user.updated.expression.script',
+            );
+            resumePayload = payload;
+            return payload['id'];
+          });
+          return result;
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('script.event.expression');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, 'user.updated.expression.script');
+
+    await runtime.emit(
+      'user.updated.expression.script',
+      const {'id': 'user-43'},
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(resumePayload?['id'], 'user-43');
+    expect(completed?.result, 'user-43');
   });
 
   test('script autoVersion step persists sequential checkpoints', () async {

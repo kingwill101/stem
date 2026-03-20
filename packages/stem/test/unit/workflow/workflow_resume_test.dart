@@ -84,6 +84,39 @@ void main() {
     expect(resumedContext.takeControl(), isNull);
   });
 
+  test('FlowContext.sleepFor uses named args and throws suspension signal', () {
+    final firstContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    expect(
+      () => firstContext.sleepFor(duration: const Duration(seconds: 1)),
+      throwsA(isA<WorkflowSuspensionSignal>()),
+    );
+    expect(firstContext.takeControl()?.type, FlowControlType.sleep);
+
+    final resumedContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      resumeData: true,
+    );
+
+    expect(
+      resumedContext.sleepFor(duration: const Duration(seconds: 1)),
+      completes,
+    );
+    expect(resumedContext.takeControl(), isNull);
+  });
+
   test(
     'FlowContext.waitForEventValue registers watcher then decodes payload',
     () {
@@ -163,6 +196,95 @@ void main() {
     expect(resumed?.message, 'approved');
   });
 
+  test(
+    'FlowContext.waitForEventRefValue uses named args and resumes with payload',
+    () {
+      const event = WorkflowEventRef<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      );
+      final waiting = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      expect(
+        () => waiting.waitForEventRefValue(event: event),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(waiting.takeControl()?.topic, 'demo.event');
+
+      final resumed = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {'message': 'approved'},
+      );
+
+      expect(
+        resumed.waitForEventRefValue(event: event),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('FlowContext.waitForEvent uses named args and resumes with payload', () {
+    final waiting = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    expect(
+      () => waiting.waitForEvent<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      ),
+      throwsA(isA<WorkflowSuspensionSignal>()),
+    );
+    expect(waiting.takeControl()?.topic, 'demo.event');
+
+    final resumed = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      resumeData: const {'message': 'approved'},
+    );
+
+    expect(
+      resumed.waitForEvent<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      ),
+      completion(
+        isA<_ResumePayload>().having(
+          (value) => value.message,
+          'message',
+          'approved',
+        ),
+      ),
+    );
+  });
+
   test('FlowContext.awaitEventRef reuses the event topic', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
@@ -230,6 +352,53 @@ void main() {
     },
   );
 
+  test(
+    'WorkflowScriptStepContext expression helpers use named args and '
+    'throw suspension signal',
+    () {
+      final sleeping = _FakeWorkflowScriptStepContext();
+      expect(
+        sleeping.sleepFor(duration: const Duration(milliseconds: 10)),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(sleeping.sleepCalls, [const Duration(milliseconds: 10)]);
+
+      final resumedSleep = _FakeWorkflowScriptStepContext(resumeData: true);
+      expect(
+        resumedSleep.sleepFor(duration: const Duration(milliseconds: 10)),
+        completes,
+      );
+      expect(resumedSleep.sleepCalls, isEmpty);
+
+      final waiting = _FakeWorkflowScriptStepContext();
+      expect(
+        waiting.waitForEvent<_ResumePayload>(
+          topic: 'demo.event',
+          codec: _resumePayloadCodec,
+        ),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(waiting.awaitedTopics, ['demo.event']);
+
+      final resumedEvent = _FakeWorkflowScriptStepContext(
+        resumeData: const {'message': 'approved'},
+      );
+      expect(
+        resumedEvent.waitForEvent<_ResumePayload>(
+          topic: 'demo.event',
+          codec: _resumePayloadCodec,
+        ),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
+
   test('WorkflowScriptStepContext.waitForEventRef reuses topic and codec', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
@@ -246,6 +415,38 @@ void main() {
     final resumedValue = resumed.waitForEventRef(event);
     expect(resumedValue?.message, 'approved');
   });
+
+  test(
+    'WorkflowScriptStepContext.waitForEventRefValue uses named args and '
+    'resumes with payload',
+    () {
+      const event = WorkflowEventRef<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      );
+      final waiting = _FakeWorkflowScriptStepContext();
+
+      expect(
+        waiting.waitForEventRefValue(event: event),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(waiting.awaitedTopics, ['demo.event']);
+
+      final resumed = _FakeWorkflowScriptStepContext(
+        resumeData: const {'message': 'approved'},
+      );
+      expect(
+        resumed.waitForEventRefValue(event: event),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
 
   test(
     'WorkflowScriptStepContext.awaitEventRef reuses the event topic',

@@ -6,6 +6,15 @@ import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 
+/// Internal control-flow signal used by expression-style suspension helpers.
+///
+/// The workflow runtime catches this after a helper has already scheduled the
+/// corresponding sleep or event wait directive. User code should not catch it.
+class WorkflowSuspensionSignal implements Exception {
+  /// Creates a durable suspension control-flow signal.
+  const WorkflowSuspensionSignal();
+}
+
 /// Typed resume helpers for durable workflow suspensions.
 extension FlowContextResumeValues on FlowContext {
   /// Returns the next resume payload as [T] and consumes it.
@@ -44,6 +53,25 @@ extension FlowContextResumeValues on FlowContext {
     return false;
   }
 
+  /// Suspends once for [duration] and resumes by replaying the same step.
+  ///
+  /// This enables expression-style flow logic:
+  ///
+  /// ```dart
+  /// await ctx.sleepFor(duration: const Duration(seconds: 1));
+  /// ```
+  Future<void> sleepFor({
+    required Duration duration,
+    Map<String, Object?>? data,
+  }) async {
+    final resume = takeResumeData();
+    if (resume != null) {
+      return;
+    }
+    sleep(duration, data: data);
+    throw const WorkflowSuspensionSignal();
+  }
+
   /// Returns the next event payload as [T] when the step has resumed, or
   /// registers an event wait and returns `null` on the first invocation.
   ///
@@ -72,6 +100,21 @@ extension FlowContextResumeValues on FlowContext {
     return null;
   }
 
+  /// Suspends until [topic] is emitted, then returns the resumed payload.
+  Future<T> waitForEvent<T>({
+    required String topic,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+    PayloadCodec<T>? codec,
+  }) async {
+    final payload = takeResumeValue<T>(codec: codec);
+    if (payload != null) {
+      return payload;
+    }
+    awaitEvent(topic, deadline: deadline, data: data);
+    throw const WorkflowSuspensionSignal();
+  }
+
   /// Returns the next event payload from [event] when the step has resumed, or
   /// registers an event wait and returns `null` on the first invocation.
   T? waitForEventRef<T>(
@@ -81,6 +124,20 @@ extension FlowContextResumeValues on FlowContext {
   }) {
     return waitForEventValue<T>(
       event.topic,
+      deadline: deadline,
+      data: data,
+      codec: event.codec,
+    );
+  }
+
+  /// Suspends until [event] is emitted, then returns the decoded payload.
+  Future<T> waitForEventRefValue<T>({
+    required WorkflowEventRef<T> event,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return waitForEvent<T>(
+      topic: event.topic,
       deadline: deadline,
       data: data,
       codec: event.codec,
@@ -128,6 +185,20 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
     return false;
   }
 
+  /// Suspends once for [duration] and resumes by replaying the same
+  /// checkpoint.
+  Future<void> sleepFor({
+    required Duration duration,
+    Map<String, Object?>? data,
+  }) async {
+    final resume = takeResumeData();
+    if (resume != null) {
+      return;
+    }
+    await sleep(duration, data: data);
+    throw const WorkflowSuspensionSignal();
+  }
+
   /// Returns the next event payload as [T] when the checkpoint has resumed, or
   /// registers an event wait and returns `null` on the first invocation.
   T? waitForEventValue<T>(
@@ -144,6 +215,21 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
     return null;
   }
 
+  /// Suspends until [topic] is emitted, then returns the resumed payload.
+  Future<T> waitForEvent<T>({
+    required String topic,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+    PayloadCodec<T>? codec,
+  }) async {
+    final payload = takeResumeValue<T>(codec: codec);
+    if (payload != null) {
+      return payload;
+    }
+    await awaitEvent(topic, deadline: deadline, data: data);
+    throw const WorkflowSuspensionSignal();
+  }
+
   /// Returns the next event payload from [event] when the checkpoint has
   /// resumed, or registers an event wait and returns `null` on the first
   /// invocation.
@@ -154,6 +240,20 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
   }) {
     return waitForEventValue<T>(
       event.topic,
+      deadline: deadline,
+      data: data,
+      codec: event.codec,
+    );
+  }
+
+  /// Suspends until [event] is emitted, then returns the decoded payload.
+  Future<T> waitForEventRefValue<T>({
+    required WorkflowEventRef<T> event,
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return waitForEvent<T>(
+      topic: event.topic,
       deadline: deadline,
       data: data,
       codec: event.codec,

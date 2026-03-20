@@ -21,14 +21,11 @@ Future<void> main() async {
       });
 
       final trackingId = await script.step('wait-for-shipment', (step) async {
-        final payload = step.waitForEventRef(
-          shipmentReadyEvent,
+        final payload = await step.waitForEventRefValue(
+          event: shipmentReadyEvent,
           deadline: DateTime.now().add(const Duration(minutes: 5)),
           data: const {'reason': 'waiting-for-carrier'},
         );
-        if (payload == null) {
-          return 'waiting';
-        }
         return payload.trackingId;
       });
 

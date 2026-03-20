@@ -16,9 +16,7 @@ For the common "sleep once, continue on resume" case, prefer the higher-level
 helper:
 
 ```dart
-if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
-  return null;
-}
+await ctx.sleepFor(duration: const Duration(milliseconds: 200));
 ```
 
 ## Await external events
@@ -34,18 +32,15 @@ Typical flow:
    `WorkflowRuntime.emitValue(...)` (or an app/service wrapper around it) with
    a payload
 4. the runtime resumes the run and exposes the payload through
-   `waitForEventValue<T>(...)`, `waitForEventRef(...)`, or the lower-level
+   `waitForEvent(...)`, `waitForEventRefValue(...)`, or the lower-level
    `takeResumeData()` / `takeResumeValue<T>(codec: ...)`
 
 For the common "wait for one event and continue" case, prefer:
 
 ```dart
-final payload = ctx.waitForEventValue<Map<String, Object?>>(
-  'orders.payment.confirmed',
+final payload = await ctx.waitForEvent<Map<String, Object?>>(
+  topic: 'orders.payment.confirmed',
 );
-if (payload == null) {
-  return null;
-}
 ```
 
 ## Emit resume events
@@ -69,7 +64,8 @@ When the topic and codec travel together in your codebase, prefer a typed
 `WorkflowEventRef<T>` and `event.emitWith(emitter, dto)` as the happy path.
 `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
 `event.call(value).emitWith(...)` remain available as lower-level variants.
-Pair that with `waitForEventRef(...)` or `awaitEventRef(...)`.
+Pair that with `await ctx.waitForEventRefValue(event: ref)` or
+`awaitEventRef(...)`.
 
 ## Inspect waiting runs
 

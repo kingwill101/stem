@@ -392,9 +392,7 @@ final app = await StemWorkflowApp.inMemory(
         });
 
         await script.step('poll-shipment', (step) async {
-          if (!step.sleepUntilResumed(const Duration(seconds: 30))) {
-            return 'waiting';
-          }
+          await step.sleepFor(duration: const Duration(seconds: 30));
           final status = await fetchShipment(checkout.id);
           if (!status.isComplete) {
             await step.sleep(const Duration(seconds: 30));
@@ -421,6 +419,9 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.iteration` tracks the current auto-version suffix when
   `autoVersion: true` is set.
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
+- `await step.sleepFor(duration: ...)` is the expression-style sleep path.
+- `await step.waitForEvent(topic: ..., codec: ...)` is the expression-style
+  event wait path.
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
@@ -1064,16 +1065,13 @@ backend metadata under `stem.unique.duplicates`.
 - Prefer the higher-level helpers for common cases:
 
   ```dart
-  if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
-    return null;
-  }
+  await ctx.sleepFor(duration: const Duration(milliseconds: 200));
   ```
 
   ```dart
-  final payload = ctx.waitForEventValue<Map<String, Object?>>('demo.event');
-  if (payload == null) {
-    return null;
-  }
+  final payload = await ctx.waitForEvent<Map<String, Object?>>(
+    topic: 'demo.event',
+  );
   ```
 
 - Use `ctx.takeResumeData()` or `ctx.takeResumeValue<T>(codec: ...)` when you
@@ -1096,9 +1094,9 @@ backend metadata under `stem.unique.duplicates`.
   `WorkflowEventRef<T>` and use `event.emitWith(emitter, dto)` as the happy
   path, with `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
   `event.call(value).emitWith(...)` still available as lower-level variants.
-  Pair that with `waitForEventRef(...)` or `awaitEventRef(...)`. Event
-  payloads still serialize onto the existing `Map<String, Object?>` wire
-  format.
+  Pair that with `await ctx.waitForEventRefValue(event: ref)` or
+  `awaitEventRef(...)`. Event payloads still serialize onto the existing
+  `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

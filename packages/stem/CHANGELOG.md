@@ -2,6 +2,11 @@
 
 ## 0.1.1
 
+- Added expression-style workflow suspension helpers with named arguments:
+  `await ctx.sleepFor(duration: ...)`,
+  `await ctx.waitForEvent(topic: ...)`, and
+  `await ctx.waitForEventRefValue(event: ...)` for both flow steps and script
+  checkpoints.
 - Added `StemModule.combine(...)` plus `modules:` support across `StemApp`,
   `StemWorkflowApp`, and `StemClient` bootstrap helpers so multi-module apps
   no longer need to pre-merge bundles manually at every call site.
