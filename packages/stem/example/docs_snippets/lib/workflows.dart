@@ -55,8 +55,11 @@ class ApprovalsFlow {
     name: 'approvals.flow',
     build: (flow) {
       flow.step('draft', (ctx) async {
-        final payload = ctx.requiredParam<Map<String, Object?>>('draft');
-        return payload.requiredValue<String>('documentId');
+        final draft = ctx.requiredParamJson<ApprovalDraft>(
+          'draft',
+          decode: ApprovalDraft.fromJson,
+        );
+        return draft.documentId;
       });
 
       flow.step('manager-review', (ctx) async {
@@ -167,8 +170,11 @@ class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
   Future<String> draft({FlowContext? context}) async {
     final ctx = context!;
-    final payload = ctx.requiredParam<Map<String, Object?>>('draft');
-    return payload.requiredValue<String>('documentId');
+    final draft = ctx.requiredParamJson<ApprovalDraft>(
+      'draft',
+      decode: ApprovalDraft.fromJson,
+    );
+    return draft.documentId;
   }
 
   @WorkflowStep(name: 'manager-review')

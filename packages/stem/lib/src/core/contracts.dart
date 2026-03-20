@@ -1756,6 +1756,47 @@ extension TaskInputContextArgs on TaskInputContext {
   T requiredArg<T>(String key, {PayloadCodec<T>? codec}) {
     return args.requiredValue<T>(key, codec: codec);
   }
+
+  /// Returns the decoded task arg DTO for [key], or `null`.
+  T? argJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO for [key], or [fallback].
+  T argJsonOr<T>(
+    String key,
+    T fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO for [key], throwing when absent.
+  T requiredArgJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.requiredValueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
 }
 
 /// Context passed to handler implementations during execution.

@@ -36,6 +36,8 @@ Depending on the context type, you can access:
 - workflow params and previous results
 - `param<T>()` / `requiredParam<T>()` for typed access to workflow start
   params
+- `paramJson<T>()` / `requiredParamJson<T>()` for nested DTO params without a
+  separate codec constant
 - `previousValue<T>()` / `requiredPreviousValue<T>()` for typed access to the
   prior step or checkpoint result
 - `sleepUntilResumed(...)` for common sleep/retry loops

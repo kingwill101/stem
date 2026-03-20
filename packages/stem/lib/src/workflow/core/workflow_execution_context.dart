@@ -58,6 +58,48 @@ extension WorkflowExecutionContextParams on WorkflowExecutionContext {
   T requiredParam<T>(String key, {PayloadCodec<T>? codec}) {
     return params.requiredValue<T>(key, codec: codec);
   }
+
+  /// Returns the decoded workflow parameter DTO for [key], or `null`.
+  T? paramJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded workflow parameter DTO for [key], or [fallback].
+  T paramJsonOr<T>(
+    String key,
+    T fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.valueJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded workflow parameter DTO for [key], throwing when
+  /// absent.
+  T requiredParamJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return params.requiredValueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
 }
 
 /// Typed read helpers for prior workflow step and checkpoint values.

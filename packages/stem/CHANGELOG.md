@@ -65,6 +65,10 @@
   `args.valueOr(...)`, and `ctx.params.requiredValue(...)` so manual tasks and
   workflows can decode scalars and codec-backed DTOs without repeating raw map
   casts.
+- Added direct JSON entry readers like `args.requiredValueJson(...)`,
+  `ctx.requiredParamJson(...)`, and shared `valueJson(...)` /
+  `requiredValueJson(...)` helpers so nested DTO payload fields no longer need
+  a separate `PayloadCodec<T>` constant.
 - Added `valueList<T>()`, `valueListOr(...)`, and `requiredValueList(...)` to
   the shared payload-map helpers so canvas chains/chords and other meta-driven
   paths can decode typed list payloads without manual list casts.

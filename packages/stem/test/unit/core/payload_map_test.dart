@@ -45,6 +45,37 @@ void main() {
       expect(draft.documentId, 'doc-42');
     });
 
+    test('valueJson decodes DTO values without a codec constant', () {
+      final payload = <String, Object?>{
+        'draft': const <String, Object?>{'documentId': 'doc-42'},
+      };
+
+      final draft = payload.valueJson<_ApprovalDraft>(
+        'draft',
+        decode: _ApprovalDraft.fromJson,
+      );
+
+      expect(draft?.documentId, 'doc-42');
+    });
+
+    test('requiredValueJson throws for missing payload keys', () {
+      const payload = <String, Object?>{'name': 'Stem'};
+
+      expect(
+        () => payload.requiredValueJson<_ApprovalDraft>(
+          'draft',
+          decode: _ApprovalDraft.fromJson,
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            "Missing required payload key 'draft'.",
+          ),
+        ),
+      );
+    });
+
     test('valueList reads typed scalar lists', () {
       const payload = <String, Object?>{
         'scores': [1, 2, 3],

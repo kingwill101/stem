@@ -436,6 +436,8 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.previousResult` contains the prior step’s persisted value.
 - `step.param<T>()` / `step.requiredParam<T>()` read workflow params without
   repeating raw map lookups.
+- `step.paramJson<T>()` / `step.requiredParamJson<T>()` decode nested DTO
+  params without a separate codec constant.
 - `step.previousValue<T>()` reads the prior persisted value without repeating
   manual casts.
 - `step.iteration` tracks the current auto-version suffix when
@@ -485,8 +487,11 @@ final approvalsFlow = Flow<String>(
   name: 'approvals.flow',
   build: (flow) {
     flow.step('draft', (ctx) async {
-      final payload = ctx.requiredParam<Map<String, Object?>>('draft');
-      return payload.requiredValue<String>('documentId');
+      final draft = ctx.requiredParamJson<ApprovalDraft>(
+        'draft',
+        decode: ApprovalDraft.fromJson,
+      );
+      return draft.documentId;
     });
 
     flow.step('manager-review', (ctx) async {

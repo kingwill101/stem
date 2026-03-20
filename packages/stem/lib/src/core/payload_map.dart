@@ -28,6 +28,51 @@ extension PayloadMapX on Map<String, Object?> {
     return value<T>(key, codec: codec) as T;
   }
 
+  /// Decodes the value for [key] as a typed DTO with a JSON decoder.
+  T? valueJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = this[key];
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the value for [key] as a typed DTO, or [fallback] when absent.
+  T valueJsonOr<T>(
+    String key,
+    T fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return valueJson<T>(
+          key,
+          decode: decode,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Decodes the value for [key] as a typed DTO, throwing when absent.
+  T requiredValueJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    if (!containsKey(key) || this[key] == null) {
+      throw StateError("Missing required payload key '$key'.");
+    }
+    return valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    ) as T;
+  }
+
   /// Returns the decoded list value for [key], or `null` when it is absent.
   ///
   /// When [codec] is supplied, each stored durable payload is decoded through
