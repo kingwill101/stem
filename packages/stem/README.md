@@ -328,8 +328,9 @@ class ParentTask implements TaskHandler<void> {
 ```
 
 If you inspect raw task progress signals, prefer
-`signal.dataJson('key', ...)`, `signal.dataAs('key', codec: ...)`, or
-`signal.dataValue<T>('key')` over manual `signal.data?['key']` casts.
+`signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`,
+`signal.dataAs('key', codec: ...)`, or `signal.dataValue<T>('key')` over
+manual `signal.data?['key']` casts.
 Shared `TaskExecutionContext` implementations also expose
 `context.retry(...)`, so typed annotated tasks can request retries without
 depending on a concrete task runtime class.
@@ -947,7 +948,9 @@ Task lifecycle signals expose matching result helpers on
 and `payload.resultAs(codec: ...)`.
 Workflow lifecycle signals expose matching metadata helpers on
 `WorkflowRunPayload` via `payload.metadataJson('key', ...)`,
-`payload.metadataAs('key', codec: ...)`, and `payload.metadataValue<T>('key')`.
+`payload.metadataVersionedJson('key', ...)`,
+`payload.metadataAs('key', codec: ...)`, and
+`payload.metadataValue<T>('key')`.
 Low-level `FlowStepControl` objects expose matching suspension metadata
 helpers via `control.dataJson(...)` and `control.dataAs(codec: ...)`.
 

@@ -143,6 +143,18 @@ void main() {
         isTrue,
       ),
     );
+    expect(
+      payload.metadataVersionedJson<_WorkflowRunMetadata>(
+        'approval',
+        version: 2,
+        decode: _WorkflowRunMetadata.fromVersionedJson,
+      ),
+      isA<_WorkflowRunMetadata>().having(
+        (value) => value.approved,
+        'approved',
+        isTrue,
+      ),
+    );
   });
 }
 
@@ -160,6 +172,14 @@ class _WorkflowRunMetadata {
   const _WorkflowRunMetadata({required this.approved});
 
   factory _WorkflowRunMetadata.fromJson(Map<String, dynamic> json) {
+    return _WorkflowRunMetadata(approved: json['approved'] as bool);
+  }
+
+  factory _WorkflowRunMetadata.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _WorkflowRunMetadata(approved: json['approved'] as bool);
   }
 

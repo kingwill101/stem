@@ -623,6 +623,27 @@ class WorkflowRunPayload implements StemEvent {
     );
   }
 
+  /// Decodes the metadata value for [key] as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return metadata.valueJson<T>(
+      key,
+      decode: (json) => PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ).decode(json),
+      typeName: typeName,
+    );
+  }
+
   /// Returns the decoded metadata value for [key], or [fallback] when absent.
   T metadataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
     return metadata.valueOr<T>(key, fallback, codec: codec);

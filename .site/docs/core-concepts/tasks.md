@@ -139,8 +139,9 @@ every retry signal and shows how the strategy interacts with broker timings.
   hand-built maps.
 - `context.retry(...)` – request an immediate retry with optional per-call
   retry policy overrides.
-- when you inspect a raw `ProgressSignal`, prefer `signal.dataJson('key', ...)`
-  or `signal.dataValue<T>('key')` over manual `signal.data?['key']` casts.
+- when you inspect a raw `ProgressSignal`, prefer
+  `signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`, or
+  `signal.dataValue<T>('key')` over manual `signal.data?['key']` casts.
 
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.

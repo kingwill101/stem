@@ -126,6 +126,29 @@ class ProgressSignal extends TaskInvocationSignal {
       typeName: typeName,
     );
   }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO from
+  /// version-aware JSON.
+  T? dataVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: (json) => PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ).decode(json),
+      typeName: typeName,
+    );
+  }
 }
 
 /// Request to enqueue a task from an isolate.

@@ -149,6 +149,9 @@
 - Added `WorkflowExecutionContext` as the shared typed execution context for
   flow steps and script checkpoints, and taught `stem_builder` to accept that
   shared context type directly in annotated workflow methods.
+- Added `WorkflowRunPayload.metadataVersionedJson(...)` and
+  `ProgressSignal.dataVersionedJson(...)` so signal payloads can decode
+  versioned DTO metadata without manual casts.
 - Simplified the manual JSON helper path so `TaskDefinition.json(...)` and
   `WorkflowRef.json(...)` no longer require unused producer-side
   `decodeArgs`/`decodeParams` callbacks just to publish DTO payloads.

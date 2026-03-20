@@ -208,6 +208,14 @@ void main() {
       ),
       isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
     );
+    expect(
+      signal.dataVersionedJson<_ProgressUpdate>(
+        'update',
+        version: 2,
+        decode: _ProgressUpdate.fromVersionedJson,
+      ),
+      isA<_ProgressUpdate>().having((value) => value.stage, 'stage', 'warming'),
+    );
   });
 
   test('TaskInvocationContext.local merges headers/meta and lineage', () async {
@@ -621,6 +629,14 @@ class _ProgressUpdate {
   const _ProgressUpdate({required this.stage});
 
   factory _ProgressUpdate.fromJson(Map<String, dynamic> json) {
+    return _ProgressUpdate(stage: json['stage'] as String);
+  }
+
+  factory _ProgressUpdate.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _ProgressUpdate(stage: json['stage'] as String);
   }
 
