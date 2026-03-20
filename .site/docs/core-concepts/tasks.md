@@ -55,6 +55,9 @@ Use `result.requiredValue()` when a completed task must have a decoded value
 and you want a fail-fast read instead of manual nullable handling.
 For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
 `decodeJson:` over a manual raw-payload cast.
+If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
+`status.payloadAs(codec: ...)` to decode the whole payload DTO without a
+separate cast/closure.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you

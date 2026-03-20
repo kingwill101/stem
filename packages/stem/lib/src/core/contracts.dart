@@ -270,6 +270,26 @@ class TaskStatus {
     return stored as T;
   }
 
+  /// Decodes the entire payload as a typed DTO with [codec].
+  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a JSON decoder.
+  T? payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Returns the decoded payload value, or [fallback] when it is absent.
   T payloadValueOr<T>(T fallback, {PayloadCodec<T>? codec}) {
     return payloadValue<T>(codec: codec) ?? fallback;

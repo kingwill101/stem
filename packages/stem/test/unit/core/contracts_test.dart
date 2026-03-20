@@ -185,6 +185,16 @@ void main() {
         status.requiredPayloadValue<Map<String, Object?>>(codec: codec),
         equals(const {'id': 'receipt-1'}),
       );
+      expect(
+        status.payloadAs<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadJson<_ReceiptPayload>(
+          decode: _ReceiptPayload.fromJson,
+        ),
+        isA<_ReceiptPayload>().having((value) => value.id, 'id', 'receipt-1'),
+      );
     });
 
     test('requiredPayloadValue throws when payload is absent', () {
@@ -209,6 +219,22 @@ void main() {
           const {'id': 'fallback'},
         ),
         equals(const {'id': 'fallback'}),
+      );
+      expect(
+        status.payloadAs<Map<String, Object?>>(
+          codec: PayloadCodec<Map<String, Object?>>.map(
+            encode: (value) => value,
+            decode: (json) => json,
+            typeName: 'ReceiptMap',
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        status.payloadJson<_ReceiptPayload>(
+          decode: _ReceiptPayload.fromJson,
+        ),
+        isNull,
       );
     });
   });
@@ -373,4 +399,14 @@ void main() {
     expect(error.toString(), contains('expected: 1'));
     expect(error.toString(), contains('actual: 2'));
   });
+}
+
+class _ReceiptPayload {
+  const _ReceiptPayload({required this.id});
+
+  factory _ReceiptPayload.fromJson(Map<String, dynamic> json) {
+    return _ReceiptPayload(id: json['id'] as String);
+  }
+
+  final String id;
 }

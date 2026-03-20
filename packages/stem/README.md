@@ -920,6 +920,9 @@ if (charge?.isSucceeded == true) {
 
 Use `waitFor(...)` when you need to keep the task id for inspection or pass it
 through another boundary before waiting.
+If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
+`status.payloadAs(codec: ...)` to decode the whole payload DTO without another
+cast/closure.
 
 Generated annotated tasks use the same surface:
 
