@@ -29,12 +29,13 @@ the worker subscription automatically.
 The managed worker subscribes to the workflow orchestration queue, so you do
 not need to manually register the internal `stem.workflow.run` task.
 
-If you prefer a minimal example, `startWorkflow(...)` and
-`startWorkflowJson(...)` also lazy-start the runtime and managed worker on
-first use. Explicit `start()` is still the better choice when you want
-deterministic application lifecycle control. Use those name-based APIs when
-workflow names come from config or external input. For workflows you define in
-code, prefer direct workflow helpers or generated workflow refs.
+If you prefer a minimal example, `startWorkflow(...)`,
+`startWorkflowValue(...)`, and `startWorkflowJson(...)` also lazy-start the
+runtime and managed worker on first use. Explicit `start()` is still the
+better choice when you want deterministic application lifecycle control. Use
+those name-based APIs when workflow names come from config or external input.
+For workflows you define in code, prefer direct workflow helpers or generated
+workflow refs.
 
 ## 3. Start a run and wait for the result
 

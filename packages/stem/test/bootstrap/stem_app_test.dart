@@ -547,6 +547,47 @@ void main() {
     });
 
     test(
+      'startWorkflowValue encodes typed params through the supplied codec',
+      () async {
+      final flow = Flow<String>(
+        name: 'workflow.codec.start',
+        build: (builder) {
+          builder.step(
+            'payload',
+            (ctx) async =>
+                '${ctx.requiredParam<String>('foo')}:'
+                '${ctx.requiredParam<String>('kind')}',
+          );
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflowValue(
+          'workflow.codec.start',
+          const _DemoPayload('bar'),
+          codec: const PayloadCodec<_DemoPayload>.map(
+            encode: _encodeDemoPayloadMap,
+            decode: _DemoPayload.fromJson,
+            typeName: '_DemoPayload',
+          ),
+        );
+        final runState = await workflowApp.getRun(runId);
+        final run = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(runId, isNotEmpty);
+        expect(runState?.params, containsPair('foo', 'bar'));
+        expect(runState?.params, containsPair('kind', 'custom'));
+        expect(run?.requiredValue(), 'bar:custom');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
+    test(
       'startWorkflowVersionedJson encodes DTO params with a persisted '
       'schema version',
       () async {
@@ -1532,6 +1573,11 @@ class _DemoPayload {
 
   Map<String, Object?> toJson() => {'foo': foo};
 }
+
+Object? _encodeDemoPayloadMap(_DemoPayload value) => {
+  'foo': value.foo,
+  'kind': 'custom',
+};
 
 const _demoPayloadCodec = PayloadCodec<_DemoPayload>(
   encode: _encodeDemoPayload,

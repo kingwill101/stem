@@ -240,6 +240,40 @@ class StemWorkflowApp
     );
   }
 
+  /// Starts a workflow from a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> startWorkflowValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    if (!_started) {
+      return start().then(
+        (_) => runtime.startWorkflowValue(
+          name,
+          value,
+          codec: codec,
+          parentRunId: parentRunId,
+          ttl: ttl,
+          cancellationPolicy: cancellationPolicy,
+        ),
+      );
+    }
+    return runtime.startWorkflowValue(
+      name,
+      value,
+      codec: codec,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Starts a workflow from a DTO and stores a schema [version] beside the
   /// JSON payload.
   Future<String> startWorkflowVersionedJson<T extends Object>(

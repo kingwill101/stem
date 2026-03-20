@@ -134,6 +134,10 @@
 - Added `TaskEnqueuer.enqueueValue(...)` across producers and task/workflow
   execution contexts so dynamic task names can still enqueue typed DTO payloads
   through an explicit `PayloadCodec<T>` without hand-built arg maps.
+- Added `WorkflowRuntime.startWorkflowValue(...)` and
+  `StemWorkflowApp.startWorkflowValue(...)` so dynamic workflow names can start
+  typed DTO-backed runs through an explicit `PayloadCodec<T>` without
+  hand-built param maps.
 - Added versioned low-level DTO shortcuts:
   `TaskEnqueuer.enqueueVersionedJson(...)`,
   `WorkflowRuntime.startWorkflowVersionedJson(...)`,

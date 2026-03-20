@@ -237,6 +237,27 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     );
   }
 
+  /// Persists a new workflow run from a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> startWorkflowValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWorkflow(
+      name,
+      params: _encodeWorkflowStartValue(name, value, codec: codec),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Persists a new workflow run from a DTO and stores a schema [version]
   /// beside the JSON payload.
   Future<String> startWorkflowVersionedJson<T extends Object>(
@@ -1505,6 +1526,35 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       ),
     );
   }
+}
+
+Map<String, Object?> _encodeWorkflowStartValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Workflow start payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Workflow start payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
 }
 
 /// Task handler that dispatches workflow run execution for a run id.
