@@ -944,8 +944,9 @@ For lower-level suspension directives, prefer `step.sleepJson(...)`,
 `step.awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)` over
 hand-built maps.
 Task lifecycle signals expose matching result helpers on
-`TaskPostrunPayload` and `TaskSuccessPayload` via `payload.resultJson(...)`
-and `payload.resultAs(codec: ...)`.
+`TaskPostrunPayload` and `TaskSuccessPayload` via
+`payload.resultJson(...)`, `payload.resultVersionedJson(...)`, and
+`payload.resultAs(codec: ...)`.
 Workflow lifecycle signals expose matching metadata helpers on
 `WorkflowRunPayload` via `payload.metadataJson('key', ...)`,
 `payload.metadataVersionedJson('key', ...)`,

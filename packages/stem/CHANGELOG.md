@@ -78,12 +78,12 @@
 - Added `WorkflowStepEvent.resultJson(...)` and `resultAs(codec: ...)` so
   workflow introspection consumers can decode DTO checkpoint results without
   manual casts.
-- Added `TaskPostrunPayload.resultJson(...)` and `resultAs(codec: ...)` so
-  task lifecycle signal consumers can decode DTO task results without manual
-  casts.
-- Added `TaskSuccessPayload.resultJson(...)` and `resultAs(codec: ...)` so
-  success-only task signal consumers can decode DTO task results without
-  manual casts.
+- Added `TaskPostrunPayload.resultJson(...)`,
+  `resultVersionedJson(...)`, and `resultAs(codec: ...)` so task lifecycle
+  signal consumers can decode DTO task results without manual casts.
+- Added `TaskSuccessPayload.resultJson(...)`,
+  `resultVersionedJson(...)`, and `resultAs(codec: ...)` so success-only
+  task signal consumers can decode DTO task results without manual casts.
 - Added `WorkflowRunPayload.metadataValue(...)`,
   `requiredMetadataValue(...)`, `metadataJson(...)`, and
   `metadataAs(codec: ...)` so workflow lifecycle signal consumers can decode

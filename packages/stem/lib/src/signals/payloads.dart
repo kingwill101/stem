@@ -233,6 +233,23 @@ class TaskPostrunPayload implements StemEvent {
     ).decode(stored);
   }
 
+  /// Decodes the task result with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// The final state of the task.
   final TaskState state;
 
@@ -353,6 +370,23 @@ class TaskSuccessPayload implements StemEvent {
     if (stored == null) return null;
     return PayloadCodec<TResult>.json(
       decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the task result with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
       typeName: typeName,
     ).decode(stored);
   }

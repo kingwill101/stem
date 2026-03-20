@@ -57,6 +57,13 @@ void main() {
       ),
       isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
     );
+    expect(
+      postrun.resultVersionedJson<_TaskResultPayload>(
+        version: 2,
+        decode: _TaskResultPayload.fromVersionedJson,
+      ),
+      isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
+    );
 
     final retry = TaskRetryPayload(
       envelope: envelope,
@@ -82,6 +89,13 @@ void main() {
     expect(
       success.resultJson<_TaskResultPayload>(
         decode: _TaskResultPayload.fromJson,
+      ),
+      isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
+    );
+    expect(
+      success.resultVersionedJson<_TaskResultPayload>(
+        version: 2,
+        decode: _TaskResultPayload.fromVersionedJson,
       ),
       isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
     );
@@ -162,6 +176,14 @@ class _TaskResultPayload {
   const _TaskResultPayload({required this.ok});
 
   factory _TaskResultPayload.fromJson(Map<String, dynamic> json) {
+    return _TaskResultPayload(ok: json['ok'] as bool);
+  }
+
+  factory _TaskResultPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _TaskResultPayload(ok: json['ok'] as bool);
   }
 
