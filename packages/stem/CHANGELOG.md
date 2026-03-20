@@ -61,6 +61,9 @@
 - Simplified the typed task-definition docs snippet to use
   `StemApp.inMemory(...)` and `definition.enqueueAndWait(...)` instead of
   manually wiring in-memory broker/backend instances and raw result waits.
+- Simplified the `routing_parity` publisher example to use
+  `StemClient.create(...)` with its explicit routing registry and Redis broker
+  factory instead of manually constructing a raw `Stem` publisher.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
