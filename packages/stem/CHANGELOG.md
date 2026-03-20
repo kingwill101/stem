@@ -110,6 +110,9 @@
 - Simplified the developer-environment bootstrap snippet to use a shared
   `StemClient` plus `createWorker(...)` while keeping the explicit Redis
   adapter configuration visible.
+- Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
+  and rate-limit delay shared libraries after those demos moved to
+  `StemClient`-based producers.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
