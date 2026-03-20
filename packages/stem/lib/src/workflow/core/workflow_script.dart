@@ -35,6 +35,28 @@ class WorkflowScript<T extends Object?> {
          resultTypeName: resultTypeName,
        );
 
+  /// Creates a script definition whose final result uses a custom payload
+  /// codec.
+  factory WorkflowScript.codec({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required PayloadCodec<T> resultCodec,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return WorkflowScript<T>(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
   /// Creates a script definition whose final result is a DTO-backed JSON
   /// value.
   factory WorkflowScript.json({

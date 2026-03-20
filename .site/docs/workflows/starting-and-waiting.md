@@ -66,7 +66,8 @@ still need to encode to a string-keyed map (typically
 
 If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 `WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
-case. Use `resultCodec:` only when the result needs a custom payload codec.
+case. Use `Flow.codec(...)` or `WorkflowScript.codec(...)` when the result
+needs a custom payload codec.
 
 For workflows without start params, start directly from the flow or script
 itself with `start(...)`, `startAndWait(...)`, or `prepareStart()`.

@@ -203,6 +203,26 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Creates a flow-based workflow definition whose final result uses a custom
+  /// payload codec.
+  factory WorkflowDefinition.flowCodec({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required PayloadCodec<T> resultCodec,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
   /// Creates a flow-based workflow definition whose final result is a DTO
   /// backed by a JSON payload.
   factory WorkflowDefinition.flowJson({
@@ -270,6 +290,28 @@ class WorkflowDefinition<T extends Object?> {
       scriptBody: run,
       resultEncoder: resultEncoder,
       resultDecoder: resultDecoder,
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result uses a
+  /// custom payload codec.
+  factory WorkflowDefinition.scriptCodec({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required PayloadCodec<T> resultCodec,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
     );
   }
 

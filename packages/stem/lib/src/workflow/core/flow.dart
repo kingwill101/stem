@@ -33,6 +33,25 @@ class Flow<T extends Object?> {
          resultTypeName: resultTypeName,
        );
 
+  /// Creates a flow definition whose final result uses a custom payload codec.
+  factory Flow.codec({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required PayloadCodec<T> resultCodec,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return Flow<T>(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
   /// Creates a flow definition whose final result is a DTO-backed JSON value.
   factory Flow.json({
     required String name,

@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `TaskDefinition.noArgsCodec(...)`, `Flow.codec(...)`,
+  `WorkflowScript.codec(...)`, `WorkflowDefinition.flowCodec(...)`, and
+  `.scriptCodec(...)` so the manual result path now has direct custom-codec
+  helpers alongside the newer JSON shortcuts.
 - Added `WorkflowDefinition.flowJson(...)` and
   `WorkflowDefinition.scriptJson(...)` so the raw definition path has the same
   direct DTO-result helper as `Flow.json(...)` and `WorkflowScript.json(...)`.

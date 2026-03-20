@@ -328,7 +328,7 @@ void main() {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
         final stem = Stem(broker: broker, backend: backend);
-        final definition = TaskDefinition.noArgs<_CodecReceipt>(
+        final definition = TaskDefinition.noArgsCodec<_CodecReceipt>(
           name: 'sample.no_args.codec',
           resultCodec: _codecReceiptCodec,
         );

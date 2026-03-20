@@ -72,8 +72,7 @@ instead. That gives you direct `enqueue(...)` /
 
 If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` when
 the result already has `toJson()` and `Type.fromJson(...)`. Use
-`TaskDefinition.noArgs(...)` with `resultCodec:` only when you need a custom
-payload codec.
+`TaskDefinition.noArgsCodec(...)` only when you need a custom payload codec.
 
 ## Configuring Retries
 

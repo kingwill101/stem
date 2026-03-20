@@ -249,9 +249,10 @@ await healthcheckDefinition.enqueue(stem);
 ```
 
 If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` in the
-common `toJson()` / `Type.fromJson(...)` case. Use `TaskDefinition.noArgs(...)`
-with `resultCodec:` when you need a custom payload codec. Both paths keep
-waiting helpers typed and advertise the right result encoder in task metadata.
+common `toJson()` / `Type.fromJson(...)` case. Use
+`TaskDefinition.noArgsCodec(...)` when you need a custom payload codec. Both
+paths keep waiting helpers typed and advertise the right result encoder in task
+metadata.
 
 You can also build requests fluently from the task definition itself:
 
@@ -372,8 +373,9 @@ For late registration, prefer the app helpers:
 - `registerModule(...)`
 
 If you are registering raw `WorkflowDefinition` values directly, prefer
-`WorkflowDefinition.flowJson(...)` and `WorkflowDefinition.scriptJson(...)`
-when the final result is a normal DTO with `toJson()` and `Type.fromJson(...)`.
+`WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
+path and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` for custom
+result codecs.
 
 ### Workflow script facade
 
@@ -526,8 +528,9 @@ still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are persisted as JSON-shaped data.
 
 If a manual flow or script only needs DTO result decoding, prefer
-`Flow.json(...)` or `WorkflowScript.json(...)` instead of passing
-`decodeResultJson:` to the base constructor.
+`Flow.json(...)` or `WorkflowScript.json(...)`. If the final result needs a
+custom codec, prefer `Flow.codec(...)` or `WorkflowScript.codec(...)` instead
+of passing `resultCodec:` to the base constructor.
 
 For workflows without start parameters, start directly from the flow or script
 itself:

@@ -2138,6 +2138,21 @@ class TaskDefinition<TArgs, TResult> {
   }
 
   /// Creates a typed task definition for handlers with no producer args.
+  static NoArgsTaskDefinition<TResult> noArgsCodec<TResult>({
+    required String name,
+    required PayloadCodec<TResult> resultCodec,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgsJson<TResult>({
     required String name,
     required TResult Function(Map<String, dynamic> payload) decodeResult,

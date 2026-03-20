@@ -71,8 +71,9 @@ runtime registry:
 - `registerModule(...)` / `registerModules(...)`
 
 If you are registering raw `WorkflowDefinition` values directly, prefer
-`WorkflowDefinition.flowJson(...)` and `WorkflowDefinition.scriptJson(...)`
-for the common DTO-result path.
+`WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
+path and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` when the
+result needs a custom codec.
 
 ## 5. Move to the right next page
 

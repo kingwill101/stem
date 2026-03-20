@@ -216,7 +216,7 @@ void main() {
     );
 
     test('codec-backed refs preserve workflow result decoding', () async {
-      final flow = Flow<_GreetingResult>(
+      final flow = Flow<_GreetingResult>.codec(
         name: 'runtime.ref.codec.result.flow',
         resultCodec: _greetingResultCodec,
         build: (builder) {
@@ -245,6 +245,53 @@ void main() {
         await workflowApp.shutdown();
       }
     });
+
+    test(
+      'raw workflow definitions expose direct codec result helpers',
+      () async {
+        final flow = WorkflowDefinition<_GreetingResult>.flowCodec(
+          name: 'runtime.ref.definition.codec.result.flow',
+          resultCodec: _greetingResultCodec,
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const _GreetingResult(
+                message: 'hello definition flow codec',
+              ),
+            );
+          },
+        );
+        final script = WorkflowDefinition<_GreetingResult>.scriptCodec(
+          name: 'runtime.ref.definition.codec.result.script',
+          resultCodec: _greetingResultCodec,
+          run: (context) async =>
+              const _GreetingResult(message: 'hello definition script codec'),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp.registerWorkflows([flow, script]);
+          await workflowApp.start();
+
+          final flowResult = await flow.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+          final scriptResult = await script.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(flowResult?.value?.message, 'hello definition flow codec');
+          expect(
+            scriptResult?.value?.message,
+            'hello definition script codec',
+          );
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
 
     test('manual workflows can derive json-backed result decoding', () async {
       final flow = Flow<_GreetingResult>.json(
