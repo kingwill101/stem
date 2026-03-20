@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('runtime workflow call extensions', () {
     test(
-      'startWith/startAndWaitWith/waitFor use typed workflow refs',
+      'start/startAndWait/waitFor use typed workflow refs',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -96,7 +96,7 @@ void main() {
     );
 
     test(
-      'named workflow start aliases mirror the with-suffixed helpers',
+      'named workflow start aliases mirror the direct workflow helpers',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.named.flow',

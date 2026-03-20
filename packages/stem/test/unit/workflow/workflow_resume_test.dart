@@ -161,7 +161,7 @@ void main() {
     },
   );
 
-  test('FlowContext.waitForEventRef reuses topic and codec', () {
+  test('WorkflowEventRef.waitValue reuses topic and codec for flows', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
       codec: _resumePayloadCodec,
@@ -197,7 +197,7 @@ void main() {
   });
 
   test(
-    'FlowContext.waitForEventRefValue uses named args and resumes with payload',
+    'WorkflowEventRef.wait uses named args and resumes with payload in flows',
     () {
       const event = WorkflowEventRef<_ResumePayload>(
         topic: 'demo.event',
@@ -399,7 +399,7 @@ void main() {
     },
   );
 
-  test('WorkflowScriptStepContext.waitForEventRef reuses topic and codec', () {
+  test('WorkflowEventRef.waitValue reuses topic and codec in scripts', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
       codec: _resumePayloadCodec,
@@ -417,8 +417,7 @@ void main() {
   });
 
   test(
-    'WorkflowScriptStepContext.waitForEventRefValue uses named args and '
-    'resumes with payload',
+    'WorkflowEventRef.wait uses named args and resumes with payload in scripts',
     () {
       const event = WorkflowEventRef<_ResumePayload>(
         topic: 'demo.event',
