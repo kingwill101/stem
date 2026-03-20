@@ -117,6 +117,7 @@ extension FlowContextResumeValues on FlowContext {
 
   /// Returns the next event payload from [event] when the step has resumed, or
   /// registers an event wait and returns `null` on the first invocation.
+  @Deprecated('Use event.waitValue(this, ...) instead.')
   T? waitForEventRef<T>(
     WorkflowEventRef<T> event, {
     DateTime? deadline,
@@ -131,6 +132,7 @@ extension FlowContextResumeValues on FlowContext {
   }
 
   /// Suspends until [event] is emitted, then returns the decoded payload.
+  @Deprecated('Use event.wait(this, ...) instead.')
   Future<T> waitForEventRefValue<T>({
     required WorkflowEventRef<T> event,
     DateTime? deadline,
