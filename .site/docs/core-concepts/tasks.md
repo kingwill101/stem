@@ -54,7 +54,8 @@ lets you deserialize complex objects before they reach application code.
 Use `result.requiredValue()` when a completed task must have a decoded value
 and you want a fail-fast read instead of manual nullable handling.
 For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
-`decodeJson:` over a manual raw-payload cast.
+`decodeJson:` for plain DTOs or `decodeVersionedJson:` when the stored payload
+persists an explicit schema version.
 If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
 `status.payloadAs(codec: ...)` to decode the whole payload DTO without a
 separate cast/closure. Use `status.payloadVersionedJson(...)` when the stored

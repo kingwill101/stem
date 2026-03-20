@@ -201,12 +201,15 @@ abstract class StemClient implements TaskResultCaller {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
     TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
   }) {
     return stem.waitForTask(
       taskId,
       timeout: timeout,
       decode: decode,
       decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
     );
   }
 

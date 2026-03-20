@@ -478,6 +478,45 @@ void main() {
       }
     });
 
+    test(
+      'waitForCompletion decodes versioned custom types on success',
+      () async {
+        final flow = Flow<Map<String, Object?>>(
+          name: 'workflow.typed.versioned',
+          build: (builder) {
+            builder.step(
+              'payload',
+              (ctx) async => {
+                PayloadCodec.versionKey: 2,
+                'foo': 'bar',
+              },
+            );
+          },
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          final runId = await workflowApp.startWorkflow(
+            'workflow.typed.versioned',
+          );
+          final run = await workflowApp.waitForCompletion<_DemoPayload>(
+            runId,
+            decodeVersionedJson: _DemoPayload.fromVersionedJson,
+          );
+
+          expect(run, isNotNull);
+          expect(run!.value, isA<_DemoPayload>());
+          expect(run.value!.foo, 'bar-v2');
+          expect(run.state.result, {
+            PayloadCodec.versionKey: 2,
+            'foo': 'bar',
+          });
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('startWorkflowJson encodes DTO params without a manual map', () async {
       final flow = Flow<String>(
         name: 'workflow.json.start',
@@ -508,7 +547,8 @@ void main() {
     });
 
     test(
-      'startWorkflowVersionedJson encodes DTO params with a persisted schema version',
+      'startWorkflowVersionedJson encodes DTO params with a persisted '
+      'schema version',
       () async {
         final flow = Flow<String>(
           name: 'workflow.versioned.json.start',
@@ -1483,6 +1523,11 @@ class _DemoPayload {
 
   factory _DemoPayload.fromJson(Map<String, Object?> json) =>
       _DemoPayload(json['foo']! as String);
+
+  factory _DemoPayload.fromVersionedJson(
+    Map<String, Object?> json,
+    int version,
+  ) => _DemoPayload('${json['foo']! as String}-v$version');
 
   final String foo;
 

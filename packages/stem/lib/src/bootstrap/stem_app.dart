@@ -143,6 +143,8 @@ class StemApp implements StemTaskApp {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
     TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
   }) async {
     await _ensureStarted();
     return stem.waitForTask(
@@ -150,6 +152,7 @@ class StemApp implements StemTaskApp {
       timeout: timeout,
       decode: decode,
       decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
     );
   }
 

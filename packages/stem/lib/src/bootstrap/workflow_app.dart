@@ -132,12 +132,15 @@ class StemWorkflowApp
     Duration? timeout,
     TResult Function(Object? payload)? decode,
     TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
   }) {
     return app.waitForTask(
       taskId,
       timeout: timeout,
       decode: decode,
       decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
     );
   }
 
@@ -506,10 +509,14 @@ class StemWorkflowApp
     Duration? timeout,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      decode == null || decodeJson == null,
-      'Specify either decode or decodeJson, not both.',
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final startedAt = stemNow();
     while (true) {
@@ -522,6 +529,7 @@ class StemWorkflowApp
           state,
           decode,
           decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
           timedOut: false,
         );
       }
@@ -530,6 +538,7 @@ class StemWorkflowApp
           state,
           decode,
           decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
           timedOut: true,
         );
       }
@@ -559,9 +568,15 @@ class StemWorkflowApp
     T Function(Object? payload)? decode, {
     required bool timedOut,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) {
     final value = state.status == WorkflowStatus.completed
-        ? _decodeResult(state.result, decode, decodeJson)
+        ? _decodeResult(
+            state.result,
+            decode,
+            decodeJson,
+            decodeVersionedJson,
+          )
         : null;
     return WorkflowResult<T>(
       runId: state.id,
@@ -577,9 +592,16 @@ class StemWorkflowApp
     Object? payload,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   ) {
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
     }
     if (decodeJson != null) {
       return decodeJson(

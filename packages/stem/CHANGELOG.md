@@ -20,6 +20,11 @@
   `WorkflowRuntime.emitVersionedJson(...)`,
   `StemWorkflowApp.emitVersionedJson(...)`, and
   `QueueEventsProducer.emitVersionedJson(...)`.
+- Added `decodeVersionedJson:` to the low-level
+  `Stem.waitForTask<T>`, `StemApp.waitForTask<T>`,
+  `StemClient.waitForTask<T>`, `StemWorkflowApp.waitForCompletion<T>`, and
+  `WorkflowRuntime.waitForCompletion<T>` APIs so schema-versioned DTO waits no
+  longer need a manual raw-payload closure.
 - Added direct `versionedJson(...)` shortcuts for manual task definitions,
   workflow refs, and workflow event refs so evolving DTO payloads do not need
   a separate `PayloadCodec.versionedJson(...)` constant in the common case.

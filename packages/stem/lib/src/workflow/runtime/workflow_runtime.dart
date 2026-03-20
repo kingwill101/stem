@@ -302,10 +302,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     Duration? timeout,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      decode == null || decodeJson == null,
-      'Specify either decode or decodeJson, not both.',
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final startedAt = _clock.now();
     while (true) {
@@ -318,6 +322,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
           state,
           decode,
           decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
           timedOut: false,
         );
       }
@@ -326,6 +331,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
           state,
           decode,
           decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
           timedOut: true,
         );
       }
@@ -429,9 +435,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     T Function(Object? payload)? decode, {
     required bool timedOut,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) {
     final value = state.status == WorkflowStatus.completed
-        ? _decodeResult(state.result, decode, decodeJson)
+        ? _decodeResult(
+            state.result,
+            decode,
+            decodeJson,
+            decodeVersionedJson,
+          )
         : null;
     return WorkflowResult<T>(
       runId: state.id,
@@ -447,9 +459,16 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     Object? payload,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   ) {
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
     }
     if (decodeJson != null) {
       return decodeJson(

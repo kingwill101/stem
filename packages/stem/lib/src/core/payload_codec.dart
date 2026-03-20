@@ -130,6 +130,19 @@ class PayloadCodec<T> {
     return _payloadJsonMap(payload, typeName);
   }
 
+  /// Reads the persisted schema version from a durable JSON payload.
+  static int readPayloadVersion(
+    Object? payload, {
+    int defaultVersion = 1,
+    String typeName = 'payload',
+  }) {
+    return _payloadVersion(
+      _payloadJsonMap(payload, typeName),
+      defaultVersion: defaultVersion,
+      typeName: typeName,
+    );
+  }
+
   /// Converts a typed value into a durable payload representation.
   Object? encode(T value) {
     final encoded = _encode(value);

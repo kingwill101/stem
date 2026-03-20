@@ -158,7 +158,10 @@ void main() {
       );
 
       expect(id, isNotEmpty);
-      expect(broker.published.single.envelope.name, 'sample.versioned.json.args');
+      expect(
+        broker.published.single.envelope.name,
+        'sample.versioned.json.args',
+      );
       expect(broker.published.single.envelope.queue, 'typed');
       expect(broker.published.single.envelope.args, {
         PayloadCodec.versionKey: 2,
@@ -678,6 +681,32 @@ void main() {
       expect(result?.requiredValue().id, 'receipt-json');
       expect(result?.rawPayload, const {'id': 'receipt-json'});
     });
+
+    test('supports decodeVersionedJson for low-level DTO waits', () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+
+      await backend.set(
+        'task-versioned-json-wait',
+        TaskState.succeeded,
+        payload: const {
+          PayloadCodec.versionKey: 2,
+          'id': 'receipt-versioned-json',
+        },
+      );
+
+      final result = await stem.waitForTask<_CodecReceipt>(
+        'task-versioned-json-wait',
+        decodeVersionedJson: _CodecReceipt.fromVersionedJson,
+      );
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.requiredValue().id, 'receipt-versioned-json-v2');
+      expect(result?.rawPayload, const {
+        PayloadCodec.versionKey: 2,
+        'id': 'receipt-versioned-json',
+      });
+    });
   });
 }
 
@@ -705,6 +734,13 @@ class _CodecReceipt {
 
   factory _CodecReceipt.fromJson(Map<String, Object?> json) {
     return _CodecReceipt(json['id']! as String);
+  }
+
+  factory _CodecReceipt.fromVersionedJson(
+    Map<String, Object?> json,
+    int version,
+  ) {
+    return _CodecReceipt('${json['id']! as String}-v$version');
   }
 
   final String id;

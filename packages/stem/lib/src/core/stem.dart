@@ -89,6 +89,8 @@ abstract interface class TaskResultCaller implements TaskEnqueuer {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
     TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
   });
 
   /// Waits for [taskId] using a typed [definition] for result decoding.
@@ -522,10 +524,14 @@ class Stem implements TaskResultCaller {
     Duration? timeout,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      decode == null || decodeJson == null,
-      'Specify either decode or decodeJson, not both.',
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final resultBackend = backend;
     if (resultBackend == null) {
@@ -539,7 +545,12 @@ class Stem implements TaskResultCaller {
         taskId: taskId,
         status: lastStatus,
         value: lastStatus.state == TaskState.succeeded
-            ? _decodeTaskPayload(lastStatus.payload, decode, decodeJson)
+            ? _decodeTaskPayload(
+                lastStatus.payload,
+                decode,
+                decodeJson,
+                decodeVersionedJson,
+              )
             : null,
         rawPayload: lastStatus.payload,
       );
@@ -562,7 +573,12 @@ class Stem implements TaskResultCaller {
           taskId: taskId,
           status: status,
           value: status.state == TaskState.succeeded
-              ? _decodeTaskPayload(status.payload, decode, decodeJson)
+              ? _decodeTaskPayload(
+                  status.payload,
+                  decode,
+                  decodeJson,
+                  decodeVersionedJson,
+                )
               : null,
           rawPayload: status.payload,
           timedOut: timedOut && !status.state.isTerminal,
@@ -1087,10 +1103,17 @@ class Stem implements TaskResultCaller {
     Object? payload,
     T Function(Object? payload)? decode,
     T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   ) {
     if (payload == null) return null;
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'task result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
     }
     if (decodeJson != null) {
       return decodeJson(

@@ -92,7 +92,8 @@ like `ordersFlow.startAndWait(...)` and
 
 `waitForCompletion<T>` is the low-level completion API for name-based runs. It
 polls the store until the run finishes or the caller times out. For DTO
-results, prefer `decodeJson:` over a manual raw-payload cast.
+results, prefer `decodeJson:` for plain DTOs or `decodeVersionedJson:` when
+the persisted payload carries an explicit schema version.
 If you already have a raw `WorkflowResult<Object?>`, use
 `result.payloadJson(...)` or `result.payloadAs(codec: ...)` to decode the
 stored workflow result without another cast/closure.
