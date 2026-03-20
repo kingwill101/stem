@@ -603,11 +603,28 @@ void main() {
         const _SuspensionPayload(stage: 'waiting'),
         deadline: DateTime.parse('2025-01-01T00:00:00Z'),
       );
+      await context.sleepVersionedJson(
+        const Duration(seconds: 3),
+        const _SuspensionPayload(stage: 'versioned-sleep'),
+        version: 2,
+      );
+      await context.awaitEventVersionedJson(
+        'topic.versioned',
+        const _SuspensionPayload(stage: 'versioned-wait'),
+        version: 2,
+        deadline: DateTime.parse('2025-01-01T00:00:01Z'),
+      );
 
-      expect(context.sleepCalls, equals([const Duration(seconds: 2)]));
-      expect(context.awaitedTopics, equals(['topic']));
-      expect(context.awaitedData, equals(const {'stage': 'waiting'}));
-      expect(context.awaitedDeadline, DateTime.parse('2025-01-01T00:00:00Z'));
+      expect(
+        context.sleepCalls,
+        equals([const Duration(seconds: 2), const Duration(seconds: 3)]),
+      );
+      expect(context.awaitedTopics, equals(['topic', 'topic.versioned']));
+      expect(context.awaitedData, {
+        PayloadCodec.versionKey: 2,
+        'stage': 'versioned-wait',
+      });
+      expect(context.awaitedDeadline, DateTime.parse('2025-01-01T00:00:01Z'));
     },
   );
 

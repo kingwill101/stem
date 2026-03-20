@@ -194,6 +194,23 @@ class FlowStepControl {
     ),
   );
 
+  /// Suspend the run until [duration] elapses with a versioned DTO payload.
+  static FlowStepControl sleepVersionedJson<T>(
+    Duration duration,
+    T value, {
+    required int version,
+    String? typeName,
+  }) => FlowStepControl.sleep(
+    duration,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeVersionedJsonMap(
+        value,
+        version: version,
+        typeName: typeName,
+      ),
+    ),
+  );
+
   /// Suspend the run until an event with [topic] arrives with a DTO payload.
   static FlowStepControl awaitTopicJson<T>(
     String topic,
@@ -205,6 +222,26 @@ class FlowStepControl {
     deadline: deadline,
     data: Map<String, Object?>.from(
       PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
+  );
+
+  /// Suspend the run until an event with [topic] arrives with a versioned DTO
+  /// payload.
+  static FlowStepControl awaitTopicVersionedJson<T>(
+    String topic,
+    T value, {
+    required int version,
+    DateTime? deadline,
+    String? typeName,
+  }) => FlowStepControl.awaitTopic(
+    topic,
+    deadline: deadline,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeVersionedJsonMap(
+        value,
+        version: version,
+        typeName: typeName,
+      ),
     ),
   );
 

@@ -75,7 +75,8 @@ Pair that with `await event.wait(ctx)`. If you are writing a flow and
 deliberately want the lower-level `FlowStepControl` path, use
 `event.awaitOn(step)` instead of dropping back to a raw topic string.
 For low-level sleep/event directives that still need DTO metadata, use
-`step.sleepJson(...)`, `step.awaitEventJson(...)`, or
+`step.sleepJson(...)`, `step.sleepVersionedJson(...)`,
+`step.awaitEventJson(...)`, `step.awaitEventVersionedJson(...)`, or
 `FlowStepControl.awaitTopicJson(...)` instead of hand-built maps.
 
 ## Inspect waiting runs

@@ -44,6 +44,25 @@ extension WorkflowScriptStepSuspensionJson on WorkflowScriptStepContext {
     );
   }
 
+  /// Suspends the workflow for [duration] with a versioned DTO payload.
+  Future<void> sleepVersionedJson<T>(
+    Duration duration,
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
+
   /// Suspends the workflow until [topic] arrives with a DTO payload.
   Future<void> awaitEventJson<T>(
     String topic,
@@ -56,6 +75,27 @@ extension WorkflowScriptStepSuspensionJson on WorkflowScriptStepContext {
       deadline: deadline,
       data: Map<String, Object?>.from(
         PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Suspends the workflow until [topic] arrives with a versioned DTO payload.
+  Future<void> awaitEventVersionedJson<T>(
+    String topic,
+    T value, {
+    required int version,
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
       ),
     );
   }

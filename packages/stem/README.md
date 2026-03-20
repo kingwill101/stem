@@ -951,8 +951,9 @@ Workflow introspection events expose matching helpers via
 `event.resultJson(...)`, `event.resultVersionedJson(...)`, and
 `event.resultAs(codec: ...)`.
 For lower-level suspension directives, prefer `step.sleepJson(...)`,
-`step.awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)` over
-hand-built maps.
+`step.sleepVersionedJson(...)`, `step.awaitEventJson(...)`,
+`step.awaitEventVersionedJson(...)`, and
+`FlowStepControl.awaitTopicJson(...)` over hand-built maps.
 Task lifecycle signals expose matching result helpers on
 `TaskPostrunPayload` and `TaskSuccessPayload` via
 `payload.resultJson(...)`, `payload.resultVersionedJson(...)`, and

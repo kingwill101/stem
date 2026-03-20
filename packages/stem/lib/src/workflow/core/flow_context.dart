@@ -117,6 +117,25 @@ class FlowContext implements WorkflowExecutionContext {
     );
   }
 
+  /// Suspends the workflow for [duration] with a versioned DTO payload.
+  FlowStepControl sleepVersionedJson<T>(
+    Duration duration,
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
+
   /// Suspends the workflow until an event with [topic] is emitted.
   ///
   /// When the event bus resumes the run, the payload is made available via
@@ -147,6 +166,27 @@ class FlowContext implements WorkflowExecutionContext {
       deadline: deadline,
       data: Map<String, Object?>.from(
         PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Suspends the workflow until [topic] arrives with a versioned DTO payload.
+  FlowStepControl awaitEventVersionedJson<T>(
+    String topic,
+    T value, {
+    required int version,
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
       ),
     );
   }

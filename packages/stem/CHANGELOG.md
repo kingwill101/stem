@@ -152,7 +152,8 @@
 - Added `TaskContext.progressJson(...)` and
   `TaskInvocationContext.progressJson(...)` so task progress updates can emit
   DTO payloads without hand-built maps.
-- Added `sleepJson(...)`, `awaitEventJson(...)`, and
+- Added `sleepJson(...)`, `sleepVersionedJson(...)`,
+  `awaitEventJson(...)`, `awaitEventVersionedJson(...)`, and
   `FlowStepControl.awaitTopicJson(...)` so lower-level flow/script suspension
   directives can carry DTO metadata without hand-built maps.
 - Added `valueList<T>()`, `valueListOr(...)`, and `requiredValueList(...)` to

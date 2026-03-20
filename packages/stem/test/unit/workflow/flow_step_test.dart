@@ -1,3 +1,4 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:test/test.dart';
 
@@ -34,6 +35,17 @@ void main() {
       const _SuspensionPayload(stage: 'waiting'),
       deadline: DateTime.parse('2025-01-01T00:00:00Z'),
     );
+    final versionedSleep = FlowStepControl.sleepVersionedJson(
+      const Duration(seconds: 6),
+      const _SuspensionPayload(stage: 'versioned-sleep'),
+      version: 2,
+    );
+    final versionedWait = FlowStepControl.awaitTopicVersionedJson(
+      'versioned-topic',
+      const _SuspensionPayload(stage: 'versioned-wait'),
+      version: 2,
+      deadline: DateTime.parse('2025-01-01T00:00:01Z'),
+    );
 
     expect(sleep.data, equals(const {'stage': 'sleeping'}));
     expect(
@@ -57,6 +69,14 @@ void main() {
     );
     expect(wait.data, equals(const {'stage': 'waiting'}));
     expect(wait.deadline, DateTime.parse('2025-01-01T00:00:00Z'));
+    expect(versionedSleep.data, {
+      PayloadCodec.versionKey: 2,
+      'stage': 'versioned-sleep',
+    });
+    expect(versionedWait.data, {
+      PayloadCodec.versionKey: 2,
+      'stage': 'versioned-wait',
+    });
   });
 }
 
