@@ -8,6 +8,8 @@
   and `StemWorkflowApp.emitJson(...)`, so dynamic task, workflow, and
   workflow-event names can still use `toJson()` inputs without hand-built
   maps.
+- Added `QueueEventsProducer.emitJson(...)` so queue-scoped custom events can
+  publish DTO payloads without hand-built maps.
 - Added `decodeJson:` shortcuts to the low-level
   `Stem.waitForTask<T>` and `StemWorkflowApp.waitForCompletion<T>` wait APIs,
   and propagated the same task wait shortcut through `StemApp` and

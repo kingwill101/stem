@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 const String _queueEventEnvelopeName = '__stem.queue.event__';
@@ -121,6 +122,29 @@ class QueueEventsProducer {
       ),
     );
     return envelope.id;
+  }
+
+  /// Emits [eventName] using a DTO payload that exposes `toJson()`.
+  Future<String> emitJson<T extends Object>(
+    String queue,
+    String eventName,
+    T payloadJson, {
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    String? typeName,
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          payloadJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      meta: meta,
+    );
   }
 }
 

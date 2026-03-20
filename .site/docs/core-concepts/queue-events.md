@@ -14,6 +14,7 @@ Use this when you need lightweight event streams for domain notifications
 ## API Surface
 
 - `QueueEventsProducer.emit(queue, eventName, payload, headers, meta)`
+- `QueueEventsProducer.emitJson(queue, eventName, dto, headers, meta)`
 - `QueueEvents.start()` / `QueueEvents.close()`
 - `QueueEvents.events` stream (all events for that queue)
 - `QueueEvents.on(eventName)` stream (filtered by name)
@@ -38,6 +39,8 @@ Multiple listeners on the same queue receive each emitted event.
 
 - Events are queue-scoped: listeners receive only events for their configured
   queue.
+- `emitJson(...)` is the DTO convenience path when the payload already exposes
+  `toJson()`.
 - `on(eventName)` matches exact event names.
 - `headers` and `meta` round-trip to listeners.
 - Event names and queue names must be non-empty.

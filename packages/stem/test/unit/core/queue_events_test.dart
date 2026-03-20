@@ -116,6 +116,34 @@ void main() {
       expect(results[1].payload['status'], 'paid');
     });
 
+    test('emitJson publishes DTO payloads without a manual map', () async {
+      final listener = QueueEvents(
+        broker: broker,
+        queue: 'orders',
+        consumerName: 'orders-listener',
+      );
+      await listener.start();
+      addTearDown(listener.close);
+
+      final received = listener
+          .on('order.shipped')
+          .first
+          .timeout(const Duration(seconds: 5));
+
+      final eventId = await producer.emitJson(
+        'orders',
+        'order.shipped',
+        const _QueueEventPayload(orderId: 'o-2', status: 'shipped'),
+      );
+
+      final event = await received;
+      expect(event.id, eventId);
+      expect(event.payload, {
+        'orderId': 'o-2',
+        'status': 'shipped',
+      });
+    });
+
     test('validates queue and event names', () async {
       expect(
         () => producer.emit('', 'evt'),
@@ -133,4 +161,19 @@ void main() {
       await listener.close();
     });
   });
+}
+
+class _QueueEventPayload {
+  const _QueueEventPayload({
+    required this.orderId,
+    required this.status,
+  });
+
+  final String orderId;
+  final String status;
+
+  Map<String, Object?> toJson() => {
+    'orderId': orderId,
+    'status': status,
+  };
 }
