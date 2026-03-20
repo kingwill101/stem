@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `awaitEventRef(...)` on flow and script checkpoint resume helpers so
+  typed `WorkflowEventRef<T>` values now cover both the common wait-for-value
+  path and the lower-level suspend-first path.
 - Added `WorkflowStartBuilder` plus `WorkflowRef.startBuilder(...)` /
   `NoArgsWorkflowRef.startBuilder()` so typed workflow refs can fluently set
   `parentRunId`, `ttl`, and `WorkflowCancellationPolicy` without dropping to

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
+import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 
@@ -85,6 +86,19 @@ extension FlowContextResumeValues on FlowContext {
       codec: event.codec,
     );
   }
+
+  /// Registers an event wait using a typed [event] reference.
+  FlowStepControl awaitEventRef<T>(
+    WorkflowEventRef<T> event, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(
+      event.topic,
+      deadline: deadline,
+      data: data,
+    );
+  }
 }
 
 /// Typed resume helpers for durable script checkpoints.
@@ -143,6 +157,19 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
       deadline: deadline,
       data: data,
       codec: event.codec,
+    );
+  }
+
+  /// Registers an event wait using a typed [event] reference.
+  Future<void> awaitEventRef<T>(
+    WorkflowEventRef<T> event, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(
+      event.topic,
+      deadline: deadline,
+      data: data,
     );
   }
 }

@@ -67,7 +67,7 @@ transport shape.
 
 When the topic and codec travel together in your codebase, prefer a typed
 `WorkflowEventRef<T>` and `event.emitWith(...)` together with
-`waitForEventRef(...)`.
+`waitForEventRef(...)` or `awaitEventRef(...)`.
 
 ## Inspect waiting runs
 

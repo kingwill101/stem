@@ -388,6 +388,8 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
 - `step.waitForEventRef(...)` handles the same path when you already have a
   typed `WorkflowEventRef<T>`.
+- `step.awaitEventRef(...)` keeps the lower-level suspend-first path on that
+  same typed event ref instead of dropping back to a raw topic string.
 - `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface
   payloads from sleeps or awaited events when you need lower-level control.
 
@@ -1022,8 +1024,8 @@ backend metadata under `stem.unique.duplicates`.
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or bundle the topic and codec once in a
   `WorkflowEventRef<T>` and use `event.emitWith(...)` together with
-  `waitForEventRef(...)`. Event payloads still serialize onto the existing
-  `Map<String, Object?>` wire format.
+  `waitForEventRef(...)` or `awaitEventRef(...)`. Event payloads still
+  serialize onto the existing `Map<String, Object?>` wire format.
 - Only return values you want persisted. If a handler returns `null`, the
   runtime treats it as "no result yet" and will run the step again on resume.
 - Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so

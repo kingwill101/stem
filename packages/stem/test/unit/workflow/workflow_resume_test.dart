@@ -163,6 +163,33 @@ void main() {
     expect(resumed?.message, 'approved');
   });
 
+  test('FlowContext.awaitEventRef reuses the event topic', () {
+    const event = WorkflowEventRef<_ResumePayload>(
+      topic: 'demo.event',
+      codec: _resumePayloadCodec,
+    );
+    final deadline = DateTime.parse('2026-01-01T00:00:00Z');
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    final control = context.awaitEventRef(
+      event,
+      deadline: deadline,
+      data: const {'source': 'flow'},
+    );
+
+    expect(control.type, FlowControlType.waitForEvent);
+    expect(control.topic, 'demo.event');
+    expect(control.deadline, deadline);
+    expect(control.data, containsPair('source', 'flow'));
+  });
+
   test(
     'WorkflowScriptStepContext helpers suspend once and decode resumed values',
     () {
@@ -219,6 +246,28 @@ void main() {
     final resumedValue = resumed.waitForEventRef(event);
     expect(resumedValue?.message, 'approved');
   });
+
+  test(
+    'WorkflowScriptStepContext.awaitEventRef reuses the event topic',
+    () async {
+      const event = WorkflowEventRef<_ResumePayload>(
+        topic: 'demo.event',
+        codec: _resumePayloadCodec,
+      );
+      final deadline = DateTime.parse('2026-01-01T00:00:00Z');
+      final context = _FakeWorkflowScriptStepContext();
+
+      await context.awaitEventRef(
+        event,
+        deadline: deadline,
+        data: const {'source': 'script'},
+      );
+
+      expect(context.awaitedTopics, ['demo.event']);
+      expect(context.awaitedDeadline, deadline);
+      expect(context.awaitedData, containsPair('source', 'script'));
+    },
+  );
 
   test(
     'WorkflowScriptStepContext.enqueue delegates to the configured enqueuer',
@@ -288,6 +337,8 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   final TaskEnqueuer? _enqueuer;
   final WorkflowCaller? _workflows;
   final List<String> awaitedTopics = <String>[];
+  DateTime? awaitedDeadline;
+  Map<String, Object?>? awaitedData;
   final List<Duration> sleepCalls = <Duration>[];
 
   @override
@@ -324,6 +375,8 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     Map<String, Object?>? data,
   }) async {
     awaitedTopics.add(topic);
+    awaitedDeadline = deadline;
+    awaitedData = data == null ? null : Map<String, Object?>.from(data);
   }
 
   @override
