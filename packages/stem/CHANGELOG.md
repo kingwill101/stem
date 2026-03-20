@@ -298,8 +298,7 @@
   supported workflow-start surfaces.
 - Removed the deprecated task-builder compatibility helpers:
   `enqueueBuilder(...)` and `enqueueNoArgsBuilder(...)`. The direct
-  `prepareEnqueue(...)` and `prepareNoArgsEnqueue(...)` forms are now the only
-  supported builder entrypoints.
+  `prepareEnqueue(...)` form is now the only supported builder entrypoint.
 - Removed the deprecated `withJsonCodec(...)` / `refWithJsonCodec(...)`
   compatibility helpers. The direct `json(...)` / `refJson(...)` forms are now
   the only supported JSON shortcut APIs.
@@ -309,9 +308,9 @@
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and
   `refCodec(...)`.
-- Added `prepareEnqueue(...)` / `prepareNoArgsEnqueue(...)` as the clearer
-  task-side names for advanced enqueue builders, and deprecated the older
-  `enqueueBuilder(...)` / `enqueueNoArgsBuilder(...)` aliases.
+- Added `prepareEnqueue(...)` as the clearer task-side name for advanced
+  enqueue builders, and deprecated the older `enqueueBuilder(...)` /
+  `enqueueNoArgsBuilder(...)` aliases.
 - Added `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` as the
   clearer names for caller-bound workflow start builders, and deprecated the
   older `startWorkflowBuilder(...)` / `startNoArgsWorkflowBuilder(...)`

@@ -190,7 +190,8 @@ void main() {
     final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
     final call = definition
-        .prepareEnqueue()
+        .asDefinition
+        .prepareEnqueue(())
         .headers(const {'h': 'v'})
         .metadata(const {'m': 1})
         .build();
@@ -204,7 +205,7 @@ void main() {
   test('NoArgsTaskDefinition.prepareEnqueue creates a fluent builder', () {
     final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-    final call = definition.prepareEnqueue().priority(4).build();
+    final call = definition.asDefinition.prepareEnqueue(()).priority(4).build();
 
     expect(call.name, 'demo.no_args');
     expect(call.resolveOptions().priority, 4);

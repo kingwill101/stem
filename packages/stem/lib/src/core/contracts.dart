@@ -3009,11 +3009,6 @@ class NoArgsTaskDefinition<TResult> {
     decodeResult: decodeResult,
   );
 
-  /// Creates a fluent enqueue builder for this no-args task definition.
-  TaskEnqueueBuilder<(), TResult> prepareEnqueue() {
-    return asDefinition.prepareEnqueue(());
-  }
-
   /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) => asDefinition.decode(payload);
 }
@@ -3366,18 +3361,6 @@ extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
     );
   }
 
-  /// Creates a caller-bound fluent builder for a no-args task definition.
-  BoundTaskEnqueueBuilder<(), TResult> prepareNoArgsEnqueue<TResult>({
-    required NoArgsTaskDefinition<TResult> definition,
-  }) {
-    return BoundTaskEnqueueBuilder(
-      enqueuer: this,
-      builder: TaskEnqueueBuilder(
-        definition: definition.asDefinition,
-        args: (),
-      ),
-    );
-  }
 }
 
 /// Retry strategy used to compute the next backoff delay.
