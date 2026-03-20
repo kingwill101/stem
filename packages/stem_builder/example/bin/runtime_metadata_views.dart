@@ -25,14 +25,14 @@ Future<void> main() async {
       ),
     );
 
-    final flowRunId = await StemWorkflowDefinitions.flow.startWithRuntime(
+    final flowRunId = await StemWorkflowDefinitions.flow.startWith(
       runtime,
       (name: 'runtime metadata'),
     );
     await runtime.executeRun(flowRunId);
 
     final scriptRunId = await StemWorkflowDefinitions.userSignup
-        .startWithRuntime(
+        .startWith(
           runtime,
           (email: 'dev@stem.dev'),
         );

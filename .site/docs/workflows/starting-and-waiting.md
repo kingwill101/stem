@@ -45,7 +45,7 @@ final approvalsRef = approvalsFlow.refWithCodec<({ApprovalDraft draft})>(
   ),
 );
 
-final runId = await approvalsRef.startWithApp(
+final runId = await approvalsRef.startWith(
   workflowApp,
   (draft: const ApprovalDraft(documentId: 'doc-42')),
 );
@@ -79,7 +79,7 @@ When you use `stem_builder`, generated workflow refs remove the raw
 workflow-name strings and give you one typed handle for both start and wait:
 
 ```dart
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
   (email: 'user@example.com'),
 );

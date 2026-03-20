@@ -37,7 +37,7 @@ Future<void> main() async {
           maxSuspendDuration: Duration(seconds: 2),
         ),
       )
-      .startWithApp(app);
+      .startWith(app);
 
   // Wait a bit longer than the policy allows so the auto-cancel can trigger.
   await Future<void>.delayed(const Duration(seconds: 4));

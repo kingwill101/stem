@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('runtime workflow call extensions', () {
     test(
-      'startWith/startAndWaitWithRuntime and waitForWithRuntime use typed workflow refs',
+      'startWith/startAndWaitWith/waitFor use typed workflow refs',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -27,7 +27,7 @@ void main() {
           final runId = await workflowRef
               .call(const {'name': 'runtime'})
               .startWith(workflowApp.runtime);
-          final waited = await workflowRef.waitForWithRuntime(
+          final waited = await workflowRef.waitFor(
             workflowApp.runtime,
             runId,
             timeout: const Duration(seconds: 2),
@@ -37,7 +37,7 @@ void main() {
 
           final oneShot = await workflowRef
               .call(const {'name': 'inline'})
-              .startAndWaitWithRuntime(
+              .startAndWaitWith(
                 workflowApp.runtime,
                 timeout: const Duration(seconds: 2),
               );
@@ -70,11 +70,11 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowRef.startWithRuntime(
+        final runId = await workflowRef.startWith(
           workflowApp.runtime,
           const {'name': 'runtime'},
         );
-        final waited = await workflowRef.waitForWithRuntime(
+        final waited = await workflowRef.waitFor(
           workflowApp.runtime,
           runId,
           timeout: const Duration(seconds: 2),
@@ -82,7 +82,7 @@ void main() {
 
         expect(waited?.value, 'hello runtime');
 
-        final oneShot = await workflowRef.startAndWaitWithRuntime(
+        final oneShot = await workflowRef.startAndWaitWith(
           workflowApp.runtime,
           const {'name': 'inline'},
           timeout: const Duration(seconds: 2),

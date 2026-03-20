@@ -15,6 +15,11 @@
 - Added `WorkflowEventEmitter` plus the unified `WorkflowEventRef.emitWith(...)`
   helper so typed workflow events no longer branch between app-specific and
   runtime-specific dispatch helpers.
+- Removed the redundant app/runtime-specific workflow helper wrappers
+  (`startWithApp`, `startWithRuntime`, `startAndWaitWithApp`,
+  `startAndWaitWithRuntime`, `waitForWithRuntime`) so workflow refs and start
+  calls consistently use the generic `startWith(...)`, `startAndWaitWith(...)`,
+  and `waitFor(...)` surface.
 - Simplified generated annotated task usage so `StemTaskDefinitions.*` is the
   canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
   `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated

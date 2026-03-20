@@ -94,7 +94,7 @@ class EcommerceServer {
           final quantity = _toInt(payload['quantity']);
 
           final result = await StemWorkflowDefinitions.addToCart
-              .startAndWaitWithApp(
+              .startAndWaitWith(
             workflowApp,
             (cartId: cartId, sku: sku, quantity: quantity),
             timeout: const Duration(seconds: 4),
@@ -133,7 +133,7 @@ class EcommerceServer {
         try {
           final runId = await checkoutWorkflow
               .call((cartId: cartId))
-              .startWithApp(workflowApp);
+              .startWith(workflowApp);
 
           final result = await checkoutWorkflow.waitFor(
             workflowApp,

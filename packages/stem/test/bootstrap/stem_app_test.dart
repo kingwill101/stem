@@ -574,7 +574,7 @@ void main() {
             .call(
               const {'name': 'stem'},
             )
-            .startWithApp(workflowApp);
+            .startWith(workflowApp);
         final result = await workflowRef.waitFor(
           workflowApp,
           runId,
@@ -614,7 +614,7 @@ void main() {
 
         final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
         try {
-          final runId = await workflowRef.call().startWithApp(workflowApp);
+          final runId = await workflowRef.call().startWith(workflowApp);
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,
@@ -676,7 +676,7 @@ void main() {
 
         final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
         try {
-          final runId = await workflowRef.call().startWithApp(workflowApp);
+          final runId = await workflowRef.call().startWith(workflowApp);
           final result = await workflowRef.waitFor(
             workflowApp,
             runId,

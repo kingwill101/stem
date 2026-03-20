@@ -26,7 +26,7 @@ Future<void> main() async {
     flows: [sleepLoop],
   );
 
-  final runId = await sleepLoopRef.startWithApp(app);
+  final runId = await sleepLoopRef.startWith(app);
   await app.runtime.executeRun(runId);
 
   // After the delay elapses, the runtime should resume without the step

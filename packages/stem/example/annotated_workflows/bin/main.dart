@@ -8,7 +8,7 @@ Future<void> main() async {
   final app = await client.createWorkflowApp(module: stemModule);
   await app.start();
 
-  final flowRunId = await StemWorkflowDefinitions.flow.startWithApp(app);
+  final flowRunId = await StemWorkflowDefinitions.flow.startWith(app);
   final flowResult = await StemWorkflowDefinitions.flow.waitFor(
     app,
     flowRunId,
@@ -20,7 +20,7 @@ Future<void> main() async {
     '${jsonEncode(flowResult?.value?['childResult'])}',
   );
 
-  final scriptResult = await StemWorkflowDefinitions.script.startAndWaitWithApp(
+  final scriptResult = await StemWorkflowDefinitions.script.startAndWaitWith(
     app,
     (
       request: const WelcomeRequest(email: '  SomeEmail@Example.com  '),
@@ -46,7 +46,7 @@ Future<void> main() async {
   print('Script detail: ${jsonEncode(scriptDetail?.toJson())}');
 
   final contextResult = await StemWorkflowDefinitions.contextScript
-      .startAndWaitWithApp(
+      .startAndWaitWith(
     app,
     (
       request: const WelcomeRequest(email: '  ContextEmail@Example.com  '),

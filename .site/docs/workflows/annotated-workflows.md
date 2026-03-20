@@ -47,7 +47,7 @@ Use the generated workflow refs when you want a single typed handle for start
 and wait operations:
 
 ```dart
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
   (email: 'user@example.com'),
 );

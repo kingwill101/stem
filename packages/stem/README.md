@@ -314,7 +314,7 @@ final app = await StemWorkflowApp.inMemory(
   flows: [demoWorkflow],
 );
 
-final runId = await demoWorkflowRef.startWithApp(app);
+final runId = await demoWorkflowRef.startWith(app);
 final result = await demoWorkflowRef.waitFor(app, runId);
 print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
@@ -453,7 +453,7 @@ final app = await StemWorkflowApp.fromUrl(
   tasks: const [],
 );
 
-final runId = await approvalsRef.startWithApp(
+final runId = await approvalsRef.startWith(
   app,
   (draft: const ApprovalDraft(documentId: 'doc-42')),
 );
@@ -472,7 +472,7 @@ the no-args ref:
 
 ```dart
 final healthcheckRef = healthcheckFlow.ref0();
-final runId = await healthcheckRef.startWithApp(app);
+final runId = await healthcheckRef.startWith(app);
 ```
 
 #### Manual `WorkflowScript`
@@ -634,7 +634,7 @@ final app = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   app,
   (email: 'user@example.com'),
 );

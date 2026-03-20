@@ -140,7 +140,7 @@ final retryDefinition = retryScript.definition;
 
 // #region workflows-run
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
-  final runId = await ApprovalsFlow.ref.startWithApp(
+  final runId = await ApprovalsFlow.ref.startWith(
     workflowApp,
     (
       draft: const ApprovalDraft(documentId: 'doc-42'),
@@ -291,7 +291,7 @@ Future<void> main() async {
   final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
   await app.start();
 
-  final runId = await demoFlowRef.startWithApp(app);
+  final runId = await demoFlowRef.startWith(app);
   final result = await demoFlowRef.waitFor(
     app,
     runId,

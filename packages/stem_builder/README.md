@@ -196,7 +196,7 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup.startAndWaitWithApp(
+final result = await StemWorkflowDefinitions.userSignup.startAndWaitWith(
   workflowApp,
   (email: 'user@example.com'),
 );

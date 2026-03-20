@@ -74,7 +74,7 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowRef.startWithRuntime(
+        final runId = await workflowRef.startWith(
           workflowApp.runtime,
           const {'name': 'runtime'},
         );
@@ -118,11 +118,11 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await workflowRef.startWithRuntime(
+        final runId = await workflowRef.startWith(
           workflowApp.runtime,
           const {'name': 'runtime'},
         );
-        final waited = await workflowRef.waitForWithRuntime(
+        final waited = await workflowRef.waitFor(
           workflowApp.runtime,
           runId,
           timeout: const Duration(seconds: 2),
@@ -152,7 +152,7 @@ void main() {
       try {
         await workflowApp.start();
 
-        final result = await workflowRef.startAndWaitWithRuntime(
+        final result = await workflowRef.startAndWaitWith(
           workflowApp.runtime,
           const _GreetingParams(name: 'codec'),
           timeout: const Duration(seconds: 2),
@@ -183,7 +183,7 @@ void main() {
       try {
         await workflowApp.start();
 
-        final result = await workflowRef.startAndWaitWithRuntime(
+        final result = await workflowRef.startAndWaitWith(
           workflowApp.runtime,
           const _GreetingParams(name: 'codec'),
           timeout: const Duration(seconds: 2),
@@ -217,11 +217,11 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowResult = await flowRef.startAndWaitWithApp(
+        final flowResult = await flowRef.startAndWaitWith(
           workflowApp,
           timeout: const Duration(seconds: 2),
         );
-        final scriptResult = await scriptRef.startAndWaitWithRuntime(
+        final scriptResult = await scriptRef.startAndWaitWith(
           workflowApp.runtime,
           timeout: const Duration(seconds: 2),
         );
@@ -251,7 +251,7 @@ void main() {
       try {
         await workflowApp.start();
 
-        final runId = await flow.ref0().startWithApp(workflowApp);
+        final runId = await flow.ref0().startWith(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
         await _userUpdatedEvent.emitWith(

@@ -244,7 +244,7 @@ void main() {
     await client.close();
   });
 
-  test('StemClient workflow app supports startAndWaitWithApp', () async {
+  test('StemClient workflow app supports startAndWaitWith', () async {
     final client = await StemClient.inMemory();
     final flow = Flow<String>(
       name: 'client.workflow.start-and-wait',
@@ -267,7 +267,7 @@ void main() {
         .call(
           const {'name': 'one-shot'},
         )
-        .startAndWaitWithApp(app, timeout: const Duration(seconds: 2));
+        .startAndWaitWith(app, timeout: const Duration(seconds: 2));
 
     expect(result?.value, 'ok:one-shot');
 

@@ -208,13 +208,13 @@ class NoArgsWorkflowRef<TResult extends Object?> {
   TResult decode(Object? payload) => asRef.decode(payload);
 
   /// Waits for [runId] using this workflow reference's decode rules.
-  Future<WorkflowResult<TResult>?> waitForWith(
+  Future<WorkflowResult<TResult>?> waitFor(
     WorkflowCaller caller,
     String runId, {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return asRef.waitForWith(
+    return asRef.waitFor(
       caller,
       runId,
       pollInterval: pollInterval,
@@ -311,7 +311,7 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     Duration? timeout,
   }) async {
     final runId = await startWith(caller);
-    return definition.waitForWith(
+    return definition.waitFor(
       caller,
       runId,
       pollInterval: pollInterval,
@@ -325,7 +325,7 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
 extension WorkflowRefExtension<TParams, TResult extends Object?>
     on WorkflowRef<TParams, TResult> {
   /// Waits for [runId] using this workflow reference's decode rules.
-  Future<WorkflowResult<TResult>?> waitForWith(
+  Future<WorkflowResult<TResult>?> waitFor(
     WorkflowCaller caller,
     String runId, {
     Duration pollInterval = const Duration(milliseconds: 100),

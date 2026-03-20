@@ -35,7 +35,7 @@ From those annotations, this example uses generated APIs:
 
 - `stemModule` (generated workflow/task bundle)
 - `StemWorkflowDefinitions.addToCart`
-- `StemWorkflowDefinitions.addToCart.startAndWaitWithApp(...)`
+- `StemWorkflowDefinitions.addToCart.startAndWaitWith(...)`
 - `StemTaskDefinitions.ecommerceAuditLog`
 - direct task definition helpers like
   `StemTaskDefinitions.ecommerceAuditLog.enqueueWith(...)`
