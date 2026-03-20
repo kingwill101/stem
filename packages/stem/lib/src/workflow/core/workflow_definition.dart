@@ -159,7 +159,7 @@ class WorkflowDefinition<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
-    T Function(Map<String, Object?> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
     assert(
@@ -212,7 +212,7 @@ class WorkflowDefinition<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
-    T Function(Map<String, Object?> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
     assert(

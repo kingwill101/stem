@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Relaxed manual `Flow(...)`, `WorkflowScript(...)`, and
+  `WorkflowDefinition.flow(...)` / `.script(...)` `decodeResultJson:` helpers
+  to accept `Map<String, dynamic>` DTO decoders, matching the newer
+  `PayloadCodec.json(...)` and `refJson(...)` surfaces.
 - Renamed the caller-bound advanced child-workflow helpers from
   `prepareWorkflowStart(...)` / `prepareNoArgsWorkflowStart(...)` to
   `prepareStart(...)` / `prepareNoArgsStart(...)` so the caller side aligns

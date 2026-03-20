@@ -20,7 +20,7 @@ class Flow<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
-    T Function(Map<String, Object?> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) : definition = WorkflowDefinition<T>.flow(
          name: name,
