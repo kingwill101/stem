@@ -539,7 +539,7 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
     definition: _childDefinition,
     args: const _ChildArgs('from-isolate'),
   );
-  await builder.enqueue(context);
+  await builder.enqueue();
   return null;
 }
 

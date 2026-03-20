@@ -86,6 +86,68 @@ void main() {
     },
   );
 
+  test('TaskEnqueuer.enqueueBuilder binds enqueue to the enqueuer', () async {
+    final enqueuer = _RecordingTaskEnqueuer();
+    final definition = TaskDefinition<Map<String, Object?>, String>(
+      name: 'demo.task',
+      encodeArgs: (args) => args,
+      decodeResult: (payload) => 'decoded:$payload',
+    );
+
+    final taskId = await enqueuer
+        .enqueueBuilder(definition: definition, args: const {'a': 1})
+        .header('h1', 'v1')
+        .queue('critical')
+        .enqueue();
+
+    expect(taskId, 'task-1');
+    expect(enqueuer.lastCall, isNotNull);
+    expect(enqueuer.lastCall!.name, 'demo.task');
+    expect(enqueuer.lastCall!.headers, containsPair('h1', 'v1'));
+    expect(enqueuer.lastCall!.resolveOptions().queue, 'critical');
+  });
+
+  test(
+    'BoundTaskEnqueueBuilder.enqueueAndWait reuses typed result decoding',
+    () async {
+      final caller = _RecordingTaskResultCaller();
+      final definition = TaskDefinition<Map<String, Object?>, String>(
+        name: 'demo.task',
+        encodeArgs: (args) => args,
+        decodeResult: (payload) => 'decoded:$payload',
+      );
+
+      final result = await caller
+          .enqueueBuilder(definition: definition, args: const {'a': 1})
+          .header('h1', 'v1')
+          .enqueueAndWait();
+
+      expect(caller.lastCall, isNotNull);
+      expect(caller.lastCall!.name, 'demo.task');
+      expect(caller.lastCall!.headers, containsPair('h1', 'v1'));
+      expect(caller.waitedTaskId, 'task-1');
+      expect(result?.value, 'decoded:stored');
+    },
+  );
+
+  test(
+    'BoundTaskEnqueueBuilder.enqueueAndWait throws without a result caller',
+    () async {
+      final enqueuer = _RecordingTaskEnqueuer();
+      final definition = TaskDefinition<Map<String, Object?>, String>(
+        name: 'demo.task',
+        encodeArgs: (args) => args,
+      );
+
+      expect(
+        () => enqueuer
+            .enqueueBuilder(definition: definition, args: const {'a': 1})
+            .enqueueAndWait(),
+        throwsStateError,
+      );
+    },
+  );
+
   test('TaskCall.copyWith updates headers and meta', () {
     final definition = TaskDefinition<Map<String, Object?>, Object?>(
       name: 'demo.task',

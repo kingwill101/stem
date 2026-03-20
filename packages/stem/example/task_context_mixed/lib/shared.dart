@@ -306,7 +306,7 @@ FutureOr<Object?> isolateChildEntrypoint(
     '[isolate_child] id=${context.id} attempt=${context.attempt} runId=$runId',
   );
 
-  final call = context
+  await context
       .enqueueBuilder(
         definition: auditDefinition,
         args: AuditArgs(
@@ -318,9 +318,7 @@ FutureOr<Object?> isolateChildEntrypoint(
       .meta('origin', 'isolate-child')
       .delay(const Duration(milliseconds: 200))
       .enqueueOptions(const TaskEnqueueOptions(shadow: 'audit-shadow'))
-      .build();
-
-  await context.enqueueCall(call);
+      .enqueue();
   return 'isolate-ok';
 }
 

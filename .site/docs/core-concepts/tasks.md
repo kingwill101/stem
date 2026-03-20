@@ -57,8 +57,10 @@ If your manual task args are DTOs, prefer
 codec still needs to encode to `Map<String, Object?>` because task args are
 published as a map.
 
-`TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, so fluent per-call
-overrides no longer force a separate manual wait step.
+`TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and any
+`TaskEnqueuer` can now create a caller-bound builder through
+`enqueueBuilder(...)`, so fluent per-call overrides no longer force a separate
+manual wait step or an extra `builder.enqueue(enqueuer)` hop.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueue(...)` /

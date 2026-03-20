@@ -9,6 +9,10 @@
 - Added `WorkflowEventEmitter.emitEventBuilder(...)` plus a caller-bound typed
   event call so apps, runtimes, and task/workflow contexts can emit typed
   workflow events without bouncing between emitter-first and ref-first styles.
+- Added `TaskEnqueuer.enqueueBuilder(...)` / `enqueueNoArgsBuilder(...)` plus a
+  caller-bound fluent task builder so producers and contexts can enqueue typed
+  task calls directly from the enqueuer surface, with `enqueueAndWait()`
+  available whenever that enqueuer also supports typed result waits.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

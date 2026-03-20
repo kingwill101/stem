@@ -143,7 +143,7 @@ final childDefinition = TaskDefinition<ChildArgs, void>(
 
 // #region tasks-invocation-builder
 Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
-  final call = invocation
+  await invocation
       .enqueueBuilder(
         definition: childDefinition,
         args: const ChildArgs('value'),
@@ -160,9 +160,7 @@ Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
           ),
         ),
       )
-      .build();
-
-  await invocation.enqueueCall(call);
+      .enqueue();
 }
 // #endregion tasks-invocation-builder
 

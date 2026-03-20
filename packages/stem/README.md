@@ -252,17 +252,18 @@ await healthcheckDefinition.enqueue(stem);
 If a no-arg task returns a DTO, pass `resultCodec:` so waiting helpers decode
 the result and the task metadata advertises the right result encoder.
 
-You can also build requests fluently with the `TaskEnqueueBuilder`:
+You can also build requests fluently from the enqueuer itself:
 
 ```dart
-final result = await TaskEnqueueBuilder(
-  definition: HelloTask.definition,
-  args: const HelloArgs(name: 'Tenant A'),
-)
-  ..header('x-tenant', 'tenant-a')
-  ..priority(5)
-  ..delay(const Duration(seconds: 30))
-  .enqueueAndWait(stem);
+final result = await stem
+    .enqueueBuilder(
+      definition: HelloTask.definition,
+      args: const HelloArgs(name: 'Tenant A'),
+    )
+    .header('x-tenant', 'tenant-a')
+    .priority(5)
+    .delay(const Duration(seconds: 30))
+    .enqueueAndWait();
 
 print(result?.value);
 ```

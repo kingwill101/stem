@@ -559,14 +559,15 @@ class TaskInvocationContext
     return delegate.emitEvent(event, value);
   }
 
-  /// Build a fluent enqueue request for this invocation.
-  ///
-  /// Use [TaskEnqueueBuilder.build] + [enqueueCall] to dispatch.
-  TaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
+  /// Build a caller-bound fluent enqueue request for this invocation.
+  BoundTaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,
     required TArgs args,
   }) {
-    return TaskEnqueueBuilder(definition: definition, args: args);
+    return BoundTaskEnqueueBuilder(
+      enqueuer: this,
+      builder: TaskEnqueueBuilder(definition: definition, args: args),
+    );
   }
 
   /// Alias for enqueue.

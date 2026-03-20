@@ -2463,6 +2463,141 @@ class TaskEnqueueBuilder<TArgs, TResult> {
   }
 }
 
+/// Caller-bound fluent task enqueue builder.
+///
+/// This keeps the enqueue target attached to the builder so producers and
+/// contexts can stay on the enqueuer surface instead of bouncing back through
+/// `builder.enqueue(enqueuer)`.
+class BoundTaskEnqueueBuilder<TArgs, TResult> {
+  /// Creates a caller-bound task enqueue builder.
+  BoundTaskEnqueueBuilder({
+    required this.enqueuer,
+    required TaskEnqueueBuilder<TArgs, TResult> builder,
+  }) : _builder = builder;
+
+  /// Bound enqueuer used for dispatch.
+  final TaskEnqueuer enqueuer;
+  final TaskEnqueueBuilder<TArgs, TResult> _builder;
+
+  /// Replaces headers entirely.
+  BoundTaskEnqueueBuilder<TArgs, TResult> headers(Map<String, String> headers) {
+    _builder.headers(headers);
+    return this;
+  }
+
+  /// Adds or overrides a single header entry.
+  BoundTaskEnqueueBuilder<TArgs, TResult> header(String key, String value) {
+    _builder.header(key, value);
+    return this;
+  }
+
+  /// Replaces metadata entirely.
+  BoundTaskEnqueueBuilder<TArgs, TResult> metadata(Map<String, Object?> meta) {
+    _builder.metadata(meta);
+    return this;
+  }
+
+  /// Adds or overrides a metadata entry.
+  BoundTaskEnqueueBuilder<TArgs, TResult> meta(String key, Object? value) {
+    _builder.meta(key, value);
+    return this;
+  }
+
+  /// Replaces the options for this call.
+  BoundTaskEnqueueBuilder<TArgs, TResult> options(TaskOptions options) {
+    _builder.options(options);
+    return this;
+  }
+
+  /// Sets the queue for this enqueue.
+  BoundTaskEnqueueBuilder<TArgs, TResult> queue(String queue) {
+    _builder.queue(queue);
+    return this;
+  }
+
+  /// Sets the priority for this enqueue.
+  BoundTaskEnqueueBuilder<TArgs, TResult> priority(int priority) {
+    _builder.priority(priority);
+    return this;
+  }
+
+  /// Sets the earliest execution time.
+  BoundTaskEnqueueBuilder<TArgs, TResult> notBefore(DateTime instant) {
+    _builder.notBefore(instant);
+    return this;
+  }
+
+  /// Sets a relative delay before execution.
+  BoundTaskEnqueueBuilder<TArgs, TResult> delay(Duration duration) {
+    _builder.delay(duration);
+    return this;
+  }
+
+  /// Replaces the enqueue options for this call.
+  BoundTaskEnqueueBuilder<TArgs, TResult> enqueueOptions(
+    TaskEnqueueOptions options,
+  ) {
+    _builder.enqueueOptions(options);
+    return this;
+  }
+
+  /// Builds the [TaskCall] with accumulated overrides.
+  TaskCall<TArgs, TResult> build() => _builder.build();
+
+  Future<String> _enqueueBuiltCall(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
+    final scopeMeta = TaskEnqueueScope.currentMeta();
+    if (scopeMeta == null || scopeMeta.isEmpty) {
+      return enqueuer.enqueueCall(
+        call,
+        enqueueOptions: resolvedEnqueueOptions,
+      );
+    }
+    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+    return enqueuer.enqueueCall(
+      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+      enqueueOptions: resolvedEnqueueOptions,
+    );
+  }
+
+  /// Builds the call and enqueues it with the bound enqueuer.
+  Future<String> enqueue({TaskEnqueueOptions? enqueueOptions}) {
+    final call = build();
+    return _enqueueBuiltCall(call, enqueueOptions: enqueueOptions);
+  }
+}
+
+/// Convenience helpers for building typed enqueue requests directly from a task
+/// enqueuer.
+extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
+  /// Creates a caller-bound fluent builder for a typed task definition.
+  BoundTaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
+    required TaskDefinition<TArgs, TResult> definition,
+    required TArgs args,
+  }) {
+    return BoundTaskEnqueueBuilder(
+      enqueuer: this,
+      builder: TaskEnqueueBuilder(definition: definition, args: args),
+    );
+  }
+
+  /// Creates a caller-bound fluent builder for a no-args task definition.
+  BoundTaskEnqueueBuilder<(), TResult> enqueueNoArgsBuilder<TResult>({
+    required NoArgsTaskDefinition<TResult> definition,
+  }) {
+    return BoundTaskEnqueueBuilder(
+      enqueuer: this,
+      builder: TaskEnqueueBuilder(
+        definition: definition.asDefinition,
+        args: (),
+      ),
+    );
+  }
+}
+
 /// Retry strategy used to compute the next backoff delay.
 /// Since: 0.1.0
 // Intentionally an interface for DI and test doubles.

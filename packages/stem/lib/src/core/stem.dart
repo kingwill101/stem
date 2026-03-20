@@ -1120,6 +1120,27 @@ extension TaskEnqueueBuilderExtension<TArgs, TResult>
   }
 }
 
+/// Convenience helpers for waiting on caller-bound task enqueue builders.
+extension BoundTaskEnqueueBuilderExtension<TArgs, TResult extends Object?>
+    on BoundTaskEnqueueBuilder<TArgs, TResult> {
+  /// Enqueues this bound request and waits for the typed task result.
+  Future<TaskResult<TResult>?> enqueueAndWait({
+    Duration? timeout,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final boundEnqueuer = enqueuer;
+    if (boundEnqueuer is! TaskResultCaller) {
+      throw StateError(
+        'BoundTaskEnqueueBuilder requires a TaskResultCaller to wait for '
+        'results',
+      );
+    }
+    final call = build();
+    final taskId = await enqueue(enqueueOptions: enqueueOptions);
+    return call.definition.waitFor(boundEnqueuer, taskId, timeout: timeout);
+  }
+}
+
 /// Convenience helpers for dispatching prebuilt [TaskCall] instances.
 extension TaskCallExtension<TArgs, TResult extends Object?>
     on TaskCall<TArgs, TResult> {
