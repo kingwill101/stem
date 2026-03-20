@@ -225,7 +225,21 @@ abstract class StemClient implements TaskResultCaller {
     Iterable<TaskHandler<Object?>> tasks = const [],
   }) async {
     final config = workerConfig ?? defaultWorkerConfig;
-    tasks.forEach(taskRegistry.register);
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    final inferredSubscription =
+        config.subscription ??
+        module?.inferTaskWorkerSubscription(
+          defaultQueue: config.queue,
+          additionalTasks: tasks,
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: config.queue,
+          );
+        })();
     return Worker(
       broker: broker,
       registry: taskRegistry,
@@ -238,7 +252,7 @@ abstract class StemClient implements TaskResultCaller {
           config.uniqueTaskCoordinator ?? uniqueTaskCoordinator,
       retryStrategy: config.retryStrategy ?? retryStrategy,
       queue: config.queue,
-      subscription: config.subscription,
+      subscription: inferredSubscription,
       consumerName: config.consumerName,
       concurrency: config.concurrency,
       prefetchMultiplier: config.prefetchMultiplier,

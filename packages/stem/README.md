@@ -72,6 +72,9 @@ Future<void> main() async {
 }
 ```
 
+`StemClient.createWorker(...)` infers queue subscriptions from the bundled or
+explicitly supplied task handlers when `workerConfig.subscription` is omitted.
+
 For persistent adapters, keep `StemClient` as the entrypoint and resolve
 broker/backend wiring from a URL:
 

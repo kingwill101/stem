@@ -362,4 +362,70 @@ void main() {
       await client.close();
     }
   });
+
+  test('StemClient createWorker infers queues from explicit tasks', () async {
+    final client = await StemClient.inMemory();
+    final worker = await client.createWorker(
+      tasks: [
+        FunctionTaskHandler<String>(
+          name: 'client.worker.explicit.queue',
+          options: const TaskOptions(queue: 'priority'),
+          entrypoint: (context, args) async => 'task-ok',
+          runInIsolate: false,
+        ),
+      ],
+    );
+
+    expect(worker.subscription.queues, ['priority']);
+
+    await worker.start();
+    try {
+      final taskId = await client.enqueue(
+        'client.worker.explicit.queue',
+        enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+      );
+      final result = await client.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 2),
+      );
+      expect(result?.value, 'task-ok');
+    } finally {
+      await worker.shutdown();
+      await client.close();
+    }
+  });
+
+  test('StemClient createWorker infers queues from default module', () async {
+    final client = await StemClient.inMemory(
+      module: StemModule(
+        tasks: [
+          FunctionTaskHandler<String>(
+            name: 'client.worker.default-module.queue',
+            options: const TaskOptions(queue: 'priority'),
+            entrypoint: (context, args) async => 'task-ok',
+            runInIsolate: false,
+          ),
+        ],
+      ),
+    );
+    final worker = await client.createWorker();
+
+    expect(worker.subscription.queues, ['priority']);
+
+    await worker.start();
+    try {
+      final taskId = await client.enqueue(
+        'client.worker.default-module.queue',
+        enqueueOptions: const TaskEnqueueOptions(queue: 'priority'),
+      );
+      final result = await client.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 2),
+      );
+      expect(result?.value, 'task-ok');
+    } finally {
+      await worker.shutdown();
+      await client.close();
+    }
+  });
 }

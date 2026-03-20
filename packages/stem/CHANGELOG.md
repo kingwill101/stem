@@ -5,6 +5,9 @@
 - Made `StemApp` lazy-start its managed worker on first enqueue/wait and
   `app.canvas` dispatch calls so in-memory and module-backed task apps no
   longer need an explicit `start()` in the common case.
+- Made `StemClient.createWorker(...)` infer queue subscriptions from bundled
+  or explicitly supplied task handlers when `workerConfig.subscription` is
+  omitted.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
