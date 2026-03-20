@@ -59,39 +59,29 @@ Future<UniqueTaskCoordinator> buildRedisCoordinator() async {
 // #endregion uniqueness-coordinator-redis
 
 // #region uniqueness-enqueue
-Future<void> enqueueDigest(Stem stem) async {
-  final firstId = await stem.enqueue(
+Future<String> enqueueDigest(TaskEnqueuer enqueuer) async {
+  final firstId = await enqueuer.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
-    options: const TaskOptions(
-      queue: 'email',
-      unique: true,
-      uniqueFor: Duration(minutes: 15),
-    ),
   );
 
-  final secondId = await stem.enqueue(
+  final secondId = await enqueuer.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
-    options: const TaskOptions(
-      queue: 'email',
-      unique: true,
-      uniqueFor: Duration(minutes: 15),
-    ),
   );
 
   print('first enqueue id:  $firstId');
   print('second enqueue id: $secondId (dup is re-used)');
+  return firstId;
 }
 // #endregion uniqueness-enqueue
 
 // #region uniqueness-override-key
-Future<void> enqueueWithOverride(Stem stem) async {
-  await stem.enqueue(
-    'orders.sync',
-    args: const {'id': 42},
-    options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),
-    meta: const {UniqueTaskMetadata.override: 'order-42'},
+Future<String> enqueueWithOverride(TaskEnqueuer enqueuer) async {
+  return enqueuer.enqueue(
+    'email.sendDigest',
+    args: const {'userId': 42},
+    meta: const {UniqueTaskMetadata.override: 'digest-override-42'},
   );
 }
 // #endregion uniqueness-override-key
@@ -110,12 +100,16 @@ Future<void> main() async {
   );
   // #endregion uniqueness-stem-worker
 
-  unawaited(app.start());
-
-  await enqueueDigest(app.stem);
-  await enqueueWithOverride(app.stem);
-
-  await Future<void>.delayed(const Duration(milliseconds: 500));
+  final digestTaskId = await enqueueDigest(app);
+  await app.waitForTask<void>(
+    digestTaskId,
+    timeout: const Duration(seconds: 1),
+  );
+  final overrideTaskId = await enqueueWithOverride(app);
+  await app.waitForTask<void>(
+    overrideTaskId,
+    timeout: const Duration(seconds: 1),
+  );
 
   await app.close();
 }

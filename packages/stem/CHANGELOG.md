@@ -20,6 +20,9 @@
 - Updated the `stack_autowire` example to use `StemApp` lazy-start and the
   high-level `app.enqueue(...)` / `app.waitForTask(...)` surface instead of
   manually starting the task app and dropping to `app.stem`.
+- Updated the uniqueness snippet to show raw `app.enqueue(...)` inheriting
+  handler-declared queue and uniqueness defaults, while still demonstrating
+  explicit uniqueness-key overrides without manual worker startup.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
