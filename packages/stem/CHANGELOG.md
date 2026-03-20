@@ -107,6 +107,9 @@
 - Simplified the mixed-cluster enqueuer example to use `StemClient.create(...)`
   and normal client shutdown instead of returning raw `Stem` producers with
   manual adapter-specific close logic.
+- Simplified the developer-environment bootstrap snippet to use a shared
+  `StemClient` plus `createWorker(...)` while keeping the explicit Redis
+  adapter configuration visible.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

@@ -13,13 +13,16 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
   // #endregion dev-env-config
 
   // #region dev-env-adapters
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
+  final broker = StemBrokerFactory(
+    create: () => RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
+    dispose: (broker) => broker.close(),
   );
-  final backend = await RedisResultBackend.connect(
-    _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
-    tls: config.tls,
+  final backend = StemBackendFactory(
+    create: () => RedisResultBackend.connect(
+      _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
+      tls: config.tls,
+    ),
+    dispose: (backend) => backend.close(),
   );
   final revokeStore = await RedisRevokeStore.connect(
     _resolveRedisUrl(config.brokerUrl, config.revokeStoreUrl, 2),
@@ -29,7 +32,7 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
   // #endregion dev-env-adapters
 
   // #region dev-env-stem
-  final stem = Stem(
+  final client = await StemClient.create(
     broker: broker,
     backend: backend,
     tasks: tasks,
@@ -39,27 +42,26 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
 
   // #region dev-env-worker
   final subscription = _buildSubscription(config);
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-    revokeStore: revokeStore,
-    rateLimiter: rateLimiter,
-    queue: config.defaultQueue,
-    subscription: subscription,
-    concurrency: 8,
-    autoscale: const WorkerAutoscaleConfig(
-      enabled: true,
-      minConcurrency: 2,
-      maxConcurrency: 16,
-      backlogPerIsolate: 2.0,
-      idlePeriod: Duration(seconds: 45),
+  final worker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      revokeStore: revokeStore,
+      rateLimiter: rateLimiter,
+      queue: config.defaultQueue,
+      subscription: subscription,
+      concurrency: 8,
+      autoscale: const WorkerAutoscaleConfig(
+        enabled: true,
+        minConcurrency: 2,
+        maxConcurrency: 16,
+        backlogPerIsolate: 2.0,
+        idlePeriod: Duration(seconds: 45),
+      ),
     ),
   );
   // #endregion dev-env-worker
 
   return Bootstrap(
-    stem: stem,
+    client: client,
     worker: worker,
     config: config,
     rateLimiter: rateLimiter,
@@ -68,13 +70,13 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
 
 class Bootstrap {
   Bootstrap({
-    required this.stem,
+    required this.client,
     required this.worker,
     required this.config,
     required this.rateLimiter,
   });
 
-  final Stem stem;
+  final StemClient client;
   final Worker worker;
   final StemConfig config;
   final RateLimiter? rateLimiter;
@@ -87,7 +89,7 @@ Future<void> runCanvasFlows(
   List<TaskHandler<Object?>> tasks,
 ) async {
   final canvas = Canvas(
-    broker: bootstrap.stem.broker,
+    broker: bootstrap.client.broker,
     backend: await RedisResultBackend.connect(
       _resolveRedisUrl(
         bootstrap.config.brokerUrl,
@@ -221,4 +223,5 @@ Future<void> main() async {
   await runCanvasFlows(bootstrap, tasks);
   await Future<void>.delayed(const Duration(seconds: 1));
   await bootstrap.worker.shutdown();
+  await bootstrap.client.close();
 }

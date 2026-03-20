@@ -51,7 +51,7 @@ piece is easy to scan and reuse:
 
 ```
 
-### Create the Stem producer
+### Create the shared client/producer
 
 ```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-stem
 
