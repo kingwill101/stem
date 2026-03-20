@@ -51,6 +51,12 @@ void main() {
     expect(postrun.taskId, equals('task-1'));
     expect(postrun.taskName, equals('demo.task'));
     expect(postrun.attempt, equals(2));
+    expect(
+      postrun.resultJson<_TaskResultPayload>(
+        decode: _TaskResultPayload.fromJson,
+      ),
+      isA<_TaskResultPayload>().having((value) => value.ok, 'ok', isTrue),
+    );
 
     final retry = TaskRetryPayload(
       envelope: envelope,
@@ -99,4 +105,14 @@ void main() {
       expect(completed.occurredAt, DateTime.utc(2025, 1, 1, 0, 1));
     });
   });
+}
+
+class _TaskResultPayload {
+  const _TaskResultPayload({required this.ok});
+
+  factory _TaskResultPayload.fromJson(Map<String, dynamic> json) {
+    return _TaskResultPayload(ok: json['ok'] as bool);
+  }
+
+  final bool ok;
 }

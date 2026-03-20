@@ -54,6 +54,9 @@
 - Added `WorkflowStepEvent.resultJson(...)` and `resultAs(codec: ...)` so
   workflow introspection consumers can decode DTO checkpoint results without
   manual casts.
+- Added `TaskPostrunPayload.resultJson(...)` and `resultAs(codec: ...)` so
+  task lifecycle signal consumers can decode DTO task results without manual
+  casts.
 - Added `GroupStatus.resultValues<T>()`, `resultJson(...)`, and
   `resultAs(codec: ...)` so canvas/group status inspection can decode typed
   child results without manually mapping raw `TaskStatus.payload` values.

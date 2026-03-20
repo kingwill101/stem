@@ -915,6 +915,8 @@ Workflow introspection events expose matching helpers via
 For lower-level suspension directives, prefer `step.sleepJson(...)`,
 `step.awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)` over
 hand-built maps.
+Task lifecycle signals expose matching result helpers on `TaskPostrunPayload`
+via `payload.resultJson(...)` and `payload.resultAs(codec: ...)`.
 
 In the example above, these calls inside `run(...)`:
 

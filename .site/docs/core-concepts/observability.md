@@ -58,6 +58,10 @@ control-plane commands.
 
 ```
 
+When you inspect `TaskPostrunPayload` directly, prefer `payload.resultJson(...)`
+or `payload.resultAs(codec: ...)` over manual `payload.result as Map<String, Object?>`
+casts.
+
 ## Workflow Introspection
 
 Workflow runtimes can emit execution events (started/completed/failed/retrying)

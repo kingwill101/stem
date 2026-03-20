@@ -2,6 +2,7 @@ import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 /// Status of a workflow run emitted via signals.
@@ -210,6 +211,26 @@ class TaskPostrunPayload implements StemEvent {
 
   /// The result returned by the task.
   final Object? result;
+
+  /// Decodes the task result with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the task result with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// The final state of the task.
   final TaskState state;
