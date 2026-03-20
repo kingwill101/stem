@@ -440,7 +440,7 @@ void main() {
       }
     });
 
-    test('workflow refs expose fluent start builders', () async {
+    test('workflow refs build explicit start calls', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.builder.flow',
         build: (builder) {
@@ -465,11 +465,12 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowBuilder = workflowRef
-            .prepareStart(const {'name': 'builder'})
-            .ttl(const Duration(minutes: 5))
-            .parentRunId('parent-builder');
-        final builtFlowCall = flowBuilder.build();
+        final builtFlowCall = workflowRef.buildStart(
+          params: const {'name': 'builder'},
+        ).copyWith(
+          ttl: const Duration(minutes: 5),
+          parentRunId: 'parent-builder',
+        );
         final runId = await workflowApp.runtime.startWorkflowCall(
           builtFlowCall,
         );
@@ -485,16 +486,11 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-builder');
 
-        final scriptBuilder = script
-            .ref0()
-            .asRef
-            .prepareStart(())
-            .cancellationPolicy(
-              const WorkflowCancellationPolicy(
-                maxRunDuration: Duration(seconds: 5),
-              ),
-            );
-        final builtScriptCall = scriptBuilder.build();
+        final builtScriptCall = script.ref0().buildStart(
+          cancellationPolicy: const WorkflowCancellationPolicy(
+            maxRunDuration: Duration(seconds: 5),
+          ),
+        );
         final scriptRunId = await workflowApp.runtime.startWorkflowCall(
           builtScriptCall,
         );
@@ -514,7 +510,7 @@ void main() {
       }
     });
 
-    test('workflow refs expose workflow start builders', () async {
+    test('workflow refs build explicit workflow start calls', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.bound.builder.flow',
         build: (builder) {
@@ -541,11 +537,12 @@ void main() {
       try {
         await workflowApp.start();
 
-        final flowBuilder = workflowRef
-            .prepareStart(const {'name': 'builder'})
-            .ttl(const Duration(minutes: 5))
-            .parentRunId('parent-bound');
-        final builtFlowCall = flowBuilder.build();
+        final builtFlowCall = workflowRef.buildStart(
+          params: const {'name': 'builder'},
+        ).copyWith(
+          ttl: const Duration(minutes: 5),
+          parentRunId: 'parent-bound',
+        );
         final runId = await workflowApp.runtime.startWorkflowCall(
           builtFlowCall,
         );
@@ -561,14 +558,11 @@ void main() {
         expect(result?.value, 'hello builder');
         expect(state?.parentRunId, 'parent-bound');
 
-        final scriptBuilder = scriptRef.asRef
-            .prepareStart(())
-            .cancellationPolicy(
-              const WorkflowCancellationPolicy(
-                maxRunDuration: Duration(seconds: 5),
-              ),
-            );
-        final builtScriptCall = scriptBuilder.build();
+        final builtScriptCall = scriptRef.buildStart(
+          cancellationPolicy: const WorkflowCancellationPolicy(
+            maxRunDuration: Duration(seconds: 5),
+          ),
+        );
         final scriptRunId = await workflowApp.runtime.startWorkflowCall(
           builtScriptCall,
         );

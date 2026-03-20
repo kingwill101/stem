@@ -84,14 +84,14 @@ Those read-side helpers take `defaultVersion:` as the fallback for older
 payloads that do not yet carry a stored version marker.
 
 For workflows without start params, start directly from the flow or script
-itself with `start(...)` or `startAndWait(...)`. Keep `prepareStart()` for the
-rarer cases where you want to assemble overrides incrementally before calling
-`startWorkflowCall(...)`. Treat `WorkflowStartCall` as the explicit low-level
+itself with `start(...)` or `startAndWait(...)`. When you need an explicit
+low-level transport object for `startWorkflowCall(...)`, build it with
+`ref0().buildStart(...)`. Treat `WorkflowStartCall` as the explicit low-level
 transport object, not the normal happy path. Use `ref0()` when another API
 specifically needs a `NoArgsWorkflowRef`.
 
-When you already know the full override set up front, prefer
-`ref.buildStart(...)` over `prepareStart(...).build()`.
+When you need to adjust an explicit start request after construction, prefer
+`ref.buildStart(...)` plus `copyWith(...)`.
 
 ## Wait for completion
 
@@ -171,8 +171,8 @@ final result = await StemWorkflowDefinitions.userSignup.startAndWait(
 If you still need the run identifier for inspection or operator tooling, read
 it from `result.runId`.
 
-Keep `ref.prepareStart(params)` for the rarer cases where you want to
-assemble a start request incrementally before dispatch.
+Keep `ref.buildStart(...)` for the rarer cases where you need to assemble or
+adjust an explicit start request before dispatch.
 
 ## Parent runs and TTL
 

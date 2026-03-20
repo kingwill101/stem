@@ -331,10 +331,10 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final call = definition
-          .prepareStart(const {'value': 'child'})
-          .parentRunId('parent-task')
-          .build();
+      final call = definition.buildStart(
+        params: const {'value': 'child'},
+        parentRunId: 'parent-task',
+      );
       final runId = await context.startWorkflowCall(call);
       final result = await call.definition.waitFor(context, runId);
 

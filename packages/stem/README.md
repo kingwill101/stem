@@ -732,8 +732,9 @@ Child workflows belong in durable execution boundaries:
   checkpoints
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for normal override cases
-- keep `ref.prepareStart(params)` for the rarer incremental-call cases where
-  you actually want to build the start request step by step
+- when you need an explicit low-level transport object, prefer
+  `ref.buildStart(...)` and then `copyWith(...)` for the rarer
+  override-heavy cases
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
 

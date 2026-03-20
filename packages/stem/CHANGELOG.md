@@ -38,6 +38,9 @@
 - Added direct `buildCall(...)` / `buildStart(...)` helpers on task/workflow
   definitions so the explicit transport path no longer requires
   `prepare...().build()` when all overrides are already known.
+- Removed `WorkflowRef.prepareStart(...)` and `WorkflowStartBuilder`; the
+  explicit workflow transport path now uses `buildStart(...)` plus
+  `copyWith(...)` when advanced overrides are needed.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.

@@ -138,11 +138,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
     return Map<String, Object?>.from(payload);
   }
 
-  /// Creates a fluent builder for this workflow start.
-  WorkflowStartBuilder<TParams, TResult> prepareStart(TParams params) {
-    return WorkflowStartBuilder(definition: this, params: params);
-  }
-
   /// Decodes a final workflow result payload.
   TResult decode(Object? payload) {
     if (payload == null) {
@@ -377,53 +372,6 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
       parentRunId: parentRunId ?? this.parentRunId,
       ttl: ttl ?? this.ttl,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
-    );
-  }
-}
-
-/// Fluent builder used to construct rich workflow start requests.
-class WorkflowStartBuilder<TParams, TResult extends Object?> {
-  /// Creates a fluent builder for workflow starts.
-  WorkflowStartBuilder({required this.definition, required this.params});
-
-  /// Workflow definition used to construct the start call.
-  final WorkflowRef<TParams, TResult> definition;
-
-  /// Typed parameters for the workflow invocation.
-  final TParams params;
-
-  String? _parentRunId;
-  Duration? _ttl;
-  WorkflowCancellationPolicy? _cancellationPolicy;
-
-  /// Sets the parent workflow run id for this start.
-  WorkflowStartBuilder<TParams, TResult> parentRunId(String parentRunId) {
-    _parentRunId = parentRunId;
-    return this;
-  }
-
-  /// Sets the retention TTL for this run.
-  WorkflowStartBuilder<TParams, TResult> ttl(Duration ttl) {
-    _ttl = ttl;
-    return this;
-  }
-
-  /// Sets the cancellation policy for this run.
-  WorkflowStartBuilder<TParams, TResult> cancellationPolicy(
-    WorkflowCancellationPolicy cancellationPolicy,
-  ) {
-    _cancellationPolicy = cancellationPolicy;
-    return this;
-  }
-
-  /// Builds the [WorkflowStartCall] with accumulated overrides.
-  WorkflowStartCall<TParams, TResult> build() {
-    return WorkflowStartCall._(
-      definition: definition,
-      params: params,
-      parentRunId: _parentRunId,
-      ttl: _ttl,
-      cancellationPolicy: _cancellationPolicy,
     );
   }
 }
