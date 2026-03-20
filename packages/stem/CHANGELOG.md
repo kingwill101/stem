@@ -147,6 +147,8 @@
   `app.app.registry`.
 - Added `StemWorkflowApp.registerWorkflow(...)` so manual workflow definition
   registration no longer needs to reach through `workflowApp.runtime`.
+- Added `StemWorkflowApp.registerFlow(...)` and `registerScript(...)` so manual
+  flow/script registration no longer needs to pass `.definition`.
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.

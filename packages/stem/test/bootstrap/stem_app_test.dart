@@ -795,6 +795,52 @@ void main() {
       }
     });
 
+    test(
+      'StemWorkflowApp exposes flow and script registration helpers',
+      () async {
+        final flow = Flow<String>(
+          name: 'workflow.register.flow.helper',
+          build: (builder) {
+            builder.step('hello', (ctx) async => 'flow-register-ok');
+          },
+        );
+        final script = WorkflowScript<String>(
+          name: 'workflow.register.script.helper',
+          run: (script) => script.step<String>(
+            'hello',
+            (step) async => 'script-register-ok',
+          ),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp
+            ..registerFlow(flow)
+            ..registerScript(script);
+
+          final flowRunId = await workflowApp.startWorkflow(
+            'workflow.register.flow.helper',
+          );
+          final flowResult = await workflowApp.waitForCompletion<String>(
+            flowRunId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(flowResult?.value, equals('flow-register-ok'));
+
+          final scriptRunId = await workflowApp.startWorkflow(
+            'workflow.register.script.helper',
+          );
+          final scriptResult = await workflowApp.waitForCompletion<String>(
+            scriptRunId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(scriptResult?.value, equals('script-register-ok'));
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',
