@@ -60,6 +60,9 @@
 - Added `TaskSuccessPayload.resultJson(...)` and `resultAs(codec: ...)` so
   success-only task signal consumers can decode DTO task results without
   manual casts.
+- Added `FlowStepControl.dataJson(...)` and `dataAs(codec: ...)` so
+  lower-level suspension control objects can decode DTO metadata without
+  manual casts.
 - Added `GroupStatus.resultValues<T>()`, `resultJson(...)`, and
   `resultAs(codec: ...)` so canvas/group status inspection can decode typed
   child results without manually mapping raw `TaskStatus.payload` values.

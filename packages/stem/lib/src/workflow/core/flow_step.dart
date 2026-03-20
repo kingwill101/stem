@@ -222,6 +222,26 @@ class FlowStepControl {
 
   /// Additional data to persist with the suspension.
   final Map<String, Object?>? data;
+
+  /// Decodes the suspension metadata with [codec], when present.
+  TData? dataAs<TData>({required PayloadCodec<TData> codec}) {
+    final stored = data;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension metadata with a JSON decoder, when present.
+  TData? dataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = data;
+    if (stored == null) return null;
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 }
 
 /// Enumerates the suspension control types.

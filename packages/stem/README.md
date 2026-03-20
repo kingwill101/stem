@@ -918,6 +918,8 @@ hand-built maps.
 Task lifecycle signals expose matching result helpers on
 `TaskPostrunPayload` and `TaskSuccessPayload` via `payload.resultJson(...)`
 and `payload.resultAs(codec: ...)`.
+Low-level `FlowStepControl` objects expose matching suspension metadata
+helpers via `control.dataJson(...)` and `control.dataAs(codec: ...)`.
 
 In the example above, these calls inside `run(...)`:
 
