@@ -54,6 +54,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
   Future<R> call(TaskContext context, Map<String, Object?> args) async {
     final invocationContext = TaskInvocationContext.local(
       id: context.id,
+      args: args,
       headers: context.headers,
       meta: context.meta,
       attempt: context.attempt,

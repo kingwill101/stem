@@ -9,6 +9,22 @@ const _parentAttemptKey = 'stem.parentAttempt';
 
 void main() {
   group('TaskContext.enqueue', () {
+    test('exposes typed arg readers on the context', () async {
+      final context = TaskContext(
+        id: 'parent-0',
+        args: const {'invoiceId': 'inv-42'},
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+
+      expect(context.requiredArg<String>('invoiceId'), equals('inv-42'));
+      expect(context.argOr<String>('tenant', 'global'), equals('global'));
+    });
+
     test('propagates headers/meta and lineage by default', () async {
       final enqueuer = _RecordingEnqueuer();
       final context = TaskContext(

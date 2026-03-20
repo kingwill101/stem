@@ -54,7 +54,7 @@ FutureOr<Object?> childEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) {
-  final value = args['value'] as String? ?? 'unknown';
+  final value = context.argOr<String>('value', 'unknown');
   // Example output keeps the script runnable without adding logging setup.
   // ignore: avoid_print
   print('[child] value=$value attempt=${context.attempt}');

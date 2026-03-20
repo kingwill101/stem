@@ -968,6 +968,7 @@ class Worker {
 
         final context = TaskContext(
           id: envelope.id,
+          args: envelope.args,
           attempt: envelope.attempt,
           headers: envelope.headers,
           meta: envelope.meta,

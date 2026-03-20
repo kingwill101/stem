@@ -15,7 +15,7 @@ class EmailTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final to = args.valueOr<String>('to', 'anonymous');
+    final to = context.argOr<String>('to', 'anonymous');
     print('Emailing $to (attempt ${context.attempt})');
   }
 }
@@ -75,7 +75,7 @@ class PublishInvoiceTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final invoiceId = args.requiredValue<String>('invoiceId');
+    final invoiceId = context.requiredArg<String>('invoiceId');
     await publishInvoice(invoiceId);
   }
 }

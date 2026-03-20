@@ -225,12 +225,13 @@ need a custom
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
 data.
 
-For manual handlers and workflows, use the typed payload readers on the map
-itself instead of repeating raw casts:
+For manual handlers, use the context arg helpers or the typed payload readers
+on the raw map instead of repeating casts. For workflows, use the context
+param/result helpers:
 
 ```dart
-final customerId = args.requiredValue<String>('customerId');
-final tenant = args.valueOr<String>('tenant', 'global');
+final customerId = context.requiredArg<String>('customerId');
+final tenant = context.argOr<String>('tenant', 'global');
 final draft = ctx.requiredParam<ApprovalDraft>(
   'draft',
   codec: approvalDraftCodec,

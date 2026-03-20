@@ -116,6 +116,14 @@ every retry signal and shows how the strategy interacts with broker timings.
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.
 
+For handler inputs, prefer the typed arg helpers on the task context when
+available:
+
+```dart
+final customerId = context.requiredArg<String>('customerId');
+final tenant = context.argOr<String>('tenant', 'global');
+```
+
 See the `packages/stem/example/task_context_mixed` demo for a runnable sample that exercises
 inline + isolate enqueue, TaskRetryPolicy overrides, and enqueue options.
 The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory TaskContext and

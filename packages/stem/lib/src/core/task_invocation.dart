@@ -277,7 +277,11 @@ class EmitWorkflowEventResponse {
 
 /// Context exposed to task entrypoints regardless of execution environment.
 class TaskInvocationContext
-    implements TaskEnqueuer, WorkflowCaller, WorkflowEventEmitter {
+    implements
+        TaskEnqueuer,
+        WorkflowCaller,
+        WorkflowEventEmitter,
+        TaskInputContext {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
     required String id,
@@ -291,11 +295,13 @@ class TaskInvocationContext
       Map<String, Object?>? data,
     })
     progress,
+    Map<String, Object?> args = const {},
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
     WorkflowEventEmitter? workflowEvents,
   }) => TaskInvocationContext._(
     id: id,
+    args: args,
     headers: headers,
     meta: meta,
     attempt: attempt,
@@ -314,8 +320,10 @@ class TaskInvocationContext
     required Map<String, String> headers,
     required Map<String, Object?> meta,
     required int attempt,
+    Map<String, Object?> args = const {},
   }) => TaskInvocationContext._(
     id: id,
+    args: args,
     headers: headers,
     meta: meta,
     attempt: attempt,
@@ -331,6 +339,7 @@ class TaskInvocationContext
   /// Internal constructor shared by local and isolate contexts.
   TaskInvocationContext._({
     required this.id,
+    required this.args,
     required this.headers,
     required this.meta,
     required this.attempt,
@@ -353,6 +362,9 @@ class TaskInvocationContext
 
   /// The unique identifier of the task.
   final String id;
+
+  @override
+  final Map<String, Object?> args;
 
   /// Headers passed to the task invocation.
   final Map<String, String> headers;

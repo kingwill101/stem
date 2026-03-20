@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `arg<T>()`, `argOr<T>()`, and `requiredArg<T>()` on `TaskContext` and
+  `TaskInvocationContext`, and taught both contexts to retain the current
+  task args so manual handlers and isolate entrypoints can read typed inputs
+  without threading raw `args[...]` lookups through their logic.
 - Added `param<T>()`, `paramOr<T>()`, and `requiredParam<T>()` on
   `WorkflowExecutionContext` and `WorkflowScriptContext` so manual flows,
   checkpoints, and script run methods can read typed workflow start params

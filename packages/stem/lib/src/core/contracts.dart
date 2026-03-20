@@ -36,6 +36,7 @@ import 'dart:collection';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
@@ -1686,9 +1687,38 @@ class TaskEnqueueScope {
   }
 }
 
+/// Shared input surface for task execution contexts that retain invocation
+/// args.
+abstract interface class TaskInputContext {
+  /// Arguments supplied to the current task invocation.
+  Map<String, Object?> get args;
+}
+
+/// Typed read helpers for task invocation args.
+extension TaskInputContextArgs on TaskInputContext {
+  /// Returns the decoded task arg for [key], or `null`.
+  T? arg<T>(String key, {PayloadCodec<T>? codec}) {
+    return args.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded task arg for [key], or [fallback].
+  T argOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return args.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded task arg for [key], throwing when absent.
+  T requiredArg<T>(String key, {PayloadCodec<T>? codec}) {
+    return args.requiredValue<T>(key, codec: codec);
+  }
+}
+
 /// Context passed to handler implementations during execution.
 class TaskContext
-    implements TaskEnqueuer, WorkflowCaller, WorkflowEventEmitter {
+    implements
+        TaskEnqueuer,
+        WorkflowCaller,
+        WorkflowEventEmitter,
+        TaskInputContext {
   /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
@@ -1698,6 +1728,7 @@ class TaskContext
     required this.heartbeat,
     required this.extendLease,
     required this.progress,
+    this.args = const {},
     this.enqueuer,
     this.workflows,
     this.workflowEvents,
@@ -1705,6 +1736,9 @@ class TaskContext
 
   /// The unique identifier of the task.
   final String id;
+
+  @override
+  final Map<String, Object?> args;
 
   /// The current attempt number.
   final int attempt;

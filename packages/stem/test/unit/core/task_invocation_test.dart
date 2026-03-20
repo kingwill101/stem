@@ -129,6 +129,22 @@ class _CapturingWorkflowEventEmitter implements WorkflowEventEmitter {
 }
 
 void main() {
+  test('TaskInvocationContext.local exposes typed arg readers', () {
+    final context = TaskInvocationContext.local(
+      id: 'task-1',
+      args: const {'customerId': 'cus-42'},
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+    );
+
+    expect(context.requiredArg<String>('customerId'), equals('cus-42'));
+    expect(context.argOr<String>('tenant', 'global'), equals('global'));
+  });
+
   test('TaskInvocationContext.local merges headers/meta and lineage', () async {
     final enqueuer = _CapturingEnqueuer('task-1');
     final context = TaskInvocationContext.local(
