@@ -9,12 +9,14 @@ Future<void> main() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://redis:6379/0';
 
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final tasks = buildTasks();
   final subscriptions = attachLogging('producer');
-  final stem = Stem(broker: broker, tasks: tasks);
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    tasks: buildTasks(),
+  );
 
-  final taskId = await stem.enqueue(
+  final taskId = await client.enqueue(
     'tasks.always_fail',
     options: const TaskOptions(maxRetries: 3, queue: 'retry-demo'),
     meta: const {'maxRetries': 3},
@@ -28,5 +30,5 @@ Future<void> main() async {
   }
 
   await Future<void>.delayed(const Duration(seconds: 1));
-  await broker.close();
+  await client.close();
 }

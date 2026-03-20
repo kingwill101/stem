@@ -29,6 +29,9 @@
 - Simplified `example/stem_example.dart` and the getting-started docs that
   embed it to use `StemApp.fromUrl(...)` plus typed wait helpers instead of
   manually wiring broker/backend/worker instances.
+- Simplified the Redis producer examples in `retry_task` and `signals_demo` to
+  use `StemClient.fromUrl(...)` instead of manually creating a broker and raw
+  `Stem` producer just to enqueue tasks.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
