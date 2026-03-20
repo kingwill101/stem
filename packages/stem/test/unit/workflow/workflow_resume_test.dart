@@ -7,6 +7,7 @@ import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
+import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:test/test.dart';
 
@@ -522,20 +523,19 @@ void main() {
     },
   );
 
-  test('WorkflowEventRef wait helpers reject unsupported waiter types', () {
-    const event = WorkflowEventRef<_ResumePayload>(
-      topic: 'demo.event',
-      codec: _resumePayloadCodec,
+  test('flow and script step contexts share the resume-context surface', () {
+    final flowContext = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
     );
+    final scriptContext = _FakeWorkflowScriptStepContext();
 
-    expect(
-      () => event.waitValue('invalid'),
-      throwsA(isA<ArgumentError>()),
-    );
-    expect(
-      () => event.wait('invalid'),
-      throwsA(isA<ArgumentError>()),
-    );
+    expect(flowContext, isA<WorkflowResumeContext>());
+    expect(scriptContext, isA<WorkflowResumeContext>());
   });
 
   test(
@@ -671,6 +671,23 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
     awaitedTopics.add(topic);
     awaitedDeadline = deadline;
     awaitedData = data == null ? null : Map<String, Object?>.from(data);
+  }
+
+  @override
+  Future<void> suspendFor(
+    Duration duration, {
+    Map<String, Object?>? data,
+  }) {
+    return sleep(duration, data: data);
+  }
+
+  @override
+  Future<void> waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(topic, deadline: deadline, data: data);
   }
 
   @override

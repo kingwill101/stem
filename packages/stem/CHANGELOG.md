@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `WorkflowResumeContext` as the shared typed suspension/wait surface for
+  flow steps and script checkpoints. Typed workflow event waits now target that
+  shared interface instead of accepting an erased `Object`.
 - Added `TaskDefinition.noArgsCodec(...)`, `Flow.codec(...)`,
   `WorkflowScript.codec(...)`, `WorkflowDefinition.flowCodec(...)`, and
   `.scriptCodec(...)` so the manual result path now has direct custom-codec

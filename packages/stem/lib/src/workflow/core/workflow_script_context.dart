@@ -5,6 +5,7 @@ import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
@@ -32,7 +33,7 @@ abstract class WorkflowScriptContext {
 /// Context provided to each script checkpoint invocation. Mirrors
 /// [FlowContext] but tailored for the facade helpers.
 abstract class WorkflowScriptStepContext
-    implements TaskEnqueuer, WorkflowCaller {
+    implements TaskEnqueuer, WorkflowCaller, WorkflowResumeContext {
   /// Name of the workflow currently executing.
   String get workflow;
 
@@ -67,7 +68,25 @@ abstract class WorkflowScriptStepContext
 
   /// Returns and clears the resume payload provided by the runtime when the
   /// checkpoint resumes after a suspension.
+  @override
   Object? takeResumeData();
+
+  @override
+  Future<void> suspendFor(
+    Duration duration, {
+    Map<String, Object?>? data,
+  }) {
+    return sleep(duration, data: data);
+  }
+
+  @override
+  Future<void> waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(topic, deadline: deadline, data: data);
+  }
 
   /// Returns a stable idempotency key derived from workflow/run/checkpoint.
   String idempotencyKey([String? scope]);

@@ -1,9 +1,10 @@
 import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -16,7 +17,8 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext implements TaskEnqueuer, WorkflowCaller {
+class FlowContext
+    implements TaskEnqueuer, WorkflowCaller, WorkflowResumeContext {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -114,6 +116,20 @@ class FlowContext implements TaskEnqueuer, WorkflowCaller {
     return _control!;
   }
 
+  @override
+  void suspendFor(Duration duration, {Map<String, Object?>? data}) {
+    sleep(duration, data: data);
+  }
+
+  @override
+  void waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    awaitEvent(topic, deadline: deadline, data: data);
+  }
+
   /// Injects a payload that will be returned the next time [takeResumeData] is
   /// called. Primarily used by the runtime; tests may also leverage it to mock
   /// resumption data.
@@ -129,6 +145,7 @@ class FlowContext implements TaskEnqueuer, WorkflowCaller {
   /// The method consumes the payload so subsequent calls during the same step
   /// return `null`. This makes it safe to guard control-flow with a simple
   /// `if (takeResumeData() == null) { ... }` pattern.
+  @override
   Object? takeResumeData() {
     final value = _resumeData;
     _resumeData = null;

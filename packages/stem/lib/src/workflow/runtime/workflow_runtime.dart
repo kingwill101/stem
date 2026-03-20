@@ -38,12 +38,12 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
-import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
@@ -1811,6 +1811,23 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
       deadline,
       data == null ? null : Map<String, Object?>.from(data),
     );
+  }
+
+  @override
+  Future<void> suspendFor(
+    Duration duration, {
+    Map<String, Object?>? data,
+  }) {
+    return sleep(duration, data: data);
+  }
+
+  @override
+  Future<void> waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(topic, deadline: deadline, data: data);
   }
 
   @override
