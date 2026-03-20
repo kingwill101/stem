@@ -104,6 +104,9 @@
 - Simplified the README Redis task examples to use `StemClient.fromUrl(...)`
   and `createWorker(...)` instead of manually wiring raw `Stem` and `Worker`
   instances in the happy path.
+- Simplified the mixed-cluster enqueuer example to use `StemClient.create(...)`
+  and normal client shutdown instead of returning raw `Stem` producers with
+  manual adapter-specific close logic.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

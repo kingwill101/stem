@@ -3,19 +3,18 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
-import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
   final redisConfig = _configFromPrefix('REDIS_');
   final postgresConfig = _configFromPrefix('POSTGRES_');
 
-  final redisStem = await _buildRedisStem(redisConfig);
-  final postgresStem = await _buildPostgresStem(postgresConfig);
+  final redisClient = await _buildRedisClient(redisConfig);
+  final postgresClient = await _buildPostgresClient(postgresConfig);
 
   final redisItems = ['cache-warmup', 'metrics-snapshot'];
   for (final item in redisItems) {
-    final id = await redisStem.enqueue(
+    final id = await redisClient.enqueue(
       'redis.only',
       args: {'task': item},
       options: TaskOptions(queue: redisConfig.defaultQueue),
@@ -25,7 +24,7 @@ Future<void> main(List<String> args) async {
 
   final postgresItems = ['billing-report', 'inventory-rollup'];
   for (final item in postgresItems) {
-    final id = await postgresStem.enqueue(
+    final id = await postgresClient.enqueue(
       'postgres.only',
       args: {'task': item},
       options: TaskOptions(queue: postgresConfig.defaultQueue),
@@ -33,10 +32,8 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Enqueued Postgres task $id for $item');
   }
 
-  await (redisStem.broker as RedisStreamsBroker).close();
-  await (redisStem.backend as RedisResultBackend).close();
-  await (postgresStem.broker as PostgresBroker).close();
-  await (postgresStem.backend as PostgresResultBackend).close();
+  await redisClient.close();
+  await postgresClient.close();
 }
 
 StemConfig _configFromPrefix(String prefix) {
@@ -52,16 +49,11 @@ StemConfig _configFromPrefix(String prefix) {
   return StemConfig.fromEnvironment(overrides);
 }
 
-Future<Stem> _buildRedisStem(StemConfig config) async {
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
+Future<StemClient> _buildRedisClient(StemConfig config) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError('STEM_RESULT_BACKEND_URL must be set for Redis Stem');
   }
-  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
 
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
@@ -71,27 +63,26 @@ Future<Stem> _buildRedisStem(StemConfig config) async {
     ),
   ];
 
-  return Stem(
-    broker: broker,
+  return StemClient.create(
+    broker: StemBrokerFactory(
+      create: () =>
+          RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => RedisResultBackend.connect(backendUrl, tls: config.tls),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 }
 
-Future<Stem> _buildPostgresStem(StemConfig config) async {
-  final broker = await PostgresBroker.connect(
-    config.brokerUrl,
-    applicationName: 'stem-mixed-enqueuer',
-    tls: config.tls,
-  );
+Future<StemClient> _buildPostgresClient(StemConfig config) async {
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError('STEM_RESULT_BACKEND_URL must be set for Postgres Stem');
   }
-  final backend = await PostgresResultBackend.connect(
-    connectionString: backendUrl,
-  );
 
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
@@ -101,10 +92,20 @@ Future<Stem> _buildPostgresStem(StemConfig config) async {
     ),
   ];
 
-  return Stem(
-    broker: broker,
+  return StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => PostgresBroker.connect(
+        config.brokerUrl,
+        applicationName: 'stem-mixed-enqueuer',
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => PostgresResultBackend.connect(connectionString: backendUrl),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 }
