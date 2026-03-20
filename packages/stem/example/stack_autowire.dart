@@ -4,11 +4,13 @@ import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 class PingTask implements TaskHandler<void> {
-  @override
-  String get name => 'demo.ping';
+  static final definition = TaskDefinition.noArgs<void>(name: 'demo.ping');
 
   @override
-  TaskMetadata get metadata => const TaskMetadata();
+  String get name => definition.name;
+
+  @override
+  TaskMetadata get metadata => definition.metadata;
 
   @override
   TaskOptions get options => const TaskOptions(maxRetries: 0);
@@ -64,8 +66,10 @@ Future<void> main() async {
     await workflowApp.start();
     await beat.start();
 
-    final taskId = await app.enqueue('demo.ping');
-    await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 1));
+    await PingTask.definition.enqueueAndWait(
+      app,
+      timeout: const Duration(seconds: 1),
+    );
   } finally {
     await beat.stop();
     await workflowApp.shutdown();

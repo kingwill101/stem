@@ -14,23 +14,32 @@ final childDefinition = TaskDefinition<ChildArgs, String>(
   metadata: const TaskMetadata(description: 'Typed child task example'),
 );
 
+final invocationParentDefinition = TaskDefinition.noArgs<void>(
+  name: 'tasks.invocation_parent',
+);
+
 class ParentTask extends TaskHandler<void> {
+  static final definition = TaskDefinition.noArgs<void>(
+    name: 'tasks.parent',
+    metadata: TaskMetadata(
+      description: 'Parent task that enqueues follow-up work.',
+    ),
+  );
+
   @override
-  String get name => 'tasks.parent';
+  String get name => definition.name;
 
   @override
   TaskOptions get options => const TaskOptions(queue: 'default');
 
   @override
-  TaskMetadata get metadata => const TaskMetadata(
-    description: 'Parent task that enqueues follow-up work.',
-  );
+  TaskMetadata get metadata => definition.metadata;
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await context.enqueue(
-      'tasks.child',
-      args: {'value': 'from-parent'},
+    await childDefinition.enqueue(
+      context,
+      const ChildArgs('from-parent'),
       enqueueOptions: TaskEnqueueOptions(
         countdown: const Duration(milliseconds: 200),
         queue: 'default',
@@ -77,9 +86,10 @@ Future<void> main() async {
       metadata: childDefinition.metadata,
     ),
     FunctionTaskHandler<void>.inline(
-      name: 'tasks.invocation_parent',
+      name: invocationParentDefinition.name,
       entrypoint: invocationParentEntrypoint,
       options: const TaskOptions(queue: 'default'),
+      metadata: invocationParentDefinition.metadata,
     ),
   ];
 
@@ -88,8 +98,8 @@ Future<void> main() async {
     workerConfig: const StemWorkerConfig(consumerName: 'example-worker'),
   );
 
-  await app.enqueue('tasks.parent', args: const {});
-  await app.enqueue('tasks.invocation_parent', args: const {});
+  await ParentTask.definition.enqueue(app);
+  await invocationParentDefinition.enqueue(app);
   final directTaskId = await childDefinition.enqueue(
     app,
     const ChildArgs('direct-call'),

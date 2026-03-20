@@ -46,8 +46,10 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 class HelloTask implements TaskHandler<void> {
+  static final definition = TaskDefinition.noArgs<void>(name: 'demo.hello');
+
   @override
-  String get name => 'demo.hello';
+  String get name => definition.name;
 
   @override
   TaskOptions get options => const TaskOptions(queue: 'default');
@@ -64,8 +66,10 @@ Future<void> main() async {
   final worker = await client.createWorker();
   unawaited(worker.start());
 
-  await client.enqueue('demo.hello');
-  await Future<void>.delayed(const Duration(seconds: 1));
+  await HelloTask.definition.enqueueAndWait(
+    client,
+    timeout: const Duration(seconds: 1),
+  );
 
   await worker.shutdown();
   await client.close();

@@ -17,6 +17,9 @@
   `emitEventBuilder(...).emit()` as the primary typed event emission path,
   while keeping the older `emitWith(...)` variants documented as lower-level
   alternatives.
+- Updated the public no-input task examples to prefer
+  `TaskDefinition.noArgs(...)` plus typed `enqueue()` / `enqueueAndWait()`
+  helpers instead of reintroducing raw task-name strings in the happy path.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with
