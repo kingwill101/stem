@@ -31,7 +31,7 @@ import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 /// This wrapper wires together broker/backend infrastructure, registers flows,
 /// and exposes convenience helpers for scheduling and observing workflow runs
 /// without having to manage [WorkflowRuntime] directly.
-class StemWorkflowApp implements WorkflowCaller, StemTaskApp {
+class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskApp {
   StemWorkflowApp._({
     required this.app,
     required this.runtime,
@@ -213,6 +213,7 @@ class StemWorkflowApp implements WorkflowCaller, StemTaskApp {
   /// Emits a typed event to resume runs waiting on [topic].
   ///
   /// This is a convenience wrapper over [WorkflowRuntime.emitValue].
+  @override
   Future<void> emitValue<T>(
     String topic,
     T value, {
@@ -222,6 +223,7 @@ class StemWorkflowApp implements WorkflowCaller, StemTaskApp {
   }
 
   /// Emits a typed event through a [WorkflowEventRef].
+  @override
   Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
     return runtime.emitEvent(event, value);
   }
@@ -655,20 +657,6 @@ StemWorkerConfig _resolveWorkflowWorkerConfig(
     return workerConfig;
   }
   return workerConfig.copyWith(subscription: inferredSubscription);
-}
-
-/// Convenience helpers for emitting typed workflow events through an app or
-/// runtime.
-extension WorkflowEventRefDispatchExtension<T> on WorkflowEventRef<T> {
-  /// Emits this typed event with [app].
-  Future<void> emitWithApp(StemWorkflowApp app, T value) {
-    return app.emitEvent(this, value);
-  }
-
-  /// Emits this typed event with [runtime].
-  Future<void> emitWithRuntime(WorkflowRuntime runtime, T value) {
-    return runtime.emitEvent(this, value);
-  }
 }
 
 /// Convenience helpers for typed workflow start calls.

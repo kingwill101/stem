@@ -68,7 +68,7 @@ const int _leaseConflictMaxRetries = 1000000;
 /// The runtime is durable: each step is re-executed from the top after a
 /// suspension or worker crash. Handlers must therefore be idempotent and rely
 /// on persisted step outputs or resume payloads to detect prior progress.
-class WorkflowRuntime implements WorkflowCaller {
+class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Creates a workflow runtime backed by a [Stem] instance and
   /// [WorkflowStore].
   WorkflowRuntime({
@@ -356,6 +356,7 @@ class WorkflowRuntime implements WorkflowCaller {
   /// When [codec] is provided, [value] is encoded before being emitted. The
   /// encoded value must be a `Map<String, Object?>` because workflow watcher
   /// resolution and event transport are currently map-shaped.
+  @override
   Future<void> emitValue<T>(
     String topic,
     T value, {
@@ -366,6 +367,7 @@ class WorkflowRuntime implements WorkflowCaller {
   }
 
   /// Emits a typed external event using a [WorkflowEventRef].
+  @override
   Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
     return emitValue(event.topic, value, codec: event.codec);
   }

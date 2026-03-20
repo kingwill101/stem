@@ -12,6 +12,9 @@
   `startAndWaitWithContext(...)` workflow-ref helpers and the separate
   `WorkflowChildCallerContext` contract so child workflow starts consistently
   target the direct `WorkflowCaller` surface.
+- Added `WorkflowEventEmitter` plus the unified `WorkflowEventRef.emitWith(...)`
+  helper so typed workflow events no longer branch between app-specific and
+  runtime-specific dispatch helpers.
 - Simplified generated annotated task usage so `StemTaskDefinitions.*` is the
   canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
   `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated

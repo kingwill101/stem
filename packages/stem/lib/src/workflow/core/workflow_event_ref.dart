@@ -1,5 +1,19 @@
 import 'package:stem/src/core/payload_codec.dart';
 
+/// Shared typed workflow-event dispatch surface used by apps and runtimes.
+abstract interface class WorkflowEventEmitter {
+  /// Emits a typed external event that serializes onto the durable map-based
+  /// workflow event transport.
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  });
+
+  /// Emits a typed external event using a [WorkflowEventRef].
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value);
+}
+
 /// Typed reference to a workflow resume event topic.
 ///
 /// This bundles the durable topic name with an optional payload codec so
@@ -17,4 +31,12 @@ class WorkflowEventRef<T> {
 
   /// Optional codec for encoding and decoding event payloads.
   final PayloadCodec<T>? codec;
+}
+
+/// Convenience helpers for dispatching typed workflow events.
+extension WorkflowEventRefExtension<T> on WorkflowEventRef<T> {
+  /// Emits this typed event with the provided [emitter].
+  Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
+    return emitter.emitEvent(this, value);
+  }
 }

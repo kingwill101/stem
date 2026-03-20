@@ -632,7 +632,7 @@ void main() {
     expect(suspended?.status, WorkflowStatus.suspended);
     expect(suspended?.waitTopic, event.topic);
 
-    await event.emitWithRuntime(
+    await event.emitWith(
       runtime,
       const _UserUpdatedEvent(id: 'user-typed-2'),
     );

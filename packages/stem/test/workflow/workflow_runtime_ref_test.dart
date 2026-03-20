@@ -254,7 +254,7 @@ void main() {
         final runId = await flow.ref0().startWithApp(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
-        await _userUpdatedEvent.emitWithApp(
+        await _userUpdatedEvent.emitWith(
           workflowApp,
           const _GreetingParams(name: 'event'),
         );
