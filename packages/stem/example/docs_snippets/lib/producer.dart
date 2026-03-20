@@ -37,8 +37,6 @@ Future<void> enqueueWithRedis() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
 
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final backend = await RedisResultBackend.connect('$brokerUrl/1');
   final tasks = [
     FunctionTaskHandler<void>(
       name: 'reports.generate',
@@ -50,31 +48,26 @@ Future<void> enqueueWithRedis() async {
     ),
   ];
 
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: '$brokerUrl/1'),
     tasks: tasks,
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'reports.generate',
     args: {'reportId': 'monthly-2025-10'},
     options: const TaskOptions(queue: 'reports', maxRetries: 3),
     meta: {'requestedBy': 'finance'},
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion producer-redis
 
 // #region producer-signed
 Future<void> enqueueWithSigning() async {
   final config = StemConfig.fromEnvironment();
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
-  final backend = InMemoryResultBackend();
   final tasks = [
     FunctionTaskHandler<void>(
       name: 'billing.charge',
@@ -85,20 +78,25 @@ Future<void> enqueueWithSigning() async {
       },
     ),
   ];
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(
+        config.brokerUrl,
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory.inMemory(),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
     notBefore: DateTime.now().add(const Duration(minutes: 5)),
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion producer-signed
 

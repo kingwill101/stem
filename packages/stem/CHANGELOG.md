@@ -41,6 +41,10 @@
 - Added `notBefore` support to the shared `TaskEnqueuer` surface so
   `StemClient`, `StemApp`, workflow contexts, and task contexts can publish
   delayed tasks without dropping down to raw `Stem`.
+- Updated the producer and programmatic-worker documentation snippets to use
+  `StemApp`/`StemClient` for their producer examples, keeping low-level worker
+  examples intact while reducing manual broker/backend wiring in the happy
+  path.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

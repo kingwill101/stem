@@ -9,33 +9,27 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region workers-producer-minimal
 Future<void> minimalProducer() async {
-  final tasks = [
-    FunctionTaskHandler<void>(
-      name: 'email.send',
-      entrypoint: (context, args) async {
-        final to = args['to'] as String? ?? 'friend';
-        print('Queued email to $to');
-        return null;
-      },
-    ),
-  ];
-
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
+  final app = await StemApp.inMemory(
+    tasks: [
+      FunctionTaskHandler<void>(
+        name: 'email.send',
+        entrypoint: (context, args) async {
+          final to = args['to'] as String? ?? 'friend';
+          print('Queued email to $to');
+          return null;
+        },
+      ),
+    ],
   );
 
-  final taskId = await stem.enqueue(
+  final taskId = await app.enqueue(
     'email.send',
     args: {'to': 'hello@example.com', 'subject': 'Welcome'},
   );
 
   print('Enqueued $taskId');
-  await backend.close();
-  await broker.close();
+  await app.waitForTask<void>(taskId);
+  await app.close();
 }
 // #endregion workers-producer-minimal
 
@@ -43,32 +37,28 @@ Future<void> minimalProducer() async {
 Future<void> redisProducer() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final backend = await RedisResultBackend.connect('$brokerUrl/1');
-  final tasks = [
-    FunctionTaskHandler<void>(
-      name: 'report.generate',
-      entrypoint: (context, args) async {
-        final id = args['reportId'] as String? ?? 'unknown';
-        print('Queued report $id');
-        return null;
-      },
-    ),
-  ];
-
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: '$brokerUrl/1'),
+    tasks: [
+      FunctionTaskHandler<void>(
+        name: 'report.generate',
+        entrypoint: (context, args) async {
+          final id = args['reportId'] as String? ?? 'unknown';
+          print('Queued report $id');
+          return null;
+        },
+      ),
+    ],
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'report.generate',
     args: {'reportId': 'monthly-2025-10'},
     options: const TaskOptions(queue: 'reports'),
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion workers-producer-redis
 
@@ -76,35 +66,33 @@ Future<void> redisProducer() async {
 Future<void> signedProducer() async {
   final config = StemConfig.fromEnvironment();
   final signer = PayloadSigner.maybe(config.signing);
-  final tasks = [
-    FunctionTaskHandler<void>(
-      name: 'billing.charge',
-      entrypoint: (context, args) async {
-        final customerId = args['customerId'] as String? ?? 'unknown';
-        print('Queued charge for $customerId');
-        return null;
-      },
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(
+        config.brokerUrl,
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
     ),
-  ];
-
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
+    backend: StemBackendFactory.inMemory(),
+    tasks: [
+      FunctionTaskHandler<void>(
+        name: 'billing.charge',
+        entrypoint: (context, args) async {
+          final customerId = args['customerId'] as String? ?? 'unknown';
+          print('Queued charge for $customerId');
+          return null;
+        },
+      ),
+    ],
     signer: signer,
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion workers-producer-signed
 
