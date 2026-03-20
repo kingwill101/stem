@@ -41,7 +41,8 @@ common path, use the direct
 `definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
 helpers. When you need a reusable prebuilt request, use
 `definition.prepareEnqueue(args).build()` and hand the resulting `TaskCall` to
-any `TaskResultCaller` / `TaskEnqueuer` surface:
+any `TaskResultCaller` / `TaskEnqueuer` surface. Treat `TaskCall` as the
+explicit low-level transport object, not the normal happy path:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-typed-definition
 

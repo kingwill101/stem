@@ -40,8 +40,8 @@ The generated file exposes:
 - `stemModule`
 - `StemWorkflowDefinitions`
 - typed workflow refs for `StemWorkflowApp` and `WorkflowRuntime`
-- typed task definitions that use the shared `TaskCall` /
-  `TaskDefinition.waitFor(...)` APIs
+- typed task definitions whose advanced explicit transport path uses
+  `TaskCall`
 
 When you pass `module: stemModule` into `StemWorkflowApp`, or create a
 `StemClient` with `module: stemModule` and then call

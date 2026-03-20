@@ -14,12 +14,13 @@ generated file exposes:
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
 - typed workflow refs like `StemWorkflowDefinitions.userSignup`
-- typed task definitions that use the shared `TaskCall` /
-  `TaskDefinition.waitFor(...)` APIs
+- typed task definitions whose advanced explicit transport path uses
+  `TaskCall`
 
-The generated task definitions are producer-safe: `Stem.enqueueCall(...)` can
-publish from the definition metadata, so producer processes do not need to
-register the worker handler locally just to enqueue typed task calls.
+The generated task definitions are producer-safe: `Stem.enqueueCall(...)`
+remains the explicit low-level transport path, and it can publish from the
+definition metadata so producer processes do not need to register the worker
+handler locally just to enqueue typed task calls.
 
 Wire the bundle directly into `StemWorkflowApp`:
 

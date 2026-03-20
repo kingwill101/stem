@@ -184,8 +184,8 @@ Generated output includes:
 - `stemModule`
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
-- typed `TaskDefinition` objects that use the shared `TaskCall` /
-  `TaskDefinition.waitFor(...)` APIs from `stem`
+- typed `TaskDefinition` objects whose advanced explicit transport path uses
+  `TaskCall`, alongside direct `enqueue(...)` / `enqueueAndWait(...)`
 
 Generated task definitions are producer-safe. `Stem.enqueueCall(...)` can use
 the definition metadata directly, so a producer can publish typed task calls

@@ -32,6 +32,9 @@
 - Removed the caller/context `prepareStart(...)` and `prepareEnqueue(...)`
   wrapper entrypoints so the advanced builder path now hangs directly off
   `WorkflowRef` and `TaskDefinition`.
+- Clarified docs so `TaskCall` and `WorkflowStartCall` are described as the
+  explicit low-level transport path, not peer happy-path APIs beside direct
+  `enqueue(...)` / `start(...)` helpers.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.

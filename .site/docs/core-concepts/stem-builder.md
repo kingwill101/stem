@@ -73,8 +73,8 @@ Generated output (`workflow_defs.stem.g.dart`) includes:
 
 - `stemModule`
 - typed workflow refs like `StemWorkflowDefinitions.userSignup`
-- typed task definitions that use the shared `TaskCall` /
-  `TaskDefinition.waitFor(...)` APIs
+- typed task definitions whose advanced explicit transport path uses
+  `TaskCall`
 
 ## Wire Into StemWorkflowApp
 

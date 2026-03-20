@@ -214,9 +214,10 @@ Future<void> main() async {
 }
 ```
 
-`Stem.enqueueCall(...)` can publish from the `TaskDefinition` metadata alone, so
-producer-only processes do not need to register the worker handler locally just
-to enqueue typed calls.
+`Stem.enqueueCall(...)` remains the explicit low-level transport path for a
+prebuilt `TaskCall`, and it can publish from the `TaskDefinition` metadata
+alone. Producer-only processes therefore do not need to register the worker
+handler locally just to enqueue typed calls.
 
 Use `TaskDefinition.json(...)` when your manual task args are normal
 DTOs with `toJson()`. Use `TaskDefinition.versionedJson(...)` when the DTO
@@ -798,9 +799,8 @@ Generated output gives you:
 - `stemModule`
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
-- typed workflow refs and task definitions that use the shared
-  `WorkflowStartCall`, `TaskCall`, `WorkflowRef`, and
-  `TaskDefinition.waitFor(...)` APIs
+- typed workflow refs and task definitions whose advanced explicit transport
+  path uses `WorkflowStartCall` / `TaskCall`
 
 The same bundle also works for plain task apps:
 
