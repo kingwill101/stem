@@ -124,6 +124,7 @@ import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Shutdown modes for workers.
@@ -274,6 +275,8 @@ class Worker {
   ///   Created automatically if not provided.
   /// - [workflows]: Optional workflow caller used when task handlers need to
   ///   start or wait for child workflows.
+  /// - [workflowEvents]: Optional workflow event emitter used when task
+  ///   handlers need to resume waiting workflows by topic or typed event ref.
   /// - [rateLimiter]: Enforces per-task rate limits. Rate limits are defined
   ///   on individual handlers via [TaskOptions.rateLimit].
   /// - [middleware]: List of middleware for intercepting task lifecycle events.
@@ -309,6 +312,7 @@ class Worker {
     TaskRegistry? registry,
     Stem? enqueuer,
     WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
     RateLimiter? rateLimiter,
     List<Middleware> middleware = const [],
     RevokeStore? revokeStore,
@@ -336,6 +340,7 @@ class Worker {
          broker: broker,
          enqueuer: enqueuer,
          workflows: workflows,
+         workflowEvents: workflowEvents,
          registry: _resolveTaskRegistry(registry, tasks),
          backend: backend,
          rateLimiter: rateLimiter,
@@ -369,6 +374,7 @@ class Worker {
     required this.backend,
     required Stem? enqueuer,
     this.workflows,
+    this.workflowEvents,
     this.rateLimiter,
     this.middleware = const [],
     this.revokeStore,
@@ -560,6 +566,9 @@ class Worker {
   /// Workflow caller used by task contexts for child workflow operations.
   /// Active workflow caller used by task handlers, if configured.
   WorkflowCaller? workflows;
+
+  /// Workflow event emitter used by task contexts for workflow resumes.
+  WorkflowEventEmitter? workflowEvents;
 
   static final math.Random _random = math.Random();
 
@@ -979,6 +988,7 @@ class Worker {
           },
           enqueuer: _enqueuer,
           workflows: workflows,
+          workflowEvents: workflowEvents,
         );
 
         await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
@@ -4584,6 +4594,27 @@ class Worker {
         } on Exception catch (error) {
           signal.replyPort.send(
             WaitForWorkflowResponse(error: error.toString()),
+          );
+        }
+      } else if (signal is EmitWorkflowEventSignal) {
+        try {
+          final workflowEvents = this.workflowEvents;
+          if (workflowEvents == null) {
+            signal.replyPort.send(
+              const EmitWorkflowEventResponse(
+                error: 'No workflow event emitter configured',
+              ),
+            );
+            return;
+          }
+          await workflowEvents.emitValue<Map<String, Object?>>(
+            signal.request.topic,
+            signal.request.payload,
+          );
+          signal.replyPort.send(const EmitWorkflowEventResponse());
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            EmitWorkflowEventResponse(error: error.toString()),
           );
         }
       }

@@ -1,9 +1,11 @@
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -102,6 +104,27 @@ class _CapturingWorkflowCaller implements WorkflowCaller {
       value: definition.decode('workflow-result'),
       rawResult: 'workflow-result',
     );
+  }
+}
+
+class _CapturingWorkflowEventEmitter implements WorkflowEventEmitter {
+  final List<String> topics = <String>[];
+  final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) async {
+    final encoded = codec != null ? codec.encode(value) : value;
+    payloads.add(Map<String, Object?>.from(encoded! as Map));
+    topics.add(topic);
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 }
 
@@ -243,6 +266,29 @@ void main() {
     expect(result?.value, 'workflow-result');
   });
 
+  test('TaskInvocationContext.local delegates typed workflow events', () async {
+    final workflowEvents = _CapturingWorkflowEventEmitter();
+    final context = TaskInvocationContext.local(
+      id: 'root-task',
+      headers: const {},
+      meta: const {},
+      attempt: 1,
+      heartbeat: () {},
+      extendLease: (_) async {},
+      progress: (_, {Map<String, Object?>? data}) async {},
+      workflowEvents: workflowEvents,
+    );
+
+    await context.emitValue('workflow.inline', const {'value': 'inline'});
+    await context.emitEvent(_eventRef, const _WorkflowEventPayload('event'));
+
+    expect(workflowEvents.topics, ['workflow.inline', 'workflow.ready']);
+    expect(workflowEvents.payloads, [
+      {'value': 'inline'},
+      {'value': 'event'},
+    ]);
+  });
+
   test('TaskInvocationContext.remote sends control signals', () async {
     final control = ReceivePort();
     addTearDown(control.close);
@@ -337,6 +383,35 @@ void main() {
     },
   );
 
+  test(
+    'TaskInvocationContext.remote proxies workflow event emission',
+    () async {
+      final control = ReceivePort();
+      addTearDown(control.close);
+
+      EmitWorkflowEventRequest? request;
+      control.listen((message) {
+        if (message is EmitWorkflowEventSignal) {
+          request = message.request;
+          message.replyPort.send(const EmitWorkflowEventResponse());
+        }
+      });
+
+      final context = TaskInvocationContext.remote(
+        id: 'remote-task',
+        controlPort: control.sendPort,
+        headers: const {},
+        meta: const {},
+        attempt: 0,
+      );
+
+      await context.emitEvent(_eventRef, const _WorkflowEventPayload('remote'));
+
+      expect(request?.topic, 'workflow.ready');
+      expect(request?.payload, {'value': 'remote'});
+    },
+  );
+
   test('TaskInvocationContext.remote surfaces enqueue errors', () async {
     final control = ReceivePort();
     addTearDown(control.close);
@@ -391,6 +466,32 @@ void main() {
     );
   });
 
+  test('TaskInvocationContext.remote surfaces workflow event errors', () async {
+    final control = ReceivePort();
+    addTearDown(control.close);
+
+    control.listen((message) {
+      if (message is EmitWorkflowEventSignal) {
+        message.replyPort.send(
+          const EmitWorkflowEventResponse(error: 'event nope'),
+        );
+      }
+    });
+
+    final context = TaskInvocationContext.remote(
+      id: 'remote-task',
+      controlPort: control.sendPort,
+      headers: const {},
+      meta: const {},
+      attempt: 0,
+    );
+
+    await expectLater(
+      () => context.emitEvent(_eventRef, const _WorkflowEventPayload('oops')),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test('TaskInvocationContext.retry throws TaskRetryRequest', () {
     final context = TaskInvocationContext.local(
       id: 'retry-task',
@@ -408,6 +509,34 @@ void main() {
       throwsA(isA<TaskRetryRequest>()),
     );
   });
+}
+
+class _WorkflowEventPayload {
+  const _WorkflowEventPayload(this.value);
+
+  final String value;
+}
+
+const PayloadCodec<_WorkflowEventPayload> _eventPayloadCodec =
+    PayloadCodec<_WorkflowEventPayload>(
+      encode: _encodeWorkflowEventPayload,
+      decode: _decodeWorkflowEventPayload,
+    );
+
+const WorkflowEventRef<_WorkflowEventPayload> _eventRef =
+    WorkflowEventRef<_WorkflowEventPayload>(
+      topic: 'workflow.ready',
+      codec: _eventPayloadCodec,
+    );
+
+Map<String, Object?> _encodeWorkflowEventPayload(_WorkflowEventPayload value) {
+  return {'value': value.value};
+}
+
+_WorkflowEventPayload _decodeWorkflowEventPayload(Object? payload) {
+  return _WorkflowEventPayload(
+    (payload! as Map<String, Object?>)['value']! as String,
+  );
 }
 
 Map<String, Object?> _encodeArgs(Map<String, Object?> args) => args;

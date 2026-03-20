@@ -3,6 +3,10 @@
 ## 0.1.1
 
 - Made `TaskContext` and `TaskInvocationContext` implement
+  `WorkflowEventEmitter` when a workflow runtime is attached, so inline
+  handlers and isolate entrypoints can resume waiting workflows with
+  `emitValue(...)` or typed `WorkflowEventRef<T>`.
+- Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowCaller` when a workflow runtime is attached, so inline handlers and
   isolate entrypoints can start and wait for typed child workflows directly.
 - Added `awaitEventRef(...)` on flow and script checkpoint resume helpers so

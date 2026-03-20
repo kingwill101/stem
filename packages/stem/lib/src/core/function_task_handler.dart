@@ -62,6 +62,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
       progress: (percent, {data}) => context.progress(percent, data: data),
       enqueuer: context.enqueuer,
       workflows: context.workflows,
+      workflowEvents: context.workflowEvents,
     );
     final result = await _entrypoint(invocationContext, args);
     return result as R;

@@ -37,7 +37,9 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
@@ -111,6 +113,18 @@ class WaitForWorkflowSignal extends TaskInvocationSignal {
 
   /// Workflow wait request payload.
   final WaitForWorkflowRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
+/// Request to emit a workflow event from an isolate.
+class EmitWorkflowEventSignal extends TaskInvocationSignal {
+  /// Creates a workflow event emit request signal.
+  const EmitWorkflowEventSignal(this.request, this.replyPort);
+
+  /// Workflow event emit request payload.
+  final EmitWorkflowEventRequest request;
 
   /// Port to deliver the response.
   final SendPort replyPort;
@@ -237,8 +251,33 @@ class WaitForWorkflowResponse {
   final String? error;
 }
 
+/// Workflow event emit request payload for isolate communication.
+class EmitWorkflowEventRequest {
+  /// Creates a workflow event emit request payload.
+  const EmitWorkflowEventRequest({
+    required this.topic,
+    required this.payload,
+  });
+
+  /// Workflow event topic to emit.
+  final String topic;
+
+  /// Encoded workflow event payload.
+  final Map<String, Object?> payload;
+}
+
+/// Response payload for isolate workflow event emit requests.
+class EmitWorkflowEventResponse {
+  /// Creates a workflow event emit response payload.
+  const EmitWorkflowEventResponse({this.error});
+
+  /// Error message when workflow event emission fails.
+  final String? error;
+}
+
 /// Context exposed to task entrypoints regardless of execution environment.
-class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
+class TaskInvocationContext
+    implements TaskEnqueuer, WorkflowCaller, WorkflowEventEmitter {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
     required String id,
@@ -254,6 +293,7 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
     progress,
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
   }) => TaskInvocationContext._(
     id: id,
     headers: headers,
@@ -264,6 +304,7 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
     progress: progress,
     enqueuer: enqueuer,
     workflows: workflows,
+    workflowEvents: workflowEvents,
   );
 
   /// Context implementation used when executing inside a worker isolate.
@@ -284,6 +325,7 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
         controlPort.send(ProgressSignal(percent, data: data)),
     enqueuer: _RemoteTaskEnqueuer(controlPort),
     workflows: _RemoteWorkflowCaller(controlPort),
+    workflowEvents: _RemoteWorkflowEventEmitter(controlPort),
   );
 
   /// Internal constructor shared by local and isolate contexts.
@@ -301,11 +343,13 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
     progress,
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
   }) : _heartbeat = heartbeat,
        _extendLease = extendLease,
        _progress = progress,
        _enqueuer = enqueuer,
-       _workflows = workflows;
+       _workflows = workflows,
+       _workflowEvents = workflowEvents;
 
   /// The unique identifier of the task.
   final String id;
@@ -332,6 +376,9 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
 
   /// Optional delegate used to start child workflows from the invocation.
   final WorkflowCaller? _workflows;
+
+  /// Optional delegate used to emit workflow events from the invocation.
+  final WorkflowEventEmitter? _workflowEvents;
 
   /// Notify the worker that the task is still running.
   void heartbeat() => _heartbeat();
@@ -484,6 +531,32 @@ class TaskInvocationContext implements TaskEnqueuer, WorkflowCaller {
       pollInterval: pollInterval,
       timeout: timeout,
     );
+  }
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) {
+    final delegate = _workflowEvents;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow event emitter configured',
+      );
+    }
+    return delegate.emitValue(topic, value, codec: codec);
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    final delegate = _workflowEvents;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow event emitter configured',
+      );
+    }
+    return delegate.emitEvent(event, value);
   }
 
   /// Build a fluent enqueue request for this invocation.
@@ -691,5 +764,59 @@ class _RemoteWorkflowCaller implements WorkflowCaller {
       );
     }
     throw StateError('Unexpected workflow wait response: $response');
+  }
+}
+
+class _RemoteWorkflowEventEmitter implements WorkflowEventEmitter {
+  _RemoteWorkflowEventEmitter(this._controlPort);
+
+  final SendPort _controlPort;
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) async {
+    final encoded = codec != null ? codec.encodeDynamic(value) : value;
+    if (encoded is! Map) {
+      throw StateError(
+        'TaskInvocationContext workflow events must encode to '
+        'Map<String, Object?>, got ${encoded.runtimeType}.',
+      );
+    }
+    final payload = <String, Object?>{};
+    for (final entry in encoded.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'TaskInvocationContext workflow event payload keys must be strings, '
+          'got ${key.runtimeType}.',
+        );
+      }
+      payload[key] = entry.value;
+    }
+
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      EmitWorkflowEventSignal(
+        EmitWorkflowEventRequest(topic: topic, payload: payload),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is EmitWorkflowEventResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      return;
+    }
+    throw StateError('Unexpected workflow event response: $response');
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 }

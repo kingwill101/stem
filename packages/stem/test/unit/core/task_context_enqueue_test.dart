@@ -274,6 +274,51 @@ void main() {
       );
     });
   });
+
+  group('TaskContext workflow events', () {
+    test('delegates typed workflow events to the configured emitter', () async {
+      final workflowEvents = _RecordingWorkflowEventEmitter();
+      final context = TaskContext(
+        id: 'event-task',
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+        workflowEvents: workflowEvents,
+      );
+      const event = WorkflowEventRef<Map<String, Object?>>(
+        topic: 'workflow.ready',
+      );
+
+      await context.emitValue('workflow.inline', const {'value': 'inline'});
+      await context.emitEvent(event, const {'value': 'event'});
+
+      expect(workflowEvents.topics, ['workflow.inline', 'workflow.ready']);
+      expect(workflowEvents.payloads, [
+        {'value': 'inline'},
+        {'value': 'event'},
+      ]);
+    });
+
+    test('throws when no workflow event emitter is configured', () {
+      final context = TaskContext(
+        id: 'no-workflow-events',
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+
+      expect(
+        () => context.emitValue('workflow.ready', const {'value': true}),
+        throwsStateError,
+      );
+    });
+  });
 }
 
 class _ExampleArgs {
@@ -399,5 +444,25 @@ class _RecordingWorkflowCaller implements WorkflowCaller {
       value: definition.decode('child-result'),
       rawResult: 'child-result',
     );
+  }
+}
+
+class _RecordingWorkflowEventEmitter implements WorkflowEventEmitter {
+  final List<String> topics = <String>[];
+  final List<Map<String, Object?>> payloads = <Map<String, Object?>>[];
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) async {
+    topics.add(topic);
+    payloads.add(Map<String, Object?>.from(value! as Map));
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 }

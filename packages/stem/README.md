@@ -300,7 +300,8 @@ class ParentTask implements TaskHandler<void> {
 ```
 
 When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
-`TaskContext` and `TaskInvocationContext` can also start typed child workflows:
+`TaskContext` and `TaskInvocationContext` can also start typed child workflows
+and emit typed workflow events:
 
 ```dart
 final childWorkflow = Flow<String>(
@@ -320,6 +321,19 @@ class ParentTask implements TaskHandler<String> {
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
     final result = await childWorkflowRef.startAndWaitWith(context);
     return result?.value ?? 'missing';
+  }
+}
+
+class NotifyTask implements TaskHandler<void> {
+  @override
+  String get name => 'demo.notify';
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    await context.emitValue(
+      'demo.child.workflow.ready',
+      {'status': 'ready'},
+    );
   }
 }
 ```

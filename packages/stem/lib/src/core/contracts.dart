@@ -41,6 +41,7 @@ import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
@@ -1686,7 +1687,8 @@ class TaskEnqueueScope {
 }
 
 /// Context passed to handler implementations during execution.
-class TaskContext implements TaskEnqueuer, WorkflowCaller {
+class TaskContext
+    implements TaskEnqueuer, WorkflowCaller, WorkflowEventEmitter {
   /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
@@ -1698,6 +1700,7 @@ class TaskContext implements TaskEnqueuer, WorkflowCaller {
     required this.progress,
     this.enqueuer,
     this.workflows,
+    this.workflowEvents,
   });
 
   /// The unique identifier of the task.
@@ -1730,6 +1733,9 @@ class TaskContext implements TaskEnqueuer, WorkflowCaller {
 
   /// Optional workflow caller for starting child workflows.
   final WorkflowCaller? workflows;
+
+  /// Optional workflow event emitter for resuming waiting workflows.
+  final WorkflowEventEmitter? workflowEvents;
 
   /// Enqueue a task with default context propagation.
   ///
@@ -1868,6 +1874,28 @@ class TaskContext implements TaskEnqueuer, WorkflowCaller {
       pollInterval: pollInterval,
       timeout: timeout,
     );
+  }
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) {
+    final delegate = workflowEvents;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow event emitter configured');
+    }
+    return delegate.emitValue(topic, value, codec: codec);
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    final delegate = workflowEvents;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow event emitter configured');
+    }
+    return delegate.emitEvent(event, value);
   }
 
   /// Alias for [enqueue].
