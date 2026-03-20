@@ -93,7 +93,7 @@ class ApprovalsFlow {
 }
 
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
-  workflowApp.registerFlow(ApprovalsFlow.flow);
+  workflowApp.registerFlows([ApprovalsFlow.flow]);
 }
 // #endregion workflows-flow
 
@@ -121,6 +121,10 @@ final retryScript = WorkflowScript(
 );
 
 final retryDefinition = retryScript.definition;
+
+Future<void> registerScript(StemWorkflowApp workflowApp) async {
+  workflowApp.registerScripts([retryScript]);
+}
 // #endregion workflows-script
 
 // #region workflows-run

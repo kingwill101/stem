@@ -841,6 +841,52 @@ void main() {
       },
     );
 
+    test(
+      'StemWorkflowApp exposes bulk flow and script registration helpers',
+      () async {
+        final flow = Flow<String>(
+          name: 'workflow.register.flows.helper',
+          build: (builder) {
+            builder.step('hello', (ctx) async => 'flows-register-ok');
+          },
+        );
+        final script = WorkflowScript<String>(
+          name: 'workflow.register.scripts.helper',
+          run: (script) => script.step<String>(
+            'hello',
+            (step) async => 'scripts-register-ok',
+          ),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp
+            ..registerFlows([flow])
+            ..registerScripts([script]);
+
+          final flowRunId = await workflowApp.startWorkflow(
+            'workflow.register.flows.helper',
+          );
+          final flowResult = await workflowApp.waitForCompletion<String>(
+            flowRunId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(flowResult?.value, equals('flows-register-ok'));
+
+          final scriptRunId = await workflowApp.startWorkflow(
+            'workflow.register.scripts.helper',
+          );
+          final scriptResult = await workflowApp.waitForCompletion<String>(
+            scriptRunId,
+            timeout: const Duration(seconds: 2),
+          );
+          expect(scriptResult?.value, equals('scripts-register-ok'));
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('StemWorkflowApp exposes run view helpers', () async {
       final flow = Flow<String>(
         name: 'workflow.views.helper',

@@ -281,9 +281,19 @@ class StemWorkflowApp
     registerWorkflow(flow.definition);
   }
 
+  /// Registers [flows] into this app's workflow registry.
+  void registerFlows(Iterable<Flow> flows) {
+    flows.forEach(registerFlow);
+  }
+
   /// Registers [script] into this app's workflow registry.
   void registerScript(WorkflowScript script) {
     registerWorkflow(script.definition);
+  }
+
+  /// Registers [scripts] into this app's workflow registry.
+  void registerScripts(Iterable<WorkflowScript> scripts) {
+    scripts.forEach(registerScript);
   }
 
   /// Returns the normalized run view for [runId], or `null` if not found.
