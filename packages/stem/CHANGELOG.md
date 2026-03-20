@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Deprecated the older workflow-event `emitWith(...)`, `waitWith(...)`, and
+  `waitValueWith(...)` helpers in favor of the direct `emit(...)`, `wait(...)`,
+  and `waitValue(...)` aliases.
 - Added direct workflow-event aliases `event.emit(...)`, `event.wait(...)`,
   and `event.waitValue(...)`, while keeping the older `...With(...)` forms for
   compatibility.

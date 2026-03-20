@@ -306,6 +306,7 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
   /// null-then-resume path.
   ///
   /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
+  @Deprecated('Use waitValue(waiter, ...) instead.')
   T? waitValueWith(
     Object waiter, {
     DateTime? deadline,
@@ -347,6 +348,7 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
   /// Suspends until this event is emitted, then returns the decoded payload.
   ///
   /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
+  @Deprecated('Use wait(waiter, ...) instead.')
   Future<T> waitWith(
     Object waiter, {
     DateTime? deadline,

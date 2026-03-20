@@ -79,6 +79,7 @@ extension WorkflowEventRefExtension<T> on WorkflowEventRef<T> {
   }
 
   /// Emits this typed event with the provided [emitter].
+  @Deprecated('Use emit(emitter, value) instead.')
   Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
     return emit(emitter, value);
   }
@@ -92,6 +93,7 @@ extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
   }
 
   /// Emits this typed event with the provided [emitter].
+  @Deprecated('Use emit(emitter) instead.')
   Future<void> emitWith(WorkflowEventEmitter emitter) {
     return emit(emitter);
   }

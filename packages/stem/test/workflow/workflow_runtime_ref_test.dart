@@ -518,7 +518,7 @@ void main() {
 
           await _userUpdatedEvent
               .call(const _GreetingParams(name: 'call'))
-              .emitWith(workflowApp);
+              .emit(workflowApp);
           await workflowApp.runtime.executeRun(runId);
 
           final result = await workflowApp.waitForCompletion<String>(
