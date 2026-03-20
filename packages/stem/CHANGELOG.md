@@ -35,6 +35,9 @@
 - Clarified docs so `TaskCall` and `WorkflowStartCall` are described as the
   explicit low-level transport path, not peer happy-path APIs beside direct
   `enqueue(...)` / `start(...)` helpers.
+- Added direct `buildCall(...)` / `buildStart(...)` helpers on task/workflow
+  definitions so the explicit transport path no longer requires
+  `prepare...().build()` when all overrides are already known.
 - Added `QueueCustomEvent.metaJson(...)`, `metaVersionedJson(...)`, and
   `metaAs(codec: ...)` so queue-event metadata can decode DTO payloads
   without raw map casts.

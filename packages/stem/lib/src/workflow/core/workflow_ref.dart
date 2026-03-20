@@ -164,12 +164,11 @@ class WorkflowRef<TParams, TResult extends Object?> {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
     return caller.startWorkflowCall(
-      WorkflowStartCall._(
-      definition: this,
-      params: params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
+      buildStart(
+        params: params,
+        parentRunId: parentRunId,
+        ttl: ttl,
+        cancellationPolicy: cancellationPolicy,
       ),
     );
   }
@@ -185,8 +184,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    final call = WorkflowStartCall._(
-      definition: this,
+    final call = buildStart(
       params: params,
       parentRunId: parentRunId,
       ttl: ttl,
@@ -200,6 +198,22 @@ class WorkflowRef<TParams, TResult extends Object?> {
         timeout: timeout,
       );
     });
+  }
+
+  /// Builds an explicit [WorkflowStartCall] for this workflow ref.
+  WorkflowStartCall<TParams, TResult> buildStart({
+    required TParams params,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return WorkflowStartCall._(
+      definition: this,
+      params: params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
   }
 }
 
@@ -258,6 +272,20 @@ class NoArgsWorkflowRef<TResult extends Object?> {
       params: (),
       pollInterval: pollInterval,
       timeout: timeout,
+    );
+  }
+
+  /// Builds an explicit [WorkflowStartCall] for this no-args workflow ref.
+  WorkflowStartCall<(), TResult> buildStart({
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return asRef.buildStart(
+      params: (),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
     );
   }
 

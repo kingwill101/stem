@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   group('runtime workflow start call dispatch', () {
     test(
-      'prepareStart().build() can be dispatched through WorkflowCaller',
+      'buildStart() can be dispatched through WorkflowCaller',
       () async {
         final flow = Flow<String>(
           name: 'runtime.extension.flow',
@@ -25,7 +25,7 @@ void main() {
           await workflowApp.start();
 
           final runId = await workflowApp.runtime.startWorkflowCall(
-            workflowRef.prepareStart(const {'name': 'runtime'}).build(),
+            workflowRef.buildStart(params: const {'name': 'runtime'}),
           );
           final waited = await workflowRef.waitFor(
             workflowApp.runtime,
@@ -35,9 +35,9 @@ void main() {
 
           expect(waited?.value, 'hello runtime');
 
-          final inlineCall = workflowRef
-              .prepareStart(const {'name': 'inline'})
-              .build();
+          final inlineCall = workflowRef.buildStart(
+            params: const {'name': 'inline'},
+          );
           final inlineRunId = await workflowApp.runtime.startWorkflowCall(
             inlineCall,
           );

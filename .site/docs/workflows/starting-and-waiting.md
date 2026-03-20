@@ -90,6 +90,9 @@ rarer cases where you want to assemble overrides incrementally before calling
 transport object, not the normal happy path. Use `ref0()` when another API
 specifically needs a `NoArgsWorkflowRef`.
 
+When you already know the full override set up front, prefer
+`ref.buildStart(...)` over `prepareStart(...).build()`.
+
 ## Wait for completion
 
 For workflows defined in code, prefer direct workflow helpers or typed refs

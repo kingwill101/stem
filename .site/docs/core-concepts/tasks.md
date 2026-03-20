@@ -40,6 +40,7 @@ name, argument encoder, optional metadata, and default `TaskOptions`. For the
 common path, use the direct
 `definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
 helpers. When you need a reusable prebuilt request, use
+`definition.buildCall(args, ...)` or
 `definition.prepareEnqueue(args).build()` and hand the resulting `TaskCall` to
 any `TaskResultCaller` / `TaskEnqueuer` surface. Treat `TaskCall` as the
 explicit low-level transport object, not the normal happy path:
@@ -99,8 +100,9 @@ final request = context.argsJson<InvoicePayload>(
 
 `TaskEnqueueBuilder` now only builds a `TaskCall`. Typed task definitions can
 create that fluent builder directly through `definition.prepareEnqueue(...)`.
-Treat `prepareEnqueue(...)` as the advanced override path, then dispatch the
-built call with `enqueueCall(...)`. For the normal case, prefer direct
+Use `buildCall(...)` when you already know the full overrides up front.
+Treat `prepareEnqueue(...)` as the incremental advanced path, then dispatch
+the built call with `enqueueCall(...)`. For the normal case, prefer direct
 `enqueue(...)` / `enqueueAndWait(...)`.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`

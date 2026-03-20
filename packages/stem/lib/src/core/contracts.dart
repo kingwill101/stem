@@ -2930,7 +2930,8 @@ class TaskDefinition<TArgs, TResult> {
     );
   }
 
-  TaskCall<TArgs, TResult> _buildCall(
+  /// Builds an explicit [TaskCall] from this definition and [args].
+  TaskCall<TArgs, TResult> buildCall(
     TArgs args, {
     Map<String, String> headers = const {},
     TaskOptions? options,
@@ -3010,6 +3011,24 @@ class NoArgsTaskDefinition<TResult> {
 
   /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) => asDefinition.decode(payload);
+
+  /// Builds an explicit [TaskCall] for this no-arg task definition.
+  TaskCall<(), TResult> buildCall({
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return asDefinition.buildCall(
+      (),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].
@@ -3163,7 +3182,7 @@ class TaskEnqueueBuilder<TArgs, TResult> {
 
   /// Builds the [TaskCall] with accumulated overrides.
   TaskCall<TArgs, TResult> build() {
-    final base = definition._buildCall(args);
+    final base = definition.buildCall(args);
     final mergedHeaders = Map<String, String>.from(base.headers);
     if (_headers != null) {
       mergedHeaders.addAll(_headers!);

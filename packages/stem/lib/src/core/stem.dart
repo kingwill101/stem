@@ -197,8 +197,8 @@ class Stem implements TaskResultCaller {
     return resolved.getGroup(groupId);
   }
 
-  /// Enqueue a typed task using a [TaskCall] wrapper produced by a
-  /// [TaskDefinition].
+  /// Enqueue a typed task using an explicit [TaskCall] transport object,
+  /// typically produced by `TaskDefinition.buildCall(...)`.
   @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
