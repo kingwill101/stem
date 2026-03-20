@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `decodeResultJson:` support to manual `refWithJsonCodec(...)` helpers
+  on `WorkflowDefinition`, `Flow`, and `WorkflowScript`, so DTO result
+  decoding can now live entirely on the typed workflow ref path.
 - Added named workflow start aliases `start(...)` and `startAndWait(...)` on
   workflow refs, no-args workflow refs, manual `Flow` / `WorkflowScript`
   wrappers, and workflow start calls/builders. The existing

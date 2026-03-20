@@ -348,13 +348,17 @@ class WorkflowDefinition<T extends Object?> {
   /// `toJson()` and `Type.fromJson(...)`.
   WorkflowRef<TParams, T> refWithJsonCodec<TParams>({
     required TParams Function(Map<String, Object?> payload) decodeParams,
+    T Function(Map<String, Object?> payload)? decodeResultJson,
     String? paramsTypeName,
+    String? resultTypeName,
   }) {
     return WorkflowRef<TParams, T>.withJsonCodec(
       name: name,
       decodeParams: decodeParams,
+      decodeResultJson: decodeResultJson,
       decodeResult: (payload) => decodeResult(payload) as T,
       paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
     );
   }
 

@@ -514,10 +514,11 @@ final runId = await approvalsRef
     .start(app);
 ```
 
-Use `refWithJsonCodec(...)` when your manual workflow start params are normal
-DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to `refWithCodec(...)`
-when you need a custom `PayloadCodec<T>`. Workflow params still need to encode
-to `Map<String, Object?>` because they are persisted as a map.
+Use `refWithJsonCodec(...)` when your manual workflow start params or final
+result are normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
+`refWithCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
+still need to encode to `Map<String, Object?>` because they are persisted as a
+map.
 
 For workflows without start parameters, start directly from the flow or script
 itself:

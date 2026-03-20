@@ -181,6 +181,40 @@ void main() {
       }
     });
 
+    test(
+      'manual workflows can derive json-backed refs with result decoding',
+      () async {
+        final flow = Flow<_GreetingResult>(
+          name: 'runtime.ref.json.ref-result.flow',
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const _GreetingResult(message: 'hello ref json'),
+            );
+          },
+        );
+        final workflowRef = flow.refWithJsonCodec<_GreetingParams>(
+          decodeParams: _GreetingParams.fromJson,
+          decodeResultJson: _GreetingResult.fromJson,
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final result = await workflowRef.startAndWait(
+            workflowApp.runtime,
+            params: const _GreetingParams(name: 'ignored'),
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(result?.value?.message, 'hello ref json');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
     test('codec-backed refs preserve workflow result decoding', () async {
       final flow = Flow<_GreetingResult>(
         name: 'runtime.ref.codec.result.flow',
