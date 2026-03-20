@@ -4,6 +4,7 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 const String _queueEventEnvelopeName = '__stem.queue.event__';
@@ -44,6 +45,21 @@ class QueueCustomEvent implements StemEvent {
 
   /// Additional metadata supplied by the publisher.
   final Map<String, Object?> meta;
+
+  /// Returns the decoded payload value for [key], or `null` when it is absent.
+  T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded payload value for [key], or [fallback] when absent.
+  T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded payload value for [key], throwing when it is absent.
+  T requiredPayloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return payload.requiredValue<T>(key, codec: codec);
+  }
 
   @override
   String get eventName => name;

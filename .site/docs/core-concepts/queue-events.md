@@ -20,6 +20,8 @@ Use this when you need lightweight event streams for domain notifications
 - `QueueEvents.on(eventName)` stream (filtered by name)
 
 All events are delivered as `QueueCustomEvent`, which implements `StemEvent`.
+Use `event.payloadValue(...)` / `event.requiredPayloadValue(...)` to read typed
+payload fields instead of repeating raw `payload['key']` casts.
 
 ## Producer + Listener
 

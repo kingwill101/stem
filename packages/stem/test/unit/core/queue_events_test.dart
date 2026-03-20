@@ -47,7 +47,7 @@ void main() {
       expect(event.id, eventId);
       expect(event.queue, 'orders');
       expect(event.name, 'order.created');
-      expect(event.payload['orderId'], 'o-1');
+      expect(event.requiredPayloadValue<String>('orderId'), 'o-1');
       expect(event.headers['x-source'], 'test');
       expect(event.meta['tenant'], 'acme');
     });
@@ -112,8 +112,8 @@ void main() {
 
       final results = await Future.wait<QueueCustomEvent>([firstA, firstB]);
       expect(results, hasLength(2));
-      expect(results[0].payload['status'], 'paid');
-      expect(results[1].payload['status'], 'paid');
+      expect(results[0].requiredPayloadValue<String>('status'), 'paid');
+      expect(results[1].requiredPayloadValue<String>('status'), 'paid');
     });
 
     test('emitJson publishes DTO payloads without a manual map', () async {
@@ -138,10 +138,8 @@ void main() {
 
       final event = await received;
       expect(event.id, eventId);
-      expect(event.payload, {
-        'orderId': 'o-2',
-        'status': 'shipped',
-      });
+      expect(event.requiredPayloadValue<String>('orderId'), 'o-2');
+      expect(event.payloadValueOr<String>('status', 'pending'), 'shipped');
     });
 
     test('validates queue and event names', () async {

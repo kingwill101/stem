@@ -16,7 +16,7 @@ Future<void> queueEventsProducerListener(Broker broker) async {
   await listener.start();
 
   final subscription = listener.on('order.created').listen((event) {
-    print('Order created: ${event.payload['orderId']}');
+    print('Order created: ${event.requiredPayloadValue<String>('orderId')}');
     print('Trace id: ${event.headers['x-trace-id']}');
   });
 
