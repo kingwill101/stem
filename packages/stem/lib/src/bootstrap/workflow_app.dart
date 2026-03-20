@@ -332,6 +332,18 @@ class StemWorkflowApp
     return store.listWatchers(topic);
   }
 
+  /// Marks all runs due at [now] as resumed and returns their ids.
+  Future<List<String>> resumeDueRuns([DateTime? now]) async {
+    final due = await store.dueRuns(now ?? DateTime.now());
+    final resumed = <String>[];
+    for (final runId in due) {
+      final state = await store.get(runId);
+      await store.markResumed(runId, data: state?.suspensionData);
+      resumed.add(runId);
+    }
+    return resumed;
+  }
+
   /// Polls the workflow store until the run reaches a terminal state.
   ///
   /// When the workflow completes successfully the persisted result is surfaced

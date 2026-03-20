@@ -150,6 +150,9 @@
   directly.
 - Added `StemWorkflowApp.listWatchers(...)` so event-watcher inspection no
   longer needs to reach through `app.store`.
+- Added `StemWorkflowApp.resumeDueRuns(...)` so sleep-based workflows no longer
+  need to call `store.dueRuns(...)`, `store.get(...)`, and `store.markResumed(
+  ...)` directly.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

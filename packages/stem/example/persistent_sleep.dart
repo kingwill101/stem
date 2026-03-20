@@ -32,10 +32,8 @@ Future<void> main() async {
   // After the delay elapses, the runtime should resume without the step
   // manually inspecting resume data.
   await Future<void>.delayed(const Duration(milliseconds: 150));
-  final due = await app.store.dueRuns(DateTime.now());
+  final due = await app.resumeDueRuns(DateTime.now());
   for (final id in due) {
-    final state = await app.store.get(id);
-    await app.store.markResumed(id, data: state?.suspensionData);
     await app.executeRun(id);
   }
 

@@ -895,6 +895,47 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp exposes due-run resume helper', () async {
+      var iterations = 0;
+      final flow = Flow<String>(
+        name: 'workflow.resume.due.helper',
+        build: (builder) {
+          builder.step('loop', (ctx) async {
+            iterations += 1;
+            if (iterations == 1) {
+              ctx.sleep(const Duration(milliseconds: 25));
+              return 'waiting';
+            }
+            return 'resumed';
+          });
+        },
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      try {
+        final runId = await workflowApp.startWorkflow(
+          'workflow.resume.due.helper',
+        );
+        await workflowApp.executeRun(runId);
+
+        await Future<void>.delayed(const Duration(milliseconds: 35));
+        final resumed = await workflowApp.resumeDueRuns(DateTime.now());
+        expect(resumed, contains(runId));
+
+        for (final id in resumed) {
+          await workflowApp.executeRun(id);
+        }
+
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, equals('resumed'));
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'workflow codecs persist encoded checkpoints and decode typed results',
       () async {
