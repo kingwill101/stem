@@ -43,7 +43,7 @@ Future<void> runTroubleshootingDemo() async {
 
   // #region troubleshooting-results
   await Future<void>.delayed(const Duration(milliseconds: 200));
-  final result = await app.backend.get(taskId);
+  final result = await app.getTaskStatus(taskId);
   print('Result: ${result?.payload}');
   // #endregion troubleshooting-results
 

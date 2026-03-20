@@ -122,6 +122,39 @@ void main() {
     await client.close();
   });
 
+  test('StemClient exposes task and group status helpers', () async {
+    final taskHandler = FunctionTaskHandler<String>(
+      name: 'client.status.task',
+      entrypoint: (context, args) async => 'status-ok',
+      runInIsolate: false,
+    );
+    final client = await StemClient.inMemory(tasks: [taskHandler]);
+    final worker = await client.createWorker();
+    await worker.start();
+
+    final taskId = await client.enqueue('client.status.task');
+    final taskStatus = await client.waitForTask<String>(
+      taskId,
+      timeout: const Duration(seconds: 2),
+    );
+    expect(taskStatus?.value, 'status-ok');
+    expect((await client.getTaskStatus(taskId))?.state, TaskState.succeeded);
+
+    final dispatch = await client.createCanvas().group<String>([
+      task('client.status.task', args: const {}),
+    ]);
+    try {
+      final groupStatus = await _waitForClientGroupStatus(
+        () => client.getGroupStatus(dispatch.groupId),
+      );
+      expect(groupStatus?.completed, 1);
+    } finally {
+      await dispatch.dispose();
+      await worker.shutdown();
+      await client.close();
+    }
+  });
+
   test('StemClient createCanvas reuses shared registry and backend', () async {
     final client = await StemClient.inMemory(
       tasks: [
@@ -481,4 +514,20 @@ void main() {
       await client.close();
     }
   });
+}
+
+Future<GroupStatus?> _waitForClientGroupStatus(
+  Future<GroupStatus?> Function() lookup, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration pollInterval = const Duration(milliseconds: 25),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await lookup();
+    if (status != null && status.completed == status.expected) {
+      return status;
+    }
+    await Future<void>.delayed(pollInterval);
+  }
+  return lookup();
 }

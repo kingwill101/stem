@@ -171,6 +171,16 @@ abstract class StemClient implements TaskResultCaller {
   }
 
   @override
+  Future<TaskStatus?> getTaskStatus(String taskId) {
+    return stem.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) {
+    return stem.getGroupStatus(groupId);
+  }
+
+  @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,

@@ -118,6 +118,9 @@
 - Added `StemClient.createCanvas()` so shared-client setups can reuse the
   client-owned broker/backend/registry for canvas dispatch without manually
   constructing `Canvas(...)`.
+- Added `getTaskStatus(...)` / `getGroupStatus(...)` to the shared
+  `TaskResultCaller` surface so apps and clients can inspect task/group state
+  without reaching into the raw result backend.
 - Removed the remaining `client.stem` leak from the microservice enqueuer
   example and clarified in the README/docs that `FlowContext` and
   `WorkflowScriptStepContext` share the same child-workflow helper surface.

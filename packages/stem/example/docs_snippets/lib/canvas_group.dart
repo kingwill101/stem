@@ -33,11 +33,11 @@ Future<void> main() async {
   ]);
 
   await _waitFor(() async {
-    final status = await app.backend.getGroup(dispatch.groupId);
+    final status = await app.getGroupStatus(dispatch.groupId);
     return status?.results.length == 3;
   });
 
-  final groupStatus = await app.backend.getGroup(dispatch.groupId);
+  final groupStatus = await app.getGroupStatus(dispatch.groupId);
   final values = groupStatus?.results.values.map((s) => s.payload).toList();
   print('Group results: $values');
 

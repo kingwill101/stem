@@ -76,6 +76,12 @@ import 'package:stem/src/signals/emitter.dart';
 
 /// Shared typed task-dispatch surface used by producers, apps, and contexts.
 abstract interface class TaskResultCaller implements TaskEnqueuer {
+  /// Reads the latest task status by task id.
+  Future<TaskStatus?> getTaskStatus(String taskId);
+
+  /// Reads the latest group status by group id.
+  Future<GroupStatus?> getGroupStatus(String groupId);
+
   /// Waits for a task result by task id.
   Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
     String taskId, {
@@ -84,10 +90,8 @@ abstract interface class TaskResultCaller implements TaskEnqueuer {
   });
 
   /// Waits for [taskId] using a typed [definition] for result decoding.
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,
@@ -173,6 +177,20 @@ class Stem implements TaskResultCaller {
     if (resolved != null) {
       await resolved.close();
     }
+  }
+
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) async {
+    final resolved = backend;
+    if (resolved == null) return null;
+    return resolved.get(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) async {
+    final resolved = backend;
+    if (resolved == null) return null;
+    return resolved.getGroup(groupId);
   }
 
   /// Enqueue a typed task using a [TaskCall] wrapper produced by a

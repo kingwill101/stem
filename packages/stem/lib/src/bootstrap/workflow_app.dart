@@ -6,7 +6,14 @@ import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart'
-    show TaskCall, TaskDefinition, TaskEnqueueOptions, TaskHandler, TaskOptions;
+    show
+        GroupStatus,
+        TaskCall,
+        TaskDefinition,
+        TaskEnqueueOptions,
+        TaskHandler,
+        TaskOptions,
+        TaskStatus;
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
@@ -31,7 +38,8 @@ import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
 /// This wrapper wires together broker/backend infrastructure, registers flows,
 /// and exposes convenience helpers for scheduling and observing workflow runs
 /// without having to manage [WorkflowRuntime] directly.
-class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskApp {
+class StemWorkflowApp
+    implements WorkflowCaller, WorkflowEventEmitter, StemTaskApp {
   StemWorkflowApp._({
     required this.app,
     required this.runtime,
@@ -106,6 +114,16 @@ class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskA
   }
 
   @override
+  Future<TaskStatus?> getTaskStatus(String taskId) {
+    return app.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) {
+    return app.getGroupStatus(groupId);
+  }
+
+  @override
   Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
     String taskId, {
     Duration? timeout,
@@ -115,10 +133,8 @@ class StemWorkflowApp implements WorkflowCaller, WorkflowEventEmitter, StemTaskA
   }
 
   @override
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,

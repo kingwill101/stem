@@ -45,6 +45,39 @@ void main() {
       }
     });
 
+    test('inMemory exposes task and group status helpers', () async {
+      final taskHandler = FunctionTaskHandler<String>(
+        name: 'test.status.task',
+        entrypoint: (context, args) async => 'status-ok',
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory(tasks: [taskHandler]);
+      try {
+        final taskId = await app.enqueue('test.status.task');
+        final taskStatus = await app.waitForTask<String>(
+          taskId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(taskStatus?.value, 'status-ok');
+        expect((await app.getTaskStatus(taskId))?.state, TaskState.succeeded);
+
+        final dispatch = await app.canvas.group<String>([
+          task('test.status.task', args: const {}),
+        ]);
+        try {
+          final groupStatus = await _waitForGroupStatus(
+            () => app.getGroupStatus(dispatch.groupId),
+          );
+          expect(groupStatus?.completed, 1);
+        } finally {
+          await dispatch.dispose();
+        }
+      } finally {
+        await app.shutdown();
+      }
+    });
+
     test(
       'inMemory registers module tasks and infers queued subscriptions',
       () async {
@@ -819,6 +852,22 @@ void main() {
       expect(revokeDisposed, isTrue);
     });
   });
+}
+
+Future<GroupStatus?> _waitForGroupStatus(
+  Future<GroupStatus?> Function() lookup, {
+  Duration timeout = const Duration(seconds: 2),
+  Duration pollInterval = const Duration(milliseconds: 25),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    final status = await lookup();
+    if (status != null && status.completed == status.expected) {
+      return status;
+    }
+    await Future<void>.delayed(pollInterval);
+  }
+  return lookup();
 }
 
 class _DemoPayload {

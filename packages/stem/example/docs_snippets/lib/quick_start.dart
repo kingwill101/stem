@@ -92,7 +92,7 @@ Future<void> main() async {
 
   // #region quickstart-inspect
   await Future<void>.delayed(const Duration(seconds: 6));
-  final resizeStatus = await app.backend.get(resizeId);
+  final resizeStatus = await app.getTaskStatus(resizeId);
   print('Resize status: ${resizeStatus?.state} (${resizeStatus?.attempt})');
 
   await app.close();

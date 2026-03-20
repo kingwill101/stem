@@ -221,7 +221,7 @@ Future<void> main(List<String> args) async {
       );
     })
     ..get('/group/<groupId>', (Request request, String groupId) async {
-      final status = await client.backend.getGroup(groupId);
+      final status = await client.getGroupStatus(groupId);
       if (status == null) {
         return Response.notFound(
           jsonEncode({'error': 'Unknown group or expired results'}),

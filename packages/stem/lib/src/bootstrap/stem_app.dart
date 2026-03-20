@@ -100,6 +100,18 @@ class StemApp implements StemTaskApp {
   }
 
   @override
+  Future<TaskStatus?> getTaskStatus(String taskId) async {
+    await _ensureStarted();
+    return stem.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) async {
+    await _ensureStarted();
+    return stem.getGroupStatus(groupId);
+  }
+
+  @override
   Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
     String taskId, {
     Duration? timeout,
@@ -110,10 +122,8 @@ class StemApp implements StemTaskApp {
   }
 
   @override
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,

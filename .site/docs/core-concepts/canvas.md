@@ -56,7 +56,8 @@ runs with `context.meta['chordResults']` populated.
 ```
 
 If any branch fails, the callback is skipped and the chord group is marked as
-failed. Inspect `backend.getGroup(chordId)` to see which branch failed before
+failed. Inspect the latest group status via `StemApp.getGroupStatus(...)`,
+`StemClient.getGroupStatus(...)`, or `backend.getGroup(chordId)` before
 retrying.
 
 ## Dependency semantics
@@ -73,7 +74,8 @@ retrying.
 - `Canvas.group` returns a `GroupDispatch` with a result stream for each child.
 - `Canvas.chord` preserves the original signature order when building
   `chordResults`, so you can map results back to inputs deterministically.
-- `backend.getGroup(groupId)` returns the latest status for each child task.
+- `StemApp.getGroupStatus(...)`, `StemClient.getGroupStatus(...)`, or
+  `backend.getGroup(groupId)` return the latest status for each child task.
 
 ## Removal semantics
 
