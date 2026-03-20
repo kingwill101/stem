@@ -322,6 +322,31 @@ void main() {
     );
 
     test(
+      'versioned json task definitions can derive versioned result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition =
+            TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedJson(
+              name: 'sample.versioned_json.result',
+              version: 2,
+              decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
+            );
+
+        final id = await stem.enqueueCall(
+          definition.buildCall(const _CodecTaskArgs('encoded')),
+        );
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+
+    test(
       'enqueueCall publishes no-arg definitions without fake empty maps',
       () async {
         final broker = _RecordingBroker();
@@ -480,7 +505,8 @@ void main() {
     );
 
     test(
-      'no-arg task definitions can derive versioned json-backed result metadata',
+      'no-arg task definitions can derive versioned json-backed result'
+      ' metadata',
       () async {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
@@ -672,6 +698,32 @@ void main() {
       final result = await definition.waitFor(
         stem,
         'task-no-args-versioned-wait',
+      );
+
+      expect(result?.value?.id, 'done-v2');
+      expect(result?.rawPayload, isA<Map<String, Object?>>());
+    });
+
+    test('supports versioned argful task definitions', () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+      final definition =
+          TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedJson(
+            name: 'args.versioned.wait',
+            version: 2,
+            decodeResultVersionedJson: _CodecReceipt.fromVersionedJson,
+          );
+
+      await backend.set(
+        'task-args-versioned-wait',
+        TaskState.succeeded,
+        payload: {'id': 'done', PayloadCodec.versionKey: 2},
+        meta: {stemResultEncoderMetaKey: _codecReceiptEncoder.id},
+      );
+
+      final result = await definition.waitFor(
+        stem,
+        'task-args-versioned-wait',
       );
 
       expect(result?.value?.id, 'done-v2');

@@ -289,6 +289,10 @@ explicit schema version, and `TaskDefinition.noArgsCodec(...)` when you need a
 custom payload codec. These paths keep waiting helpers typed and advertise the
 right result encoder in task metadata.
 
+For argful manual tasks, `TaskDefinition.versionedJson(...)` also accepts
+`decodeResultVersionedJson:` when the stored result needs the same explicit
+schema-version decode path.
+
 When a DTO payload needs an explicit persisted schema version, prefer
 `PayloadCodec.versionedJson(...)`. It stores `__stemPayloadVersion` beside the
 JSON payload and passes the persisted version into the decoder so you can keep

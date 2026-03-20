@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `decodeResultVersionedJson:` to
+  `TaskDefinition.versionedJson(...)` so argful manual task definitions can
+  derive version-aware result decoding and result-encoder metadata.
 - Refreshed runnable workflow/task examples to remove stale `.call(...)`
   transport usage and prefer the narrowed direct `start(...)` /
   `buildCall(...)` surfaces.

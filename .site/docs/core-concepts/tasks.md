@@ -113,6 +113,10 @@ the result already has `toJson()` and `Type.fromJson(...)`. Use
 an explicit schema version, and `TaskDefinition.noArgsCodec(...)` only when
 you need a custom payload codec.
 
+For argful manual tasks, `TaskDefinition.versionedJson(...)` also accepts
+`decodeResultVersionedJson:` when the stored result should carry an explicit
+schema version.
+
 ## Configuring Retries
 
 Workers apply an `ExponentialJitterRetryStrategy` by default. Each retry is

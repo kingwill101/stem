@@ -2756,15 +2756,30 @@ class TaskDefinition<TArgs, TResult> {
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
     TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
     String? argsTypeName,
     String? resultTypeName,
   }) {
-    final resultCodec = decodeResultJson == null
-        ? null
-        : PayloadCodec<TResult>.json(
-            decode: decodeResultJson,
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: version,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
             typeName: resultTypeName ?? '$TResult',
-          );
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
     return TaskDefinition<TArgs, TResult>(
       name: name,
       encodeArgs: (args) => _encodeVersionedJsonArgs(
