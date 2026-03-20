@@ -44,6 +44,17 @@ void main() {
         'sleeping',
       ),
     );
+    expect(
+      sleep.dataVersionedJson<_SuspensionPayload>(
+        version: 2,
+        decode: _SuspensionPayload.fromVersionedJson,
+      ),
+      isA<_SuspensionPayload>().having(
+        (value) => value.stage,
+        'stage',
+        'sleeping',
+      ),
+    );
     expect(wait.data, equals(const {'stage': 'waiting'}));
     expect(wait.deadline, DateTime.parse('2025-01-01T00:00:00Z'));
   });
@@ -53,6 +64,14 @@ class _SuspensionPayload {
   const _SuspensionPayload({required this.stage});
 
   factory _SuspensionPayload.fromJson(Map<String, dynamic> json) {
+    return _SuspensionPayload(stage: json['stage'] as String);
+  }
+
+  factory _SuspensionPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
     return _SuspensionPayload(stage: json['stage'] as String);
   }
 

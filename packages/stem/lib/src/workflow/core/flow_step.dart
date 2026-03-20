@@ -242,6 +242,24 @@ class FlowStepControl {
       typeName: typeName,
     ).decode(stored);
   }
+
+  /// Decodes the suspension metadata with a version-aware JSON decoder, when
+  /// present.
+  TData? dataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = data;
+    if (stored == null) return null;
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 }
 
 /// Enumerates the suspension control types.

@@ -55,8 +55,9 @@ Depending on the context type, you can access:
 - `sleepJson(...)`, `awaitEventJson(...)`, and `FlowStepControl.awaitTopicJson(...)`
   when lower-level suspension directives still need DTO metadata without a
   separate codec constant
-- `control.dataJson(...)` / `control.dataAs(codec: ...)` when you inspect a
-  lower-level `FlowStepControl` directly
+- `control.dataJson(...)`, `control.dataVersionedJson(...)`, or
+  `control.dataAs(codec: ...)` when you inspect a lower-level
+  `FlowStepControl` directly
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `takeResumeJson<T>(...)` for DTO event-driven resumes without a separate
