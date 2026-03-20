@@ -155,6 +155,8 @@
 - Clarified the README workflow guidance to prefer `StemWorkflowApp`
   helpers in the happy path and reserve direct `WorkflowRuntime` usage for
   low-level scenarios.
+- Refreshed workflow docs snippets to match the app-level workflow helper
+  surface, including `resumeDueRuns(...)` guidance for fake-clock tests.
 - Added `StemWorkflowApp.rewindToCheckpoint(...)` so replay-oriented flows no
   longer need to call `store.rewindToStep(...)` and `store.markRunning(...)`
   directly.

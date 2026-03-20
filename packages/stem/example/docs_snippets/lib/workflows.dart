@@ -29,7 +29,7 @@ ApprovalDraft _decodeApprovalDraft(Object? payload) {
 }
 
 // #region workflows-runtime
-Future<void> bootstrapWorkflowRuntime() async {
+Future<void> bootstrapWorkflowApp() async {
   // #region workflows-app-create
   final workflowApp = await StemWorkflowApp.fromUrl(
     'redis://127.0.0.1:56379',

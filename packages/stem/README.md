@@ -1113,7 +1113,9 @@ expect(recorded.name, 'tasks.email');
 ```
 
 - `FakeWorkflowClock` keeps workflow tests deterministic. Inject the same clock
-  into your runtime and store, then advance it directly instead of sleeping:
+  into your runtime and store, then advance it directly instead of sleeping.
+  At the app layer, prefer `workflowApp.resumeDueRuns(clock.now())` once that
+  same fake clock is wired into the store backing the app:
 
   ```dart
   final clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
