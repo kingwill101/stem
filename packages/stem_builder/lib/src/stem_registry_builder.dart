@@ -57,7 +57,7 @@ class StemRegistryBuilder implements Builder {
       inPackage: 'stem',
     );
     const taskContextChecker = TypeChecker.typeNamed(
-      TaskInvocationContext,
+      TaskExecutionContext,
       inPackage: 'stem',
     );
     const mapChecker = TypeChecker.typeNamed(Map, inSdk: true);
@@ -617,7 +617,7 @@ class StemRegistryBuilder implements Builder {
       [taskContextChecker],
       function,
       annotationLabel: '@TaskDefn function',
-      contextTypeLabel: 'TaskInvocationContext',
+      contextTypeLabel: 'TaskExecutionContext',
     );
 
     final remaining = parameters
@@ -648,7 +648,7 @@ class StemRegistryBuilder implements Builder {
     for (final parameter in remaining) {
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
-          '@TaskDefn function ${function.displayName} only supports required positional serializable or codec-backed parameters after TaskInvocationContext.',
+          '@TaskDefn function ${function.displayName} only supports required positional serializable or codec-backed parameters after TaskExecutionContext.',
           element: function,
         );
       }

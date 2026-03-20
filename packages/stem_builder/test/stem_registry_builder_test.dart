@@ -79,7 +79,8 @@ class WorkflowScriptContext {
   }) async => throw UnimplementedError();
 }
 class WorkflowScriptStepContext implements WorkflowExecutionContext {}
-class TaskInvocationContext {}
+abstract class TaskExecutionContext {}
+class TaskInvocationContext implements TaskExecutionContext {}
 
 class NoArgsTaskDefinition<T> {
   const NoArgsTaskDefinition({
@@ -997,7 +998,8 @@ class SignupWorkflow {
   );
 
   test(
-    'supports optional named WorkflowExecutionContext injection in script checkpoints',
+    'supports optional named WorkflowExecutionContext injection '
+    'in script checkpoints',
     () async {
       const input = '''
 import 'package:stem/stem.dart';
@@ -1102,7 +1104,7 @@ class HelloWorkflow {
     },
   );
 
-  test('supports optional named TaskInvocationContext injection', () async {
+  test('supports optional named TaskExecutionContext injection', () async {
     const input = '''
 import 'package:stem/stem.dart';
 
@@ -1111,7 +1113,7 @@ part 'workflows.stem.g.dart';
 @TaskDefn(name: 'typed.task')
 Future<void> typedTask(
   String email, {
-  TaskInvocationContext? context,
+  TaskExecutionContext? context,
 }) async {}
 ''';
 

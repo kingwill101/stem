@@ -276,12 +276,7 @@ class EmitWorkflowEventResponse {
 }
 
 /// Context exposed to task entrypoints regardless of execution environment.
-class TaskInvocationContext
-    implements
-        TaskEnqueuer,
-        WorkflowCaller,
-        WorkflowEventEmitter,
-        TaskInputContext {
+class TaskInvocationContext implements TaskExecutionContext {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
     required String id,
@@ -361,18 +356,22 @@ class TaskInvocationContext
        _workflowEvents = workflowEvents;
 
   /// The unique identifier of the task.
+  @override
   final String id;
 
   @override
   final Map<String, Object?> args;
 
   /// Headers passed to the task invocation.
+  @override
   final Map<String, String> headers;
 
   /// Invocation metadata (e.g. trace, tenant).
+  @override
   final Map<String, Object?> meta;
 
   /// Current attempt count.
+  @override
   final int attempt;
 
   final void Function() _heartbeat;
@@ -393,26 +392,17 @@ class TaskInvocationContext
   final WorkflowEventEmitter? _workflowEvents;
 
   /// Notify the worker that the task is still running.
+  @override
   void heartbeat() => _heartbeat();
 
   /// Request an extension of the underlying broker lease/visibility timeout.
+  @override
   Future<void> extendLease(Duration by) => _extendLease(by);
 
   /// Report progress back to the worker.
+  @override
   Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
       _progress(percentComplete, data: data);
-
-  /// Report progress with a JSON-serializable DTO payload.
-  Future<void> progressJson<T>(double percentComplete, T value, {
-    String? typeName,
-  }) {
-    return progress(
-      percentComplete,
-      data: Map<String, Object?>.from(
-        PayloadCodec.encodeJsonMap(value, typeName: typeName),
-      ),
-    );
-  }
 
   /// Enqueue a task from within a task invocation.
   ///

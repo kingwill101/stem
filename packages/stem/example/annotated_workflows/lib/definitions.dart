@@ -309,7 +309,7 @@ class AnnotatedContextScriptWorkflow {
 @TaskDefn(name: 'send_email', options: TaskOptions(maxRetries: 1))
 Future<void> sendEmail(
   Map<String, Object?> args, {
-  TaskInvocationContext? context,
+  TaskExecutionContext? context,
 }) async {
   final ctx = context!;
   ctx.heartbeat();
@@ -319,7 +319,7 @@ Future<void> sendEmail(
 @TaskDefn(name: 'send_email_typed', options: TaskOptions(maxRetries: 1))
 Future<EmailDeliveryReceipt> sendEmailTyped(
   EmailDispatch dispatch, {
-  TaskInvocationContext? context,
+  TaskExecutionContext? context,
 }) async {
   final ctx = context!;
   ctx.heartbeat();

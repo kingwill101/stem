@@ -1840,58 +1840,41 @@ extension TaskInputContextArgs on TaskInputContext {
   }
 }
 
-/// Context passed to handler implementations during execution.
-class TaskContext
+/// Shared execution surface for task handlers and isolate entrypoints.
+abstract interface class TaskExecutionContext
     implements
         TaskEnqueuer,
         WorkflowCaller,
         WorkflowEventEmitter,
         TaskInputContext {
-  /// Creates a task execution context for a handler invocation.
-  TaskContext({
-    required this.id,
-    required this.attempt,
-    required this.headers,
-    required this.meta,
-    required this.heartbeat,
-    required this.extendLease,
-    required this.progress,
-    this.args = const {},
-    this.enqueuer,
-    this.workflows,
-    this.workflowEvents,
-  });
-
   /// The unique identifier of the task.
-  final String id;
-
-  @override
-  final Map<String, Object?> args;
+  String get id;
 
   /// The current attempt number.
-  final int attempt;
+  int get attempt;
 
   /// Headers associated with the task.
-  final Map<String, String> headers;
+  Map<String, String> get headers;
 
-  /// Metadata for the task.
-  final Map<String, Object?> meta;
+  /// Metadata for the task invocation.
+  Map<String, Object?> get meta;
 
-  /// Function to send a heartbeat.
-  final void Function() heartbeat;
+  /// Notify the worker that the task is still running.
+  void heartbeat();
 
-  /// Function to extend the lease by a given duration.
-  final Future<void> Function(Duration) extendLease;
+  /// Request an extension of the current lease by [by].
+  Future<void> extendLease(Duration by);
 
-  /// Function to report progress.
-  final Future<void> Function(
-    double percentComplete, {
-    Map<String, Object?>? data,
-  })
-  progress;
+  /// Report progress back to the worker.
+  Future<void> progress(double percentComplete, {Map<String, Object?>? data});
+}
 
+/// Shared task-progress helpers for execution contexts.
+extension TaskExecutionContextProgressX on TaskExecutionContext {
   /// Report progress with a JSON-serializable DTO payload.
-  Future<void> progressJson<T>(double percentComplete, T value, {
+  Future<void> progressJson<T>(
+    double percentComplete,
+    T value, {
     String? typeName,
   }) {
     return progress(
@@ -1901,6 +1884,56 @@ class TaskContext
       ),
     );
   }
+}
+
+/// Context passed to handler implementations during execution.
+class TaskContext implements TaskExecutionContext {
+  /// Creates a task execution context for a handler invocation.
+  TaskContext({
+    required this.id,
+    required this.attempt,
+    required this.headers,
+    required this.meta,
+    required void Function() heartbeat,
+    required Future<void> Function(Duration) extendLease,
+    required Future<void> Function(
+      double percentComplete, {
+      Map<String, Object?>? data,
+    })
+    progress,
+    this.args = const {},
+    this.enqueuer,
+    this.workflows,
+    this.workflowEvents,
+  }) : _heartbeat = heartbeat,
+       _extendLease = extendLease,
+       _progress = progress;
+
+  /// The unique identifier of the task.
+  @override
+  final String id;
+
+  @override
+  final Map<String, Object?> args;
+
+  /// The current attempt number.
+  @override
+  final int attempt;
+
+  /// Headers associated with the task.
+  @override
+  final Map<String, String> headers;
+
+  /// Metadata for the task.
+  @override
+  final Map<String, Object?> meta;
+  final void Function() _heartbeat;
+  final Future<void> Function(Duration) _extendLease;
+  final Future<void> Function(
+    double percentComplete, {
+    Map<String, Object?>? data,
+  })
+  _progress;
 
   /// Optional enqueuer for scheduling additional tasks.
   final TaskEnqueuer? enqueuer;
@@ -1910,6 +1943,16 @@ class TaskContext
 
   /// Optional workflow event emitter for resuming waiting workflows.
   final WorkflowEventEmitter? workflowEvents;
+
+  @override
+  void heartbeat() => _heartbeat();
+
+  @override
+  Future<void> extendLease(Duration by) => _extendLease(by);
+
+  @override
+  Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
+      _progress(percentComplete, data: data);
 
   /// Enqueue a task with default context propagation.
   ///

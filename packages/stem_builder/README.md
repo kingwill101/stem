@@ -55,7 +55,7 @@ class HelloScript {
 @TaskDefn(name: 'hello.task')
 Future<void> helloTask(
   String email,
-  {TaskInvocationContext? context}
+  {TaskExecutionContext? context}
 ) async {
   // ...
 }
@@ -102,7 +102,7 @@ Supported context injection points:
 - script runs: `WorkflowScriptContext`
 - script checkpoints: `WorkflowScriptStepContext` or
   `WorkflowExecutionContext`
-- tasks: `TaskInvocationContext`
+- tasks: `TaskExecutionContext`
 
 Durable workflow execution contexts enqueue tasks directly:
 
@@ -293,4 +293,4 @@ See [`example/README.md`](example/README.md) for runnable examples, including:
 - Generated registration + execution with `StemWorkflowApp`
 - Runtime manifest + run detail views with `WorkflowRuntime`
 - Plain direct-call script checkpoints and context-aware script checkpoints
-- Typed `@TaskDefn` parameters with `TaskInvocationContext`
+- Typed `@TaskDefn` parameters with `TaskExecutionContext`

@@ -10,7 +10,7 @@ const _parentAttemptKey = 'stem.parentAttempt';
 void main() {
   group('TaskContext.enqueue', () {
     test('exposes typed arg readers on the context', () async {
-      final context = TaskContext(
+      final TaskExecutionContext context = TaskContext(
         id: 'parent-0',
         args: const {'invoiceId': 'inv-42'},
         attempt: 0,
@@ -27,7 +27,7 @@ void main() {
 
     test('reports progress with JSON DTO payloads', () async {
       Object? progressData;
-      final context = TaskContext(
+      final TaskExecutionContext context = TaskContext(
         id: 'parent-0b',
         attempt: 0,
         headers: const {},

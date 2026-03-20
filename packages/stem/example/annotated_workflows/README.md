@@ -19,7 +19,7 @@ It now demonstrates the generated script-proxy behavior explicitly:
   `StemWorkflowDefinitions.*.startAndWait(context, params: value)`
 - a plain script workflow that returns a codec-backed DTO result and persists a
   codec-backed DTO checkpoint value
-- a typed `@TaskDefn` using optional named `TaskInvocationContext? context`
+- a typed `@TaskDefn` using optional named `TaskExecutionContext? context`
   plus codec-backed DTO input/output types
 
 When you run the example, it prints:

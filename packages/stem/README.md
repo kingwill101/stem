@@ -312,7 +312,8 @@ class ParentTask implements TaskHandler<void> {
 ```
 
 When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
-`TaskContext` and `TaskInvocationContext` can also start typed child workflows
+`TaskExecutionContext` implementations like `TaskContext` and
+`TaskInvocationContext` can also start typed child workflows
 and emit typed workflow events:
 
 ```dart
@@ -649,7 +650,7 @@ class BuilderUserSignupWorkflow {
 @TaskDefn(name: 'builder.example.task')
 Future<void> builderExampleTask(
   Map<String, Object?> args,
-  {TaskInvocationContext? context}
+  {TaskExecutionContext? context}
 ) async {}
 ```
 
@@ -667,7 +668,7 @@ Context injection works at every runtime layer:
 - script runs can take `WorkflowScriptContext`
 - script checkpoints can take `WorkflowScriptStepContext` or
   `WorkflowExecutionContext`
-- tasks can take `TaskInvocationContext`
+- tasks can take `TaskExecutionContext`
 
 Durable workflow execution contexts enqueue tasks directly:
 

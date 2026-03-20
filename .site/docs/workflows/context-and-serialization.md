@@ -11,7 +11,7 @@ Everything else that crosses a durable boundary must be serializable.
 - script runs: `WorkflowScriptContext`
 - script checkpoints: `WorkflowScriptStepContext` or
   `WorkflowExecutionContext`
-- tasks: `TaskInvocationContext`
+- tasks: `TaskExecutionContext`
 
 Those context objects are not part of the persisted payload shape. They are
 injected by the runtime when the handler executes.
@@ -22,7 +22,7 @@ parameter:
 - `Future<T> run(String email, {WorkflowScriptContext? context})`
 - `Future<T> checkpoint(String email, {WorkflowExecutionContext? context})`
 - `Future<T> step({WorkflowExecutionContext? context})`
-- `Future<void> task(String id, {TaskInvocationContext? context})`
+- `Future<void> task(String id, {TaskExecutionContext? context})`
 
 ## What context gives you
 
@@ -64,7 +64,7 @@ Depending on the context type, you can access:
   `ref.start(context, params: value)` and
   `ref.startAndWait(context, params: value)`
 - direct task enqueue APIs because `WorkflowExecutionContext` and
-  `TaskInvocationContext` both implement `TaskEnqueuer`
+  `TaskExecutionContext` both implement `TaskEnqueuer`
 - task metadata like `id`, `attempt`, `meta`
 
 Child workflow starts belong in durable boundaries:

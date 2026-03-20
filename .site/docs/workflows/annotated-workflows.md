@@ -153,7 +153,7 @@ example that demonstrates:
 - `WorkflowScriptContext`
 - `WorkflowScriptStepContext`
 - optional named context injection
-- `TaskInvocationContext`
+- `TaskExecutionContext`
 - codec-backed DTO workflow checkpoints and final workflow results
 - typed task DTO input and result decoding
 

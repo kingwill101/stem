@@ -56,7 +56,7 @@ class UserSignupWorkflow {
 Future<void> logAudit(
   String event,
   String id, {
-  TaskInvocationContext? context,
+  TaskExecutionContext? context,
 }) async {
   final ctx = context!;
   ctx.progress(1.0, data: {'event': event, 'id': id});

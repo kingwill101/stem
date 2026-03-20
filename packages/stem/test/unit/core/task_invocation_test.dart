@@ -130,7 +130,7 @@ class _CapturingWorkflowEventEmitter implements WorkflowEventEmitter {
 
 void main() {
   test('TaskInvocationContext.local exposes typed arg readers', () {
-    final context = TaskInvocationContext.local(
+    final TaskExecutionContext context = TaskInvocationContext.local(
       id: 'task-1',
       args: const {'customerId': 'cus-42'},
       headers: const {},
@@ -149,15 +149,16 @@ void main() {
     'TaskInvocationContext.local reports progress with JSON DTO payloads',
     () async {
       Object? progressData;
-      final context = TaskInvocationContext.local(
+      final TaskExecutionContext context = TaskInvocationContext.local(
         id: 'task-1b',
         headers: const {},
         meta: const {},
-      attempt: 0,
-      heartbeat: () {},
-      extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async => progressData = data,
-    );
+        attempt: 0,
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {Map<String, Object?>? data}) async =>
+            progressData = data,
+      );
 
       await context.progressJson(25, const _ProgressUpdate(stage: 'warming'));
 
