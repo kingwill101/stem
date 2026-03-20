@@ -63,7 +63,7 @@ void main() {
       final stem = Stem(
         broker: broker,
         backend: backend,
-        tasks: [_StubTaskHandler()],
+        tasks: [const _StubTaskHandler()],
       );
 
       final id = await stem.enqueue(
@@ -207,6 +207,100 @@ void main() {
         expect(backend.records.single.state, TaskState.queued);
       },
     );
+
+    test('uses handler default queue when raw enqueue omits options', () async {
+      final broker = _RecordingBroker();
+      final stem = Stem(
+        broker: broker,
+        tasks: [
+          const _StubTaskHandler(
+            options: TaskOptions(queue: 'emails'),
+          ),
+        ],
+      );
+
+      await stem.enqueue('sample.task', args: {'value': 'ok'});
+
+      expect(broker.published.single.envelope.queue, 'emails');
+    });
+
+    test(
+      'uses handler publish defaults for priority visibility and retry policy',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(
+          broker: broker,
+          backend: backend,
+          tasks: [
+            const _StubTaskHandler(
+              options: TaskOptions(
+                queue: 'emails',
+                priority: 7,
+                visibilityTimeout: Duration(seconds: 45),
+                retryPolicy: TaskRetryPolicy(maxRetries: 9),
+              ),
+            ),
+          ],
+        );
+
+        await stem.enqueue('sample.task', args: {'value': 'ok'});
+
+        expect(broker.published.single.envelope.queue, 'emails');
+        expect(broker.published.single.envelope.priority, 7);
+        expect(
+          broker.published.single.envelope.visibilityTimeout,
+          const Duration(seconds: 45),
+        );
+        expect(broker.published.single.envelope.maxRetries, 9);
+        expect(
+          backend.records.single.meta['stem.retryPolicy'],
+          containsPair('maxRetries', 9),
+        );
+      },
+    );
+
+    test('explicit task options override handler defaults', () async {
+      final broker = _RecordingBroker();
+      final stem = Stem(
+        broker: broker,
+        tasks: [
+          const _StubTaskHandler(
+            options: TaskOptions(queue: 'emails', priority: 7),
+          ),
+        ],
+      );
+
+      await stem.enqueue(
+        'sample.task',
+        args: {'value': 'ok'},
+        options: const TaskOptions(queue: 'custom', priority: 3),
+      );
+
+      expect(broker.published.single.envelope.queue, 'custom');
+      expect(broker.published.single.envelope.priority, 3);
+    });
+
+    test('enqueue options override handler routing defaults', () async {
+      final broker = _RecordingBroker();
+      final stem = Stem(
+        broker: broker,
+        tasks: [
+          const _StubTaskHandler(
+            options: TaskOptions(queue: 'emails', priority: 7),
+          ),
+        ],
+      );
+
+      await stem.enqueue(
+        'sample.task',
+        args: {'value': 'ok'},
+        enqueueOptions: const TaskEnqueueOptions(queue: 'audit', priority: 5),
+      );
+
+      expect(broker.published.single.envelope.queue, 'audit');
+      expect(broker.published.single.envelope.priority, 5);
+    });
 
     test(
       'no-arg task definitions can attach codec-backed result metadata',
@@ -530,14 +624,23 @@ _CodecTaskArgs _decodeCodecTaskArgs(Object? payload) {
 }
 
 class _StubTaskHandler implements TaskHandler<void> {
+  const _StubTaskHandler({
+    TaskOptions options = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+  }) : _taskOptions = options,
+       _taskMetadata = metadata;
+
+  final TaskOptions _taskOptions;
+  final TaskMetadata _taskMetadata;
+
   @override
   String get name => 'sample.task';
 
   @override
-  TaskOptions get options => const TaskOptions();
+  TaskOptions get options => _taskOptions;
 
   @override
-  TaskMetadata get metadata => const TaskMetadata();
+  TaskMetadata get metadata => _taskMetadata;
 
   @override
   TaskEntrypoint? get isolateEntrypoint => null;

@@ -8,6 +8,9 @@
 - Made `StemClient.createWorker(...)` infer queue subscriptions from bundled
   or explicitly supplied task handlers when `workerConfig.subscription` is
   omitted.
+- Made raw `Stem.enqueue('task.name')` inherit handler-declared publish defaults
+  like queue routing, priority, visibility timeout, and retry policy when the
+  producer does not override them explicitly.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

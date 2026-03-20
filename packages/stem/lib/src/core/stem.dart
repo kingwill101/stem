@@ -243,13 +243,17 @@ class Stem implements TaskResultCaller {
     required TaskPayloadEncoder argsEncoder,
     required TaskPayloadEncoder resultEncoder,
   }) async {
+    final effectiveOptions = _resolveEffectiveTaskOptions(
+      options,
+      fallbackOptions,
+    );
     final tracer = StemTracer.instance;
-    final queueOverride = enqueueOptions?.queue ?? options.queue;
+    final queueOverride = enqueueOptions?.queue ?? effectiveOptions.queue;
     final decision = routing.resolve(
       RouteRequest(task: name, headers: headers, queue: queueOverride),
     );
     final targetName = decision.targetName;
-    final basePriority = enqueueOptions?.priority ?? options.priority;
+    final basePriority = enqueueOptions?.priority ?? effectiveOptions.priority;
     final resolvedPriority = decision.effectivePriority(basePriority);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = scopeMeta == null
@@ -265,9 +269,9 @@ class Stem implements TaskResultCaller {
     if (!enrichedMeta.containsKey('stem.task')) {
       enrichedMeta['stem.task'] = name;
     }
-    if (options.retryPolicy != null &&
+    if (effectiveOptions.retryPolicy != null &&
         !enrichedMeta.containsKey('stem.retryPolicy')) {
-      enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
+      enrichedMeta['stem.retryPolicy'] = effectiveOptions.retryPolicy!.toJson();
     }
 
     final scheduledAt = _resolveNotBefore(
@@ -275,8 +279,7 @@ class Stem implements TaskResultCaller {
       enqueueOptions,
     );
     final maxRetries = _resolveMaxRetries(
-      options,
-      fallbackOptions,
+      effectiveOptions,
       enqueueOptions,
     );
     final taskId = enqueueOptions?.taskId ?? generateEnvelopeId();
@@ -336,11 +339,11 @@ class Stem implements TaskResultCaller {
           notBefore: scheduledAt,
           priority: resolvedPriority,
           maxRetries: maxRetries,
-          visibilityTimeout: options.visibilityTimeout,
+          visibilityTimeout: effectiveOptions.visibilityTimeout,
           meta: encodedMeta,
         );
 
-        if (options.unique) {
+        if (effectiveOptions.unique) {
           final coordinator = uniqueTaskCoordinator;
           if (coordinator == null) {
             throw StateError(
@@ -350,7 +353,7 @@ class Stem implements TaskResultCaller {
           }
           final claim = await coordinator.acquire(
             envelope: envelope,
-            options: options,
+            options: effectiveOptions,
           );
           if (!claim.isAcquired) {
             final existingId = claim.existingTaskId;
@@ -445,6 +448,48 @@ class Stem implements TaskResultCaller {
       context: producerParentContext,
       spanKind: dotel.SpanKind.producer,
       attributes: spanAttributes,
+    );
+  }
+
+  TaskOptions _resolveEffectiveTaskOptions(
+    TaskOptions options,
+    TaskOptions fallbackOptions,
+  ) {
+    const defaults = TaskOptions();
+    return TaskOptions(
+      queue: options.queue != defaults.queue
+          ? options.queue
+          : fallbackOptions.queue,
+      maxRetries: options.maxRetries != defaults.maxRetries
+          ? options.maxRetries
+          : fallbackOptions.maxRetries,
+      softTimeLimit: options.softTimeLimit ?? fallbackOptions.softTimeLimit,
+      hardTimeLimit: options.hardTimeLimit ?? fallbackOptions.hardTimeLimit,
+      rateLimit: options.rateLimit ?? fallbackOptions.rateLimit,
+      groupRateLimit: options.groupRateLimit ?? fallbackOptions.groupRateLimit,
+      groupRateKey: options.groupRateKey ?? fallbackOptions.groupRateKey,
+      groupRateKeyHeader:
+          options.groupRateKeyHeader != defaults.groupRateKeyHeader
+          ? options.groupRateKeyHeader
+          : fallbackOptions.groupRateKeyHeader,
+      groupRateLimiterFailureMode:
+          options.groupRateLimiterFailureMode !=
+              defaults.groupRateLimiterFailureMode
+          ? options.groupRateLimiterFailureMode
+          : fallbackOptions.groupRateLimiterFailureMode,
+      unique: options.unique != defaults.unique
+          ? options.unique
+          : fallbackOptions.unique,
+      uniqueFor: options.uniqueFor ?? fallbackOptions.uniqueFor,
+      priority: options.priority != defaults.priority
+          ? options.priority
+          : fallbackOptions.priority,
+      acksLate: options.acksLate != defaults.acksLate
+          ? options.acksLate
+          : fallbackOptions.acksLate,
+      visibilityTimeout:
+          options.visibilityTimeout ?? fallbackOptions.visibilityTimeout,
+      retryPolicy: options.retryPolicy ?? fallbackOptions.retryPolicy,
     );
   }
 
@@ -591,7 +636,6 @@ class Stem implements TaskResultCaller {
   /// handler defaults.
   int _resolveMaxRetries(
     TaskOptions options,
-    TaskOptions handlerOptions,
     TaskEnqueueOptions? enqueueOptions,
   ) {
     final policyMax = enqueueOptions?.retryPolicy?.maxRetries;
@@ -605,7 +649,7 @@ class Stem implements TaskResultCaller {
     if (options.maxRetries != 0) {
       return options.maxRetries;
     }
-    return handlerOptions.maxRetries;
+    return 0;
   }
 
   /// Maps enqueue-only settings into envelope metadata.
