@@ -115,8 +115,8 @@ Child workflows should be started from durable boundaries:
 - `ref.startAndWait(context, params: value)` inside script checkpoints
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
-- keep `context.prepareStart(...)` for the rarer incremental-call
-  cases where you actually want to build the start request step by step
+- build an explicit transport request with `ref.buildStart(...)` only for the
+  rarer low-level cases where you need to pass a `WorkflowStartCall` around
 
 Avoid starting child workflows directly from the raw
 `WorkflowScriptContext` body unless you are explicitly handling replay
@@ -281,9 +281,10 @@ await workflowApp.executeRun(runId);
 Annotated tasks also get generated definitions:
 
 ```dart
-final taskId = await StemTaskDefinitions.builderExampleTask
-    .call(const {'kind': 'welcome'})
-    .enqueue(workflowApp);
+final taskId = await StemTaskDefinitions.builderExampleTask.enqueue(
+  workflowApp,
+  const {'kind': 'welcome'},
+);
 ```
 
 ## Examples
