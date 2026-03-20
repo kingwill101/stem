@@ -59,6 +59,11 @@ stem worker resume --worker worker-a --queue default
 For a runnable lab that exercises ping/stats/revoke/shutdown against real
 workers, see `packages/stem/example/worker_control_lab` in the repository.
 
+If you are working directly with low-level `ControlCommandMessage` and
+`ControlReplyMessage` values in custom tooling, prefer
+`payloadJson(...)` / `payloadVersionedJson(...)` and
+`errorJson(...)` / `errorVersionedJson(...)` over manual map casts.
+
 ## Autoscaling Concurrency
 
 Workers can autoscale their isolate pools between configured minimum and

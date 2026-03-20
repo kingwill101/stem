@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `ControlCommandMessage.payloadJson(...)`,
+  `payloadVersionedJson(...)`, and the matching `ControlReplyMessage`
+  payload/error helpers so low-level worker control tooling can decode DTO
+  payloads without raw map casts.
 - Added `WorkflowStepEvent.metadataJson(...)`,
   `metadataVersionedJson(...)`, `metadataPayloadJson(...)`, and the matching
   `WorkflowRuntimeEvent` helpers so workflow introspection metadata can decode
