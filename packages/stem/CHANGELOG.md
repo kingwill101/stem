@@ -8,6 +8,11 @@
   `waitWith(...)`. The direct `event.emit(...)`, `event.call(...).emit(...)`,
   `event.wait(...)`, `event.waitValue(...)`, and `event.awaitOn(...)` surfaces
   are now the only supported forms.
+- Removed the deprecated workflow-start compatibility helpers:
+  `startWith(...)`, `startAndWaitWith(...)`, `startWorkflowBuilder(...)`, and
+  `startNoArgsWorkflowBuilder(...)`. The direct `start(...)`,
+  `startAndWait(...)`, and `prepareWorkflowStart(...)` forms are now the only
+  supported workflow-start surfaces.
 - Replaced the older manual DTO helper names with direct forms:
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and

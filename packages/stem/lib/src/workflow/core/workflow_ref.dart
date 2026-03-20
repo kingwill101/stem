@@ -148,23 +148,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
     return payload as TResult;
   }
 
-  /// Starts this workflow ref directly with [caller].
-  @Deprecated('Use start(caller, params: ...) instead.')
-  Future<String> startWith(
-    WorkflowCaller caller,
-    TParams params, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return call(
-      params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startWith(caller);
-  }
-
   /// Starts this workflow ref directly with [caller] using named args.
   Future<String> start(
     WorkflowCaller caller, {
@@ -179,29 +162,6 @@ class WorkflowRef<TParams, TResult extends Object?> {
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
     ).start(caller);
-  }
-
-  /// Starts this workflow ref with [caller] and waits for the result.
-  @Deprecated('Use startAndWait(caller, params: ...) instead.')
-  Future<WorkflowResult<TResult>?> startAndWaitWith(
-    WorkflowCaller caller,
-    TParams params, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return call(
-      params,
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startAndWait(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
   }
 
   /// Starts this workflow ref with [caller] and waits for the result using
@@ -270,21 +230,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
   }
 
   /// Starts this workflow ref directly with [caller].
-  @Deprecated('Use start(caller, ...) instead.')
-  Future<String> startWith(
-    WorkflowCaller caller, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return call(
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startWith(caller);
-  }
-
-  /// Starts this workflow ref directly with [caller].
   Future<String> start(
     WorkflowCaller caller, {
     String? parentRunId,
@@ -296,27 +241,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
     ).start(caller);
-  }
-
-  /// Starts this workflow ref with [caller] and waits for the result.
-  @Deprecated('Use startAndWait(caller, ...) instead.')
-  Future<WorkflowResult<TResult>?> startAndWaitWith(
-    WorkflowCaller caller, {
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return call(
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    ).startAndWait(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
   }
 
   /// Starts this workflow ref with [caller] and waits for the result.
@@ -485,12 +409,6 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     return caller.startWorkflowCall(this);
   }
 
-  /// Starts this typed workflow call with the provided [caller].
-  @Deprecated('Use start(caller) instead.')
-  Future<String> startWith(WorkflowCaller caller) {
-    return start(caller);
-  }
-
   /// Starts this typed workflow call with [caller] and waits for the result.
   Future<WorkflowResult<TResult>?> startAndWait(
     WorkflowCaller caller, {
@@ -508,21 +426,6 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
     });
   }
 
-  /// Starts this typed workflow call with [caller] and waits for the result.
-  @Deprecated('Use startAndWait(caller, ...) instead.')
-  Future<WorkflowResult<TResult>?> startAndWaitWith(
-    WorkflowCaller caller, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) async {
-    final runId = await start(caller);
-    return definition.waitFor(
-      caller,
-      runId,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
 }
 
 /// Convenience helpers for dispatching [WorkflowStartBuilder] instances.
@@ -531,12 +434,6 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
   /// Builds this workflow call and starts it with the provided [caller].
   Future<String> start(WorkflowCaller caller) {
     return build().start(caller);
-  }
-
-  /// Builds this workflow call and starts it with the provided [caller].
-  @Deprecated('Use start(caller) instead.')
-  Future<String> startWith(WorkflowCaller caller) {
-    return start(caller);
   }
 
   /// Builds this workflow call, starts it with [caller], and waits for the
@@ -553,20 +450,6 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
     );
   }
 
-  /// Builds this workflow call, starts it with [caller], and waits for the
-  /// result.
-  @Deprecated('Use startAndWait(caller, ...) instead.')
-  Future<WorkflowResult<TResult>?> startAndWaitWith(
-    WorkflowCaller caller, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) {
-    return startAndWait(
-      caller,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
 }
 
 /// Caller-bound fluent workflow start builder.
@@ -640,19 +523,6 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
     );
   }
 
-  /// Creates a caller-bound fluent start builder for a typed workflow ref.
-  @Deprecated('Use prepareWorkflowStart(...) instead.')
-  BoundWorkflowStartBuilder<TParams, TResult>
-  startWorkflowBuilder<TParams, TResult extends Object?>({
-    required WorkflowRef<TParams, TResult> definition,
-    required TParams params,
-  }) {
-    return prepareWorkflowStart(
-      definition: definition,
-      params: params,
-    );
-  }
-
   /// Creates a caller-bound fluent start builder for a no-args workflow ref.
   BoundWorkflowStartBuilder<(), TResult>
   prepareNoArgsWorkflowStart<TResult extends Object?>({
@@ -664,14 +534,6 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
     );
   }
 
-  /// Creates a caller-bound fluent start builder for a no-args workflow ref.
-  @Deprecated('Use prepareNoArgsWorkflowStart(...) instead.')
-  BoundWorkflowStartBuilder<(), TResult>
-  startNoArgsWorkflowBuilder<TResult extends Object?>({
-    required NoArgsWorkflowRef<TResult> definition,
-  }) {
-    return prepareNoArgsWorkflowStart(definition: definition);
-  }
 }
 
 /// Convenience helpers for waiting on typed workflow refs using a generic
