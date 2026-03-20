@@ -910,6 +910,8 @@ Workflow run detail views expose the same convenience surface via
 Checkpoint entries from `viewCheckpoints(...)` and
 `WorkflowCheckpointView.fromEntry(...)` expose the same surface via
 `entry.valueJson(...)` and `entry.valueAs(codec: ...)`.
+Workflow introspection events expose matching helpers via
+`event.resultJson(...)` and `event.resultAs(codec: ...)`.
 
 In the example above, these calls inside `run(...)`:
 

@@ -1,4 +1,5 @@
 import 'package:stem/src/core/stem_event.dart';
+import 'package:stem/src/core/payload_codec.dart';
 
 /// Enumerates workflow step event types emitted by the runtime.
 enum WorkflowStepEventType {
@@ -56,6 +57,26 @@ class WorkflowStepEvent implements StemEvent {
 
   /// Optional result payload for completed steps.
   final Object? result;
+
+  /// Decodes the step result payload with [codec], when present.
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the step result payload with a JSON decoder, when present.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Optional error message for failed steps.
   final String? error;

@@ -42,5 +42,35 @@ void main() {
       expect(event.attributes['runId'], 'run-1');
       expect(event.attributes['stepId'], 'charge');
     });
+
+    test('WorkflowStepEvent decodes DTO result payloads', () {
+      final event = WorkflowStepEvent(
+        runId: 'run-2',
+        workflow: 'checkout',
+        stepId: 'charge',
+        type: WorkflowStepEventType.completed,
+        timestamp: DateTime.utc(2026, 2, 24, 16, 30),
+        result: const {'chargeId': 'ch_123'},
+      );
+
+      expect(
+        event.resultJson<_ChargeResult>(decode: _ChargeResult.fromJson),
+        isA<_ChargeResult>().having(
+          (value) => value.chargeId,
+          'chargeId',
+          'ch_123',
+        ),
+      );
+    });
   });
+}
+
+class _ChargeResult {
+  const _ChargeResult({required this.chargeId});
+
+  factory _ChargeResult.fromJson(Map<String, dynamic> json) {
+    return _ChargeResult(chargeId: json['chargeId'] as String);
+  }
+
+  final String chargeId;
 }
