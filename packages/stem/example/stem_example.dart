@@ -60,13 +60,9 @@ Future<void> main() async {
   await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 2));
 
   // Typed helper with TaskDefinition for compile-time safety.
-  final typedTaskId = await HelloTask.definition.enqueue(
+  await HelloTask.definition.enqueueAndWait(
     app,
     const HelloArgs(name: 'Stem'),
-  );
-  await HelloTask.definition.waitFor(
-    app,
-    typedTaskId,
     timeout: const Duration(seconds: 2),
   );
   await app.close();

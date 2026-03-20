@@ -27,6 +27,9 @@
   `startBuilder()`, and `waitFor(...)` helpers on manual `Flow` and
   `WorkflowScript` definitions so simple workflows no longer need an extra
   `ref0()` hop just to start or wait.
+- Updated the public typed task examples to prefer `enqueueAndWait(...)` as the
+  happy path when callers only need the final typed result, while keeping
+  `waitFor(...)` documented for task-id-driven inspection flows.
 - Made `TaskContext` and `TaskInvocationContext` implement
   `WorkflowEventEmitter` when a workflow runtime is attached, so inline
   handlers and isolate entrypoints can resume waiting workflows with

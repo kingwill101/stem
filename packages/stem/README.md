@@ -231,15 +231,14 @@ that already have a `PayloadCodec<T>`. The codec still needs to encode to
 `Map<String, Object?>` because task args are published as a map.
 
 For typed task calls, the definition and call objects now expose the common
-producer operations directly:
+producer operations directly. Prefer `enqueueAndWait(...)` when you only need
+the final typed result:
 
 ```dart
-final taskId = await HelloTask.definition.enqueue(
+final result = await HelloTask.definition.enqueueAndWait(
   stem,
   const HelloArgs(name: 'Stem'),
 );
-
-final result = await HelloTask.definition.waitFor(stem, taskId);
 ```
 
 For tasks without producer inputs, use `TaskDefinition.noArgs(...)` so callers
@@ -817,18 +816,15 @@ lowering.
 ### Typed task completion
 
 Producers can now wait for individual task results using either
-`TaskDefinition.waitFor(...)` or `Stem.waitForTask<T>` with optional decoders.
-These helpers return a `TaskResult<T>` containing the underlying `TaskStatus`,
-decoded payload, and a timeout flag:
+`TaskDefinition.enqueueAndWait(...)`, `TaskDefinition.waitFor(...)`, or
+`Stem.waitForTask<T>` with optional decoders. These helpers return a
+`TaskResult<T>` containing the underlying `TaskStatus`, decoded payload, and a
+timeout flag:
 
 ```dart
-final taskId = await ChargeCustomer.definition
-  .call(ChargeArgs(orderId: '123'))
-  .enqueue(stem);
-
-final charge = await ChargeCustomer.definition.waitFor(
+final charge = await ChargeCustomer.definition.enqueueAndWait(
   stem,
-  taskId,
+  ChargeArgs(orderId: '123'),
 );
 if (charge?.isSucceeded == true) {
   print('Captured ${charge!.value!.total}');
@@ -836,6 +832,9 @@ if (charge?.isSucceeded == true) {
   log.severe('Charge failed: ${charge!.status.error}');
 }
 ```
+
+Use `waitFor(...)` when you need to keep the task id for inspection or pass it
+through another boundary before waiting.
 
 Generated annotated tasks use the same surface:
 
