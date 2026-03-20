@@ -2,6 +2,133 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('StemModule.merge', () {
+    test('combines distinct task and workflow definitions', () async {
+      final taskA = FunctionTaskHandler<String>(
+        name: 'module.merge.task.a',
+        entrypoint: (context, args) async => 'a',
+        runInIsolate: false,
+      );
+      final taskB = FunctionTaskHandler<String>(
+        name: 'module.merge.task.b',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'b',
+        runInIsolate: false,
+      );
+      final flow = Flow<String>(
+        name: 'module.merge.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'ok');
+        },
+      );
+      final merged = StemModule.merge([
+        StemModule(tasks: [taskA]),
+        StemModule(flows: [flow], tasks: [taskB]),
+      ]);
+
+      expect(merged.tasks, [taskA, taskB]);
+      expect(
+        merged.workflowDefinitions.map((definition) => definition.name),
+        ['module.merge.flow'],
+      );
+      expect(merged.workflowManifest.map((entry) => entry.name), [
+        'module.merge.flow',
+      ]);
+
+      final app = await StemWorkflowApp.inMemory(module: merged);
+      try {
+        await app.start();
+
+        final runId = await app.startWorkflow('module.merge.flow');
+        final flowResult = await app.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(flowResult?.value, 'ok');
+      } finally {
+        await app.close();
+      }
+    });
+
+    test('deduplicates identical modules and manifest entries', () {
+      final flow = Flow<String>(
+        name: 'module.merge.duplicate.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'ok');
+        },
+      );
+      final task = FunctionTaskHandler<String>(
+        name: 'module.merge.duplicate.task',
+        entrypoint: (context, args) async => 'ok',
+        runInIsolate: false,
+      );
+      final module = StemModule(flows: [flow], tasks: [task]);
+
+      final merged = StemModule.merge([module, module]);
+
+      expect(merged.tasks, [task]);
+      expect(
+        merged.workflowDefinitions.map((definition) => definition.name),
+        ['module.merge.duplicate.flow'],
+      );
+      expect(merged.workflowManifest.map((entry) => entry.name), [
+        'module.merge.duplicate.flow',
+      ]);
+    });
+
+    test('fails fast on conflicting task or workflow names', () {
+      final taskA = FunctionTaskHandler<String>(
+        name: 'module.merge.conflict.task',
+        entrypoint: (context, args) async => 'a',
+        runInIsolate: false,
+      );
+      final taskB = FunctionTaskHandler<String>(
+        name: 'module.merge.conflict.task',
+        entrypoint: (context, args) async => 'b',
+        runInIsolate: false,
+      );
+      final flowA = Flow<String>(
+        name: 'module.merge.conflict.workflow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'a');
+        },
+      );
+      final flowB = Flow<String>(
+        name: 'module.merge.conflict.workflow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'b');
+        },
+      );
+
+      expect(
+        () => StemModule.merge([
+          StemModule(tasks: [taskA]),
+          StemModule(tasks: [taskB]),
+        ]),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            contains('module.merge.conflict.task'),
+          ),
+        ),
+      );
+      expect(
+        () => StemModule.merge([
+          StemModule(flows: [flowA]),
+          StemModule(flows: [flowB]),
+        ]),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            contains('module.merge.conflict.workflow'),
+          ),
+        ),
+      );
+    });
+  });
+
   group('module bootstrap', () {
     test('StemApp.inMemory registers module tasks and infers queues', () async {
       final moduleTask = FunctionTaskHandler<String>(

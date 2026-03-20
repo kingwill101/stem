@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Added `StemModule.merge(...)` so generated and hand-written bundles can be
+  composed with fail-fast conflict checks instead of manual list stitching.
 - Updated the public workflow event examples and docs to prefer the direct
   typed ref helper `event.emitWith(emitter, value)` for simple event emission,
   leaving bound event builders and prebuilt calls as lower-level variants.

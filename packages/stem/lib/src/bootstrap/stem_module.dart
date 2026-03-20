@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow.dart';
@@ -46,6 +47,105 @@ class StemModule {
                scripts: scripts,
              ),
        );
+
+  /// Merges [modules] into one bundled module.
+  ///
+  /// Duplicate task or workflow names must resolve to the same underlying
+  /// object instance. Distinct definitions with the same public name fail fast
+  /// so module composition never silently overrides behavior.
+  factory StemModule.merge(Iterable<StemModule> modules) {
+    final mergedWorkflows = <WorkflowDefinition>[];
+    final mergedFlows = <Flow>[];
+    final mergedScripts = <WorkflowScript>[];
+    final mergedTasks = <TaskHandler<Object?>>[];
+    final mergedManifest = <WorkflowManifestEntry>[];
+    final workflowDefinitionsByName = <String, WorkflowDefinition>{};
+    final taskHandlersByName = <String, TaskHandler<Object?>>{};
+    final manifestEntriesByName = <String, WorkflowManifestEntry>{};
+
+    void addWorkflowDefinition(
+      WorkflowDefinition definition, {
+      required String source,
+      required void Function() onFirstSeen,
+    }) {
+      final existing = workflowDefinitionsByName[definition.name];
+      if (existing == null) {
+        workflowDefinitionsByName[definition.name] = definition;
+        onFirstSeen();
+        return;
+      }
+      if (!identical(existing, definition)) {
+        throw ArgumentError(
+          'Workflow "${definition.name}" is declared by multiple modules '
+          'with different definitions ($source).',
+        );
+      }
+    }
+
+    void addTaskHandler(TaskHandler<Object?> handler) {
+      final existing = taskHandlersByName[handler.name];
+      if (existing == null) {
+        taskHandlersByName[handler.name] = handler;
+        mergedTasks.add(handler);
+        return;
+      }
+      if (!identical(existing, handler)) {
+        throw ArgumentError(
+          'Task handler "${handler.name}" is declared by multiple modules '
+          'with different handlers.',
+        );
+      }
+    }
+
+    void addManifestEntry(WorkflowManifestEntry entry) {
+      final existing = manifestEntriesByName[entry.name];
+      if (existing == null) {
+        manifestEntriesByName[entry.name] = entry;
+        mergedManifest.add(entry);
+        return;
+      }
+      if (!_sameManifestEntry(existing, entry)) {
+        throw ArgumentError(
+          'Workflow manifest entry "${entry.name}" conflicts across merged '
+          'modules.',
+        );
+      }
+    }
+
+    for (final module in modules) {
+      for (final workflow in module.workflows) {
+        addWorkflowDefinition(
+          workflow,
+          source: 'workflow definition',
+          onFirstSeen: () => mergedWorkflows.add(workflow),
+        );
+      }
+      for (final flow in module.flows) {
+        addWorkflowDefinition(
+          flow.definition,
+          source: 'flow',
+          onFirstSeen: () => mergedFlows.add(flow),
+        );
+      }
+      for (final script in module.scripts) {
+        addWorkflowDefinition(
+          script.definition,
+          source: 'script',
+          onFirstSeen: () => mergedScripts.add(script),
+        );
+      }
+      module.tasks.forEach(addTaskHandler);
+      module.workflowManifest.forEach(addManifestEntry);
+    }
+
+    return StemModule(
+      workflows: mergedWorkflows,
+      flows: mergedFlows,
+      scripts: mergedScripts,
+      tasks: mergedTasks,
+      workflowManifest: mergedManifest,
+    );
+  }
 
   /// Raw workflow definitions that are not represented as [Flow] or
   /// [WorkflowScript] instances.
@@ -196,4 +296,8 @@ class StemModule {
       yield script.definition.toManifestEntry();
     }
   }
+}
+
+bool _sameManifestEntry(WorkflowManifestEntry a, WorkflowManifestEntry b) {
+  return jsonEncode(a.toJson()) == jsonEncode(b.toJson());
 }

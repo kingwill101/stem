@@ -98,6 +98,17 @@ subscription from the workflow queue plus the default queues declared on the
 bundled task handlers. Explicit subscriptions are still available for advanced
 routing.
 
+If your service needs more than one generated or hand-written bundle, merge
+them before bootstrap:
+
+```dart
+final module = StemModule.merge([authModule, billingModule, stemModule]);
+final workflowApp = await StemWorkflowApp.inMemory(module: module);
+```
+
+`StemModule.merge(...)` fails fast when modules declare conflicting task or
+workflow names.
+
 If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 

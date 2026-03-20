@@ -732,6 +732,17 @@ When you bootstrap a plain `StemApp`, the worker infers task queue
 subscriptions from the bundled or explicitly supplied task handlers. Set
 `workerConfig.subscription` explicitly only when you need broader routing.
 
+If you need to compose multiple generated or hand-written bundles, merge them
+once and pass the combined module through bootstrap:
+
+```dart
+final module = StemModule.merge([authModule, billingModule, stemModule]);
+final app = await StemWorkflowApp.inMemory(module: module);
+```
+
+`StemModule.merge(...)` fails fast when modules declare the same task or
+workflow name with different underlying definitions.
+
 If your service already owns a `StemApp`, reuse it:
 
 ```dart
