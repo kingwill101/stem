@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Updated the public workflow docs and annotated workflow example to prefer
+  direct child-workflow helpers like `ref.startAndWaitWith(context, value)` in
+  durable boundaries, keeping `startWorkflowBuilder(...)` for advanced
+  override cases.
 - Clarified the workflow docs so direct workflow helpers and generated refs are
   the default path, while `startWorkflow(...)` / `waitForCompletion(...)` are
   explicitly documented as the low-level name-driven APIs.

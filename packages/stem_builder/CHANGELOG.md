@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Updated the builder docs and annotated workflow example to prefer direct
+  child-workflow helpers like `ref.startAndWaitWith(context, value)` in
+  durable boundaries, leaving caller-bound builders for advanced overrides.
 - Warned when a manual `script.step(...)` wrapper redundantly encloses an
   annotated checkpoint, including context-aware checkpoints that can now use
   direct annotated method calls with injected workflow-step context.

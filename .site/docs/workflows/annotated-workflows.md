@@ -132,9 +132,10 @@ This keeps one authoring model:
 When a workflow needs to start another workflow, do it from a durable boundary:
 
 - `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer
-  `context.startWorkflowBuilder(definition: ref, params: value).startAndWait()`
-  inside flow steps and checkpoint methods
+  `WorkflowCaller`, so prefer `ref.startAndWaitWith(context, value)` inside
+  flow steps and checkpoint methods
+- use `context.startWorkflowBuilder(...)` only when you need advanced start
+  overrides like `ttl(...)` or `cancellationPolicy(...)`
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 

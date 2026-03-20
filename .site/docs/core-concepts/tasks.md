@@ -127,8 +127,9 @@ When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
 both `TaskContext` and `TaskInvocationContext` also implement
 `WorkflowCaller`, so handlers and isolate entrypoints can start or wait for
 typed child workflows without dropping to raw workflow-name APIs. For manual
-no-args flows and scripts, prefer `childFlow.startBuilder().startAndWaitWith(
-context)` over manufacturing a temporary `ref0()` just to start the child.
+flows and scripts, prefer `childFlow.startAndWaitWith(context)` or
+`childWorkflowRef.startAndWaitWith(context, value)` for the simple case. Use a
+builder only when you need advanced overrides.
 
 Those same contexts also implement `WorkflowEventEmitter`, so tasks can resume
 waiting workflows through `emitValue(...)` or typed `WorkflowEventRef<T>`

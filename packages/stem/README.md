@@ -639,9 +639,10 @@ Durable workflow contexts enqueue tasks directly:
 Child workflows belong in durable execution boundaries:
 
 - `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer
-  `context.startWorkflowBuilder(definition: ref, params: value).startAndWait()`
-  inside flow steps and script checkpoints
+  `WorkflowCaller`, so prefer `ref.startAndWaitWith(context, value)` inside
+  flow steps and script checkpoints
+- use `context.startWorkflowBuilder(...)` when you need advanced overrides like
+  `ttl(...)` or `cancellationPolicy(...)`
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
 
