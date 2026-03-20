@@ -67,6 +67,15 @@ class PayloadCodec<T> {
     return _payloadJsonMap(payload, typeName ?? value.runtimeType.toString());
   }
 
+  /// Normalizes a durable payload into the string-keyed JSON map shape used by
+  /// DTO-style decoders.
+  static Map<String, dynamic> decodeJsonMap(
+    Object? payload, {
+    String typeName = 'payload',
+  }) {
+    return _payloadJsonMap(payload, typeName);
+  }
+
   /// Converts a typed value into a durable payload representation.
   Object? encode(T value) => _encode(value);
 

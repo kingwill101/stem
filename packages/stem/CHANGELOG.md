@@ -2,6 +2,11 @@
 
 ## 0.1.1
 
+- Added `decodeJson:` shortcuts to the low-level
+  `Stem.waitForTask<T>` and `StemWorkflowApp.waitForCompletion<T>` wait APIs,
+  and propagated the same task wait shortcut through `StemApp` and
+  `StemClient`, so DTO waits no longer need manual
+  `payload as Map<String, Object?>` closures.
 - Added typed task/workflow result readers:
   `TaskStatus.payloadValue(...)`, `payloadValueOr(...)`,
   `requiredPayloadValue(...)`, `TaskResult.valueOr(...)`,

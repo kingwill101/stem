@@ -131,8 +131,14 @@ class StemWorkflowApp
     String taskId, {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
   }) {
-    return app.waitForTask(taskId, timeout: timeout, decode: decode);
+    return app.waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: decode,
+      decodeJson: decodeJson,
+    );
   }
 
   @override
@@ -404,7 +410,12 @@ class StemWorkflowApp
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   }) async {
+    assert(
+      decode == null || decodeJson == null,
+      'Specify either decode or decodeJson, not both.',
+    );
     final startedAt = stemNow();
     while (true) {
       final state = await store.get(runId);
@@ -412,10 +423,20 @@ class StemWorkflowApp
         return null;
       }
       if (state.isTerminal) {
-        return _buildResult(state, decode, timedOut: false);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          timedOut: false,
+        );
       }
       if (timeout != null && stemNow().difference(startedAt) >= timeout) {
-        return _buildResult(state, decode, timedOut: true);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          timedOut: true,
+        );
       }
       await Future<void>.delayed(pollInterval);
     }
@@ -442,9 +463,10 @@ class StemWorkflowApp
     RunState state,
     T Function(Object? payload)? decode, {
     required bool timedOut,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   }) {
     final value = state.status == WorkflowStatus.completed
-        ? _decodeResult(state.result, decode)
+        ? _decodeResult(state.result, decode, decodeJson)
         : null;
     return WorkflowResult<T>(
       runId: state.id,
@@ -459,9 +481,15 @@ class StemWorkflowApp
   T? _decodeResult<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   ) {
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+      );
     }
     return payload as T?;
   }

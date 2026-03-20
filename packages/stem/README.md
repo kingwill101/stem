@@ -866,14 +866,15 @@ print(result.requiredValue().total);
 ```
 
 `StemWorkflowApp.waitForCompletion<T>` is the low-level completion API for
-name-based runs. It exposes the decoded value along with the raw `RunState`,
+name-based runs. It accepts either `decode:` or the shorter `decodeJson:`
+shortcut for DTOs and exposes the decoded value along with the raw `RunState`,
 letting you work with domain models without manual casts:
 
 ```dart
 final runId = await app.startWorkflow('orders.workflow');
 final result = await app.waitForCompletion<OrderReceipt>(
   runId,
-  decode: (payload) => OrderReceipt.fromJson(payload! as Map<String, Object?>),
+  decodeJson: OrderReceipt.fromJson,
 );
 if (result?.isCompleted == true) {
   print(result!.requiredValue().total);
@@ -901,7 +902,8 @@ Producers can now wait for individual task results using either
 `TaskDefinition.enqueueAndWait(...)`, `TaskDefinition.waitFor(...)`, or
 `Stem.waitForTask<T>` with optional decoders. These helpers return a
 `TaskResult<T>` containing the underlying `TaskStatus`, decoded payload, and a
-timeout flag:
+timeout flag. For low-level DTO waits, `Stem.waitForTask<T>` also accepts
+`decodeJson:`:
 
 ```dart
 final charge = await ChargeCustomer.definition.enqueueAndWait(

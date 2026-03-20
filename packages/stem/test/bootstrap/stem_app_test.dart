@@ -466,8 +466,7 @@ void main() {
         final runId = await workflowApp.startWorkflow('workflow.typed');
         final run = await workflowApp.waitForCompletion<_DemoPayload>(
           runId,
-          decode: (payload) =>
-              _DemoPayload.fromJson(payload! as Map<String, Object?>),
+          decodeJson: _DemoPayload.fromJson,
         );
 
         expect(run, isNotNull);

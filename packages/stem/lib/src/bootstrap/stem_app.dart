@@ -142,9 +142,15 @@ class StemApp implements StemTaskApp {
     String taskId, {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
   }) async {
     await _ensureStarted();
-    return stem.waitForTask(taskId, timeout: timeout, decode: decode);
+    return stem.waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: decode,
+      decodeJson: decodeJson,
+    );
   }
 
   @override

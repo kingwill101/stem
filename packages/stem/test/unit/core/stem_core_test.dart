@@ -585,6 +585,28 @@ void main() {
       expect(result?.rawPayload, isA<_CodecReceipt>());
     });
   });
+
+  group('Stem.waitForTask', () {
+    test('supports decodeJson for low-level DTO waits', () async {
+      final backend = InMemoryResultBackend();
+      final stem = Stem(broker: _RecordingBroker(), backend: backend);
+
+      await backend.set(
+        'task-json-wait',
+        TaskState.succeeded,
+        payload: const {'id': 'receipt-json'},
+      );
+
+      final result = await stem.waitForTask<_CodecReceipt>(
+        'task-json-wait',
+        decodeJson: _CodecReceipt.fromJson,
+      );
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.requiredValue().id, 'receipt-json');
+      expect(result?.rawPayload, const {'id': 'receipt-json'});
+    });
+  });
 }
 
 ResultBackend _codecAwareBackend() {

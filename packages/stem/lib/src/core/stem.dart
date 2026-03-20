@@ -62,6 +62,7 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
@@ -87,6 +88,7 @@ abstract interface class TaskResultCaller implements TaskEnqueuer {
     String taskId, {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
   });
 
   /// Waits for [taskId] using a typed [definition] for result decoding.
@@ -519,7 +521,12 @@ class Stem implements TaskResultCaller {
     String taskId, {
     Duration? timeout,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   }) async {
+    assert(
+      decode == null || decodeJson == null,
+      'Specify either decode or decodeJson, not both.',
+    );
     final resultBackend = backend;
     if (resultBackend == null) {
       throw StateError(
@@ -532,7 +539,7 @@ class Stem implements TaskResultCaller {
         taskId: taskId,
         status: lastStatus,
         value: lastStatus.state == TaskState.succeeded
-            ? _decodeTaskPayload(lastStatus.payload, decode)
+            ? _decodeTaskPayload(lastStatus.payload, decode, decodeJson)
             : null,
         rawPayload: lastStatus.payload,
       );
@@ -555,7 +562,7 @@ class Stem implements TaskResultCaller {
           taskId: taskId,
           status: status,
           value: status.state == TaskState.succeeded
-              ? _decodeTaskPayload(status.payload, decode)
+              ? _decodeTaskPayload(status.payload, decode, decodeJson)
               : null,
           rawPayload: status.payload,
           timedOut: timedOut && !status.state.isTerminal,
@@ -1079,10 +1086,16 @@ class Stem implements TaskResultCaller {
   T? _decodeTaskPayload<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   ) {
     if (payload == null) return null;
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'task result'),
+      );
     }
     return payload as T?;
   }

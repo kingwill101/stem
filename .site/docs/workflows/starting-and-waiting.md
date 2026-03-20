@@ -85,7 +85,8 @@ like `ordersFlow.startAndWait(...)` and
 `StemWorkflowDefinitions.orders.startAndWait(...)`.
 
 `waitForCompletion<T>` is the low-level completion API for name-based runs. It
-polls the store until the run finishes or the caller times out.
+polls the store until the run finishes or the caller times out. For DTO
+results, prefer `decodeJson:` over a manual raw-payload cast.
 
 Use the returned `WorkflowResult<T>` when you need:
 

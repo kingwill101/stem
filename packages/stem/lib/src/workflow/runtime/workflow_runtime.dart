@@ -252,7 +252,12 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   }) async {
+    assert(
+      decode == null || decodeJson == null,
+      'Specify either decode or decodeJson, not both.',
+    );
     final startedAt = _clock.now();
     while (true) {
       final state = await _store.get(runId);
@@ -260,10 +265,20 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         return null;
       }
       if (state.isTerminal) {
-        return _buildResult(state, decode, timedOut: false);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          timedOut: false,
+        );
       }
       if (timeout != null && _clock.now().difference(startedAt) >= timeout) {
-        return _buildResult(state, decode, timedOut: true);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          timedOut: true,
+        );
       }
       await Future<void>.delayed(pollInterval);
     }
@@ -327,9 +342,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     RunState state,
     T Function(Object? payload)? decode, {
     required bool timedOut,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   }) {
     final value = state.status == WorkflowStatus.completed
-        ? _decodeResult(state.result, decode)
+        ? _decodeResult(state.result, decode, decodeJson)
         : null;
     return WorkflowResult<T>(
       runId: state.id,
@@ -344,9 +360,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   T? _decodeResult<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
   ) {
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+      );
     }
     return payload as T?;
   }

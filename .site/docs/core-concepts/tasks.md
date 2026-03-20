@@ -53,6 +53,8 @@ Typed results flow through `TaskResult<TResult>` when you call
 lets you deserialize complex objects before they reach application code.
 Use `result.requiredValue()` when a completed task must have a decoded value
 and you want a fail-fast read instead of manual nullable handling.
+For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
+`decodeJson:` over a manual raw-payload cast.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
 when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you
