@@ -68,7 +68,7 @@ runtime registry:
 - `registerWorkflow(...)` / `registerWorkflows(...)`
 - `registerFlow(...)` / `registerFlows(...)`
 - `registerScript(...)` / `registerScripts(...)`
-- `registerModule(...)`
+- `registerModule(...)` / `registerModules(...)`
 
 ## 5. Move to the right next page
 

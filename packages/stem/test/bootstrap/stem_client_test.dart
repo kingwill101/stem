@@ -383,6 +383,47 @@ void main() {
     await client.close();
   });
 
+  test('StemClient.inMemory merges plural default modules', () async {
+    final flow = Flow<String>(
+      name: 'client.modules.workflow',
+      build: (builder) {
+        builder.step('hello', (ctx) async => 'module-ok');
+      },
+    );
+    final task = FunctionTaskHandler<String>(
+      name: 'client.modules.task',
+      options: const TaskOptions(queue: 'priority'),
+      entrypoint: (context, args) async => 'task-ok',
+      runInIsolate: false,
+    );
+    final client = await StemClient.inMemory(
+      modules: [
+        StemModule(flows: [flow]),
+        StemModule(tasks: [task]),
+      ],
+    );
+
+    final app = await client.createWorkflowApp();
+    await app.start();
+
+    expect(app.app.registry.resolve(task.name), same(task));
+    expect(
+      app.app.worker.subscription.queues,
+      unorderedEquals(['workflow', 'priority']),
+    );
+
+    final runId = await app.startWorkflow(flow.definition.name);
+    final result = await app.waitForCompletion<String>(
+      runId,
+      timeout: const Duration(seconds: 2),
+    );
+
+    expect(result?.value, 'module-ok');
+
+    await app.close();
+    await client.close();
+  });
+
   test('StemClient workflow app supports startAndWaitWith', () async {
     final client = await StemClient.inMemory();
     final flow = Flow<String>(

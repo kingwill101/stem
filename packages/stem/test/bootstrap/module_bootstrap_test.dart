@@ -3,6 +3,28 @@ import 'package:test/test.dart';
 
 void main() {
   group('StemModule.merge', () {
+    test('combine returns null, a single module, or a merged module', () {
+      final taskA = FunctionTaskHandler<String>(
+        name: 'module.combine.task.a',
+        entrypoint: (context, args) async => 'a',
+        runInIsolate: false,
+      );
+      final taskB = FunctionTaskHandler<String>(
+        name: 'module.combine.task.b',
+        entrypoint: (context, args) async => 'b',
+        runInIsolate: false,
+      );
+      final moduleA = StemModule(tasks: [taskA]);
+      final moduleB = StemModule(tasks: [taskB]);
+
+      expect(StemModule.combine(), isNull);
+      expect(StemModule.combine(module: moduleA), same(moduleA));
+      expect(
+        StemModule.combine(modules: [moduleA, moduleB])?.tasks,
+        [taskA, taskB],
+      );
+    });
+
     test('combines distinct task and workflow definitions', () async {
       final taskA = FunctionTaskHandler<String>(
         name: 'module.merge.task.a',
@@ -183,6 +205,38 @@ void main() {
       }
     });
 
+    test('StemApp.inMemory merges plural modules during bootstrap', () async {
+      final taskA = FunctionTaskHandler<String>(
+        name: 'module.bootstrap.modules.task.a',
+        entrypoint: (context, args) async => 'a',
+        runInIsolate: false,
+      );
+      final taskB = FunctionTaskHandler<String>(
+        name: 'module.bootstrap.modules.task.b',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'b',
+        runInIsolate: false,
+      );
+
+      final app = await StemApp.inMemory(
+        modules: [
+          StemModule(tasks: [taskA]),
+          StemModule(tasks: [taskB]),
+        ],
+      );
+      await app.start();
+      try {
+        expect(app.registry.resolve(taskA.name), same(taskA));
+        expect(app.registry.resolve(taskB.name), same(taskB));
+        expect(
+          app.worker.subscription.queues,
+          unorderedEquals(['default', 'priority']),
+        );
+      } finally {
+        await app.close();
+      }
+    });
+
     test('StemClient.createWorkflowApp reuses its default module', () async {
       final moduleTask = FunctionTaskHandler<String>(
         name: 'module.client.workflow-task',
@@ -252,6 +306,50 @@ void main() {
         );
 
         final runId = await workflowApp.startWorkflow('module.app.workflow');
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(result?.value, 'module-ok');
+      } finally {
+        await workflowApp.close();
+      }
+    });
+
+    test('StemApp.createWorkflowApp registers plural modules', () async {
+      final flow = Flow<String>(
+        name: 'module.app.modules.workflow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'module-ok');
+        },
+      );
+      final task = FunctionTaskHandler<String>(
+        name: 'module.app.modules.task',
+        options: const TaskOptions(queue: 'priority'),
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final stemApp = await StemApp.inMemory(
+        workerConfig: StemWorkerConfig(
+          queue: 'workflow',
+          subscription: RoutingSubscription(
+            queues: ['workflow', 'priority'],
+          ),
+        ),
+      );
+
+      final workflowApp = await stemApp.createWorkflowApp(
+        modules: [
+          StemModule(flows: [flow]),
+          StemModule(tasks: [task]),
+        ],
+      );
+      await workflowApp.start();
+      try {
+        expect(workflowApp.app.registry.resolve(task.name), same(task));
+
+        final runId = await workflowApp.startWorkflow(flow.definition.name);
         final result = await workflowApp.waitForCompletion<String>(
           runId,
           timeout: const Duration(seconds: 2),

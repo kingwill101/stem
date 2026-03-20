@@ -271,6 +271,15 @@ class StemWorkflowApp
     module.registerInto(workflows: runtime.registry);
   }
 
+  /// Registers all tasks and workflows from [modules] into this app.
+  void registerModules(Iterable<StemModule> modules) {
+    final merged = StemModule.combine(modules: modules);
+    if (merged == null) {
+      return;
+    }
+    registerModule(merged);
+  }
+
   /// Registers [definition] into this app's workflow registry.
   void registerWorkflow(WorkflowDefinition definition) {
     runtime.registerWorkflow(definition);
@@ -495,6 +504,7 @@ class StemWorkflowApp
   /// ```
   static Future<StemWorkflowApp> create({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -516,7 +526,9 @@ class StemWorkflowApp
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
-    final effectiveModule = module ?? stemApp?.module;
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ??
+        stemApp?.module;
     final moduleTasks =
         effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final moduleWorkflowDefinitions =
@@ -606,6 +618,7 @@ class StemWorkflowApp
   /// ```
   static Future<StemWorkflowApp> inMemory({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -624,6 +637,7 @@ class StemWorkflowApp
   }) {
     return StemWorkflowApp.create(
       module: module,
+      modules: modules,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -656,6 +670,7 @@ class StemWorkflowApp
   static Future<StemWorkflowApp> fromUrl(
     String url, {
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -683,7 +698,7 @@ class StemWorkflowApp
   }) async {
     final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
       workerConfig,
-      module: module,
+      module: StemModule.combine(module: module, modules: modules),
       tasks: tasks,
       continuationQueue: continuationQueue,
       executionQueue: executionQueue,
@@ -716,6 +731,7 @@ class StemWorkflowApp
     try {
       return await create(
         module: module,
+        modules: modules,
         workflows: workflows,
         flows: flows,
         scripts: scripts,
@@ -752,6 +768,7 @@ class StemWorkflowApp
   static Future<StemWorkflowApp> fromClient({
     required StemClient client,
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -767,7 +784,7 @@ class StemWorkflowApp
   }) async {
     final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
       workerConfig,
-      module: module,
+      module: StemModule.combine(module: module, modules: modules),
       tasks: tasks,
       continuationQueue: continuationQueue,
       executionQueue: executionQueue,
@@ -778,6 +795,7 @@ class StemWorkflowApp
     );
     return StemWorkflowApp.create(
       module: module,
+      modules: modules,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -804,6 +822,7 @@ extension StemAppWorkflowExtension on StemApp {
   /// required by the supplied module or tasks.
   Future<StemWorkflowApp> createWorkflowApp({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -819,7 +838,8 @@ extension StemAppWorkflowExtension on StemApp {
     WorkflowIntrospectionSink? introspectionSink,
   }) {
     return StemWorkflowApp.create(
-      module: module ?? this.module,
+      module:
+          StemModule.combine(module: module, modules: modules) ?? this.module,
       workflows: workflows,
       flows: flows,
       scripts: scripts,

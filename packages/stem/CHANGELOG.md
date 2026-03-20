@@ -2,6 +2,12 @@
 
 ## 0.1.1
 
+- Added `StemModule.combine(...)` plus `modules:` support across `StemApp`,
+  `StemWorkflowApp`, and `StemClient` bootstrap helpers so multi-module apps
+  no longer need to pre-merge bundles manually at every call site.
+- Added `registerModules(...)` on `StemWorkflowApp` so late registration can
+  attach multiple generated or hand-written bundles with the same conflict
+  rules as `StemModule.merge(...)`.
 - Added `StemModule.merge(...)` so generated and hand-written bundles can be
   composed with fail-fast conflict checks instead of manual list stitching.
 - Updated the public workflow event examples and docs to prefer the direct

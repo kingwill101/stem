@@ -3,6 +3,42 @@ import 'package:test/test.dart';
 
 void main() {
   group('workflow module bootstrap', () {
+    test('StemWorkflowApp.inMemory merges plural modules', () async {
+      final flow = Flow<String>(
+        name: 'workflow.module.modules.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'flow-ok');
+        },
+      );
+      final task = FunctionTaskHandler<String>(
+        name: 'workflow.module.modules.task',
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final workflowApp = await StemWorkflowApp.inMemory(
+        modules: [
+          StemModule(flows: [flow]),
+          StemModule(tasks: [task]),
+        ],
+      );
+      try {
+        expect(
+          workflowApp.app.worker.subscription.queues,
+          unorderedEquals(['workflow', 'default']),
+        );
+
+        await workflowApp.start();
+        final runId = await workflowApp.startWorkflow(flow.definition.name);
+        final result = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'flow-ok');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('StemWorkflowApp.inMemory infers workflow and task queues', () async {
       final helperTask = FunctionTaskHandler<String>(
         name: 'workflow.module.queue-helper',
@@ -159,5 +195,50 @@ void main() {
         }
       },
     );
+
+    test('registerModules registers flows and tasks together', () async {
+      final flow = Flow<String>(
+        name: 'workflow.module.register-modules.flow',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'flow-ok');
+        },
+      );
+      final task = FunctionTaskHandler<String>(
+        name: 'workflow.module.register-modules.task',
+        entrypoint: (context, args) async => 'task-ok',
+        runInIsolate: false,
+      );
+      final taskDefinition = TaskDefinition.noArgs<String>(name: task.name);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        workerConfig: StemWorkerConfig(
+          queue: 'workflow',
+          subscription: RoutingSubscription(
+            queues: ['workflow', 'default'],
+          ),
+        ),
+      );
+      try {
+        workflowApp.registerModules([
+          StemModule(flows: [flow]),
+          StemModule(tasks: [task]),
+        ]);
+
+        await workflowApp.start();
+        final runId = await workflowApp.startWorkflow(flow.definition.name);
+        final workflowResult = await workflowApp.waitForCompletion<String>(
+          runId,
+          timeout: const Duration(seconds: 2),
+        );
+        final taskResult = await taskDefinition.enqueueAndWait(
+          workflowApp,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(workflowResult?.value, 'flow-ok');
+        expect(taskResult?.value, 'task-ok');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
   });
 }

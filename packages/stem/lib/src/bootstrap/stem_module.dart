@@ -147,6 +147,28 @@ class StemModule {
     );
   }
 
+  /// Combines an optional singular [module] and plural [modules] input.
+  ///
+  /// Returns `null` when no modules are supplied. When exactly one module is
+  /// present it is returned unchanged. Otherwise the modules are merged with
+  /// the same conflict detection as [StemModule.merge].
+  static StemModule? combine({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+  }) {
+    final combined = <StemModule>[
+      ?module,
+      ...modules,
+    ];
+    if (combined.isEmpty) {
+      return null;
+    }
+    if (combined.length == 1) {
+      return combined.single;
+    }
+    return StemModule.merge(combined);
+  }
+
   /// Raw workflow definitions that are not represented as [Flow] or
   /// [WorkflowScript] instances.
   final List<WorkflowDefinition> workflows;

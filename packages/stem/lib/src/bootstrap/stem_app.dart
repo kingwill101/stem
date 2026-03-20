@@ -184,6 +184,7 @@ class StemApp implements StemTaskApp {
   /// Creates a new Stem application with the provided configuration.
   static Future<StemApp> create({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     StemBrokerFactory? broker,
@@ -200,7 +201,12 @@ class StemApp implements StemTaskApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
-    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final effectiveModule = StemModule.combine(
+      module: module,
+      modules: modules,
+    );
+    final bundledTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final allTasks = [...bundledTasks, ...tasks];
     final taskRegistry = registry ?? InMemoryTaskRegistry();
     registerModuleTaskHandlers(taskRegistry, allTasks);
@@ -244,7 +250,7 @@ class StemApp implements StemTaskApp {
     final workerSigner = workerConfig.signer ?? signer;
     final inferredSubscription =
         workerConfig.subscription ??
-        module?.inferTaskWorkerSubscription(
+        effectiveModule?.inferTaskWorkerSubscription(
           defaultQueue: workerConfig.queue,
           additionalTasks: tasks,
         ) ??
@@ -294,7 +300,7 @@ class StemApp implements StemTaskApp {
     ];
 
     return StemApp._(
-      module: module,
+      module: effectiveModule,
       registry: taskRegistry,
       broker: brokerInstance,
       backend: encodedBackend,
@@ -307,6 +313,7 @@ class StemApp implements StemTaskApp {
   /// Creates an in-memory Stem application (broker + result backend).
   static Future<StemApp> inMemory({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
@@ -316,6 +323,7 @@ class StemApp implements StemTaskApp {
   }) {
     return StemApp.create(
       module: module,
+      modules: modules,
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
@@ -334,6 +342,7 @@ class StemApp implements StemTaskApp {
   static Future<StemApp> fromUrl(
     String url, {
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     Iterable<StemStoreAdapter> adapters = const [],
@@ -408,6 +417,7 @@ class StemApp implements StemTaskApp {
     try {
       final app = await create(
         module: module,
+        modules: modules,
         tasks: tasks,
         registry: registry,
         broker: resolvedStack.broker,
@@ -448,10 +458,12 @@ class StemApp implements StemTaskApp {
   static Future<StemApp> fromClient(
     StemClient client, {
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
   }) async {
-    final effectiveModule = module ?? client.module;
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? client.module;
     final bundledTasks =
         effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final allTasks = [...bundledTasks, ...tasks];

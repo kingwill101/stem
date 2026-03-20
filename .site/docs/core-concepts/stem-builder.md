@@ -109,6 +109,15 @@ final workflowApp = await StemWorkflowApp.inMemory(module: module);
 `StemModule.merge(...)` fails fast when modules declare conflicting task or
 workflow names.
 
+If you do not want to pre-merge them yourself, bootstrap helpers also accept
+`modules:` directly:
+
+```dart
+final workflowApp = await StemWorkflowApp.inMemory(
+  modules: [authModule, billingModule, stemModule],
+);
+```
+
 If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 
