@@ -18,7 +18,7 @@ Future<void> main() async {
       });
 
       final trackingId = await script.step('wait-for-shipment', (step) async {
-        final payload = await shipmentReadyEvent.waitWith(
+        final payload = await shipmentReadyEvent.wait(
           step,
           deadline: DateTime.now().add(const Duration(minutes: 5)),
           data: const {'reason': 'waiting-for-carrier'},
@@ -51,7 +51,7 @@ Future<void> main() async {
     print('Watcher metadata: ${watcher.data}');
   }
 
-  await shipmentReadyEvent.emitWith(
+  await shipmentReadyEvent.emit(
     app,
     const _ShipmentReadyEvent(trackingId: 'ZX-42'),
   );

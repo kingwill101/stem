@@ -74,16 +74,26 @@ class WorkflowEventCall<T> {
 /// Convenience helpers for dispatching typed workflow events.
 extension WorkflowEventRefExtension<T> on WorkflowEventRef<T> {
   /// Emits this typed event with the provided [emitter].
-  Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
+  Future<void> emit(WorkflowEventEmitter emitter, T value) {
     return emitter.emitEvent(this, value);
+  }
+
+  /// Emits this typed event with the provided [emitter].
+  Future<void> emitWith(WorkflowEventEmitter emitter, T value) {
+    return emit(emitter, value);
   }
 }
 
 /// Convenience helpers for dispatching prebuilt [WorkflowEventCall] instances.
 extension WorkflowEventCallExtension<T> on WorkflowEventCall<T> {
   /// Emits this typed event with the provided [emitter].
-  Future<void> emitWith(WorkflowEventEmitter emitter) {
+  Future<void> emit(WorkflowEventEmitter emitter) {
     return emitter.emitEvent(event, value);
+  }
+
+  /// Emits this typed event with the provided [emitter].
+  Future<void> emitWith(WorkflowEventEmitter emitter) {
+    return emit(emitter);
   }
 }
 
@@ -103,7 +113,7 @@ class BoundWorkflowEventCall<T> {
   WorkflowEventCall<T> build() => _call;
 
   /// Emits the bound typed workflow event call.
-  Future<void> emit() => _call.emitWith(_emitter);
+  Future<void> emit() => _call.emit(_emitter);
 }
 
 /// Convenience helpers for building typed workflow event calls directly from a

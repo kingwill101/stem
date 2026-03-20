@@ -329,7 +329,7 @@ class NotifyTask implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await childReadyEvent.emitWith(context, {'status': 'ready'});
+    await childReadyEvent.emit(context, {'status': 'ready'});
   }
 }
 ```
@@ -419,7 +419,7 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `await step.sleepFor(duration: ...)` is the expression-style sleep path.
 - `await step.waitForEvent(topic: ..., codec: ...)` is the expression-style
   event wait path.
-- `await event.waitWith(step)` keeps typed event waits on the
+- `await event.wait(step)` keeps typed event waits on the
   `WorkflowEventRef<T>` surface.
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
@@ -1114,11 +1114,10 @@ backend metadata under `stem.unique.duplicates`.
 - When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
-  as the shortest typed event form and call `event.emitWith(emitter, dto)` as
-  the happy path. `emitter.emitEventBuilder(event: ref, value: dto).emit()`
-  and `event.call(value).emitWith(...)` remain available as lower-level
-  variants.
-  Pair that with `await event.waitWith(ctx)` or `awaitEventRef(...)`. Event
+  as the shortest typed event form and call `event.emit(emitter, dto)` as the
+  happy path. `emitter.emitEventBuilder(event: ref, value: dto).emit()` and
+  `event.call(value).emit(...)` remain available as lower-level variants.
+  Pair that with `await event.wait(ctx)` or `awaitEventRef(...)`. Event
   payloads still serialize onto the existing `Map<String, Object?>` wire
   format.
 - Only return values you want persisted. If a handler returns `null`, the

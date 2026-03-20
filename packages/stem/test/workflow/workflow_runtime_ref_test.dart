@@ -463,7 +463,7 @@ void main() {
         name: 'runtime.ref.event.flow',
         build: (builder) {
           builder.step('wait', (ctx) async {
-            final payload = _userUpdatedEvent.waitValueWith(ctx);
+            final payload = _userUpdatedEvent.waitValue(ctx);
             if (payload == null) {
               return null;
             }
@@ -479,7 +479,7 @@ void main() {
         final runId = await flow.ref0().startWith(workflowApp);
         await workflowApp.runtime.executeRun(runId);
 
-        await _userUpdatedEvent.emitWith(
+        await _userUpdatedEvent.emit(
           workflowApp,
           const _GreetingParams(name: 'event'),
         );
@@ -500,10 +500,10 @@ void main() {
       'typed workflow event calls emit from the prebuilt call surface',
       () async {
         final flow = Flow<String>(
-          name: 'runtime.ref.event.call.flow',
-          build: (builder) {
-            builder.step('wait', (ctx) async {
-              final payload = await _userUpdatedEvent.waitWith(ctx);
+        name: 'runtime.ref.event.call.flow',
+        build: (builder) {
+          builder.step('wait', (ctx) async {
+              final payload = await _userUpdatedEvent.wait(ctx);
               return 'hello ${payload.name}';
             });
           },
@@ -536,12 +536,12 @@ void main() {
     test('workflow event emitters expose bound event calls', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.event.bound.flow',
-        build: (builder) {
-          builder.step('wait', (ctx) async {
-            final payload = _userUpdatedEvent.waitValueWith(ctx);
-            if (payload == null) {
-              return null;
-            }
+          build: (builder) {
+            builder.step('wait', (ctx) async {
+              final payload = _userUpdatedEvent.waitValue(ctx);
+              if (payload == null) {
+                return null;
+              }
             return 'hello ${payload.name}';
           });
         },

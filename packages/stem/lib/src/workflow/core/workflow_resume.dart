@@ -276,14 +276,14 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
 
 /// Direct typed wait helpers on [WorkflowEventRef].
 ///
-/// These mirror `event.emitWith(...)` so typed workflow events can stay on the
+/// These mirror `event.emit(...)` so typed workflow events can stay on the
 /// event-ref surface for both emit and wait paths.
 extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
   /// Registers an event wait and returns the resumed payload on the legacy
   /// null-then-resume path.
   ///
   /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
-  T? waitValueWith(
+  T? waitValue(
     Object waiter, {
     DateTime? deadline,
     Map<String, Object?>? data,
@@ -297,7 +297,49 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
     throw ArgumentError.value(
       waiter,
       'waiter',
-      'WorkflowEventRef.waitValueWith requires a FlowContext or '
+      'WorkflowEventRef.waitValue requires a FlowContext or '
+          'WorkflowScriptStepContext.',
+    );
+  }
+
+  /// Registers an event wait and returns the resumed payload on the legacy
+  /// null-then-resume path.
+  ///
+  /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
+  T? waitValueWith(
+    Object waiter, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return waitValue(waiter, deadline: deadline, data: data);
+  }
+
+  /// Suspends until this event is emitted, then returns the decoded payload.
+  ///
+  /// [waiter] must be a [FlowContext] or [WorkflowScriptStepContext].
+  Future<T> wait(
+    Object waiter, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    if (waiter case final FlowContext context) {
+      return context.waitForEventRefValue(
+        event: this,
+        deadline: deadline,
+        data: data,
+      );
+    }
+    if (waiter case final WorkflowScriptStepContext context) {
+      return context.waitForEventRefValue(
+        event: this,
+        deadline: deadline,
+        data: data,
+      );
+    }
+    throw ArgumentError.value(
+      waiter,
+      'waiter',
+      'WorkflowEventRef.wait requires a FlowContext or '
           'WorkflowScriptStepContext.',
     );
   }
@@ -310,25 +352,6 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) {
-    if (waiter case final FlowContext context) {
-      return context.waitForEventRefValue(
-        event: this,
-        deadline: deadline,
-        data: data,
-      );
-    }
-    if (waiter case final WorkflowScriptStepContext context) {
-      return context.waitForEventRefValue(
-        event: this,
-        deadline: deadline,
-        data: data,
-      );
-    }
-    throw ArgumentError.value(
-      waiter,
-      'waiter',
-      'WorkflowEventRef.waitWith requires a FlowContext or '
-          'WorkflowScriptStepContext.',
-    );
+    return wait(waiter, deadline: deadline, data: data);
   }
 }

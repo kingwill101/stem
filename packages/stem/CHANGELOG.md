@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added direct workflow-event aliases `event.emit(...)`, `event.wait(...)`,
+  and `event.waitValue(...)`, while keeping the older `...With(...)` forms for
+  compatibility.
 - Refreshed the cancellation-policy workflow example to use the fluent builder
   `start(...)` alias instead of `startWith(...)`.
 - Refreshed the remaining simple workflow examples to use direct `start(...)`
