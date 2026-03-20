@@ -965,7 +965,10 @@ Workflow lifecycle signals expose matching metadata helpers on
 `WorkflowRunPayload` via `payload.metadataJson('key', ...)`,
 `payload.metadataVersionedJson('key', ...)`,
 `payload.metadataAs('key', codec: ...)`, and
-`payload.metadataValue<T>('key')`.
+`payload.metadataValue<T>('key')`. When the whole metadata map is one DTO,
+prefer `payload.metadataPayloadJson(...)`,
+`payload.metadataPayloadVersionedJson(...)`, or
+`payload.metadataPayloadAs(codec: ...)`.
 Low-level `FlowStepControl` objects expose matching suspension metadata
 helpers via `control.dataJson(...)`, `control.dataVersionedJson(...)`, and
 `control.dataAs(codec: ...)`.

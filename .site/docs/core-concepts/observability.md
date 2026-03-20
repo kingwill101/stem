@@ -66,7 +66,10 @@ For workflow lifecycle signals, prefer
 `payload.metadataJson('key', ...)`,
 `payload.metadataVersionedJson('key', ...)`, or
 `payload.metadataAs('key', codec: ...)` over manual
-`payload.metadata['key'] as Map<String, Object?>` casts.
+`payload.metadata['key'] as Map<String, Object?>` casts. If the entire
+metadata map is one DTO, use `payload.metadataPayloadJson(...)`,
+`payload.metadataPayloadVersionedJson(...)`, or
+`payload.metadataPayloadAs(codec: ...)` instead.
 
 ## Workflow Introspection
 

@@ -644,6 +644,11 @@ class WorkflowRunPayload implements StemEvent {
     return metadata.value<T>(key, codec: codec);
   }
 
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(metadata);
+  }
+
   /// Decodes the metadata value for [key] as a typed DTO with a JSON decoder.
   T? metadataJson<T>(
     String key, {
@@ -655,6 +660,17 @@ class WorkflowRunPayload implements StemEvent {
       decode: decode,
       typeName: typeName,
     );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metadataPayloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(metadata);
   }
 
   /// Decodes the metadata value for [key] as a typed DTO with a version-aware
@@ -676,6 +692,22 @@ class WorkflowRunPayload implements StemEvent {
       ).decode(json),
       typeName: typeName,
     );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metadataPayloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(metadata);
   }
 
   /// Returns the decoded metadata value for [key], or [fallback] when absent.

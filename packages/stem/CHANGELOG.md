@@ -105,6 +105,10 @@
   `requiredMetadataValue(...)`, `metadataJson(...)`, and
   `metadataAs(codec: ...)` so workflow lifecycle signal consumers can decode
   structured metadata without raw map casts.
+- Added `WorkflowRunPayload.metadataPayloadJson(...)`,
+  `metadataPayloadVersionedJson(...)`, and `metadataPayloadAs(codec: ...)` so
+  workflow lifecycle signal consumers can decode a whole metadata DTO without
+  field-by-field reads.
 - Added `ProgressSignal.dataValue(...)`, `requiredDataValue(...)`,
   `dataJson(...)`, and `dataAs(codec: ...)` so raw task-progress signal
   consumers can decode structured progress metadata without raw map casts.

@@ -147,6 +147,23 @@ void main() {
     expect(payload.metadataValueOr<String>('missing', 'fallback'), 'fallback');
     expect(payload.requiredMetadataValue<int>('attempt'), 3);
     expect(
+      payload.metadataPayloadJson<_WorkflowRunEnvelope>(
+        decode: _WorkflowRunEnvelope.fromJson,
+      ),
+      isA<_WorkflowRunEnvelope>()
+          .having((value) => value.attempt, 'attempt', 3)
+          .having((value) => value.approved, 'approved', isTrue),
+    );
+    expect(
+      payload.metadataPayloadVersionedJson<_WorkflowRunEnvelope>(
+        version: 2,
+        decode: _WorkflowRunEnvelope.fromVersionedJson,
+      ),
+      isA<_WorkflowRunEnvelope>()
+          .having((value) => value.attempt, 'attempt', 3)
+          .having((value) => value.approved, 'approved', isTrue),
+    );
+    expect(
       payload.metadataJson<_WorkflowRunMetadata>(
         'approval',
         decode: _WorkflowRunMetadata.fromJson,
@@ -205,5 +222,30 @@ class _WorkflowRunMetadata {
     return _WorkflowRunMetadata(approved: json['approved'] as bool);
   }
 
+  final bool approved;
+}
+
+class _WorkflowRunEnvelope {
+  const _WorkflowRunEnvelope({required this.attempt, required this.approved});
+
+  factory _WorkflowRunEnvelope.fromJson(Map<String, dynamic> json) {
+    final approval = Map<String, dynamic>.from(
+      json['approval']! as Map<Object?, Object?>,
+    );
+    return _WorkflowRunEnvelope(
+      attempt: json['attempt'] as int,
+      approved: approval['approved'] as bool,
+    );
+  }
+
+  factory _WorkflowRunEnvelope.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowRunEnvelope.fromJson(json);
+  }
+
+  final int attempt;
   final bool approved;
 }
