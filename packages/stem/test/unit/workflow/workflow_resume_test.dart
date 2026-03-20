@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
@@ -47,6 +49,83 @@ void main() {
     expect(value!['approvedBy'], 'gateway');
     expect(context.takeResumeValue<Map<String, Object?>>(), isNull);
   });
+
+  test(
+    'WorkflowExecutionContext.previousValue reads typed previous results',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'tail',
+        params: const {},
+        previousResult: 'approved',
+        stepIndex: 1,
+      );
+      final scriptContext = _FakeWorkflowScriptStepContext(
+        previousResult: 'emailed',
+      );
+
+      expect(flowContext.previousValue<String>(), 'approved');
+      expect(scriptContext.previousValue<String>(), 'emailed');
+    },
+  );
+
+  test(
+    'WorkflowExecutionContext.requiredParam reads typed workflow params',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'draft',
+        params: const {'documentId': 'doc-42'},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final scriptContext = _FakeWorkflowScriptStepContext(
+        params: const {'documentId': 'doc-43'},
+      );
+
+      expect(flowContext.requiredParam<String>('documentId'), 'doc-42');
+      expect(scriptContext.requiredParam<String>('documentId'), 'doc-43');
+    },
+  );
+
+  test(
+    'WorkflowScriptContext.requiredParam decodes codec-backed workflow params',
+    () {
+      final context = _FakeWorkflowScriptContext(
+        params: const {'payload': {'message': 'approved'}},
+      );
+
+      final value = context.requiredParam<_ResumePayload>(
+        'payload',
+        codec: _resumePayloadCodec,
+      );
+
+      expect(value.message, 'approved');
+    },
+  );
+
+  test(
+    'WorkflowExecutionContext.requiredPreviousValue '
+    'decodes codec-backed values',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'tail',
+        params: const {},
+        previousResult: const {'message': 'approved'},
+        stepIndex: 1,
+      );
+
+      final value = flowContext.requiredPreviousValue<_ResumePayload>(
+        codec: _resumePayloadCodec,
+      );
+
+      expect(value.message, 'approved');
+    },
+  );
 
   test('FlowContext.sleepUntilResumed suspends once then resumes', () {
     final firstContext = FlowContext(
@@ -624,13 +703,19 @@ _ResumePayload _decodeResumePayload(Object? payload) {
 class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   _FakeWorkflowScriptStepContext({
     Object? resumeData,
+    Object? previousResult,
+    Map<String, Object?> params = const {},
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
   }) : _resumeData = resumeData,
+       _previousResult = previousResult,
+       _params = params,
        _enqueuer = enqueuer,
        _workflows = workflows;
 
   Object? _resumeData;
+  final Object? _previousResult;
+  final Map<String, Object?> _params;
   final TaskEnqueuer? _enqueuer;
   final WorkflowCaller? _workflows;
   final List<String> awaitedTopics = <String>[];
@@ -648,10 +733,10 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
   int get iteration => 0;
 
   @override
-  Map<String, Object?> get params => const {};
+  Map<String, Object?> get params => _params;
 
   @override
-  Object? get previousResult => null;
+  Object? get previousResult => _previousResult;
 
   @override
   String get runId => 'run-1';
@@ -802,6 +887,28 @@ class _FakeWorkflowScriptStepContext implements WorkflowScriptStepContext {
       pollInterval: pollInterval,
       timeout: timeout,
     );
+  }
+}
+
+class _FakeWorkflowScriptContext implements WorkflowScriptContext {
+  _FakeWorkflowScriptContext({required this.params});
+
+  @override
+  final Map<String, Object?> params;
+
+  @override
+  String get runId => 'run-1';
+
+  @override
+  String get workflow => 'demo.workflow';
+
+  @override
+  Future<T> step<T>(
+    String name,
+    FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    bool autoVersion = false,
+  }) {
+    return Future<T>.error(UnimplementedError());
   }
 }
 

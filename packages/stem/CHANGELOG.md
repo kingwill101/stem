@@ -2,6 +2,14 @@
 
 ## 0.1.1
 
+- Added `param<T>()`, `paramOr<T>()`, and `requiredParam<T>()` on
+  `WorkflowExecutionContext` and `WorkflowScriptContext` so manual flows,
+  checkpoints, and script run methods can read typed workflow start params
+  without repeating `ctx.params[...]` lookups.
+- Added `previousValue<T>()` and `requiredPreviousValue<T>()` on
+  `WorkflowExecutionContext` so manual flow steps and script checkpoints can
+  read prior persisted values without repeating raw `previousResult as ...`
+  casts.
 - Added typed payload-map readers like `args.requiredValue(...)`,
   `args.valueOr(...)`, and `ctx.params.requiredValue(...)` so manual tasks and
   workflows can decode scalars and codec-backed DTOs without repeating raw map

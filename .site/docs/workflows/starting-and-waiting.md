@@ -64,6 +64,11 @@ decoder. Use `refCodec(...)` when you need a custom `PayloadCodec<T>`.
 Workflow params still need to encode to a string-keyed map (typically
 `Map<String, dynamic>`) because they are stored as JSON-shaped data.
 
+Inside manual flow steps and script checkpoints, prefer
+`ctx.param<T>()` / `ctx.requiredParam<T>()` for workflow start params and
+`ctx.previousValue<T>()` / `ctx.requiredPreviousValue<T>()` over repeating raw
+`previousResult as ...` casts.
+
 If a manual flow or script returns a DTO, prefer `Flow.json(...)` or
 `WorkflowScript.json(...)` in the common `toJson()` / `Type.fromJson(...)`
 case. Use `Flow.codec(...)` or `WorkflowScript.codec(...)` when the result

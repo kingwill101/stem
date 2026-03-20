@@ -231,7 +231,7 @@ itself instead of repeating raw casts:
 ```dart
 final customerId = args.requiredValue<String>('customerId');
 final tenant = args.valueOr<String>('tenant', 'global');
-final draft = ctx.params.requiredValue<ApprovalDraft>(
+final draft = ctx.requiredParam<ApprovalDraft>(
   'draft',
   codec: approvalDraftCodec,
 );
@@ -433,6 +433,10 @@ final app = await StemWorkflowApp.inMemory(
 Inside a script checkpoint you can access the same metadata as `FlowContext`:
 
 - `step.previousResult` contains the prior step’s persisted value.
+- `step.param<T>()` / `step.requiredParam<T>()` read workflow params without
+  repeating raw map lookups.
+- `step.previousValue<T>()` reads the prior persisted value without repeating
+  manual casts.
 - `step.iteration` tracks the current auto-version suffix when
   `autoVersion: true` is set.
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
@@ -479,7 +483,7 @@ final approvalsFlow = Flow<String>(
   name: 'approvals.flow',
   build: (flow) {
     flow.step('draft', (ctx) async {
-      final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+      final payload = ctx.requiredParam<Map<String, Object?>>('draft');
       return payload.requiredValue<String>('documentId');
     });
 
@@ -494,7 +498,7 @@ final approvalsFlow = Flow<String>(
     });
 
     flow.step('finalize', (ctx) async {
-      final approvedBy = ctx.previousResult as String?;
+      final approvedBy = ctx.previousValue<String>();
       return 'approved-by:$approvedBy';
     });
   },
@@ -826,7 +830,7 @@ for side effects:
 
 ```dart
 flow.step('emit-side-effects', (ctx) async {
-  final order = ctx.previousResult as Map<String, Object?>;
+  final order = ctx.requiredPreviousValue<Map<String, Object?>>();
 
   await ctx.enqueue(
     'ecommerce.audit.log',

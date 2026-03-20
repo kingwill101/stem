@@ -55,7 +55,7 @@ class ApprovalsFlow {
     name: 'approvals.flow',
     build: (flow) {
       flow.step('draft', (ctx) async {
-        final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+        final payload = ctx.requiredParam<Map<String, Object?>>('draft');
         return payload.requiredValue<String>('documentId');
       });
 
@@ -70,7 +70,7 @@ class ApprovalsFlow {
       });
 
       flow.step('finalize', (ctx) async {
-        final approvedBy = ctx.previousResult as String?;
+        final approvedBy = ctx.previousValue<String>();
         return 'approved-by:$approvedBy';
       });
     },
@@ -167,7 +167,7 @@ class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
   Future<String> draft({FlowContext? context}) async {
     final ctx = context!;
-    final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+    final payload = ctx.requiredParam<Map<String, Object?>>('draft');
     return payload.requiredValue<String>('documentId');
   }
 
@@ -186,7 +186,7 @@ class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
   Future<String> finalize({FlowContext? context}) async {
     final ctx = context!;
-    final approvedBy = ctx.previousResult as String?;
+    final approvedBy = ctx.previousValue<String>();
     return 'approved-by:$approvedBy';
   }
 }

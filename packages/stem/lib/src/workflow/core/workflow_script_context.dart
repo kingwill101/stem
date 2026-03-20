@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_execution_context.dart';
@@ -11,7 +13,6 @@ import 'package:stem/src/workflow/core/workflow_result.dart';
 /// the workflow runtime so scripts can execute with durable semantics.
 abstract class WorkflowScriptContext {
   /// Name of the workflow currently executing.
-  @override
   String get workflow;
 
   /// Identifier for the run. Useful when emitting logs or constructing
@@ -31,10 +32,29 @@ abstract class WorkflowScriptContext {
   });
 }
 
+/// Typed read helpers for workflow start parameters in script run methods.
+extension WorkflowScriptContextParams on WorkflowScriptContext {
+  /// Returns the decoded workflow parameter for [key], or `null`.
+  T? param<T>(String key, {PayloadCodec<T>? codec}) {
+    return params.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded workflow parameter for [key], or [fallback].
+  T paramOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return params.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded workflow parameter for [key], throwing when absent.
+  T requiredParam<T>(String key, {PayloadCodec<T>? codec}) {
+    return params.requiredValue<T>(key, codec: codec);
+  }
+}
+
 /// Context provided to each script checkpoint invocation. Mirrors
 /// [FlowContext] but tailored for the facade helpers.
 abstract class WorkflowScriptStepContext implements WorkflowExecutionContext {
   /// Name of the workflow currently executing.
+  @override
   String get workflow;
 
   /// Identifier for the workflow run.

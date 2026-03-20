@@ -1,4 +1,6 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 
@@ -38,4 +40,48 @@ abstract interface class WorkflowExecutionContext
 
   /// Optional typed workflow caller for spawning child workflows.
   WorkflowCaller? get workflows;
+}
+
+/// Typed read helpers for workflow start parameters.
+extension WorkflowExecutionContextParams on WorkflowExecutionContext {
+  /// Returns the decoded workflow parameter for [key], or `null`.
+  T? param<T>(String key, {PayloadCodec<T>? codec}) {
+    return params.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded workflow parameter for [key], or [fallback].
+  T paramOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return params.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded workflow parameter for [key], throwing when absent.
+  T requiredParam<T>(String key, {PayloadCodec<T>? codec}) {
+    return params.requiredValue<T>(key, codec: codec);
+  }
+}
+
+/// Typed read helpers for prior workflow step and checkpoint values.
+extension WorkflowExecutionContextValues on WorkflowExecutionContext {
+  /// Returns the decoded prior step/checkpoint value as [T], or `null`.
+  ///
+  /// When [codec] is supplied, a non-`T` durable payload is decoded through
+  /// that codec before being returned.
+  T? previousValue<T>({PayloadCodec<T>? codec}) {
+    final value = previousResult;
+    if (value == null) return null;
+    if (codec != null && value is! T) {
+      return codec.decodeDynamic(value) as T;
+    }
+    return value as T;
+  }
+
+  /// Returns the decoded prior step/checkpoint value as [T], throwing when the
+  /// workflow does not yet have a previous result.
+  T requiredPreviousValue<T>({PayloadCodec<T>? codec}) {
+    final value = previousValue<T>(codec: codec);
+    if (value == null) {
+      throw StateError('WorkflowExecutionContext.previousResult is null.');
+    }
+    return value;
+  }
 }

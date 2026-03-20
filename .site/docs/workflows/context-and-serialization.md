@@ -34,6 +34,10 @@ Depending on the context type, you can access:
 - `stepIndex`
 - `iteration`
 - workflow params and previous results
+- `param<T>()` / `requiredParam<T>()` for typed access to workflow start
+  params
+- `previousValue<T>()` / `requiredPreviousValue<T>()` for typed access to the
+  prior step or checkpoint result
 - `sleepUntilResumed(...)` for common sleep/retry loops
 - `waitForEventValue<T>(...)` for common event waits
 - `event.awaitOn(step)` when a flow deliberately wants the lower-level
@@ -115,12 +119,12 @@ For normal DTOs that expose `toJson()` and `Type.fromJson(...)`, prefer
 `PayloadCodec<T>.json(...)`. Drop down to `PayloadCodec<T>.map(...)` when you
 need a custom map encoder or a nonstandard decode function.
 
-For manual flows and scripts, prefer the typed payload readers on
-`ctx.params` before dropping to raw map casts:
+For manual flows and scripts, prefer the typed workflow param helpers before
+dropping to raw map casts:
 
 ```dart
-final userId = ctx.params.requiredValue<String>('userId');
-final draft = ctx.params.requiredValue<ApprovalDraft>(
+final userId = ctx.requiredParam<String>('userId');
+final draft = ctx.requiredParam<ApprovalDraft>(
   'draft',
   codec: approvalDraftCodec,
 );
