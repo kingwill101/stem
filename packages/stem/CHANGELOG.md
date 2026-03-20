@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `WorkflowWatcher.dataJson(...)`, `dataVersionedJson(...)`,
+  `dataAs(codec: ...)`, and the matching `WorkflowWatcherResolution`
+  `resumeData...` helpers so watcher inspection can decode full stored watcher
+  metadata DTOs without raw map casts.
 - Added `RunState.paramsJson(...)`, `paramsVersionedJson(...)`, and
   `paramsAs(codec: ...)` so low-level workflow run snapshots can decode
   stored workflow input DTOs without raw map casts.

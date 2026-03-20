@@ -238,10 +238,12 @@ void main() {
         createdAt: DateTime.utc(2026, 2, 25),
         deadline: DateTime.utc(2026, 2, 25, 0, 15),
         data: const {
+          PayloadCodec.versionKey: 2,
           'type': 'event',
           'iteration': 2,
           'iterationStep': 'approval#2',
           'payload': {'invoiceId': 'inv-1'},
+          'topic': 'invoice.approved',
           'suspendedAt': '2026-02-25T00:01:00Z',
           'requestedResumeAt': '2026-02-25T00:02:00Z',
           'policyDeadline': '2026-02-25T00:15:00Z',
@@ -252,10 +254,12 @@ void main() {
         stepName: 'awaitApproval',
         topic: 'invoice.approved',
         resumeData: const {
+          PayloadCodec.versionKey: 2,
           'type': 'event',
           'iteration': 2,
           'iterationStep': 'approval#2',
           'payload': {'invoiceId': 'inv-1'},
+          'topic': 'invoice.approved',
           'deliveredAt': '2026-02-25T00:01:30Z',
         },
       );
@@ -284,6 +288,21 @@ void main() {
           'invoiceId',
           'inv-1',
         ),
+      );
+      expect(
+        watcher.dataJson<_WatcherMetadata>(decode: _WatcherMetadata.fromJson),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
+      expect(
+        watcher.dataVersionedJson<_WatcherMetadata>(
+          version: 2,
+          decode: _WatcherMetadata.fromVersionedJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
       );
       expect(watcher.suspendedAt, equals(DateTime.utc(2026, 2, 25, 0, 1)));
       expect(
@@ -319,6 +338,23 @@ void main() {
           'invoiceId',
           'inv-1',
         ),
+      );
+      expect(
+        resolution.resumeDataJson<_WatcherMetadata>(
+          decode: _WatcherMetadata.fromJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
+      expect(
+        resolution.resumeDataVersionedJson<_WatcherMetadata>(
+          version: 2,
+          decode: _WatcherMetadata.fromVersionedJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
       );
       expect(
         resolution.deliveredAt,
@@ -575,6 +611,29 @@ class _TenantPayload {
   }
 
   final String tenant;
+}
+
+class _WatcherMetadata {
+  const _WatcherMetadata({required this.topic, required this.invoiceId});
+
+  factory _WatcherMetadata.fromJson(Map<String, dynamic> json) {
+    final payload = json['payload'] as Map<String, dynamic>;
+    return _WatcherMetadata(
+      topic: json['topic'] as String,
+      invoiceId: payload['invoiceId'] as String,
+    );
+  }
+
+  factory _WatcherMetadata.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WatcherMetadata.fromJson(json);
+  }
+
+  final String topic;
+  final String invoiceId;
 }
 
 class _RuntimePayload {

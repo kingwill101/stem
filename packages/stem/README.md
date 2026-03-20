@@ -1232,8 +1232,9 @@ backend metadata under `stem.unique.duplicates`.
   registers the run in the store so the next emitted payload is persisted
   atomically and delivered exactly once on resume. Operators can inspect
   suspended runs via `WorkflowStore.listWatchers` or `runsWaitingOn`. When the
-  watcher payload is a DTO, prefer `watcher.payloadJson(...)` or
-  `watcher.payloadAs(codec: ...)`.
+  watcher metadata is one DTO, prefer `watcher.dataJson(...)` or
+  `watcher.dataAs(codec: ...)`. When only the nested watcher payload is a DTO,
+  use `watcher.payloadJson(...)` or `watcher.payloadAs(codec: ...)`.
 - Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
   `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
   actively-owned runs from ones that need recovery.

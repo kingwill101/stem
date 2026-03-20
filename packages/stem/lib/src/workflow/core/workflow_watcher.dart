@@ -43,6 +43,37 @@ class WorkflowWatcher {
   /// Additional metadata supplied when the watcher was registered.
   final Map<String, Object?> data;
 
+  /// Decodes the full watcher metadata with [codec].
+  TData dataAs<TData>({required PayloadCodec<TData> codec}) {
+    return codec.decode(data);
+  }
+
+  /// Decodes the full watcher metadata with a JSON decoder.
+  TData dataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(data);
+  }
+
+  /// Decodes the full watcher metadata with a version-aware JSON decoder.
+  TData dataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(data);
+  }
+
   /// Suspension type (`sleep`, `event`, etc.) when recorded by runtime.
   String? get suspensionType => data['type']?.toString();
 
@@ -151,6 +182,37 @@ class WorkflowWatcherResolution {
 
   /// Resume data merged from stored metadata and event payload.
   final Map<String, Object?> resumeData;
+
+  /// Decodes the full resume data payload with [codec].
+  TData resumeDataAs<TData>({required PayloadCodec<TData> codec}) {
+    return codec.decode(resumeData);
+  }
+
+  /// Decodes the full resume data payload with a JSON decoder.
+  TData resumeDataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(resumeData);
+  }
+
+  /// Decodes the full resume data payload with a version-aware JSON decoder.
+  TData resumeDataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(resumeData);
+  }
 
   /// Suspension type (`sleep`, `event`, etc.) propagated to resume payload.
   String? get suspensionType => resumeData['type']?.toString();
