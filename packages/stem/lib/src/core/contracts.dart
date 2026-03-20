@@ -696,6 +696,38 @@ class DeadLetterEntry {
   /// Additional metadata captured at failure time.
   final Map<String, Object?> meta;
 
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
   /// Timestamp when the task was dead-lettered.
   final DateTime deadAt;
 
@@ -889,8 +921,72 @@ class ScheduleEntry {
   /// Positional arguments to pass to the task.
   final Map<String, Object?> args;
 
+  /// Decodes the full args payload as a typed DTO with [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full args payload as a typed DTO with a JSON decoder.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full args payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Keyword-style arguments passed to the task.
   final Map<String, Object?> kwargs;
+
+  /// Decodes the full kwargs payload as a typed DTO with [codec].
+  T kwargsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(kwargs);
+  }
+
+  /// Decodes the full kwargs payload as a typed DTO with a JSON decoder.
+  T kwargsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(kwargs);
+  }
+
+  /// Decodes the full kwargs payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T kwargsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(kwargs);
+  }
 
   /// Whether this schedule entry is enabled.
   final bool enabled;
@@ -936,6 +1032,38 @@ class ScheduleEntry {
 
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// Optimistic locking version assigned by the underlying store.
   final int version;

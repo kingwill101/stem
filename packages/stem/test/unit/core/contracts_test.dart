@@ -335,6 +335,29 @@ void main() {
       expect(decoded.meta['trace'], equals('abc'));
       expect(decoded.deadAt, equals(DateTime.utc(2025)));
     });
+
+    test('exposes typed metadata helpers', () {
+      final entry = DeadLetterEntry(
+        envelope: Envelope(name: 'task', args: const {}),
+        deadAt: DateTime.utc(2025),
+        meta: const {
+          PayloadCodec.versionKey: 2,
+          'trace': 'abc',
+        },
+      );
+
+      expect(
+        entry.metaJson<_TraceMeta>(decode: _TraceMeta.fromJson),
+        isA<_TraceMeta>().having((value) => value.trace, 'trace', 'abc'),
+      );
+      expect(
+        entry.metaVersionedJson<_TraceMeta>(
+          version: 2,
+          decode: _TraceMeta.fromVersionedJson,
+        ),
+        isA<_TraceMeta>().having((value) => value.trace, 'trace', 'abc'),
+      );
+    });
   });
 
   group('DeadLetterPage/ReplayResult', () {
@@ -466,6 +489,71 @@ void main() {
       expect(updated.lastError, isNull);
       expect(updated.enabled, isFalse);
     });
+
+    test('exposes typed args, kwargs, and metadata helpers', () {
+      final entry = ScheduleEntry(
+        id: 'schedule-typed',
+        taskName: 'task',
+        queue: 'default',
+        spec: IntervalScheduleSpec(every: const Duration(minutes: 1)),
+        args: const {
+          PayloadCodec.versionKey: 2,
+          'value': 1,
+        },
+        kwargs: const {
+          PayloadCodec.versionKey: 2,
+          'label': 'nightly',
+        },
+        meta: const {
+          PayloadCodec.versionKey: 2,
+          'source': 'scheduler',
+        },
+      );
+
+      expect(
+        entry.argsJson<_ScheduleArgs>(decode: _ScheduleArgs.fromJson),
+        isA<_ScheduleArgs>().having((value) => value.value, 'value', 1),
+      );
+      expect(
+        entry.argsVersionedJson<_ScheduleArgs>(
+          version: 2,
+          decode: _ScheduleArgs.fromVersionedJson,
+        ),
+        isA<_ScheduleArgs>().having((value) => value.value, 'value', 1),
+      );
+      expect(
+        entry.kwargsJson<_ScheduleKwargs>(decode: _ScheduleKwargs.fromJson),
+        isA<_ScheduleKwargs>().having(
+          (value) => value.label,
+          'label',
+          'nightly',
+        ),
+      );
+      expect(
+        entry.kwargsVersionedJson<_ScheduleKwargs>(
+          version: 2,
+          decode: _ScheduleKwargs.fromVersionedJson,
+        ),
+        isA<_ScheduleKwargs>().having(
+          (value) => value.label,
+          'label',
+          'nightly',
+        ),
+      );
+      expect(
+        entry.metaJson<_ScheduleMeta>(decode: _ScheduleMeta.fromJson),
+        isA<_ScheduleMeta>()
+            .having((value) => value.source, 'source', 'scheduler'),
+      );
+      expect(
+        entry.metaVersionedJson<_ScheduleMeta>(
+          version: 2,
+          decode: _ScheduleMeta.fromVersionedJson,
+        ),
+        isA<_ScheduleMeta>()
+            .having((value) => value.source, 'source', 'scheduler'),
+      );
+    });
   });
 
   test('ScheduleConflictException string includes metadata', () {
@@ -515,4 +603,76 @@ class _ReceiptPayload {
   }
 
   final String id;
+}
+
+class _TraceMeta {
+  const _TraceMeta({required this.trace});
+
+  factory _TraceMeta.fromJson(Map<String, dynamic> json) {
+    return _TraceMeta(trace: json['trace'] as String);
+  }
+
+  factory _TraceMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TraceMeta.fromJson(json);
+  }
+
+  final String trace;
+}
+
+class _ScheduleArgs {
+  const _ScheduleArgs({required this.value});
+
+  factory _ScheduleArgs.fromJson(Map<String, dynamic> json) {
+    return _ScheduleArgs(value: json['value'] as int);
+  }
+
+  factory _ScheduleArgs.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleArgs.fromJson(json);
+  }
+
+  final int value;
+}
+
+class _ScheduleKwargs {
+  const _ScheduleKwargs({required this.label});
+
+  factory _ScheduleKwargs.fromJson(Map<String, dynamic> json) {
+    return _ScheduleKwargs(label: json['label'] as String);
+  }
+
+  factory _ScheduleKwargs.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleKwargs.fromJson(json);
+  }
+
+  final String label;
+}
+
+class _ScheduleMeta {
+  const _ScheduleMeta({required this.source});
+
+  factory _ScheduleMeta.fromJson(Map<String, dynamic> json) {
+    return _ScheduleMeta(source: json['source'] as String);
+  }
+
+  factory _ScheduleMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleMeta.fromJson(json);
+  }
+
+  final String source;
 }

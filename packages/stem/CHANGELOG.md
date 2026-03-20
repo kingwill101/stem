@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added `DeadLetterEntry.metaJson(...)`, `metaVersionedJson(...)`,
+  `ScheduleEntry.argsJson(...)`, `kwargsJson(...)`, and `metaJson(...)` so
+  DLQ and scheduler tooling can decode persisted DTO payloads without raw map
+  casts.
 - Added `ControlCommandMessage.payloadJson(...)`,
   `payloadVersionedJson(...)`, and the matching `ControlReplyMessage`
   payload/error helpers so low-level worker control tooling can decode DTO
