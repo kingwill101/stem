@@ -41,7 +41,7 @@ final priorityRegistry = RoutingRegistry(
 // #endregion routing-priority-range
 
 // #region routing-bootstrap
-Future<(Stem, Worker)> bootstrapStem() async {
+Future<(StemClient, Worker)> bootstrapStem() async {
   final routing = await loadRouting();
   final tasks = [EmailTask()];
   final config = StemConfig.fromEnvironment();
@@ -52,21 +52,23 @@ Future<(Stem, Worker)> bootstrapStem() async {
     broadcastChannels: config.workerBroadcasts,
   );
 
-  final stem = Stem(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    backend: InMemoryResultBackend(),
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory.inMemory(),
     tasks: tasks,
     routing: routing,
   );
 
-  final worker = Worker(
-    broker: await RedisStreamsBroker.connect('redis://localhost:6379'),
-    backend: InMemoryResultBackend(),
-    tasks: tasks,
-    subscription: subscription,
+  final worker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      subscription: subscription,
+    ),
   );
 
-  return (stem, worker);
+  return (client, worker);
 }
 
 class EmailTask extends TaskHandler<void> {
