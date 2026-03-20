@@ -89,7 +89,7 @@ Child workflow starts belong in durable boundaries:
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to those
   helpers for the normal override cases
 - keep `ref.buildStart(...)` for the rarer cases where you explicitly want a
-  reusable `WorkflowStartCall`
+  reusable `WorkflowStartCall` built with its final overrides
 
 Do not treat the raw `WorkflowScriptContext` body as a safe place for child
 starts or other replay-sensitive side effects.

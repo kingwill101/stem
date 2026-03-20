@@ -346,20 +346,6 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
   /// Encodes typed parameters into the workflow parameter map.
   Map<String, Object?> encodeParams() => definition.encodeParams(params);
 
-  /// Returns a copy of this call with updated workflow start options.
-  WorkflowStartCall<TParams, TResult> copyWith({
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return WorkflowStartCall._(
-      definition: definition,
-      params: params,
-      parentRunId: parentRunId ?? this.parentRunId,
-      ttl: ttl ?? this.ttl,
-      cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
-    );
-  }
 }
 
 /// Convenience helpers for waiting on typed workflow refs using a generic

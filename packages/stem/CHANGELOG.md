@@ -38,6 +38,9 @@
 - Added direct `buildCall(...)` / `buildStart(...)` helpers on task/workflow
   definitions so the explicit transport path no longer requires
   `prepare...().build()` when all overrides are already known.
+- Removed `TaskCall.copyWith(...)` and `WorkflowStartCall.copyWith(...)`.
+  Explicit transport objects are now built with their final overrides up
+  front rather than mutated after construction.
 - Removed no-args `buildCall()` / `buildStart()` transport wrappers in favor
   of the explicit typed surfaces:
   `definition.asDefinition.buildCall(())` and

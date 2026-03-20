@@ -90,8 +90,8 @@ low-level transport object for `startWorkflowCall(...)`, build it with
 transport object, not the normal happy path. Use `ref0()` when another API
 specifically needs a `NoArgsWorkflowRef`.
 
-When you need to adjust an explicit start request after construction, prefer
-`ref.buildStart(...)` plus `copyWith(...)`.
+When you need an explicit start request, prefer `ref.buildStart(...)` with the
+final overrides you already know.
 
 ## Wait for completion
 

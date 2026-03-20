@@ -238,7 +238,7 @@ void main() {
   });
 
   group('TaskCall', () {
-    test('buildCall plus copyWith builds TaskCall with overrides', () {
+    test('buildCall builds TaskCall with overrides', () {
       final definition = TaskDefinition<_Args, void>(
         name: 'demo.task',
         encodeArgs: (args) => {'value': args.value},
@@ -246,7 +246,6 @@ void main() {
 
       final call = definition.buildCall(
         _Args(7),
-      ).copyWith(
         headers: const {'x-id': 'abc'},
         meta: const {'source': 'test'},
         options: const TaskOptions(priority: 5, queue: 'fast'),

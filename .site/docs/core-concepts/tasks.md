@@ -97,10 +97,10 @@ final request = context.argsJson<InvoicePayload>(
 );
 ```
 
-Use `buildCall(...)` when you need an explicit low-level transport object, and
-then `copyWith(...)` if you need to adjust headers, metadata, options, or
-scheduling before dispatch. For the normal case, prefer direct `enqueue(...)`
-/ `enqueueAndWait(...)`.
+Use `buildCall(...)` when you need an explicit low-level transport object and
+provide the final headers, metadata, options, or scheduling overrides up
+front. For the normal case, prefer direct `enqueue(...)` /
+`enqueueAndWait(...)`.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
 instead. That gives you direct `enqueue(...)` /

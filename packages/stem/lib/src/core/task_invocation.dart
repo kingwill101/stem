@@ -751,9 +751,13 @@ class TaskInvocationContext implements TaskExecutionContext {
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
     }
 
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
       headers: Map.unmodifiable(mergedHeaders),
+      options: call.options,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
     return delegate.enqueueCall(
       mergedCall,

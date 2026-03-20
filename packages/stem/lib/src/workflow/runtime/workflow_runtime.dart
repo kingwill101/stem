@@ -2168,9 +2168,13 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
         executionQueue != 'default') {
       resolvedOptions = resolvedOptions.copyWith(queue: executionQueue);
     }
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
+      headers: call.headers,
       options: resolvedOptions,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
     return delegate.enqueueCall(
       mergedCall,
@@ -2210,7 +2214,12 @@ class _ChildWorkflowCaller implements WorkflowCaller {
     WorkflowStartCall<TParams, TResult> call,
   ) {
     return runtime.startWorkflowCall(
-      call.copyWith(parentRunId: parentRunId),
+      call.definition.buildStart(
+        params: call.params,
+        parentRunId: parentRunId,
+        ttl: call.ttl,
+        cancellationPolicy: call.cancellationPolicy,
+      ),
     );
   }
 

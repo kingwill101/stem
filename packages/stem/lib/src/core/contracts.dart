@@ -2419,9 +2419,13 @@ class TaskContext implements TaskExecutionContext {
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
     }
 
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
       headers: Map.unmodifiable(mergedHeaders),
+      options: call.options,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
 
     return delegate.enqueueCall(
@@ -3050,24 +3054,6 @@ class TaskCall<TArgs, TResult> {
   /// Resolve final options combining call overrides with defaults.
   TaskOptions resolveOptions() => options ?? definition.defaultOptions;
 
-  /// Returns a copy of this call with updated properties.
-  TaskCall<TArgs, TResult> copyWith({
-    Map<String, String>? headers,
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return TaskCall._(
-      definition: definition,
-      args: args,
-      headers: headers ?? this.headers,
-      options: options ?? this.options,
-      notBefore: notBefore ?? this.notBefore,
-      meta: meta ?? this.meta,
-      enqueueOptions: enqueueOptions ?? this.enqueueOptions,
-    );
-  }
 }
 
 /// Convenience helpers for building typed enqueue requests directly from a task

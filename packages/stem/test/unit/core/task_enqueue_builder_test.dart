@@ -39,13 +39,14 @@ void main() {
       expect(call.meta, containsPair('from', 'definition'));
     });
 
-    test('TaskCall.copyWith replaces headers, metadata, and options', () {
+    test('buildCall accepts direct headers, metadata, and options', () {
       final definition = TaskDefinition<Map<String, Object?>, Object?>(
         name: 'demo.task',
         encodeArgs: (args) => args,
       );
 
-      final call = definition.buildCall(const {'a': 1}).copyWith(
+      final call = definition.buildCall(
+        const {'a': 1},
         headers: const {'h': 'v'},
         meta: const {'m': 1},
         options: const TaskOptions(queue: 'q', priority: 9),
@@ -144,18 +145,13 @@ void main() {
       expect(result?.value, 'decoded:stored');
     });
 
-    test('TaskCall.copyWith updates headers and meta', () {
+    test('buildCall can be rebuilt with updated headers and meta', () {
       final definition = TaskDefinition<Map<String, Object?>, Object?>(
         name: 'demo.task',
         encodeArgs: (args) => args,
       );
-      final call = definition.buildCall(
+      final updated = definition.buildCall(
         const {'a': 1},
-        headers: const {'h': 'v'},
-        meta: const {'m': 1},
-      );
-
-      final updated = call.copyWith(
         headers: const {'h2': 'v2'},
         meta: const {'m2': 2},
       );

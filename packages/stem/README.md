@@ -313,7 +313,7 @@ print(result?.value);
 
 Treat `buildCall(...)` as the advanced path when you need an explicit
 transport object with custom headers, metadata, delay, priority, or other
-overrides. Use `copyWith(...)` if you need to adjust it before dispatch. For
+overrides. Build the final call directly with the overrides you need. For
 the normal case, prefer direct `enqueue(...)` or `enqueueAndWait(...)`.
 
 ### Enqueue from inside a task
@@ -731,8 +731,7 @@ Child workflows belong in durable execution boundaries:
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for normal override cases
 - when you need an explicit low-level transport object, prefer
-  `ref.buildStart(...)` and then `copyWith(...)` for the rarer
-  override-heavy cases
+  `ref.buildStart(...)` for the rarer explicit transport cases
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself
 

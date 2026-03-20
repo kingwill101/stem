@@ -467,7 +467,6 @@ void main() {
 
         final builtFlowCall = workflowRef.buildStart(
           params: const {'name': 'builder'},
-        ).copyWith(
           ttl: const Duration(minutes: 5),
           parentRunId: 'parent-builder',
         );
@@ -540,7 +539,6 @@ void main() {
 
         final builtFlowCall = workflowRef.buildStart(
           params: const {'name': 'builder'},
-        ).copyWith(
           ttl: const Duration(minutes: 5),
           parentRunId: 'parent-bound',
         );

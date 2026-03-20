@@ -138,8 +138,7 @@ When a workflow needs to start another workflow, do it from a durable boundary:
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
 - when you need an explicit low-level transport object, prefer
-  `ref.buildStart(...)` and then `copyWith(...)` for the rarer
-  override-heavy cases
+  `ref.buildStart(...)` for the rarer explicit transport cases
 
 Avoid starting child workflows from the raw `WorkflowScriptContext` body.
 

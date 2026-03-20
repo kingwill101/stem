@@ -1098,7 +1098,14 @@ Future<String> _enqueueBuiltTaskCall(
   }
   final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
   return enqueuer.enqueueCall(
-    call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+    call.definition.buildCall(
+      call.args,
+      headers: call.headers,
+      options: call.options,
+      notBefore: call.notBefore,
+      meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
+    ),
     enqueueOptions: resolvedEnqueueOptions,
   );
 }
