@@ -3,6 +3,7 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 /// Status of a workflow run emitted via signals.
@@ -595,6 +596,42 @@ class WorkflowRunPayload implements StemEvent {
 
   /// Additional metadata associated with the workflow run.
   final Map<String, Object?> metadata;
+
+  /// Returns the decoded metadata value for [key], or `null` when absent.
+  ///
+  /// When [codec] is supplied, the stored durable payload is decoded through
+  /// that codec before being returned.
+  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return metadata.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with [codec].
+  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    return metadata.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a JSON decoder.
+  T? metadataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return metadata.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded metadata value for [key], or [fallback] when absent.
+  T metadataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return metadata.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded metadata value for [key], throwing when absent.
+  T requiredMetadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return metadata.requiredValue<T>(key, codec: codec);
+  }
 
   /// Optional canonical signal name when this payload is emitted.
   final String? signalName;

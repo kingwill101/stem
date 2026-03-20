@@ -61,6 +61,9 @@ control-plane commands.
 When you inspect `TaskPostrunPayload` or `TaskSuccessPayload` directly, prefer
 `payload.resultJson(...)` or `payload.resultAs(codec: ...)` over manual
 `payload.result as Map<String, Object?>` casts.
+For workflow lifecycle signals, prefer `payload.metadataJson('key', ...)` or
+`payload.metadataAs('key', codec: ...)` over manual
+`payload.metadata['key'] as Map<String, Object?>` casts.
 
 ## Workflow Introspection
 

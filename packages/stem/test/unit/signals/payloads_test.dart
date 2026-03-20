@@ -117,6 +117,33 @@ void main() {
       expect(completed.occurredAt, DateTime.utc(2025, 1, 1, 0, 1));
     });
   });
+
+  test('workflow run payload exposes typed metadata helpers', () {
+    final payload = WorkflowRunPayload(
+      runId: 'run-1',
+      workflow: 'demo.workflow',
+      status: WorkflowRunStatus.suspended,
+      metadata: const {
+        'attempt': 3,
+        'approval': {'approved': true},
+      },
+    );
+
+    expect(payload.metadataValue<int>('attempt'), 3);
+    expect(payload.metadataValueOr<String>('missing', 'fallback'), 'fallback');
+    expect(payload.requiredMetadataValue<int>('attempt'), 3);
+    expect(
+      payload.metadataJson<_WorkflowRunMetadata>(
+        'approval',
+        decode: _WorkflowRunMetadata.fromJson,
+      ),
+      isA<_WorkflowRunMetadata>().having(
+        (value) => value.approved,
+        'approved',
+        isTrue,
+      ),
+    );
+  });
 }
 
 class _TaskResultPayload {
@@ -127,4 +154,14 @@ class _TaskResultPayload {
   }
 
   final bool ok;
+}
+
+class _WorkflowRunMetadata {
+  const _WorkflowRunMetadata({required this.approved});
+
+  factory _WorkflowRunMetadata.fromJson(Map<String, dynamic> json) {
+    return _WorkflowRunMetadata(approved: json['approved'] as bool);
+  }
+
+  final bool approved;
 }

@@ -60,6 +60,10 @@
 - Added `TaskSuccessPayload.resultJson(...)` and `resultAs(codec: ...)` so
   success-only task signal consumers can decode DTO task results without
   manual casts.
+- Added `WorkflowRunPayload.metadataValue(...)`,
+  `requiredMetadataValue(...)`, `metadataJson(...)`, and
+  `metadataAs(codec: ...)` so workflow lifecycle signal consumers can decode
+  structured metadata without raw map casts.
 - Added `FlowStepControl.dataJson(...)` and `dataAs(codec: ...)` so
   lower-level suspension control objects can decode DTO metadata without
   manual casts.
