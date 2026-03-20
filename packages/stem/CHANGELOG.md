@@ -11,6 +11,9 @@
 - Made raw `Stem.enqueue('task.name')` inherit handler-declared publish defaults
   like queue routing, priority, visibility timeout, and retry policy when the
   producer does not override them explicitly.
+- Updated the public snippets and annotated workflow example to use the
+  high-level app surfaces directly, dropping unnecessary `start()` calls and
+  `app.stem` hops in the common in-memory and workflow happy paths.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.

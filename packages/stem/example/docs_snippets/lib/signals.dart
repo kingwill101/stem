@@ -154,8 +154,7 @@ Future<void> main() async {
     ),
   );
 
-  unawaited(app.start());
-  await app.stem.enqueue('signals.demo', args: const {});
+  await app.enqueue('signals.demo', args: const {});
   await Future<void>.delayed(const Duration(milliseconds: 200));
   await app.close();
 

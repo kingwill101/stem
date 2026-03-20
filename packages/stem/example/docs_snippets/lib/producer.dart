@@ -21,10 +21,11 @@ Future<void> enqueueInMemory() async {
     ],
   );
 
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'hello.print',
     args: {'name': 'Stem'},
   );
+  await app.waitForTask<void>(taskId);
 
   print('Enqueued $taskId');
   await app.close();

@@ -55,7 +55,6 @@ Future<void> bootstrapWorkflowRuntime() async {
 Future<void> bootstrapWorkflowClient() async {
   final client = await StemClient.fromUrl('memory://');
   final app = await client.createWorkflowApp(module: stemModule);
-  await app.start();
   await app.close();
   await client.close();
 }
@@ -273,7 +272,6 @@ Future<void> main() async {
   final demoFlowRef = demoFlow.ref0();
 
   final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
-  await app.start();
 
   final runId = await demoFlowRef.startWith(app);
   final result = await demoFlowRef.waitFor(
