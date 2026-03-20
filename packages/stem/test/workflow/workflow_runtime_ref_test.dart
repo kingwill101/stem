@@ -161,9 +161,7 @@ void main() {
           });
         },
       );
-      final workflowRef = flow.refJson<_GreetingParams>(
-        decodeParams: _GreetingParams.fromJson,
-      );
+      final workflowRef = flow.refJson<_GreetingParams>();
 
       final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
       try {
@@ -194,7 +192,6 @@ void main() {
           },
         );
         final workflowRef = flow.refJson<_GreetingParams>(
-          decodeParams: _GreetingParams.fromJson,
           decodeResultJson: _GreetingResult.fromJson,
         );
 
@@ -337,43 +334,43 @@ void main() {
     test(
       'raw workflow definitions expose direct json result helpers',
       () async {
-      final flow = WorkflowDefinition<_GreetingResult>.flowJson(
-        name: 'runtime.ref.definition.json.result.flow',
-        decodeResult: _GreetingResult.fromJson,
-        build: (builder) {
-          builder.step(
-            'hello',
-            (ctx) async =>
-                const _GreetingResult(message: 'hello definition flow json'),
+        final flow = WorkflowDefinition<_GreetingResult>.flowJson(
+          name: 'runtime.ref.definition.json.result.flow',
+          decodeResult: _GreetingResult.fromJson,
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async =>
+                  const _GreetingResult(message: 'hello definition flow json'),
+            );
+          },
+        );
+        final script = WorkflowDefinition<_GreetingResult>.scriptJson(
+          name: 'runtime.ref.definition.json.result.script',
+          decodeResult: _GreetingResult.fromJson,
+          run: (context) async =>
+              const _GreetingResult(message: 'hello definition script json'),
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory();
+        try {
+          workflowApp.registerWorkflows([flow, script]);
+          await workflowApp.start();
+
+          final flowResult = await flow.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
           );
-        },
-      );
-      final script = WorkflowDefinition<_GreetingResult>.scriptJson(
-        name: 'runtime.ref.definition.json.result.script',
-        decodeResult: _GreetingResult.fromJson,
-        run: (context) async =>
-            const _GreetingResult(message: 'hello definition script json'),
-      );
+          final scriptResult = await script.ref0().startAndWait(
+            workflowApp.runtime,
+            timeout: const Duration(seconds: 2),
+          );
 
-      final workflowApp = await StemWorkflowApp.inMemory();
-      try {
-        workflowApp.registerWorkflows([flow, script]);
-        await workflowApp.start();
-
-        final flowResult = await flow.ref0().startAndWait(
-          workflowApp.runtime,
-          timeout: const Duration(seconds: 2),
-        );
-        final scriptResult = await script.ref0().startAndWait(
-          workflowApp.runtime,
-          timeout: const Duration(seconds: 2),
-        );
-
-        expect(flowResult?.value?.message, 'hello definition flow json');
-        expect(scriptResult?.value?.message, 'hello definition script json');
-      } finally {
-        await workflowApp.shutdown();
-      }
+          expect(flowResult?.value?.message, 'hello definition flow json');
+          expect(scriptResult?.value?.message, 'hello definition script json');
+        } finally {
+          await workflowApp.shutdown();
+        }
       },
     );
 
@@ -590,9 +587,9 @@ void main() {
       'typed workflow event calls emit from the prebuilt call surface',
       () async {
         final flow = Flow<String>(
-        name: 'runtime.ref.event.call.flow',
-        build: (builder) {
-          builder.step('wait', (ctx) async {
+          name: 'runtime.ref.event.call.flow',
+          build: (builder) {
+            builder.step('wait', (ctx) async {
               final payload = await _userUpdatedEvent.wait(ctx);
               return 'hello ${payload.name}';
             });
@@ -626,12 +623,12 @@ void main() {
     test('workflow event emitters expose bound event calls', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.event.bound.flow',
-          build: (builder) {
-            builder.step('wait', (ctx) async {
-              final payload = _userUpdatedEvent.waitValue(ctx);
-              if (payload == null) {
-                return null;
-              }
+        build: (builder) {
+          builder.step('wait', (ctx) async {
+            final payload = _userUpdatedEvent.waitValue(ctx);
+            if (payload == null) {
+              return null;
+            }
             return 'hello ${payload.name}';
           });
         },

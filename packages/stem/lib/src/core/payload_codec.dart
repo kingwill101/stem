@@ -57,6 +57,16 @@ class PayloadCodec<T> {
   final T Function(Map<String, dynamic> payload)? _decodeMap;
   final String? _typeName;
 
+  /// Encodes a DTO to the string-keyed map shape required by task/workflow
+  /// argument payloads.
+  static Map<String, dynamic> encodeJsonMap<T>(
+    T value, {
+    String? typeName,
+  }) {
+    final payload = _encodeJsonPayload(value);
+    return _payloadJsonMap(payload, typeName ?? value.runtimeType.toString());
+  }
+
   /// Converts a typed value into a durable payload representation.
   Object? encode(T value) => _encode(value);
 

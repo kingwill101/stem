@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Simplified the manual JSON helper path so `TaskDefinition.json(...)` and
+  `WorkflowRef.json(...)` no longer require unused producer-side
+  `decodeArgs`/`decodeParams` callbacks just to publish DTO payloads.
 - Added `WorkflowResumeContext` as the shared typed suspension/wait surface for
   flow steps and script checkpoints. Typed workflow event waits now target that
   shared interface instead of accepting an erased `Object`.

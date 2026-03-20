@@ -53,8 +53,8 @@ Typed results flow through `TaskResult<TResult>` when you call
 lets you deserialize complex objects before they reach application code.
 
 If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
-when the type already has `toJson()` and `Type.fromJson(...)`. Use
-`TaskDefinition.codec(...)` when you need a custom
+when the type already has `toJson()`. Use `TaskDefinition.codec(...)` when you
+need a custom
 `PayloadCodec<T>`. Task args still need to encode to a string-keyed map
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
 data.

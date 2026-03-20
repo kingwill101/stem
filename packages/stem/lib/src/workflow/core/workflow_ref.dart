@@ -30,10 +30,9 @@ class WorkflowRef<TParams, TResult extends Object?> {
   }
 
   /// Creates a typed workflow reference for DTO params that already expose
-  /// `toJson()` and `Type.fromJson(...)`.
+  /// `toJson()`.
   factory WorkflowRef.json({
     required String name,
-    required TParams Function(Map<String, dynamic> payload) decodeParams,
     TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     TResult Function(Object? payload)? decodeResult,
     String? paramsTypeName,
@@ -45,14 +44,11 @@ class WorkflowRef<TParams, TResult extends Object?> {
             decode: decodeResultJson,
             typeName: resultTypeName ?? '$TResult',
           );
-    return WorkflowRef<TParams, TResult>.codec(
+    return WorkflowRef<TParams, TResult>(
       name: name,
-      paramsCodec: PayloadCodec<TParams>.json(
-        decode: decodeParams,
-        typeName: paramsTypeName ?? '$TParams',
-      ),
-      resultCodec: resultCodec,
-      decodeResult: decodeResult,
+      encodeParams: (params) =>
+          _encodeJsonParams(params, paramsTypeName ?? '$TParams'),
+      decodeResult: decodeResult ?? resultCodec?.decode,
     );
   }
 
@@ -92,6 +88,14 @@ class WorkflowRef<TParams, TResult extends Object?> {
       'WorkflowRef.codec($workflowName) must encode params to '
       'Map<String, Object?>, got ${payload.runtimeType}.',
     );
+  }
+
+  static Map<String, Object?> _encodeJsonParams<T>(T params, String typeName) {
+    final payload = PayloadCodec.encodeJsonMap(
+      params,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
   }
 
   /// Builds a workflow start call from typed arguments.
@@ -404,7 +408,6 @@ extension WorkflowStartCallExtension<TParams, TResult extends Object?>
       );
     });
   }
-
 }
 
 /// Convenience helpers for dispatching [WorkflowStartBuilder] instances.
@@ -428,7 +431,6 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
       timeout: timeout,
     );
   }
-
 }
 
 /// Caller-bound fluent workflow start builder.
@@ -512,7 +514,6 @@ extension WorkflowCallerBuilderExtension on WorkflowCaller {
       builder: definition.prepareStart(),
     );
   }
-
 }
 
 /// Convenience helpers for waiting on typed workflow refs using a generic

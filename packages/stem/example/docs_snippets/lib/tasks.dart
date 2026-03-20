@@ -59,15 +59,13 @@ class InvoicePayload {
 }
 
 class PublishInvoiceTask extends TaskHandler<void> {
-  static final definition =
-      TaskDefinition<InvoicePayload, bool>.json(
-        name: 'invoice.publish',
-        decodeArgs: InvoicePayload.fromJson,
-        metadata: const TaskMetadata(
-          description: 'Publishes invoices downstream',
-        ),
-        defaultOptions: const TaskOptions(queue: 'billing'),
-      );
+  static final definition = TaskDefinition<InvoicePayload, bool>.json(
+    name: 'invoice.publish',
+    metadata: const TaskMetadata(
+      description: 'Publishes invoices downstream',
+    ),
+    defaultOptions: const TaskOptions(queue: 'billing'),
+  );
 
   @override
   String get name => definition.name;

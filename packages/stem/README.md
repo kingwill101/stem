@@ -162,7 +162,6 @@ Use the new typed wrapper when you want compile-time checking and shared metadat
 class HelloTask implements TaskHandler<void> {
   static final definition = TaskDefinition<HelloArgs, void>.json(
     name: 'demo.hello',
-    decodeArgs: HelloArgs.fromJson,
     metadata: TaskMetadata(description: 'Simple hello world example'),
   );
 
@@ -220,8 +219,8 @@ producer-only processes do not need to register the worker handler locally just
 to enqueue typed calls.
 
 Use `TaskDefinition.json(...)` when your manual task args are normal
-DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
-`TaskDefinition.codec(...)` only when you need a custom
+DTOs with `toJson()`. Drop down to `TaskDefinition.codec(...)` only when you
+need a custom
 `PayloadCodec<T>`. Task args still need to encode to a string-keyed map
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
 data.
@@ -488,7 +487,6 @@ final approvalsFlow = Flow<String>(
 );
 
 final approvalsRef = approvalsFlow.refJson<ApprovalDraft>(
-  decodeParams: ApprovalDraft.fromJson,
 );
 
 final app = await StemWorkflowApp.fromUrl(
@@ -521,11 +519,12 @@ final runId = await approvalsRef
     .start(app);
 ```
 
-Use `refJson(...)` when your manual workflow start params or final result are
-normal DTOs with `toJson()` and `Type.fromJson(...)`. Drop down to
-`refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow params
-still need to encode to a string-keyed map (typically
-`Map<String, dynamic>`) because they are persisted as JSON-shaped data.
+Use `refJson(...)` when your manual workflow start params are DTOs with
+`toJson()`, or when the final result also needs a `Type.fromJson(...)`
+decoder. Drop down to `refCodec(...)` when you need a custom
+`PayloadCodec<T>`. Workflow params still need to encode to a string-keyed map
+(typically `Map<String, dynamic>`) because they are persisted as JSON-shaped
+data.
 
 If a manual flow or script only needs DTO result decoding, prefer
 `Flow.json(...)` or `WorkflowScript.json(...)`. If the final result needs a

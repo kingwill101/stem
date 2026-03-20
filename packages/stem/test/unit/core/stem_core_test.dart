@@ -105,10 +105,10 @@ void main() {
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
       final definition = TaskDefinition<_CodecTaskArgs, Object?>.codec(
-            name: 'sample.codec.args',
-            argsCodec: _codecTaskArgsCodec,
-            defaultOptions: const TaskOptions(queue: 'typed'),
-          );
+        name: 'sample.codec.args',
+        argsCodec: _codecTaskArgsCodec,
+        defaultOptions: const TaskOptions(queue: 'typed'),
+      );
 
       final id = await stem.enqueueCall(
         definition.call(const _CodecTaskArgs('encoded')),
@@ -128,7 +128,6 @@ void main() {
       final stem = Stem(broker: broker, backend: backend);
       final definition = TaskDefinition<_CodecTaskArgs, Object?>.json(
         name: 'sample.json.args',
-        decodeArgs: _CodecTaskArgs.fromJson,
         defaultOptions: const TaskOptions(queue: 'typed'),
       );
 
@@ -189,10 +188,10 @@ void main() {
         final backend = _RecordingBackend();
         final stem = Stem(broker: broker, backend: backend);
         final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.codec(
-              name: 'sample.codec.result',
-              argsCodec: _codecTaskArgsCodec,
-              resultCodec: _codecReceiptCodec,
-            );
+          name: 'sample.codec.result',
+          argsCodec: _codecTaskArgsCodec,
+          resultCodec: _codecReceiptCodec,
+        );
 
         final id = await stem.enqueueCall(
           definition.call(const _CodecTaskArgs('encoded')),
@@ -640,10 +639,6 @@ final _codecReceiptDefinition =
 
 class _CodecTaskArgs {
   const _CodecTaskArgs(this.value);
-
-  factory _CodecTaskArgs.fromJson(Map<String, Object?> payload) {
-    return _CodecTaskArgs(payload['value']! as String);
-  }
 
   final String value;
 

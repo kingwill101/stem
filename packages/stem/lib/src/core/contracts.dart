@@ -2107,33 +2107,29 @@ class TaskDefinition<TArgs, TResult> {
   }
 
   /// Creates a typed task definition for DTO args that already expose
-  /// `toJson()` and `Type.fromJson(...)`.
+  /// `toJson()`.
   factory TaskDefinition.json({
     required String name,
-    required TArgs Function(Map<String, dynamic> payload) decodeArgs,
     TaskMetaBuilder<TArgs>? encodeMeta,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
     TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     String? argsTypeName,
     String? resultTypeName,
-    }) {
+  }) {
     final resultCodec = decodeResultJson == null
         ? null
         : PayloadCodec<TResult>.json(
             decode: decodeResultJson,
             typeName: resultTypeName ?? '$TResult',
           );
-    return TaskDefinition<TArgs, TResult>.codec(
+    return TaskDefinition<TArgs, TResult>(
       name: name,
-      argsCodec: PayloadCodec<TArgs>.json(
-        decode: decodeArgs,
-        typeName: argsTypeName ?? '$TArgs',
-      ),
+      encodeArgs: (args) => _encodeJsonArgs(args, argsTypeName ?? '$TArgs'),
       encodeMeta: encodeMeta,
       defaultOptions: defaultOptions,
-      metadata: metadata,
-      resultCodec: resultCodec,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
     );
   }
 
@@ -2245,6 +2241,14 @@ class TaskDefinition<TArgs, TResult> {
       'TaskDefinition.codec($taskName) must encode args to '
       'Map<String, Object?>, got ${payload.runtimeType}.',
     );
+  }
+
+  static Map<String, Object?> _encodeJsonArgs<T>(T args, String typeName) {
+    final payload = PayloadCodec.encodeJsonMap(
+      args,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
   }
 
   static TaskMetadata _metadataWithResultCodec<TResult>(

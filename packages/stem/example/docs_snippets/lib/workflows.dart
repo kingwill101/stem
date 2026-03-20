@@ -76,9 +76,7 @@ class ApprovalsFlow {
     },
   );
 
-  static final ref = flow.refJson<ApprovalDraft>(
-    decodeParams: ApprovalDraft.fromJson,
-  );
+  static final ref = flow.refJson<ApprovalDraft>();
 }
 
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
