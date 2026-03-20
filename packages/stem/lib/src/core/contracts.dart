@@ -1867,6 +1867,16 @@ abstract interface class TaskExecutionContext
 
   /// Report progress back to the worker.
   Future<void> progress(double percentComplete, {Map<String, Object?>? data});
+
+  /// Request a retry of the current task.
+  Future<void> retry({
+    Duration? countdown,
+    DateTime? eta,
+    TaskRetryPolicy? retryPolicy,
+    int? maxRetries,
+    Duration? timeLimit,
+    Duration? softTimeLimit,
+  });
 }
 
 /// Shared task-progress helpers for execution contexts.
@@ -2139,6 +2149,7 @@ class TaskContext implements TaskExecutionContext {
   /// Throws a [TaskRetryRequest] which is intercepted by the worker to
   /// schedule the retry. Override retry policies/time limits per invocation
   /// by passing the optional parameters.
+  @override
   Future<void> retry({
     Duration? countdown,
     DateTime? eta,

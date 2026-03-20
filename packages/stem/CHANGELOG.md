@@ -70,6 +70,9 @@
 - Added `TaskExecutionContext` as the shared task-side execution surface for
   `TaskContext` and `TaskInvocationContext`, and taught `stem_builder` to
   accept it directly in annotated task definitions.
+- Added `TaskExecutionContext.retry(...)` so typed task handlers can request
+  retries through the shared task context surface instead of depending on
+  concrete runtime classes.
 - Added `FlowStepControl.dataJson(...)` and `dataAs(codec: ...)` so
   lower-level suspension control objects can decode DTO metadata without
   manual casts.

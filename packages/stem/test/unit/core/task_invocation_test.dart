@@ -552,7 +552,7 @@ void main() {
   });
 
   test('TaskInvocationContext.retry throws TaskRetryRequest', () {
-    final context = TaskInvocationContext.local(
+    final TaskExecutionContext context = TaskInvocationContext.local(
       id: 'retry-task',
       headers: const {},
       meta: const {},
