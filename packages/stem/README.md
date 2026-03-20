@@ -130,7 +130,7 @@ class HelloTask implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final who = args['name'] as String? ?? 'world';
+    final who = args.valueOr<String>('name', 'world');
     print('Hello $who (attempt ${context.attempt})');
   }
 }
@@ -176,7 +176,7 @@ class HelloTask implements TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final who = args['name'] as String? ?? 'world';
+    final who = args.valueOr<String>('name', 'world');
     print('Hello $who (attempt ${context.attempt})');
   }
 }
@@ -224,6 +224,18 @@ need a custom
 `PayloadCodec<T>`. Task args still need to encode to a string-keyed map
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
 data.
+
+For manual handlers and workflows, use the typed payload readers on the map
+itself instead of repeating raw casts:
+
+```dart
+final customerId = args.requiredValue<String>('customerId');
+final tenant = args.valueOr<String>('tenant', 'global');
+final draft = ctx.params.requiredValue<ApprovalDraft>(
+  'draft',
+  codec: approvalDraftCodec,
+);
+```
 
 For typed task calls, the definition and call objects now expose the common
 producer operations directly. Prefer `enqueueAndWait(...)` when you only need
@@ -391,7 +403,9 @@ final app = await StemWorkflowApp.inMemory(
       name: 'orders.workflow',
       run: (script) async {
         final checkout = await script.step('checkout', (step) async {
-          return await chargeCustomer(step.params['userId'] as String);
+          return await chargeCustomer(
+            step.params.requiredValue<String>('userId'),
+          );
         });
 
         await script.step('poll-shipment', (step) async {
@@ -465,8 +479,8 @@ final approvalsFlow = Flow<String>(
   name: 'approvals.flow',
   build: (flow) {
     flow.step('draft', (ctx) async {
-      final payload = ctx.params['draft'] as Map<String, Object?>;
-      return payload['documentId'];
+      final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+      return payload.requiredValue<String>('documentId');
     });
 
     flow.step('manager-review', (ctx) async {

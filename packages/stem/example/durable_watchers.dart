@@ -13,7 +13,7 @@ Future<void> main() async {
     name: 'shipment.workflow',
     run: (script) async {
       await script.step('prepare', (step) async {
-        final orderId = step.params['orderId'];
+        final orderId = step.params.requiredValue<String>('orderId');
         return 'prepared-$orderId';
       });
 
@@ -67,11 +67,11 @@ Future<void> main() async {
 class _ShipmentReadyEvent {
   const _ShipmentReadyEvent({required this.trackingId});
 
+  factory _ShipmentReadyEvent.fromJson(Map<String, dynamic> json) {
+    return _ShipmentReadyEvent(trackingId: json['trackingId'] as String);
+  }
+
   final String trackingId;
 
   Map<String, dynamic> toJson() => {'trackingId': trackingId};
-
-  static _ShipmentReadyEvent fromJson(Map<String, dynamic> json) {
-    return _ShipmentReadyEvent(trackingId: json['trackingId'] as String);
-  }
 }

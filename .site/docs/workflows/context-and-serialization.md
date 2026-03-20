@@ -115,6 +115,17 @@ For normal DTOs that expose `toJson()` and `Type.fromJson(...)`, prefer
 `PayloadCodec<T>.json(...)`. Drop down to `PayloadCodec<T>.map(...)` when you
 need a custom map encoder or a nonstandard decode function.
 
+For manual flows and scripts, prefer the typed payload readers on
+`ctx.params` before dropping to raw map casts:
+
+```dart
+final userId = ctx.params.requiredValue<String>('userId');
+final draft = ctx.params.requiredValue<ApprovalDraft>(
+  'draft',
+  codec: approvalDraftCodec,
+);
+```
+
 ## Practical rule
 
 When you need context metadata, add the appropriate optional named context

@@ -55,8 +55,8 @@ class ApprovalsFlow {
     name: 'approvals.flow',
     build: (flow) {
       flow.step('draft', (ctx) async {
-        final payload = ctx.params['draft'] as Map<String, Object?>;
-        return payload['documentId'];
+        final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+        return payload.requiredValue<String>('documentId');
       });
 
       flow.step('manager-review', (ctx) async {
@@ -66,7 +66,7 @@ class ApprovalsFlow {
         if (resume == null) {
           return null;
         }
-        return resume['approvedBy'] as String?;
+        return resume.value<String>('approvedBy');
       });
 
       flow.step('finalize', (ctx) async {
@@ -99,7 +99,7 @@ final retryScript = WorkflowScript(
       if (resume == null) {
         return 'pending';
       }
-      return resume['chargeId'] as String;
+      return resume.requiredValue<String>('chargeId');
     });
 
     final receipt = await script.step<String>('confirm', (ctx) async {
@@ -167,8 +167,8 @@ class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
   Future<String> draft({FlowContext? context}) async {
     final ctx = context!;
-    final payload = ctx.params['draft'] as Map<String, Object?>;
-    return payload['documentId'] as String;
+    final payload = ctx.params.requiredValue<Map<String, Object?>>('draft');
+    return payload.requiredValue<String>('documentId');
   }
 
   @WorkflowStep(name: 'manager-review')
@@ -180,7 +180,7 @@ class ApprovalsAnnotatedWorkflow {
     if (resume == null) {
       return null;
     }
-    return resume['approvedBy'] as String?;
+    return resume.value<String>('approvedBy');
   }
 
   @WorkflowStep()
@@ -202,7 +202,7 @@ class BillingRetryAnnotatedWorkflow {
       if (resume == null) {
         return 'pending';
       }
-      return resume['chargeId'] as String;
+      return resume.requiredValue<String>('chargeId');
     });
 
     return script.step<String>('confirm', (ctx) async {

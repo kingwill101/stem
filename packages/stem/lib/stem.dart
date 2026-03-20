@@ -67,13 +67,12 @@
 /// ```
 library;
 
-export 'package:contextual/contextual.dart' show Context, Level, Logger;
-
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/scheduler/beat.dart';
 import 'package:stem/src/worker/worker.dart';
 
+export 'package:contextual/contextual.dart' show Context, Level, Logger;
 export 'package:stem_memory/stem_memory.dart'
     show
         InMemoryBroker,
@@ -100,6 +99,7 @@ export 'src/core/encoder_keys.dart';
 export 'src/core/envelope.dart';
 export 'src/core/function_task_handler.dart';
 export 'src/core/payload_codec.dart';
+export 'src/core/payload_map.dart';
 export 'src/core/queue_events.dart';
 export 'src/core/retry.dart';
 export 'src/core/stem.dart';

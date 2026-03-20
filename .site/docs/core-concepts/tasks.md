@@ -59,6 +59,14 @@ need a custom
 (typically `Map<String, dynamic>`) because they are published as JSON-shaped
 data.
 
+For manual handlers, prefer the typed payload readers on the argument map
+instead of repeating raw casts:
+
+```dart
+final customerId = args.requiredValue<String>('customerId');
+final tenant = args.valueOr<String>('tenant', 'global');
+```
+
 `TaskEnqueueBuilder` also supports `enqueueAndWait(...)`, and typed task
 definitions can now create a fluent builder directly through
 `definition.prepareEnqueue(...)`. `TaskEnqueuer.prepareEnqueue(...)` remains

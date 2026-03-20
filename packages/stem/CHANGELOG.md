@@ -2,6 +2,10 @@
 
 ## 0.1.1
 
+- Added typed payload-map readers like `args.requiredValue(...)`,
+  `args.valueOr(...)`, and `ctx.params.requiredValue(...)` so manual tasks and
+  workflows can decode scalars and codec-backed DTOs without repeating raw map
+  casts.
 - Added `WorkflowExecutionContext` as the shared typed execution context for
   flow steps and script checkpoints, and taught `stem_builder` to accept that
   shared context type directly in annotated workflow methods.
