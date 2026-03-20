@@ -10,19 +10,10 @@ import 'package:stem_redis/stem_redis.dart';
 
 Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
-  final backend = config.resultBackendUrl != null
-      ? await RedisResultBackend.connect(
-          config.resultBackendUrl!,
-          tls: config.tls,
-        )
-      : null;
+  final backendUrl = config.resultBackendUrl;
   final signer = PayloadSigner.maybe(config.signing);
 
-  if (backend == null) {
+  if (backendUrl == null) {
     stderr.writeln(
       'STEM_RESULT_BACKEND_URL must be provided for the email service.',
     );
@@ -34,13 +25,25 @@ Future<void> main(List<String> args) async {
       name: 'email.send',
       entrypoint: _placeholderEntrypoint,
       options: const TaskOptions(queue: 'emails', maxRetries: 3),
-    ),
+      ),
   ];
 
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(
+        config.brokerUrl,
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => RedisResultBackend.connect(
+        backendUrl,
+        tls: config.tls,
+      ),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: signer,
   );
 
@@ -62,7 +65,7 @@ Future<void> main(List<String> args) async {
           }),
         );
       }
-      final taskId = await stem.enqueue(
+      final taskId = await client.enqueue(
         'email.send',
         args: {'to': to, 'subject': subject, 'body': emailBody},
         options: const TaskOptions(queue: 'emails'),
@@ -85,8 +88,7 @@ Future<void> main(List<String> args) async {
   Future<void> shutdown(ProcessSignal signal) async {
     stdout.writeln('Shutting down email enqueue service ($signal)...');
     await server.close(force: true);
-    await broker.close();
-    await backend.close();
+    await client.close();
     exit(0);
   }
 

@@ -10,19 +10,12 @@ Future<void> main(List<String> args) async {
   final config = StemConfig.fromEnvironment();
   final secretKey = SecretKey(base64Decode(_requireEnv('PAYLOAD_SECRET')));
   final cipher = AesGcm.with256bits();
-
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
       'STEM_RESULT_BACKEND_URL must be set for the encrypted example.',
     );
   }
-  final backend = await RedisResultBackend.connect(backendUrl, tls: config.tls);
-
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<String>(
       name: 'secure.report',
@@ -31,10 +24,19 @@ Future<void> main(List<String> args) async {
     ),
   ];
 
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(
+      create: () => RedisStreamsBroker.connect(
+        config.brokerUrl,
+        tls: config.tls,
+      ),
+      dispose: (broker) => broker.close(),
+    ),
+    backend: StemBackendFactory(
+      create: () => RedisResultBackend.connect(backendUrl, tls: config.tls),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
-    backend: backend,
     signer: PayloadSigner.maybe(config.signing),
   );
 
@@ -57,7 +59,7 @@ Future<void> main(List<String> args) async {
       'mac': base64Encode(box.mac.bytes),
     };
 
-    final taskId = await stem.enqueue(
+    final taskId = await client.enqueue(
       'secure.report',
       args: payload,
       options: TaskOptions(queue: config.defaultQueue),
@@ -65,8 +67,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Enqueued secure task $taskId for ${job['customerId']}');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 FutureOr<Object?> _noopEntrypoint(

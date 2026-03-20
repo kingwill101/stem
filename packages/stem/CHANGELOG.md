@@ -49,6 +49,9 @@
   `redis_postgres_worker`, and `postgres_tls`) to use `StemClient.create(...)`
   with explicit broker/backend factories instead of hand-constructing `Stem`
   for publishing.
+- Simplified the `encrypted_payload`, `email_service`, and
+  `signing_key_rotation` producer/enqueuer examples to use client-backed
+  publishing instead of manually wiring `Stem` just to enqueue tasks.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
