@@ -74,8 +74,28 @@ import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 
+/// Shared typed task-dispatch surface used by producers, apps, and contexts.
+abstract interface class TaskResultCaller implements TaskEnqueuer {
+  /// Waits for a task result by task id.
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+  });
+
+  /// Waits for [taskId] using a typed [definition] for result decoding.
+  Future<TaskResult<TResult>?> waitForTaskDefinition<
+    TArgs,
+    TResult extends Object?
+  >(
+    String taskId,
+    TaskDefinition<TArgs, TResult> definition, {
+    Duration? timeout,
+  });
+}
+
 /// Facade used by producer applications to enqueue tasks.
-class Stem implements TaskEnqueuer {
+class Stem implements TaskResultCaller {
   /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
@@ -431,6 +451,7 @@ class Stem implements TaskEnqueuer {
   /// Waits for [taskId] to reach a terminal state and returns a typed view of
   /// the final [TaskStatus]. Requires [backend] to be configured; otherwise a
   /// [StateError] is thrown.
+  @override
   Future<TaskResult<T>?> waitForTask<T extends Object?>(
     String taskId, {
     Duration? timeout,
@@ -503,6 +524,7 @@ class Stem implements TaskEnqueuer {
   }
 
   /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
+  @override
   Future<TaskResult<TResult>?>
   waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
@@ -1008,7 +1030,7 @@ class Stem implements TaskEnqueuer {
 extension TaskEnqueueBuilderExtension<TArgs, TResult>
     on TaskEnqueueBuilder<TArgs, TResult> {
   /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueueWith(TaskEnqueuer enqueuer) {
+  Future<String> enqueue(TaskEnqueuer enqueuer) {
     final call = build();
     final scopeMeta = TaskEnqueueScope.currentMeta();
     if (scopeMeta == null || scopeMeta.isEmpty) {
@@ -1029,7 +1051,7 @@ extension TaskCallExtension<TArgs, TResult extends Object?>
   /// Ambient [TaskEnqueueScope] metadata is merged the same way as the fluent
   /// [TaskEnqueueBuilder] helper so producers and task contexts behave
   /// consistently.
-  Future<String> enqueueWith(
+  Future<String> enqueue(
     TaskEnqueuer enqueuer, {
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -1044,14 +1066,14 @@ extension TaskCallExtension<TArgs, TResult extends Object?>
     );
   }
 
-  /// Enqueues this call on [stem] and waits for the typed task result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWith(
-    Stem stem, {
+  /// Enqueues this call on [caller] and waits for the typed task result.
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller, {
     TaskEnqueueOptions? enqueueOptions,
     Duration? timeout,
   }) async {
-    final taskId = await enqueueWith(stem, enqueueOptions: enqueueOptions);
-    return definition.waitFor(stem, taskId, timeout: timeout);
+    final taskId = await enqueue(caller, enqueueOptions: enqueueOptions);
+    return definition.waitFor(caller, taskId, timeout: timeout);
   }
 }
 
@@ -1059,7 +1081,7 @@ extension TaskCallExtension<TArgs, TResult extends Object?>
 extension TaskDefinitionExtension<TArgs, TResult extends Object?>
     on TaskDefinition<TArgs, TResult> {
   /// Enqueues this typed task definition directly with [enqueuer].
-  Future<String> enqueueWith(
+  Future<String> enqueue(
     TaskEnqueuer enqueuer,
     TArgs args, {
     Map<String, String> headers = const {},
@@ -1075,12 +1097,12 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
       notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
-    ).enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
+    ).enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Enqueues this typed task definition and waits for its typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWith(
-    Stem stem,
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller,
     TArgs args, {
     Map<String, String> headers = const {},
     TaskOptions? options,
@@ -1096,8 +1118,8 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
       notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
-    ).enqueueAndWaitWith(
-      stem,
+    ).enqueueAndWait(
+      caller,
       enqueueOptions: enqueueOptions,
       timeout: timeout,
     );
@@ -1105,11 +1127,11 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
 
   /// Waits for [taskId] using this definition's decoding rules.
   Future<TaskResult<TResult>?> waitFor(
-    Stem stem,
+    TaskResultCaller caller,
     String taskId, {
     Duration? timeout,
   }) {
-    return stem.waitForTaskDefinition(taskId, this, timeout: timeout);
+    return caller.waitForTaskDefinition(taskId, this, timeout: timeout);
   }
 }
 
@@ -1117,7 +1139,7 @@ extension TaskDefinitionExtension<TArgs, TResult extends Object?>
 extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     on NoArgsTaskDefinition<TResult> {
   /// Enqueues this no-arg task definition with [enqueuer].
-  Future<String> enqueueWith(
+  Future<String> enqueue(
     TaskEnqueuer enqueuer, {
     Map<String, String> headers = const {},
     TaskOptions? options,
@@ -1131,21 +1153,21 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
       notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
-    ).enqueueWith(enqueuer, enqueueOptions: enqueueOptions);
+    ).enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Waits for [taskId] using this definition's decoding rules.
   Future<TaskResult<TResult>?> waitFor(
-    Stem stem,
+    TaskResultCaller caller,
     String taskId, {
     Duration? timeout,
   }) {
-    return stem.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
+    return caller.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
   }
 
   /// Enqueues this no-arg task definition and waits for the typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWith(
-    Stem stem, {
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller, {
     Map<String, String> headers = const {},
     TaskOptions? options,
     DateTime? notBefore,
@@ -1153,14 +1175,14 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     TaskEnqueueOptions? enqueueOptions,
     Duration? timeout,
   }) async {
-    final taskId = await enqueueWith(
-      stem,
+    final taskId = await enqueue(
+      caller,
       headers: headers,
       options: options,
       notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );
-    return waitFor(stem, taskId, timeout: timeout);
+    return waitFor(caller, taskId, timeout: timeout);
   }
 }

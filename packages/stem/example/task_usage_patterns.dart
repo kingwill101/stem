@@ -37,7 +37,7 @@ class ParentTask extends TaskHandler<void> {
       ),
     );
 
-    await childDefinition.enqueueWith(context, const ChildArgs('typed'));
+    await childDefinition.enqueue(context, const ChildArgs('typed'));
   }
 }
 
@@ -99,7 +99,7 @@ Future<void> main() async {
 
   await stem.enqueue('tasks.parent', args: const {});
   await stem.enqueue('tasks.invocation_parent', args: const {});
-  final directTaskId = await childDefinition.enqueueWith(
+  final directTaskId = await childDefinition.enqueue(
     stem,
     const ChildArgs('direct-call'),
   );
@@ -112,7 +112,7 @@ Future<void> main() async {
   // ignore: avoid_print
   print('[direct] result=${directResult?.value}');
 
-  final inlineResult = await childDefinition.enqueueAndWaitWith(
+  final inlineResult = await childDefinition.enqueueAndWait(
     stem,
     const ChildArgs('inline-wait'),
     timeout: const Duration(seconds: 1),

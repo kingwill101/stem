@@ -59,7 +59,7 @@
 ///   final taskId = await addDefinition.call({
 ///     'a': 10,
 ///     'b': 20,
-///   }).enqueueWith(stem);
+///   }).enqueue(stem);
 ///   final result = await stem.waitForTask<int>(taskId);
 ///
 ///   print('Sum is: ${result?.value}'); // Sum is: 30

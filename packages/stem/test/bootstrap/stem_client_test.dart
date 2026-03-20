@@ -155,7 +155,7 @@ void main() {
       );
 
       await app.start();
-      final result = await taskDefinition.enqueueAndWaitWithApp(
+      final result = await taskDefinition.enqueueAndWait(
         app,
         timeout: const Duration(seconds: 2),
       );
@@ -299,7 +299,7 @@ void main() {
     final worker = await client.createWorker();
     await worker.start();
     try {
-      final result = await definition.enqueueAndWaitWithClient(
+      final result = await definition.enqueueAndWait(
         client,
         timeout: const Duration(seconds: 2),
       );

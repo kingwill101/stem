@@ -197,7 +197,7 @@ void main() {
           defaultOptions: const TaskOptions(queue: 'typed'),
         );
 
-        final id = await definition.enqueueWith(stem);
+        final id = await definition.enqueue(stem);
 
         expect(id, isNotEmpty);
         expect(broker.published.single.envelope.name, 'sample.no_args');
@@ -219,7 +219,7 @@ void main() {
           resultCodec: _codecReceiptCodec,
         );
 
-        final id = await definition.enqueueWith(stem);
+        final id = await definition.enqueue(stem);
 
         expect(
           backend.records.single.meta[stemResultEncoderMetaKey],
@@ -231,7 +231,7 @@ void main() {
   });
 
   group('TaskCall helpers', () {
-    test('TaskDefinition.enqueueWith enqueues typed args directly', () async {
+    test('TaskDefinition.enqueue enqueues typed args directly', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
@@ -242,7 +242,7 @@ void main() {
       );
 
       final taskId = await TaskEnqueueScope.run({'traceId': 'scope-1'}, () {
-        return definition.enqueueWith(stem, (value: 'ok'));
+        return definition.enqueue(stem, (value: 'ok'));
       });
 
       expect(taskId, isNotEmpty);
@@ -257,7 +257,7 @@ void main() {
       );
     });
 
-    test('enqueueWith enqueues typed calls with scoped metadata', () async {
+    test('enqueue enqueues typed calls with scoped metadata', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
@@ -268,7 +268,7 @@ void main() {
       );
 
       final taskId = await TaskEnqueueScope.run({'traceId': 'scope-1'}, () {
-        return definition.call((value: 'ok')).enqueueWith(stem);
+        return definition.call((value: 'ok')).enqueue(stem);
       });
 
       expect(taskId, isNotEmpty);
@@ -280,7 +280,7 @@ void main() {
       );
     });
 
-    test('enqueueAndWaitWith returns typed results', () async {
+    test('enqueueAndWait returns typed results', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
@@ -301,13 +301,13 @@ void main() {
 
       final result = await definition
           .call((value: 'ok'))
-          .enqueueAndWaitWith(stem, timeout: const Duration(seconds: 1));
+          .enqueueAndWait(stem, timeout: const Duration(seconds: 1));
 
       expect(result?.isSucceeded, isTrue);
       expect(result?.value, 'done');
     });
 
-    test('TaskDefinition.enqueueAndWaitWith returns typed results', () async {
+    test('TaskDefinition.enqueueAndWait returns typed results', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
@@ -326,7 +326,7 @@ void main() {
         }),
       );
 
-      final result = await definition.enqueueAndWaitWith(
+      final result = await definition.enqueueAndWait(
         stem,
         (value: 'ok'),
         timeout: const Duration(seconds: 1),
@@ -379,7 +379,7 @@ void main() {
       expect(result?.rawPayload, isA<_CodecReceipt>());
     });
 
-    test('enqueueAndWaitWith supports no-arg task definitions', () async {
+    test('enqueueAndWait supports no-arg task definitions', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
       final stem = Stem(broker: broker, backend: backend);
@@ -395,7 +395,7 @@ void main() {
         }),
       );
 
-      final result = await definition.enqueueAndWaitWith(
+      final result = await definition.enqueueAndWait(
         stem,
         timeout: const Duration(seconds: 1),
       );

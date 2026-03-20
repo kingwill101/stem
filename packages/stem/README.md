@@ -206,7 +206,7 @@ Future<void> main() async {
   );
 
   unawaited(worker.start());
-  await HelloTask.definition.enqueueWith(
+  await HelloTask.definition.enqueue(
     stem,
     const HelloArgs(name: 'Stem'),
   );
@@ -229,7 +229,7 @@ For typed task calls, the definition and call objects now expose the common
 producer operations directly:
 
 ```dart
-final taskId = await HelloTask.definition.enqueueWith(
+final taskId = await HelloTask.definition.enqueue(
   stem,
   const HelloArgs(name: 'Stem'),
 );
@@ -245,7 +245,7 @@ final healthcheckDefinition = TaskDefinition.noArgs<void>(
   name: 'demo.healthcheck',
 );
 
-await healthcheckDefinition.enqueueWith(stem);
+await healthcheckDefinition.enqueue(stem);
 ```
 
 If a no-arg task returns a DTO, pass `resultCodec:` so waiting helpers decode
@@ -261,7 +261,7 @@ final taskId = await TaskEnqueueBuilder(
   ..header('x-tenant', 'tenant-a')
   ..priority(5)
   ..delay(const Duration(seconds: 30))
-  .enqueueWith(stem);
+  .enqueue(stem);
 ```
 
 ### Enqueue from inside a task
@@ -575,7 +575,7 @@ Durable workflow contexts enqueue tasks directly:
 
 - `FlowContext.enqueue(...)`
 - `WorkflowScriptStepContext.enqueue(...)`
-- typed task definitions can target those contexts via `enqueueWith(...)`
+- typed task definitions can target those contexts via `enqueue(...)`
 
 Child workflows belong in durable execution boundaries:
 
@@ -759,7 +759,7 @@ decoded payload, and a timeout flag:
 ```dart
 final taskId = await ChargeCustomer.definition
   .call(ChargeArgs(orderId: '123'))
-  .enqueueWith(stem);
+  .enqueue(stem);
 
 final charge = await ChargeCustomer.definition.waitFor(
   stem,
@@ -775,7 +775,7 @@ if (charge?.isSucceeded == true) {
 Generated annotated tasks use the same surface:
 
 ```dart
-final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWaitWith(
+final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWait(
   stem,
   (
     dispatch: EmailDispatch(

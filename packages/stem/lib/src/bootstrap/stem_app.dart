@@ -17,24 +17,7 @@ import 'package:stem/src/worker/worker.dart';
 import 'package:stem_memory/stem_memory.dart' show InMemoryRevokeStore;
 
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
-abstract interface class StemTaskApp implements TaskEnqueuer {
-  /// Waits for a task result by task id using the app's backing result store.
-  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
-    String taskId, {
-    Duration? timeout,
-    TResult Function(Object? payload)? decode,
-  });
-
-  /// Waits for a task result using a typed [definition] for result decoding.
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  });
-}
+abstract interface class StemTaskApp implements TaskResultCaller {}
 
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
 class StemApp implements StemTaskApp {
@@ -469,93 +452,5 @@ class StemApp implements StemTaskApp {
         },
       ],
     );
-  }
-}
-
-/// Adds app-bound enqueue-and-wait helpers for prebuilt [TaskCall] objects.
-extension TaskCallStemTaskAppExtension<TArgs, TResult extends Object?>
-    on TaskCall<TArgs, TResult> {
-  /// Enqueues this call with [app] and waits for its typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithApp(
-    StemTaskApp app, {
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) async {
-    final taskId = await enqueueWith(app, enqueueOptions: enqueueOptions);
-    return app.waitForTaskDefinition(taskId, definition, timeout: timeout);
-  }
-}
-
-/// Adds app-bound helpers for typed [TaskDefinition] values.
-extension TaskDefinitionStemTaskAppExtension<TArgs, TResult extends Object?>
-    on TaskDefinition<TArgs, TResult> {
-  /// Enqueues this definition with [app] and waits for its typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithApp(
-    StemTaskApp app,
-    TArgs args, {
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) {
-    return call(
-      args,
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueueAndWaitWithApp(
-      app,
-      enqueueOptions: enqueueOptions,
-      timeout: timeout,
-    );
-  }
-
-  /// Waits for [taskId] using this definition's decoding rules through [app].
-  Future<TaskResult<TResult>?> waitForApp(
-    StemTaskApp app,
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return app.waitForTaskDefinition(taskId, this, timeout: timeout);
-  }
-}
-
-/// Adds app-bound helpers for no-arg [NoArgsTaskDefinition] values.
-extension NoArgsTaskDefinitionStemTaskAppExtension<TResult extends Object?>
-    on NoArgsTaskDefinition<TResult> {
-  /// Enqueues this no-arg definition with [app] and waits for its result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithApp(
-    StemTaskApp app, {
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) {
-    return call(
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueueAndWaitWithApp(
-      app,
-      enqueueOptions: enqueueOptions,
-      timeout: timeout,
-    );
-  }
-
-  /// Waits for [taskId] using this definition's decoding rules through [app].
-  Future<TaskResult<TResult>?> waitForApp(
-    StemTaskApp app,
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return app.waitForTaskDefinition(taskId, asDefinition, timeout: timeout);
   }
 }

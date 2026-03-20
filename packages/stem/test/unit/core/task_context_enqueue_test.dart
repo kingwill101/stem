@@ -202,7 +202,7 @@ void main() {
         args: const _ExampleArgs('hello'),
       );
 
-      await builder.queue('priority').priority(7).enqueueWith(context);
+      await builder.queue('priority').priority(7).enqueue(context);
 
       final record = enqueuer.last!;
       expect(record.name, equals('tasks.typed'));

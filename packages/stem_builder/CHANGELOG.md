@@ -4,7 +4,7 @@
 
 - Switched generated output to a bundle-first surface with `stemModule`, `StemWorkflowDefinitions`, `StemTaskDefinitions`, generated typed wait helpers, and payload codec generation for DTO-backed workflow/task APIs.
 - Removed generated task-specific enqueue/wait extension APIs in favor of the
-  shared `TaskCall.enqueueWith(...)` and `TaskDefinition.waitFor(...)` surface
+  shared `TaskCall.enqueue(...)` and `TaskDefinition.waitFor(...)` surface
   from `stem`, reducing duplicate happy paths in generated task code.
 - Added builder diagnostics for duplicate or conflicting annotated workflow checkpoint names and refreshed generated examples around typed workflow refs.
 - Refreshed generated child-workflow examples and docs to use the unified

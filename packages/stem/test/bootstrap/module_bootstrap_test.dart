@@ -23,7 +23,7 @@ void main() {
         expect(app.registry.resolve('module.bootstrap.task'), same(moduleTask));
         expect(app.worker.subscription.queues, ['priority']);
 
-        final result = await moduleDefinition.enqueueAndWaitWithApp(
+        final result = await moduleDefinition.enqueueAndWait(
           app,
           timeout: const Duration(seconds: 2),
         );

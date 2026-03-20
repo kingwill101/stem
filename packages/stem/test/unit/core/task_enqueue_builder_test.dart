@@ -98,12 +98,12 @@ void main() {
   });
 
   test(
-    'NoArgsTaskDefinition.enqueueWith uses the TaskEnqueuer surface',
+    'NoArgsTaskDefinition.enqueue uses the TaskEnqueuer surface',
     () async {
     final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
     final enqueuer = _RecordingTaskEnqueuer();
 
-    final taskId = await definition.enqueueWith(
+    final taskId = await definition.enqueue(
       enqueuer,
       headers: const {'h': 'v'},
       meta: const {'m': 1},

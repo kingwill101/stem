@@ -1367,7 +1367,7 @@ void main() {
             await TaskEnqueueBuilder(
               definition: definition,
               args: const <String, Object?>{},
-            ).meta('origin', 'builder').enqueueWith(stem);
+            ).meta('origin', 'builder').enqueue(stem);
             return 'done';
           });
         },

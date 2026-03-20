@@ -68,7 +68,7 @@ Future<void> main() async {
   );
 
   final typedTaskResult = await StemTaskDefinitions.sendEmailTyped
-      .enqueueAndWaitWithApp(
+      .enqueueAndWait(
     app,
     (
       dispatch: const EmailDispatch(

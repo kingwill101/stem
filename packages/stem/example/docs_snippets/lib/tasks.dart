@@ -102,7 +102,7 @@ Future<void> runTypedDefinitionExample() async {
     tasks: [PublishInvoiceTask()],
   );
 
-  final taskId = await PublishInvoiceTask.definition.enqueueWith(
+  final taskId = await PublishInvoiceTask.definition.enqueue(
     stem,
     const InvoicePayload(invoiceId: 'inv_42'),
   );

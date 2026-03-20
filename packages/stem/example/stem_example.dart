@@ -64,7 +64,7 @@ Future<void> main() async {
   await stem.enqueue('demo.hello', args: {'name': 'Stem'});
 
   // Typed helper with TaskDefinition for compile-time safety.
-  await HelloTask.definition(const HelloArgs(name: 'Stem')).enqueueWith(stem);
+  await HelloTask.definition(const HelloArgs(name: 'Stem')).enqueue(stem);
   await Future<void>.delayed(const Duration(seconds: 1));
   await worker.shutdown();
   await broker.close();

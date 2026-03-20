@@ -21,7 +21,7 @@
   calls consistently use the generic `startWith(...)`, `startAndWaitWith(...)`,
   and `waitFor(...)` surface.
 - Simplified generated annotated task usage so `StemTaskDefinitions.*` is the
-  canonical surface, reusing shared `TaskCall.enqueueWith(...)` and
+  canonical surface, reusing shared `TaskCall.enqueue(...)` and
   `TaskDefinition.waitFor(...)` helpers instead of emitting separate generated
   enqueue/wait extension APIs.
 - Added `WorkflowStartCall.startWith(...)` so workflow refs can dispatch

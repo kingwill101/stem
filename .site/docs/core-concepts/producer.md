@@ -51,7 +51,7 @@ options, scheduling):
 Typed helpers are also available on `Canvas` (`definition.toSignature`) so
 group/chain/chord APIs produce strongly typed `TaskResult<T>` streams.
 Need to tweak headers/meta/queue at call sites? Wrap the definition in a
-`TaskEnqueueBuilder` and invoke `await builder.enqueueWith(stem);`.
+`TaskEnqueueBuilder` and invoke `await builder.enqueue(stem);`.
 
 ## Enqueue options
 

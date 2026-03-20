@@ -19,7 +19,7 @@ import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Shared entrypoint that owns broker/backend configuration for Stem runtimes.
-abstract class StemClient implements TaskEnqueuer {
+abstract class StemClient implements TaskResultCaller {
   /// Creates a client using the provided factories and defaults.
   static Future<StemClient> create({
     StemModule? module,
@@ -176,6 +176,7 @@ abstract class StemClient implements TaskEnqueuer {
   }
 
   /// Waits for a task result by task id using the client's shared backend.
+  @override
   Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
     String taskId, {
     Duration? timeout,
@@ -185,6 +186,7 @@ abstract class StemClient implements TaskEnqueuer {
   }
 
   /// Waits for a task result using a typed [definition] for decoding.
+  @override
   Future<TaskResult<TResult>?> waitForTaskDefinition<
     TArgs,
     TResult extends Object?
@@ -301,99 +303,6 @@ abstract class StemClient implements TaskEnqueuer {
   Future<void> close();
 }
 
-/// Adds client-bound enqueue-and-wait helpers for prebuilt [TaskCall] objects.
-extension TaskCallStemClientExtension<TArgs, TResult extends Object?>
-    on TaskCall<TArgs, TResult> {
-  /// Enqueues this call with [client] and waits for its typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
-    StemClient client, {
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) async {
-    final taskId = await enqueueWith(client, enqueueOptions: enqueueOptions);
-    return client.waitForTaskDefinition(taskId, definition, timeout: timeout);
-  }
-}
-
-/// Adds client-bound helpers for typed [TaskDefinition] values.
-extension TaskDefinitionStemClientExtension<TArgs, TResult extends Object?>
-    on TaskDefinition<TArgs, TResult> {
-  /// Enqueues this definition with [client] and waits for its typed result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
-    StemClient client,
-    TArgs args, {
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) {
-    return call(
-      args,
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueueAndWaitWithClient(
-      client,
-      enqueueOptions: enqueueOptions,
-      timeout: timeout,
-    );
-  }
-
-  /// Waits for [taskId] using this definition's decoding rules through
-  /// [client].
-  Future<TaskResult<TResult>?> waitForClient(
-    StemClient client,
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return client.waitForTaskDefinition(taskId, this, timeout: timeout);
-  }
-}
-
-/// Adds client-bound helpers for no-arg [NoArgsTaskDefinition] values.
-extension NoArgsTaskDefinitionStemClientExtension<TResult extends Object?>
-    on NoArgsTaskDefinition<TResult> {
-  /// Enqueues this no-arg definition with [client] and waits for its result.
-  Future<TaskResult<TResult>?> enqueueAndWaitWithClient(
-    StemClient client, {
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-    Duration? timeout,
-  }) {
-    return call(
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueueAndWaitWithClient(
-      client,
-      enqueueOptions: enqueueOptions,
-      timeout: timeout,
-    );
-  }
-
-  /// Waits for [taskId] using this definition's decoding rules through
-  /// [client].
-  Future<TaskResult<TResult>?> waitForClient(
-    StemClient client,
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return client.waitForTaskDefinition(
-      taskId,
-      asDefinition,
-      timeout: timeout,
-    );
-  }
-}
 
 class _DefaultStemClient extends StemClient {
   _DefaultStemClient({

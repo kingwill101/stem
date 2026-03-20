@@ -218,7 +218,7 @@ class InlineCoordinatorTask extends TaskHandler<void> {
       ),
     );
 
-    final auditId = await auditDefinition.enqueueWith(
+    final auditId = await auditDefinition.enqueue(
       context,
       AuditArgs(
         runId: runId,
@@ -285,7 +285,7 @@ FutureOr<Object?> inlineEntrypoint(
     '[inline_entrypoint] id=${context.id} attempt=${context.attempt} runId=$runId meta=${context.meta}',
   );
 
-  await auditDefinition.enqueueWith(
+  await auditDefinition.enqueue(
     context,
     AuditArgs(
       runId: runId,

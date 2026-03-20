@@ -45,7 +45,7 @@ Future<void> main() async {
   try {
     await taskApp.start();
     final taskResult = await StemTaskDefinitions.builderExamplePing
-        .enqueueAndWaitWith(
+        .enqueueAndWait(
       taskApp.stem,
       timeout: const Duration(seconds: 2),
     );

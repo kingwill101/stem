@@ -39,7 +39,7 @@ checks for required arguments and result types. A definition bundles the task
 name, argument encoder, optional metadata, and default `TaskOptions`. Build a
 call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
 or `Canvas` helpers. For the common path, use the direct
-`definition.enqueueWith(stem, args)` / `definition.enqueueAndWaitWith(...)`
+`definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
 helpers and drop down to `.call(args)` only when you need a reusable prebuilt
 request:
 
@@ -58,8 +58,8 @@ codec still needs to encode to `Map<String, Object?>` because task args are
 published as a map.
 
 For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
-instead. That gives you direct `enqueueWith(...)` /
-`enqueueAndWaitWith(...)` helpers without passing a fake empty map and the same
+instead. That gives you direct `enqueue(...)` /
+`enqueueAndWait(...)` helpers without passing a fake empty map and the same
 `waitFor(...)` decoding surface as normal typed definitions.
 
 ## Configuring Retries

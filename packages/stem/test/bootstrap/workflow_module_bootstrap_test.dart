@@ -22,7 +22,7 @@ void main() {
         );
 
         await workflowApp.start();
-        final result = await helperDefinition.enqueueAndWaitWithApp(
+        final result = await helperDefinition.enqueueAndWait(
           workflowApp,
           timeout: const Duration(seconds: 2),
         );

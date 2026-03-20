@@ -107,7 +107,7 @@ Durable workflow contexts enqueue tasks directly:
 
 - `FlowContext.enqueue(...)`
 - `WorkflowScriptStepContext.enqueue(...)`
-- typed task definitions can target those contexts via `enqueueWith(...)`
+- typed task definitions can target those contexts via `enqueue(...)`
 
 Child workflows should be started from durable boundaries:
 
@@ -172,7 +172,7 @@ dart run build_runner build
 The generated part exports a bundle plus typed refs/definitions so you can
 avoid raw workflow-name and task-name strings (for example
 `StemWorkflowDefinitions.userSignup.startWith(workflowApp, (email: 'user@example.com'))`
-or `StemTaskDefinitions.builderExamplePing.enqueueWith(stem)`).
+or `StemTaskDefinitions.builderExamplePing.enqueue(stem)`).
 
 Generated output includes:
 
@@ -268,7 +268,7 @@ Annotated tasks also get generated definitions:
 ```dart
 final taskId = await StemTaskDefinitions.builderExampleTask
     .call(const {'kind': 'welcome'})
-    .enqueueWith(workflowApp);
+    .enqueue(workflowApp);
 ```
 
 ## Examples

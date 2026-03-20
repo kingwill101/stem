@@ -131,7 +131,7 @@ Future<void> enqueueTyped() async {
   final app = await StemApp.inMemory(tasks: [GenerateReportTask()]);
   await app.start();
 
-  final taskId = await GenerateReportTask.definition.enqueueWith(
+  final taskId = await GenerateReportTask.definition.enqueue(
     app.stem,
     const ReportPayload(reportId: 'monthly-2025-10'),
     options: const TaskOptions(priority: 5),
