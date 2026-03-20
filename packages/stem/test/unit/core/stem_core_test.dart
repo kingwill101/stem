@@ -344,6 +344,27 @@ void main() {
         expect(backend.records.single.id, id);
       },
     );
+
+    test(
+      'no-arg task definitions can derive json-backed result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition = TaskDefinition.noArgs<_CodecReceipt>(
+          name: 'sample.no_args.json',
+          decodeResultJson: _CodecReceipt.fromJson,
+        );
+
+        final id = await definition.enqueue(stem);
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
   });
 
   group('TaskCall helpers', () {
@@ -479,7 +500,7 @@ void main() {
       final stem = Stem(broker: _RecordingBroker(), backend: backend);
       final definition = TaskDefinition.noArgs<_CodecReceipt>(
         name: 'no-args.wait',
-        resultCodec: _codecReceiptCodec,
+        decodeResultJson: _CodecReceipt.fromJson,
       );
 
       await backend.set(

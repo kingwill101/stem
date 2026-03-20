@@ -63,6 +63,10 @@ has `toJson()` and `Type.fromJson(...)`. Use `refWithCodec(...)` when you need
 a custom `PayloadCodec<T>`. Workflow params still need to encode to
 `Map<String, Object?>` because they are stored as a map.
 
+If a manual flow or script returns a DTO, prefer `decodeResultJson:` on the
+definition constructor in the common `toJson()` / `Type.fromJson(...)` case.
+Use `resultCodec:` only when the result needs a custom payload codec.
+
 For workflows without start params, start directly from the flow or script
 itself with `startWith(...)`, `startAndWaitWith(...)`, or `startBuilder()`.
 Use `ref0()` when another API specifically needs a `NoArgsWorkflowRef`.

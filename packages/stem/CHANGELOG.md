@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `decodeResultJson:` shortcuts on manual `Flow`, `WorkflowScript`, and
+  `TaskDefinition.noArgs(...)` definitions so common DTO result decoding no
+  longer needs a separate `PayloadCodec<T>.json(...)` constant.
 - Added `TaskDefinition.withJsonCodec(...)`, `refWithJsonCodec(...)`, and
   `WorkflowEventRef<T>.json(...)` so manual DTO-backed tasks, workflows, and
   typed workflow events no longer need a separate codec constant in the common

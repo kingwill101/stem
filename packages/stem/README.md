@@ -247,8 +247,10 @@ final healthcheckDefinition = TaskDefinition.noArgs<void>(
 await healthcheckDefinition.enqueue(stem);
 ```
 
-If a no-arg task returns a DTO, pass `resultCodec:` so waiting helpers decode
-the result and the task metadata advertises the right result encoder.
+If a no-arg task returns a DTO, prefer `decodeResultJson:` in the common
+`toJson()` / `Type.fromJson(...)` case. Use `resultCodec:` when you need a
+custom payload codec. Both paths keep waiting helpers typed and advertise the
+right result encoder in task metadata.
 
 You can also build requests fluently from the task definition itself:
 

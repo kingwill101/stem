@@ -212,6 +212,47 @@ void main() {
       }
     });
 
+    test('manual workflows can derive json-backed result decoding', () async {
+      final flow = Flow<_GreetingResult>(
+        name: 'runtime.ref.json.result.flow',
+        decodeResultJson: _GreetingResult.fromJson,
+        build: (builder) {
+          builder.step(
+            'hello',
+            (ctx) async => const _GreetingResult(message: 'hello flow json'),
+          );
+        },
+      );
+      final script = WorkflowScript<_GreetingResult>(
+        name: 'runtime.ref.json.result.script',
+        decodeResultJson: _GreetingResult.fromJson,
+        run: (context) async =>
+            const _GreetingResult(message: 'hello script json'),
+      );
+
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+        scripts: [script],
+      );
+      try {
+        await workflowApp.start();
+
+        final flowResult = await flow.startAndWaitWith(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
+        final scriptResult = await script.startAndWaitWith(
+          workflowApp.runtime,
+          timeout: const Duration(seconds: 2),
+        );
+
+        expect(flowResult?.value?.message, 'hello flow json');
+        expect(scriptResult?.value?.message, 'hello script json');
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test('manual workflows expose direct no-args helpers', () async {
       final flow = Flow<String>(
         name: 'runtime.ref.no-args.flow',

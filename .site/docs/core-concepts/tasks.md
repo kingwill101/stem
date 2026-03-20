@@ -69,6 +69,10 @@ instead. That gives you direct `enqueue(...)` /
 `enqueueAndWait(...)` helpers without passing a fake empty map and the same
 `waitFor(...)` decoding surface as normal typed definitions.
 
+If a no-arg task returns a DTO, prefer `decodeResultJson:` when the result
+already has `toJson()` and `Type.fromJson(...)`. Use `resultCodec:` only when
+you need a custom payload codec.
+
 ## Configuring Retries
 
 Workers apply an `ExponentialJitterRetryStrategy` by default. Each retry is

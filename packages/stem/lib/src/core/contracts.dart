@@ -2122,13 +2122,12 @@ class TaskDefinition<TArgs, TResult> {
     String? argsTypeName,
     String? resultTypeName,
   }) {
-    final resultCodec =
-        decodeResultJson == null
-            ? null
-            : PayloadCodec<TResult>.json(
-              decode: decodeResultJson,
-              typeName: resultTypeName ?? '$TResult',
-            );
+    final resultCodec = decodeResultJson == null
+        ? null
+        : PayloadCodec<TResult>.json(
+            decode: decodeResultJson,
+            typeName: resultTypeName ?? '$TResult',
+          );
     return TaskDefinition<TArgs, TResult>.withPayloadCodec(
       name: name,
       argsCodec: PayloadCodec<TArgs>.json(
@@ -2149,16 +2148,30 @@ class TaskDefinition<TArgs, TResult> {
     TaskMetadata metadata = const TaskMetadata(),
     TaskResultDecoder<TResult>? decodeResult,
     PayloadCodec<TResult>? resultCodec,
+    TResult Function(Map<String, Object?> payload)? decodeResultJson,
+    String? resultTypeName,
   }) {
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<TResult>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$TResult',
+              ));
     return NoArgsTaskDefinition<TResult>(
       name: name,
       defaultOptions: defaultOptions,
       metadata: TaskDefinition._metadataWithResultCodec(
         name,
         metadata,
-        resultCodec,
+        resolvedResultCodec,
       ),
-      decodeResult: decodeResult ?? resultCodec?.decode,
+      decodeResult: decodeResult ?? resolvedResultCodec?.decode,
     );
   }
 

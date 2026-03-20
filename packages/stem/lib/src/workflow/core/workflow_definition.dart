@@ -159,7 +159,13 @@ class WorkflowDefinition<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
+    T Function(Map<String, Object?> payload)? decodeResultJson,
+    String? resultTypeName,
   }) {
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
     final steps = <FlowStep>[];
     build(FlowBuilder(steps));
     final edges = <WorkflowEdge>[];
@@ -168,12 +174,20 @@ class WorkflowDefinition<T extends Object?> {
     }
     Object? Function(Object?)? resultEncoder;
     Object? Function(Object?)? resultDecoder;
-    if (resultCodec != null) {
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<T>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$T',
+              ));
+    if (resolvedResultCodec != null) {
       resultEncoder = (Object? value) {
-        return resultCodec.encodeDynamic(value);
+        return resolvedResultCodec.encodeDynamic(value);
       };
       resultDecoder = (Object? payload) {
-        return resultCodec.decodeDynamic(payload);
+        return resolvedResultCodec.decodeDynamic(payload);
       };
     }
     return WorkflowDefinition._(
@@ -198,15 +212,29 @@ class WorkflowDefinition<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
+    T Function(Map<String, Object?> payload)? decodeResultJson,
+    String? resultTypeName,
   }) {
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
     Object? Function(Object?)? resultEncoder;
     Object? Function(Object?)? resultDecoder;
-    if (resultCodec != null) {
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<T>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$T',
+              ));
+    if (resolvedResultCodec != null) {
       resultEncoder = (Object? value) {
-        return resultCodec.encodeDynamic(value);
+        return resolvedResultCodec.encodeDynamic(value);
       };
       resultDecoder = (Object? payload) {
-        return resultCodec.decodeDynamic(payload);
+        return resolvedResultCodec.decodeDynamic(payload);
       };
     }
     return WorkflowDefinition._(

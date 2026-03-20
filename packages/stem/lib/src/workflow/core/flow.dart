@@ -20,6 +20,8 @@ class Flow<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
+    T Function(Map<String, Object?> payload)? decodeResultJson,
+    String? resultTypeName,
   }) : definition = WorkflowDefinition<T>.flow(
          name: name,
          build: build,
@@ -27,6 +29,8 @@ class Flow<T extends Object?> {
          description: description,
          metadata: metadata,
          resultCodec: resultCodec,
+         decodeResultJson: decodeResultJson,
+         resultTypeName: resultTypeName,
        );
 
   /// The constructed workflow definition.
