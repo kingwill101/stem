@@ -106,6 +106,9 @@ typed DTO plus a `PayloadCodec<T>`, but the codec must still encode to a
 `Map<String, Object?>` because watcher persistence and event delivery are
 map-based today.
 
+For map-shaped DTOs, prefer `PayloadCodec<T>.map(...)` over hand-written
+`Object?` decode wrappers.
+
 ## Practical rule
 
 When you need context metadata, add the appropriate optional named context

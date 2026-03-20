@@ -578,9 +578,10 @@ class _CodecReceipt {
   Map<String, Object?> toJson() => {'id': id};
 }
 
-const _codecReceiptCodec = PayloadCodec<_CodecReceipt>(
+const _codecReceiptCodec = PayloadCodec<_CodecReceipt>.map(
   encode: _encodeCodecReceipt,
-  decode: _decodeCodecReceipt,
+  decode: _CodecReceipt.fromJson,
+  typeName: '_CodecReceipt',
 );
 
 const _codecReceiptEncoder = CodecTaskPayloadEncoder<_CodecReceipt>(
@@ -599,10 +600,6 @@ final _codecReceiptDefinition =
 
 Object? _encodeCodecReceipt(_CodecReceipt value) => value.toJson();
 
-_CodecReceipt _decodeCodecReceipt(Object? payload) {
-  return _CodecReceipt.fromJson(Map<String, Object?>.from(payload! as Map));
-}
-
 class _CodecTaskArgs {
   const _CodecTaskArgs(this.value);
 
@@ -611,9 +608,10 @@ class _CodecTaskArgs {
   Map<String, Object?> toJson() => {'value': value};
 }
 
-const _codecTaskArgsCodec = PayloadCodec<_CodecTaskArgs>(
+const _codecTaskArgsCodec = PayloadCodec<_CodecTaskArgs>.map(
   encode: _encodeCodecTaskArgs,
   decode: _decodeCodecTaskArgs,
+  typeName: '_CodecTaskArgs',
 );
 
 Object? _encodeCodecTaskArgs(_CodecTaskArgs value) => value.toJson();

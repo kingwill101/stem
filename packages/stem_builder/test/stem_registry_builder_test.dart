@@ -12,9 +12,18 @@ typedef _FlowStepHandler = Future<Object?> Function(FlowContext context);
 enum WorkflowStepKind { task, choice, parallel, wait, custom }
 
 class PayloadCodec<T> {
-  const PayloadCodec({required this.encode, required this.decode});
+  const PayloadCodec({required this.encode, required this.decode})
+    : typeName = null;
+  const PayloadCodec.map({
+    required this.encode,
+    required T Function(Map<String, Object?> payload) decode,
+    this.typeName,
+  }) : decode = _unsupportedDecode;
   final Object? Function(T value) encode;
   final T Function(Object? payload) decode;
+  final String? typeName;
+
+  static T _unsupportedDecode<T>(Object? payload) => throw UnimplementedError();
 }
 
 class FlowStep {
@@ -1201,11 +1210,13 @@ Future<EmailRequest> dtoTask(
             allOf([
               contains('abstract final class StemPayloadCodecs'),
               contains('PayloadCodec<EmailRequest> emailRequest ='),
+              contains('PayloadCodec<EmailRequest>.map('),
               contains(
                 'WorkflowRef<EmailRequest, EmailRequest> script =',
               ),
               contains('encode: (value) => value.toJson(),'),
-              contains('EmailRequest.fromJson('),
+              contains('decode: EmailRequest.fromJson,'),
+              contains('typeName: "EmailRequest",'),
               contains(
                 'StemPayloadCodecs.emailRequest.encode(params)',
               ),

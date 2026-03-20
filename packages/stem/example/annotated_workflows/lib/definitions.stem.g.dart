@@ -3,65 +3,42 @@
 
 part of 'definitions.dart';
 
-Map<String, Object?> _stemPayloadMap(Object? value, String typeName) {
-  if (value is Map<String, Object?>) {
-    return Map<String, Object?>.from(value);
-  }
-  if (value is Map) {
-    final result = <String, Object?>{};
-    value.forEach((key, entry) {
-      if (key is! String) {
-        throw StateError('$typeName payload must use string keys.');
-      }
-      result[key] = entry;
-    });
-    return result;
-  }
-  throw StateError(
-    '$typeName payload must decode to Map<String, Object?>, got ${value.runtimeType}.',
-  );
-}
-
 abstract final class StemPayloadCodecs {
   static final PayloadCodec<WelcomeWorkflowResult> welcomeWorkflowResult =
-      PayloadCodec<WelcomeWorkflowResult>(
+      PayloadCodec<WelcomeWorkflowResult>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) => WelcomeWorkflowResult.fromJson(
-          _stemPayloadMap(payload, "WelcomeWorkflowResult"),
-        ),
+        decode: WelcomeWorkflowResult.fromJson,
+        typeName: "WelcomeWorkflowResult",
       );
   static final PayloadCodec<WelcomeRequest> welcomeRequest =
-      PayloadCodec<WelcomeRequest>(
+      PayloadCodec<WelcomeRequest>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) =>
-            WelcomeRequest.fromJson(_stemPayloadMap(payload, "WelcomeRequest")),
+        decode: WelcomeRequest.fromJson,
+        typeName: "WelcomeRequest",
       );
   static final PayloadCodec<WelcomePreparation> welcomePreparation =
-      PayloadCodec<WelcomePreparation>(
+      PayloadCodec<WelcomePreparation>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) => WelcomePreparation.fromJson(
-          _stemPayloadMap(payload, "WelcomePreparation"),
-        ),
+        decode: WelcomePreparation.fromJson,
+        typeName: "WelcomePreparation",
       );
   static final PayloadCodec<ContextCaptureResult> contextCaptureResult =
-      PayloadCodec<ContextCaptureResult>(
+      PayloadCodec<ContextCaptureResult>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) => ContextCaptureResult.fromJson(
-          _stemPayloadMap(payload, "ContextCaptureResult"),
-        ),
+        decode: ContextCaptureResult.fromJson,
+        typeName: "ContextCaptureResult",
       );
   static final PayloadCodec<EmailDispatch> emailDispatch =
-      PayloadCodec<EmailDispatch>(
+      PayloadCodec<EmailDispatch>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) =>
-            EmailDispatch.fromJson(_stemPayloadMap(payload, "EmailDispatch")),
+        decode: EmailDispatch.fromJson,
+        typeName: "EmailDispatch",
       );
   static final PayloadCodec<EmailDeliveryReceipt> emailDeliveryReceipt =
-      PayloadCodec<EmailDeliveryReceipt>(
+      PayloadCodec<EmailDeliveryReceipt>.map(
         encode: (value) => value.toJson(),
-        decode: (payload) => EmailDeliveryReceipt.fromJson(
-          _stemPayloadMap(payload, "EmailDeliveryReceipt"),
-        ),
+        decode: EmailDeliveryReceipt.fromJson,
+        typeName: "EmailDeliveryReceipt",
       );
 }
 

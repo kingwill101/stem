@@ -25,14 +25,16 @@ class _GreetingResult {
   Map<String, Object?> toJson() => {'message': message};
 }
 
-const _greetingParamsCodec = PayloadCodec<_GreetingParams>(
+const _greetingParamsCodec = PayloadCodec<_GreetingParams>.map(
   encode: _encodeGreetingParams,
-  decode: _decodeGreetingParams,
+  decode: _GreetingParams.fromJson,
+  typeName: '_GreetingParams',
 );
 
-const _greetingResultCodec = PayloadCodec<_GreetingResult>(
+const _greetingResultCodec = PayloadCodec<_GreetingResult>.map(
   encode: _encodeGreetingResult,
-  decode: _decodeGreetingResult,
+  decode: _GreetingResult.fromJson,
+  typeName: '_GreetingResult',
 );
 
 const _userUpdatedEvent = WorkflowEventRef<_GreetingParams>(
@@ -42,17 +44,7 @@ const _userUpdatedEvent = WorkflowEventRef<_GreetingParams>(
 
 Object? _encodeGreetingParams(_GreetingParams value) => value.toJson();
 
-_GreetingParams _decodeGreetingParams(Object? payload) {
-  return _GreetingParams.fromJson(
-    Map<String, Object?>.from(payload! as Map),
-  );
-}
-
 Object? _encodeGreetingResult(_GreetingResult value) => value.toJson();
-
-_GreetingResult _decodeGreetingResult(Object? payload) {
-  return _GreetingResult.fromJson(Map<String, Object?>.from(payload! as Map));
-}
 
 void main() {
   group('runtime workflow refs', () {

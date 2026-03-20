@@ -1351,42 +1351,18 @@ class _RegistryEmitter {
     if (payloadCodecSymbols.isEmpty) {
       return;
     }
-    buffer.writeln('Map<String, Object?> _stemPayloadMap(');
-    buffer.writeln('  Object? value,');
-    buffer.writeln('  String typeName,');
-    buffer.writeln(') {');
-    buffer.writeln('  if (value is Map<String, Object?>) {');
-    buffer.writeln('    return Map<String, Object?>.from(value);');
-    buffer.writeln('  }');
-    buffer.writeln('  if (value is Map) {');
-    buffer.writeln('    final result = <String, Object?>{};');
-    buffer.writeln('    value.forEach((key, entry) {');
-    buffer.writeln('      if (key is! String) {');
-    buffer.writeln(
-      r"        throw StateError('$typeName payload must use string keys.');",
-    );
-    buffer.writeln('      }');
-    buffer.writeln('      result[key] = entry;');
-    buffer.writeln('    });');
-    buffer.writeln('    return result;');
-    buffer.writeln('  }');
-    buffer.writeln(
-      r"  throw StateError('$typeName payload must decode to Map<String, Object?>, got ${value.runtimeType}.');",
-    );
-    buffer.writeln('}');
-    buffer.writeln();
-
     buffer.writeln('abstract final class StemPayloadCodecs {');
     for (final entry in payloadCodecSymbols.entries) {
       final typeCode = entry.key;
       final symbol = entry.value;
       buffer.writeln('  static final PayloadCodec<$typeCode> $symbol =');
-      buffer.writeln('      PayloadCodec<$typeCode>(');
+      buffer.writeln('      PayloadCodec<$typeCode>.map(');
       buffer.writeln('        encode: (value) => value.toJson(),');
       buffer.writeln(
-        '        decode: (payload) => $typeCode.fromJson('
-        '          _stemPayloadMap(payload, ${_string(typeCode)}),'
-        '        ),',
+        '        decode: $typeCode.fromJson,',
+      );
+      buffer.writeln(
+        '        typeName: ${_string(typeCode)},',
       );
       buffer.writeln('      );');
     }

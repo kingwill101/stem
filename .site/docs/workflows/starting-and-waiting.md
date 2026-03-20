@@ -24,11 +24,10 @@ Manual `Flow(...)` and `WorkflowScript(...)` definitions can derive a typed ref
 without repeating the workflow-name string:
 
 ```dart
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>.map(
   encode: (value) => value.toJson(),
-  decode: (payload) => ApprovalDraft.fromJson(
-    Map<String, Object?>.from(payload as Map),
-  ),
+  decode: ApprovalDraft.fromJson,
+  typeName: 'ApprovalDraft',
 );
 
 final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(

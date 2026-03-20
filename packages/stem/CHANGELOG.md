@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `PayloadCodec<T>.map(...)` so map-shaped workflow/task DTO codecs no
+  longer need handwritten `Object?` decode wrappers, and refreshed the public
+  typed payload docs/examples around the new helper.
 - Added expression-style workflow suspension helpers with named arguments:
   `await ctx.sleepFor(duration: ...)`,
   `await ctx.waitForEvent(topic: ...)`, and

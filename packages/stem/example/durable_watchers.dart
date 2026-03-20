@@ -1,8 +1,9 @@
 import 'package:stem/stem.dart';
 
-final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>(
+final shipmentReadyEventCodec = PayloadCodec<_ShipmentReadyEvent>.map(
   encode: (value) => value.toJson(),
   decode: _ShipmentReadyEvent.fromJson,
+  typeName: '_ShipmentReadyEvent',
 );
 final shipmentReadyEvent = WorkflowEventRef<_ShipmentReadyEvent>(
   topic: 'shipment.ready',

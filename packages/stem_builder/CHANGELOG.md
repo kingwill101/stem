@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Switched generated DTO payload codecs to `PayloadCodec<T>.map(...)`, removing
+  the old emitted map-normalization helper and the need for handwritten
+  `Object?` decode wrappers in generated output.
 - Updated the builder docs and annotated workflow example to prefer direct
   child-workflow helpers like `ref.startAndWaitWith(context, value)` in
   durable boundaries, leaving caller-bound builders for advanced overrides.

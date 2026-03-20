@@ -193,11 +193,10 @@ class HelloArgs {
   }
 }
 
-const helloArgsCodec = PayloadCodec<HelloArgs>(
+const helloArgsCodec = PayloadCodec<HelloArgs>.map(
   encode: (value) => value.toJson(),
-  decode: (payload) => HelloArgs.fromJson(
-    Map<String, Object?>.from(payload! as Map),
-  ),
+  decode: HelloArgs.fromJson,
+  typeName: 'HelloArgs',
 );
 
 Future<void> main() async {
@@ -483,11 +482,10 @@ final approvalsFlow = Flow<String>(
   },
 );
 
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>.map(
   encode: (value) => value.toJson(),
-  decode: (payload) => ApprovalDraft.fromJson(
-    Map<String, Object?>.from(payload as Map),
-  ),
+  decode: ApprovalDraft.fromJson,
+  typeName: 'ApprovalDraft',
 );
 
 final approvalsRef = approvalsFlow.refWithCodec<ApprovalDraft>(

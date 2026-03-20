@@ -17,16 +17,13 @@ class ApprovalDraft {
   }
 }
 
-const approvalDraftCodec = PayloadCodec<ApprovalDraft>(
+const approvalDraftCodec = PayloadCodec<ApprovalDraft>.map(
   encode: _encodeApprovalDraft,
-  decode: _decodeApprovalDraft,
+  decode: ApprovalDraft.fromJson,
+  typeName: 'ApprovalDraft',
 );
 
 Object? _encodeApprovalDraft(ApprovalDraft value) => value.toJson();
-
-ApprovalDraft _decodeApprovalDraft(Object? payload) {
-  return ApprovalDraft.fromJson(Map<String, Object?>.from(payload as Map));
-}
 
 // #region workflows-runtime
 Future<void> bootstrapWorkflowApp() async {
