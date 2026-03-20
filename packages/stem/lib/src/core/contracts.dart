@@ -2291,12 +2291,6 @@ class TaskDefinition<TArgs, TResult> {
   }
 
   /// Creates a fluent enqueue builder from this definition and [args].
-  @Deprecated('Use prepareEnqueue(args) instead.')
-  TaskEnqueueBuilder<TArgs, TResult> enqueueBuilder(TArgs args) {
-    return prepareEnqueue(args);
-  }
-
-  /// Creates a fluent enqueue builder from this definition and [args].
   TaskEnqueueBuilder<TArgs, TResult> prepareEnqueue(TArgs args) {
     return TaskEnqueueBuilder(definition: this, args: args);
   }
@@ -2368,12 +2362,6 @@ class NoArgsTaskDefinition<TResult> {
       meta: meta,
       enqueueOptions: enqueueOptions,
     );
-  }
-
-  /// Creates a fluent enqueue builder for this no-args task definition.
-  @Deprecated('Use prepareEnqueue() instead.')
-  TaskEnqueueBuilder<(), TResult> enqueueBuilder() {
-    return prepareEnqueue();
   }
 
   /// Creates a fluent enqueue builder for this no-args task definition.
@@ -2666,15 +2654,6 @@ class BoundTaskEnqueueBuilder<TArgs, TResult> {
 /// enqueuer.
 extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
   /// Creates a caller-bound fluent builder for a typed task definition.
-  @Deprecated('Use prepareEnqueue(definition: ..., args: ...) instead.')
-  BoundTaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
-    required TaskDefinition<TArgs, TResult> definition,
-    required TArgs args,
-  }) {
-    return prepareEnqueue(definition: definition, args: args);
-  }
-
-  /// Creates a caller-bound fluent builder for a typed task definition.
   BoundTaskEnqueueBuilder<TArgs, TResult> prepareEnqueue<TArgs, TResult>({
     required TaskDefinition<TArgs, TResult> definition,
     required TArgs args,
@@ -2683,14 +2662,6 @@ extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
       enqueuer: this,
       builder: TaskEnqueueBuilder(definition: definition, args: args),
     );
-  }
-
-  /// Creates a caller-bound fluent builder for a no-args task definition.
-  @Deprecated('Use prepareNoArgsEnqueue(definition: ...) instead.')
-  BoundTaskEnqueueBuilder<(), TResult> enqueueNoArgsBuilder<TResult>({
-    required NoArgsTaskDefinition<TResult> definition,
-  }) {
-    return prepareNoArgsEnqueue(definition: definition);
   }
 
   /// Creates a caller-bound fluent builder for a no-args task definition.

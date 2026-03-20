@@ -13,6 +13,10 @@
   `startNoArgsWorkflowBuilder(...)`. The direct `start(...)`,
   `startAndWait(...)`, and `prepareWorkflowStart(...)` forms are now the only
   supported workflow-start surfaces.
+- Removed the deprecated task-builder compatibility helpers:
+  `enqueueBuilder(...)` and `enqueueNoArgsBuilder(...)`. The direct
+  `prepareEnqueue(...)` and `prepareNoArgsEnqueue(...)` forms are now the only
+  supported builder entrypoints.
 - Replaced the older manual DTO helper names with direct forms:
   `TaskDefinition.json(...)`, `TaskDefinition.codec(...)`,
   `WorkflowRef.json(...)`, `WorkflowRef.codec(...)`, `refJson(...)`, and

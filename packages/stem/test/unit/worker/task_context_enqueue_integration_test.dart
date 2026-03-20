@@ -535,7 +535,7 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
-  final builder = context.enqueueBuilder(
+  final builder = context.prepareEnqueue(
     definition: _childDefinition,
     args: const _ChildArgs('from-isolate'),
   );
