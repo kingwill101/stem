@@ -50,6 +50,31 @@ void main() {
     expect(context.takeResumeValue<Map<String, Object?>>(), isNull);
   });
 
+  test('FlowContext.takeResumeJson decodes DTO payloads', () {
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-1',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      resumeData: const {'message': 'approved'},
+    );
+
+    final value = context.takeResumeJson<_ResumePayload>(
+      decode: _ResumePayload.fromJson,
+    );
+
+    expect(value, isNotNull);
+    expect(value!.message, 'approved');
+    expect(
+      context.takeResumeJson<_ResumePayload>(
+        decode: _ResumePayload.fromJson,
+      ),
+      isNull,
+    );
+  });
+
   test(
     'WorkflowExecutionContext.previousValue reads typed previous results',
     () {
@@ -121,6 +146,26 @@ void main() {
 
       final value = flowContext.requiredPreviousValue<_ResumePayload>(
         codec: _resumePayloadCodec,
+      );
+
+      expect(value.message, 'approved');
+    },
+  );
+
+  test(
+    'WorkflowExecutionContext.requiredPreviousJson decodes DTO values',
+    () {
+      final flowContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'tail',
+        params: const {},
+        previousResult: const {'message': 'approved'},
+        stepIndex: 1,
+      );
+
+      final value = flowContext.requiredPreviousJson<_ResumePayload>(
+        decode: _ResumePayload.fromJson,
       );
 
       expect(value.message, 'approved');
@@ -234,6 +279,51 @@ void main() {
       final resumed = resumedContext.waitForEventValue<_ResumePayload>(
         'demo.event',
         codec: _resumePayloadCodec,
+      );
+
+      expect(resumed, isNotNull);
+      expect(resumed!.message, 'approved');
+      expect(resumedContext.takeControl(), isNull);
+    },
+  );
+
+  test(
+    'FlowContext.waitForEventValueJson registers watcher '
+    'then decodes DTO payload',
+    () {
+      final firstContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      final firstResult = firstContext.waitForEventValueJson<_ResumePayload>(
+        'demo.event',
+        decode: _ResumePayload.fromJson,
+      );
+
+      expect(firstResult, isNull);
+      final control = firstContext.takeControl();
+      expect(control, isNotNull);
+      expect(control!.type, FlowControlType.waitForEvent);
+      expect(control.topic, 'demo.event');
+
+      final resumedContext = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {'message': 'approved'},
+      );
+
+      final resumed = resumedContext.waitForEventValueJson<_ResumePayload>(
+        'demo.event',
+        decode: _ResumePayload.fromJson,
       );
 
       expect(resumed, isNotNull);
@@ -365,6 +455,53 @@ void main() {
       ),
     );
   });
+
+  test(
+    'FlowContext.waitForEventJson uses named args and resumes with DTO payload',
+    () {
+      final waiting = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+
+      expect(
+        () => waiting.waitForEventJson<_ResumePayload>(
+          topic: 'demo.event',
+          decode: _ResumePayload.fromJson,
+        ),
+        throwsA(isA<WorkflowSuspensionSignal>()),
+      );
+      expect(waiting.takeControl()?.topic, 'demo.event');
+
+      final resumed = FlowContext(
+        workflow: 'demo',
+        runId: 'run-1',
+        stepName: 'wait',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+        resumeData: const {'message': 'approved'},
+      );
+
+      expect(
+        resumed.waitForEventJson<_ResumePayload>(
+          topic: 'demo.event',
+          decode: _ResumePayload.fromJson,
+        ),
+        completion(
+          isA<_ResumePayload>().having(
+            (value) => value.message,
+            'message',
+            'approved',
+          ),
+        ),
+      );
+    },
+  );
 
   test('WorkflowEventRef.awaitOn reuses the event topic for flows', () {
     const event = WorkflowEventRef<_ResumePayload>(

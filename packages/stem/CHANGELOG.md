@@ -69,6 +69,10 @@
   `ctx.requiredParamJson(...)`, and shared `valueJson(...)` /
   `requiredValueJson(...)` helpers so nested DTO payload fields no longer need
   a separate `PayloadCodec<T>` constant.
+- Added `previousJson(...)`, `requiredPreviousJson(...)`,
+  `takeResumeJson(...)`, `waitForEventValueJson(...)`, and
+  `waitForEventJson(...)` so workflow steps and checkpoints can decode prior
+  DTO results and resume/event payloads without separate codec constants.
 - Added `valueList<T>()`, `valueListOr(...)`, and `requiredValueList(...)` to
   the shared payload-map helpers so canvas chains/chords and other meta-driven
   paths can decode typed list payloads without manual list casts.

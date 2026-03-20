@@ -438,8 +438,10 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
   repeating raw map lookups.
 - `step.paramJson<T>()` / `step.requiredParamJson<T>()` decode nested DTO
   params without a separate codec constant.
-- `step.previousValue<T>()` reads the prior persisted value without repeating
-  manual casts.
+- `step.previousValue<T>()` / `step.requiredPreviousValue<T>()` read the prior
+  persisted value without repeating manual casts.
+- `step.previousJson<T>()` / `step.requiredPreviousJson<T>()` decode prior DTO
+  results without a separate codec constant.
 - `step.iteration` tracks the current auto-version suffix when
   `autoVersion: true` is set.
 - `step.idempotencyKey('scope')` builds stable outbound identifiers.
@@ -451,12 +453,15 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
+- `step.waitForEventValueJson<T>(...)` handles the same path for DTO event
+  payloads without a separate codec constant.
 - `event.waitValue(step)` handles the same path when you already have a typed
   `WorkflowEventRef<T>`.
 - `event.awaitOn(step)` keeps the lower-level flow-control suspend-first path
   on that same typed event ref instead of dropping back to a raw topic string.
-- `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface
-  payloads from sleeps or awaited events when you need lower-level control.
+- `step.takeResumeData()`, `step.takeResumeValue<T>(codec: ...)`, and
+  `step.takeResumeJson<T>(...)` surface payloads from sleeps or awaited events
+  when you need lower-level control.
 
 ### Current workflow model
 

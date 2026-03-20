@@ -126,4 +126,46 @@ extension WorkflowExecutionContextValues on WorkflowExecutionContext {
     }
     return value;
   }
+
+  /// Returns the decoded prior step/checkpoint value as a typed DTO, or
+  /// `null`.
+  T? previousJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final value = previousResult;
+    if (value == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(value);
+  }
+
+  /// Returns the decoded prior step/checkpoint DTO, or [fallback].
+  T previousJsonOr<T>(
+    T fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return previousJson<T>(
+          decode: decode,
+          typeName: typeName,
+        ) ??
+        fallback;
+  }
+
+  /// Returns the decoded prior step/checkpoint DTO, throwing when absent.
+  T requiredPreviousJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final value = previousJson<T>(
+      decode: decode,
+      typeName: typeName,
+    );
+    if (value == null) {
+      throw StateError('WorkflowExecutionContext.previousResult is null.');
+    }
+    return value;
+  }
 }
