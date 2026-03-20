@@ -861,13 +861,7 @@ final client = await StemClient.inMemory(
   additionalEncoders: const [MyOtherEncoder()],
 );
 
-final canvas = Canvas(
-  broker: broker,
-  backend: backend,
-  tasks: [SecretTask()],
-  resultEncoder: const Base64ResultEncoder(),
-  argsEncoder: const Base64ResultEncoder(),
-);
+final canvas = client.createCanvas();
 ```
 
 Every envelope published by Stem carries the argument encoder id in headers/meta

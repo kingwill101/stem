@@ -129,11 +129,7 @@ Future<void> main(List<String> args) async {
     signer: signer,
   );
   // #endregion signing-producer-stem
-  final canvas = Canvas(
-    broker: client.broker,
-    backend: client.backend,
-    tasks: tasks,
-  );
+  final canvas = client.createCanvas(tasks: tasks);
   final autoFill = _AutoFillController(
     enqueuer: client.stem,
     enabled: _boolFromEnv(

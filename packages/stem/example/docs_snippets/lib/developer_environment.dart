@@ -88,17 +88,7 @@ Future<void> runCanvasFlows(
   Bootstrap bootstrap,
   List<TaskHandler<Object?>> tasks,
 ) async {
-  final canvas = Canvas(
-    broker: bootstrap.client.broker,
-    backend: await RedisResultBackend.connect(
-      _resolveRedisUrl(
-        bootstrap.config.brokerUrl,
-        bootstrap.config.resultBackendUrl,
-        1,
-      ),
-    ),
-    tasks: tasks,
-  );
+  final canvas = bootstrap.client.createCanvas(tasks: tasks);
 
   final ids = await canvas.group([
     task('media.resize', args: {'file': 'hero.png'}),

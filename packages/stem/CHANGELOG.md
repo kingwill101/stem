@@ -115,6 +115,9 @@
   instead of raw producer wiring.
 - Simplified the README unique-task deduplication snippet to use
   `StemClient.create(...)` instead of a raw `Stem(...)` constructor example.
+- Added `StemClient.createCanvas()` so shared-client setups can reuse the
+  client-owned broker/backend/registry for canvas dispatch without manually
+  constructing `Canvas(...)`.
 - Removed the now-unused raw `Stem` helper constructors from the DLQ sandbox
   and rate-limit delay shared libraries after those demos moved to
   `StemClient`-based producers.

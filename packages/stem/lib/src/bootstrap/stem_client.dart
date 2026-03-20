@@ -3,6 +3,7 @@ import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/bootstrap/workflow_app.dart';
+import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
@@ -189,10 +190,8 @@ abstract class StemClient implements TaskResultCaller {
 
   /// Waits for a task result using a typed [definition] for decoding.
   @override
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
+  Future<TaskResult<TResult>?>
+  waitForTaskDefinition<TArgs, TResult extends Object?>(
     String taskId,
     TaskDefinition<TArgs, TResult> definition, {
     Duration? timeout,
@@ -271,6 +270,21 @@ abstract class StemClient implements TaskResultCaller {
     );
   }
 
+  /// Creates a canvas using the shared broker/backend/registry.
+  Canvas createCanvas({
+    Iterable<TaskHandler<Object?>> tasks = const [],
+  }) {
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    return Canvas(
+      broker: broker,
+      backend: backend,
+      registry: taskRegistry,
+      encoderRegistry: encoderRegistry,
+    );
+  }
+
   /// Creates a workflow app using the shared client configuration.
   Future<StemWorkflowApp> createWorkflowApp({
     StemModule? module,
@@ -318,7 +332,6 @@ abstract class StemClient implements TaskResultCaller {
   /// Releases resources held by the client.
   Future<void> close();
 }
-
 
 class _DefaultStemClient extends StemClient {
   _DefaultStemClient({

@@ -122,6 +122,59 @@ void main() {
     await client.close();
   });
 
+  test('StemClient createCanvas reuses shared registry and backend', () async {
+    final client = await StemClient.inMemory(
+      tasks: [
+        FunctionTaskHandler<String>(
+          name: 'client.canvas.task',
+          entrypoint: (context, args) async => 'canvas-ok',
+          runInIsolate: false,
+        ),
+      ],
+    );
+    final worker = await client.createWorker();
+    await worker.start();
+
+    final canvas = client.createCanvas();
+    final taskId = await canvas.send(
+      task<String>('client.canvas.task', args: const {}),
+    );
+    final result = await client.waitForTask<String>(
+      taskId,
+      timeout: const Duration(seconds: 2),
+    );
+
+    expect(result?.value, 'canvas-ok');
+
+    await worker.shutdown();
+    await client.close();
+  });
+
+  test('StemClient createCanvas registers additional tasks', () async {
+    final extraTask = FunctionTaskHandler<String>(
+      name: 'client.canvas.extra',
+      entrypoint: (context, args) async => 'extra-ok',
+      runInIsolate: false,
+    );
+    final client = await StemClient.inMemory();
+    final worker = await client.createWorker(tasks: [extraTask]);
+    await worker.start();
+
+    final canvas = client.createCanvas(tasks: [extraTask]);
+    final taskId = await canvas.send(
+      task<String>('client.canvas.extra', args: const {}),
+    );
+    final result = await client.waitForTask<String>(
+      taskId,
+      timeout: const Duration(seconds: 2),
+    );
+
+    expect(result?.value, 'extra-ok');
+
+    await worker.shutdown();
+    await client.close();
+  });
+
   test('StemClient createApp infers queues from explicit tasks', () async {
     final client = await StemClient.inMemory();
     final app = await client.createApp(
