@@ -147,6 +147,7 @@ extension FlowContextResumeValues on FlowContext {
   }
 
   /// Registers an event wait using a typed [event] reference.
+  @Deprecated('Use event.awaitOn(this, ...) instead.')
   FlowStepControl awaitEventRef<T>(
     WorkflowEventRef<T> event, {
     DateTime? deadline,
@@ -284,6 +285,20 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
 /// These mirror `event.emit(...)` so typed workflow events can stay on the
 /// event-ref surface for both emit and wait paths.
 extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
+  /// Registers a low-level flow-control wait while keeping the typed event ref
+  /// on the call site.
+  FlowStepControl awaitOn(
+    FlowContext step, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return step.awaitEvent(
+      topic,
+      deadline: deadline,
+      data: data,
+    );
+  }
+
   /// Registers an event wait and returns the resumed payload on the legacy
   /// null-then-resume path.
   ///

@@ -285,7 +285,7 @@ void main() {
     );
   });
 
-  test('FlowContext.awaitEventRef reuses the event topic', () {
+  test('WorkflowEventRef.awaitOn reuses the event topic for flows', () {
     const event = WorkflowEventRef<_ResumePayload>(
       topic: 'demo.event',
       codec: _resumePayloadCodec,
@@ -300,8 +300,8 @@ void main() {
       stepIndex: 0,
     );
 
-    final control = context.awaitEventRef(
-      event,
+    final control = event.awaitOn(
+      context,
       deadline: deadline,
       data: const {'source': 'flow'},
     );

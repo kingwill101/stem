@@ -2,6 +2,8 @@
 
 ## 0.1.1
 
+- Added `event.awaitOn(step)` for the low-level flow-control event wait path,
+  and deprecated `FlowContext.awaitEventRef(...)`.
 - Deprecated script-step `awaitEventRef(...)` in favor of `await event.wait(ctx)`.
 - Deprecated context-side `waitForEventRef(...)` and
   `waitForEventRefValue(...)` in favor of `event.waitValue(ctx)` and
