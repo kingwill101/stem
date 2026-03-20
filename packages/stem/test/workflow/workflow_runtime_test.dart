@@ -673,6 +673,53 @@ void main() {
     expect(completed?.result, 'user-typed-1');
   });
 
+  test(
+    'emitJson resumes flows with DTO payloads without a manual map',
+    () async {
+      _UserUpdatedEvent? observedPayload;
+
+      runtime.registerWorkflow(
+        Flow(
+          name: 'event.json.workflow',
+          build: (flow) {
+            flow.step<String?>(
+              'wait',
+              (context) async {
+                final resume = context.takeResumeValue<_UserUpdatedEvent>(
+                  codec: _userUpdatedEventCodec,
+                );
+                if (resume == null) {
+                  context.awaitEvent('user.updated.json');
+                  return null;
+                }
+                observedPayload = resume;
+                return resume.id;
+              },
+            );
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow('event.json.workflow');
+      await runtime.executeRun(runId);
+
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.json');
+
+      await runtime.emitJson(
+        'user.updated.json',
+        const _UserUpdatedEvent(id: 'user-json-1'),
+      );
+      await runtime.executeRun(runId);
+
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(observedPayload?.id, 'user-json-1');
+      expect(completed?.result, 'user-json-1');
+    },
+  );
+
   test('emitEvent resumes flows with typed workflow event refs', () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.codec(
       topic: 'user.updated.ref',

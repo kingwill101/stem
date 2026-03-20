@@ -361,6 +361,23 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     }
   }
 
+  /// Emits a DTO-backed external event without requiring a manual payload map.
+  Future<void> emitJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    String? typeName,
+  }) {
+    return emit(
+      topic,
+      Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          payloadJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+    );
+  }
+
   WorkflowResult<T> _buildResult<T extends Object?>(
     RunState state,
     T Function(Object? payload)? decode, {

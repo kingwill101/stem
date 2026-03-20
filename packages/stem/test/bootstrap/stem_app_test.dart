@@ -508,6 +508,54 @@ void main() {
     });
 
     test(
+      'emitJson resumes runs with DTO payloads without a manual map',
+      () async {
+        const demoPayloadCodec = PayloadCodec<_DemoPayload>.json(
+          decode: _DemoPayload.fromJson,
+        );
+        final flow = Flow<String?>(
+          name: 'workflow.json.emit',
+          build: (builder) {
+            builder.step<String?>(
+              'wait',
+              (ctx) async {
+                final resume = ctx.takeResumeValue<_DemoPayload>(
+                  codec: demoPayloadCodec,
+                );
+                if (resume == null) {
+                  ctx.awaitEvent('workflow.json.emit.topic');
+                  return null;
+                }
+                return resume.foo;
+              },
+            );
+          },
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          final runId = await workflowApp.startWorkflow('workflow.json.emit');
+          await workflowApp.executeRun(runId);
+
+          await workflowApp.emitJson(
+            'workflow.json.emit.topic',
+            const _DemoPayload('baz'),
+          );
+
+          final run = await workflowApp.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(runId, isNotEmpty);
+          expect(run?.requiredValue(), 'baz');
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
       'waitForCompletion does not decode when workflow is cancelled',
       () async {
         final flow = Flow(

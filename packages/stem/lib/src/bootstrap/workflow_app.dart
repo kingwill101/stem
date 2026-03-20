@@ -254,6 +254,19 @@ class StemWorkflowApp
     );
   }
 
+  /// Emits a DTO-backed external event without requiring a manual payload map.
+  Future<void> emitJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    String? typeName,
+  }) {
+    return runtime.emitJson(
+      topic,
+      payloadJson,
+      typeName: typeName,
+    );
+  }
+
   /// Schedules a workflow run from a prebuilt [WorkflowStartCall].
   @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(

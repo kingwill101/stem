@@ -469,7 +469,7 @@ The runtime shape is the same in every case:
 - bootstrap a `StemWorkflowApp`
 - pass `flows:`, `scripts:`, and `tasks:` directly
 - start runs with direct workflow helpers or generated workflow refs
-- use `startWorkflow(...)` / `startWorkflowJson(...)` /
+- use `startWorkflow(...)` / `startWorkflowJson(...)` / `emitJson(...)` /
   `waitForCompletion(...)` when names come from config, CLI input, or other
   dynamic sources
 
@@ -1146,7 +1146,8 @@ backend metadata under `stem.unique.duplicates`.
 
 - Awaited events behave the same way: the emitted payload is delivered via
   `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
-- When you have a DTO event, emit it through `workflowApp.emitValue(...)` (or
+- When you have a DTO event, emit it through `workflowApp.emitJson(...)` /
+  `workflowApp.emitValue(...)` (or `runtime.emitJson(...)` /
   `runtime.emitValue(...)` when you are intentionally using the low-level
   runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)`
   as the shortest typed event form and call `event.emit(emitter, dto)` as the
