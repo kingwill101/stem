@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `WorkerHeartbeat.extrasJson(...)`,
+  `extrasVersionedJson(...)`, and `extrasAs(codec: ...)` so persisted worker
+  heartbeat metadata can decode DTO payloads without raw map casts.
 - Added `DeadLetterEntry.metaJson(...)`, `metaVersionedJson(...)`,
   `ScheduleEntry.argsJson(...)`, `kwargsJson(...)`, and `metaJson(...)` so
   DLQ and scheduler tooling can decode persisted DTO payloads without raw map

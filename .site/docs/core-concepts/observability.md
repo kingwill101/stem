@@ -108,6 +108,9 @@ When worker events carry structured `data`, prefer `event.dataJson(...)`,
 `payload.responseAs(codec: ...)`, `payload.errorJson(...)`,
 `payload.errorVersionedJson(...)`, or `payload.errorAs(codec: ...)` instead of
 walking raw `response` / `error` maps.
+Persisted worker heartbeats expose the same typed decode path on `extras` via
+`heartbeat.extrasJson(...)`, `heartbeat.extrasVersionedJson(...)`, and
+`heartbeat.extrasAs(codec: ...)`.
 
 ## Logging
 

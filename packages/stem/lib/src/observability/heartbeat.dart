@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
+
 /// Structured payload describing worker state for external monitoring systems.
 class WorkerHeartbeat {
   /// Captures the current worker state at [timestamp] using optional [extras].
@@ -67,6 +70,53 @@ class WorkerHeartbeat {
 
   /// Additional metadata for downstream consumers.
   final Map<String, Object?> extras;
+
+  /// Decodes the full extras payload as a typed DTO with [codec].
+  T extrasAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(extras);
+  }
+
+  /// Decodes the full extras payload as a typed DTO with a JSON decoder.
+  T extrasJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(extras);
+  }
+
+  /// Decodes the full extras payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T extrasVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(extras);
+  }
+
+  /// Returns the decoded extras value for [key], or `null` when absent.
+  T? extraValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return extras.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded extras value for [key], or [fallback] when absent.
+  T extraValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return extras.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded extras value for [key], throwing when absent.
+  T requiredExtraValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return extras.requiredValue<T>(key, codec: codec);
+  }
 
   /// Serializes this heartbeat into a JSON-ready map for transport or storage.
   Map<String, Object?> toJson() => {
