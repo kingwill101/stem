@@ -44,6 +44,10 @@ class StemRegistryBuilder implements Builder {
       FlowContext,
       inPackage: 'stem',
     );
+    const workflowExecutionContextChecker = TypeChecker.typeNamed(
+      WorkflowExecutionContext,
+      inPackage: 'stem',
+    );
     const scriptContextChecker = TypeChecker.typeNamed(
       WorkflowScriptContext,
       inPackage: 'stem',
@@ -177,6 +181,7 @@ class StemRegistryBuilder implements Builder {
           final stepBinding = _validateScriptStepMethod(
             method,
             scriptStepContextChecker,
+            workflowExecutionContextChecker,
           );
           final stepAnnotation = workflowStepChecker.firstAnnotationOfExact(
             method,
@@ -202,8 +207,10 @@ class StemRegistryBuilder implements Builder {
               method: method.displayName,
               flowContextParameterName: null,
               flowContextIsNamed: false,
+              flowContextTypeCode: null,
               scriptStepContextParameterName: stepBinding.contextParameterName,
               scriptStepContextIsNamed: stepBinding.contextIsNamed,
+              scriptStepContextTypeCode: stepBinding.contextTypeCode,
               valueParameters: stepBinding.valueParameters,
               returnTypeCode: stepBinding.returnTypeCode,
               stepValueTypeCode: stepBinding.stepValueTypeCode,
@@ -268,6 +275,7 @@ class StemRegistryBuilder implements Builder {
         final stepBinding = _validateFlowStepMethod(
           method,
           flowContextChecker,
+          workflowExecutionContextChecker,
         );
         final stepAnnotation = workflowStepChecker.firstAnnotationOfExact(
           method,
@@ -293,8 +301,10 @@ class StemRegistryBuilder implements Builder {
             method: method.displayName,
             flowContextParameterName: stepBinding.contextParameterName,
             flowContextIsNamed: stepBinding.contextIsNamed,
+            flowContextTypeCode: stepBinding.contextTypeCode,
             scriptStepContextParameterName: null,
             scriptStepContextIsNamed: false,
+            scriptStepContextTypeCode: null,
             valueParameters: stepBinding.valueParameters,
             returnTypeCode: null,
             stepValueTypeCode: stepBinding.stepValueTypeCode,
@@ -442,7 +452,7 @@ class StemRegistryBuilder implements Builder {
     final parameters = method.formalParameters;
     final contextParameter = _extractInjectedContextParameter(
       parameters,
-      scriptContextChecker,
+      [scriptContextChecker],
       method,
       annotationLabel: '@workflow.run method',
       contextTypeLabel: 'WorkflowScriptContext',
@@ -483,6 +493,7 @@ class StemRegistryBuilder implements Builder {
   static _FlowStepBinding _validateFlowStepMethod(
     MethodElement method,
     TypeChecker flowContextChecker,
+    TypeChecker workflowExecutionContextChecker,
   ) {
     if (method.isPrivate) {
       throw InvalidGenerationSourceError(
@@ -493,10 +504,10 @@ class StemRegistryBuilder implements Builder {
     final parameters = method.formalParameters;
     final contextParameter = _extractInjectedContextParameter(
       parameters,
-      flowContextChecker,
+      [flowContextChecker, workflowExecutionContextChecker],
       method,
       annotationLabel: '@workflow.step method',
-      contextTypeLabel: 'FlowContext',
+      contextTypeLabel: 'FlowContext or WorkflowExecutionContext',
     );
 
     final valueParameters = <_ValueParameterInfo>[];
@@ -506,7 +517,7 @@ class StemRegistryBuilder implements Builder {
       }
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
-          '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after FlowContext.',
+          '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after FlowContext or WorkflowExecutionContext.',
           element: method,
         );
       }
@@ -523,6 +534,7 @@ class StemRegistryBuilder implements Builder {
     return _FlowStepBinding(
       contextParameterName: contextParameter?.name,
       contextIsNamed: contextParameter?.isNamed ?? false,
+      contextTypeCode: contextParameter?.typeCode,
       valueParameters: valueParameters,
       stepValueTypeCode: _workflowResultTypeCode(method.returnType),
       stepValuePayloadCodecTypeCode: _workflowResultPayloadCodecTypeCode(
@@ -534,6 +546,7 @@ class StemRegistryBuilder implements Builder {
   static _ScriptStepBinding _validateScriptStepMethod(
     MethodElement method,
     TypeChecker scriptStepContextChecker,
+    TypeChecker workflowExecutionContextChecker,
   ) {
     if (method.isPrivate) {
       throw InvalidGenerationSourceError(
@@ -555,10 +568,10 @@ class StemRegistryBuilder implements Builder {
     final parameters = method.formalParameters;
     final contextParameter = _extractInjectedContextParameter(
       parameters,
-      scriptStepContextChecker,
+      [scriptStepContextChecker, workflowExecutionContextChecker],
       method,
       annotationLabel: '@workflow.step method',
-      contextTypeLabel: 'WorkflowScriptStepContext',
+      contextTypeLabel: 'WorkflowScriptStepContext or WorkflowExecutionContext',
     );
 
     final valueParameters = <_ValueParameterInfo>[];
@@ -568,7 +581,7 @@ class StemRegistryBuilder implements Builder {
       }
       if (!parameter.isRequiredPositional) {
         throw InvalidGenerationSourceError(
-          '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after WorkflowScriptStepContext.',
+          '@workflow.step method ${method.displayName} only supports required positional serializable or codec-backed parameters after WorkflowScriptStepContext or WorkflowExecutionContext.',
           element: method,
         );
       }
@@ -585,6 +598,7 @@ class StemRegistryBuilder implements Builder {
     return _ScriptStepBinding(
       contextParameterName: contextParameter?.name,
       contextIsNamed: contextParameter?.isNamed ?? false,
+      contextTypeCode: contextParameter?.typeCode,
       valueParameters: valueParameters,
       returnTypeCode: _typeCode(returnType),
       stepValueTypeCode: _typeCode(stepValueType),
@@ -600,7 +614,7 @@ class StemRegistryBuilder implements Builder {
     final parameters = function.formalParameters;
     final contextParameter = _extractInjectedContextParameter(
       parameters,
-      taskContextChecker,
+      [taskContextChecker],
       function,
       annotationLabel: '@TaskDefn function',
       contextTypeLabel: 'TaskInvocationContext',
@@ -677,7 +691,7 @@ class StemRegistryBuilder implements Builder {
 
   static _InjectedContextParameter? _extractInjectedContextParameter(
     List<FormalParameterElement> parameters,
-    TypeChecker checker,
+    List<TypeChecker> checkers,
     Element element, {
     required String annotationLabel,
     required String contextTypeLabel,
@@ -685,18 +699,19 @@ class StemRegistryBuilder implements Builder {
     _InjectedContextParameter? contextParameter;
     if (parameters.isNotEmpty &&
         parameters.first.isRequiredPositional &&
-        checker.isAssignableFromType(parameters.first.type)) {
+        _matchesAnyContextType(checkers, parameters.first.type)) {
       contextParameter = _InjectedContextParameter(
         parameter: parameters.first,
         name: parameters.first.displayName,
         isNamed: false,
+        typeCode: _typeCode(parameters.first.type),
       );
     }
 
     for (final parameter in parameters.skip(
       contextParameter == null ? 0 : 1,
     )) {
-      if (!checker.isAssignableFromType(parameter.type)) {
+      if (!_matchesAnyContextType(checkers, parameter.type)) {
         continue;
       }
       if (contextParameter != null) {
@@ -718,10 +733,23 @@ class StemRegistryBuilder implements Builder {
         parameter: parameter,
         name: parameter.displayName,
         isNamed: true,
+        typeCode: _typeCode(parameter.type),
       );
     }
 
     return contextParameter;
+  }
+
+  static bool _matchesAnyContextType(
+    List<TypeChecker> checkers,
+    DartType type,
+  ) {
+    for (final checker in checkers) {
+      if (checker.isAssignableFromType(type)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static String _taskResultTypeCode(DartType returnType) {
@@ -946,8 +974,10 @@ class _WorkflowStepInfo {
     required this.method,
     required this.flowContextParameterName,
     required this.flowContextIsNamed,
+    required this.flowContextTypeCode,
     required this.scriptStepContextParameterName,
     required this.scriptStepContextIsNamed,
+    required this.scriptStepContextTypeCode,
     required this.valueParameters,
     required this.returnTypeCode,
     required this.stepValueTypeCode,
@@ -963,8 +993,10 @@ class _WorkflowStepInfo {
   final String method;
   final String? flowContextParameterName;
   final bool flowContextIsNamed;
+  final String? flowContextTypeCode;
   final String? scriptStepContextParameterName;
   final bool scriptStepContextIsNamed;
+  final String? scriptStepContextTypeCode;
   final List<_ValueParameterInfo> valueParameters;
   final String? returnTypeCode;
   final String? stepValueTypeCode;
@@ -1166,6 +1198,7 @@ class _FlowStepBinding {
   const _FlowStepBinding({
     required this.contextParameterName,
     required this.contextIsNamed,
+    required this.contextTypeCode,
     required this.valueParameters,
     required this.stepValueTypeCode,
     required this.stepValuePayloadCodecTypeCode,
@@ -1173,6 +1206,7 @@ class _FlowStepBinding {
 
   final String? contextParameterName;
   final bool contextIsNamed;
+  final String? contextTypeCode;
   final List<_ValueParameterInfo> valueParameters;
   final String stepValueTypeCode;
   final String? stepValuePayloadCodecTypeCode;
@@ -1198,6 +1232,7 @@ class _ScriptStepBinding {
   const _ScriptStepBinding({
     required this.contextParameterName,
     required this.contextIsNamed,
+    required this.contextTypeCode,
     required this.valueParameters,
     required this.returnTypeCode,
     required this.stepValueTypeCode,
@@ -1206,6 +1241,7 @@ class _ScriptStepBinding {
 
   final String? contextParameterName;
   final bool contextIsNamed;
+  final String? contextTypeCode;
   final List<_ValueParameterInfo> valueParameters;
   final String returnTypeCode;
   final String stepValueTypeCode;
@@ -1247,11 +1283,13 @@ class _InjectedContextParameter {
     required this.parameter,
     required this.name,
     required this.isNamed,
+    required this.typeCode,
   });
 
   final FormalParameterElement parameter;
   final String name;
   final bool isNamed;
+  final String typeCode;
 }
 
 class _RegistryEmitter {
@@ -1467,14 +1505,14 @@ class _RegistryEmitter {
         final signature = _methodSignature(
           positional: [
             if (step.acceptsScriptStepContext && !step.scriptStepContextIsNamed)
-              'WorkflowScriptStepContext ${step.scriptStepContextParameterName!}',
+              '${step.scriptStepContextTypeCode!} ${step.scriptStepContextParameterName!}',
             ...step.valueParameters.map(
               (parameter) => '${parameter.typeCode} ${parameter.name}',
             ),
           ],
           named: [
             if (step.acceptsScriptStepContext && step.scriptStepContextIsNamed)
-              'WorkflowScriptStepContext? ${step.scriptStepContextParameterName!}',
+              '${step.scriptStepContextTypeCode!} ${step.scriptStepContextParameterName!}',
           ],
         );
         final invocationArgs = _invocationArgs(

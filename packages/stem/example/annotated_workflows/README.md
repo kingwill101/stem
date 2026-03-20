@@ -4,7 +4,7 @@ This example shows how to use `@WorkflowDefn`, `@WorkflowStep`, and `@TaskDefn`
 with the `stem_builder` bundle generator.
 
 It now demonstrates the generated script-proxy behavior explicitly:
-- a flow step using `FlowContext`
+- a flow step using `WorkflowExecutionContext`
 - a flow step starting and waiting on a child workflow through
   `StemWorkflowDefinitions.*.startAndWait(context, params: value)`
 - `run(WelcomeRequest request)` calls annotated checkpoint methods directly
@@ -12,7 +12,7 @@ It now demonstrates the generated script-proxy behavior explicitly:
 - `deliverWelcome(...)` calls another annotated checkpoint from inside an
   checkpoint
 - a second script workflow uses optional named context injection
-  (`WorkflowScriptContext? context` / `WorkflowScriptStepContext? context`) to
+  (`WorkflowScriptContext? context` / `WorkflowExecutionContext? context`) to
   expose `runId`, `workflow`, `stepName`, `stepIndex`, and idempotency keys
   while still calling its annotated checkpoint directly from `run(...)`
 - a script checkpoint starting and waiting on a child workflow through
@@ -23,7 +23,7 @@ It now demonstrates the generated script-proxy behavior explicitly:
   plus codec-backed DTO input/output types
 
 When you run the example, it prints:
-- the flow result with `FlowContext` metadata
+- the flow result with `WorkflowExecutionContext` metadata
 - the flow child workflow result without a separate `waitFor(...)` call
 - the plain script result
 - the persisted checkpoint order for the plain script workflow

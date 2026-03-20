@@ -93,20 +93,20 @@ Script workflows use one entry model:
 - start with a plain direct-call `run(String email, ...)`
 - add an optional named injected context when you need runtime metadata
   - `Future<T> run(String email, {WorkflowScriptContext? context})`
-  - `Future<T> checkpoint(String email, {WorkflowScriptStepContext? context})`
+  - `Future<T> checkpoint(String email, {WorkflowExecutionContext? context})`
 - direct annotated checkpoint calls stay the default path
 
 Supported context injection points:
 
-- flow steps: `FlowContext`
+- flow steps: `FlowContext` or `WorkflowExecutionContext`
 - script runs: `WorkflowScriptContext`
-- script checkpoints: `WorkflowScriptStepContext`
+- script checkpoints: `WorkflowScriptStepContext` or
+  `WorkflowExecutionContext`
 - tasks: `TaskInvocationContext`
 
-Durable workflow contexts enqueue tasks directly:
+Durable workflow execution contexts enqueue tasks directly:
 
-- `FlowContext.enqueue(...)`
-- `WorkflowScriptStepContext.enqueue(...)`
+- `WorkflowExecutionContext.enqueue(...)`
 - typed task definitions can target those contexts via `enqueue(...)`
 
 Child workflows should be started from durable boundaries:

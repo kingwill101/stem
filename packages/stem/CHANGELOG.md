@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `WorkflowExecutionContext` as the shared typed execution context for
+  flow steps and script checkpoints, and taught `stem_builder` to accept that
+  shared context type directly in annotated workflow methods.
 - Simplified the manual JSON helper path so `TaskDefinition.json(...)` and
   `WorkflowRef.json(...)` no longer require unused producer-side
   `decodeArgs`/`decodeParams` callbacks just to publish DTO payloads.

@@ -7,9 +7,10 @@ Everything else that crosses a durable boundary must be serializable.
 
 ## Supported context injection points
 
-- flow steps: `FlowContext`
+- flow steps: `FlowContext` or `WorkflowExecutionContext`
 - script runs: `WorkflowScriptContext`
-- script checkpoints: `WorkflowScriptStepContext`
+- script checkpoints: `WorkflowScriptStepContext` or
+  `WorkflowExecutionContext`
 - tasks: `TaskInvocationContext`
 
 Those context objects are not part of the persisted payload shape. They are
@@ -19,8 +20,8 @@ For annotated workflows/tasks, the preferred shape is an optional named context
 parameter:
 
 - `Future<T> run(String email, {WorkflowScriptContext? context})`
-- `Future<T> checkpoint(String email, {WorkflowScriptStepContext? context})`
-- `Future<T> step({FlowContext? context})`
+- `Future<T> checkpoint(String email, {WorkflowExecutionContext? context})`
+- `Future<T> step({WorkflowExecutionContext? context})`
 - `Future<void> task(String id, {TaskInvocationContext? context})`
 
 ## What context gives you
@@ -43,9 +44,8 @@ Depending on the context type, you can access:
 - direct child-workflow start helpers such as
   `ref.start(context, params: value)` and
   `ref.startAndWait(context, params: value)`
-- direct task enqueue APIs because `FlowContext`,
-  `WorkflowScriptStepContext`, and `TaskInvocationContext` all implement
-  `TaskEnqueuer`
+- direct task enqueue APIs because `WorkflowExecutionContext` and
+  `TaskInvocationContext` both implement `TaskEnqueuer`
 - task metadata like `id`, `attempt`, `meta`
 
 Child workflow starts belong in durable boundaries:

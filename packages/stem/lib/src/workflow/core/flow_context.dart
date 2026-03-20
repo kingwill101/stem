@@ -2,9 +2,9 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_execution_context.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
-import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -17,8 +17,7 @@ import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext
-    implements TaskEnqueuer, WorkflowCaller, WorkflowResumeContext {
+class FlowContext implements WorkflowExecutionContext {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -36,30 +35,39 @@ class FlowContext
        _resumeData = resumeData;
 
   /// Name of the workflow.
+  @override
   final String workflow;
 
   /// Identifier of the workflow run.
+  @override
   final String runId;
 
   /// Name of the current step.
+  @override
   final String stepName;
 
   /// Parameters passed when the workflow was started.
+  @override
   final Map<String, Object?> params;
 
   /// Result of the previous step, if any.
+  @override
   final Object? previousResult;
 
   /// Zero-based index of the current step.
+  @override
   final int stepIndex;
 
   /// Current iteration when auto-versioning is enabled.
+  @override
   final int iteration;
 
   /// Optional enqueuer for scheduling tasks with workflow metadata.
+  @override
   final TaskEnqueuer? enqueuer;
 
   /// Optional typed workflow caller for spawning child workflows.
+  @override
   final WorkflowCaller? workflows;
   final WorkflowClock _clock;
 
@@ -163,6 +171,7 @@ class FlowContext
   /// Returns a stable idempotency key derived from the workflow, run, and
   /// [scope]. Defaults to the current [stepName] (including iteration suffix
   /// when [iteration] > 0) when no scope is provided.
+  @override
   String idempotencyKey([String? scope]) {
     final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
     final effectiveScope = (scope == null || scope.isEmpty)

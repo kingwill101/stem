@@ -4,6 +4,7 @@ import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_execution_context.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
@@ -523,7 +524,7 @@ void main() {
     },
   );
 
-  test('flow and script step contexts share the resume-context surface', () {
+  test('flow and script step contexts share the execution-context surface', () {
     final flowContext = FlowContext(
       workflow: 'demo',
       runId: 'run-1',
@@ -536,6 +537,8 @@ void main() {
 
     expect(flowContext, isA<WorkflowResumeContext>());
     expect(scriptContext, isA<WorkflowResumeContext>());
+    expect(flowContext, isA<WorkflowExecutionContext>());
+    expect(scriptContext, isA<WorkflowExecutionContext>());
   });
 
   test(

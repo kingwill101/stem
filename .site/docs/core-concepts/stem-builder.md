@@ -220,7 +220,7 @@ app is creating the worker itself.
 - When you need runtime metadata, add an optional named injected context
   parameter:
   - `WorkflowScriptContext? context` on `run(...)`
-  - `WorkflowScriptStepContext? context` on the checkpoint method
+  - `WorkflowExecutionContext? context` on flow steps or checkpoint methods
 - DTO classes are supported when they provide:
   - a string-keyed `toJson()` map (typically `Map<String, dynamic>`)
   - `factory Type.fromJson(Map<String, dynamic> json)` or an equivalent named

@@ -189,7 +189,9 @@ class ContextCaptureResult {
 @WorkflowDefn(name: 'annotated.flow')
 class AnnotatedFlowWorkflow {
   @WorkflowStep()
-  Future<Map<String, Object?>?> start({FlowContext? context}) async {
+  Future<Map<String, Object?>?> start({
+    WorkflowExecutionContext? context,
+  }) async {
     final ctx = context!;
     if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
@@ -269,7 +271,7 @@ class AnnotatedContextScriptWorkflow {
   @WorkflowStep(name: 'capture-context')
   Future<ContextCaptureResult> captureContext(
     WelcomeRequest request, {
-    WorkflowScriptStepContext? context,
+    WorkflowExecutionContext? context,
   }) async {
     final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);

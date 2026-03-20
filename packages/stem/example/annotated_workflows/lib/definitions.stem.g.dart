@@ -101,7 +101,7 @@ class _StemScriptProxy1 extends AnnotatedContextScriptWorkflow {
   @override
   Future<ContextCaptureResult> captureContext(
     WelcomeRequest request, {
-    WorkflowScriptStepContext? context,
+    WorkflowExecutionContext? context,
   }) {
     return _script.step<ContextCaptureResult>(
       "capture-context",

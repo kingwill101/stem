@@ -6,7 +6,8 @@ import 'package:test/test.dart';
 const stubStem = '''
 library stem;
 
-class FlowContext {}
+class WorkflowExecutionContext {}
+class FlowContext implements WorkflowExecutionContext {}
 typedef _FlowStepHandler = Future<Object?> Function(FlowContext context);
 
 enum WorkflowStepKind { task, choice, parallel, wait, custom }
@@ -77,7 +78,7 @@ class WorkflowScriptContext {
     bool autoVersion = false,
   }) async => throw UnimplementedError();
 }
-class WorkflowScriptStepContext {}
+class WorkflowScriptStepContext implements WorkflowExecutionContext {}
 class TaskInvocationContext {}
 
 class NoArgsTaskDefinition<T> {
@@ -995,6 +996,49 @@ class SignupWorkflow {
     },
   );
 
+  test(
+    'supports optional named WorkflowExecutionContext injection in script checkpoints',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class SignupWorkflow {
+  Future<String> run(String email) async => sendWelcomeEmail(email);
+
+  @WorkflowStep()
+  Future<String> sendWelcomeEmail(
+    String email, {
+    WorkflowExecutionContext? context,
+  }) async => email;
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            allOf([
+              contains(
+                '(context) => super.sendWelcomeEmail(email, context: context)',
+              ),
+              contains('WorkflowExecutionContext? context'),
+            ]),
+          ),
+        },
+      );
+    },
+  );
+
   test('supports optional named FlowContext injection', () async {
     const input = '''
 import 'package:stem/stem.dart';
@@ -1024,6 +1068,39 @@ class HelloWorkflow {
       },
     );
   });
+
+  test(
+    'supports optional named WorkflowExecutionContext injection in flow steps',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(name: 'hello.flow')
+class HelloWorkflow {
+  @WorkflowStep(name: 'step-1')
+  Future<String> stepOne({WorkflowExecutionContext? context}) async => 'ok';
+}
+''';
+
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+            contains('(ctx) => impl.stepOne(context: ctx)'),
+          ),
+        },
+      );
+    },
+  );
 
   test('supports optional named TaskInvocationContext injection', () async {
     const input = '''

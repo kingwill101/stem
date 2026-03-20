@@ -3,14 +3,15 @@ import 'dart:async';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_execution_context.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
-import 'package:stem/src/workflow/core/workflow_resume_context.dart';
 
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
 abstract class WorkflowScriptContext {
   /// Name of the workflow currently executing.
+  @override
   String get workflow;
 
   /// Identifier for the run. Useful when emitting logs or constructing
@@ -32,27 +33,32 @@ abstract class WorkflowScriptContext {
 
 /// Context provided to each script checkpoint invocation. Mirrors
 /// [FlowContext] but tailored for the facade helpers.
-abstract class WorkflowScriptStepContext
-    implements TaskEnqueuer, WorkflowCaller, WorkflowResumeContext {
+abstract class WorkflowScriptStepContext implements WorkflowExecutionContext {
   /// Name of the workflow currently executing.
   String get workflow;
 
   /// Identifier for the workflow run.
+  @override
   String get runId;
 
   /// Name of the current checkpoint.
+  @override
   String get stepName;
 
   /// Zero-based checkpoint index in the workflow definition.
+  @override
   int get stepIndex;
 
   /// Iteration count for looped checkpoints.
+  @override
   int get iteration;
 
   /// Parameters provided when the workflow started.
+  @override
   Map<String, Object?> get params;
 
   /// Result of the previous checkpoint, if any.
+  @override
   Object? get previousResult;
 
   /// Schedules a wake-up after [duration]. The workflow suspends once the
@@ -89,12 +95,15 @@ abstract class WorkflowScriptStepContext
   }
 
   /// Returns a stable idempotency key derived from workflow/run/checkpoint.
+  @override
   String idempotencyKey([String? scope]);
 
   /// Optional enqueuer for scheduling tasks with workflow metadata.
+  @override
   TaskEnqueuer? get enqueuer;
 
   /// Optional typed workflow caller for spawning child workflows.
+  @override
   WorkflowCaller? get workflows;
 
   @override
@@ -114,6 +123,7 @@ abstract class WorkflowScriptStepContext
     TaskEnqueueOptions? enqueueOptions,
   });
 
+  /// Starts a typed child workflow using this checkpoint context.
   @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
     WorkflowRef<TParams, TResult> definition,
@@ -123,11 +133,13 @@ abstract class WorkflowScriptStepContext
     WorkflowCancellationPolicy? cancellationPolicy,
   });
 
+  /// Starts a prebuilt child workflow call using this checkpoint context.
   @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   );
 
+  /// Waits for a typed child workflow using this checkpoint context.
   @override
   Future<WorkflowResult<TResult>?>
   waitForWorkflowRef<TParams, TResult extends Object?>(

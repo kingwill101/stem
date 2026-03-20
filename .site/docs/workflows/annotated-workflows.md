@@ -131,9 +131,9 @@ This keeps one authoring model:
 
 When a workflow needs to start another workflow, do it from a durable boundary:
 
-- `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer `ref.startAndWait(context, params: value)` inside
-  flow steps and checkpoint methods
+- `WorkflowExecutionContext` implements `WorkflowCaller`, so prefer
+  `ref.startAndWait(context, params: value)` inside flow steps and checkpoint
+  methods
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
 - keep `context.prepareStart(...)` for the rarer incremental-call
@@ -147,6 +147,7 @@ Use `packages/stem/example/annotated_workflows` when you want a verified
 example that demonstrates:
 
 - `FlowContext`
+- `WorkflowExecutionContext`
 - direct-call script checkpoints
 - nested annotated checkpoint calls
 - `WorkflowScriptContext`

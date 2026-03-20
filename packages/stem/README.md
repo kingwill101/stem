@@ -626,27 +626,27 @@ Script workflows use one authoring model:
 - start with a plain `run(String email, ...)` method
 - add an optional named injected context when you need runtime metadata:
   - `Future<T> run(String email, {WorkflowScriptContext? context})`
-  - `Future<T> capture(String email, {WorkflowScriptStepContext? context})`
+  - `Future<T> capture(String email, {WorkflowExecutionContext? context})`
 - direct checkpoint method calls still stay the default happy path
 
 Context injection works at every runtime layer:
 
-- flow steps can take `FlowContext`
+- flow steps can take `FlowContext` or `WorkflowExecutionContext`
 - script runs can take `WorkflowScriptContext`
-- script checkpoints can take `WorkflowScriptStepContext`
+- script checkpoints can take `WorkflowScriptStepContext` or
+  `WorkflowExecutionContext`
 - tasks can take `TaskInvocationContext`
 
-Durable workflow contexts enqueue tasks directly:
+Durable workflow execution contexts enqueue tasks directly:
 
-- `FlowContext.enqueue(...)`
-- `WorkflowScriptStepContext.enqueue(...)`
+- `WorkflowExecutionContext.enqueue(...)`
 - typed task definitions can target those contexts via `enqueue(...)`
 
 Child workflows belong in durable execution boundaries:
 
-- `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so prefer `ref.startAndWait(context, params: value)` inside
-  flow steps and script checkpoints
+- `WorkflowExecutionContext` implements `WorkflowCaller`, so prefer
+  `ref.startAndWait(context, params: value)` inside flow steps and script
+  checkpoints
 - pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
   `ref.start(...)` / `ref.startAndWait(...)` for normal override cases
 - keep `context.prepareStart(...)` for the rarer incremental-call

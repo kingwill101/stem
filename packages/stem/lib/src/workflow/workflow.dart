@@ -11,6 +11,7 @@ export 'core/workflow_checkpoint.dart';
 export 'core/workflow_clock.dart';
 export 'core/workflow_definition.dart';
 export 'core/workflow_event_ref.dart';
+export 'core/workflow_execution_context.dart';
 export 'core/workflow_ref.dart';
 export 'core/workflow_result.dart';
 export 'core/workflow_resume.dart';
