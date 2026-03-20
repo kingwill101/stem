@@ -399,6 +399,89 @@ extension WorkflowStartBuilderExtension<TParams, TResult extends Object?>
   }
 }
 
+/// Caller-bound fluent workflow start builder.
+///
+/// This mirrors the role `TaskInvocationContext.enqueueBuilder(...)` plays for
+/// tasks: a workflow-capable caller can create a fluent start request without
+/// pivoting back through the workflow ref for dispatch.
+class BoundWorkflowStartBuilder<TParams, TResult extends Object?> {
+  /// Creates a caller-bound workflow start builder.
+  BoundWorkflowStartBuilder._({
+    required WorkflowCaller caller,
+    required WorkflowStartBuilder<TParams, TResult> builder,
+  }) : _caller = caller,
+       _builder = builder;
+
+  final WorkflowCaller _caller;
+  final WorkflowStartBuilder<TParams, TResult> _builder;
+
+  /// Sets the parent workflow run id for this start.
+  BoundWorkflowStartBuilder<TParams, TResult> parentRunId(String parentRunId) {
+    _builder.parentRunId(parentRunId);
+    return this;
+  }
+
+  /// Sets the retention TTL for this run.
+  BoundWorkflowStartBuilder<TParams, TResult> ttl(Duration ttl) {
+    _builder.ttl(ttl);
+    return this;
+  }
+
+  /// Sets the cancellation policy for this run.
+  BoundWorkflowStartBuilder<TParams, TResult> cancellationPolicy(
+    WorkflowCancellationPolicy cancellationPolicy,
+  ) {
+    _builder.cancellationPolicy(cancellationPolicy);
+    return this;
+  }
+
+  /// Builds the [WorkflowStartCall] with accumulated overrides.
+  WorkflowStartCall<TParams, TResult> build() => _builder.build();
+
+  /// Starts the built workflow call with the bound caller.
+  Future<String> start() => _builder.startWith(_caller);
+
+  /// Starts the built workflow call with the bound caller and waits for the
+  /// typed workflow result.
+  Future<WorkflowResult<TResult>?> startAndWait({
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return _builder.startAndWaitWith(
+      _caller,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+}
+
+/// Convenience helpers for building typed workflow starts directly from a
+/// workflow-capable caller.
+extension WorkflowCallerBuilderExtension on WorkflowCaller {
+  /// Creates a caller-bound fluent start builder for a typed workflow ref.
+  BoundWorkflowStartBuilder<TParams, TResult>
+  startWorkflowBuilder<TParams, TResult extends Object?>({
+    required WorkflowRef<TParams, TResult> definition,
+    required TParams params,
+  }) {
+    return BoundWorkflowStartBuilder._(
+      caller: this,
+      builder: definition.startBuilder(params),
+    );
+  }
+
+  /// Creates a caller-bound fluent start builder for a no-args workflow ref.
+  BoundWorkflowStartBuilder<(), TResult>
+  startNoArgsWorkflowBuilder<TResult extends Object?>({
+    required NoArgsWorkflowRef<TResult> definition,
+  }) {
+    return BoundWorkflowStartBuilder._(
+      caller: this,
+      builder: definition.startBuilder(),
+    );
+  }
+}
+
 /// Convenience helpers for waiting on typed workflow refs using a generic
 /// [WorkflowCaller].
 extension WorkflowRefExtension<TParams, TResult extends Object?>

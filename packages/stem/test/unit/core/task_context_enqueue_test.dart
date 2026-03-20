@@ -273,6 +273,38 @@ void main() {
         throwsStateError,
       );
     });
+
+    test('builds child workflow starts directly from the context', () async {
+      final workflows = _RecordingWorkflowCaller();
+      final context = TaskContext(
+        id: 'workflow-builder-task',
+        attempt: 0,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+        workflows: workflows,
+      );
+      final definition = WorkflowRef<Map<String, Object?>, String>(
+        name: 'workflow.child',
+        encodeParams: (params) => params,
+      );
+
+      final result = await context
+          .startWorkflowBuilder(
+            definition: definition,
+            params: const {'value': 'child'},
+          )
+          .parentRunId('parent-task')
+          .startAndWait();
+
+      expect(workflows.lastWorkflowName, 'workflow.child');
+      expect(workflows.lastWorkflowParams, {'value': 'child'});
+      expect(workflows.lastParentRunId, 'parent-task');
+      expect(workflows.waitedRunId, 'run-1');
+      expect(result?.value, 'child-result');
+    });
   });
 
   group('TaskContext workflow events', () {
@@ -392,6 +424,7 @@ class _RecordingEnqueuer implements TaskEnqueuer {
 class _RecordingWorkflowCaller implements WorkflowCaller {
   String? lastWorkflowName;
   Map<String, Object?>? lastWorkflowParams;
+  String? lastParentRunId;
   String? waitedRunId;
 
   @override
@@ -404,6 +437,7 @@ class _RecordingWorkflowCaller implements WorkflowCaller {
   }) async {
     lastWorkflowName = definition.name;
     lastWorkflowParams = definition.encodeParams(params);
+    lastParentRunId = parentRunId;
     return 'run-1';
   }
 

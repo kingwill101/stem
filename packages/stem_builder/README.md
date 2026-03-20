@@ -111,9 +111,9 @@ Durable workflow contexts enqueue tasks directly:
 
 Child workflows should be started from durable boundaries:
 
-- `StemWorkflowDefinitions.someWorkflow.startWith(context, value)`
+- `context.startWorkflowBuilder(definition: ref, params: value).start()`
   inside flow steps
-- `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
+- `context.startWorkflowBuilder(definition: ref, params: value).startAndWait()`
   inside script checkpoints
 
 Avoid starting child workflows directly from the raw

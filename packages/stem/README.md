@@ -319,7 +319,9 @@ class ParentTask implements TaskHandler<String> {
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final result = await childWorkflowRef.startAndWaitWith(context);
+    final result = await context
+        .startNoArgsWorkflowBuilder(definition: childWorkflowRef)
+        .startAndWait();
     return result?.value ?? 'missing';
   }
 }
@@ -639,8 +641,8 @@ Durable workflow contexts enqueue tasks directly:
 Child workflows belong in durable execution boundaries:
 
 - `FlowContext` and `WorkflowScriptStepContext` both implement
-  `WorkflowCaller`, so use
-  `StemWorkflowDefinitions.someWorkflow.startAndWaitWith(context, value)`
+  `WorkflowCaller`, so prefer
+  `context.startWorkflowBuilder(definition: ref, params: value).startAndWait()`
   inside flow steps and script checkpoints
 - do not start child workflows from the raw `WorkflowScriptContext` body unless
   you are deliberately managing replay/idempotency yourself

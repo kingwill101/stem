@@ -6,7 +6,8 @@ with the `stem_builder` bundle generator.
 It now demonstrates the generated script-proxy behavior explicitly:
 - a flow step using `FlowContext`
 - a flow step starting and waiting on a child workflow through
-  `StemWorkflowDefinitions.*.startAndWaitWith(context, value)`
+  `context.startWorkflowBuilder(definition: StemWorkflowDefinitions.*, params:
+  value).startAndWait()`
 - `run(WelcomeRequest request)` calls annotated checkpoint methods directly
 - `prepareWelcome(...)` calls other annotated checkpoints
 - `deliverWelcome(...)` calls another annotated checkpoint from inside an
@@ -16,7 +17,8 @@ It now demonstrates the generated script-proxy behavior explicitly:
   expose `runId`, `workflow`, `stepName`, `stepIndex`, and idempotency keys
   while still calling its annotated checkpoint directly from `run(...)`
 - a script checkpoint starting and waiting on a child workflow through
-  `StemWorkflowDefinitions.*.startAndWaitWith(context, value)`
+  `context.startWorkflowBuilder(definition: StemWorkflowDefinitions.*, params:
+  value).startAndWait()`
 - a plain script workflow that returns a codec-backed DTO result and persists a
   codec-backed DTO checkpoint value
 - a typed `@TaskDefn` using optional named `TaskInvocationContext? context`
