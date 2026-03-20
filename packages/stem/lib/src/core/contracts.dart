@@ -3009,24 +3009,6 @@ class NoArgsTaskDefinition<TResult> {
     decodeResult: decodeResult,
   );
 
-  /// Builds a typed call without requiring an explicit empty payload.
-  TaskCall<(), TResult> call({
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return asDefinition.call(
-      (),
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    );
-  }
-
   /// Creates a fluent enqueue builder for this no-args task definition.
   TaskEnqueueBuilder<(), TResult> prepareEnqueue() {
     return asDefinition.prepareEnqueue(());

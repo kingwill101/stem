@@ -233,20 +233,6 @@ class NoArgsWorkflowRef<TResult extends Object?> {
 
   static Map<String, Object?> _encodeParams(() _) => const <String, Object?>{};
 
-  /// Builds a workflow start call without requiring an explicit empty payload.
-  WorkflowStartCall<(), TResult> call({
-    String? parentRunId,
-    Duration? ttl,
-    WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    return asRef.call(
-      (),
-      parentRunId: parentRunId,
-      ttl: ttl,
-      cancellationPolicy: cancellationPolicy,
-    );
-  }
-
   /// Creates a fluent builder for this workflow start.
   WorkflowStartBuilder<(), TResult> prepareStart() {
     return asRef.prepareStart(());
@@ -259,11 +245,13 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return call(
+    return asRef.start(
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).start(caller);
+      caller,
+      params: (),
+    );
   }
 
   /// Starts this workflow ref with [caller] and waits for the result.
@@ -275,12 +263,12 @@ class NoArgsWorkflowRef<TResult extends Object?> {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
   }) {
-    return call(
+    return asRef.startAndWait(
       parentRunId: parentRunId,
       ttl: ttl,
       cancellationPolicy: cancellationPolicy,
-    ).startAndWait(
       caller,
+      params: (),
       pollInterval: pollInterval,
       timeout: timeout,
     );

@@ -186,13 +186,14 @@ void main() {
     expect(updated.meta['m2'], 2);
   });
 
-  test('NoArgsTaskDefinition.call encodes an empty payload', () {
+  test('NoArgsTaskDefinition.prepareEnqueue builds an empty payload call', () {
     final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-    final call = definition.call(
-      headers: const {'h': 'v'},
-      meta: const {'m': 1},
-    );
+    final call = definition
+        .prepareEnqueue()
+        .headers(const {'h': 'v'})
+        .metadata(const {'m': 1})
+        .build();
 
     expect(call.name, 'demo.no_args');
     expect(call.encodeArgs(), isEmpty);
@@ -273,6 +274,9 @@ class _RecordingTaskResultCaller extends _RecordingTaskEnqueuer
     String taskId, {
     Duration? timeout,
     TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
   }) async {
     waitedTaskId = taskId;
     return TaskResult<TResult>(

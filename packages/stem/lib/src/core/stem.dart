@@ -1281,13 +1281,16 @@ extension NoArgsTaskDefinitionExtension<TResult extends Object?>
     Map<String, Object?>? meta,
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    return call(
-      headers: headers,
-      options: options,
-      notBefore: notBefore,
-      meta: meta,
-      enqueueOptions: enqueueOptions,
-    ).enqueue(enqueuer, enqueueOptions: enqueueOptions);
+    return asDefinition
+        .call(
+          (),
+          headers: headers,
+          options: options,
+          notBefore: notBefore,
+          meta: meta,
+          enqueueOptions: enqueueOptions,
+        )
+        .enqueue(enqueuer, enqueueOptions: enqueueOptions);
   }
 
   /// Waits for [taskId] using this definition's decoding rules.
