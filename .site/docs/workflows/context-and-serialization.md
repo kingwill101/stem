@@ -35,6 +35,8 @@ Depending on the context type, you can access:
 - workflow params and previous results
 - `sleepUntilResumed(...)` for common sleep/retry loops
 - `waitForEventValue<T>(...)` for common event waits
+- `event.awaitOn(step)` when a flow deliberately wants the lower-level
+  `FlowStepControl` suspend-first path on a typed event ref
 - `takeResumeData()` for event-driven resumes
 - `takeResumeValue<T>(codec: ...)` for typed event-driven resumes
 - `idempotencyKey(...)`
