@@ -687,7 +687,7 @@ void main() {
           flow.step<String?>(
             'wait',
             (context) async {
-              final resume = context.waitForEventRef(event);
+              final resume = event.waitValue(context);
               if (resume == null) {
                 return null;
               }

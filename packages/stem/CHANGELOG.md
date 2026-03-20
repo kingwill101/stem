@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Deprecated context-side `waitForEventRef(...)` and
+  `waitForEventRefValue(...)` in favor of `event.waitValue(ctx)` and
+  `event.wait(ctx)`.
 - Deprecated `emitEventBuilder(...)` in favor of direct typed event calls via
   `event.emit(...)` or `event.call(value).emit(...)`.
 - Deprecated the older workflow-start `startWith(...)` and

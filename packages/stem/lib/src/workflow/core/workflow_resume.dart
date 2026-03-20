@@ -233,6 +233,7 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
   /// Returns the next event payload from [event] when the checkpoint has
   /// resumed, or registers an event wait and returns `null` on the first
   /// invocation.
+  @Deprecated('Use event.waitValue(this, ...) instead.')
   T? waitForEventRef<T>(
     WorkflowEventRef<T> event, {
     DateTime? deadline,
@@ -247,6 +248,7 @@ extension WorkflowScriptStepResumeValues on WorkflowScriptStepContext {
   }
 
   /// Suspends until [event] is emitted, then returns the decoded payload.
+  @Deprecated('Use event.wait(this, ...) instead.')
   Future<T> waitForEventRefValue<T>({
     required WorkflowEventRef<T> event,
     DateTime? deadline,
@@ -289,10 +291,20 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
     Map<String, Object?>? data,
   }) {
     if (waiter case final FlowContext context) {
-      return context.waitForEventRef(this, deadline: deadline, data: data);
+      return context.waitForEventValue<T>(
+        topic,
+        deadline: deadline,
+        data: data,
+        codec: codec,
+      );
     }
     if (waiter case final WorkflowScriptStepContext context) {
-      return context.waitForEventRef(this, deadline: deadline, data: data);
+      return context.waitForEventValue<T>(
+        topic,
+        deadline: deadline,
+        data: data,
+        codec: codec,
+      );
     }
     throw ArgumentError.value(
       waiter,
@@ -324,17 +336,19 @@ extension WorkflowEventRefWaitExtension<T> on WorkflowEventRef<T> {
     Map<String, Object?>? data,
   }) {
     if (waiter case final FlowContext context) {
-      return context.waitForEventRefValue(
-        event: this,
+      return context.waitForEvent<T>(
+        topic: topic,
         deadline: deadline,
         data: data,
+        codec: codec,
       );
     }
     if (waiter case final WorkflowScriptStepContext context) {
-      return context.waitForEventRefValue(
-        event: this,
+      return context.waitForEvent<T>(
+        topic: topic,
         deadline: deadline,
         data: data,
+        codec: codec,
       );
     }
     throw ArgumentError.value(

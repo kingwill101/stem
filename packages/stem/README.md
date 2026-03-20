@@ -424,8 +424,8 @@ Inside a script checkpoint you can access the same metadata as `FlowContext`:
 - `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
   resume path.
 - `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
-- `step.waitForEventRef(...)` handles the same path when you already have a
-  typed `WorkflowEventRef<T>`.
+- `event.waitValue(step)` handles the same path when you already have a typed
+  `WorkflowEventRef<T>`.
 - `step.awaitEventRef(...)` keeps the lower-level suspend-first path on that
   same typed event ref instead of dropping back to a raw topic string.
 - `step.takeResumeData()` and `step.takeResumeValue<T>(codec: ...)` surface

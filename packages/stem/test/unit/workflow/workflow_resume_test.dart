@@ -175,7 +175,7 @@ void main() {
       stepIndex: 0,
     );
 
-    final firstResult = firstContext.waitForEventRef(event);
+    final firstResult = event.waitValue(firstContext);
 
     expect(firstResult, isNull);
     final control = firstContext.takeControl();
@@ -192,7 +192,7 @@ void main() {
       resumeData: const {'message': 'approved'},
     );
 
-    final resumed = resumedContext.waitForEventRef(event);
+    final resumed = event.waitValue(resumedContext);
     expect(resumed?.message, 'approved');
   });
 
@@ -213,7 +213,7 @@ void main() {
       );
 
       expect(
-        () => waiting.waitForEventRefValue(event: event),
+        () => event.wait(waiting),
         throwsA(isA<WorkflowSuspensionSignal>()),
       );
       expect(waiting.takeControl()?.topic, 'demo.event');
@@ -229,7 +229,7 @@ void main() {
       );
 
       expect(
-        resumed.waitForEventRefValue(event: event),
+        event.wait(resumed),
         completion(
           isA<_ResumePayload>().having(
             (value) => value.message,
@@ -405,14 +405,14 @@ void main() {
       codec: _resumePayloadCodec,
     );
     final waiting = _FakeWorkflowScriptStepContext();
-    final firstEvent = waiting.waitForEventRef(event);
+    final firstEvent = event.waitValue(waiting);
     expect(firstEvent, isNull);
     expect(waiting.awaitedTopics, ['demo.event']);
 
     final resumed = _FakeWorkflowScriptStepContext(
       resumeData: const {'message': 'approved'},
     );
-    final resumedValue = resumed.waitForEventRef(event);
+    final resumedValue = event.waitValue(resumed);
     expect(resumedValue?.message, 'approved');
   });
 
@@ -427,7 +427,7 @@ void main() {
       final waiting = _FakeWorkflowScriptStepContext();
 
       expect(
-        waiting.waitForEventRefValue(event: event),
+        event.wait(waiting),
         throwsA(isA<WorkflowSuspensionSignal>()),
       );
       expect(waiting.awaitedTopics, ['demo.event']);
@@ -436,7 +436,7 @@ void main() {
         resumeData: const {'message': 'approved'},
       );
       expect(
-        resumed.waitForEventRefValue(event: event),
+        event.wait(resumed),
         completion(
           isA<_ResumePayload>().having(
             (value) => value.message,
