@@ -64,6 +64,9 @@
 - Simplified the `routing_parity` publisher example to use
   `StemClient.create(...)` with its explicit routing registry and Redis broker
   factory instead of manually constructing a raw `Stem` publisher.
+- Simplified the best-practices docs snippet to use `StemApp.inMemory(...)`
+  and a generic `TaskEnqueuer` helper instead of manually wiring `Stem` and
+  `Worker` just to enqueue a single in-memory task.
 - Flattened single-argument generated workflow/task refs and helper calls so
   one-field annotated workflows/tasks now use direct values instead of
   synthetic named-record wrappers in generated APIs, examples, and docs.
