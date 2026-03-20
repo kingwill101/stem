@@ -161,8 +161,8 @@ app is creating the worker itself.
 - Plain `run(...)` is best when called checkpoint methods only need
   serializable
   parameters.
-- When you need runtime metadata or an explicit `script.step(...)`, add an
-  optional named injected context parameter:
+- When you need runtime metadata, add an optional named injected context
+  parameter:
   - `WorkflowScriptContext? context` on `run(...)`
   - `WorkflowScriptStepContext? context` on the checkpoint method
 - DTO classes are supported when they provide:

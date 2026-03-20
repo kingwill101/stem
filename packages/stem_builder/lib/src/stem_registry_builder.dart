@@ -315,8 +315,9 @@ class StemRegistryBuilder implements Builder {
           importAlias: '',
           className: classElement.displayName,
           steps: steps,
-          resultTypeCode:
-              steps.isEmpty ? 'Object?' : (steps.last.stepValueTypeCode ?? 'Object?'),
+          resultTypeCode: steps.isEmpty
+              ? 'Object?'
+              : (steps.last.stepValueTypeCode ?? 'Object?'),
           resultPayloadCodecTypeCode: steps.isEmpty
               ? null
               : steps.last.stepValuePayloadCodecTypeCode,
@@ -606,7 +607,9 @@ class StemRegistryBuilder implements Builder {
     );
 
     final remaining = parameters
-        .where((parameter) => !identical(parameter, contextParameter?.parameter))
+        .where(
+          (parameter) => !identical(parameter, contextParameter?.parameter),
+        )
         .toList(growable: false);
     final legacyMapSignature =
         contextParameter != null &&
@@ -1042,7 +1045,7 @@ Future<void> _diagnoseScriptCheckpointPatterns(
 
     for (final methodName in invocation.annotatedMethodCalls) {
       final step = stepsByMethod[methodName];
-      if (step == null || step.acceptsScriptStepContext) {
+      if (step == null) {
         continue;
       }
       final wrapperName = invocation.stepName ?? '<dynamic>';
@@ -1076,7 +1079,8 @@ class _ManualScriptStepVisitor extends RecursiveAstVisitor<void> {
 
   @override
   void visitMethodInvocation(MethodInvocation node) {
-    if (node.methodName.name == 'step' && node.argumentList.arguments.length >= 2) {
+    if (node.methodName.name == 'step' &&
+        node.argumentList.arguments.length >= 2) {
       final nameArg = node.argumentList.arguments.first;
       final callbackArg = node.argumentList.arguments[1];
       final callback = callbackArg is FunctionExpression ? callbackArg : null;
@@ -1651,20 +1655,17 @@ class _RegistryEmitter {
     for (final workflow in workflows) {
       final fieldName = fieldNames[workflow]!;
       final argsTypeCode = _workflowArgsTypeCode(workflow);
-      final valueParameters =
-          workflow.kind == WorkflowKind.script
-              ? workflow.runValueParameters
-              : workflow.steps.first.valueParameters;
+      final valueParameters = workflow.kind == WorkflowKind.script
+          ? workflow.runValueParameters
+          : workflow.steps.first.valueParameters;
       final usesNoArgsDefinition = valueParameters.isEmpty;
       final singleParameter = _singleValueParameter(valueParameters);
-      final refType =
-          usesNoArgsDefinition
-              ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
-              : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
-      final constructorType =
-          usesNoArgsDefinition
-              ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
-              : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
+      final refType = usesNoArgsDefinition
+          ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
+          : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
+      final constructorType = usesNoArgsDefinition
+          ? 'NoArgsWorkflowRef<${workflow.resultTypeCode}>'
+          : 'WorkflowRef<$argsTypeCode, ${workflow.resultTypeCode}>';
       buffer.writeln('  static final $refType $fieldName = $constructorType(');
       buffer.writeln('    name: ${_string(workflow.name)},');
       if (!usesNoArgsDefinition) {
@@ -1899,7 +1900,8 @@ class _RegistryEmitter {
       'final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[',
     );
     for (final task in tasks) {
-      final entrypoint = task.adapterName ?? _qualify(task.importAlias, task.function);
+      final entrypoint =
+          task.adapterName ?? _qualify(task.importAlias, task.function);
       final metadataCode = _taskMetadataCode(task);
       buffer.writeln('  FunctionTaskHandler<Object?>(');
       buffer.writeln('    name: ${_string(task.name)},');
@@ -1961,7 +1963,9 @@ class _RegistryEmitter {
         buffer.writeln('    },');
       }
       if (task.options != null) {
-        buffer.writeln('    defaultOptions: ${_dartObjectToCode(task.options!)},');
+        buffer.writeln(
+          '    defaultOptions: ${_dartObjectToCode(task.options!)},',
+        );
       }
       if (task.metadata != null) {
         buffer.writeln('    metadata: ${_dartObjectToCode(task.metadata!)},');
@@ -1994,7 +1998,7 @@ class _RegistryEmitter {
           if (task.usesLegacyMapArgs)
             'args'
           else
-          ...task.valueParameters.map((param) => _decodeArg('args', param)),
+            ...task.valueParameters.map((param) => _decodeArg('args', param)),
         ],
         named: {
           if (task.acceptsTaskContext && task.taskContextIsNamed)
@@ -2134,7 +2138,10 @@ class _RegistryEmitter {
         'as ${parameter.typeCode})';
   }
 
-  String _encodeValueExpression(String expression, _ValueParameterInfo parameter) {
+  String _encodeValueExpression(
+    String expression,
+    _ValueParameterInfo parameter,
+  ) {
     final codecTypeCode = parameter.payloadCodecTypeCode;
     if (codecTypeCode == null) {
       return expression;
@@ -2163,10 +2170,9 @@ class _RegistryEmitter {
   }
 
   String _workflowArgsTypeCode(_WorkflowInfo workflow) {
-    final parameters =
-        workflow.kind == WorkflowKind.script
-            ? workflow.runValueParameters
-            : workflow.steps.first.valueParameters;
+    final parameters = workflow.kind == WorkflowKind.script
+        ? workflow.runValueParameters
+        : workflow.steps.first.valueParameters;
     if (parameters.isEmpty) {
       return '()';
     }

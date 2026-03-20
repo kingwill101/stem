@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Updated the public annotated workflow example and workflow docs to keep
+  context-aware script workflows on the direct annotated checkpoint path,
+  removing the redundant outer `script.step(...)` wrapper from the happy path.
 - Made `StemApp` lazy-start its managed worker on first enqueue/wait and
   `app.canvas` dispatch calls so in-memory and module-backed task apps no
   longer need an explicit `start()` in the common case.

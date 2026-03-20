@@ -94,8 +94,8 @@ class UserSignupWorkflow {
 The generator rewrites those calls into durable checkpoint boundaries in the
 generated proxy class.
 
-When you need runtime metadata or an explicit `script.step(...)`, add an
-optional named injected context parameter:
+When you need runtime metadata, add an optional named injected context
+parameter:
 
 ```dart
 @WorkflowDefn(name: 'annotated.context_script', kind: WorkflowKind.script)
@@ -104,11 +104,7 @@ class AnnotatedContextScriptWorkflow {
     String email,
     {WorkflowScriptContext? context}
   ) async {
-    final script = context!;
-    return script.step<Map<String, Object?>>(
-      'enter-context-step',
-      (ctx) => captureContext(email, context: ctx),
-    );
+    return captureContext(email);
   }
 
   @WorkflowStep(name: 'capture-context')

@@ -2,6 +2,9 @@
 
 ## 0.1.0
 
+- Warned when a manual `script.step(...)` wrapper redundantly encloses an
+  annotated checkpoint, including context-aware checkpoints that can now use
+  direct annotated method calls with injected workflow-step context.
 - Flattened generated single-argument workflow/task definitions so one-field
   annotated workflows/tasks emit direct typed refs instead of named-record
   wrappers.

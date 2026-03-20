@@ -62,8 +62,9 @@ Future<void> helloTask(
 ```
 
 Script workflows can use a plain `run(...)` method with no extra annotation.
-When you need runtime metadata or an explicit `script.step(...)`, add an
-optional named `WorkflowScriptContext? context` parameter.
+When you need runtime metadata, add an optional named
+`WorkflowScriptContext? context` parameter. The direct annotated checkpoint
+call still stays the default path.
 
 The intended usage is to call annotated checkpoint methods directly from
 `run(...)`:
@@ -90,8 +91,7 @@ Conceptually:
 Script workflows use one entry model:
 
 - start with a plain direct-call `run(String email, ...)`
-- add an optional named injected context when you need runtime metadata or an
-  explicit `script.step(...)` wrapper
+- add an optional named injected context when you need runtime metadata
   - `Future<T> run(String email, {WorkflowScriptContext? context})`
   - `Future<T> checkpoint(String email, {WorkflowScriptStepContext? context})`
 - direct annotated checkpoint calls stay the default path

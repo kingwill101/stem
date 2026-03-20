@@ -14,6 +14,7 @@ It now demonstrates the generated script-proxy behavior explicitly:
 - a second script workflow uses optional named context injection
   (`WorkflowScriptContext? context` / `WorkflowScriptStepContext? context`) to
   expose `runId`, `workflow`, `stepName`, `stepIndex`, and idempotency keys
+  while still calling its annotated checkpoint directly from `run(...)`
 - a script checkpoint starting and waiting on a child workflow through
   `StemWorkflowDefinitions.*.startAndWaitWith(context, value)`
 - a plain script workflow that returns a codec-backed DTO result and persists a

@@ -206,23 +206,23 @@ Future<void> sendEmail(
           AssetId('stem', 'lib/stem.dart'),
           stubStem,
         ),
-        outputs: {
-          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
-            allOf([
-              contains('StemWorkflowDefinitions'),
-              contains('StemTaskDefinitions'),
-              contains('NoArgsWorkflowRef<String>'),
-              contains('Flow('),
-              contains('WorkflowScript('),
-              contains('stemModule = StemModule('),
-              contains('FunctionTaskHandler'),
-              contains("part of 'workflows.dart';"),
-              isNot(contains('StemGeneratedTaskEnqueuer')),
-              isNot(contains('StemGeneratedTaskResults')),
-              isNot(contains('waitForSendEmail(')),
-            ]),
-          ),
-        },
+      outputs: {
+        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+          allOf([
+            contains('StemWorkflowDefinitions'),
+            contains('StemTaskDefinitions'),
+            contains('NoArgsWorkflowRef<String>'),
+            contains('Flow('),
+            contains('WorkflowScript('),
+            contains('stemModule = StemModule('),
+            contains('FunctionTaskHandler'),
+            contains("part of 'workflows.dart';"),
+            isNot(contains('StemGeneratedTaskEnqueuer')),
+            isNot(contains('StemGeneratedTaskResults')),
+            isNot(contains('waitForSendEmail(')),
+          ]),
+        ),
+      },
     );
   });
 
@@ -412,7 +412,7 @@ Future<String> sendEmail(EmailRequest request) async => request.email;
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-              contains(
+            contains(
               'static final TaskDefinition<EmailRequest, String> emailSend =',
             ),
             isNot(contains('enqueueEmailSend(')),
@@ -447,7 +447,7 @@ class SignupWorkflow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-              contains(
+            contains(
               'static final WorkflowRef<String, String> signupWorkflow =',
             ),
             isNot(contains('startSignupWorkflow(')),
@@ -460,7 +460,7 @@ class SignupWorkflow {
   });
 
   test('generates typed workflow refs for annotated flows', () async {
-    const input = '''
+    const input = r'''
 import 'package:stem/stem.dart';
 
 part 'workflows.stem.g.dart';
@@ -484,7 +484,7 @@ class GreetingFlow {
       outputs: {
         'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
           allOf([
-              contains(
+            contains(
               'static final WorkflowRef<String, String> greetingFlow =',
             ),
             isNot(contains('startGreetingFlow(')),
@@ -658,7 +658,7 @@ class DuplicateCheckpointWorkflow {
   test(
     'rejects manual checkpoint names that conflict with annotated ones',
     () async {
-    const input = '''
+      const input = '''
 import 'package:stem/stem.dart';
 
 part 'workflows.stem.g.dart';
@@ -675,23 +675,24 @@ class DuplicateManualCheckpointWorkflow {
 }
 ''';
 
-    final result = await testBuilder(
-      stemRegistryBuilder(BuilderOptions.empty),
-      {'stem_builder|lib/workflows.dart': input},
-      rootPackage: 'stem_builder',
-      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
-        ..testing.writeString(
-          AssetId('stem', 'lib/stem.dart'),
-          stubStem,
-        ),
-    );
-    expect(result.succeeded, isFalse);
-    expect(result.errors.join('\n'), contains('manual checkpoint'));
-    expect(
-      result.errors.join('\n'),
-      contains('conflicts with annotated checkpoint'),
-    );
-  });
+      final result = await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+      );
+      expect(result.succeeded, isFalse);
+      expect(result.errors.join('\n'), contains('manual checkpoint'));
+      expect(
+        result.errors.join('\n'),
+        contains('conflicts with annotated checkpoint'),
+      );
+    },
+  );
 
   test(
     'warns when manual script.step wraps an annotated checkpoint call',
@@ -732,6 +733,61 @@ class MixedCheckpointWorkflow {
           warningLogOf(
             allOf([
               contains('wraps annotated checkpoint "send-email"'),
+              contains('outer-wrapper'),
+              contains('avoid nested checkpoints'),
+            ]),
+          ),
+        ),
+      );
+    },
+  );
+
+  test(
+    'warns when manual script.step wraps a context-aware annotated '
+    'checkpoint call',
+    () async {
+      const input = '''
+import 'package:stem/stem.dart';
+
+part 'workflows.stem.g.dart';
+
+@WorkflowDefn(kind: WorkflowKind.script)
+class MixedContextCheckpointWorkflow {
+  @WorkflowRun()
+  Future<void> run(WorkflowScriptContext script) async {
+    await script.step<void>(
+      'outer-wrapper',
+      (ctx) => capture('user@example.com', context: ctx),
+    );
+  }
+
+  @WorkflowStep(name: 'capture')
+  Future<void> capture(
+    String email, {
+    WorkflowScriptStepContext? context,
+  }) async {}
+}
+''';
+
+      final records = <Object?>[];
+      await testBuilders(
+        [stemRegistryBuilder(BuilderOptions.empty)],
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        onLog: records.add,
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+      );
+
+      expect(
+        records,
+        contains(
+          warningLogOf(
+            allOf([
+              contains('wraps annotated checkpoint "capture"'),
               contains('outer-wrapper'),
               contains('avoid nested checkpoints'),
             ]),
@@ -1094,7 +1150,7 @@ Future<void> typedTask(
   test(
     'generates codec-backed DTO helpers for workflow and task types',
     () async {
-    const input = '''
+      const input = '''
 import 'package:stem/stem.dart';
 
 part 'workflows.stem.g.dart';
@@ -1131,17 +1187,17 @@ Future<EmailRequest> dtoTask(
 ) async => request;
 ''';
 
-    await testBuilder(
-      stemRegistryBuilder(BuilderOptions.empty),
-      {'stem_builder|lib/workflows.dart': input},
-      rootPackage: 'stem_builder',
-      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
-        ..testing.writeString(
-          AssetId('stem', 'lib/stem.dart'),
-          stubStem,
-        ),
-      outputs: {
-        'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
+      await testBuilder(
+        stemRegistryBuilder(BuilderOptions.empty),
+        {'stem_builder|lib/workflows.dart': input},
+        rootPackage: 'stem_builder',
+        readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+          ..testing.writeString(
+            AssetId('stem', 'lib/stem.dart'),
+            stubStem,
+          ),
+        outputs: {
+          'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains('abstract final class StemPayloadCodecs'),
               contains('PayloadCodec<EmailRequest> emailRequest ='),
@@ -1166,10 +1222,11 @@ Future<EmailRequest> dtoTask(
               contains('valueCodec: StemPayloadCodecs.emailRequest,'),
               contains('resultCodec: StemPayloadCodecs.emailRequest,'),
             ]),
-        ),
-      },
-    );
-  });
+          ),
+        },
+      );
+    },
+  );
 
   test('rejects non-serializable workflow step parameter types', () async {
     const input = '''

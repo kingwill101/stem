@@ -561,8 +561,7 @@ Future<void> builderExampleTask(
 Script workflows use one authoring model:
 
 - start with a plain `run(String email, ...)` method
-- add an optional named injected context when you need runtime metadata or an
-  explicit `script.step(...)` wrapper:
+- add an optional named injected context when you need runtime metadata:
   - `Future<T> run(String email, {WorkflowScriptContext? context})`
   - `Future<T> capture(String email, {WorkflowScriptStepContext? context})`
 - direct checkpoint method calls still stay the default happy path
