@@ -25,7 +25,7 @@ LogMessageFormatter createStemLogFormatter(StemLogFormat format) {
 Logger createStemLogger({
   Level level = Level.info,
   StemLogFormat format = StemLogFormat.pretty,
-  bool enableConsole = true,
+  bool enableConsole = false,
 }) {
   final logger = Logger(
     formatter: createStemLogFormatter(format),
@@ -80,10 +80,16 @@ Context stemLogContext({
 void configureStemLogging({
   Level level = Level.info,
   StemLogFormat? format,
+  bool enableConsole = true,
 }) {
   stemLogger.setLevel(level);
   if (format != null) {
     stemLogger.formatter(createStemLogFormatter(format));
+  }
+  if (enableConsole) {
+    stemLogger.addChannel('console', ConsoleLogDriver());
+  } else {
+    stemLogger.removeChannel('console');
   }
 }
 

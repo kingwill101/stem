@@ -120,9 +120,10 @@ Use `stemLogger` (Contextual logger) for structured logs.
 
 ```
 
-Stem now defaults to `StemLogFormat.pretty` for interactive console output.
-When you want machine-oriented output for production log shipping, switch back
-with `configureStemLogging(format: StemLogFormat.plain)`.
+The shared `stemLogger` starts silent by default, so opt in explicitly with
+`configureStemLogging(level: Level.info, format: StemLogFormat.pretty)`.
+When you want machine-oriented output for production log shipping, switch to
+`configureStemLogging(format: StemLogFormat.plain)`.
 
 Workers automatically include attempt, queue, and worker id in log contexts when
 `StemSignals` are enabled.

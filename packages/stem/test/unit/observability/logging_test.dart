@@ -30,12 +30,12 @@ void main() {
     configureStemLogging(level: Level.warning);
   });
 
-  test('createStemLogger defaults to the pretty formatter', () async {
-    final logger = createStemLogger(enableConsole: false);
+  test('createStemLogger defaults to a silent logger', () async {
+    final logger = createStemLogger()..info('default silent mode');
+
     final driver = _RecordingLogDriver();
     logger.addChannel('recording', driver);
-
-    logger.channel('recording').info('default pretty mode');
+    logger.channel('recording').info('explicit recording mode');
     await logger.shutdown();
 
     expect(driver.entries, hasLength(1));
@@ -65,7 +65,7 @@ void main() {
     () async {
       final original = stemLogger;
       addTearDown(() => setStemLogger(original));
-      final replacement = createStemLogger(enableConsole: false);
+      final replacement = createStemLogger();
       final driver = _RecordingLogDriver();
       replacement.addChannel('recording', driver);
       setStemLogger(replacement);
@@ -81,6 +81,15 @@ void main() {
       );
     },
   );
+
+  test('configureStemLogging can keep the shared logger silent', () {
+    final original = stemLogger;
+    addTearDown(() => setStemLogger(original));
+    final replacement = createStemLogger(enableConsole: true);
+    setStemLogger(replacement);
+
+    configureStemLogging(enableConsole: false);
+  });
 
   test('createStemLogFormatter returns the plain formatter', () {
     expect(
