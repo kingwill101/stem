@@ -132,7 +132,7 @@ void main() {
       expect(
         event.metadataVersionedJson<_StepMetadata>(
           'worker',
-          version: 2,
+          defaultVersion: 2,
           decode: _StepMetadata.fromVersionedJson,
         ),
         isA<_StepMetadata>().having(
@@ -153,7 +153,7 @@ void main() {
       );
       expect(
         event.metadataPayloadVersionedJson<_StepMetadata>(
-          version: 2,
+          defaultVersion: 2,
           decode: _StepMetadata.fromVersionedJson,
         ),
         isA<_StepMetadata>().having(
@@ -194,7 +194,7 @@ void main() {
       expect(
         event.metadataVersionedJson<_RuntimeMetadata>(
           'detail',
-          version: 2,
+          defaultVersion: 2,
           decode: _RuntimeMetadata.fromVersionedJson,
         ),
         isA<_RuntimeMetadata>().having(
@@ -215,7 +215,7 @@ void main() {
       );
       expect(
         event.metadataPayloadVersionedJson<_RuntimeMetadata>(
-          version: 2,
+          defaultVersion: 2,
           decode: _RuntimeMetadata.fromVersionedJson,
         ),
         isA<_RuntimeMetadata>().having(
