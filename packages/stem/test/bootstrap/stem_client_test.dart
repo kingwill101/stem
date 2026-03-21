@@ -491,6 +491,47 @@ void main() {
     }
   });
 
+  test('StemClient fromUrl reuses a pre-resolved stack', () async {
+    final handler = FunctionTaskHandler<String>(
+      name: 'client.from-url.stack',
+      entrypoint: (context, args) async => 'ok',
+    );
+    final definition = TaskDefinition.noArgs<String>(
+      name: 'client.from-url.stack',
+    );
+    final stack = StemStack.fromUrl(
+      'test://localhost',
+      adapters: [
+        TestStoreAdapter(
+          scheme: 'test',
+          adapterName: 'client-test-adapter',
+          broker: StemBrokerFactory(create: () async => InMemoryBroker()),
+          backend: StemBackendFactory(
+            create: () async => InMemoryResultBackend(),
+          ),
+        ),
+      ],
+    );
+    final client = await StemClient.fromUrl(
+      'memory://ignored',
+      stack: stack,
+      tasks: [handler],
+    );
+
+    final worker = await client.createWorker();
+    await worker.start();
+    try {
+      final result = await definition.enqueueAndWait(
+        client,
+        timeout: const Duration(seconds: 2),
+      );
+      expect(result?.value, 'ok');
+    } finally {
+      await worker.shutdown();
+      await client.close();
+    }
+  });
+
   test('StemClient createWorker infers queues from explicit tasks', () async {
     final client = await StemClient.inMemory();
     final worker = await client.createWorker(

@@ -92,6 +92,9 @@ abstract class StemClient implements TaskResultCaller {
   ///
   /// This resolves broker/backend factories via [StemStack.fromUrl] so callers
   /// can avoid manual factory wiring for common Redis/Postgres/SQLite setups.
+  ///
+  /// When [stack] is supplied, the client reuses that pre-resolved adapter
+  /// stack instead of resolving broker/backend factories from [url] again.
   static Future<StemClient> fromUrl(
     String url, {
     StemModule? module,
@@ -111,20 +114,23 @@ abstract class StemClient implements TaskResultCaller {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    StemStack? stack,
   }) {
-    final stack = StemStack.fromUrl(
-      url,
-      adapters: adapters,
-      overrides: overrides,
-    );
+    final resolvedStack =
+        stack ??
+        StemStack.fromUrl(
+          url,
+          adapters: adapters,
+          overrides: overrides,
+        );
     return create(
       module: module,
       modules: modules,
       tasks: tasks,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
-      broker: stack.broker,
-      backend: stack.backend,
+      broker: resolvedStack.broker,
+      backend: resolvedStack.backend,
       routing: routing,
       retryStrategy: retryStrategy,
       uniqueTaskCoordinator: uniqueTaskCoordinator,
