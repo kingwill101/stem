@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_signing_key_rotation/shared.dart';
 
 Future<void> main() async {
@@ -14,15 +15,10 @@ Future<void> main() async {
 
   final tasks = buildTasks();
   // #region signing-rotation-producer-stem
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => connectBroker(config.brokerUrl, tls: config.tls),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => connectBackend(backendUrl, tls: config.tls),
-      dispose: (backend) => backend.close(),
-    ),
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: signer,
   );

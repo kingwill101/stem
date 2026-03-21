@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_rate_limit_delay_demo/shared.dart';
 
 Future<void> main() async {
@@ -13,15 +14,10 @@ Future<void> main() async {
 
   final tasks = buildTasks();
   final routing = buildRoutingRegistry();
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => connectBroker(brokerUrl),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => connectBackend(backendUrl),
-      dispose: (backend) => backend.close(),
-    ),
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     routing: routing,
   );

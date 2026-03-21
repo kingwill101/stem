@@ -63,16 +63,10 @@ Future<StemClient> _buildRedisClient(StemConfig config) async {
     ),
   ];
 
-  return StemClient.create(
-    broker: StemBrokerFactory(
-      create: () =>
-          RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => RedisResultBackend.connect(backendUrl, tls: config.tls),
-      dispose: (backend) => backend.close(),
-    ),
+  return StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );
@@ -92,19 +86,15 @@ Future<StemClient> _buildPostgresClient(StemConfig config) async {
     ),
   ];
 
-  return StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => PostgresBroker.connect(
-        config.brokerUrl,
+  return StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [
+      StemPostgresAdapter(
         applicationName: 'stem-mixed-enqueuer',
         tls: config.tls,
       ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => PostgresResultBackend.connect(connectionString: backendUrl),
-      dispose: (backend) => backend.close(),
-    ),
+    ],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );

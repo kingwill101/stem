@@ -110,21 +110,10 @@ Future<void> main(List<String> args) async {
       .toList(growable: false);
 
   // #region signing-producer-stem
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect(
-        config.brokerUrl,
-        tls: config.tls,
-      ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => RedisResultBackend.connect(
-        backendUrl,
-        tls: config.tls,
-      ),
-      dispose: (backend) => backend.close(),
-    ),
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: signer,
   );

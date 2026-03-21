@@ -22,21 +22,15 @@ Future<void> main(List<String> args) async {
     ),
   ];
 
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => PostgresBroker.connect(
-        config.brokerUrl,
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [
+      StemPostgresAdapter(
         applicationName: 'stem-postgres-enqueuer',
         tls: config.tls,
       ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => PostgresResultBackend.connect(
-        connectionString: backendUrl,
-      ),
-      dispose: (backend) => backend.close(),
-    ),
+    ],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );

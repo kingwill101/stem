@@ -10,15 +10,10 @@ Future<void> main() async {
 
   final routing = buildRoutingRegistry();
   final tasks = buildDemoTasks();
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect(
-        redisUrl,
-        namespace: 'stem-routing-demo',
-      ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory.inMemory(),
+  final client = await StemClient.fromUrl(
+    redisUrl,
+    adapters: const [StemRedisAdapter(namespace: 'stem-routing-demo')],
+    overrides: const StemStoreOverrides(backend: 'memory://'),
     tasks: tasks,
     routing: routing,
   );

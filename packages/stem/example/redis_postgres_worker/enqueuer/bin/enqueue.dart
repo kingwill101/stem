@@ -23,20 +23,13 @@ Future<void> main(List<String> args) async {
     ),
   ];
 
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect(
-        config.brokerUrl,
-        tls: config.tls,
-      ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => PostgresResultBackend.connect(
-        connectionString: backendUrl,
-      ),
-      dispose: (backend) => backend.close(),
-    ),
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [
+      StemRedisAdapter(tls: config.tls),
+      StemPostgresAdapter(),
+    ],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );
