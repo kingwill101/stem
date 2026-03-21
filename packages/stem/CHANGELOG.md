@@ -2,6 +2,9 @@
 
 ## 0.1.1
 
+- Added `PayloadVersionRegistry<T>` plus registry-backed versioned factories
+  for manual task definitions, workflow refs, workflow events, flows, and
+  scripts.
 - Added `Flow.versionedMap(...)`, `WorkflowScript.versionedMap(...)`,
   `WorkflowDefinition.flowVersionedMap(...)`, and
   `WorkflowDefinition.scriptVersionedMap(...)` for custom map workflow results

@@ -29,6 +29,12 @@ class _GreetingResult {
     );
   }
 
+  factory _GreetingResult.fromV2Json(Map<String, dynamic> json) {
+    return _GreetingResult(
+      message: '${json['message']! as String} v2',
+    );
+  }
+
   factory _GreetingResult.fromVersionedMap(
     Map<String, dynamic> json,
     int version,
@@ -51,6 +57,14 @@ const _greetingParamsCodec = PayloadCodec<_GreetingParams>.json(
 const _greetingResultCodec = PayloadCodec<_GreetingResult>.json(
   decode: _GreetingResult.fromJson,
   typeName: '_GreetingResult',
+);
+
+const _greetingResultRegistry = PayloadVersionRegistry<_GreetingResult>(
+  decoders: <int, _GreetingResult Function(Map<String, dynamic>)>{
+    1: _GreetingResult.fromJson,
+    2: _GreetingResult.fromV2Json,
+  },
+  defaultVersion: 1,
 );
 
 class _LegacyGreetingParams {
@@ -636,6 +650,46 @@ void main() {
           expect(
             (result?.value as _GreetingResult?)?.message,
             'hello ref result v2',
+          );
+        } finally {
+          await workflowApp.shutdown();
+        }
+      },
+    );
+
+    test(
+      'manual workflows can derive registry-backed versioned-json refs',
+      () async {
+        final flow = Flow<Object?>(
+          name: 'runtime.ref.registry.ref-result.flow',
+          build: (builder) {
+            builder.step(
+              'hello',
+              (ctx) async => const {
+                'message': 'hello ref registry',
+                PayloadCodec.versionKey: 2,
+              },
+            );
+          },
+        );
+        final workflowRef = flow.refVersionedJsonRegistry<_GreetingParams>(
+          version: 2,
+          resultRegistry: _greetingResultRegistry,
+        );
+
+        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        try {
+          await workflowApp.start();
+
+          final result = await workflowRef.startAndWait(
+            workflowApp.runtime,
+            params: const _GreetingParams(name: 'ignored'),
+            timeout: const Duration(seconds: 2),
+          );
+
+          expect(
+            (result?.value as _GreetingResult?)?.message,
+            'hello ref registry v2',
           );
         } finally {
           await workflowApp.shutdown();

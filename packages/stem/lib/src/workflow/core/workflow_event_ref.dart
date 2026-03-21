@@ -74,6 +74,26 @@ class WorkflowEventRef<T> {
     );
   }
 
+  /// Creates a typed workflow event reference backed by a reusable version
+  /// registry.
+  factory WorkflowEventRef.versionedJsonRegistry({
+    required String topic,
+    required int version,
+    required PayloadVersionRegistry<T> registry,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return WorkflowEventRef<T>.codec(
+      topic: topic,
+      codec: PayloadCodec<T>.versionedJsonRegistry(
+        version: version,
+        registry: registry,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ),
+    );
+  }
+
   /// Creates a typed workflow event reference for custom map payloads that
   /// persist a schema [version] beside the payload.
   factory WorkflowEventRef.versionedMap({
@@ -90,6 +110,28 @@ class WorkflowEventRef<T> {
         encode: encode,
         version: version,
         decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ),
+    );
+  }
+
+  /// Creates a typed workflow event reference for custom map payloads backed
+  /// by a reusable version registry.
+  factory WorkflowEventRef.versionedMapRegistry({
+    required String topic,
+    required Object? Function(T value) encode,
+    required int version,
+    required PayloadVersionRegistry<T> registry,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return WorkflowEventRef<T>.codec(
+      topic: topic,
+      codec: PayloadCodec<T>.versionedMapRegistry(
+        encode: encode,
+        version: version,
+        registry: registry,
         defaultDecodeVersion: defaultDecodeVersion,
         typeName: typeName,
       ),

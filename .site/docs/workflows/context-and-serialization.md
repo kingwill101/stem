@@ -164,6 +164,18 @@ custom map encoder or a nonstandard version-aware decode function.
 `PayloadCodec<T>.versionedMapRegistry(...)` gives the same reusable-registry
 shape for that case.
 
+The same registry-backed model is available on the higher-level authoring
+factories too:
+- `TaskDefinition.versionedJsonRegistry(...)`
+- `TaskDefinition.versionedMapRegistry(...)`
+- `WorkflowRef.versionedJsonRegistry(...)`
+- `WorkflowRef.versionedMapRegistry(...)`
+- `WorkflowEventRef.versionedJsonRegistry(...)`
+- `WorkflowEventRef.versionedMapRegistry(...)`
+- `Flow.versionedJsonRegistry(...)` / `Flow.versionedMapRegistry(...)`
+- `WorkflowScript.versionedJsonRegistry(...)` /
+  `WorkflowScript.versionedMapRegistry(...)`
+
 For manual flows and scripts, prefer the typed workflow param helpers before
 dropping to raw map casts:
 

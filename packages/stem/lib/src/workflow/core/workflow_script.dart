@@ -111,6 +111,36 @@ class WorkflowScript<T extends Object?> {
     );
   }
 
+  /// Creates a script definition whose final result uses a reusable version
+  /// registry.
+  factory WorkflowScript.versionedJsonRegistry({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowScript<T>(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedJsonRegistry(
+        version: version,
+        registry: resultRegistry,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
   /// Creates a script definition whose final result is a versioned custom map
   /// payload.
   factory WorkflowScript.versionedMap({
@@ -137,6 +167,38 @@ class WorkflowScript<T extends Object?> {
         encode: encodeResult,
         version: version,
         decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
+  /// Creates a script definition whose final result is a versioned custom map
+  /// payload decoded through a reusable registry.
+  factory WorkflowScript.versionedMapRegistry({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required Object? Function(T value) encodeResult,
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowScript<T>(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedMapRegistry(
+        encode: encodeResult,
+        version: version,
+        registry: resultRegistry,
         defaultDecodeVersion: defaultDecodeVersion,
         typeName: resultTypeName ?? '$T',
       ),
@@ -201,6 +263,24 @@ class WorkflowScript<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedJsonRegistry<TParams>({
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return definition.refVersionedJsonRegistry<TParams>(
+      version: version,
+      resultRegistry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Builds a typed [WorkflowRef] for custom map params that persist a schema
   /// [version] beside the payload.
   WorkflowRef<TParams, T> refVersionedMap<TParams>({
@@ -218,6 +298,26 @@ class WorkflowScript<T extends Object?> {
       version: version,
       decodeResultJson: decodeResultJson,
       decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for custom map params that persist a schema
+  /// [version] and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedMapRegistry<TParams>({
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return definition.refVersionedMapRegistry<TParams>(
+      encodeParams: encodeParams,
+      version: version,
+      resultRegistry: resultRegistry,
       defaultDecodeVersion: defaultDecodeVersion,
       paramsTypeName: paramsTypeName,
       resultTypeName: resultTypeName,

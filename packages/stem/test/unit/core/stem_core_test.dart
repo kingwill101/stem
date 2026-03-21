@@ -376,6 +376,31 @@ void main() {
     );
 
     test(
+      'versioned json registry task definitions can derive versioned result metadata',
+      () async {
+        final broker = _RecordingBroker();
+        final backend = _RecordingBackend();
+        final stem = Stem(broker: broker, backend: backend);
+        final definition =
+            TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedJsonRegistry(
+              name: 'sample.versioned_json.registry.result',
+              version: 2,
+              resultRegistry: _codecReceiptRegistry,
+            );
+
+        final id = await stem.enqueueCall(
+          definition.buildCall(const _CodecTaskArgs('encoded')),
+        );
+
+        expect(
+          backend.records.single.meta[stemResultEncoderMetaKey],
+          endsWith('.result.codec'),
+        );
+        expect(backend.records.single.id, id);
+      },
+    );
+
+    test(
       'versioned map task definitions can derive versioned result metadata',
       () async {
         final broker = _RecordingBroker();
@@ -990,6 +1015,10 @@ class _CodecReceipt {
     return _CodecReceipt('${json['id']! as String}-v$version');
   }
 
+  factory _CodecReceipt.fromV2Json(Map<String, dynamic> json) {
+    return _CodecReceipt('${json['id']! as String}-v2');
+  }
+
   final String id;
 
   Map<String, Object?> toJson() => {'id': id};
@@ -1034,6 +1063,14 @@ class _EnvelopeMeta {
 const _codecReceiptCodec = PayloadCodec<_CodecReceipt>.json(
   decode: _CodecReceipt.fromJson,
   typeName: '_CodecReceipt',
+);
+
+const _codecReceiptRegistry = PayloadVersionRegistry<_CodecReceipt>(
+  decoders: <int, _CodecReceipt Function(Map<String, dynamic>)>{
+    1: _CodecReceipt.fromJson,
+    2: _CodecReceipt.fromV2Json,
+  },
+  defaultVersion: 1,
 );
 
 const _codecReceiptEncoder = CodecTaskPayloadEncoder<_CodecReceipt>(

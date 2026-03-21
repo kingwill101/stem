@@ -318,6 +318,18 @@ Use `PayloadCodec.versionedMap(...)` instead when the payload still needs a
 custom map encoder or a nonstandard version-aware decode shape.
 `PayloadCodec.versionedMapRegistry(...)` provides the same registry-backed
 pattern for that custom-map case.
+
+The same registry-backed model is available on the author-facing factories:
+- `TaskDefinition.versionedJsonRegistry(...)`
+- `TaskDefinition.versionedMapRegistry(...)`
+- `WorkflowRef.versionedJsonRegistry(...)`
+- `WorkflowRef.versionedMapRegistry(...)`
+- `WorkflowEventRef.versionedJsonRegistry(...)`
+- `WorkflowEventRef.versionedMapRegistry(...)`
+- `Flow.versionedJsonRegistry(...)` / `Flow.versionedMapRegistry(...)`
+- `WorkflowScript.versionedJsonRegistry(...)` /
+  `WorkflowScript.versionedMapRegistry(...)`
+
 The same pattern now carries through the low-level readback helpers:
 `status.payloadVersionedJson(...)`, `result.payloadVersionedJson(...)`,
 `workflowResult.payloadVersionedJson(...)`, and

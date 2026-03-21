@@ -862,6 +862,53 @@ void main() {
     expect(completed?.result, 'user-versioned-ref-2');
   });
 
+  test('emitEvent resumes flows with registry-backed workflow event refs', () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJsonRegistry(
+      topic: 'user.updated.registry.ref',
+      version: 2,
+      registry: _userUpdatedEventRegistry,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.registry.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.registry.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-registry-ref-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-registry-ref-2');
+    expect(completed?.result, 'user-registry-ref-2');
+  });
+
   test('emitEvent resumes flows with versioned-map workflow event refs', () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.versionedMap(
       topic: 'user.updated.versioned.map.ref',
@@ -1754,6 +1801,10 @@ class _UserUpdatedEvent {
     return _UserUpdatedEvent(id: json['id'] as String);
   }
 
+  static _UserUpdatedEvent fromV2Json(Map<String, dynamic> json) {
+    return _UserUpdatedEvent(id: json['id'] as String);
+  }
+
   static _UserUpdatedEvent fromVersionedMap(
     Map<String, dynamic> json,
     int version,
@@ -1762,3 +1813,11 @@ class _UserUpdatedEvent {
     return _UserUpdatedEvent(id: '${json['user_id'] as String}-v$version');
   }
 }
+
+const _userUpdatedEventRegistry = PayloadVersionRegistry<_UserUpdatedEvent>(
+  decoders: <int, _UserUpdatedEvent Function(Map<String, dynamic>)>{
+    1: _UserUpdatedEvent.fromJson,
+    2: _UserUpdatedEvent.fromV2Json,
+  },
+  defaultVersion: 1,
+);

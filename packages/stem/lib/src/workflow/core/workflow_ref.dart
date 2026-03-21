@@ -109,6 +109,34 @@ class WorkflowRef<TParams, TResult extends Object?> {
     );
   }
 
+  /// Creates a typed workflow reference for DTO params that already expose
+  /// `toJson()` and decode versioned results through a reusable registry.
+  factory WorkflowRef.versionedJsonRegistry({
+    required String name,
+    required int version,
+    required PayloadVersionRegistry<TResult> resultRegistry,
+    TResult Function(Object? payload)? decodeResult,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    final resultCodec = PayloadCodec<TResult>.versionedJsonRegistry(
+      version: version,
+      registry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: resultTypeName ?? '$TResult',
+    );
+    return WorkflowRef<TParams, TResult>(
+      name: name,
+      encodeParams: (params) => _encodeVersionedJsonParams(
+        params,
+        version: version,
+        typeName: paramsTypeName ?? '$TParams',
+      ),
+      decodeResult: decodeResult ?? resultCodec.decode,
+    );
+  }
+
   /// Creates a typed workflow reference for custom map params that persist a
   /// schema [version] beside the payload.
   factory WorkflowRef.versionedMap({
@@ -151,6 +179,43 @@ class WorkflowRef<TParams, TResult extends Object?> {
                   decode: decodeResultJson,
                   typeName: resultTypeName ?? '$TResult',
                 ));
+    return WorkflowRef<TParams, TResult>.codec(
+      name: name,
+      paramsCodec: paramsCodec,
+      resultCodec: resultCodec,
+      decodeResult: decodeResult,
+    );
+  }
+
+  /// Creates a typed workflow reference for custom map params that persist a
+  /// schema [version] and decode versioned results through a reusable
+  /// registry.
+  factory WorkflowRef.versionedMapRegistry({
+    required String name,
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    required PayloadVersionRegistry<TResult> resultRegistry,
+    TResult Function(Object? payload)? decodeResult,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    final paramsCodec = PayloadCodec<TParams>.versionedMap(
+      encode: encodeParams,
+      version: version,
+      decode: (payload, _) => throw UnsupportedError(
+        'WorkflowRef.versionedMapRegistry($name) only uses the params codec '
+        'for encoding. Decoding is not supported at the ref layer.',
+      ),
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: paramsTypeName ?? '$TParams',
+    );
+    final resultCodec = PayloadCodec<TResult>.versionedJsonRegistry(
+      version: version,
+      registry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: resultTypeName ?? '$TResult',
+    );
     return WorkflowRef<TParams, TResult>.codec(
       name: name,
       paramsCodec: paramsCodec,

@@ -602,6 +602,25 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedJsonRegistry<TParams>({
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedJsonRegistry(
+      name: name,
+      version: version,
+      resultRegistry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
   /// Builds a typed [WorkflowRef] for custom map params that persist a schema
   /// [version] beside the payload.
   WorkflowRef<TParams, T> refVersionedMap<TParams>({
@@ -625,6 +644,27 @@ class WorkflowDefinition<T extends Object?> {
           decodeResultJson == null && decodeResultVersionedJson == null
           ? (payload) => decodeResult(payload) as T
           : null,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for custom map params that persist a schema
+  /// [version] and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedMapRegistry<TParams>({
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedMapRegistry(
+      name: name,
+      encodeParams: encodeParams,
+      version: version,
+      resultRegistry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
       paramsTypeName: paramsTypeName,
       resultTypeName: resultTypeName,
     );
