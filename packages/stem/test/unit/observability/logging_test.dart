@@ -1,3 +1,10 @@
+import 'package:contextual/contextual.dart'
+    show
+        LogDriver,
+        LogEntry,
+        LoggerChannelSelection,
+        PlainTextLogFormatter,
+        PrettyLogFormatter;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -21,6 +28,42 @@ void main() {
     configureStemLogging(level: Level.warning);
   });
 
+  test('createStemLogFormatter returns the pretty formatter', () {
+    expect(
+      createStemLogFormatter(StemLogFormat.pretty),
+      isA<PrettyLogFormatter>(),
+    );
+  });
+
+  test(
+    'configureStemLogging can switch the shared logger to pretty mode',
+    () async {
+      final original = stemLogger;
+      addTearDown(() => setStemLogger(original));
+      final replacement = createStemLogger(enableConsole: false);
+    final driver = _RecordingLogDriver();
+    replacement.addChannel('recording', driver);
+      setStemLogger(replacement);
+
+      configureStemLogging(format: StemLogFormat.pretty);
+      stemLogger.channel('recording').info('pretty shared mode');
+      await stemLogger.shutdown();
+
+      expect(driver.entries, hasLength(1));
+      expect(
+        createStemLogFormatter(StemLogFormat.pretty),
+        isA<PrettyLogFormatter>(),
+      );
+    },
+  );
+
+  test('createStemLogFormatter returns the plain formatter', () {
+    expect(
+      createStemLogFormatter(StemLogFormat.plain),
+      isA<PlainTextLogFormatter>(),
+    );
+  });
+
   test('setStemLogger replaces the shared logger', () {
     final original = stemLogger;
     addTearDown(() => setStemLogger(original));
@@ -41,4 +84,15 @@ void main() {
     expect(context['subsystem'], 'worker');
     expect(context['queue'], 'default');
   });
+}
+
+class _RecordingLogDriver extends LogDriver {
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
+
+  final List<LogEntry> entries;
+
+  @override
+  Future<void> log(LogEntry entry) async {
+    entries.add(entry);
+  }
 }

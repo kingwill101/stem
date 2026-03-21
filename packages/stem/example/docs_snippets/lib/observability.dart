@@ -43,6 +43,7 @@ void recordQueueDepth(String queue, int depth) {
 
 // #region observability-logging
 void logTaskStart(Envelope envelope) {
+  configureStemLogging(format: StemLogFormat.pretty);
   stemLogger.info(
     'Task started',
     Context({'task': envelope.name, 'id': envelope.id}),

@@ -1,18 +1,40 @@
 import 'package:contextual/contextual.dart';
 
-Logger _buildStemLogger() {
-  return Logger()..addChannel(
-    'console',
-    ConsoleLogDriver(),
-    formatter: PlainTextLogFormatter(
-      settings: FormatterSettings(
-        includePrefix: false,
-      ),
-    ),
-  );
+/// Available output formats for the shared Stem logger.
+enum StemLogFormat {
+  /// Plain logfmt-style output without ANSI color codes.
+  plain,
+
+  /// Colored terminal output intended for interactive local development.
+  pretty,
 }
 
-Logger _stemLogger = _buildStemLogger();
+/// Creates a formatter matching the shared Stem logging presets.
+LogMessageFormatter createStemLogFormatter(StemLogFormat format) {
+  final settings = FormatterSettings(includePrefix: false);
+  return switch (format) {
+    StemLogFormat.pretty => PrettyLogFormatter(settings: settings),
+    StemLogFormat.plain => PlainTextLogFormatter(settings: settings),
+  };
+}
+
+/// Creates a logger configured the same way Stem configures its shared logger.
+Logger createStemLogger({
+  Level level = Level.info,
+  StemLogFormat format = StemLogFormat.plain,
+  bool enableConsole = true,
+}) {
+  final logger = Logger(
+    formatter: createStemLogFormatter(format),
+    defaultChannelEnabled: false,
+  )..setLevel(level);
+  if (enableConsole) {
+    logger.addChannel('console', ConsoleLogDriver());
+  }
+  return logger;
+}
+
+Logger _stemLogger = createStemLogger();
 
 /// Shared logger configured with console output suitable for worker
 /// diagnostics.
@@ -52,6 +74,12 @@ Context stemLogContext({
 }
 
 /// Sets the minimum log [level] for the shared [stemLogger].
-void configureStemLogging({Level level = Level.info}) {
+void configureStemLogging({
+  Level level = Level.info,
+  StemLogFormat? format,
+}) {
   stemLogger.setLevel(level);
+  if (format != null) {
+    stemLogger.formatter(createStemLogFormatter(format));
+  }
 }
