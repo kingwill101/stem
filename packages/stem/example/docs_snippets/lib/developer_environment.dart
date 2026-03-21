@@ -13,28 +13,22 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
   // #endregion dev-env-config
 
   // #region dev-env-adapters
-  final broker = StemBrokerFactory(
-    create: () => RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
-    dispose: (broker) => broker.close(),
-  );
-  final backend = StemBackendFactory(
-    create: () => RedisResultBackend.connect(
-      _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
-      tls: config.tls,
+  final stack = StemStack.fromUrl(
+    config.brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(
+      backend: _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
+      revoke: _resolveRedisUrl(config.brokerUrl, config.revokeStoreUrl, 2),
     ),
-    dispose: (backend) => backend.close(),
+    requireRevokeStore: true,
   );
-  final revokeStore = await RedisRevokeStore.connect(
-    _resolveRedisUrl(config.brokerUrl, config.revokeStoreUrl, 2),
-  );
+  final revokeStore = await stack.revokeStore!.create();
   final routing = await _loadRoutingRegistry(config);
   final rateLimiter = await connectRateLimiter(config);
   // #endregion dev-env-adapters
 
   // #region dev-env-stem
-  final client = await StemClient.create(
-    broker: broker,
-    backend: backend,
+  final client = await stack.createClient(
     tasks: tasks,
     routing: routing,
   );
@@ -115,25 +109,20 @@ Future<void> runCanvasFlows(
 // #region dev-env-status
 Future<void> inspectChordStatus(String chordId) async {
   final config = StemConfig.fromEnvironment(Platform.environment);
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect(config.brokerUrl, tls: config.tls),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => RedisResultBackend.connect(
-        _resolveRedisUrl(
-          config.brokerUrl,
-          config.resultBackendUrl,
-          1,
-        ),
-        tls: config.tls,
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(
+      backend: _resolveRedisUrl(
+        config.brokerUrl,
+        config.resultBackendUrl,
+        1,
       ),
-      dispose: (backend) => backend.close(),
     ),
   );
   final status = await client.getTaskStatus(chordId);
   print('Chord completion state: ${status?.state}');
+  await client.close();
 }
 // #endregion dev-env-status
 

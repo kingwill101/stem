@@ -79,21 +79,8 @@ Future<void> main() async {
 `StemClient.createWorker(...)` infers queue subscriptions from the bundled or
 explicitly supplied task handlers when `workerConfig.subscription` is omitted.
 
-For persistent adapters, keep `StemClient` as the entrypoint and resolve
-broker/backend wiring from a URL:
-
-```dart
-import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
-
-final client = await StemClient.create(
-  broker: redisBrokerFactory('redis://localhost:6379'),
-  backend: redisResultBackendFactory('redis://localhost:6379/1'),
-  tasks: [HelloTask()],
-);
-```
-
-or use the lower-boilerplate URL helper:
+For persistent adapters, keep `StemClient` as the entrypoint and resolve the
+broker/backend stack from a URL:
 
 ```dart
 import 'package:stem/stem.dart';
@@ -110,7 +97,7 @@ final client = await StemClient.fromUrl(
 ```
 
 If adapter resolution already happens elsewhere, reuse the resolved stack
-directly:
+directly instead of rebuilding factories by hand:
 
 ```dart
 final stack = StemStack.fromUrl(
@@ -125,6 +112,9 @@ final client = await stack.createClient(
   tasks: [HelloTask()],
 );
 ```
+
+Reach for `StemClient.create(...)` only when the store factories are genuinely
+custom and cannot be expressed through `StemStack.fromUrl(...)`.
 
 ### Direct enqueue (map-based)
 
@@ -1265,14 +1255,11 @@ final unique = UniqueTaskCoordinator(
   defaultTtl: const Duration(minutes: 5),
 );
 
-final client = await StemClient.create(
-  broker: StemBrokerFactory(
-    create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
-    dispose: (broker) => broker.close(),
-  ),
-  backend: StemBackendFactory(
-    create: () => RedisResultBackend.connect('redis://localhost:6379/1'),
-    dispose: (backend) => backend.close(),
+final client = await StemClient.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  overrides: const StemStoreOverrides(
+    backend: 'redis://localhost:6379/1',
   ),
   tasks: [OrdersSyncTask()],
   uniqueTaskCoordinator: unique,

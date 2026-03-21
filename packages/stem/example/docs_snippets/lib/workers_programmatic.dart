@@ -67,15 +67,10 @@ Future<void> redisProducer() async {
 Future<void> signedProducer() async {
   final config = StemConfig.fromEnvironment();
   final signer = PayloadSigner.maybe(config.signing);
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect(
-        config.brokerUrl,
-        tls: config.tls,
-      ),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory.inMemory(),
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(backend: 'memory://'),
     tasks: [
       FunctionTaskHandler<void>(
         name: 'billing.charge',

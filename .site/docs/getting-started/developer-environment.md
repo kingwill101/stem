@@ -66,6 +66,11 @@ piece is easy to scan and reuse:
 Together, these steps give you access to routing, rate limiting, revoke
 storage, and queue configuration—all backed by Redis.
 
+The recommended pattern here is to resolve a `StemStack` from the environment
+once, build a shared `StemClient` from that stack, and then layer workers or
+workflow apps on top. Manual broker/backend factory wiring is the fallback
+path, not the default.
+
 ## 3. Launch Workers, Beat, and Producers
 
 With the environment configured, run Stem components from separate terminals:

@@ -23,11 +23,7 @@ final demoTasks = [
 
 // #region persistence-backend-in-memory
 Future<void> connectInMemoryBackend() async {
-  final client = await StemClient.create(
-    broker: StemBrokerFactory.inMemory(),
-    backend: StemBackendFactory.inMemory(),
-    tasks: demoTasks,
-  );
+  final client = await StemClient.inMemory(tasks: demoTasks);
   await demoTaskDefinition.enqueue(client);
   await client.close();
 }
@@ -35,14 +31,11 @@ Future<void> connectInMemoryBackend() async {
 
 // #region persistence-backend-redis
 Future<void> connectRedisBackend() async {
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => RedisResultBackend.connect('redis://localhost:6379/1'),
-      dispose: (backend) => backend.close(),
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://localhost:6379/1',
     ),
     tasks: demoTasks,
   );
@@ -53,16 +46,11 @@ Future<void> connectRedisBackend() async {
 
 // #region persistence-backend-postgres
 Future<void> connectPostgresBackend() async {
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => RedisStreamsBroker.connect('redis://localhost:6379'),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => PostgresResultBackend.connect(
-        connectionString: 'postgres://postgres:postgres@localhost:5432/stem',
-      ),
-      dispose: (backend) => backend.close(),
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'postgres://postgres:postgres@localhost:5432/stem',
     ),
     tasks: demoTasks,
   );
@@ -73,14 +61,11 @@ Future<void> connectPostgresBackend() async {
 
 // #region persistence-backend-sqlite
 Future<void> connectSqliteBackend() async {
-  final client = await StemClient.create(
-    broker: StemBrokerFactory(
-      create: () => SqliteBroker.open(File('stem_broker.sqlite')),
-      dispose: (broker) => broker.close(),
-    ),
-    backend: StemBackendFactory(
-      create: () => SqliteResultBackend.open(File('stem_backend.sqlite')),
-      dispose: (backend) => backend.close(),
+  final client = await StemClient.fromUrl(
+    'sqlite:///${File('stem_broker.sqlite').absolute.path}',
+    adapters: const [StemSqliteAdapter()],
+    overrides: StemStoreOverrides(
+      backend: 'sqlite:///${File('stem_backend.sqlite').absolute.path}',
     ),
     tasks: demoTasks,
   );

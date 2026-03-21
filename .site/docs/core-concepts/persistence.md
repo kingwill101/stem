@@ -9,6 +9,11 @@ Use persistence when you need durable task state, workflow state, shared
 schedules, or revocation storage. Stem ships with Redis, Postgres, and SQLite
 adapters plus in-memory variants for local development.
 
+For the normal path, prefer `StemClient.inMemory(...)`,
+`StemClient.fromUrl(...)`, or a reusable `StemStack.fromUrl(...).createClient(...)`.
+Drop to `StemClient.create(...)` only when you really need custom broker or
+backend factories that the adapter stack cannot express.
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

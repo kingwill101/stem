@@ -9,6 +9,10 @@ Enqueue tasks from your Dart services through a `TaskEnqueuer` surface such as
 `StemClient`, `StemApp`, or `StemWorkflowApp`. Start with the in-memory broker,
 then opt into Redis/Postgres as needed.
 
+For adapter-backed deployments, prefer `StemClient.fromUrl(...)` or
+`StemStack.fromUrl(...).createClient(...)`. Keep `StemClient.create(...)` for
+the rarer case where you must provide custom factories directly.
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
