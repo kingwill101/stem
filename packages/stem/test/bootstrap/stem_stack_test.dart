@@ -45,6 +45,28 @@ void main() {
       expect(workflowStore, isA<InMemoryWorkflowStore>());
     });
 
+    test('can create a client from a resolved stack', () async {
+      final stack = StemStack.fromUrl('memory://');
+      final handler = FunctionTaskHandler<String>(
+        name: 'stack.client.task',
+        entrypoint: (context, args) async => 'ok',
+      );
+      final definition = TaskDefinition.noArgs<String>(name: 'stack.client.task');
+      final client = await stack.createClient(tasks: [handler]);
+      final worker = await client.createWorker();
+      await worker.start();
+      try {
+        final result = await definition.enqueueAndWait(
+          client,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'ok');
+      } finally {
+        await worker.shutdown();
+        await client.close();
+      }
+    });
+
     test('honors overrides for specific stores', () {
       final fooBroker = StemBrokerFactory(
         create: () async => InMemoryBroker(),

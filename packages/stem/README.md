@@ -109,6 +109,23 @@ final client = await StemClient.fromUrl(
 );
 ```
 
+If adapter resolution already happens elsewhere, reuse the resolved stack
+directly:
+
+```dart
+final stack = StemStack.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
+  overrides: const StemStoreOverrides(
+    backend: 'redis://localhost:6379/1',
+  ),
+);
+
+final client = await stack.createClient(
+  tasks: [HelloTask()],
+);
+```
+
 ### Direct enqueue (map-based)
 
 ```dart

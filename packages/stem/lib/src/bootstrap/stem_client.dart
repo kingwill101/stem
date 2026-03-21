@@ -92,9 +92,6 @@ abstract class StemClient implements TaskResultCaller {
   ///
   /// This resolves broker/backend factories via [StemStack.fromUrl] so callers
   /// can avoid manual factory wiring for common Redis/Postgres/SQLite setups.
-  ///
-  /// When [stack] is supplied, the client reuses that pre-resolved adapter
-  /// stack instead of resolving broker/backend factories from [url] again.
   static Future<StemClient> fromUrl(
     String url, {
     StemModule? module,
@@ -114,23 +111,62 @@ abstract class StemClient implements TaskResultCaller {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-    StemStack? stack,
   }) {
-    final resolvedStack =
-        stack ??
-        StemStack.fromUrl(
-          url,
-          adapters: adapters,
-          overrides: overrides,
-        );
+    final stack = StemStack.fromUrl(
+      url,
+      adapters: adapters,
+      overrides: overrides,
+    );
+    return fromStack(
+      stack,
+      module: module,
+      modules: modules,
+      tasks: tasks,
+      taskRegistry: taskRegistry,
+      workflowRegistry: workflowRegistry,
+      routing: routing,
+      retryStrategy: retryStrategy,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      middleware: middleware,
+      signer: signer,
+      defaultWorkerConfig: defaultWorkerConfig,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a client from a pre-resolved [StemStack].
+  ///
+  /// Use this when adapter resolution is managed elsewhere and the client
+  /// should reuse that broker/backend stack directly.
+  static Future<StemClient> fromStack(
+    StemStack stack, {
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? taskRegistry,
+    WorkflowRegistry? workflowRegistry,
+    RoutingRegistry? routing,
+    RetryStrategy? retryStrategy,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) {
     return create(
       module: module,
       modules: modules,
       tasks: tasks,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
-      broker: resolvedStack.broker,
-      backend: resolvedStack.backend,
+      broker: stack.broker,
+      backend: stack.backend,
       routing: routing,
       retryStrategy: retryStrategy,
       uniqueTaskCoordinator: uniqueTaskCoordinator,
@@ -522,5 +558,46 @@ class _DefaultStemClient extends StemClient {
   Future<void> close() async {
     await disposeBroker();
     await disposeBackend();
+  }
+}
+
+/// Convenience helpers for bootstrapping clients from a resolved [StemStack].
+extension StemStackClientBootstrap on StemStack {
+  /// Creates a client using this resolved broker/backend stack.
+  Future<StemClient> createClient({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? taskRegistry,
+    WorkflowRegistry? workflowRegistry,
+    RoutingRegistry? routing,
+    RetryStrategy? retryStrategy,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) {
+    return StemClient.fromStack(
+      this,
+      module: module,
+      modules: modules,
+      tasks: tasks,
+      taskRegistry: taskRegistry,
+      workflowRegistry: workflowRegistry,
+      routing: routing,
+      retryStrategy: retryStrategy,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      middleware: middleware,
+      signer: signer,
+      defaultWorkerConfig: defaultWorkerConfig,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
   }
 }

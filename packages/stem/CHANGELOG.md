@@ -2,6 +2,9 @@
 
 ## 0.2.0
 
+- Added `StemClient.fromStack(...)` and `StemStack.createClient(...)` so
+  adapter-resolved broker/backend stacks have the same direct bootstrap path
+  as the higher-level app helpers.
 - Narrowed the public task and workflow invocation APIs around direct
   `enqueue(...)` / `enqueueAndWait(...)` and `start(...)` / `startAndWait(...)`
   calls, with explicit transport objects left as the advanced low-level path.
