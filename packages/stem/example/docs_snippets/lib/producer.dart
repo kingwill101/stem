@@ -8,7 +8,7 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region producer-in-memory
 Future<void> enqueueInMemory() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: [
       FunctionTaskHandler<void>(
         name: 'hello.print',
@@ -20,6 +20,7 @@ Future<void> enqueueInMemory() async {
       ),
     ],
   );
+  final app = await client.createApp();
 
   final taskId = await app.enqueue(
     'hello.print',
@@ -29,6 +30,7 @@ Future<void> enqueueInMemory() async {
 
   print('Enqueued $taskId');
   await app.close();
+  await client.close();
 }
 // #endregion producer-in-memory
 
@@ -122,7 +124,8 @@ class GenerateReportTask extends TaskHandler<String> {
 }
 
 Future<void> enqueueTyped() async {
-  final app = await StemApp.inMemory(tasks: [GenerateReportTask()]);
+  final client = await StemClient.inMemory(tasks: [GenerateReportTask()]);
+  final app = await client.createApp();
 
   final result = await GenerateReportTask.definition.enqueueAndWait(
     app,
@@ -132,6 +135,7 @@ Future<void> enqueueTyped() async {
   );
   print(result?.value);
   await app.close();
+  await client.close();
 }
 // #endregion producer-typed
 
@@ -145,14 +149,16 @@ class AesPayloadEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> configureProducerEncoders() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: const [],
     argsEncoder: const AesPayloadEncoder(),
     resultEncoder: const JsonTaskPayloadEncoder(),
     additionalEncoders: const [CustomBinaryEncoder()],
   );
+  final app = await client.createApp();
 
   await app.close();
+  await client.close();
 }
 // #endregion producer-encoders
 

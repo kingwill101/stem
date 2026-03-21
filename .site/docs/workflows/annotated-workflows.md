@@ -22,13 +22,14 @@ remains the explicit low-level transport path, and it can publish from the
 definition metadata so producer processes do not need to register the worker
 handler locally just to enqueue typed task calls.
 
-Wire the bundle directly into `StemWorkflowApp`:
+Wire the bundle through `StemClient`:
 
 ```dart
-final workflowApp = await StemWorkflowApp.fromUrl(
+final client = await StemClient.fromUrl(
   'memory://',
   module: stemModule,
 );
+final workflowApp = await client.createWorkflowApp();
 ```
 
 With `module: stemModule`, the workflow app infers the worker subscription

@@ -78,13 +78,14 @@ Generated output (`workflow_defs.stem.g.dart`) includes:
 
 ## Wire Into StemWorkflowApp
 
-Use the generated definitions/helpers directly with `StemWorkflowApp`:
+Use the generated definitions/helpers directly through `StemClient`:
 
 ```dart
-final workflowApp = await StemWorkflowApp.fromUrl(
+final client = await StemClient.fromUrl(
   'memory://',
   module: stemModule,
 );
+final workflowApp = await client.createWorkflowApp();
 
 await workflowApp.start();
 final result = await StemWorkflowDefinitions.userSignup.startAndWait(
@@ -103,7 +104,8 @@ them before bootstrap:
 
 ```dart
 final module = StemModule.merge([authModule, billingModule, stemModule]);
-final workflowApp = await StemWorkflowApp.inMemory(module: module);
+final client = await StemClient.inMemory(module: module);
+final workflowApp = await client.createWorkflowApp();
 ```
 
 `StemModule.merge(...)` fails fast when modules declare conflicting task or
@@ -113,19 +115,21 @@ If you do not want to pre-merge them yourself, bootstrap helpers also accept
 `modules:` directly:
 
 ```dart
-final workflowApp = await StemWorkflowApp.inMemory(
+final client = await StemClient.inMemory(
   modules: [authModule, billingModule, stemModule],
 );
+final workflowApp = await client.createWorkflowApp();
 ```
 
 The same bundle-first path works for plain task apps too:
 
 ```dart
-final taskApp = await StemApp.fromUrl(
+final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
   module: stemModule,
 );
+final taskApp = await client.createApp();
 ```
 
 If you need to attach generated or hand-written task definitions after
@@ -158,7 +162,7 @@ If you already manage a `StemApp` for a larger service, reuse it instead of
 bootstrapping a second app:
 
 ```dart
-final stemApp = await StemApp.fromUrl(
+final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
   module: stemModule,
@@ -169,6 +173,7 @@ final stemApp = await StemApp.fromUrl(
     ),
   ),
 );
+final stemApp = await client.createApp();
 
 final workflowApp = await stemApp.createWorkflowApp();
 ```
@@ -180,18 +185,19 @@ need. If you want automatic queue inference, prefer `StemClient`.
 For task-only services, the same bundle works directly with `StemApp`:
 
 ```dart
-final taskApp = await StemApp.fromUrl(
+final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
   module: stemModule,
 );
+final taskApp = await client.createApp();
 ```
 
 Plain `StemApp` bootstrap infers task queue subscriptions from the bundled or
 explicitly supplied task handlers when `workerConfig.subscription` is omitted,
 and it lazy-starts on the first enqueue or wait call.
 
-If you already centralize broker/backend wiring in a `StemClient`, prefer the
+If you already centralize broker/backend wiring in a `StemClient`, stay on the
 shared-client path:
 
 ```dart

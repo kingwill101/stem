@@ -44,13 +44,15 @@ class ChargePrepared {
 // #region workflows-runtime
 Future<void> bootstrapWorkflowApp() async {
   // #region workflows-app-create
-  final workflowApp = await StemWorkflowApp.fromUrl(
+  final client = await StemClient.fromUrl(
     'redis://127.0.0.1:56379',
     adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
     overrides: const StemStoreOverrides(
       backend: 'redis://127.0.0.1:56379/1',
       workflow: 'postgresql://<user>:<password>@127.0.0.1:65432/stem',
     ),
+  );
+  final workflowApp = await client.createWorkflowApp(
     flows: [ApprovalsFlow.flow],
     scripts: [retryScript],
     eventBusFactory: WorkflowEventBusFactory.inMemory(),
@@ -179,14 +181,14 @@ final encoders = TaskPayloadEncoderRegistry(
 );
 
 Future<void> configureWorkflowEncoders() async {
-  final app = await StemWorkflowApp.fromUrl(
-    'memory://',
-    flows: [ApprovalsFlow.flow],
+  final client = await StemClient.inMemory(
     encoderRegistry: encoders,
     additionalEncoders: const [GzipPayloadEncoder()],
   );
+  final app = await client.createWorkflowApp(flows: [ApprovalsFlow.flow]);
 
   await app.close();
+  await client.close();
 }
 // #endregion workflows-encoders
 
@@ -296,7 +298,8 @@ Future<void> main() async {
     },
   );
 
-  final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
+  final client = await StemClient.inMemory();
+  final app = await client.createWorkflowApp(flows: [demoFlow]);
 
   final runId = await demoFlow.start(app);
   final result = await demoFlow.waitFor(
@@ -307,4 +310,5 @@ Future<void> main() async {
   print('Workflow result: ${result?.status} value=${result?.value}');
 
   await app.close();
+  await client.close();
 }

@@ -15,9 +15,9 @@ Pass normal task handlers through `tasks:` if the workflow also needs to
 enqueue regular Stem tasks.
 
 If you need separate workflow lanes, pass `continuationQueue:` and
-`executionQueue:` into the `StemWorkflowApp.*` bootstrap helpers. When the app
-is creating the managed worker for you, those queue names are inferred into
-the worker subscription automatically.
+`executionQueue:` into `client.createWorkflowApp(...)`. When the app is
+creating the managed worker for you, those queue names are inferred into the
+worker subscription automatically.
 
 ## 2. Start the managed worker
 

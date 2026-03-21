@@ -81,9 +81,10 @@ class PublishInvoiceTask extends TaskHandler<void> {
 }
 
 Future<void> runTypedDefinitionExample() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: [PublishInvoiceTask()],
   );
+  final app = await client.createApp();
 
   final result = await PublishInvoiceTask.definition.enqueueAndWait(
     app,
@@ -93,6 +94,7 @@ Future<void> runTypedDefinitionExample() async {
     print('Invoice published');
   }
   await app.close();
+  await client.close();
 }
 // #endregion tasks-typed-definition
 
@@ -168,13 +170,15 @@ class Base64PayloadEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> configureEncoders() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: [EmailTask()],
     argsEncoder: const Base64PayloadEncoder(),
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [MyOtherEncoder()],
   );
+  final app = await client.createApp();
   await app.close();
+  await client.close();
 }
 // #endregion tasks-encoders-global
 
@@ -217,7 +221,8 @@ class MyOtherEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> main() async {
-  final app = await StemApp.inMemory(tasks: [EmailTask()]);
+  final client = await StemClient.inMemory(tasks: [EmailTask()]);
+  final app = await client.createApp();
 
   final taskId = await app.enqueue(
     'email.send',
@@ -230,4 +235,5 @@ Future<void> main() async {
   print('Email task state: ${result?.status.state}');
 
   await app.close();
+  await client.close();
 }

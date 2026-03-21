@@ -452,7 +452,8 @@ final demoWorkflow = Flow<String>(
   },
 );
 
-final app = await StemWorkflowApp.inMemory(
+final client = await StemClient.inMemory();
+final app = await client.createWorkflowApp(
   flows: [demoWorkflow],
 );
 
@@ -462,12 +463,13 @@ print(result?.value); // 'hello world'
 print(result?.state.status); // WorkflowStatus.completed
 
 await app.shutdown();
+await client.close();
 ```
 
 If you need separate workflow lanes, pass `continuationQueue:` and
-`executionQueue:` into the `StemWorkflowApp.*` bootstrap helpers. When
-`StemWorkflowApp` is creating the managed worker for you, those queue names are
-inferred into the worker subscription automatically.
+`executionQueue:` into `client.createWorkflowApp(...)`. When the workflow app
+is creating the managed worker for you, those queue names are inferred into the
+worker subscription automatically.
 
 For late registration, prefer the app helpers:
 
@@ -492,7 +494,8 @@ while retaining the same durability semantics (checkpoints, resume payloads,
 auto-versioning) as the lower-level API:
 
 ```dart
-final app = await StemWorkflowApp.inMemory(
+final client = await StemClient.inMemory();
+final app = await client.createWorkflowApp(
   scripts: [
     WorkflowScript(
       name: 'orders.workflow',
@@ -615,8 +618,8 @@ final approvalsFlow = Flow<String>(
 final approvalsRef = approvalsFlow.refJson<ApprovalDraft>(
 );
 
-final app = await StemWorkflowApp.fromUrl(
-  'memory://',
+final client = await StemClient.fromUrl('memory://');
+final app = await client.createWorkflowApp(
   flows: [approvalsFlow],
   tasks: const [],
 );
@@ -629,6 +632,7 @@ final runId = await approvalsRef.start(
 final result = await approvalsRef.waitFor(app, runId);
 print(result?.value);
 await app.close();
+await client.close();
 ```
 
 When you need advanced start options without dropping back to raw workflow
@@ -708,7 +712,8 @@ final billingRetryScript = WorkflowScript(
   },
 );
 
-final app = await StemWorkflowApp.inMemory(
+final client = await StemClient.inMemory();
+final app = await client.createWorkflowApp(
   scripts: [billingRetryScript],
   tasks: const [],
 );
@@ -836,10 +841,8 @@ dart run build_runner build
 Wire the generated bundle directly into `StemWorkflowApp`:
 
 ```dart
-final app = await StemWorkflowApp.fromUrl(
-  'memory://',
-  module: stemModule,
-);
+final client = await StemClient.fromUrl('memory://', module: stemModule);
+final app = await client.createWorkflowApp();
 
 final result = await StemWorkflowDefinitions.userSignup.startAndWait(
   app,
@@ -865,11 +868,13 @@ Generated output gives you:
 The same bundle also works for plain task apps:
 
 ```dart
-final taskApp = await StemApp.fromUrl(
+final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
   module: stemModule,
 );
+
+final taskApp = await client.createApp();
 ```
 
 `StemApp` lazy-starts its managed worker on the first enqueue, wait, or
@@ -891,7 +896,8 @@ once and pass the combined module through bootstrap:
 
 ```dart
 final module = StemModule.merge([authModule, billingModule, stemModule]);
-final app = await StemWorkflowApp.inMemory(module: module);
+final client = await StemClient.inMemory(module: module);
+final app = await client.createWorkflowApp();
 ```
 
 `StemModule.merge(...)` fails fast when modules declare the same task or
@@ -901,9 +907,10 @@ Bootstrap helpers also accept `modules:` directly when you would rather let
 the app/client merge them for you:
 
 ```dart
-final app = await StemWorkflowApp.inMemory(
+final client = await StemClient.inMemory(
   modules: [authModule, billingModule, stemModule],
 );
+final app = await client.createWorkflowApp();
 ```
 
 If you want to inspect what a bundled module will require before bootstrapping,
