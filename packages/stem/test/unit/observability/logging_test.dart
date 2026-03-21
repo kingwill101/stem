@@ -1,7 +1,9 @@
+import 'package:ansicolor/ansicolor.dart' show ansiColorDisabled;
 import 'package:contextual/contextual.dart'
     show
         LogDriver,
         LogEntry,
+        LogRecord,
         LoggerChannelSelection,
         PlainTextLogFormatter,
         PrettyLogFormatter;
@@ -40,10 +42,22 @@ void main() {
   });
 
   test('createStemLogFormatter returns the pretty formatter', () {
-    expect(
-      createStemLogFormatter(StemLogFormat.pretty),
-      isA<PrettyLogFormatter>(),
+    final originalAnsiSetting = ansiColorDisabled;
+    addTearDown(() => ansiColorDisabled = originalAnsiSetting);
+    ansiColorDisabled = false;
+
+    final formatter = createStemLogFormatter(StemLogFormat.pretty);
+    final output = formatter.format(
+      LogRecord(
+        time: DateTime.utc(2026, 3, 21, 12),
+        level: Level.info,
+        message: 'hello',
+      ),
     );
+
+    expect(output, contains('\x1B[38;5;12m'));
+    expect(output, isNot(contains('\x1B[38;5;255m')));
+    expect(formatter, isNot(isA<PrettyLogFormatter>()));
   });
 
   test(
@@ -63,7 +77,7 @@ void main() {
       expect(driver.entries, hasLength(1));
       expect(
         createStemLogFormatter(StemLogFormat.pretty),
-        isA<PrettyLogFormatter>(),
+        isNot(isA<PrettyLogFormatter>()),
       );
     },
   );
