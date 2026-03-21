@@ -28,6 +28,17 @@ void main() {
     configureStemLogging(level: Level.warning);
   });
 
+  test('createStemLogger defaults to the pretty formatter', () async {
+    final logger = createStemLogger(enableConsole: false);
+    final driver = _RecordingLogDriver();
+    logger.addChannel('recording', driver);
+
+    logger.channel('recording').info('default pretty mode');
+    await logger.shutdown();
+
+    expect(driver.entries, hasLength(1));
+  });
+
   test('createStemLogFormatter returns the pretty formatter', () {
     expect(
       createStemLogFormatter(StemLogFormat.pretty),
@@ -41,8 +52,8 @@ void main() {
       final original = stemLogger;
       addTearDown(() => setStemLogger(original));
       final replacement = createStemLogger(enableConsole: false);
-    final driver = _RecordingLogDriver();
-    replacement.addChannel('recording', driver);
+      final driver = _RecordingLogDriver();
+      replacement.addChannel('recording', driver);
       setStemLogger(replacement);
 
       configureStemLogging(format: StemLogFormat.pretty);

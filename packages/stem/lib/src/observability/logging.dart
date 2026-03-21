@@ -21,7 +21,7 @@ LogMessageFormatter createStemLogFormatter(StemLogFormat format) {
 /// Creates a logger configured the same way Stem configures its shared logger.
 Logger createStemLogger({
   Level level = Level.info,
-  StemLogFormat format = StemLogFormat.plain,
+  StemLogFormat format = StemLogFormat.pretty,
   bool enableConsole = true,
 }) {
   final logger = Logger(

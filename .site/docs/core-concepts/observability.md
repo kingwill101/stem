@@ -120,9 +120,9 @@ Use `stemLogger` (Contextual logger) for structured logs.
 
 ```
 
-For local development, switch the shared logger to colored terminal output with
-`configureStemLogging(format: StemLogFormat.pretty)`. Keep the default plain
-formatter for production log shipping and machine parsing.
+Stem now defaults to `StemLogFormat.pretty` for interactive console output.
+When you want machine-oriented output for production log shipping, switch back
+with `configureStemLogging(format: StemLogFormat.plain)`.
 
 Workers automatically include attempt, queue, and worker id in log contexts when
 `StemSignals` are enabled.
