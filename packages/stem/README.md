@@ -1,1410 +1,20 @@
-[![pub package](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem)
-[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.2-blue.svg)](https://dart.dev/)
-[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
-[![Build Status](https://github.com/kingwill101/stem/workflows/ci/badge.svg)](https://github.com/kingwill101/stem/actions)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/kingwill101/stem/main/packages/stem/coverage/coverage.json)](https://github.com/kingwill101/stem/actions/workflows/stem.yaml)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
-
 <p align="center">
   <img src="../../.site/static/img/stem-logo.png" width="300" alt="Stem Logo" />
 </p>
 
+[![pub package](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem)
+[![Dart](https://img.shields.io/badge/dart-%3E%3D3.9.2-blue.svg)](https://dart.dev/)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow.svg)](https://www.buymeacoffee.com/kingwill101)
+
 # Stem
 
- Stem is a Dart-native background job platform. It gives you Celery-style
-task execution with a Dart-first API, Redis Streams integration, retries,
-scheduling, observability, and security tooling-all without leaving the Dart
-ecosystem.
+Stem is a Dart-first background job and workflow platform: enqueue work, run workers, and orchestrate durable workflows.
 
-## Install
+For full docs, API references, and in-depth guides, visit
+https://kingwill101.github.io/stem.
 
-```bash
-dart pub add stem           # core runtime APIs
-dart pub add stem_redis     # Redis broker + result backend
-dart pub add stem_postgres  # (optional) Postgres broker + backend
-dart pub add stem_sqlite    # (optional) SQLite broker + backend
-dart pub add -d stem_builder # (optional) workflow/task code generator
-dart pub global activate stem_cli
-```
 
-Add the pub-cache bin directory to your `PATH` so the `stem_cli` tool is available:
-
-```bash
-export PATH="$HOME/.pub-cache/bin:$PATH"
-stem --help
-```
-
-## Quick Start
-
-### StemClient entrypoint
-
-Use a single entrypoint to share broker/backend/config between workers and
-workflow apps.
-
-```dart
-import 'dart:async';
-import 'package:stem/stem.dart';
-
-class HelloTask implements TaskHandler<void> {
-  static final definition = TaskDefinition.noArgs<void>(name: 'demo.hello');
-
-  @override
-  String get name => definition.name;
-
-  @override
-  TaskOptions get options => const TaskOptions(queue: 'default');
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    print('Hello from StemClient');
-  }
-}
-
-Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [HelloTask()]);
-
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-
-  await HelloTask.definition.enqueueAndWait(
-    client,
-    timeout: const Duration(seconds: 1),
-  );
-
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-`StemClient.createWorker(...)` infers queue subscriptions from the bundled or
-explicitly supplied task handlers when `workerConfig.subscription` is omitted.
-
-For persistent adapters, keep `StemClient` as the entrypoint and resolve the
-broker/backend stack from a URL:
-
-```dart
-import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
-
-final client = await StemClient.fromUrl(
-  'redis://localhost:6379',
-  adapters: const [StemRedisAdapter()],
-  overrides: const StemStoreOverrides(
-    backend: 'redis://localhost:6379/1',
-  ),
-  tasks: [HelloTask()],
-);
-```
-
-If adapter resolution already happens elsewhere, reuse the resolved stack
-directly instead of rebuilding factories by hand:
-
-```dart
-final stack = StemStack.fromUrl(
-  'redis://localhost:6379',
-  adapters: const [StemRedisAdapter()],
-  overrides: const StemStoreOverrides(
-    backend: 'redis://localhost:6379/1',
-  ),
-);
-
-final client = await stack.createClient(
-  tasks: [HelloTask()],
-);
-```
-
-Reach for `StemClient.create(...)` only when the store factories are genuinely
-custom and cannot be expressed through `StemStack.fromUrl(...)`.
-
-### Direct enqueue (map-based)
-
-```dart
-import 'dart:async';
-import 'package:stem/stem.dart';
-import 'package:stem_redis/stem_redis.dart';
-
-class HelloTask implements TaskHandler<void> {
-  @override
-  String get name => 'demo.hello';
-
-  @override
-  TaskOptions get options => const TaskOptions(
-        queue: 'default',
-        maxRetries: 3,
-        rateLimit: '10/s',
-        visibilityTimeout: Duration(seconds: 60),
-      );
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final who = args.valueOr<String>('name', 'world');
-    print('Hello $who (attempt ${context.attempt})');
-  }
-}
-
-Future<void> main() async {
-  final client = await StemClient.fromUrl(
-    'redis://localhost:6379',
-    adapters: const [StemRedisAdapter()],
-    overrides: const StemStoreOverrides(
-      backend: 'redis://localhost:6379/1',
-    ),
-    tasks: [HelloTask()],
-  );
-
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-  await client.enqueueValue(
-    'demo.hello',
-    const HelloArgs(name: 'Stem'),
-    codec: const PayloadCodec<HelloArgs>.json(
-      decode: HelloArgs.fromJson,
-    ),
-  );
-  await Future<void>.delayed(const Duration(seconds: 1));
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-### Typed helpers with `TaskDefinition`
-
-Use the new typed wrapper when you want compile-time checking and shared metadata:
-
-```dart
-class HelloTask implements TaskHandler<void> {
-  static final definition = TaskDefinition<HelloArgs, void>.json(
-    name: 'demo.hello',
-    metadata: TaskMetadata(description: 'Simple hello world example'),
-  );
-
-  @override
-  String get name => 'demo.hello';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 3);
-
-  @override
-  TaskMetadata get metadata => definition.metadata;
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final who = args.valueOr<String>('name', 'world');
-    print('Hello $who (attempt ${context.attempt})');
-  }
-}
-
-class HelloArgs {
-  const HelloArgs({required this.name});
-  final String name;
-
-  Map<String, dynamic> toJson() => {'name': name};
-
-  factory HelloArgs.fromJson(Map<String, dynamic> json) {
-    return HelloArgs(name: json['name']! as String);
-  }
-}
-
-Future<void> main() async {
-  final client = await StemClient.fromUrl(
-    'redis://localhost:6379',
-    adapters: const [StemRedisAdapter()],
-    overrides: const StemStoreOverrides(
-      backend: 'redis://localhost:6379/1',
-    ),
-    tasks: [HelloTask()],
-  );
-
-  final worker = await client.createWorker();
-  unawaited(worker.start());
-  await HelloTask.definition.enqueue(
-    client,
-    const HelloArgs(name: 'Stem'),
-  );
-  await Future<void>.delayed(const Duration(seconds: 1));
-  await worker.shutdown();
-  await client.close();
-}
-```
-
-`Stem.enqueueCall(...)` remains the explicit low-level transport path for a
-prebuilt `TaskCall`, and it can publish from the `TaskDefinition` metadata
-alone. Producer-only processes therefore do not need to register the worker
-handler locally just to enqueue typed calls.
-
-Use `TaskDefinition.json(...)` when your manual task args are normal
-DTOs with `toJson()`. Use `TaskDefinition.versionedJson(...)` when the DTO
-schema is expected to evolve and the published payload should persist an
-explicit `__stemPayloadVersion`. Drop down to `TaskDefinition.codec(...)` only
-when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
-string-keyed map (typically `Map<String, dynamic>`) because they are published
-as JSON-shaped data.
-If the args need a custom map encoder and still need an explicit stored schema
-version, use `TaskDefinition.versionedMap(...)`.
-If the args stay unversioned but the stored result carries an explicit schema
-version, `TaskDefinition.json(...)` also accepts
-`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
-
-For manual handlers, use the context arg helpers or the typed payload readers
-on the raw map instead of repeating casts. For workflows, use the context
-param/result helpers:
-
-```dart
-final customerId = context.requiredArg<String>('customerId');
-final tenant = context.argOr<String>('tenant', 'global');
-final draft = ctx.requiredParam<ApprovalDraft>(
-  'draft',
-  codec: approvalDraftCodec,
-);
-final taskArgs = context.argsJson<InvoicePayload>(
-  decode: InvoicePayload.fromJson,
-);
-final workflowParams = ctx.paramsAs<ApprovalDraft>(
-  codec: approvalDraftCodec,
-);
-final versionedParams = ctx.paramsVersionedJson<ApprovalDraft>(
-  defaultVersion: 2,
-  decode: ApprovalDraft.fromVersionedJson,
-);
-final nestedDraft = ctx.paramVersionedJson<ApprovalDraft>(
-  'draft',
-  defaultVersion: 2,
-  decode: ApprovalDraft.fromVersionedJson,
-);
-```
-
-For read-side `...VersionedJson(...)` helpers, `defaultVersion:` is only the
-fallback used when an older stored payload does not already include
-`__stemPayloadVersion`. Keep `version:` for write-side helpers that are
-actually persisting a new schema version.
-
-For typed task calls, the definition and call objects now expose the common
-producer operations directly. Prefer `enqueueAndWait(...)` when you only need
-the final typed result:
-
-```dart
-final result = await HelloTask.definition.enqueueAndWait(
-  stem,
-  const HelloArgs(name: 'Stem'),
-);
-```
-
-For tasks without producer inputs, use `TaskDefinition.noArgs(...)` so callers
-can publish directly instead of passing a fake empty map:
-
-```dart
-final healthcheckDefinition = TaskDefinition.noArgs<void>(
-  name: 'demo.healthcheck',
-);
-
-await healthcheckDefinition.enqueue(stem);
-```
-
-If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` in the
-common `toJson()` / `Type.fromJson(...)` case. Use
-`TaskDefinition.noArgsVersionedJson(...)` when the stored result needs an
-explicit schema version, and `TaskDefinition.noArgsCodec(...)` when you need a
-custom payload codec. These paths keep waiting helpers typed and advertise the
-right result encoder in task metadata.
-
-For argful manual tasks, `TaskDefinition.versionedJson(...)` also accepts
-`decodeResultVersionedJson:` when the stored result needs the same explicit
-schema-version decode path.
-
-When a DTO payload needs an explicit persisted schema version, prefer
-`PayloadCodec.versionedJson(...)`. It stores `__stemPayloadVersion` beside the
-JSON payload and passes the persisted version into the decoder so you can keep
-older payloads readable while newer producers emit the latest shape.
-
-If the payload evolves through multiple stored versions, prefer
-`PayloadVersionRegistry<T>` with `PayloadCodec.versionedJsonRegistry(...)` so
-version-specific decoders live in one reusable registry instead of being
-repeated inline at every call site.
-
-Use `PayloadCodec.versionedMap(...)` instead when the payload still needs a
-custom map encoder or a nonstandard version-aware decode shape.
-`PayloadCodec.versionedMapRegistry(...)` provides the same registry-backed
-pattern for that custom-map case.
-
-The same registry-backed model is available on the author-facing factories:
-- `TaskDefinition.versionedJsonRegistry(...)`
-- `TaskDefinition.versionedMapRegistry(...)`
-- `WorkflowRef.versionedJsonRegistry(...)`
-- `WorkflowRef.versionedMapRegistry(...)`
-- `WorkflowEventRef.versionedJsonRegistry(...)`
-- `WorkflowEventRef.versionedMapRegistry(...)`
-- `Flow.versionedJsonRegistry(...)` / `Flow.versionedMapRegistry(...)`
-- `WorkflowScript.versionedJsonRegistry(...)` /
-  `WorkflowScript.versionedMapRegistry(...)`
-
-The same pattern now carries through the low-level readback helpers:
-`status.payloadVersionedJson(...)`, `result.payloadVersionedJson(...)`,
-`workflowResult.payloadVersionedJson(...)`, and
-`runState.resultVersionedJson(...)`.
-
-You can also build requests fluently from the task definition itself:
-
-```dart
-final result = await HelloTask.definition.enqueueAndWait(
-  stem,
-  const HelloArgs(name: 'Tenant A'),
-  headers: const {'x-tenant': 'tenant-a'},
-  options: const TaskOptions(priority: 5),
-  notBefore: stemNow().add(const Duration(seconds: 30)),
-);
-
-print(result?.value);
-```
-
-Treat `buildCall(...)` as the advanced path when you need an explicit
-transport object with custom headers, metadata, delay, priority, or other
-overrides. Build the final call directly with the overrides you need. For
-the normal case, prefer direct `enqueue(...)` or `enqueueAndWait(...)`.
-
-### Enqueue from inside a task
-
-Handlers can enqueue follow-up work using `TaskContext.enqueue` and request
-retries directly:
-
-```dart
-class ParentTask implements TaskHandler<void> {
-  @override
-  String get name => 'demo.parent';
-
-  @override
-  TaskOptions get options => const TaskOptions(maxRetries: 3);
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await context.enqueue(
-      'demo.child',
-      args: {'id': 'child-1'},
-      enqueueOptions: TaskEnqueueOptions(
-        countdown: const Duration(seconds: 30),
-        retry: true,
-        retryPolicy: TaskRetryPolicy(backoff: true),
-      ),
-    );
-
-    if (context.attempt == 0) {
-      await context.retry(countdown: const Duration(seconds: 10));
-    }
-  }
-}
-```
-
-If you inspect raw task progress signals, prefer
-`signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`,
-`signal.dataAs('key', codec: ...)`, or `signal.dataValue<T>('key')` for keyed
-reads, and `signal.payloadJson(...)`,
-`signal.payloadVersionedJson(...)`, or `signal.payloadAs(codec: ...)` when the
-entire progress payload is one DTO.
-Shared `TaskExecutionContext` implementations also expose
-`context.retry(...)`, so typed annotated tasks can request retries without
-depending on a concrete task runtime class.
-
-When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
-`TaskExecutionContext` can also start typed child workflows and emit typed
-workflow events:
-
-```dart
-final childWorkflow = Flow<String>(
-  name: 'demo.child.workflow',
-  build: (flow) {
-    flow.step('complete', (ctx) async => 'done');
-  },
-);
-const childReadyEvent = WorkflowEventRef<Map<String, Object?>>(
-  topic: 'demo.child.workflow.ready',
-);
-
-class ParentTask implements TaskHandler<String> {
-  @override
-  String get name => 'demo.parent';
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final result = await childWorkflow.startAndWait(context);
-    return result?.value ?? 'missing';
-  }
-}
-
-class NotifyTask implements TaskHandler<void> {
-  @override
-  String get name => 'demo.notify';
-
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    await childReadyEvent.emit(context, {'status': 'ready'});
-  }
-}
-```
-
-### Bootstrap helpers
-
-Spin up a full runtime in one call using the bootstrap APIs:
-
-```dart
-final demoWorkflow = Flow<String>(
-  name: 'demo.workflow',
-  build: (flow) {
-    flow.step('hello', (ctx) async => 'done');
-  },
-);
-
-final client = await StemClient.inMemory();
-final app = await client.createWorkflowApp(
-  flows: [demoWorkflow],
-);
-
-final runId = await demoWorkflow.start(app);
-final result = await demoWorkflow.waitFor(app, runId);
-print(result?.value); // 'hello world'
-print(result?.state.status); // WorkflowStatus.completed
-
-await app.shutdown();
-await client.close();
-```
-
-If you need separate workflow lanes, pass `continuationQueue:` and
-`executionQueue:` into `client.createWorkflowApp(...)`. When the workflow app
-is creating the managed worker for you, those queue names are inferred into the
-worker subscription automatically.
-
-For late registration, prefer the app helpers:
-
-- `registerWorkflow(...)` / `registerWorkflows(...)`
-- `registerFlow(...)` / `registerFlows(...)`
-- `registerScript(...)` / `registerScripts(...)`
-- `registerModule(...)`
-
-If you are registering raw `WorkflowDefinition` values directly, prefer
-`WorkflowDefinition.flowJson(...)` / `.scriptJson(...)` for the common DTO
-path, `WorkflowDefinition.flowVersionedJson(...)` /
-`.scriptVersionedJson(...)` when the stored result needs an explicit schema
-version, and `WorkflowDefinition.flowCodec(...)` / `.scriptCodec(...)` for
-custom result codecs.
-
-### Workflow script facade
-
-Prefer the high-level `WorkflowScript` facade when you want to author a
-workflow as a single async function. The facade wraps `FlowBuilder` so your
-code can `await script.step`, `await step.sleep`, and `await step.awaitEvent`
-while retaining the same durability semantics (checkpoints, resume payloads,
-auto-versioning) as the lower-level API:
-
-```dart
-final client = await StemClient.inMemory();
-final app = await client.createWorkflowApp(
-  scripts: [
-    WorkflowScript(
-      name: 'orders.workflow',
-      run: (script) async {
-        final checkout = await script.step('checkout', (step) async {
-          return await chargeCustomer(
-            step.params.requiredValue<String>('userId'),
-          );
-        });
-
-        await script.step('poll-shipment', (step) async {
-          await step.sleepFor(duration: const Duration(seconds: 30));
-          final status = await fetchShipment(checkout.id);
-          if (!status.isComplete) {
-            await step.sleep(const Duration(seconds: 30));
-            return 'waiting';
-          }
-          return status.value;
-        }, autoVersion: true);
-
-        final receipt = await script.step<String>('notify', (step) async {
-          await sendReceiptEmail(checkout);
-          return 'emailed';
-        });
-
-        return receipt;
-      },
-    ),
-  ],
-);
-```
-
-Inside a script checkpoint you can access the same metadata as `FlowContext`:
-
-- `step.previousResult` contains the prior step’s persisted value.
-- `step.param<T>()` / `step.requiredParam<T>()` read workflow params without
-  repeating raw map lookups.
-- `step.paramJson<T>()` / `step.requiredParamJson<T>()` decode nested DTO
-  params without a separate codec constant.
-- `step.previousValue<T>()` / `step.requiredPreviousValue<T>()` read the prior
-  persisted value without repeating manual casts.
-- `step.previousJson<T>()` / `step.requiredPreviousJson<T>()` decode prior DTO
-  results without a separate codec constant.
-- `step.iteration` tracks the current auto-version suffix when
-  `autoVersion: true` is set.
-- `step.idempotencyKey('scope')` builds stable outbound identifiers.
-- `await step.sleepFor(duration: ...)` is the expression-style sleep path.
-- `await step.waitForEvent(topic: ..., codec: ...)` is the expression-style
-  event wait path.
-- `await event.wait(step)` keeps typed event waits on the
-  `WorkflowEventRef<T>` surface.
-- `step.sleepUntilResumed(...)` handles the common sleep-once, continue-on-
-  resume path.
-- `step.waitForEventValue<T>(...)` handles the common wait-for-one-event path.
-- `step.waitForEventValueJson<T>(...)` handles the same path for DTO event
-  payloads without a separate codec constant.
-- `event.waitValue(step)` handles the same path when you already have a typed
-  `WorkflowEventRef<T>`.
-- `event.awaitOn(step)` keeps the lower-level flow-control suspend-first path
-  on that same typed event ref instead of dropping back to a raw topic string.
-- `step.takeResumeData()`, `step.takeResumeValue<T>(codec: ...)`, and
-  `step.takeResumeJson<T>(...)` surface payloads from sleeps or awaited events
-  when you need lower-level control.
-
-### Current workflow model
-
-Stem supports three workflow authoring styles today:
-
-1. `Flow<T>` for explicit orchestration
-2. `WorkflowScript` for function-style durable workflows
-3. `stem_builder` for annotated workflows with generated workflow refs
-
-The runtime shape is the same in every case:
-
-- bootstrap a `StemWorkflowApp`
-- pass `flows:`, `scripts:`, and `tasks:` directly
-- start runs with direct workflow helpers or generated workflow refs
-- use `enqueueValue(...)`, `startWorkflow(...)` /
-  `startWorkflowValue(...)` / `startWorkflowJson(...)`, `emitJson(...)`, and
-  `waitForCompletion(...)` when names come from config, CLI input, or other
-  dynamic sources
-
-You do not need to build task registries manually for normal workflow usage.
-
-#### Manual `Flow`
-
-Use `Flow` when you want explicit step orchestration and fine control over
-resume behavior:
-
-```dart
-final approvalsFlow = Flow<String>(
-  name: 'approvals.flow',
-  build: (flow) {
-    flow.step('draft', (ctx) async {
-      final draft = ctx.requiredParamJson<ApprovalDraft>(
-        'draft',
-        decode: ApprovalDraft.fromJson,
-      );
-      return draft.documentId;
-    });
-
-    flow.step('manager-review', (ctx) async {
-      final resume = ctx.waitForEventValueJson<ApprovalDecision>(
-        'approvals.manager',
-        decode: ApprovalDecision.fromJson,
-      );
-      if (resume == null) {
-        return null;
-      }
-      return resume.approvedBy;
-    });
-
-    flow.step('finalize', (ctx) async {
-      final approvedBy = ctx.previousValue<String>();
-      return 'approved-by:$approvedBy';
-    });
-  },
-);
-
-final approvalsRef = approvalsFlow.refJson<ApprovalDraft>(
-);
-
-final client = await StemClient.fromUrl('memory://');
-final app = await client.createWorkflowApp(
-  flows: [approvalsFlow],
-  tasks: const [],
-);
-
-final runId = await approvalsRef.start(
-  app,
-  params: const ApprovalDraft(documentId: 'doc-42'),
-);
-
-final result = await approvalsRef.waitFor(app, runId);
-print(result?.value);
-await app.close();
-await client.close();
-```
-
-When you need advanced start options without dropping back to raw workflow
-names, keep using the direct typed ref helpers:
-
-```dart
-final runId = await approvalsRef.start(
-  app,
-  params: const ApprovalDraft(documentId: 'doc-42'),
-  parentRunId: 'parent-run',
-  ttl: const Duration(hours: 1),
-  cancellationPolicy: const WorkflowCancellationPolicy(
-    maxRuntime: Duration(minutes: 10),
-  ),
-);
-```
-
-Use `refJson(...)` when your manual workflow start params are DTOs with
-`toJson()`, or when the final result also needs a `Type.fromJson(...)`
-decoder. Use `refVersionedJson(...)` when the start payload schema is expected
-to evolve and the persisted params should store `__stemPayloadVersion`. Drop
-down to `refCodec(...)` when you need a custom `PayloadCodec<T>`. Workflow
-params still need to encode to a string-keyed map (typically
-`Map<String, dynamic>`) because they are persisted as JSON-shaped data.
-If the params need a custom map encoder and still need an explicit stored
-schema version, use `refVersionedMap(...)` / `WorkflowRef.versionedMap(...)`.
-If the params stay unversioned but the stored result carries an explicit schema
-version, `refJson(...)` / `WorkflowRef.json(...)` also accept
-`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
-
-If a manual flow or script only needs DTO result decoding, prefer
-`Flow.json(...)` or `WorkflowScript.json(...)`. Use
-`Flow.versionedJson(...)` / `WorkflowScript.versionedJson(...)` when the stored
-result needs an explicit schema version. If the final result needs a custom
-codec, prefer `Flow.codec(...)` or `WorkflowScript.codec(...)` instead of
-passing `resultCodec:` to the base constructor. If the result still needs a
-custom map encoder plus an explicit stored schema version, use
-`Flow.versionedMap(...)` / `WorkflowScript.versionedMap(...)`.
-For manual typed refs, `refVersionedJson(...)` / `WorkflowRef.versionedJson(...)`
-also accept `decodeResultVersionedJson:` when the stored result should use the
-same explicit schema-version decode path.
-
-For workflows without start parameters, start directly from the flow or script
-itself:
-
-```dart
-final runId = await healthcheckFlow.start(app);
-```
-
-If you need to pass a no-args workflow through another API, `ref0()` still
-builds the explicit `NoArgsWorkflowRef`.
-
-#### Manual `WorkflowScript`
-
-Use `WorkflowScript` when you want your workflow to read like a normal async
-function while still persisting durable checkpoints:
-
-```dart
-final billingRetryScript = WorkflowScript(
-  name: 'billing.retry-script',
-  run: (script) async {
-    final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.waitForEventValueJson<ChargePrepared>(
-        'billing.charge.prepared',
-        decode: ChargePrepared.fromJson,
-      );
-      if (resume == null) {
-        return 'pending';
-      }
-      return resume.chargeId;
-    });
-
-    return script.step<String>('confirm', (ctx) async {
-      ctx.idempotencyKey('confirm-$chargeId');
-      return 'receipt-$chargeId';
-    });
-  },
-);
-
-final client = await StemClient.inMemory();
-final app = await client.createWorkflowApp(
-  scripts: [billingRetryScript],
-  tasks: const [],
-);
-```
-
-#### Annotated workflows with `stem_builder`
-
-Use `stem_builder` when you want the best DX: plain method signatures,
-generated manifests, and typed workflow refs.
-
-The important part of the model is that `run(...)` calls other annotated
-methods directly. Those method calls are what become durable script checkpoints in
-the generated proxy.
-
-The conceptual split is:
-
-- `Flow`: declared steps are the execution plan
-- `WorkflowScript`: `run(...)` is the execution plan, and declared checkpoints
-  are manifest/introspection metadata
-
-```dart
-import 'package:stem/stem.dart';
-
-part 'definitions.stem.g.dart';
-
-@WorkflowDefn(name: 'builder.example.user_signup', kind: WorkflowKind.script)
-class BuilderUserSignupWorkflow {
-  Future<Map<String, Object?>> run(String email) async {
-    final user = await createUser(email);
-    await sendWelcomeEmail(email);
-    await sendOneWeekCheckInEmail(email);
-    return {'userId': user['id'], 'status': 'done'};
-  }
-
-  @WorkflowStep(name: 'create-user')
-  Future<Map<String, Object?>> createUser(String email) async {
-    return {'id': 'user:$email'};
-  }
-
-  @WorkflowStep(name: 'send-welcome-email')
-  Future<void> sendWelcomeEmail(String email) async {}
-
-  @WorkflowStep(name: 'send-one-week-check-in-email')
-  Future<void> sendOneWeekCheckInEmail(String email) async {}
-}
-
-@TaskDefn(name: 'builder.example.task')
-Future<void> builderExampleTask(
-  Map<String, Object?> args,
-  {TaskExecutionContext? context}
-) async {}
-```
-
-Script workflows use one authoring model:
-
-- start with a plain `run(String email, ...)` method
-- add an optional named injected context when you need runtime metadata:
-  - `Future<T> run(String email, {WorkflowScriptContext? context})`
-  - `Future<T> capture(String email, {WorkflowExecutionContext? context})`
-- direct checkpoint method calls still stay the default happy path
-
-Context injection works at every runtime layer:
-
-- flow steps can take `FlowContext` or `WorkflowExecutionContext`
-- script runs can take `WorkflowScriptContext`
-- script checkpoints can take `WorkflowScriptStepContext` or
-  `WorkflowExecutionContext`
-- tasks can take `TaskExecutionContext`
-
-Durable workflow execution contexts enqueue tasks directly:
-
-- `WorkflowExecutionContext.enqueue(...)`
-- typed task definitions can target those contexts via `enqueue(...)`
-
-Child workflows belong in durable execution boundaries:
-
-- `WorkflowExecutionContext` implements `WorkflowCaller`, so prefer
-  `ref.startAndWait(context, params: value)` inside flow steps and script
-  checkpoints
-- pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
-  `ref.start(...)` / `ref.startAndWait(...)` for normal override cases
-- when you need an explicit low-level transport object, prefer
-  `ref.buildStart(...)` for the rarer explicit transport cases
-- do not start child workflows from the raw `WorkflowScriptContext` body unless
-  you are deliberately managing replay/idempotency yourself
-
-For annotated workflows/tasks, the preferred shape is an optional named context
-parameter. The runtime injects it, and it is not part of the durable payload.
-
-Serializable parameter rules for generated workflows and tasks are strict:
-
-- supported:
-  - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
-  - `List<T>` where `T` is serializable
-  - `Map<String, T>` where `T` is serializable
-  - DTO classes with:
-    - a string-keyed `toJson()` map (typically `Map<String, dynamic>`)
-    - `factory Type.fromJson(Map<String, dynamic> json)` or an equivalent
-      named `fromJson` constructor
-- not supported directly:
-  - optional/named business parameters on generated workflow/task entrypoints
-
-Typed task results can use the same DTO convention.
-
-Workflow inputs, checkpoint values, and final workflow results can use the same
-DTO convention. The generated `PayloadCodec` persists the JSON form while
-workflow code continues to work with typed objects.
-
-See the runnable example:
-
-  - [example/annotated_workflows](example/annotated_workflows)
-  - `FlowContext` metadata
-  - plain proxy-driven script checkpoint calls
-  - `WorkflowScriptContext` + `WorkflowScriptStepContext`
-  - optional named context injection
-  - codec-backed workflow checkpoint values and workflow results
-  - typed `@TaskDefn` decoding scalar, `Map`, and `List` parameters
-
-Generate code:
-
-```bash
-dart run build_runner build
-```
-
-Wire the generated bundle directly into `StemWorkflowApp`:
-
-```dart
-final client = await StemClient.fromUrl('memory://', module: stemModule);
-final app = await client.createWorkflowApp();
-
-final result = await StemWorkflowDefinitions.userSignup.startAndWait(
-  app,
-  params: 'user@example.com',
-);
-print(result?.value);
-await app.close();
-```
-
-When you use `module: stemModule`, `StemWorkflowApp` infers the worker
-subscription from the workflow queue plus the default queues declared on the
-bundled task handlers. You only need to set `workerConfig.subscription`
-explicitly when your routing goes beyond those defaults.
-
-Generated output gives you:
-
-- `stemModule`
-- `StemWorkflowDefinitions`
-- `StemTaskDefinitions`
-- typed workflow refs and task definitions whose advanced explicit transport
-  path uses `WorkflowStartCall` / `TaskCall`
-
-The same bundle also works for plain task apps:
-
-```dart
-final client = await StemClient.fromUrl(
-  'redis://localhost:6379',
-  adapters: const [StemRedisAdapter()],
-  module: stemModule,
-);
-
-final taskApp = await client.createApp();
-```
-
-`StemApp` lazy-starts its managed worker on the first enqueue, wait, or
-`app.canvas` dispatch call, so you only need `await taskApp.start()` when you
-want explicit lifecycle control.
-
-For late registration on the plain task side, prefer the app helpers instead
-of reaching through the registry:
-
-- `registerTask(...)` / `registerTasks(...)`
-- `registerModule(...)` / `registerModules(...)`
-
-When you bootstrap a plain `StemApp`, the worker infers task queue
-subscriptions from the bundled or explicitly supplied task handlers. Set
-`workerConfig.subscription` explicitly only when you need broader routing.
-
-If you need to compose multiple generated or hand-written bundles, merge them
-once and pass the combined module through bootstrap:
-
-```dart
-final module = StemModule.merge([authModule, billingModule, stemModule]);
-final client = await StemClient.inMemory(module: module);
-final app = await client.createWorkflowApp();
-```
-
-`StemModule.merge(...)` fails fast when modules declare the same task or
-workflow name with different underlying definitions.
-
-Bootstrap helpers also accept `modules:` directly when you would rather let
-the app/client merge them for you:
-
-```dart
-final client = await StemClient.inMemory(
-  modules: [authModule, billingModule, stemModule],
-);
-final app = await client.createWorkflowApp();
-```
-
-If you want to inspect what a bundled module will require before bootstrapping,
-use `requiredTaskQueues()` for task-only workers and
-`requiredWorkflowQueues(...)` for workflow-capable workers:
-
-```dart
-final queues = stemModule.requiredWorkflowQueues(
-  continuationQueue: 'workflow-continue',
-  executionQueue: 'workflow-step',
-);
-
-print(queues);
-```
-
-For low-level worker wiring, the module can also give you the exact
-subscription directly:
-
-```dart
-final subscription = stemModule.requiredWorkflowSubscription(
-  continuationQueue: 'workflow-continue',
-  executionQueue: 'workflow-step',
-);
-```
-
-If your service already owns a `StemApp`, reuse it:
-
-```dart
-final client = await StemClient.fromUrl(
-  'redis://localhost:6379',
-  adapters: const [StemRedisAdapter()],
-  module: stemModule,
-);
-
-final workflowApp = await client.createWorkflowApp();
-```
-
-If you reuse an existing `StemApp`, its worker subscription stays authoritative.
-Workflow-side queue inference only applies when `StemWorkflowApp` is also
-creating the worker.
-
-#### Mixing workflows and normal tasks
-
-A workflow can orchestrate durable steps and still enqueue ordinary Stem tasks
-for side effects:
-
-```dart
-flow.step('emit-side-effects', (ctx) async {
-  final order = ctx.requiredPreviousValue<Map<String, Object?>>();
-
-  await ctx.enqueue(
-    'ecommerce.audit.log',
-    args: {
-      'event': 'order.checked_out',
-      'entityId': order['id'],
-      'detail': 'cart=${order['cartId']}',
-    },
-    options: const TaskOptions(queue: 'default'),
-  );
-
-  return order;
-});
-```
-
-That split is the intended model:
-
-- workflows coordinate durable state transitions
-- regular tasks handle side effects and background execution
-- both are wired into the same app, and generated modules bundle the two
-  surfaces together
-
-### Typed workflow completion
-
-All workflow definitions (flows and scripts) accept an optional type argument
-representing the value they produce. For workflows you define in code, prefer
-their direct helpers or typed refs:
-
-```dart
-final result = await ordersWorkflow.startAndWait(app);
-print(result.requiredValue().total);
-```
-
-`StemWorkflowApp.waitForCompletion<T>` is the low-level completion API for
-name-based runs. It accepts `decode:`, the shorter `decodeJson:` shortcut for
-plain DTOs, or `decodeVersionedJson:` for schema-versioned DTOs, and exposes
-the decoded value along with the raw `RunState`, letting you work with domain
-models without manual casts:
-
-```dart
-final runId = await app.startWorkflow('orders.workflow');
-final result = await app.waitForCompletion<OrderReceipt>(
-  runId,
-  decodeJson: OrderReceipt.fromJson,
-);
-if (result?.isCompleted == true) {
-  print(result!.requiredValue().total);
-} else if (result?.timedOut == true) {
-  inspectSuspension(result?.state);
-}
-```
-
-If you already have a raw `WorkflowResult<Object?>`, use
-`result.payloadJson(...)` or `result.payloadAs(codec: ...)` to decode the
-stored workflow result without another cast/closure.
-If you are inspecting the underlying `RunState` directly, use
-`state.paramsJson(...)`, `state.paramsAs(codec: ...)`,
-`state.resultJson(...)`, `state.resultAs(codec: ...)`,
-`state.resultVersionedJson(...)`, `state.suspensionPayloadJson(...)`,
-`state.suspensionPayloadVersionedJson(...)`,
-`state.lastErrorJson(...)`, `state.runtimeJson(...)`,
-`state.cancellationDataJson(...)`, or `state.suspensionPayloadAs(codec: ...)`
-instead of manual raw-map casts.
-Workflow run detail views expose the same convenience surface via
-`runView.paramsJson(...)`, `runView.paramsAs(codec: ...)`,
-`runView.resultJson(...)`, `runView.resultAs(codec: ...)`,
-`runView.resultVersionedJson(...)`, `runView.suspensionPayloadJson(...)`,
-`runView.suspensionPayloadVersionedJson(...)`, `runView.lastErrorJson(...)`,
-`runView.runtimeJson(...)`, and `runView.suspensionPayloadAs(codec: ...)`.
-Checkpoint entries from `viewCheckpoints(...)` and
-`WorkflowCheckpointView.fromEntry(...)` expose the same surface via
-`entry.valueJson(...)`, `entry.valueVersionedJson(...)`, and
-`entry.valueAs(codec: ...)`.
-Workflow introspection events expose matching helpers via
-`event.resultJson(...)`, `event.resultVersionedJson(...)`, and
-`event.resultAs(codec: ...)`, plus metadata helpers via
-`event.metadataJson('key', ...)`, `event.metadataVersionedJson('key', ...)`,
-`event.metadataAs('key', codec: ...)`, `event.metadataPayloadJson(...)`, and
-`event.metadataPayloadVersionedJson(...)`. Worker events expose matching typed helpers on
-`WorkerEvent.data` via `event.dataJson(...)`,
-`event.dataVersionedJson(...)`, and `event.dataAs(codec: ...)`. Control
-command completion signals expose the same surface on `response` and `error`
-via `payload.responseJson(...)`, `payload.responseVersionedJson(...)`,
-`payload.responseAs(codec: ...)`, `payload.errorJson(...)`,
-`payload.errorVersionedJson(...)`, and `payload.errorAs(codec: ...)`.
-For lower-level suspension directives, prefer `step.sleepJson(...)`,
-`step.sleepVersionedJson(...)`, `step.awaitEventJson(...)`,
-`step.awaitEventVersionedJson(...)`, and
-`FlowStepControl.awaitTopicJson(...)` over hand-built maps.
-Task lifecycle signals expose matching result helpers on
-`TaskPostrunPayload` and `TaskSuccessPayload` via
-`payload.resultJson(...)`, `payload.resultVersionedJson(...)`, and
-`payload.resultAs(codec: ...)`.
-Workflow lifecycle signals expose matching metadata helpers on
-`WorkflowRunPayload` via `payload.metadataJson('key', ...)`,
-`payload.metadataVersionedJson('key', ...)`,
-`payload.metadataAs('key', codec: ...)`, and
-`payload.metadataValue<T>('key')`. When the whole metadata map is one DTO,
-prefer `payload.metadataPayloadJson(...)`,
-`payload.metadataPayloadVersionedJson(...)`, or
-`payload.metadataPayloadAs(codec: ...)`.
-Low-level `FlowStepControl` objects expose matching suspension metadata
-helpers via `control.dataJson(...)`, `control.dataVersionedJson(...)`, and
-`control.dataAs(codec: ...)`.
-Workflow execution contexts expose the same version-aware decode path for
-prior step results and resume/event payloads via
-`step.requiredPreviousVersionedJson(...)`,
-`step.takeResumeVersionedJson(...)`,
-`step.waitForEventValueVersionedJson(...)`, and
-`step.waitForEventVersionedJson(...)`.
-
-In the example above, these calls inside `run(...)`:
-
-```dart
-final user = await createUser(email);
-await sendWelcomeEmail(email);
-await sendOneWeekCheckInEmail(email);
-```
-
-are transformed by generated code into durable `script.step(...)` calls. See
-the generated proxy in
-`packages/stem_builder/example/lib/definitions.stem.g.dart` for the concrete
-lowering.
-
-### Typed task completion
-
-Producers can now wait for individual task results using either
-`TaskDefinition.enqueueAndWait(...)`, `TaskDefinition.waitFor(...)`, or
-`Stem.waitForTask<T>` with optional decoders. These helpers return a
-`TaskResult<T>` containing the underlying `TaskStatus`, decoded payload, and a
-timeout flag. For low-level DTO waits, `Stem.waitForTask<T>` also accepts
-`decodeJson:` and `decodeVersionedJson:`:
-
-```dart
-final charge = await ChargeCustomer.definition.enqueueAndWait(
-  stem,
-  ChargeArgs(orderId: '123'),
-);
-if (charge?.isSucceeded == true) {
-  print('Captured ${charge!.requiredValue().total}');
-} else if (charge?.isFailed == true) {
-  log.severe('Charge failed: ${charge!.status.error}');
-}
-```
-
-Use `waitFor(...)` when you need to keep the task id for inspection or pass it
-through another boundary before waiting.
-If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
-`status.payloadAs(codec: ...)` to decode the whole payload DTO without another
-cast/closure. If the whole task metadata map is one DTO, use
-`status.metaJson(...)` or `status.metaAs(codec: ...)` instead of manual
-`status.meta[...]` casts.
-If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
-or `result.payloadAs(codec: ...)` to decode the stored task result DTO without
-another cast/closure.
-If you are inspecting a low-level `TaskError`, use `error.metaJson(...)`,
-`error.metaVersionedJson(...)`, or `error.metaAs(codec: ...)` instead of
-manual `error.meta[...]` casts.
-
-Generated annotated tasks use the same surface:
-
-```dart
-final receipt = await StemTaskDefinitions.sendEmailTyped.enqueueAndWait(
-  stem,
-  EmailDispatch(
-    email: 'typed@example.com',
-    subject: 'Welcome',
-    body: 'Codec-backed DTO payloads',
-    tags: ['welcome'],
-  ),
-);
-print(receipt?.requiredValue().deliveryId);
-```
-
-### Typed canvas helpers
-
-`TaskSignature<T>` (and the `task<T>()` helper) lets you declare the result type
-for canvas primitives. The existing `Canvas.group`, `Canvas.chain`, and
-`Canvas.chord` APIs now accept generics so typed values flow through sequential
-steps, groups, and chords without manual casts:
-
-```dart
-final dispatch = await canvas.group<OrderSummary>([
-  task<OrderSummary>(
-    'orders.fetch',
-    args: {'storeId': 42},
-    decode: (payload) => OrderSummary.fromJson(
-      payload! as Map<String, Object?>,
-    ),
-  ),
-  task<OrderSummary>('orders.refresh'),
-]);
-
-dispatch.results.listen((result) {
-  if (result.isSucceeded) {
-    dashboard.update(result.requiredValue());
-  }
-});
-
-final chainResult = await canvas.chain<int>([
-  task<int>('metrics.seed', args: {'value': 1}),
-  task<int>('metrics.bump', args: {'add': 3}),
-]);
-print(chainResult.value); // 4
-
-final chordResult = await canvas.chord<double>(
-  body: [
-    task<double>('image.resize', args: {'size': 256}),
-    task<double>('image.resize', args: {'size': 512}),
-  ],
-  callback: task('image.aggregate'),
-);
-print('Body results: ${chordResult.values}');
-```
-
-If you later inspect the aggregate backend record via
-`StemApp.getGroupStatus(...)` or `StemClient.getGroupStatus(...)`, use
-`status.resultValues<T>()` for scalar child results or
-`status.resultJson(...)` / `status.resultAs(codec: ...)` for DTO payloads
-instead of manually mapping `status.results.values`.
-
-### Task payload encoders
-
-By default Stem stores handler arguments/results exactly as provided (JSON-friendly
-structures). Configure default `TaskPayloadEncoder`s when bootstrapping
-`StemClient`, `StemApp`, `StemWorkflowApp`, or `Canvas` to plug in custom
-serialization (encryption, compression, base64 wrappers, etc.) for both task
-arguments and persisted results:
-
-```dart
-import 'dart:convert';
-
-class Base64ResultEncoder extends TaskPayloadEncoder {
-  const Base64ResultEncoder();
-
-  @override
-  Object? encode(Object? value) {
-    if (value is String) {
-      return base64Encode(utf8.encode(value));
-    }
-    return value;
-  }
-
-  @override
-  Object? decode(Object? stored) {
-    if (stored is String) {
-      return utf8.decode(base64Decode(stored));
-    }
-    return stored;
-  }
-}
-
-final client = await StemClient.inMemory(
-  tasks: [...],
-  resultEncoder: const Base64ResultEncoder(),
-  argsEncoder: const Base64ResultEncoder(),
-  additionalEncoders: const [MyOtherEncoder()],
-);
-
-final canvas = client.createCanvas();
-```
-
-Every envelope published by Stem carries the argument encoder id in headers/meta
-(`stem-args-encoder` / `__stemArgsEncoder`) and every status stored in a result
-backend carries the result encoder id (`__stemResultEncoder`). Workers use the same
-`TaskPayloadEncoderRegistry` to resolve IDs, ensuring payloads are decoded exactly
-once regardless of how many custom encoders you register.
-
-Per-task overrides live on `TaskMetadata`, so both handlers and the corresponding
-`TaskDefinition` share the same configuration:
-
-```dart
-class SecretTask extends TaskHandler<void> {
-  static const _encoder = Base64ResultEncoder();
-
-  @override
-  TaskMetadata get metadata => const TaskMetadata(
-        description: 'Encrypt args + results',
-        argsEncoder: _encoder,
-        resultEncoder: _encoder,
-      );
-
-  // ...
-}
-```
-
-Encoders run exactly once per persistence/read cycle and fall back to the JSON
-behavior when none is provided.
-
-### Unique task deduplication
-
-Set `TaskOptions(unique: true)` to prevent duplicate enqueues when a matching
-task is already in-flight. Stem uses a `UniqueTaskCoordinator` backed by a
-`LockStore` (Redis or in-memory) to claim uniqueness before publishing:
-
-```dart
-final lockStore = await RedisLockStore.connect('redis://localhost:6379');
-final unique = UniqueTaskCoordinator(
-  lockStore: lockStore,
-  defaultTtl: const Duration(minutes: 5),
-);
-
-final client = await StemClient.fromUrl(
-  'redis://localhost:6379',
-  adapters: const [StemRedisAdapter()],
-  overrides: const StemStoreOverrides(
-    backend: 'redis://localhost:6379/1',
-  ),
-  tasks: [OrdersSyncTask()],
-  uniqueTaskCoordinator: unique,
-);
-```
-
-The unique key is derived from:
-
-- task name
-- queue name
-- task arguments
-- headers
-- metadata (excluding keys prefixed with `stem.`)
-
-Keys are canonicalized (sorted maps, stable JSON) so equivalent inputs produce
-the same hash. Use `uniqueFor` to control the TTL; when unset, the coordinator
-falls back to `visibilityTimeout` or its default TTL.
-
-Override the unique key when needed:
-
-```dart
-final id = await client.enqueue(
-  'orders.sync',
-  args: {'id': 42},
-  options: const TaskOptions(unique: true, uniqueFor: Duration(minutes: 10)),
-  meta: {UniqueTaskMetadata.override: 'order-42'},
-);
-```
-
-When a duplicate is skipped, Stem returns the existing task id, emits the
-`stem.tasks.deduplicated` metric, and appends a duplicate entry to the result
-backend metadata under `stem.unique.duplicates`.
-
-### Durable workflow semantics
-
-- Chords dispatch from workers. Once every branch completes, any worker may enqueue the callback, ensuring producer crashes do not block completion.
-- Steps may run multiple times. The runtime replays a step from the top after
-  every suspension (sleep, awaited event, rewind) and after worker crashes, so
-  handlers must be idempotent.
-- Event waits are durable watchers. When a step calls `awaitEvent`, the runtime
-  registers the run in the store so the next emitted payload is persisted
-  atomically and delivered exactly once on resume. Operators can inspect
-  suspended runs via `WorkflowStore.listWatchers` or `runsWaitingOn`. When the
-  watcher metadata is one DTO, prefer `watcher.dataJson(...)` or
-  `watcher.dataAs(codec: ...)`. When only the nested watcher payload is a DTO,
-  use `watcher.payloadJson(...)` or `watcher.payloadAs(codec: ...)`.
-- Checkpoints act as heartbeats. Every successful `saveStep` refreshes the run's
-  `updatedAt` timestamp so operators (and future reclaim logic) can distinguish
-  actively-owned runs from ones that need recovery.
-- Run execution is lease-based. The runtime claims each run with a lease
-  (`runLeaseDuration`) and renews it while work continues. If another worker
-  owns the lease, the task is retried so a takeover can occur once the lease
-  expires. Keep `runLeaseDuration` at least as long as the broker visibility
-  timeout and ensure `leaseExtension` renewals happen before either expires.
-- Sleeps persist wake timestamps. When a resumed step calls `sleep` again, the
-  runtime skips re-suspending once the stored `resumeAt` is reached so loop
-  handlers can simply call `sleep` without extra guards.
-- Prefer the higher-level helpers for common cases:
-
-  ```dart
-  await ctx.sleepFor(duration: const Duration(milliseconds: 200));
-  ```
-
-  ```dart
-  final payload = await ctx.waitForEvent<Map<String, Object?>>(
-    topic: 'demo.event',
-  );
-  ```
-
-- Use `ctx.takeResumeData()` or `ctx.takeResumeValue<T>(codec: ...)` when you
-  need lower-level control over the resume payload or need to distinguish
-  custom suspension markers yourself.
-- When you suspend with the low-level API, provide a marker in the `data`
-  payload so the resumed step can distinguish the wake-up path. For example:
-
-  ```dart
-  if (!ctx.sleepUntilResumed(const Duration(milliseconds: 200))) {
-    return null;
-  }
-  ```
-
-- Awaited events behave the same way: the emitted payload is delivered via
-  `takeResumeData()` / `takeResumeValue<T>(codec: ...)` when the run resumes.
-- When you have a DTO event, emit it through `workflowApp.emitJson(...)` /
-  `workflowApp.emitVersionedJson(...)` / `workflowApp.emitValue(...)` (or
-  `runtime.emitJson(...)` / `runtime.emitVersionedJson(...)` /
-  `runtime.emitValue(...)` when you are intentionally using the low-level
-  runtime) with a `PayloadCodec<T>`, or use `WorkflowEventRef<T>.json(...)` /
-  `WorkflowEventRef<T>.versionedJson(...)` /
-  `WorkflowEventRef<T>.versionedMap(...)` as the shortest typed event forms
-  and call `event.emit(emitter, dto)` as the happy path.
-  Pair that with `await event.wait(ctx)`. Event payloads still serialize onto
-  a string-keyed JSON-like map.
-- Only return values you want persisted. If a handler returns `null`, the
-  runtime treats it as "no result yet" and will run the step again on resume.
-- Derive outbound idempotency tokens with `ctx.idempotencyKey('charge')` so
-  retries reuse the same stable identifier (`workflow/run/scope`).
-- Use `autoVersion: true` on steps that you plan to re-execute (e.g. after
-  rewinding). Each completion stores a checkpoint like `step#0`, `step#1`, ... and
-  the handler receives the current iteration via `ctx.iteration`.
-- Set an optional `WorkflowCancellationPolicy` when starting runs to auto-cancel
-  workflows that exceed a wall-clock budget or stay suspended beyond an allowed
-  duration. When a policy trips, the run transitions to `cancelled` and the
-  reason is surfaced via `stem wf show`.
-
-```dart
-flow.step(
-  'process-item',
-  autoVersion: true,
-  (ctx) async {
-    final iteration = ctx.iteration;
-    final item = items[iteration];
-    return await process(item);
-  },
-);
-
-final runId = await workflowApp.startWorkflow(
-  'demo.workflow',
-  params: const {'userId': '42'},
-  cancellationPolicy: const WorkflowCancellationPolicy(
-    maxRunDuration: Duration(minutes: 15),
-    maxSuspendDuration: Duration(minutes: 5),
-  ),
-);
-```
-
-When those low-level name-based paths already have DTO inputs, prefer
-`client.enqueueValue(...)` plus `workflowApp.startWorkflowValue(...)`,
-`workflowApp.startWorkflowJson(...)`, or
-`workflowApp.startWorkflowVersionedJson(...)` over hand-built map payloads.
-Use `PayloadCodec.versionedJson(...)` with `enqueueValue(...)` or
-`startWorkflowValue(...)`, or the workflow-specific versioned helpers, when
-the DTO schema is expected to evolve and you want the payload to persist an
-explicit `__stemPayloadVersion`.
-
-Adapter packages expose typed factories (e.g. `redisBrokerFactory`,
-`postgresResultBackendFactory`, `sqliteWorkflowStoreFactory`) so you can replace
-drivers by importing the adapter you need.
 
 ## Features
 
@@ -1418,9 +28,224 @@ drivers by importing the adapter you need.
 - **Adapters** - In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
 - **Specs & tooling** - OpenSpec change workflow, quality gates (see `example/quality_gates`), chaos/regression suites.
 
+## Install
+
+```bash
+dart pub add stem
+# Optional adapters
+dart pub add stem_redis     # Redis broker/backend
+dart pub add stem_postgres  # Postgres broker/backend
+dart pub add stem_sqlite    # SQLite broker/backend
+dart pub add -d stem_builder # for annotations/codegen (optional)
+dart pub add -d stem_cli      # for CLI tooling
+```
+
+
+## Examples
+
+### Minimal in-memory task + worker
+
+```dart
+import "dart:async";
+import "package:stem/stem.dart";
+
+class HelloTask extends TaskHandler<void> {
+  @override
+  String get name => "demo.hello";
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    final name = args.valueOr<String>("name", "world");
+    print("Hello $name");
+  }
+}
+
+Future<void> main() async {
+  final client = await StemClient.inMemory(tasks: [HelloTask()]);
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  await client.enqueueValue("demo.hello", const {"name": "Stem"});
+  await Future<void>.delayed(const Duration(seconds: 1));
+
+  await worker.shutdown();
+  await client.close();
+}
+```
+
+### Reusable stack from URL (Redis)
+
+```dart
+import "package:stem/stem.dart";
+import "package:stem_redis/stem_redis.dart";
+
+Future<void> main() async {
+  final client = await StemClient.fromUrl(
+    "redis://localhost:6379",
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: "redis://localhost:6379/1",
+    ),
+    tasks: [HelloTask()],
+  );
+
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  await client.enqueueValue("demo.hello", const {"name": "Redis"});
+  await Future<void>.delayed(const Duration(seconds: 1));
+
+  await worker.shutdown();
+  await client.close();
+}
+```
+
+### Typed task definition and waiting for result
+
+```dart
+class HelloArgs {
+  const HelloArgs({required this.name});
+  final String name;
+
+  Map<String, dynamic> toJson() => {"name": name};
+  factory HelloArgs.fromJson(Map<String, dynamic> json) =>
+      HelloArgs(name: json["name"] as String);
+}
+
+class HelloTask2 extends TaskHandler<String> {
+  static final definition = TaskDefinition<HelloArgs, String>.json(
+    name: "demo.hello2",
+    metadata: const TaskMetadata(description: "typed hello task"),
+  );
+
+  @override
+  String get name => definition.name;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    final payload = HelloArgs.fromJson(args.cast<String, dynamic>());
+    return "Hello ${payload.name}";
+  }
+}
+
+Future<void> main() async {
+  final client = await StemClient.inMemory(tasks: [HelloTask2()]);
+  final worker = await client.createWorker();
+  unawaited(worker.start());
+
+  final result = await HelloTask2.definition.enqueueAndWait(
+    client,
+    const HelloArgs(name: "Typed"),
+  );
+  print(result?.value);
+
+  await worker.shutdown();
+  await client.close();
+}
+```
+
+### Workflow quick-start (Flow)
+
+```dart
+import "package:stem/stem.dart";
+
+final onboardingFlow = Flow<String>(
+  name: "demo.onboarding",
+  build: (flow) {
+    flow.step("welcome", (ctx) async {
+      return "Welcome ${ctx.requiredParam<String>("name")}";
+    });
+    flow.step("done", (ctx) async => "Done");
+  },
+);
+
+Future<void> main() async {
+  final appClient = await StemClient.inMemory();
+  final app = await appClient.createWorkflowApp(flows: [onboardingFlow]);
+
+  final ref = onboardingFlow.refJson(HelloArgs.fromJson);
+  final runId = await ref.start(app, params: const HelloArgs(name: "Stem"));
+  final result = await ref.waitFor(app, runId);
+
+  print(result?.value);
+  await app.shutdown();
+  await appClient.close();
+}
+```
+
+### Annotated workflow + task with `stem_builder`
+
+```dart
+import "package:stem/stem.dart";
+import "package:stem_builder/stem_builder.dart";
+
+part "definitions.stem.g.dart";
+
+@WorkflowDefn(name: "builder.signup", kind: WorkflowKind.script)
+class BuilderSignupWorkflow {
+  Future<String> run(String email) async {
+    final userId = await createUser(email);
+    await finalizeSignup(userId: userId);
+    return userId;
+  }
+
+  @WorkflowStep(name: "create-user")
+  Future<String> createUser(String email) async {
+    return "user-$email";
+  }
+
+  @WorkflowStep(name: "finalize")
+  Future<void> finalizeSignup({required String userId}) async {}
+}
+
+@TaskDefn(name: "builder.send_welcome")
+Future<void> sendWelcomeEmail(
+  String email, {
+  TaskExecutionContext? context,
+}) async {
+  // optional: use context for logger/meta/retry helpers
+}
+```
+
+```bash
+dart run build_runner build
+
+# After generation, use module + generated defs
+```
+
+```dart
+// example usage after codegen
+final client = await StemClient.inMemory(module: stemModule);
+final app = await client.createWorkflowApp();
+
+final runId = await StemWorkflowDefinitions.builderSignup.startAndWait(
+  app,
+  "alice@example.com",
+);
+final result = await StemWorkflowDefinitions.builderSignup.waitFor(app, runId);
+print(result?.value); // {user: alice@example.com}
+```
+
+### 5) CLI at a glance
+
+```bash
+# Start a worker or run built-in introspection commands
+stem --help
+stem worker start --help
+stem wf --help
+```
+
+
+## Want depth?
+
+This README is intentionally example-focused.
+For implementation details, runtime semantics, adapter tuning, and operational playbooks,
+see the full docs at https://kingwill101.github.io/stem.
+
+
 ## Documentation & Examples
 
-- Full docs: [Full docs](.site/docs) (run `npm install && npm start` inside `.site/`).
+
 - Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
 - [workflows](example/workflows/) - end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis). See `versioned_rewind.dart` for auto-versioned step rewinds.
@@ -1441,62 +266,3 @@ drivers by importing the adapter you need.
 - [security examples](example/security/*) - payload signing + TLS profiles.
 - [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
 - [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.
-
-## Running Tests Locally
-
-Start the dockerised dependencies and export the integration variables before
-invoking the test suite:
-
-```bash
-source packages/stem_cli/_init_test_env
-dart test
-```
-
-The helper script launches `packages/stem_cli/docker/testing/docker-compose.yml`
-(Redis + Postgres) and populates `STEM_TEST_*` environment variables needed by
-the integration suites.
-
-### Adapter Contract Tests
-
-Stem ships a reusable adapter contract suite in
-`packages/stem_adapter_tests`. Adapter packages (Redis broker/postgres
-backend, SQLite adapters, and any future integrations) add it as a
-`dev_dependency` and invoke `runBrokerContractTests` /
-`runResultBackendContractTests` from their integration tests. The harness
-exercises core behaviours-enqueue/ack/nack, dead-letter replay, lease
-extension, result persistence, group aggregation, and heartbeat storage-so
-all adapters stay aligned with the broker and result backend contracts. See
-`test/integration/brokers/postgres_broker_integration_test.dart` and
-`test/integration/backends/postgres_backend_integration_test.dart` for
-reference usage.
-
-### Testing helpers
-
-Use `FakeStem` from `package:stem/stem.dart` in unit tests when you want to
-record enqueued jobs without standing up brokers:
-
-```dart
-final fake = FakeStem();
-await fake.enqueue('tasks.email', args: {'id': 1});
-final recorded = fake.enqueues.single;
-expect(recorded.name, 'tasks.email');
-```
-
-- `FakeWorkflowClock` keeps workflow tests deterministic. Inject the same clock
-  into your runtime and store, then advance it directly instead of sleeping.
-  At the app layer, prefer `workflowApp.resumeDueRuns(clock.now())` once that
-  same fake clock is wired into the store backing the app:
-
-  ```dart
-  final clock = FakeWorkflowClock(DateTime.utc(2024, 1, 1));
-  final store = InMemoryWorkflowStore(clock: clock);
-  final runtime = WorkflowRuntime(
-    stem: stem,
-    store: store,
-    eventBus: InMemoryEventBus(store),
-    clock: clock,
-  );
-
-  clock.advance(const Duration(seconds: 5));
-  final dueRuns = await store.dueRuns(clock.now());
-  ```
