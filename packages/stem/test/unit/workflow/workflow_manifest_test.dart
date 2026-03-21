@@ -33,20 +33,18 @@ void main() {
     final definition = WorkflowScript<Map<String, Object?>>(
       name: 'manifest.script',
       run: (script) async {
-        final email = script.params['email'] as String;
+        final email = script.params['email']! as String;
         return {'email': email, 'status': 'done'};
       },
       checkpoints: [
         WorkflowCheckpoint(
           name: 'create-user',
           title: 'Create user',
-          kind: WorkflowStepKind.task,
           taskNames: const ['user.create'],
         ),
         WorkflowCheckpoint(
           name: 'send-welcome-email',
           title: 'Send welcome email',
-          kind: WorkflowStepKind.task,
           taskNames: const ['email.send'],
         ),
       ],

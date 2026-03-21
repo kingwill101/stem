@@ -136,7 +136,9 @@ void main() {
       expect(enqueuer.records.single.args, equals({'value': 42}));
     });
 
-    test('enqueueValue encodes typed payloads through the supplied codec', () async {
+    test(
+      'enqueueValue encodes typed payloads through the supplied codec',
+      () async {
       final enqueuer = _RecordingEnqueuer();
       final context = TaskContext(
         id: 'parent-3b',
@@ -163,7 +165,8 @@ void main() {
       expect(record.meta[_parentTaskIdKey], equals('parent-3b'));
       expect(record.meta[_parentAttemptKey], equals(1));
       expect(record.headers['x-trace-id'], equals('trace-2'));
-    });
+      },
+    );
 
     test('merges headers/meta overrides with defaults', () async {
       final enqueuer = _RecordingEnqueuer();

@@ -178,9 +178,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       continuationQueue: continuationQueue,
       executionQueue: executionQueue,
       serializationFormat: _stem.payloadEncoders.defaultArgsEncoder.id,
-      serializationVersion: '1',
       frameFormat: 'stem-envelope',
-      frameVersion: '1',
       encryptionScope: _stem.signer != null ? 'signed-envelope' : 'none',
       encryptionEnabled: _stem.signer != null,
       streamId: '${name}_$requestedRunId',
@@ -361,6 +359,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   }
 
   /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  @override
   Future<WorkflowResult<TResult>?>
   waitForWorkflowRef<TParams, TResult extends Object?>(
     String runId,
@@ -963,7 +962,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
                 step: step.name,
                 extra: {
                   'workflowSuspensionType': 'event',
-                  'topic': control.topic!,
+                  'topic': control.topic,
                   'workflowIteration': iteration,
                   if (deadline != null) 'deadline': deadline.toIso8601String(),
                   'runtimeId': _runtimeId,
@@ -1296,9 +1295,9 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Enqueues a workflow run execution task.
   Future<void> _enqueueRun(
     String runId, {
-    String? workflow,
     required bool continuation,
     required WorkflowContinuationReason reason,
+    String? workflow,
     WorkflowRunRuntimeMetadata? runtimeMetadata,
   }) async {
     final metadata =
@@ -1923,7 +1922,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
           step: stepName,
           extra: {
             'workflowSuspensionType': 'event',
-            'topic': control.topic!,
+            'topic': control.topic,
             'workflowIteration': iteration,
             if (deadline != null) 'deadline': deadline.toIso8601String(),
             'runtimeId': runtime._runtimeId,
@@ -2230,7 +2229,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     TaskEnqueueOptions? enqueueOptions,
   }) {
     final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(call.meta);
-    TaskOptions? resolvedOptions = call.options;
+    var resolvedOptions = call.options;
     if (resolvedOptions == null) {
       final inherited = call.definition.defaultOptions;
       if (inherited.queue == 'default' && executionQueue != 'default') {

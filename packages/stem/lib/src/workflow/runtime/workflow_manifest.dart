@@ -228,8 +228,10 @@ extension WorkflowManifestDefinition on WorkflowDefinition {
 
 String _stableHexDigest(String input) {
   final bytes = utf8.encode(input);
+  // FNV-1a uses this exact 64-bit offset basis; keep the literal stable.
+  // ignore: avoid_js_rounded_ints
   var hash = 0xcbf29ce484222325;
-  const prime = 0x00000100000001B3;
+  const prime = 0x100000001b3;
   for (final value in bytes) {
     hash ^= value;
     hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;

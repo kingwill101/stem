@@ -24,6 +24,18 @@ class WorkflowCheckpoint {
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
+  /// Rehydrates declared checkpoint metadata from serialized JSON.
+  factory WorkflowCheckpoint.fromJson(Map<String, Object?> json) {
+    return WorkflowCheckpoint(
+      name: json['name']?.toString() ?? '',
+      title: json['title']?.toString(),
+      kind: _checkpointKindFromJson(json['kind']),
+      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
+      autoVersion: json['autoVersion'] == true,
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+    );
+  }
+
   /// Creates checkpoint metadata backed by a typed [valueCodec].
   static WorkflowCheckpoint typed<T>({
     required String name,
@@ -43,18 +55,6 @@ class WorkflowCheckpoint {
       kind: kind,
       taskNames: taskNames,
       metadata: metadata,
-    );
-  }
-
-  /// Rehydrates declared checkpoint metadata from serialized JSON.
-  factory WorkflowCheckpoint.fromJson(Map<String, Object?> json) {
-    return WorkflowCheckpoint(
-      name: json['name']?.toString() ?? '',
-      title: json['title']?.toString(),
-      kind: _checkpointKindFromJson(json['kind']),
-      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
-      autoVersion: json['autoVersion'] == true,
-      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
     );
   }
 

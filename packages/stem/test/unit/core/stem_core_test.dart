@@ -376,7 +376,8 @@ void main() {
     );
 
     test(
-      'versioned json registry task definitions can derive versioned result metadata',
+      'versioned json registry task definitions can derive versioned result '
+      'metadata',
       () async {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
@@ -406,7 +407,8 @@ void main() {
         final broker = _RecordingBroker();
         final backend = _RecordingBackend();
         final stem = Stem(broker: broker, backend: backend);
-        final definition = TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedMap(
+        final definition =
+            TaskDefinition<_CodecTaskArgs, _CodecReceipt>.versionedMap(
           name: 'sample.versioned_map.result',
           version: 2,
           encodeArgs: (args) => {'legacy_value': args.value},

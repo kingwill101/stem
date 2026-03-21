@@ -51,7 +51,9 @@ void main() {
         name: 'stack.client.task',
         entrypoint: (context, args) async => 'ok',
       );
-      final definition = TaskDefinition.noArgs<String>(name: 'stack.client.task');
+      final definition = TaskDefinition.noArgs<String>(
+        name: 'stack.client.task',
+      );
       final client = await stack.createClient(tasks: [handler]);
       final worker = await client.createWorker();
       await worker.start();

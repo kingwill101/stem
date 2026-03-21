@@ -141,7 +141,7 @@ void main() {
     expect((await client.getTaskStatus(taskId))?.state, TaskState.succeeded);
 
     final dispatch = await client.createCanvas().group<String>([
-      task('client.status.task', args: const {}),
+      task('client.status.task'),
     ]);
     try {
       final groupStatus = await _waitForClientGroupStatus(
@@ -170,7 +170,7 @@ void main() {
 
     final canvas = client.createCanvas();
     final taskId = await canvas.send(
-      task<String>('client.canvas.task', args: const {}),
+      task<String>('client.canvas.task'),
     );
     final result = await client.waitForTask<String>(
       taskId,
@@ -195,7 +195,7 @@ void main() {
 
     final canvas = client.createCanvas(tasks: [extraTask]);
     final taskId = await canvas.send(
-      task<String>('client.canvas.extra', args: const {}),
+      task<String>('client.canvas.extra'),
     );
     final result = await client.waitForTask<String>(
       taskId,

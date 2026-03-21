@@ -70,9 +70,7 @@ const _greetingResultRegistry = PayloadVersionRegistry<_GreetingResult>(
 class _LegacyGreetingParams {
   const _LegacyGreetingParams({required this.name});
 
-  final String name;
-
-  static _LegacyGreetingParams fromVersionedMap(
+  factory _LegacyGreetingParams.fromVersionedMap(
     Map<String, dynamic> json,
     int version,
   ) {
@@ -80,6 +78,8 @@ class _LegacyGreetingParams {
       name: '${json['display_name']! as String} v$version',
     );
   }
+
+  final String name;
 }
 
 final _userUpdatedEvent = WorkflowEventRef<_GreetingParams>.json(

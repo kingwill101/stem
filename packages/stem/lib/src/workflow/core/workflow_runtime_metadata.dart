@@ -54,36 +54,30 @@ class WorkflowRunRuntimeMetadata {
   factory WorkflowRunRuntimeMetadata.fromJson(Map<String, Object?> json) {
     return WorkflowRunRuntimeMetadata(
       workflowId: json['workflowId']?.toString() ?? '',
-      orchestrationQueue:
-          json['orchestrationQueue']?.toString().trim().isNotEmpty == true
-          ? json['orchestrationQueue']!.toString().trim()
-          : 'workflow',
-      continuationQueue:
-          json['continuationQueue']?.toString().trim().isNotEmpty == true
-          ? json['continuationQueue']!.toString().trim()
-          : 'workflow',
-      executionQueue:
-          json['executionQueue']?.toString().trim().isNotEmpty == true
-          ? json['executionQueue']!.toString().trim()
-          : 'default',
-      serializationFormat:
-          json['serializationFormat']?.toString().trim().isNotEmpty == true
-          ? json['serializationFormat']!.toString().trim()
-          : 'json',
-      serializationVersion:
-          json['serializationVersion']?.toString().trim().isNotEmpty == true
-          ? json['serializationVersion']!.toString().trim()
-          : '1',
-      frameFormat: json['frameFormat']?.toString().trim().isNotEmpty == true
-          ? json['frameFormat']!.toString().trim()
-          : 'json-frame',
-      frameVersion: json['frameVersion']?.toString().trim().isNotEmpty == true
-          ? json['frameVersion']!.toString().trim()
-          : '1',
-      encryptionScope:
-          json['encryptionScope']?.toString().trim().isNotEmpty == true
-          ? json['encryptionScope']!.toString().trim()
-          : 'none',
+      orchestrationQueue: _stringOrDefault(
+        json,
+        'orchestrationQueue',
+        'workflow',
+      ),
+      continuationQueue: _stringOrDefault(
+        json,
+        'continuationQueue',
+        'workflow',
+      ),
+      executionQueue: _stringOrDefault(json, 'executionQueue', 'default'),
+      serializationFormat: _stringOrDefault(
+        json,
+        'serializationFormat',
+        'json',
+      ),
+      serializationVersion: _stringOrDefault(
+        json,
+        'serializationVersion',
+        '1',
+      ),
+      frameFormat: _stringOrDefault(json, 'frameFormat', 'json-frame'),
+      frameVersion: _stringOrDefault(json, 'frameVersion', '1'),
+      encryptionScope: _stringOrDefault(json, 'encryptionScope', 'none'),
       encryptionEnabled: json['encryptionEnabled'] == true,
       streamId: json['streamId']?.toString(),
     );
@@ -178,4 +172,14 @@ class WorkflowRunRuntimeMetadata {
       ..remove(workflowParentRunIdParamKey);
     return UnmodifiableMapView(copy);
   }
+}
+
+String _stringOrDefault(
+  Map<String, Object?> json,
+  String key,
+  String fallback,
+) {
+  final raw = json[key]?.toString().trim();
+  if (raw == null || raw.isEmpty) return fallback;
+  return raw;
 }

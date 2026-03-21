@@ -160,7 +160,9 @@ void main() {
       expect(updated.meta['m2'], 2);
     });
 
-    test('NoArgsTaskDefinition.asDefinition.buildCall builds an empty call', () {
+    test(
+      'NoArgsTaskDefinition.asDefinition.buildCall builds an empty call',
+      () {
       final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
       final call = definition.asDefinition.buildCall(
@@ -173,7 +175,8 @@ void main() {
       expect(call.encodeArgs(), isEmpty);
       expect(call.headers, containsPair('h', 'v'));
       expect(call.meta, containsPair('m', 1));
-    });
+      },
+    );
 
     test('NoArgsTaskDefinition.asDefinition.buildCall accepts overrides', () {
       final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
@@ -188,7 +191,9 @@ void main() {
       expect(call.encodeArgs(), isEmpty);
     });
 
-    test('NoArgsTaskDefinition.enqueue uses the TaskEnqueuer surface', () async {
+    test(
+      'NoArgsTaskDefinition.enqueue uses the TaskEnqueuer surface',
+      () async {
       final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
       final enqueuer = _RecordingTaskEnqueuer();
 
@@ -204,7 +209,8 @@ void main() {
       expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
       expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
       expect(enqueuer.lastCall!.meta, containsPair('m', 1));
-    });
+      },
+    );
   });
 }
 

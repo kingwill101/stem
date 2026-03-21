@@ -815,7 +815,9 @@ void main() {
     expect(completed?.result, 'user-typed-2');
   });
 
-  test('emitEvent resumes flows with versioned-json workflow event refs', () async {
+  test(
+    'emitEvent resumes flows with versioned-json workflow event refs',
+    () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJson(
       topic: 'user.updated.versioned.ref',
       version: 2,
@@ -860,9 +862,12 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload?.id, 'user-versioned-ref-2');
     expect(completed?.result, 'user-versioned-ref-2');
-  });
+    },
+  );
 
-  test('emitEvent resumes flows with registry-backed workflow event refs', () async {
+  test(
+    'emitEvent resumes flows with registry-backed workflow event refs',
+    () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJsonRegistry(
       topic: 'user.updated.registry.ref',
       version: 2,
@@ -907,9 +912,12 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload?.id, 'user-registry-ref-2');
     expect(completed?.result, 'user-registry-ref-2');
-  });
+    },
+  );
 
-  test('emitEvent resumes flows with versioned-map workflow event refs', () async {
+  test(
+    'emitEvent resumes flows with versioned-map workflow event refs',
+    () async {
     final event = WorkflowEventRef<_UserUpdatedEvent>.versionedMap(
       topic: 'user.updated.versioned.map.ref',
       encode: (value) => {'user_id': value.id},
@@ -938,7 +946,9 @@ void main() {
       ).definition,
     );
 
-    final runId = await runtime.startWorkflow('event.versioned.map.ref.workflow');
+    final runId = await runtime.startWorkflow(
+      'event.versioned.map.ref.workflow',
+    );
     await runtime.executeRun(runId);
 
     final suspended = await store.get(runId);
@@ -955,7 +965,8 @@ void main() {
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload?.id, 'user-versioned-map-ref-v3');
     expect(completed?.result, 'user-versioned-map-ref-v3');
-  });
+    },
+  );
 
   test('emit persists payload before worker resumes execution', () async {
     runtime.registerWorkflow(
@@ -1640,6 +1651,8 @@ void main() {
           },
         ).definition,
       );
+      // Keep this direct call form; cascading a single registration is noisier.
+      // ignore: cascade_invocations
       runtime.registerWorkflow(
         Flow(
           name: 'logging.complete.workflow',
@@ -1785,15 +1798,11 @@ const _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>.json(
 class _UserUpdatedEvent {
   const _UserUpdatedEvent({required this.id});
 
-  final String id;
-
-  Map<String, Object?> toJson() => {'id': id};
-
-  static _UserUpdatedEvent fromJson(Map<String, Object?> json) {
-    return _UserUpdatedEvent(id: json['id'] as String);
+  factory _UserUpdatedEvent.fromJson(Map<String, Object?> json) {
+    return _UserUpdatedEvent(id: json['id']! as String);
   }
 
-  static _UserUpdatedEvent fromVersionedJson(
+  factory _UserUpdatedEvent.fromVersionedJson(
     Map<String, dynamic> json,
     int version,
   ) {
@@ -1801,17 +1810,21 @@ class _UserUpdatedEvent {
     return _UserUpdatedEvent(id: json['id'] as String);
   }
 
-  static _UserUpdatedEvent fromV2Json(Map<String, dynamic> json) {
+  factory _UserUpdatedEvent.fromV2Json(Map<String, dynamic> json) {
     return _UserUpdatedEvent(id: json['id'] as String);
   }
 
-  static _UserUpdatedEvent fromVersionedMap(
+  factory _UserUpdatedEvent.fromVersionedMap(
     Map<String, dynamic> json,
     int version,
   ) {
     expect(version, 3);
     return _UserUpdatedEvent(id: '${json['user_id'] as String}-v$version');
   }
+
+  final String id;
+
+  Map<String, Object?> toJson() => {'id': id};
 }
 
 const _userUpdatedEventRegistry = PayloadVersionRegistry<_UserUpdatedEvent>(
