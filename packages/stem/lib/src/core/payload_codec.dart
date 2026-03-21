@@ -1,4 +1,45 @@
+import 'dart:collection';
+
 import 'package:stem/src/core/task_payload_encoder.dart';
+
+/// Registry of version-specific payload decoders for a single durable DTO type.
+///
+/// Use this when a payload schema evolves over time and you want one reusable
+/// place to define how each stored version should be decoded.
+class PayloadVersionRegistry<T> {
+  /// Creates a version registry from explicit [decoders].
+  const PayloadVersionRegistry({
+    required Map<int, T Function(Map<String, dynamic> payload)> decoders,
+    this.defaultVersion,
+  }) : _decoders = decoders;
+
+  final Map<int, T Function(Map<String, dynamic> payload)> _decoders;
+
+  /// Fallback version to use when a stored payload does not persist one.
+  final int? defaultVersion;
+
+  /// Registered decoder versions.
+  Map<int, T Function(Map<String, dynamic> payload)> get decoders =>
+      UnmodifiableMapView(_decoders);
+
+  /// Decodes [payload] using the decoder registered for [version].
+  T decode(
+    Map<String, dynamic> payload,
+    int version, {
+    String typeName = 'payload',
+  }) {
+    final decoder = _decoders[version];
+    if (decoder == null) {
+      final known = _decoders.keys.toList()..sort();
+      throw StateError(
+        '$typeName has no decoder registered for payload version $version. '
+        'Known versions: ${known.join(', ')}.',
+      );
+    }
+    return decoder(payload);
+  }
+}
+
 
 /// Encodes and decodes a strongly-typed payload value.
 ///
@@ -114,6 +155,49 @@ class PayloadCodec<T> {
        _jsonVersion = version,
        _defaultDecodeVersion = defaultDecodeVersion,
        _typeName = typeName;
+
+  /// Creates a JSON DTO codec backed by a reusable version registry.
+  ///
+  /// This keeps payload version evolution in one place instead of repeating the
+  /// same `switch(version)` logic across task, workflow, and event surfaces.
+  factory PayloadCodec.versionedJsonRegistry({
+    required int version,
+    required PayloadVersionRegistry<T> registry,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      defaultDecodeVersion: defaultDecodeVersion ?? registry.defaultVersion,
+      decode: (payload, storedVersion) => registry.decode(
+        payload,
+        storedVersion,
+        typeName: typeName ?? '$T',
+      ),
+      typeName: typeName,
+    );
+  }
+
+  /// Creates a custom map-backed codec backed by a reusable version registry.
+  factory PayloadCodec.versionedMapRegistry({
+    required Object? Function(T value) encode,
+    required int version,
+    required PayloadVersionRegistry<T> registry,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedMap(
+      encode: encode,
+      version: version,
+      defaultDecodeVersion: defaultDecodeVersion ?? registry.defaultVersion,
+      decode: (payload, storedVersion) => registry.decode(
+        payload,
+        storedVersion,
+        typeName: typeName ?? '$T',
+      ),
+      typeName: typeName,
+    );
+  }
 
   /// Reserved key used to persist payload schema versions for versioned codecs.
   static const String versionKey = '__stemPayloadVersion';

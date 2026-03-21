@@ -229,6 +229,74 @@ void main() {
     });
   });
 
+  group('PayloadVersionRegistry', () {
+    const registry = PayloadVersionRegistry<_VersionedCodecPayload>(
+      decoders: <int, _VersionedCodecPayload Function(Map<String, dynamic>)>{
+        1: _VersionedCodecPayload.fromV1Json,
+        2: _VersionedCodecPayload.fromV2Json,
+      },
+      defaultVersion: 1,
+    );
+
+    test('decodes versioned JSON payloads through a reusable registry', () {
+      final codec = PayloadCodec<_VersionedCodecPayload>.versionedJsonRegistry(
+        version: 2,
+        registry: registry,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      final decoded = codec.decode({
+        PayloadCodec.versionKey: 2,
+        'id': 'payload-registry-v2',
+        'count': 21,
+      });
+
+      expect(decoded.id, 'payload-registry-v2');
+      expect(decoded.count, 21);
+      expect(decoded.decodedVersion, 2);
+    });
+
+    test('uses the registry default version when the payload has none', () {
+      final codec = PayloadCodec<_VersionedCodecPayload>.versionedJsonRegistry(
+        version: 2,
+        registry: registry,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      final decoded = codec.decode({
+        'legacy_id': 'payload-registry-v1',
+        'amount': 18,
+      });
+
+      expect(decoded.id, 'payload-registry-v1');
+      expect(decoded.count, 18);
+      expect(decoded.decodedVersion, 1);
+    });
+
+    test('rejects unknown payload versions with a clear error', () {
+      final codec = PayloadCodec<_VersionedCodecPayload>.versionedJsonRegistry(
+        version: 2,
+        registry: registry,
+        typeName: '_VersionedCodecPayload',
+      );
+
+      expect(
+        () => codec.decode({
+          PayloadCodec.versionKey: 9,
+          'id': 'payload-registry-unknown',
+          'count': 22,
+        }),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('has no decoder registered for payload version 9'),
+          ),
+        ),
+      );
+    });
+  });
+
   group('PayloadCodec.versionedMap', () {
     test('encodes custom map payloads with a persisted schema version', () {
       const codec = PayloadCodec<_VersionedCodecPayload>.versionedMap(
@@ -362,6 +430,22 @@ class _VersionedCodecPayload {
       id: json['id']! as String,
       count: json['count']! as int,
       decodedVersion: version,
+    );
+  }
+
+  factory _VersionedCodecPayload.fromV1Json(Map<String, dynamic> json) {
+    return _VersionedCodecPayload(
+      id: json['legacy_id']! as String,
+      count: json['amount']! as int,
+      decodedVersion: 1,
+    );
+  }
+
+  factory _VersionedCodecPayload.fromV2Json(Map<String, dynamic> json) {
+    return _VersionedCodecPayload(
+      id: json['id']! as String,
+      count: json['count']! as int,
+      decodedVersion: 2,
     );
   }
 
