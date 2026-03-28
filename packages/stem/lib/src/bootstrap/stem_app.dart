@@ -31,6 +31,7 @@ class StemApp implements StemTaskApp {
     required this.backend,
     required this.stem,
     required this.worker,
+    required this.allowWorkerAutoStart,
     required List<Future<void> Function()> disposers,
   }) : _disposers = disposers {
     canvas = _ManagedCanvas(
@@ -38,7 +39,7 @@ class StemApp implements StemTaskApp {
       backend: backend,
       registry: registry,
       encoderRegistry: stem.payloadEncoders,
-      onBeforeDispatch: _ensureStarted,
+      onBeforeDispatch: _maybeAutoStart,
     );
   }
 
@@ -60,6 +61,9 @@ class StemApp implements StemTaskApp {
   /// Worker managed by the helper.
   final Worker worker;
 
+  /// Whether shortcut operations may lazily start the managed worker.
+  final bool allowWorkerAutoStart;
+
   /// Canvas facade used for chains, groups, and chords.
   late final Canvas canvas;
 
@@ -68,7 +72,15 @@ class StemApp implements StemTaskApp {
   bool _started = false;
   Future<void>? _startFuture;
 
-  Future<void> _ensureStarted() => _started ? Future.value() : start();
+  /// Whether the managed worker has been started.
+  bool get isStarted => _started;
+
+  Future<void> _maybeAutoStart() {
+    if (_started || !allowWorkerAutoStart) {
+      return Future.value();
+    }
+    return start();
+  }
 
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
@@ -105,7 +117,7 @@ class StemApp implements StemTaskApp {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.enqueue(
       name,
       args: args,
@@ -128,7 +140,7 @@ class StemApp implements StemTaskApp {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.enqueueValue(
       name,
       value,
@@ -146,19 +158,19 @@ class StemApp implements StemTaskApp {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.enqueueCall(call, enqueueOptions: enqueueOptions);
   }
 
   @override
   Future<TaskStatus?> getTaskStatus(String taskId) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.getTaskStatus(taskId);
   }
 
   @override
   Future<GroupStatus?> getGroupStatus(String groupId) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.getGroupStatus(groupId);
   }
 
@@ -171,7 +183,7 @@ class StemApp implements StemTaskApp {
     TResult Function(Map<String, dynamic> payload, int version)?
     decodeVersionedJson,
   }) async {
-    await _ensureStarted();
+    await _maybeAutoStart();
     return stem.waitForTask(
       taskId,
       timeout: timeout,
@@ -245,6 +257,7 @@ class StemApp implements StemTaskApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) async {
     final effectiveModule = StemModule.combine(
       module: module,
@@ -351,6 +364,7 @@ class StemApp implements StemTaskApp {
       backend: encodedBackend,
       stem: stem,
       worker: worker,
+      allowWorkerAutoStart: allowWorkerAutoStart,
       disposers: disposers,
     );
   }
@@ -365,6 +379,7 @@ class StemApp implements StemTaskApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) {
     return StemApp.create(
       module: module,
@@ -377,6 +392,7 @@ class StemApp implements StemTaskApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -408,6 +424,7 @@ class StemApp implements StemTaskApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
     StemStack? stack,
+    bool allowWorkerAutoStart = true,
   }) async {
     final needsUniqueLockStore =
         uniqueTasks &&
@@ -478,6 +495,7 @@ class StemApp implements StemTaskApp {
         resultEncoder: resultEncoder,
         argsEncoder: argsEncoder,
         additionalEncoders: additionalEncoders,
+        allowWorkerAutoStart: allowWorkerAutoStart,
       );
 
       // Dispose auto-provisioned lock/revoke stores after worker shutdown and
@@ -506,6 +524,7 @@ class StemApp implements StemTaskApp {
     Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
+    bool allowWorkerAutoStart = true,
   }) async {
     final effectiveModule =
         StemModule.combine(module: module, modules: modules) ?? client.module;
@@ -562,6 +581,7 @@ class StemApp implements StemTaskApp {
       backend: client.backend,
       stem: client.stem,
       worker: worker,
+      allowWorkerAutoStart: allowWorkerAutoStart,
       disposers: [
         () async {
           await worker.shutdown();

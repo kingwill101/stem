@@ -43,6 +43,13 @@ dart pub add -d stem_cli      # for CLI tooling
 
 ## Examples
 
+`StemApp` and `StemWorkflowApp` shortcut helpers lazily start their managed
+worker by default. Pass `allowWorkerAutoStart: false` when you want producer
+or orchestration shortcuts without starting that worker in the background,
+then call `start()` explicitly when you're ready. `StemWorkflowApp` also
+exposes `startRuntime()` and `startWorker()` when you want those lifecycles
+split.
+
 ### Minimal in-memory task + worker
 
 ```dart
@@ -161,7 +168,11 @@ final onboardingFlow = Flow<String>(
 
 Future<void> main() async {
   final appClient = await StemClient.inMemory();
-  final app = await appClient.createWorkflowApp(flows: [onboardingFlow]);
+  final app = await appClient.createWorkflowApp(
+    flows: [onboardingFlow],
+    allowWorkerAutoStart: false,
+  );
+  await app.start();
 
   final ref = onboardingFlow.refJson(HelloArgs.fromJson);
   final runId = await ref.start(app, params: const HelloArgs(name: "Stem"));
@@ -216,7 +227,8 @@ dart run build_runner build
 ```dart
 // example usage after codegen
 final client = await StemClient.inMemory(module: stemModule);
-final app = await client.createWorkflowApp();
+final app = await client.createWorkflowApp(allowWorkerAutoStart: false);
+await app.start();
 
 final runId = await StemWorkflowDefinitions.builderSignup.startAndWait(
   app,
@@ -224,6 +236,94 @@ final runId = await StemWorkflowDefinitions.builderSignup.startAndWait(
 );
 final result = await StemWorkflowDefinitions.builderSignup.waitFor(app, runId);
 print(result?.value); // {user: alice@example.com}
+```
+
+### Workflow with multiple worker queues
+
+```dart
+import "package:stem/stem.dart";
+
+final onboardingFlow = Flow<Map<String, String>>(
+  name: "workflow.multi_workers",
+  build: (flow) {
+    flow.step("dispatch", (ctx) async {
+      final notifyTaskId = await ctx.enqueue(
+        "notify.send",
+        args: {"email": "alex@example.com"},
+        enqueueOptions: const TaskEnqueueOptions(queue: "notifications"),
+      );
+      final analyticsTaskId = await ctx.enqueue(
+        "analytics.track",
+        args: {"userId": "alex", "event": "account.created"},
+        enqueueOptions: const TaskEnqueueOptions(queue: "analytics"),
+      );
+      return {"notifyTaskId": notifyTaskId, "trackTaskId": analyticsTaskId};
+    });
+  },
+);
+
+class NotifyTask extends TaskHandler<String> {
+  @override
+  String get name => "notify.send";
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: "notifications");
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async =>
+      "notified:${args['email']}";
+}
+
+class AnalyticsTask extends TaskHandler<String> {
+  @override
+  String get name => "analytics.track";
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: "analytics");
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async =>
+      "tracked:${args['event']}";
+}
+
+Future<void> main() async {
+  final client = await StemClient.inMemory();
+  final app = await client.createWorkflowApp(
+    flows: [onboardingFlow],
+    workerConfig: const StemWorkerConfig(queue: "workflow"),
+  );
+  await app.start();
+
+  final notifications = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      queue: "notifications-worker",
+      consumerName: "notifications-worker",
+      subscription: RoutingSubscription.singleQueue("notifications"),
+    ),
+    tasks: [NotifyTask()],
+  );
+  final analytics = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      queue: "analytics-worker",
+      consumerName: "analytics-worker",
+      subscription: RoutingSubscription.singleQueue("analytics"),
+    ),
+    tasks: [AnalyticsTask()],
+  );
+
+  await notifications.start();
+  await analytics.start();
+
+  final result = await onboardingFlow.startAndWait(app);
+  final taskIds = result?.value ?? const <String, String>{};
+  print(await app.waitForTask<String>(taskIds['notifyTaskId']!));
+  print(await app.waitForTask<String>(taskIds['trackTaskId']!));
+
+  await notifications.shutdown();
+  await analytics.shutdown();
+  await app.close();
+  await client.close();
+}
 ```
 
 ### 5) CLI at a glance
@@ -235,6 +335,81 @@ stem worker start --help
 stem wf --help
 ```
 
+
+### General worker management (multi-worker setup)
+
+```dart
+import "package:stem/stem.dart";
+
+class EmailTask extends TaskHandler<void> {
+  @override
+  String get name => "notify.send";
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: "notify");
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    print("notify queue: ${args['to']}");
+  }
+}
+
+class ReportTask extends TaskHandler<void> {
+  @override
+  String get name => "reports.aggregate";
+
+  @override
+  TaskOptions get options => const TaskOptions(queue: "reports");
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    print("reports queue: ${args['reportId']}");
+  }
+}
+
+Future<void> main() async {
+  final client = await StemClient.inMemory();
+
+  final notifyWorker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      queue: "notify-worker",
+      consumerName: "notify-worker",
+      subscription: RoutingSubscription.singleQueue("notify"),
+    ),
+    tasks: [EmailTask()],
+  );
+
+  final reportsWorker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      queue: "reports-worker",
+      consumerName: "reports-worker",
+      subscription: RoutingSubscription.singleQueue("reports"),
+    ),
+    tasks: [ReportTask()],
+  );
+
+  await notifyWorker.start();
+  await reportsWorker.start();
+
+  await client.enqueue(
+    "notify.send",
+    args: {"to": "ops@example.com"},
+  );
+  await client.enqueue(
+    "reports.aggregate",
+    args: {"reportId": "r-2026-q1"},
+  );
+
+  await Future<void>.delayed(const Duration(milliseconds: 400));
+
+  await notifyWorker.shutdown();
+  await reportsWorker.shutdown();
+  await client.close();
+}
+```
+
+- Full example that combines a workflow dispatching to dedicated workers:
+  [multiple_workers.dart](example/workflows/multiple_workers.dart)
 
 ## Want depth?
 
@@ -249,6 +424,7 @@ see the full docs at https://kingwill101.github.io/stem.
 - Guided onboarding: [Guided onboarding](.site/docs/getting-started/) (install → infra → ops → production).
 - Examples (each has its own README):
 - [workflows](example/workflows/) - end-to-end workflow samples (in-memory, sleep/event, SQLite, Redis). See `versioned_rewind.dart` for auto-versioned step rewinds.
+- [multiple_workers.dart](example/workflows/multiple_workers.dart) - workflow dispatching tasks to `notifications` and `analytics` workers.
 - [cancellation_policy](example/workflows/cancellation_policy.dart) - demonstrates auto-cancelling long workflows using `WorkflowCancellationPolicy`.
 - [rate_limit_delay](example/rate_limit_delay) - delayed enqueue, priority clamping, Redis rate limiter.
 - [dlq_sandbox](example/dlq_sandbox) - dead-letter inspection and replay via CLI.

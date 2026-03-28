@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
@@ -47,6 +49,7 @@ class StemWorkflowApp
     required this.runtime,
     required this.store,
     required this.eventBus,
+    required this.allowWorkerAutoStart,
     required Future<void> Function() disposeStore,
     required Future<void> Function() disposeBus,
   }) : _disposeStore = disposeStore,
@@ -64,10 +67,30 @@ class StemWorkflowApp
   /// Event bus used to deliver workflow events.
   final EventBus eventBus;
 
+  /// Whether shortcut operations may lazily start the managed worker.
+  final bool allowWorkerAutoStart;
+
   final Future<void> Function() _disposeStore;
   final Future<void> Function() _disposeBus;
 
-  bool _started = false;
+  bool _runtimeStarted = false;
+  Future<void>? _runtimeStartFuture;
+
+  /// Whether both the runtime and managed worker have been started.
+  bool get isStarted => isRuntimeStarted && isWorkerStarted;
+
+  /// Whether the workflow runtime has been started.
+  bool get isRuntimeStarted => _runtimeStarted;
+
+  /// Whether the managed worker has been started.
+  bool get isWorkerStarted => app.isStarted;
+
+  Future<void> _ensureReadyForWorkflowStart() async {
+    await startRuntime();
+    if (allowWorkerAutoStart) {
+      await startWorker();
+    }
+  }
 
   /// Starts the workflow runtime and the underlying Stem worker.
   ///
@@ -80,10 +103,36 @@ class StemWorkflowApp
   /// await app.start();
   /// ```
   Future<void> start() async {
-    if (_started) return;
-    _started = true;
-    await runtime.start();
-    await app.start();
+    await startRuntime();
+    await startWorker();
+  }
+
+  /// Starts the workflow runtime without starting the managed worker.
+  Future<void> startRuntime() async {
+    if (_runtimeStarted) return;
+    final existing = _runtimeStartFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _runtimeStartFuture = completer.future;
+    try {
+      await runtime.start();
+      _runtimeStarted = true;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _runtimeStartFuture = null;
+      _runtimeStarted = false;
+      completer.completeError(error, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Starts the managed worker used for workflow execution.
+  Future<void> startWorker() {
+    return app.start();
   }
 
   @override
@@ -169,7 +218,8 @@ class StemWorkflowApp
   /// Schedules a workflow run.
   ///
   /// Lazily starts the runtime on the first invocation so simple examples do
-  /// not need to call [start] manually.
+  /// not need to call [start] manually. The managed worker is only auto-started
+  /// when [allowWorkerAutoStart] is `true`.
   ///
   /// Example:
   /// ```dart
@@ -188,18 +238,8 @@ class StemWorkflowApp
 
     /// Optional policy that enforces automatic run cancellation.
     WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflow(
-          name,
-          params: params,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflow(
       name,
       params: params,
@@ -217,19 +257,8 @@ class StemWorkflowApp
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
     String? typeName,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflowJson(
-          name,
-          paramsJson,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-          typeName: typeName,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflowJson(
       name,
       paramsJson,
@@ -251,19 +280,8 @@ class StemWorkflowApp
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflowValue(
-          name,
-          value,
-          codec: codec,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflowValue(
       name,
       value,
@@ -284,20 +302,8 @@ class StemWorkflowApp
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
     String? typeName,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflowVersionedJson(
-          name,
-          paramsJson,
-          version: version,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-          typeName: typeName,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflowVersionedJson(
       name,
       paramsJson,
@@ -317,18 +323,8 @@ class StemWorkflowApp
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflowRef(
-          definition,
-          params,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflowRef(
       definition,
       params,
@@ -671,7 +667,8 @@ class StemWorkflowApp
     await app.shutdown();
     await _disposeBus();
     await _disposeStore();
-    _started = false;
+    _runtimeStarted = false;
+    _runtimeStartFuture = null;
   }
 
   /// Alias for [shutdown].
@@ -716,6 +713,7 @@ class StemWorkflowApp
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) async {
     final effectiveModule =
         StemModule.combine(module: module, modules: modules) ?? stemApp?.module;
@@ -740,11 +738,13 @@ class StemWorkflowApp
           resultEncoder: resultEncoder,
           argsEncoder: argsEncoder,
           additionalEncoders: additionalEncoders,
+          allowWorkerAutoStart: allowWorkerAutoStart,
         );
     if (stemApp != null) {
       _validateReusableStemApp(
         appInstance,
         resolvedWorkerConfig,
+        allowWorkerAutoStart: allowWorkerAutoStart,
       );
     }
 
@@ -787,6 +787,7 @@ class StemWorkflowApp
       runtime: runtime,
       store: store,
       eventBus: eventBus,
+      allowWorkerAutoStart: allowWorkerAutoStart,
       disposeStore: () async => storeFactoryInstance.dispose(store),
       disposeBus: () async => busFactory.dispose(eventBus),
     );
@@ -824,6 +825,7 @@ class StemWorkflowApp
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) {
     return StemWorkflowApp.create(
       module: module,
@@ -847,6 +849,7 @@ class StemWorkflowApp
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -885,6 +888,7 @@ class StemWorkflowApp
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) async {
     final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
       workerConfig,
@@ -916,6 +920,7 @@ class StemWorkflowApp
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
 
     try {
@@ -936,6 +941,7 @@ class StemWorkflowApp
         leaseExtension: leaseExtension,
         workflowRegistry: workflowRegistry,
         introspectionSink: introspectionSink,
+        allowWorkerAutoStart: allowWorkerAutoStart,
       );
     } on Object catch (error, stackTrace) {
       // fromUrl owns the app instance; clean it up when workflow bootstrap
@@ -971,6 +977,7 @@ class StemWorkflowApp
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
+    bool allowWorkerAutoStart = true,
   }) async {
     final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
       workerConfig,
@@ -982,6 +989,7 @@ class StemWorkflowApp
     final appInstance = await StemApp.fromClient(
       client,
       workerConfig: resolvedWorkerConfig,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
     return StemWorkflowApp.create(
       module: module,
@@ -999,6 +1007,7 @@ class StemWorkflowApp
       leaseExtension: leaseExtension,
       workflowRegistry: client.workflowRegistry,
       introspectionSink: introspectionSink,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 }
@@ -1026,6 +1035,7 @@ extension StemAppWorkflowExtension on StemApp {
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
     WorkflowIntrospectionSink? introspectionSink,
+    bool allowWorkerAutoStart = true,
   }) {
     return StemWorkflowApp.create(
       module:
@@ -1044,6 +1054,7 @@ extension StemAppWorkflowExtension on StemApp {
       leaseExtension: leaseExtension,
       workflowRegistry: workflowRegistry,
       introspectionSink: introspectionSink,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 }
@@ -1051,7 +1062,19 @@ extension StemAppWorkflowExtension on StemApp {
 void _validateReusableStemApp(
   StemApp app,
   StemWorkerConfig workerConfig,
+  {
+    required bool allowWorkerAutoStart,
+  }
 ) {
+  if (app.allowWorkerAutoStart != allowWorkerAutoStart) {
+    throw StateError(
+      'StemWorkflowApp.create(stemApp: ...) requires the reused StemApp '
+      'to use the same allowWorkerAutoStart setting. Create the StemApp with '
+      'allowWorkerAutoStart: $allowWorkerAutoStart or omit stemApp so the '
+      'workflow app can create a matching shortcut wrapper.',
+    );
+  }
+
   final requiredQueues =
       workerConfig.subscription?.resolveQueues(
         workerConfig.queue,
