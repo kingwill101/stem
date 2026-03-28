@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 const String _queueEventEnvelopeName = '__stem.queue.event__';
@@ -43,6 +45,85 @@ class QueueCustomEvent implements StemEvent {
 
   /// Additional metadata supplied by the publisher.
   final Map<String, Object?> meta;
+
+  /// Decodes the full event metadata payload with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full event metadata payload with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full event metadata payload with a version-aware JSON
+  /// decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Returns the decoded payload value for [key], or `null` when it is absent.
+  T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the entire payload as a typed DTO with [codec].
+  T payloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(payload);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a JSON decoder.
+  T payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Returns the decoded payload value for [key], or [fallback] when absent.
+  T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded payload value for [key], throwing when it is absent.
+  T requiredPayloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return payload.requiredValue<T>(key, codec: codec);
+  }
 
   @override
   String get eventName => name;
@@ -122,6 +203,106 @@ class QueueEventsProducer {
     );
     return envelope.id;
   }
+
+  /// Emits [eventName] using a DTO payload that exposes `toJson()`.
+  Future<String> emitJson<T extends Object>(
+    String queue,
+    String eventName,
+    T payloadJson, {
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    String? typeName,
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          payloadJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      meta: meta,
+    );
+  }
+
+  /// Emits [eventName] using a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> emitValue<T>(
+    String queue,
+    String eventName,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: _encodeQueueEventValue(queue, eventName, value, codec: codec),
+      headers: headers,
+      meta: meta,
+    );
+  }
+
+  /// Emits [eventName] using a DTO payload and stores a schema [version]
+  /// beside the JSON payload.
+  Future<String> emitVersionedJson<T extends Object>(
+    String queue,
+    String eventName,
+    T payloadJson, {
+    required int version,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    String? typeName,
+  }) {
+    return emit(
+      queue,
+      eventName,
+      payload: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          payloadJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      meta: meta,
+    );
+  }
+}
+
+Map<String, Object?> _encodeQueueEventValue<T>(
+  String queue,
+  String eventName,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Queue event payload for $queue/$eventName must use string keys, '
+          'got ${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Queue event payload for $queue/$eventName must encode to '
+    'Map<String, Object?>, got ${payload.runtimeType}.',
+  );
 }
 
 /// Listens for queue-scoped custom events emitted by [QueueEventsProducer].

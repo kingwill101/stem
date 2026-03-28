@@ -3,6 +3,9 @@ import 'dart:collection';
 /// Reserved params key storing internal runtime metadata for workflow runs.
 const String workflowRuntimeMetadataParamKey = '__stem.workflow.runtime';
 
+/// Reserved params key storing the parent workflow run identifier.
+const String workflowParentRunIdParamKey = '__stem.workflow.parentRunId';
+
 /// Logical channel used by workflow-related task enqueues.
 enum WorkflowChannelKind {
   /// Orchestration channel used by workflow continuation tasks.
@@ -51,36 +54,30 @@ class WorkflowRunRuntimeMetadata {
   factory WorkflowRunRuntimeMetadata.fromJson(Map<String, Object?> json) {
     return WorkflowRunRuntimeMetadata(
       workflowId: json['workflowId']?.toString() ?? '',
-      orchestrationQueue:
-          json['orchestrationQueue']?.toString().trim().isNotEmpty == true
-          ? json['orchestrationQueue']!.toString().trim()
-          : 'workflow',
-      continuationQueue:
-          json['continuationQueue']?.toString().trim().isNotEmpty == true
-          ? json['continuationQueue']!.toString().trim()
-          : 'workflow',
-      executionQueue:
-          json['executionQueue']?.toString().trim().isNotEmpty == true
-          ? json['executionQueue']!.toString().trim()
-          : 'default',
-      serializationFormat:
-          json['serializationFormat']?.toString().trim().isNotEmpty == true
-          ? json['serializationFormat']!.toString().trim()
-          : 'json',
-      serializationVersion:
-          json['serializationVersion']?.toString().trim().isNotEmpty == true
-          ? json['serializationVersion']!.toString().trim()
-          : '1',
-      frameFormat: json['frameFormat']?.toString().trim().isNotEmpty == true
-          ? json['frameFormat']!.toString().trim()
-          : 'json-frame',
-      frameVersion: json['frameVersion']?.toString().trim().isNotEmpty == true
-          ? json['frameVersion']!.toString().trim()
-          : '1',
-      encryptionScope:
-          json['encryptionScope']?.toString().trim().isNotEmpty == true
-          ? json['encryptionScope']!.toString().trim()
-          : 'none',
+      orchestrationQueue: _stringOrDefault(
+        json,
+        'orchestrationQueue',
+        'workflow',
+      ),
+      continuationQueue: _stringOrDefault(
+        json,
+        'continuationQueue',
+        'workflow',
+      ),
+      executionQueue: _stringOrDefault(json, 'executionQueue', 'default'),
+      serializationFormat: _stringOrDefault(
+        json,
+        'serializationFormat',
+        'json',
+      ),
+      serializationVersion: _stringOrDefault(
+        json,
+        'serializationVersion',
+        '1',
+      ),
+      frameFormat: _stringOrDefault(json, 'frameFormat', 'json-frame'),
+      frameVersion: _stringOrDefault(json, 'frameVersion', '1'),
+      encryptionScope: _stringOrDefault(json, 'encryptionScope', 'none'),
       encryptionEnabled: json['encryptionEnabled'] == true,
       streamId: json['streamId']?.toString(),
     );
@@ -151,20 +148,38 @@ class WorkflowRunRuntimeMetadata {
   }
 
   /// Returns a new params map containing this metadata under the reserved key.
-  Map<String, Object?> attachToParams(Map<String, Object?> params) {
+  Map<String, Object?> attachToParams(
+    Map<String, Object?> params, {
+    String? parentRunId,
+  }) {
     return Map<String, Object?>.unmodifiable({
       ...params,
       workflowRuntimeMetadataParamKey: toJson(),
+      if (parentRunId != null && parentRunId.isNotEmpty)
+        workflowParentRunIdParamKey: parentRunId,
     });
   }
 
   /// Returns params without internal runtime metadata.
   static Map<String, Object?> stripFromParams(Map<String, Object?> params) {
     if (!params.containsKey(workflowRuntimeMetadataParamKey)) {
-      return Map<String, Object?>.unmodifiable(params);
+      if (!params.containsKey(workflowParentRunIdParamKey)) {
+        return Map<String, Object?>.unmodifiable(params);
+      }
     }
     final copy = Map<String, Object?>.from(params)
-      ..remove(workflowRuntimeMetadataParamKey);
+      ..remove(workflowRuntimeMetadataParamKey)
+      ..remove(workflowParentRunIdParamKey);
     return UnmodifiableMapView(copy);
   }
+}
+
+String _stringOrDefault(
+  Map<String, Object?> json,
+  String key,
+  String fallback,
+) {
+  final raw = json[key]?.toString().trim();
+  if (raw == null || raw.isEmpty) return fallback;
+  return raw;
 }

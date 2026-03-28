@@ -1,5 +1,5 @@
 // Canvas chord example for documentation.
-// ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
+// ignore_for_file: avoid_print
 
 import 'dart:async';
 
@@ -13,17 +13,16 @@ Future<void> main() async {
         name: 'fetch.metric',
         entrypoint: (context, args) async {
           await Future<void>.delayed(const Duration(milliseconds: 40));
-          return args['value'] as int;
+          return args.requiredValue<int>('value');
         },
       ),
       FunctionTaskHandler<Object?>(
         name: 'aggregate.metric',
         entrypoint: (context, args) async {
-          final values =
-              (context.meta['chordResults'] as List?)
-                  ?.whereType<int>()
-                  .toList() ??
-              const [];
+          final values = context.meta.valueListOr<int>(
+            'chordResults',
+            const [],
+          );
           final sum = values.fold<int>(0, (a, b) => a + b);
           print('Aggregated result: $sum');
           return null;
@@ -36,7 +35,6 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
-  await app.start();
 
   final canvas = app.canvas;
   final chordResult = await canvas.chord(

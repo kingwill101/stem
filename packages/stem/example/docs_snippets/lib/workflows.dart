@@ -5,16 +5,54 @@ import 'package:stem/stem.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 
+class ApprovalDraft {
+  const ApprovalDraft({required this.documentId});
+
+  final String documentId;
+
+  Map<String, dynamic> toJson() => {'documentId': documentId};
+
+  factory ApprovalDraft.fromJson(Map<String, dynamic> json) {
+    return ApprovalDraft(documentId: json['documentId'] as String);
+  }
+}
+
+class ApprovalDecision {
+  const ApprovalDecision({required this.approvedBy});
+
+  final String approvedBy;
+
+  Map<String, dynamic> toJson() => {'approvedBy': approvedBy};
+
+  factory ApprovalDecision.fromJson(Map<String, dynamic> json) {
+    return ApprovalDecision(approvedBy: json['approvedBy'] as String);
+  }
+}
+
+class ChargePrepared {
+  const ChargePrepared({required this.chargeId});
+
+  final String chargeId;
+
+  Map<String, dynamic> toJson() => {'chargeId': chargeId};
+
+  factory ChargePrepared.fromJson(Map<String, dynamic> json) {
+    return ChargePrepared(chargeId: json['chargeId'] as String);
+  }
+}
+
 // #region workflows-runtime
-Future<void> bootstrapWorkflowRuntime() async {
+Future<void> bootstrapWorkflowApp() async {
   // #region workflows-app-create
-  final workflowApp = await StemWorkflowApp.fromUrl(
+  final client = await StemClient.fromUrl(
     'redis://127.0.0.1:56379',
     adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
     overrides: const StemStoreOverrides(
       backend: 'redis://127.0.0.1:56379/1',
       workflow: 'postgresql://<user>:<password>@127.0.0.1:65432/stem',
     ),
+  );
+  final workflowApp = await client.createWorkflowApp(
     flows: [ApprovalsFlow.flow],
     scripts: [retryScript],
     eventBusFactory: WorkflowEventBusFactory.inMemory(),
@@ -30,9 +68,8 @@ Future<void> bootstrapWorkflowRuntime() async {
 
 // #region workflows-client
 Future<void> bootstrapWorkflowClient() async {
-  final client = await StemClient.fromUrl('memory://');
-  final app = await client.createWorkflowApp(module: stemModule);
-  await app.start();
+  final client = await StemClient.fromUrl('memory://', module: stemModule);
+  final app = await client.createWorkflowApp();
   await app.close();
   await client.close();
 }
@@ -44,29 +81,40 @@ class ApprovalsFlow {
     name: 'approvals.flow',
     build: (flow) {
       flow.step('draft', (ctx) async {
-        final payload = ctx.params['draft'] as Map<String, Object?>;
-        return payload['documentId'];
+        final draft = ctx.requiredParamJson<ApprovalDraft>(
+          'draft',
+          decode: ApprovalDraft.fromJson,
+        );
+        return draft.documentId;
       });
 
       flow.step('manager-review', (ctx) async {
-        final resume = ctx.takeResumeValue<Map<String, Object?>>();
+        final resume = ctx.waitForEventValueJson<ApprovalDecision>(
+          'approvals.manager',
+          decode: ApprovalDecision.fromJson,
+        );
         if (resume == null) {
-          await ctx.awaitEvent('approvals.manager');
           return null;
         }
-        return resume['approvedBy'] as String?;
+        return resume.approvedBy;
       });
 
       flow.step('finalize', (ctx) async {
-        final approvedBy = ctx.previousResult as String?;
+        final approvedBy = ctx.previousValue<String>();
         return 'approved-by:$approvedBy';
       });
     },
   );
+
+  static final ref = flow.refJson<ApprovalDraft>();
 }
 
 Future<void> registerFlow(StemWorkflowApp workflowApp) async {
-  workflowApp.runtime.registerWorkflow(ApprovalsFlow.flow.definition);
+  workflowApp.registerFlows([ApprovalsFlow.flow]);
+}
+
+Future<void> registerWorkflowDefinition(StemWorkflowApp workflowApp) async {
+  workflowApp.registerWorkflows([ApprovalsFlow.flow.definition]);
 }
 // #endregion workflows-flow
 
@@ -75,12 +123,14 @@ final retryScript = WorkflowScript(
   name: 'billing.retry-script',
   run: (script) async {
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValueJson<ChargePrepared>(
+        'billing.charge.prepared',
+        decode: ChargePrepared.fromJson,
+      );
       if (resume == null) {
-        await ctx.awaitEvent('billing.charge.prepared');
         return 'pending';
       }
-      return resume['chargeId'] as String;
+      return resume.chargeId;
     });
 
     final receipt = await script.step<String>('confirm', (ctx) async {
@@ -93,28 +143,31 @@ final retryScript = WorkflowScript(
 );
 
 final retryDefinition = retryScript.definition;
+
+Future<void> registerScript(StemWorkflowApp workflowApp) async {
+  workflowApp.registerScripts([retryScript]);
+}
 // #endregion workflows-script
 
 // #region workflows-run
 Future<void> runWorkflow(StemWorkflowApp workflowApp) async {
-  final runId = await workflowApp.startWorkflow(
-    'approvals.flow',
-    params: {
-      'draft': {'documentId': 'doc-42'},
-    },
+  final runId = await ApprovalsFlow.ref.start(
+    workflowApp,
+    params: const ApprovalDraft(documentId: 'doc-42'),
     cancellationPolicy: const WorkflowCancellationPolicy(
       maxRunDuration: Duration(hours: 2),
       maxSuspendDuration: Duration(minutes: 30),
     ),
   );
 
-  final result = await workflowApp.waitForCompletion<String>(
+  final result = await ApprovalsFlow.ref.waitFor(
+    workflowApp,
     runId,
     timeout: const Duration(minutes: 5),
   );
 
   if (result?.isCompleted == true) {
-    print('Workflow finished with ${result!.value}');
+    print('Workflow finished with ${result!.requiredValue()}');
   } else {
     print('Workflow state: ${result?.status}');
   }
@@ -128,14 +181,14 @@ final encoders = TaskPayloadEncoderRegistry(
 );
 
 Future<void> configureWorkflowEncoders() async {
-  final app = await StemWorkflowApp.fromUrl(
-    'memory://',
-    flows: [ApprovalsFlow.flow],
+  final client = await StemClient.inMemory(
     encoderRegistry: encoders,
     additionalEncoders: const [GzipPayloadEncoder()],
   );
+  final app = await client.createWorkflowApp(flows: [ApprovalsFlow.flow]);
 
   await app.close();
+  await client.close();
 }
 // #endregion workflows-encoders
 
@@ -143,39 +196,49 @@ Future<void> configureWorkflowEncoders() async {
 @WorkflowDefn(name: 'approvals.flow')
 class ApprovalsAnnotatedWorkflow {
   @WorkflowStep()
-  Future<String> draft(FlowContext ctx) async {
-    final payload = ctx.params['draft'] as Map<String, Object?>;
-    return payload['documentId'] as String;
+  Future<String> draft({FlowContext? context}) async {
+    final ctx = context!;
+    final draft = ctx.requiredParamJson<ApprovalDraft>(
+      'draft',
+      decode: ApprovalDraft.fromJson,
+    );
+    return draft.documentId;
   }
 
   @WorkflowStep(name: 'manager-review')
-  Future<String?> managerReview(FlowContext ctx) async {
-    final resume = ctx.takeResumeValue<Map<String, Object?>>();
+  Future<String?> managerReview({FlowContext? context}) async {
+    final ctx = context!;
+    final resume = ctx.waitForEventValueJson<ApprovalDecision>(
+      'approvals.manager',
+      decode: ApprovalDecision.fromJson,
+    );
     if (resume == null) {
-      await ctx.awaitEvent('approvals.manager');
       return null;
     }
-    return resume['approvedBy'] as String?;
+    return resume.approvedBy;
   }
 
   @WorkflowStep()
-  Future<String> finalize(FlowContext ctx) async {
-    final approvedBy = ctx.previousResult as String?;
+  Future<String> finalize({FlowContext? context}) async {
+    final ctx = context!;
+    final approvedBy = ctx.previousValue<String>();
     return 'approved-by:$approvedBy';
   }
 }
 
 @WorkflowDefn(name: 'billing.retry-script', kind: WorkflowKind.script)
 class BillingRetryAnnotatedWorkflow {
-  @WorkflowRun()
-  Future<String> run(WorkflowScriptContext script) async {
+  Future<String> run({WorkflowScriptContext? context}) async {
+    final script = context!;
     final chargeId = await script.step<String>('charge', (ctx) async {
-      final resume = ctx.takeResumeValue<Map<String, Object?>>();
+      final resume = ctx.waitForEventValueJson<ChargePrepared>(
+        'billing.charge.prepared',
+        decode: ChargePrepared.fromJson,
+      );
       if (resume == null) {
-        await ctx.awaitEvent('billing.charge.prepared');
         return 'pending';
       }
-      return resume['chargeId'] as String;
+      return resume.chargeId;
     });
 
     return script.step<String>('confirm', (ctx) async {
@@ -190,18 +253,17 @@ class BillingRetryAnnotatedWorkflow {
   options: TaskOptions(maxRetries: 5),
 )
 Future<void> sendEmail(
-  TaskInvocationContext ctx,
-  Map<String, Object?> args,
-) async {
+  Map<String, Object?> args, {
+  TaskInvocationContext? context,
+}) async {
+  final ctx = context!;
+  ctx.heartbeat();
   // send email
 }
 
 Future<void> registerAnnotatedDefinitions(StemWorkflowApp app) async {
   // Generated by stem_builder.
-  stemModule.registerInto(
-    workflows: app.runtime.registry,
-    tasks: app.app.registry,
-  );
+  app.registerModule(stemModule);
 }
 // #endregion workflows-annotated
 
@@ -236,15 +298,17 @@ Future<void> main() async {
     },
   );
 
-  final app = await StemWorkflowApp.inMemory(flows: [demoFlow]);
-  await app.start();
+  final client = await StemClient.inMemory();
+  final app = await client.createWorkflowApp(flows: [demoFlow]);
 
-  final runId = await app.startWorkflow('demo.flow');
-  final result = await app.waitForCompletion<String>(
+  final runId = await demoFlow.start(app);
+  final result = await demoFlow.waitFor(
+    app,
     runId,
     timeout: const Duration(seconds: 5),
   );
   print('Workflow result: ${result?.status} value=${result?.value}');
 
   await app.close();
+  await client.close();
 }

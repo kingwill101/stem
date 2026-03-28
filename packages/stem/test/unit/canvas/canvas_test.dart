@@ -56,6 +56,27 @@ void main() {
       await dispatch.dispose();
     });
 
+    test('group auto-initializes an explicit groupId when missing', () async {
+      const groupId = 'group-explicit-id';
+      final dispatch = await canvas.group<int>([
+        task<int>('echo', args: {'value': 4}),
+        task<int>('echo', args: {'value': 6}),
+      ], groupId: groupId);
+
+      final received = await dispatch.results
+          .map((result) => result.value)
+          .toList();
+      final typed = received.whereType<int>().toList();
+      expect(typed, containsAll([4, 6]));
+
+      final group = await backend.getGroup(groupId);
+      expect(group, isNotNull);
+      expect(group!.expected, equals(2));
+      expect(group.results.length, equals(2));
+
+      await dispatch.dispose();
+    });
+
     test('chain returns typed payload', () async {
       final result = await canvas.chain<int>([
         task<int>('echo', args: {'value': 1}),

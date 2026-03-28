@@ -1,8 +1,6 @@
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<int>(
       name: 'square',
@@ -14,20 +12,16 @@ Future<void> main() async {
     ),
   ];
 
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.inMemory(
     tasks: tasks,
-    consumerName: 'group-worker',
-    concurrency: 2,
-    prefetchMultiplier: 1,
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'group-worker',
+      concurrency: 2,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
-
-  final canvas = Canvas(broker: broker, backend: backend, tasks: tasks);
   const groupHandle = 'squares-demo';
-  await backend.initGroup(GroupDescriptor(id: groupHandle, expected: 3));
-  final dispatch = await canvas.group<int>([
+  final dispatch = await app.canvas.group<int>([
     task<int>('square', args: <String, Object?>{'value': 2}),
     task<int>('square', args: <String, Object?>{'value': 3}),
     task<int>('square', args: <String, Object?>{'value': 4}),
@@ -38,11 +32,9 @@ Future<void> main() async {
       .where((value) => value != null)
       .cast<int>()
       .toList();
-  final status = await backend.getGroup(groupHandle);
+  final status = await app.getGroupStatus(groupHandle);
   print('Group results: $squares (backend count: ${status?.results.length})');
   await dispatch.dispose();
 
-  await worker.shutdown();
-  await backend.close();
-  await broker.close();
+  await app.shutdown();
 }

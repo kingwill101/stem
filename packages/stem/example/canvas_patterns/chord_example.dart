@@ -3,24 +3,21 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<int>(
       name: 'fetch.metric',
       entrypoint: (context, args) async {
         await Future<void>.delayed(const Duration(milliseconds: 40));
-        return args['value'] as int;
+        return args.requiredValue<int>('value');
       },
     ),
     FunctionTaskHandler<Object?>(
       name: 'aggregate.metric',
       entrypoint: (context, args) async {
-        final values =
-            (context.meta['chordResults'] as List?)
-                ?.whereType<int>()
-                .toList() ??
-            const [];
+        final values = context.meta.valueListOr<int>(
+          'chordResults',
+          const [],
+        );
         final sum = values.fold<int>(0, (a, b) => a + b);
         print('Aggregated result: $sum');
         return null;
@@ -28,18 +25,15 @@ Future<void> main() async {
     ),
   ];
 
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
+  final app = await StemApp.inMemory(
     tasks: tasks,
-    consumerName: 'chord-worker',
-    concurrency: 3,
-    prefetchMultiplier: 1,
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'chord-worker',
+      concurrency: 3,
+      prefetchMultiplier: 1,
+    ),
   );
-  await worker.start();
-
-  final canvas = Canvas(broker: broker, backend: backend, tasks: tasks);
-  final chordResult = await canvas.chord(
+  final chordResult = await app.canvas.chord(
     body: [
       task('fetch.metric', args: <String, Object?>{'value': 5}),
       task('fetch.metric', args: <String, Object?>{'value': 7}),
@@ -51,16 +45,14 @@ Future<void> main() async {
   final callbackId = chordResult.callbackTaskId;
 
   await _waitFor(() async {
-    final status = await backend.get(callbackId);
+    final status = await app.getTaskStatus(callbackId);
     return status?.state == TaskState.succeeded;
   });
 
-  final callbackStatus = await backend.get(callbackId);
+  final callbackStatus = await app.getTaskStatus(callbackId);
   print('Callback state: ${callbackStatus?.state}');
 
-  await worker.shutdown();
-  await backend.close();
-  await broker.close();
+  await app.shutdown();
 }
 
 Future<void> _waitFor(

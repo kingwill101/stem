@@ -33,6 +33,7 @@ library;
 import 'dart:convert';
 
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:uuid/uuid.dart';
 
 /// Target classification for routing operations.
@@ -227,6 +228,38 @@ class Envelope {
   /// Arguments passed to the task handler.
   final Map<String, Object?> args;
 
+  /// Decodes the full task args payload as a typed DTO with [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from JSON.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from version-aware
+  /// JSON.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Arbitrary metadata headers (trace id, tenant, etc).
   final Map<String, String> headers;
 
@@ -253,6 +286,38 @@ class Envelope {
 
   /// Additional metadata persisted with the message.
   final Map<String, Object?> meta;
+
+  /// Decodes the full envelope metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full envelope metadata payload as a typed DTO from JSON.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full envelope metadata payload as a typed DTO from
+  /// version-aware JSON.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// Returns a copy of this envelope with updated fields.
   Envelope copyWith({

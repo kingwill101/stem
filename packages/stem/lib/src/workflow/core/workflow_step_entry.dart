@@ -1,3 +1,5 @@
+import 'package:stem/src/core/payload_codec.dart';
+
 /// Persisted step checkpoint metadata for a workflow run.
 class WorkflowStepEntry {
   /// Creates a workflow step entry snapshot.
@@ -29,6 +31,44 @@ class WorkflowStepEntry {
 
   /// Optional timestamp when the checkpoint was recorded.
   final DateTime? completedAt;
+
+  /// Decodes the persisted checkpoint value with [codec], when present.
+  TValue? valueAs<TValue>({required PayloadCodec<TValue> codec}) {
+    final stored = value;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a JSON decoder, when present.
+  TValue? valueJson<TValue>({
+    required TValue Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a version-aware JSON decoder,
+  /// when present.
+  TValue? valueVersionedJson<TValue>({
+    required int version,
+    required TValue Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Base step name without any auto-version suffix.
   String get baseName {

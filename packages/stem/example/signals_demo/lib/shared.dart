@@ -3,6 +3,11 @@ import 'dart:convert';
 
 import 'package:stem/stem.dart';
 
+final flakyTaskDefinition = TaskDefinition.noArgs<String>(name: 'tasks.flaky');
+final alwaysFailTaskDefinition = TaskDefinition.noArgs<void>(
+  name: 'tasks.always_fail',
+);
+
 List<TaskHandler<Object?>> buildTasks() => [
       FunctionTaskHandler<String>(
         name: 'tasks.hello',
@@ -10,12 +15,12 @@ List<TaskHandler<Object?>> buildTasks() => [
         options: const TaskOptions(maxRetries: 0),
       ),
       FunctionTaskHandler<String>(
-        name: 'tasks.flaky',
+        name: flakyTaskDefinition.name,
         entrypoint: _flakyEntrypoint,
         options: const TaskOptions(maxRetries: 2),
       ),
       FunctionTaskHandler<void>(
-        name: 'tasks.always_fail',
+        name: alwaysFailTaskDefinition.name,
         entrypoint: _alwaysFailEntrypoint,
         options: const TaskOptions(maxRetries: 1),
       ),

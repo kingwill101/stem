@@ -1,6 +1,6 @@
 name: stem
 description: "Stem is a Dart-native background job platform with Redis Streams, retries, scheduling, observability, and security tooling."
-version: 0.1.1
+version: 0.2.0
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
@@ -8,6 +8,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  ansicolor: ^2.0.3
   collection: ^1.19.1
   contextual: ^2.2.0
   crypto: ^3.0.7

@@ -3,9 +3,12 @@ import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/bootstrap/workflow_app.dart';
+import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
@@ -18,9 +21,11 @@ import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 
 /// Shared entrypoint that owns broker/backend configuration for Stem runtimes.
-abstract class StemClient {
+abstract class StemClient implements TaskResultCaller {
   /// Creates a client using the provided factories and defaults.
   static Future<StemClient> create({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -39,6 +44,8 @@ abstract class StemClient {
   }) async {
     return _DefaultStemClient.create(
       tasks: tasks,
+      module: module,
+      modules: modules,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
       broker: broker,
@@ -58,6 +65,8 @@ abstract class StemClient {
 
   /// Creates an in-memory client using in-memory broker/backend.
   static Future<StemClient> inMemory({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
@@ -66,6 +75,8 @@ abstract class StemClient {
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) {
     return create(
+      module: module,
+      modules: modules,
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
@@ -83,6 +94,8 @@ abstract class StemClient {
   /// can avoid manual factory wiring for common Redis/Postgres/SQLite setups.
   static Future<StemClient> fromUrl(
     String url, {
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -104,7 +117,51 @@ abstract class StemClient {
       adapters: adapters,
       overrides: overrides,
     );
+    return fromStack(
+      stack,
+      module: module,
+      modules: modules,
+      tasks: tasks,
+      taskRegistry: taskRegistry,
+      workflowRegistry: workflowRegistry,
+      routing: routing,
+      retryStrategy: retryStrategy,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      middleware: middleware,
+      signer: signer,
+      defaultWorkerConfig: defaultWorkerConfig,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
+  }
+
+  /// Creates a client from a pre-resolved [StemStack].
+  ///
+  /// Use this when adapter resolution is managed elsewhere and the client
+  /// should reuse that broker/backend stack directly.
+  static Future<StemClient> fromStack(
+    StemStack stack, {
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? taskRegistry,
+    WorkflowRegistry? workflowRegistry,
+    RoutingRegistry? routing,
+    RetryStrategy? retryStrategy,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) {
     return create(
+      module: module,
+      modules: modules,
       tasks: tasks,
       taskRegistry: taskRegistry,
       workflowRegistry: workflowRegistry,
@@ -135,8 +192,92 @@ abstract class StemClient {
   /// Shared workflow registry for workflow definitions.
   WorkflowRegistry get workflowRegistry;
 
+  /// Optional default bundle registered into this client.
+  StemModule? get module;
+
   /// Enqueue facade for producers.
   Stem get stem;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return stem.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return stem.enqueueValue(
+      name,
+      value,
+      codec: codec,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) {
+    return stem.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) {
+    return stem.getGroupStatus(groupId);
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return stem.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  /// Waits for a task result by task id using the client's shared backend.
+  @override
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
+  }) {
+    return stem.waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: decode,
+      decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
+    );
+  }
 
   /// Payload encoder registry used for task args/results.
   TaskPayloadEncoderRegistry get encoderRegistry;
@@ -165,7 +306,21 @@ abstract class StemClient {
     Iterable<TaskHandler<Object?>> tasks = const [],
   }) async {
     final config = workerConfig ?? defaultWorkerConfig;
-    tasks.forEach(taskRegistry.register);
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    final inferredSubscription =
+        config.subscription ??
+        module?.inferTaskWorkerSubscription(
+          defaultQueue: config.queue,
+          additionalTasks: tasks,
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: config.queue,
+          );
+        })();
     return Worker(
       broker: broker,
       registry: taskRegistry,
@@ -178,7 +333,7 @@ abstract class StemClient {
           config.uniqueTaskCoordinator ?? uniqueTaskCoordinator,
       retryStrategy: config.retryStrategy ?? retryStrategy,
       queue: config.queue,
-      subscription: config.subscription,
+      subscription: inferredSubscription,
       consumerName: config.consumerName,
       concurrency: config.concurrency,
       prefetchMultiplier: config.prefetchMultiplier,
@@ -195,43 +350,74 @@ abstract class StemClient {
     );
   }
 
+  /// Creates a canvas using the shared broker/backend/registry.
+  Canvas createCanvas({
+    Iterable<TaskHandler<Object?>> tasks = const [],
+  }) {
+    final bundledTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    return Canvas(
+      broker: broker,
+      backend: backend,
+      registry: taskRegistry,
+      encoderRegistry: encoderRegistry,
+    );
+  }
+
   /// Creates a workflow app using the shared client configuration.
   Future<StemWorkflowApp> createWorkflowApp({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
+    bool allowWorkerAutoStart = true,
   }) {
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? this.module;
     return StemWorkflowApp.fromClient(
       client: this,
-      module: module,
+      module: effectiveModule,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
       workerConfig: workerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       introspectionSink: introspectionSink,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
   /// Creates a StemApp wrapper using the shared client configuration.
   Future<StemApp> createApp({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig? workerConfig,
+    bool allowWorkerAutoStart = true,
   }) {
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? this.module;
     return StemApp.fromClient(
       this,
+      module: effectiveModule,
       tasks: tasks,
       workerConfig: workerConfig ?? defaultWorkerConfig,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -245,6 +431,7 @@ class _DefaultStemClient extends StemClient {
     required this.backend,
     required this.taskRegistry,
     required this.workflowRegistry,
+    required this.module,
     required this.stem,
     required this.encoderRegistry,
     required this.routing,
@@ -258,6 +445,8 @@ class _DefaultStemClient extends StemClient {
   }) : middleware = List.unmodifiable(middleware);
 
   static Future<StemClient> create({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? taskRegistry,
     WorkflowRegistry? workflowRegistry,
@@ -274,9 +463,17 @@ class _DefaultStemClient extends StemClient {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) async {
+    final effectiveModule = StemModule.combine(
+      module: module,
+      modules: modules,
+    );
+    final bundledTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
     final registry = taskRegistry ?? InMemoryTaskRegistry();
-    tasks.forEach(registry.register);
+    registerModuleTaskHandlers(registry, allTasks);
     final workflows = workflowRegistry ?? InMemoryWorkflowRegistry();
+    effectiveModule?.registerInto(workflows: workflows);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
@@ -305,6 +502,7 @@ class _DefaultStemClient extends StemClient {
       backend: backendInstance,
       taskRegistry: registry,
       workflowRegistry: workflows,
+      module: effectiveModule,
       stem: stem,
       encoderRegistry: stem.payloadEncoders,
       routing: stem.routing,
@@ -329,6 +527,9 @@ class _DefaultStemClient extends StemClient {
 
   @override
   final WorkflowRegistry workflowRegistry;
+
+  @override
+  final StemModule? module;
 
   @override
   final Stem stem;
@@ -361,5 +562,46 @@ class _DefaultStemClient extends StemClient {
   Future<void> close() async {
     await disposeBroker();
     await disposeBackend();
+  }
+}
+
+/// Convenience helpers for bootstrapping clients from a resolved [StemStack].
+extension StemStackClientBootstrap on StemStack {
+  /// Creates a client using this resolved broker/backend stack.
+  Future<StemClient> createClient({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    TaskRegistry? taskRegistry,
+    WorkflowRegistry? workflowRegistry,
+    RoutingRegistry? routing,
+    RetryStrategy? retryStrategy,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    Iterable<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    StemWorkerConfig defaultWorkerConfig = const StemWorkerConfig(),
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) {
+    return StemClient.fromStack(
+      this,
+      module: module,
+      modules: modules,
+      tasks: tasks,
+      taskRegistry: taskRegistry,
+      workflowRegistry: workflowRegistry,
+      routing: routing,
+      retryStrategy: retryStrategy,
+      uniqueTaskCoordinator: uniqueTaskCoordinator,
+      middleware: middleware,
+      signer: signer,
+      defaultWorkerConfig: defaultWorkerConfig,
+      encoderRegistry: encoderRegistry,
+      resultEncoder: resultEncoder,
+      argsEncoder: argsEncoder,
+      additionalEncoders: additionalEncoders,
+    );
   }
 }

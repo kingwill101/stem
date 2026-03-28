@@ -43,12 +43,6 @@ Future<void> main() async {
     dbFile.createSync(recursive: true);
   }
 
-  final broker = InMemoryBroker();
-  final backend = await SqliteResultBackend.open(
-    dbFile,
-    defaultTtl: const Duration(hours: 1),
-    groupDefaultTtl: const Duration(hours: 1),
-  );
   final lockStore = InMemoryLockStore();
   final coordinator = UniqueTaskCoordinator(
     lockStore: lockStore,
@@ -59,26 +53,32 @@ Future<void> main() async {
   final tasks = [SendDigestTask()];
 
   // #region unique-task-stem-worker
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.create(
+    broker: StemBrokerFactory.inMemory(),
+    backend: StemBackendFactory(
+      create: () => SqliteResultBackend.open(
+        dbFile,
+        defaultTtl: const Duration(hours: 1),
+        groupDefaultTtl: const Duration(hours: 1),
+      ),
+      dispose: (backend) => backend.close(),
+    ),
     tasks: tasks,
     uniqueTaskCoordinator: coordinator,
   );
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-    uniqueTaskCoordinator: coordinator,
-    queue: 'email',
-    consumerName: 'unique-worker',
+  final worker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      uniqueTaskCoordinator: coordinator,
+      queue: 'email',
+      consumerName: 'unique-worker',
+    ),
   );
   // #endregion unique-task-stem-worker
 
   unawaited(worker.start());
 
   // #region unique-task-enqueue
-  final firstId = await stem.enqueue(
+  final firstId = await client.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
     options: const TaskOptions(
@@ -88,7 +88,7 @@ Future<void> main() async {
     ),
   );
   // #endregion unique-task-enqueue
-  final secondId = await stem.enqueue(
+  final secondId = await client.enqueue(
     'email.sendDigest',
     args: const {'userId': 42},
     options: const TaskOptions(
@@ -104,6 +104,5 @@ Future<void> main() async {
   await Future<void>.delayed(const Duration(seconds: 2));
 
   await worker.shutdown();
-  await broker.close();
-  await backend.close();
+  await client.close();
 }

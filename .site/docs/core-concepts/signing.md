@@ -23,7 +23,8 @@ reason.
 ## How signing works in Stem
 
 - Producers create a `PayloadSigner` from environment-derived config and pass it
-  into `Stem` to sign new envelopes.
+  into the producer runtime (`StemClient` or raw `Stem`) to sign new
+  envelopes.
 - Workers create the same signer (or verification-only config) and pass it into
   `Worker` to verify each delivery.
 - Schedulers/Beat that enqueue tasks should also sign.
@@ -46,8 +47,10 @@ export STEM_SIGNING_ACTIVE_KEY=v1
 
 2) Wire the signer into producers, workers, and schedulers.
 
-These snippets come from the `packages/stem/example/microservice` project so you can see the
-full context.
+These snippets come from the `packages/stem/example/microservice` project so you
+can see the full context. They intentionally show the lower-level signing
+plumbing; for the normal happy path, still prefer `StemClient`/`StemApp`
+bootstrap.
 
 <Tabs>
 <TabItem value="producer" label="Producer (enqueuer): sign outgoing envelopes">

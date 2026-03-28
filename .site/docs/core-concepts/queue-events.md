@@ -14,11 +14,22 @@ Use this when you need lightweight event streams for domain notifications
 ## API Surface
 
 - `QueueEventsProducer.emit(queue, eventName, payload, headers, meta)`
+- `QueueEventsProducer.emitValue(queue, eventName, value, codec, headers, meta)`
+- `QueueEventsProducer.emitJson(queue, eventName, dto, headers, meta)`
+- `QueueEventsProducer.emitVersionedJson(queue, eventName, dto, version, headers, meta)`
 - `QueueEvents.start()` / `QueueEvents.close()`
 - `QueueEvents.events` stream (all events for that queue)
 - `QueueEvents.on(eventName)` stream (filtered by name)
 
 All events are delivered as `QueueCustomEvent`, which implements `StemEvent`.
+Use `event.payloadValue(...)` / `event.requiredPayloadValue(...)` to read typed
+payload fields instead of repeating raw `payload['key']` casts.
+If one queue event maps to one DTO, use `event.payloadJson(...)`,
+`event.payloadVersionedJson(...)`, or `event.payloadAs(codec: ...)` to decode
+the whole payload in one step.
+If the whole queue-event metadata map is one DTO, use `event.metaJson(...)`,
+`event.metaVersionedJson(...)`, or `event.metaAs(codec: ...)` instead of
+manual `event.meta[...]` casts.
 
 ## Producer + Listener
 
@@ -38,6 +49,13 @@ Multiple listeners on the same queue receive each emitted event.
 
 - Events are queue-scoped: listeners receive only events for their configured
   queue.
+- `emitValue(...)` is the codec-backed path when the payload should be
+  authored as a typed object but still use a custom map encoder or explicit
+  `PayloadCodec<T>`.
+- `emitJson(...)` is the DTO convenience path when the payload already exposes
+  `toJson()`.
+- `emitVersionedJson(...)` is the same convenience path when the payload
+  schema should persist an explicit `__stemPayloadVersion`.
 - `on(eventName)` matches exact event names.
 - `headers` and `meta` round-trip to listeners.
 - Event names and queue names must be non-empty.

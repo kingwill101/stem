@@ -58,6 +58,19 @@ control-plane commands.
 
 ```
 
+When you inspect `TaskPostrunPayload` or `TaskSuccessPayload` directly, prefer
+`payload.resultJson(...)`, `payload.resultVersionedJson(...)`, or
+`payload.resultAs(codec: ...)` over manual
+`payload.result as Map<String, Object?>` casts.
+For workflow lifecycle signals, prefer
+`payload.metadataJson('key', ...)`,
+`payload.metadataVersionedJson('key', ...)`, or
+`payload.metadataAs('key', codec: ...)` over manual
+`payload.metadata['key'] as Map<String, Object?>` casts. If the entire
+metadata map is one DTO, use `payload.metadataPayloadJson(...)`,
+`payload.metadataPayloadVersionedJson(...)`, or
+`payload.metadataPayloadAs(codec: ...)` instead.
+
 ## Workflow Introspection
 
 Workflow runtimes can emit execution events (started/completed/failed/retrying)
@@ -80,6 +93,25 @@ class LoggingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
 }
 ```
 
+When a completed step or checkpoint carries a DTO payload, prefer
+`event.resultJson(...)`, `event.resultVersionedJson(...)`, or
+`event.resultAs(codec: ...)` over manual
+`event.result as Map<String, Object?>` casts.
+Step and runtime introspection events also expose typed metadata helpers via
+`event.metadataJson('key', ...)`, `event.metadataVersionedJson('key', ...)`,
+`event.metadataAs('key', codec: ...)`, `event.metadataPayloadJson(...)`, and
+`event.metadataPayloadVersionedJson(...)`.
+When worker events carry structured `data`, prefer `event.dataJson(...)`,
+`event.dataVersionedJson(...)`, or `event.dataAs(codec: ...)` over manual
+`event.data!['key']` casts. For completed control commands, use
+`payload.responseJson(...)`, `payload.responseVersionedJson(...)`,
+`payload.responseAs(codec: ...)`, `payload.errorJson(...)`,
+`payload.errorVersionedJson(...)`, or `payload.errorAs(codec: ...)` instead of
+walking raw `response` / `error` maps.
+Persisted worker heartbeats expose the same typed decode path on `extras` via
+`heartbeat.extrasJson(...)`, `heartbeat.extrasVersionedJson(...)`, and
+`heartbeat.extrasAs(codec: ...)`.
+
 ## Logging
 
 Use `stemLogger` (Contextual logger) for structured logs.
@@ -87,6 +119,11 @@ Use `stemLogger` (Contextual logger) for structured logs.
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-logging
 
 ```
+
+The shared `stemLogger` starts silent by default, so opt in explicitly with
+`configureStemLogging(level: Level.info, format: StemLogFormat.pretty)`.
+When you want machine-oriented output for production log shipping, switch to
+`configureStemLogging(format: StemLogFormat.plain)`.
 
 Workers automatically include attempt, queue, and worker id in log contexts when
 `StemSignals` are enabled.

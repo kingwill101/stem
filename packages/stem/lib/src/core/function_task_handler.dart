@@ -54,6 +54,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
   Future<R> call(TaskContext context, Map<String, Object?> args) async {
     final invocationContext = TaskInvocationContext.local(
       id: context.id,
+      args: args,
       headers: context.headers,
       meta: context.meta,
       attempt: context.attempt,
@@ -61,6 +62,8 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
       extendLease: context.extendLease,
       progress: (percent, {data}) => context.progress(percent, data: data),
       enqueuer: context.enqueuer,
+      workflows: context.workflows,
+      workflowEvents: context.workflowEvents,
     );
     final result = await _entrypoint(invocationContext, args);
     return result as R;

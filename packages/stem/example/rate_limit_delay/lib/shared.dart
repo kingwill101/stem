@@ -39,20 +39,6 @@ RoutingRegistry buildRoutingRegistry() {
   return RoutingRegistry(config);
 }
 
-Stem buildStem({
-  required Broker broker,
-  required Iterable<TaskHandler<Object?>> tasks,
-  ResultBackend? backend,
-  RoutingRegistry? routing,
-}) {
-  return Stem(
-    broker: broker,
-    tasks: tasks,
-    backend: backend,
-    routing: routing,
-  );
-}
-
 Future<RedisStreamsBroker> connectBroker(String uri) =>
     RedisStreamsBroker.connect(uri);
 

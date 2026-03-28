@@ -1,7 +1,6 @@
 // Observability snippets for documentation.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
-import 'package:contextual/contextual.dart';
 import 'package:stem/stem.dart';
 
 // #region observability-metrics
@@ -11,16 +10,12 @@ void configureMetrics() {
 // #endregion observability-metrics
 
 // #region observability-tracing
-Stem buildTracedStem(
-  Broker broker,
-  ResultBackend backend,
+Future<StemClient> buildTracedStem(
   Iterable<TaskHandler<Object?>> tasks,
 ) {
   // Configure OpenTelemetry globally; StemTracer.instance reads from it.
   final _ = StemTracer.instance;
-  return Stem(
-    broker: broker,
-    backend: backend,
+  return StemClient.inMemory(
     tasks: tasks,
   );
 }
@@ -48,6 +43,7 @@ void recordQueueDepth(String queue, int depth) {
 
 // #region observability-logging
 void logTaskStart(Envelope envelope) {
+  configureStemLogging(format: StemLogFormat.pretty);
   stemLogger.info(
     'Task started',
     Context({'task': envelope.name, 'id': envelope.id}),
@@ -57,6 +53,7 @@ void logTaskStart(Envelope envelope) {
 
 final metrics = MetricsCollector();
 final heartbeatGauge = GaugeMetric();
+final traceTaskDefinition = TaskDefinition.noArgs<void>(name: 'demo.trace');
 
 class MetricsCollector {
   void recordRetry({required Duration delay}) {}
@@ -72,7 +69,7 @@ Future<void> main() async {
 
   final tasks = [
     FunctionTaskHandler<void>(
-      name: 'demo.trace',
+      name: traceTaskDefinition.name,
       entrypoint: (context, args) async {
         print('Tracing demo task');
         return null;
@@ -80,17 +77,14 @@ Future<void> main() async {
     ),
   ];
 
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = buildTracedStem(broker, backend, tasks);
+  final client = await buildTracedStem(tasks);
 
   logTaskStart(
     Envelope(
-      name: 'demo.trace',
+      name: traceTaskDefinition.name,
       args: const {},
     ),
   );
-  await stem.enqueue('demo.trace', args: const {});
-  await backend.close();
-  await broker.close();
+  await traceTaskDefinition.enqueue(client);
+  await client.close();
 }

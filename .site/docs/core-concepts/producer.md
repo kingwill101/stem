@@ -5,13 +5,18 @@ sidebar_position: 2
 slug: /core-concepts/producer
 ---
 
-Enqueue tasks from your Dart services using `Stem.enqueue`. Start with the
-in-memory broker, then opt into Redis/Postgres as needed.
+Enqueue tasks from your Dart services through a `TaskEnqueuer` surface such as
+`StemClient`, `StemApp`, or `StemWorkflowApp`. Start with the in-memory broker,
+then opt into Redis/Postgres as needed.
+
+For adapter-backed deployments, prefer `StemClient.fromUrl(...)` or
+`StemStack.fromUrl(...).createClient(...)`. Keep `StemClient.create(...)` for
+the rarer case where you must provide custom factories directly.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-## Enqueue tasks
+## Raw Enqueue
 
 <Tabs>
 <TabItem value="in-memory" label="In-memory (bin/producer.dart)">
@@ -39,19 +44,30 @@ import TabItem from '@theme/TabItem';
 
 ## Typed Enqueue Helpers
 
-When you need compile-time guarantees for task arguments and result types, wrap
-your handler in a `TaskDefinition`. The definition knows how to encode args and
-decode results, and exposes a fluent builder for overrides (headers, meta,
-options, scheduling):
+For the common producer path, prefer `TaskDefinition<TArgs, TResult>`. The
+definition owns argument encoding, result decoding, and default publish
+metadata, while exposing direct helpers and a fluent builder for overrides
+(headers, meta, options, scheduling):
 
 ```dart title="bin/producer_typed.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/producer.dart#producer-typed
 
 ```
 
 Typed helpers are also available on `Canvas` (`definition.toSignature`) so
-group/chain/chord APIs produce strongly typed `TaskResult<T>` streams.
-Need to tweak headers/meta/queue at call sites? Wrap the definition in a
-`TaskEnqueueBuilder` and invoke `await builder.enqueueWith(stem);`.
+group/chain/chord APIs produce strongly typed `TaskResult<T>` streams. Need to
+tweak headers/meta/queue at call sites? Start from
+`definition.buildCall(args, ...)` when you need the explicit advanced
+transport path.
+
+Raw task-name strings still work, but they are the lower-level interop path.
+Reach for them when the task name is truly dynamic or you are crossing a
+boundary that does not have the generated/manual `TaskDefinition`. When those
+calls already have typed DTO args, prefer
+`enqueuer.enqueueValue(name, dto, codec: ...)` over hand-building an `args`
+map.
+If you later inspect the raw `Envelope`, prefer `envelope.argsJson(...)`,
+`envelope.argsVersionedJson(...)`, `envelope.metaJson(...)`, or
+`envelope.metaVersionedJson(...)` over manual map casts.
 
 ## Enqueue options
 
@@ -68,7 +84,7 @@ unsupported.
 Example:
 
 ```dart
-await stem.enqueue(
+await enqueuer.enqueue(
   'tasks.email',
   args: {'to': 'ops@example.com'},
   enqueueOptions: TaskEnqueueOptions(
@@ -86,7 +102,8 @@ await stem.enqueue(
 
 ## Tips
 
-- Reuse a single `Stem` instance; create it during application bootstrap.
+- Reuse a single `TaskEnqueuer` implementation; in most apps that means
+  `StemClient`, `StemApp`, or `StemWorkflowApp`.
 - Capture the returned task id when you need to poll status from the result backend.
 - Use `TaskOptions` to set queue, retries, priority, isolation, and visibility timeouts.
 - `meta` is stored with result backend entries—great for audit trails.

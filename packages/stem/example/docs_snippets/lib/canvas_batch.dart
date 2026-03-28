@@ -21,7 +21,6 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
-  await app.start();
 
   final submission = await app.canvas.submitBatch<int>([
     task('batch.double', args: {'value': 1}),

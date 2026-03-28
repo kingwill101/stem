@@ -51,7 +51,7 @@ piece is easy to scan and reuse:
 
 ```
 
-### Create the Stem producer
+### Create the shared client/producer
 
 ```dart title="lib/stem_bootstrap.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-stem
 
@@ -65,6 +65,11 @@ piece is easy to scan and reuse:
 
 Together, these steps give you access to routing, rate limiting, revoke
 storage, and queue configuration—all backed by Redis.
+
+The recommended pattern here is to resolve a `StemStack` from the environment
+once, build a shared `StemClient` from that stack, and then layer workers or
+workflow apps on top. Manual broker/backend factory wiring is the fallback
+path, not the default.
 
 ## 3. Launch Workers, Beat, and Producers
 
@@ -115,7 +120,7 @@ pipelines and query progress from any process:
 
 ```
 
-Later, you can monitor status from any machine:
+Later, you can monitor status from any machine with a lightweight client:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/developer_environment.dart#dev-env-status
 

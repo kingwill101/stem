@@ -1,6 +1,7 @@
 import 'dart:async';
 
 /// Shared clock abstraction used across the Stem ecosystem.
+// ignore: one_member_abstracts
 abstract class StemClock {
   /// Creates a clock implementation.
   const StemClock();

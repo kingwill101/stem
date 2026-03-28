@@ -192,17 +192,6 @@ void main() {
       expect(handler.metadata.description, 'Example task');
     });
 
-    test('retains SimpleTaskRegistry as a compatibility alias', () {
-      // Compatibility coverage intentionally exercises the deprecated symbol.
-      // ignore: deprecated_member_use_from_same_package
-      final registry = SimpleTaskRegistry();
-      // A single plain call is clearer here than forcing a one-off cascade.
-      // ignore: cascade_invocations
-      registry.register(_TestHandler('legacy.task'));
-
-      expect(registry, isA<InMemoryTaskRegistry>());
-      expect(registry.resolve('legacy.task')?.name, 'legacy.task');
-    });
   });
 
   group('TaskDefinition', () {
@@ -212,7 +201,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final call = definition(_Args(42));
+      final call = definition.buildCall(_Args(42));
       expect(call.name, 'demo.task');
       expect(call.encodeArgs(), {'value': 42});
       expect(call.resolveOptions(), const TaskOptions());
@@ -230,7 +219,7 @@ void main() {
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final call = definition(
+      final call = definition.buildCall(
         _Args(99),
         headers: {'x-id': 'abc'},
         options: const TaskOptions(queue: 'custom'),
@@ -248,25 +237,20 @@ void main() {
     });
   });
 
-  group('TaskEnqueueBuilder', () {
-    test('builds TaskCall with overrides', () {
+  group('TaskCall', () {
+    test('buildCall builds TaskCall with overrides', () {
       final definition = TaskDefinition<_Args, void>(
         name: 'demo.task',
         encodeArgs: (args) => {'value': args.value},
       );
 
-      final builder =
-          TaskEnqueueBuilder<_Args, void>(
-              definition: definition,
-              args: _Args(7),
-            )
-            ..header('x-id', 'abc')
-            ..meta('source', 'test')
-            ..priority(5)
-            ..queue('fast')
-            ..delay(const Duration(seconds: 1));
-
-      final call = builder.build();
+      final call = definition.buildCall(
+        _Args(7),
+        headers: const {'x-id': 'abc'},
+        meta: const {'source': 'test'},
+        options: const TaskOptions(priority: 5, queue: 'fast'),
+        notBefore: stemNow().add(const Duration(seconds: 1)),
+      );
       expect(call.headers['x-id'], 'abc');
       expect(call.meta['source'], 'test');
       expect(call.resolveOptions().priority, 5);

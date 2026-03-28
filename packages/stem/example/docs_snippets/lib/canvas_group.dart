@@ -1,5 +1,5 @@
 // Canvas group example for documentation.
-// ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
+// ignore_for_file: avoid_print
 
 import 'dart:async';
 
@@ -12,7 +12,7 @@ Future<void> main() async {
       FunctionTaskHandler<int>(
         name: 'square',
         entrypoint: (context, args) async {
-          final value = args['value'] as int;
+          final value = args.requiredValue<int>('value');
           await Future<void>.delayed(const Duration(milliseconds: 50));
           return value * value;
         },
@@ -24,23 +24,21 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
-  await app.start();
 
   final canvas = app.canvas;
-  const groupHandle = 'squares-demo';
-  await canvas.group([
+  final dispatch = await canvas.group([
     task('square', args: <String, Object?>{'value': 2}),
     task('square', args: <String, Object?>{'value': 3}),
     task('square', args: <String, Object?>{'value': 4}),
-  ], groupId: groupHandle);
+  ]);
 
   await _waitFor(() async {
-    final status = await app.backend.getGroup(groupHandle);
+    final status = await app.getGroupStatus(dispatch.groupId);
     return status?.results.length == 3;
   });
 
-  final groupStatus = await app.backend.getGroup(groupHandle);
-  final values = groupStatus?.results.values.map((s) => s.payload).toList();
+  final groupStatus = await app.getGroupStatus(dispatch.groupId);
+  final values = groupStatus?.resultValues<int>().values.toList();
   print('Group results: $values');
 
   await app.close();

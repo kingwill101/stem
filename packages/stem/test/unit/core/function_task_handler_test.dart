@@ -9,6 +9,7 @@ void main() {
       Duration? extended;
       double? progressValue;
       Map<String, Object?>? progressData;
+      String? argValue;
 
       final handler = FunctionTaskHandler<int>(
         name: 'math.add',
@@ -16,6 +17,7 @@ void main() {
           invocation.heartbeat();
           await invocation.extendLease(const Duration(seconds: 3));
           await invocation.progress(0.5, data: {'stage': 'halfway'});
+          argValue = invocation.requiredArg<String>('name');
           final a = args['a']! as int;
           final b = args['b']! as int;
           return a + b;
@@ -39,10 +41,11 @@ void main() {
             progressData = data;
           },
         ),
-        const {'a': 2, 'b': 3},
+        const {'a': 2, 'b': 3, 'name': 'stem'},
       );
 
       expect(result, equals(5));
+      expect(argValue, equals('stem'));
       expect(handler.isolateEntrypoint, isNotNull);
       expect(heartbeats, equals(1));
       expect(extended, equals(const Duration(seconds: 3)));

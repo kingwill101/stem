@@ -92,6 +92,10 @@ void main() {
         state.workflowParams.containsKey(workflowRuntimeMetadataParamKey),
         isFalse,
       );
+      expect(
+        state.workflowParams.containsKey(workflowParentRunIdParamKey),
+        isFalse,
+      );
       expect(introspection.runtimeEvents, isNotEmpty);
       expect(
         introspection.runtimeEvents.last.type,
@@ -100,7 +104,234 @@ void main() {
     },
   );
 
-  test('viewRunDetail exposes uniform run and step views', () async {
+  test(
+    'startWorkflow persists parent run id without exposing it to handlers',
+    () async {
+      runtime.registerWorkflow(
+        Flow(
+          name: 'parent.runtime.workflow',
+          build: (flow) {
+            flow.step('inspect', (context) async => context.params);
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow(
+        'parent.runtime.workflow',
+        parentRunId: 'wf-parent',
+        params: const {'tenant': 'acme'},
+      );
+
+      final state = await store.get(runId);
+      expect(state, isNotNull);
+      expect(state!.parentRunId, 'wf-parent');
+      expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(
+        state.params[workflowParentRunIdParamKey],
+        equals('wf-parent'),
+      );
+    },
+  );
+
+  test('flow context workflows starts typed child workflows', () async {
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.runtime.flow',
+      encodeParams: (params) => params,
+    );
+
+    runtime
+      ..registerWorkflow(
+        Flow(
+          name: 'child.runtime.flow',
+          build: (flow) {
+            flow.step('hello', (context) async {
+              final value = context.params['value'] as String? ?? 'child';
+              return 'ok:$value';
+            });
+          },
+        ).definition,
+      )
+      ..registerWorkflow(
+        Flow(
+          name: 'parent.runtime.flow',
+          build: (flow) {
+            flow.step('spawn', (context) async {
+              return childRef.start(
+                context,
+                params: const {'value': 'spawned'},
+              );
+            });
+          },
+        ).definition,
+      );
+
+    final parentRunId = await runtime.startWorkflow('parent.runtime.flow');
+    await runtime.executeRun(parentRunId);
+
+    final parentState = await store.get(parentRunId);
+    final childRunId = parentState!.result! as String;
+    final childState = await store.get(childRunId);
+
+    expect(childState, isNotNull);
+    expect(childState!.workflow, 'child.runtime.flow');
+    expect(childState.parentRunId, parentRunId);
+    expect(childState.workflowParams, equals(const {'value': 'spawned'}));
+  });
+
+  test('script checkpoint workflows starts typed child workflows', () async {
+    final childRef = WorkflowRef<Map<String, Object?>, String>(
+      name: 'child.runtime.script',
+      encodeParams: (params) => params,
+    );
+
+    runtime
+      ..registerWorkflow(
+        Flow(
+          name: 'child.runtime.script',
+          build: (flow) {
+            flow.step('hello', (context) async {
+              final value = context.params['value'] as String? ?? 'child';
+              return 'ok:$value';
+            });
+          },
+        ).definition,
+      )
+      ..registerWorkflow(
+        WorkflowScript<String>(
+          name: 'parent.runtime.script',
+          checkpoints: [
+            WorkflowCheckpoint(name: 'spawn'),
+          ],
+          run: (script) async {
+            return script.step<String>('spawn', (context) async {
+              return childRef.start(
+                context,
+                params: const {'value': 'script-child'},
+              );
+            });
+          },
+        ).definition,
+      );
+
+    final parentRunId = await runtime.startWorkflow('parent.runtime.script');
+    await runtime.executeRun(parentRunId);
+
+    final parentState = await store.get(parentRunId);
+    final childRunId = parentState!.result! as String;
+    final childState = await store.get(childRunId);
+
+    expect(childState, isNotNull);
+    expect(childState!.workflow, 'child.runtime.script');
+    expect(childState.parentRunId, parentRunId);
+    expect(childState.workflowParams, equals(const {'value': 'script-child'}));
+  });
+
+  test(
+    'flow contexts can startAndWait for child workflows directly',
+    () async {
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.runtime.wait.flow',
+        encodeParams: (params) => params,
+      );
+
+      runtime
+        ..registerWorkflow(
+          Flow(
+            name: 'child.runtime.wait.flow',
+            build: (flow) {
+              flow.step('hello', (context) async {
+                final value = context.params['value'] as String? ?? 'child';
+                return 'ok:$value';
+              });
+            },
+          ).definition,
+        )
+        ..registerWorkflow(
+          Flow(
+            name: 'parent.runtime.wait.flow',
+            build: (flow) {
+              flow.step('spawn', (context) async {
+                final childResult = await childRef.startAndWait(
+                  context,
+                  params: const {'value': 'spawned'},
+                  timeout: const Duration(seconds: 2),
+                );
+                return {
+                  'childRunId': childResult?.runId,
+                  'childValue': childResult?.value,
+                };
+              });
+            },
+          ).definition,
+        );
+
+      final parentRunId = await runtime.startWorkflow(
+        'parent.runtime.wait.flow',
+      );
+      await runtime.executeRun(parentRunId);
+
+      final parentState = await store.get(parentRunId);
+      final result = Map<String, Object?>.from(parentState!.result! as Map);
+      expect(result['childRunId'], isA<String>());
+      expect(result['childValue'], 'ok:spawned');
+    },
+  );
+
+  test(
+    'script checkpoints can startAndWait for child workflows directly',
+    () async {
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.runtime.wait.script',
+        encodeParams: (params) => params,
+      );
+
+      runtime
+        ..registerWorkflow(
+          Flow(
+            name: 'child.runtime.wait.script',
+            build: (flow) {
+              flow.step('hello', (context) async {
+                final value = context.params['value'] as String? ?? 'child';
+                return 'ok:$value';
+              });
+            },
+          ).definition,
+        )
+        ..registerWorkflow(
+          WorkflowScript<Map<String, Object?>>(
+            name: 'parent.runtime.wait.script',
+            checkpoints: [WorkflowCheckpoint(name: 'spawn')],
+            run: (script) async {
+              return script.step<Map<String, Object?>>('spawn', (
+                context,
+              ) async {
+                final childResult = await childRef.startAndWait(
+                  context,
+                  params: const {'value': 'script-child'},
+                  timeout: const Duration(seconds: 2),
+                );
+                return {
+                  'childRunId': childResult?.runId,
+                  'childValue': childResult?.value,
+                };
+              });
+            },
+          ).definition,
+        );
+
+      final parentRunId = await runtime.startWorkflow(
+        'parent.runtime.wait.script',
+      );
+      await runtime.executeRun(parentRunId);
+
+      final parentState = await store.get(parentRunId);
+      final result = Map<String, Object?>.from(parentState!.result! as Map);
+      expect(result['childRunId'], isA<String>());
+      expect(result['childValue'], 'ok:script-child');
+    },
+  );
+
+  test('viewRunDetail exposes uniform run and checkpoint views', () async {
     runtime.registerWorkflow(
       Flow(
         name: 'views.workflow',
@@ -117,9 +348,9 @@ void main() {
     expect(detail, isNotNull);
     expect(detail!.run.runId, equals(runId));
     expect(detail.run.workflow, equals('views.workflow'));
-    expect(detail.steps, hasLength(1));
-    expect(detail.steps.first.baseStepName, equals('only'));
-    expect(detail.steps.first.stepName, equals('only'));
+    expect(detail.checkpoints, hasLength(1));
+    expect(detail.checkpoints.first.baseCheckpointName, equals('only'));
+    expect(detail.checkpoints.first.checkpointName, equals('only'));
   });
 
   test('workflowManifest exposes typed manifest entries', () {
@@ -287,6 +518,46 @@ void main() {
     expect(completed?.result, 'resumed');
   });
 
+  test('sleepFor suspends and resumes without manual guards', () async {
+    runtime.registerWorkflow(
+      Flow(
+        name: 'sleep.expression.workflow',
+        build: (flow) {
+          flow
+            ..step('wait', (context) async {
+              await context.sleepFor(
+                duration: const Duration(milliseconds: 20),
+              );
+              return 'slept';
+            })
+            ..step(
+              'complete',
+              (context) async => '${context.previousResult}-done',
+            );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('sleep.expression.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.resumeAt, isNotNull);
+
+    clock.advance(const Duration(milliseconds: 30));
+    final due = await store.dueRuns(clock.now());
+    for (final id in due) {
+      final state = await store.get(id);
+      await store.markResumed(id, data: state?.suspensionData);
+      await runtime.executeRun(id);
+    }
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(completed?.result, 'slept-done');
+  });
+
   test('awaitEvent suspends and resumes with payload', () async {
     String? observedPayload;
 
@@ -321,6 +592,40 @@ void main() {
     final completed = await store.get(runId);
     expect(completed?.status, WorkflowStatus.completed);
     expect(observedPayload, 'user-123');
+  });
+
+  test('waitForEvent suspends and resumes with payload', () async {
+    String? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.expression.workflow',
+        build: (flow) {
+          flow.step('wait', (context) async {
+            final payload = await context.waitForEvent<Map<String, Object?>>(
+              topic: 'user.updated.expression',
+            );
+            observedPayload = payload['id'] as String?;
+            return payload['id'];
+          });
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.expression.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, 'user.updated.expression');
+
+    await runtime.emit('user.updated.expression', const {'id': 'user-789'});
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload, 'user-789');
+    expect(completed?.result, 'user-789');
   });
 
   test('emitValue resumes flows with codec-backed DTO payloads', () async {
@@ -367,6 +672,301 @@ void main() {
     expect(observedPayload?.id, 'user-typed-1');
     expect(completed?.result, 'user-typed-1');
   });
+
+  test(
+    'emitJson resumes flows with DTO payloads without a manual map',
+    () async {
+      _UserUpdatedEvent? observedPayload;
+
+      runtime.registerWorkflow(
+        Flow(
+          name: 'event.json.workflow',
+          build: (flow) {
+            flow.step<String?>(
+              'wait',
+              (context) async {
+                final resume = context.takeResumeValue<_UserUpdatedEvent>(
+                  codec: _userUpdatedEventCodec,
+                );
+                if (resume == null) {
+                  context.awaitEvent('user.updated.json');
+                  return null;
+                }
+                observedPayload = resume;
+                return resume.id;
+              },
+            );
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow('event.json.workflow');
+      await runtime.executeRun(runId);
+
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.json');
+
+      await runtime.emitJson(
+        'user.updated.json',
+        const _UserUpdatedEvent(id: 'user-json-1'),
+      );
+      await runtime.executeRun(runId);
+
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(observedPayload?.id, 'user-json-1');
+      expect(completed?.result, 'user-json-1');
+    },
+  );
+
+  test(
+    'emitVersionedJson resumes flows with versioned DTO payloads',
+    () async {
+      _UserUpdatedEvent? observedPayload;
+
+      runtime.registerWorkflow(
+        Flow(
+          name: 'event.versioned.json.workflow',
+          build: (flow) {
+            flow.step<String?>(
+              'wait',
+              (context) async {
+                final resume = context.takeResumeValue<_UserUpdatedEvent>(
+                  codec: _userUpdatedEventCodec,
+                );
+                if (resume == null) {
+                  context.awaitEvent('user.updated.versioned.json');
+                  return null;
+                }
+                observedPayload = resume;
+                return resume.id;
+              },
+            );
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow(
+        'event.versioned.json.workflow',
+      );
+      await runtime.executeRun(runId);
+
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.versioned.json');
+
+      await runtime.emitVersionedJson(
+        'user.updated.versioned.json',
+        const _UserUpdatedEvent(id: 'user-json-2'),
+        version: 2,
+      );
+      await runtime.executeRun(runId);
+
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(observedPayload?.id, 'user-json-2');
+      expect(completed?.result, 'user-json-2');
+    },
+  );
+
+  test('emitEvent resumes flows with typed workflow event refs', () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.codec(
+      topic: 'user.updated.ref',
+      codec: _userUpdatedEventCodec,
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-typed-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-typed-2');
+    expect(completed?.result, 'user-typed-2');
+  });
+
+  test(
+    'emitEvent resumes flows with versioned-json workflow event refs',
+    () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJson(
+      topic: 'user.updated.versioned.ref',
+      version: 2,
+      decode: _UserUpdatedEvent.fromVersionedJson,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.versioned.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.versioned.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-versioned-ref-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-versioned-ref-2');
+    expect(completed?.result, 'user-versioned-ref-2');
+    },
+  );
+
+  test(
+    'emitEvent resumes flows with registry-backed workflow event refs',
+    () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedJsonRegistry(
+      topic: 'user.updated.registry.ref',
+      version: 2,
+      registry: _userUpdatedEventRegistry,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.registry.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow('event.registry.ref.workflow');
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-registry-ref-2'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-registry-ref-2');
+    expect(completed?.result, 'user-registry-ref-2');
+    },
+  );
+
+  test(
+    'emitEvent resumes flows with versioned-map workflow event refs',
+    () async {
+    final event = WorkflowEventRef<_UserUpdatedEvent>.versionedMap(
+      topic: 'user.updated.versioned.map.ref',
+      encode: (value) => {'user_id': value.id},
+      version: 3,
+      decode: _UserUpdatedEvent.fromVersionedMap,
+      typeName: '_UserUpdatedEvent',
+    );
+    _UserUpdatedEvent? observedPayload;
+
+    runtime.registerWorkflow(
+      Flow(
+        name: 'event.versioned.map.ref.workflow',
+        build: (flow) {
+          flow.step<String?>(
+            'wait',
+            (context) async {
+              final resume = event.waitValue(context);
+              if (resume == null) {
+                return null;
+              }
+              observedPayload = resume;
+              return resume.id;
+            },
+          );
+        },
+      ).definition,
+    );
+
+    final runId = await runtime.startWorkflow(
+      'event.versioned.map.ref.workflow',
+    );
+    await runtime.executeRun(runId);
+
+    final suspended = await store.get(runId);
+    expect(suspended?.status, WorkflowStatus.suspended);
+    expect(suspended?.waitTopic, event.topic);
+
+    await event.emit(
+      runtime,
+      const _UserUpdatedEvent(id: 'user-versioned-map-ref'),
+    );
+    await runtime.executeRun(runId);
+
+    final completed = await store.get(runId);
+    expect(completed?.status, WorkflowStatus.completed);
+    expect(observedPayload?.id, 'user-versioned-map-ref-v3');
+    expect(completed?.result, 'user-versioned-map-ref-v3');
+    },
+  );
 
   test('emit persists payload before worker resumes execution', () async {
     runtime.registerWorkflow(
@@ -742,6 +1342,47 @@ void main() {
     expect(completed?.result, 'user-42');
   });
 
+  test(
+    'script waitForEvent uses named args and resumes with payload',
+    () async {
+      Map<String, Object?>? resumePayload;
+
+      runtime.registerWorkflow(
+        WorkflowScript(
+          name: 'script.event.expression',
+          run: (script) async {
+            final result = await script.step('wait', (step) async {
+              final payload = await step.waitForEvent<Map<String, Object?>>(
+                topic: 'user.updated.expression.script',
+              );
+              resumePayload = payload;
+              return payload['id'];
+            });
+            return result;
+          },
+        ).definition,
+      );
+
+      final runId = await runtime.startWorkflow('script.event.expression');
+      await runtime.executeRun(runId);
+
+      final suspended = await store.get(runId);
+      expect(suspended?.status, WorkflowStatus.suspended);
+      expect(suspended?.waitTopic, 'user.updated.expression.script');
+
+      await runtime.emit(
+        'user.updated.expression.script',
+        const {'id': 'user-43'},
+      );
+      await runtime.executeRun(runId);
+
+      final completed = await store.get(runId);
+      expect(completed?.status, WorkflowStatus.completed);
+      expect(resumePayload?['id'], 'user-43');
+      expect(completed?.result, 'user-43');
+    },
+  );
+
   test('script autoVersion step persists sequential checkpoints', () async {
     final iterations = <int>[];
 
@@ -912,9 +1553,7 @@ void main() {
         name: 'meta.workflow',
         build: (flow) {
           flow.step('dispatch', (context) async {
-            final enqueuer = context.enqueuer;
-            expect(enqueuer, isNotNull);
-            await enqueuer!.enqueue(
+            await context.enqueue(
               taskName,
               meta: const {'custom': 'value'},
             );
@@ -1012,6 +1651,8 @@ void main() {
           },
         ).definition,
       );
+      // Keep this direct call form; cascading a single registration is noisier.
+      // ignore: cascade_invocations
       runtime.registerWorkflow(
         Flow(
           name: 'logging.complete.workflow',
@@ -1090,10 +1731,11 @@ void main() {
         name: 'meta.builder.workflow',
         build: (flow) {
           flow.step('dispatch', (context) async {
-            await TaskEnqueueBuilder(
-              definition: definition,
-              args: const <String, Object?>{},
-            ).meta('origin', 'builder').enqueueWith(stem);
+            final call = definition.buildCall(
+              const <String, Object?>{},
+              meta: const {'origin': 'builder'},
+            );
+            await stem.enqueueCall(call);
             return 'done';
           });
         },
@@ -1148,20 +1790,47 @@ class _RecordingLogDriver extends LogDriver {
   }
 }
 
-final _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>(
-  encode: (value) => value.toJson(),
+const _userUpdatedEventCodec = PayloadCodec<_UserUpdatedEvent>.json(
   decode: _UserUpdatedEvent.fromJson,
+  typeName: '_UserUpdatedEvent',
 );
 
 class _UserUpdatedEvent {
   const _UserUpdatedEvent({required this.id});
 
+  factory _UserUpdatedEvent.fromJson(Map<String, Object?> json) {
+    return _UserUpdatedEvent(id: json['id']! as String);
+  }
+
+  factory _UserUpdatedEvent.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _UserUpdatedEvent(id: json['id'] as String);
+  }
+
+  factory _UserUpdatedEvent.fromV2Json(Map<String, dynamic> json) {
+    return _UserUpdatedEvent(id: json['id'] as String);
+  }
+
+  factory _UserUpdatedEvent.fromVersionedMap(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 3);
+    return _UserUpdatedEvent(id: '${json['user_id'] as String}-v$version');
+  }
+
   final String id;
 
   Map<String, Object?> toJson() => {'id': id};
-
-  static _UserUpdatedEvent fromJson(Object? payload) {
-    final json = payload! as Map<String, Object?>;
-    return _UserUpdatedEvent(id: json['id'] as String);
-  }
 }
+
+const _userUpdatedEventRegistry = PayloadVersionRegistry<_UserUpdatedEvent>(
+  decoders: <int, _UserUpdatedEvent Function(Map<String, dynamic>)>{
+    1: _UserUpdatedEvent.fromJson,
+    2: _UserUpdatedEvent.fromV2Json,
+  },
+  defaultVersion: 1,
+);

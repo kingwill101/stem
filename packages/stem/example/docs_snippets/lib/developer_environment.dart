@@ -13,25 +13,22 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
   // #endregion dev-env-config
 
   // #region dev-env-adapters
-  final broker = await RedisStreamsBroker.connect(
+  final stack = StemStack.fromUrl(
     config.brokerUrl,
-    tls: config.tls,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(
+      backend: _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
+      revoke: _resolveRedisUrl(config.brokerUrl, config.revokeStoreUrl, 2),
+    ),
+    requireRevokeStore: true,
   );
-  final backend = await RedisResultBackend.connect(
-    _resolveRedisUrl(config.brokerUrl, config.resultBackendUrl, 1),
-    tls: config.tls,
-  );
-  final revokeStore = await RedisRevokeStore.connect(
-    _resolveRedisUrl(config.brokerUrl, config.revokeStoreUrl, 2),
-  );
+  final revokeStore = await stack.revokeStore!.create();
   final routing = await _loadRoutingRegistry(config);
   final rateLimiter = await connectRateLimiter(config);
   // #endregion dev-env-adapters
 
   // #region dev-env-stem
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await stack.createClient(
     tasks: tasks,
     routing: routing,
   );
@@ -39,27 +36,26 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
 
   // #region dev-env-worker
   final subscription = _buildSubscription(config);
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-    revokeStore: revokeStore,
-    rateLimiter: rateLimiter,
-    queue: config.defaultQueue,
-    subscription: subscription,
-    concurrency: 8,
-    autoscale: const WorkerAutoscaleConfig(
-      enabled: true,
-      minConcurrency: 2,
-      maxConcurrency: 16,
-      backlogPerIsolate: 2.0,
-      idlePeriod: Duration(seconds: 45),
+  final worker = await client.createWorker(
+    workerConfig: StemWorkerConfig(
+      revokeStore: revokeStore,
+      rateLimiter: rateLimiter,
+      queue: config.defaultQueue,
+      subscription: subscription,
+      concurrency: 8,
+      autoscale: const WorkerAutoscaleConfig(
+        enabled: true,
+        minConcurrency: 2,
+        maxConcurrency: 16,
+        backlogPerIsolate: 2.0,
+        idlePeriod: Duration(seconds: 45),
+      ),
     ),
   );
   // #endregion dev-env-worker
 
   return Bootstrap(
-    stem: stem,
+    client: client,
     worker: worker,
     config: config,
     rateLimiter: rateLimiter,
@@ -68,13 +64,13 @@ Future<Bootstrap> bootstrapStem(List<TaskHandler<Object?>> tasks) async {
 
 class Bootstrap {
   Bootstrap({
-    required this.stem,
+    required this.client,
     required this.worker,
     required this.config,
     required this.rateLimiter,
   });
 
-  final Stem stem;
+  final StemClient client;
   final Worker worker;
   final StemConfig config;
   final RateLimiter? rateLimiter;
@@ -86,17 +82,7 @@ Future<void> runCanvasFlows(
   Bootstrap bootstrap,
   List<TaskHandler<Object?>> tasks,
 ) async {
-  final canvas = Canvas(
-    broker: bootstrap.stem.broker,
-    backend: await RedisResultBackend.connect(
-      _resolveRedisUrl(
-        bootstrap.config.brokerUrl,
-        bootstrap.config.resultBackendUrl,
-        1,
-      ),
-    ),
-    tasks: tasks,
-  );
+  final canvas = bootstrap.client.createCanvas(tasks: tasks);
 
   final ids = await canvas.group([
     task('media.resize', args: {'file': 'hero.png'}),
@@ -122,15 +108,21 @@ Future<void> runCanvasFlows(
 
 // #region dev-env-status
 Future<void> inspectChordStatus(String chordId) async {
-  final backend = await RedisResultBackend.connect(
-    _resolveRedisUrl(
-      Platform.environment['STEM_BROKER_URL']!,
-      Platform.environment['STEM_RESULT_BACKEND_URL'],
-      1,
+  final config = StemConfig.fromEnvironment(Platform.environment);
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(
+      backend: _resolveRedisUrl(
+        config.brokerUrl,
+        config.resultBackendUrl,
+        1,
+      ),
     ),
   );
-  final status = await backend.get(chordId);
+  final status = await client.getTaskStatus(chordId);
   print('Chord completion state: ${status?.state}');
+  await client.close();
 }
 // #endregion dev-env-status
 
@@ -221,4 +213,5 @@ Future<void> main() async {
   await runCanvasFlows(bootstrap, tasks);
   await Future<void>.delayed(const Duration(seconds: 1));
   await bootstrap.worker.shutdown();
+  await bootstrap.client.close();
 }

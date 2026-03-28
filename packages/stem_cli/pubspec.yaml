@@ -8,7 +8,7 @@ environment:
 
 dependencies:
   artisanal: ^0.2.0
-  stem: ^0.1.0
+  stem: ^0.2.0
   stem_redis: ^0.1.0
   stem_postgres: ^0.1.0
   stem_sqlite: ^0.1.0

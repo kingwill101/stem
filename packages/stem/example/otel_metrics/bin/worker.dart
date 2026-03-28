@@ -3,10 +3,12 @@ import 'dart:io';
 
 import 'package:stem/stem.dart';
 
+final pingDefinition = TaskDefinition.noArgs<void>(name: 'metrics.ping');
+
 Future<void> main() async {
   final tasks = <TaskHandler<Object?>>[
     FunctionTaskHandler<void>(
-      name: 'metrics.ping',
+      name: pingDefinition.name,
       entrypoint: (context, _) async {
         // Simulate a bit of work.
         await Future<void>.delayed(const Duration(milliseconds: 150));
@@ -15,9 +17,6 @@ Future<void> main() async {
       },
     ),
   ];
-
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
 
   final otlpEndpoint = Platform.environment['STEM_OTLP_ENDPOINT'] ??
       'http://localhost:4318/v1/metrics';
@@ -28,16 +27,17 @@ Future<void> main() async {
     metricExporters: ['otlp:$otlpEndpoint'],
   );
 
-  final worker = Worker(
-    broker: broker,
+  final client = await StemClient.inMemory(
     tasks: tasks,
-    backend: backend,
-    consumerName: 'otel-demo-worker',
-    observability: observability,
-    heartbeatTransport: const NoopHeartbeatTransport(),
   );
-
-  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
+  final worker = await client.createWorker(
+    workerConfig: const StemWorkerConfig(
+      consumerName: 'otel-demo-worker',
+      heartbeatTransport: NoopHeartbeatTransport(),
+    ).copyWith(
+      observability: observability,
+    ),
+  );
 
   await worker.start();
   print(
@@ -45,6 +45,6 @@ Future<void> main() async {
   );
 
   Timer.periodic(const Duration(seconds: 1), (_) async {
-    await stem.enqueue('metrics.ping');
+    await pingDefinition.enqueue(client);
   });
 }

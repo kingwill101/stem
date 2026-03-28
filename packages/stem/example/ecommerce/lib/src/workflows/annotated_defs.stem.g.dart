@@ -37,15 +37,13 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "ecommerce.cart.add_item",
     checkpoints: [
-      FlowStep(
+      WorkflowCheckpoint(
         name: "validate-input",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "price-line-item",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -77,8 +75,6 @@ abstract final class StemWorkflowDefinitions {
         },
       );
 }
-
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {
@@ -120,43 +116,6 @@ abstract final class StemTaskDefinitions {
         defaultOptions: const TaskOptions(queue: "default"),
         metadata: const TaskMetadata(),
       );
-}
-
-extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
-  Future<String> enqueueEcommerceAuditLog({
-    required String event,
-    required String entityId,
-    required String detail,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.ecommerceAuditLog.call(
-        (event: event, entityId: entityId, detail: detail),
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-}
-
-extension StemGeneratedTaskResults on Stem {
-  Future<TaskResult<Map<String, Object?>>?> waitForEcommerceAuditLog(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.ecommerceAuditLog,
-      timeout: timeout,
-    );
-  }
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[

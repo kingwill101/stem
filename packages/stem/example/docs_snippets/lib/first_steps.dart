@@ -31,11 +31,10 @@ Future<void> runInMemoryDemo() async {
       consumerName: 'first-steps-worker',
     ),
   );
-  await app.start();
   // #endregion first-steps-bootstrap
 
   // #region first-steps-enqueue
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'email.send',
     args: {'to': 'hello@example.com'},
   );
@@ -43,7 +42,7 @@ Future<void> runInMemoryDemo() async {
   // #endregion first-steps-enqueue
 
   // #region first-steps-results
-  final result = await app.stem.waitForTask<String>(taskId);
+  final result = await app.waitForTask<String>(taskId);
   print('Task state: ${result?.status.state} value=${result?.value}');
   // #endregion first-steps-results
 

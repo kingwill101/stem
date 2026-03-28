@@ -9,30 +9,28 @@ import 'package:stem/stem.dart';
 /// seconds, the runtime automatically cancels the run once the policy is
 /// exceeded. Operators can introspect the reason via `StemWorkflowApp`.
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory(
-    flows: [
-      Flow(
-        name: 'reports.generate',
-        build: (flow) {
-          flow.step('poll-status', (ctx) async {
-            final resume = ctx.takeResumeValue<bool>();
-            if (resume != true) {
-              print('[workflow] polling external system…');
-              // Simulate a slow external service; the cancellation policy will
-              // cap this suspension to 2 seconds.
-              ctx.sleep(const Duration(seconds: 5));
-              return null;
-            }
-            print('[workflow] resumed with payload: $resume');
-            return 'finished';
-          });
-        },
-      ),
-    ],
+  final reportsGenerate = Flow<String>(
+    name: 'reports.generate',
+    build: (flow) {
+      flow.step('poll-status', (ctx) async {
+        if (!ctx.sleepUntilResumed(const Duration(seconds: 5))) {
+          print('[workflow] polling external system…');
+          // Simulate a slow external service; the cancellation policy will
+          // cap this suspension to 2 seconds.
+          return null;
+        }
+        print('[workflow] resumed after sleep');
+        return 'finished';
+      });
+    },
   );
 
-  final runId = await app.startWorkflow(
-    'reports.generate',
+  final app = await StemWorkflowApp.inMemory(
+    flows: [reportsGenerate],
+  );
+
+  final runId = await reportsGenerate.start(
+    app,
     cancellationPolicy: const WorkflowCancellationPolicy(
       maxRunDuration: Duration(minutes: 10),
       maxSuspendDuration: Duration(seconds: 2),

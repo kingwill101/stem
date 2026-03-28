@@ -37,6 +37,12 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Signature for task entrypoints that can run inside isolate executors.
 typedef TaskEntrypoint =
@@ -75,6 +81,111 @@ class ProgressSignal extends TaskInvocationSignal {
 
   /// Optional progress metadata.
   final Map<String, Object?>? data;
+
+  /// Returns the decoded progress metadata value for [key], or `null`.
+  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded progress metadata value for [key], or [fallback].
+  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded progress metadata value for [key], throwing if absent.
+  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) {
+      throw StateError('Progress signal does not include metadata.');
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO with [codec].
+  T? dataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the full progress payload as a typed DTO with [codec].
+  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO from JSON.
+  T? dataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full progress payload as a typed DTO from JSON.
+  T? payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the progress metadata value for [key] as a typed DTO from
+  /// version-aware JSON.
+  T? dataVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: (json) => PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ).decode(json),
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full progress payload as a typed DTO from version-aware JSON.
+  T? payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 }
 
 /// Request to enqueue a task from an isolate.
@@ -89,6 +200,42 @@ class EnqueueTaskSignal extends TaskInvocationSignal {
   final SendPort replyPort;
 }
 
+/// Request to start a workflow from an isolate.
+class StartWorkflowSignal extends TaskInvocationSignal {
+  /// Creates a workflow start request signal.
+  const StartWorkflowSignal(this.request, this.replyPort);
+
+  /// Workflow start request payload.
+  final StartWorkflowRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
+/// Request to wait for a workflow from an isolate.
+class WaitForWorkflowSignal extends TaskInvocationSignal {
+  /// Creates a workflow wait request signal.
+  const WaitForWorkflowSignal(this.request, this.replyPort);
+
+  /// Workflow wait request payload.
+  final WaitForWorkflowRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
+/// Request to emit a workflow event from an isolate.
+class EmitWorkflowEventSignal extends TaskInvocationSignal {
+  /// Creates a workflow event emit request signal.
+  const EmitWorkflowEventSignal(this.request, this.replyPort);
+
+  /// Workflow event emit request payload.
+  final EmitWorkflowEventRequest request;
+
+  /// Port to deliver the response.
+  final SendPort replyPort;
+}
+
 /// Enqueue request payload for isolate communication.
 class TaskEnqueueRequest {
   /// Creates an enqueue request payload.
@@ -98,6 +245,7 @@ class TaskEnqueueRequest {
     required this.headers,
     required this.options,
     required this.meta,
+    this.notBefore,
     this.enqueueOptions,
   });
 
@@ -107,6 +255,38 @@ class TaskEnqueueRequest {
   /// Task arguments.
   final Map<String, Object?> args;
 
+  /// Decodes the full task args payload as a typed DTO with [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from JSON.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full task args payload as a typed DTO from version-aware
+  /// JSON.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Task headers.
   final Map<String, String> headers;
 
@@ -115,6 +295,41 @@ class TaskEnqueueRequest {
 
   /// Task metadata.
   final Map<String, Object?> meta;
+
+  /// Decodes the full task metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full task metadata payload as a typed DTO from JSON.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full task metadata payload as a typed DTO from version-aware
+  /// JSON.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Optional delay before execution.
+  final DateTime? notBefore;
 
   /// Enqueue options.
   final Map<String, Object?>? enqueueOptions;
@@ -132,8 +347,208 @@ class TaskEnqueueResponse {
   final String? error;
 }
 
+/// Workflow start request payload for isolate communication.
+class StartWorkflowRequest {
+  /// Creates a workflow start request payload.
+  const StartWorkflowRequest({
+    required this.workflowName,
+    required this.params,
+    this.parentRunId,
+    this.ttlMs,
+    this.cancellationPolicy,
+  });
+
+  /// Workflow name to start.
+  final String workflowName;
+
+  /// Encoded workflow params.
+  final Map<String, Object?> params;
+
+  /// Decodes the full workflow params payload as a typed DTO with [codec].
+  T paramsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(params);
+  }
+
+  /// Decodes the full workflow params payload as a typed DTO from JSON.
+  T paramsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(params);
+  }
+
+  /// Decodes the full workflow params payload as a typed DTO from version-aware
+  /// JSON.
+  T paramsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(params);
+  }
+
+  /// Optional parent workflow run id.
+  final String? parentRunId;
+
+  /// Optional run TTL in milliseconds.
+  final int? ttlMs;
+
+  /// Optional serialized cancellation policy.
+  final Map<String, Object?>? cancellationPolicy;
+}
+
+/// Response payload for isolate workflow start requests.
+class StartWorkflowResponse {
+  /// Creates a workflow start response payload.
+  const StartWorkflowResponse({this.runId, this.error});
+
+  /// Started workflow run id on success.
+  final String? runId;
+
+  /// Error message when workflow start fails.
+  final String? error;
+}
+
+/// Workflow wait request payload for isolate communication.
+class WaitForWorkflowRequest {
+  /// Creates a workflow wait request payload.
+  const WaitForWorkflowRequest({
+    required this.runId,
+    required this.workflowName,
+    this.pollIntervalMs,
+    this.timeoutMs,
+  });
+
+  /// Workflow run id to wait on.
+  final String runId;
+
+  /// Workflow name used for result decoding.
+  final String workflowName;
+
+  /// Poll interval in milliseconds.
+  final int? pollIntervalMs;
+
+  /// Timeout in milliseconds.
+  final int? timeoutMs;
+}
+
+/// Response payload for isolate workflow wait requests.
+class WaitForWorkflowResponse {
+  /// Creates a workflow wait response payload.
+  const WaitForWorkflowResponse({this.result, this.error});
+
+  /// Serialized workflow result payload.
+  final Map<String, Object?>? result;
+
+  /// Decodes the workflow result payload as a typed DTO with [codec].
+  T? resultAs<T>({required PayloadCodec<T> codec}) {
+    final payload = result;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the workflow result payload as a typed DTO from JSON.
+  T? resultJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = result;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the workflow result payload as a typed DTO from version-aware
+  /// JSON.
+  T? resultVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = result;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Error message when workflow wait fails.
+  final String? error;
+}
+
+/// Workflow event emit request payload for isolate communication.
+class EmitWorkflowEventRequest {
+  /// Creates a workflow event emit request payload.
+  const EmitWorkflowEventRequest({
+    required this.topic,
+    required this.payload,
+  });
+
+  /// Workflow event topic to emit.
+  final String topic;
+
+  /// Encoded workflow event payload.
+  final Map<String, Object?> payload;
+
+  /// Decodes the full workflow event payload as a typed DTO with [codec].
+  T payloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full workflow event payload as a typed DTO from JSON.
+  T payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full workflow event payload as a typed DTO from version-aware
+  /// JSON.
+  T payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+}
+
+/// Response payload for isolate workflow event emit requests.
+class EmitWorkflowEventResponse {
+  /// Creates a workflow event emit response payload.
+  const EmitWorkflowEventResponse({this.error});
+
+  /// Error message when workflow event emission fails.
+  final String? error;
+}
+
 /// Context exposed to task entrypoints regardless of execution environment.
-class TaskInvocationContext implements TaskEnqueuer {
+class TaskInvocationContext implements TaskExecutionContext {
   /// Context implementation used when executing locally in the same isolate.
   factory TaskInvocationContext.local({
     required String id,
@@ -147,9 +562,13 @@ class TaskInvocationContext implements TaskEnqueuer {
       Map<String, Object?>? data,
     })
     progress,
+    Map<String, Object?> args = const {},
     TaskEnqueuer? enqueuer,
+    WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
   }) => TaskInvocationContext._(
     id: id,
+    args: args,
     headers: headers,
     meta: meta,
     attempt: attempt,
@@ -157,6 +576,8 @@ class TaskInvocationContext implements TaskEnqueuer {
     extendLease: extendLease,
     progress: progress,
     enqueuer: enqueuer,
+    workflows: workflows,
+    workflowEvents: workflowEvents,
   );
 
   /// Context implementation used when executing inside a worker isolate.
@@ -166,8 +587,10 @@ class TaskInvocationContext implements TaskEnqueuer {
     required Map<String, String> headers,
     required Map<String, Object?> meta,
     required int attempt,
+    Map<String, Object?> args = const {},
   }) => TaskInvocationContext._(
     id: id,
+    args: args,
     headers: headers,
     meta: meta,
     attempt: attempt,
@@ -176,11 +599,14 @@ class TaskInvocationContext implements TaskEnqueuer {
     progress: (percent, {data}) async =>
         controlPort.send(ProgressSignal(percent, data: data)),
     enqueuer: _RemoteTaskEnqueuer(controlPort),
+    workflows: _RemoteWorkflowCaller(controlPort),
+    workflowEvents: _RemoteWorkflowEventEmitter(controlPort),
   );
 
   /// Internal constructor shared by local and isolate contexts.
   TaskInvocationContext._({
     required this.id,
+    required this.args,
     required this.headers,
     required this.meta,
     required this.attempt,
@@ -192,21 +618,32 @@ class TaskInvocationContext implements TaskEnqueuer {
     })
     progress,
     TaskEnqueuer? enqueuer,
+    WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
   }) : _heartbeat = heartbeat,
        _extendLease = extendLease,
        _progress = progress,
-       _enqueuer = enqueuer;
+       _enqueuer = enqueuer,
+       _workflows = workflows,
+       _workflowEvents = workflowEvents;
 
   /// The unique identifier of the task.
+  @override
   final String id;
 
+  @override
+  final Map<String, Object?> args;
+
   /// Headers passed to the task invocation.
+  @override
   final Map<String, String> headers;
 
   /// Invocation metadata (e.g. trace, tenant).
+  @override
   final Map<String, Object?> meta;
 
   /// Current attempt count.
+  @override
   final int attempt;
 
   final void Function() _heartbeat;
@@ -220,13 +657,22 @@ class TaskInvocationContext implements TaskEnqueuer {
   /// Optional delegate used to enqueue tasks from within the invocation.
   final TaskEnqueuer? _enqueuer;
 
+  /// Optional delegate used to start child workflows from the invocation.
+  final WorkflowCaller? _workflows;
+
+  /// Optional delegate used to emit workflow events from the invocation.
+  final WorkflowEventEmitter? _workflowEvents;
+
   /// Notify the worker that the task is still running.
+  @override
   void heartbeat() => _heartbeat();
 
   /// Request an extension of the underlying broker lease/visibility timeout.
+  @override
   Future<void> extendLease(Duration by) => _extendLease(by);
 
   /// Report progress back to the worker.
+  @override
   Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
       _progress(percentComplete, data: data);
 
@@ -241,6 +687,7 @@ class TaskInvocationContext implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -269,7 +716,30 @@ class TaskInvocationContext implements TaskEnqueuer {
       args: args,
       headers: mergedHeaders,
       options: options,
+      notBefore: notBefore,
       meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeInvocationEnqueuedValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -303,9 +773,13 @@ class TaskInvocationContext implements TaskEnqueuer {
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
     }
 
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
       headers: Map.unmodifiable(mergedHeaders),
+      options: call.options,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
     return delegate.enqueueCall(
       mergedCall,
@@ -313,22 +787,98 @@ class TaskInvocationContext implements TaskEnqueuer {
     );
   }
 
-  /// Build a fluent enqueue request for this invocation.
-  ///
-  /// Use [TaskEnqueueBuilder.build] + [enqueueCall] to dispatch.
-  TaskEnqueueBuilder<TArgs, TResult> enqueueBuilder<TArgs, TResult>({
-    required TaskDefinition<TArgs, TResult> definition,
-    required TArgs args,
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
   }) {
-    return TaskEnqueueBuilder(definition: definition, args: args);
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    final delegate = _workflows;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow caller configured',
+      );
+    }
+    return delegate.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) {
+    final delegate = _workflowEvents;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow event emitter configured',
+      );
+    }
+    return delegate.emitValue(topic, value, codec: codec);
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    final delegate = _workflowEvents;
+    if (delegate == null) {
+      throw StateError(
+        'TaskInvocationContext has no workflow event emitter configured',
+      );
+    }
+    return delegate.emitEvent(event, value);
   }
 
   /// Alias for enqueue.
+  @override
   Future<String> spawn(
     String name, {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -337,6 +887,7 @@ class TaskInvocationContext implements TaskEnqueuer {
       args: args,
       headers: headers,
       options: options,
+      notBefore: notBefore,
       meta: meta,
       enqueueOptions: enqueueOptions,
     );
@@ -347,6 +898,7 @@ class TaskInvocationContext implements TaskEnqueuer {
   /// Throws a [TaskRetryRequest] which is intercepted by the worker to
   /// schedule the retry. Override retry policies/time limits per invocation
   /// by passing the optional parameters.
+  @override
   Future<void> retry({
     Duration? countdown,
     DateTime? eta,
@@ -379,6 +931,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
@@ -391,6 +944,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
           args: args,
           headers: headers,
           options: options.toJson(),
+          notBefore: notBefore,
           meta: meta,
           enqueueOptions: enqueueOptions?.toJson(),
         ),
@@ -422,5 +976,204 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
       meta: call.meta,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeInvocationEnqueuedValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+Map<String, Object?> _encodeInvocationEnqueuedValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
+}
+
+class _RemoteWorkflowCaller implements WorkflowCaller {
+  _RemoteWorkflowCaller(this._controlPort);
+
+  final SendPort _controlPort;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      StartWorkflowSignal(
+        StartWorkflowRequest(
+          workflowName: definition.name,
+          params: definition.encodeParams(params),
+          parentRunId: parentRunId,
+          ttlMs: ttl?.inMilliseconds,
+          cancellationPolicy: cancellationPolicy?.toJson(),
+        ),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is StartWorkflowResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      return response.runId ?? '';
+    }
+    throw StateError('Unexpected workflow start response: $response');
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return startWorkflowRef(
+      call.definition,
+      call.params,
+      parentRunId: call.parentRunId,
+      ttl: call.ttl,
+      cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      WaitForWorkflowSignal(
+        WaitForWorkflowRequest(
+          runId: runId,
+          workflowName: definition.name,
+          pollIntervalMs: pollInterval.inMilliseconds,
+          timeoutMs: timeout?.inMilliseconds,
+        ),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is WaitForWorkflowResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      final resultJson = response.result;
+      if (resultJson == null) {
+        return null;
+      }
+      final raw = WorkflowResult<Object?>.fromJson(resultJson);
+      return WorkflowResult<TResult>(
+        runId: raw.runId,
+        status: raw.status,
+        state: raw.state,
+        value: raw.rawResult == null ? null : definition.decode(raw.rawResult),
+        rawResult: raw.rawResult,
+        timedOut: raw.timedOut,
+      );
+    }
+    throw StateError('Unexpected workflow wait response: $response');
+  }
+}
+
+class _RemoteWorkflowEventEmitter implements WorkflowEventEmitter {
+  _RemoteWorkflowEventEmitter(this._controlPort);
+
+  final SendPort _controlPort;
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) async {
+    final encoded = codec != null ? codec.encodeDynamic(value) : value;
+    if (encoded is! Map) {
+      throw StateError(
+        'TaskInvocationContext workflow events must encode to '
+        'Map<String, Object?>, got ${encoded.runtimeType}.',
+      );
+    }
+    final payload = <String, Object?>{};
+    for (final entry in encoded.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'TaskInvocationContext workflow event payload keys must be strings, '
+          'got ${key.runtimeType}.',
+        );
+      }
+      payload[key] = entry.value;
+    }
+
+    final responsePort = ReceivePort();
+    _controlPort.send(
+      EmitWorkflowEventSignal(
+        EmitWorkflowEventRequest(topic: topic, payload: payload),
+        responsePort.sendPort,
+      ),
+    );
+    final response = await responsePort.first;
+    responsePort.close();
+    if (response is EmitWorkflowEventResponse) {
+      if (response.error != null) {
+        throw StateError(response.error!);
+      }
+      return;
+    }
+    throw StateError('Unexpected workflow event response: $response');
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 }

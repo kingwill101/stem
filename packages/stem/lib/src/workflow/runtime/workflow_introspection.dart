@@ -1,3 +1,5 @@
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 /// Enumerates workflow step event types emitted by the runtime.
@@ -57,11 +59,136 @@ class WorkflowStepEvent implements StemEvent {
   /// Optional result payload for completed steps.
   final Object? result;
 
+  /// Decodes the step result payload with [codec], when present.
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the step result payload with a JSON decoder, when present.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the step result payload with a version-aware JSON decoder, when
+  /// present.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Optional error message for failed steps.
   final String? error;
 
   /// Optional metadata associated with the event.
   final Map<String, Object?>? metadata;
+
+  /// Returns the decoded metadata value for [key], or `null` when absent.
+  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with [codec].
+  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a JSON decoder.
+  T? metadataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.valueVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T? metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T? metadataPayloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataPayloadVersionedJson<T>({
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   @override
   String get eventName => 'workflow.step.${type.name}';
@@ -106,6 +233,93 @@ class WorkflowRuntimeEvent implements StemEvent {
 
   /// Additional event metadata.
   final Map<String, Object?>? metadata;
+
+  /// Returns the decoded metadata value for [key], or `null` when absent.
+  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with [codec].
+  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a JSON decoder.
+  T? metadataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return payload.valueVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T? metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T? metadataPayloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataPayloadVersionedJson<T>({
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = metadata;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   @override
   String get eventName => 'workflow.runtime.${type.name}';

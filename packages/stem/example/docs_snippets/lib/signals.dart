@@ -5,6 +5,10 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
+final signalsDemoTaskDefinition = TaskDefinition.noArgs<void>(
+  name: 'signals.demo',
+);
+
 // #region signals-configure
 void configureSignals() {
   StemSignals.configure(
@@ -59,7 +63,7 @@ List<SignalSubscription> registerWorkerScopedSignals() {
           'Task failed on worker ${payload.worker.id}: ${payload.taskName}',
         );
       },
-      taskName: 'signals.demo',
+      taskName: signalsDemoTaskDefinition.name,
       workerId: 'signals-worker',
     ),
     StemSignals.onControlCommandCompleted(
@@ -141,7 +145,7 @@ Future<void> main() async {
     'memory://',
     tasks: [
       FunctionTaskHandler<void>(
-        name: 'signals.demo',
+        name: signalsDemoTaskDefinition.name,
         entrypoint: (context, args) async {
           print('Signals demo task');
           return null;
@@ -154,8 +158,7 @@ Future<void> main() async {
     ),
   );
 
-  unawaited(app.start());
-  await app.stem.enqueue('signals.demo', args: const {});
+  await signalsDemoTaskDefinition.enqueue(app);
   await Future<void>.delayed(const Duration(milliseconds: 200));
   await app.close();
 

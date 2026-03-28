@@ -106,6 +106,8 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/stem_event.dart';
@@ -123,6 +125,9 @@ import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Shutdown modes for workers.
 ///
@@ -270,6 +275,10 @@ class Worker {
   ///   is created and populated from [tasks].
   /// - [enqueuer]: [Stem] instance for spawning child tasks from handlers.
   ///   Created automatically if not provided.
+  /// - [workflows]: Optional workflow caller used when task handlers need to
+  ///   start or wait for child workflows.
+  /// - [workflowEvents]: Optional workflow event emitter used when task
+  ///   handlers need to resume waiting workflows by topic or typed event ref.
   /// - [rateLimiter]: Enforces per-task rate limits. Rate limits are defined
   ///   on individual handlers via [TaskOptions.rateLimit].
   /// - [middleware]: List of middleware for intercepting task lifecycle events.
@@ -304,6 +313,8 @@ class Worker {
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     Stem? enqueuer,
+    WorkflowCaller? workflows,
+    WorkflowEventEmitter? workflowEvents,
     RateLimiter? rateLimiter,
     List<Middleware> middleware = const [],
     RevokeStore? revokeStore,
@@ -330,6 +341,8 @@ class Worker {
   }) : this._(
          broker: broker,
          enqueuer: enqueuer,
+         workflows: workflows,
+         workflowEvents: workflowEvents,
          registry: _resolveTaskRegistry(registry, tasks),
          backend: backend,
          rateLimiter: rateLimiter,
@@ -362,6 +375,8 @@ class Worker {
     required this.registry,
     required this.backend,
     required Stem? enqueuer,
+    this.workflows,
+    this.workflowEvents,
     this.rateLimiter,
     this.middleware = const [],
     this.revokeStore,
@@ -425,7 +440,6 @@ class Worker {
           signer: signer,
           encoderRegistry: payloadEncoders,
         );
-
     _maxConcurrency = this.concurrency;
 
     final autoscaleMax =
@@ -550,6 +564,13 @@ class Worker {
 
   /// Enqueuer used by task contexts for spawning new work.
   Stem? _enqueuer;
+
+  /// Workflow caller used by task contexts for child workflow operations.
+  /// Active workflow caller used by task handlers, if configured.
+  WorkflowCaller? workflows;
+
+  /// Workflow event emitter used by task contexts for workflow resumes.
+  WorkflowEventEmitter? workflowEvents;
 
   static final math.Random _random = math.Random();
 
@@ -949,6 +970,7 @@ class Worker {
 
         final context = TaskContext(
           id: envelope.id,
+          args: envelope.args,
           attempt: envelope.attempt,
           headers: envelope.headers,
           meta: envelope.meta,
@@ -968,6 +990,8 @@ class Worker {
             _reportProgress(envelope, progress, data: data);
           },
           enqueuer: _enqueuer,
+          workflows: workflows,
+          workflowEvents: workflowEvents,
         );
 
         await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
@@ -1938,7 +1962,7 @@ class Worker {
           envelope,
           extra: {
             'error': error.message,
-            if (error.keyId != null) 'keyId': error.keyId!,
+            if (error.keyId != null) 'keyId': error.keyId,
           },
         ),
       ),
@@ -4493,6 +4517,7 @@ class Worker {
                   signal.request.enqueueOptions!.cast<String, Object?>(),
                 )
               : null;
+          final notBefore = signal.request.notBefore;
           final enqueuer = _enqueuer;
           if (enqueuer == null) {
             signal.replyPort.send(
@@ -4505,6 +4530,7 @@ class Worker {
             args: signal.request.args,
             headers: signal.request.headers,
             options: options,
+            notBefore: notBefore,
             meta: signal.request.meta,
             enqueueOptions: enqueueOptions,
           );
@@ -4514,8 +4540,95 @@ class Worker {
             TaskEnqueueResponse(error: error.toString()),
           );
         }
+      } else if (signal is StartWorkflowSignal) {
+        try {
+          final workflows = this.workflows;
+          if (workflows == null) {
+            signal.replyPort.send(
+              const StartWorkflowResponse(
+                error: 'No workflow caller configured',
+              ),
+            );
+            return;
+          }
+          final runId = await workflows.startWorkflowRef(
+            _workerWorkflowRef(signal.request.workflowName),
+            signal.request.params,
+            parentRunId: signal.request.parentRunId,
+            ttl: signal.request.ttlMs == null
+                ? null
+                : Duration(milliseconds: signal.request.ttlMs!),
+            cancellationPolicy: WorkflowCancellationPolicy.fromJson(
+              signal.request.cancellationPolicy,
+            ),
+          );
+          signal.replyPort.send(StartWorkflowResponse(runId: runId));
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            StartWorkflowResponse(error: error.toString()),
+          );
+        }
+      } else if (signal is WaitForWorkflowSignal) {
+        try {
+          final workflows = this.workflows;
+          if (workflows == null) {
+            signal.replyPort.send(
+              const WaitForWorkflowResponse(
+                error: 'No workflow caller configured',
+              ),
+            );
+            return;
+          }
+          final result = await workflows.waitForWorkflowRef(
+            signal.request.runId,
+            _workerWorkflowRef(signal.request.workflowName),
+            pollInterval: signal.request.pollIntervalMs == null
+                ? const Duration(milliseconds: 100)
+                : Duration(milliseconds: signal.request.pollIntervalMs!),
+            timeout: signal.request.timeoutMs == null
+                ? null
+                : Duration(milliseconds: signal.request.timeoutMs!),
+          );
+          signal.replyPort.send(
+            WaitForWorkflowResponse(
+              result: result?.toJson(),
+            ),
+          );
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            WaitForWorkflowResponse(error: error.toString()),
+          );
+        }
+      } else if (signal is EmitWorkflowEventSignal) {
+        try {
+          final workflowEvents = this.workflowEvents;
+          if (workflowEvents == null) {
+            signal.replyPort.send(
+              const EmitWorkflowEventResponse(
+                error: 'No workflow event emitter configured',
+              ),
+            );
+            return;
+          }
+          await workflowEvents.emitValue<Map<String, Object?>>(
+            signal.request.topic,
+            signal.request.payload,
+          );
+          signal.replyPort.send(const EmitWorkflowEventResponse());
+        } on Exception catch (error) {
+          signal.replyPort.send(
+            EmitWorkflowEventResponse(error: error.toString()),
+          );
+        }
       }
     };
+  }
+
+  WorkflowRef<Map<String, Object?>, Object?> _workerWorkflowRef(String name) {
+    return WorkflowRef<Map<String, Object?>, Object?>(
+      name: name,
+      encodeParams: (params) => params,
+    );
   }
 
   /// Lazily creates or returns the worker isolate pool.
@@ -4660,6 +4773,67 @@ class WorkerEvent implements StemEvent {
 
   /// Additional data for the event.
   final Map<String, Object?>? data;
+
+  /// Returns the decoded data value for [key], or `null` when absent.
+  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded data value for [key], or [fallback] when absent.
+  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded data value for [key], throwing when absent.
+  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = data;
+    if (payload == null) {
+      throw StateError('WorkerEvent.data does not contain "$key".');
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the full data payload as a typed DTO with [codec].
+  T? dataAs<T>({required PayloadCodec<T> codec}) {
+    final payload = data;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full data payload as a typed DTO with a JSON decoder.
+  T? dataJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full data payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? dataVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = data;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   @override
   String get eventName => 'worker.${type.name}';

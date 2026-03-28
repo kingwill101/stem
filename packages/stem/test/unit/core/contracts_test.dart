@@ -1,5 +1,6 @@
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:test/test.dart';
 
@@ -89,6 +90,7 @@ void main() {
         state: TaskState.failed,
         attempt: 1,
         meta: const {
+          PayloadCodec.versionKey: 2,
           'task': 'email.send',
           'queue': 'critical',
           'namespace': 'acme',
@@ -121,6 +123,22 @@ void main() {
         },
       );
 
+      expect(
+        status.metaJson<_TaskStatusMeta>(decode: _TaskStatusMeta.fromJson),
+        isA<_TaskStatusMeta>()
+            .having((value) => value.task, 'task', 'email.send')
+            .having((value) => value.queue, 'queue', 'critical'),
+      );
+      expect(
+        status.metaVersionedJson<_TaskStatusMeta>(
+          version: 2,
+          decode: _TaskStatusMeta.fromVersionedJson,
+        ),
+        isA<_TaskStatusMeta>()
+            .having((value) => value.task, 'task', 'email.send')
+            .having((value) => value.queue, 'queue', 'critical'),
+      );
+
       expect(status.taskName, equals('email.send'));
       expect(status.queueName, equals('critical'));
       expect(status.namespace, equals('acme'));
@@ -151,6 +169,194 @@ void main() {
       expect(status.workflowSerializationVersion, equals('1'));
       expect(status.workflowStreamId, equals('invoice_run-123'));
     });
+
+    test('payload helpers decode stored values', () {
+      final status = TaskStatus(
+        id: 'task-4',
+        state: TaskState.succeeded,
+        attempt: 0,
+        payload: const {'id': 'receipt-1'},
+      );
+      final codec = PayloadCodec<Map<String, Object?>>.map(
+        encode: (value) => value,
+        decode: (json) => json,
+        typeName: 'ReceiptMap',
+      );
+
+      expect(
+        status.payloadValue<Map<String, Object?>>(),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadValue<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadValueOr<Map<String, Object?>>(
+          const {'id': 'fallback'},
+          codec: codec,
+        ),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.requiredPayloadValue<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadAs<Map<String, Object?>>(codec: codec),
+        equals(const {'id': 'receipt-1'}),
+      );
+      expect(
+        status.payloadJson<_ReceiptPayload>(
+          decode: _ReceiptPayload.fromJson,
+        ),
+        isA<_ReceiptPayload>().having((value) => value.id, 'id', 'receipt-1'),
+      );
+      expect(
+        status.payloadVersionedJson<_ReceiptPayload>(
+          version: 2,
+          decode: _ReceiptPayload.fromVersionedJson,
+        ),
+        isA<_ReceiptPayload>().having((value) => value.id, 'id', 'receipt-1'),
+      );
+    });
+
+    test('error metadata helpers decode structured values', () {
+      const error = TaskError(
+        type: 'Boom',
+        message: 'fail',
+        meta: {
+          PayloadCodec.versionKey: 2,
+          'queue': 'default',
+        },
+      );
+
+      expect(
+        error.metaJson<_ErrorMeta>(decode: _ErrorMeta.fromJson),
+        isA<_ErrorMeta>().having((value) => value.queue, 'queue', 'default'),
+      );
+      expect(
+        error.metaVersionedJson<_ErrorMeta>(
+          version: 2,
+          decode: _ErrorMeta.fromVersionedJson,
+        ),
+        isA<_ErrorMeta>().having((value) => value.queue, 'queue', 'default'),
+      );
+    });
+
+    test('requiredPayloadValue throws when payload is absent', () {
+      final status = TaskStatus(
+        id: 'task-5',
+        state: TaskState.failed,
+        attempt: 1,
+      );
+
+      expect(
+        status.requiredPayloadValue<Map<String, Object?>>,
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('task-5'),
+          ),
+        ),
+      );
+      expect(
+        status.payloadValueOr<Map<String, Object?>>(
+          const {'id': 'fallback'},
+        ),
+        equals(const {'id': 'fallback'}),
+      );
+      expect(
+        status.payloadAs<Map<String, Object?>>(
+          codec: PayloadCodec<Map<String, Object?>>.map(
+            encode: (value) => value,
+            decode: (json) => json,
+            typeName: 'ReceiptMap',
+          ),
+        ),
+        isNull,
+      );
+      expect(
+        status.payloadJson<_ReceiptPayload>(
+          decode: _ReceiptPayload.fromJson,
+        ),
+        isNull,
+      );
+    });
+  });
+
+  group('GroupStatus', () {
+    test('exposes typed child-result decode helpers', () {
+      final codec = PayloadCodec<Map<String, Object?>>.map(
+        encode: (value) => value,
+        decode: (json) => json,
+        typeName: 'ReceiptMap',
+      );
+      final scalarStatus = GroupStatus(
+        id: 'grp-1',
+        expected: 2,
+        results: {
+          'task-1': TaskStatus(
+            id: 'task-1',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: 7,
+          ),
+          'task-2': TaskStatus(
+            id: 'task-2',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: 9,
+          ),
+        },
+      );
+      final dtoStatus = GroupStatus(
+        id: 'grp-2',
+        expected: 1,
+        results: {
+          'task-1': TaskStatus(
+            id: 'task-1',
+            state: TaskState.succeeded,
+            attempt: 0,
+            payload: const {'id': 'receipt-1'},
+          ),
+        },
+      );
+
+      expect(
+        scalarStatus.resultValues<int>(),
+        equals({
+          'task-1': 7,
+          'task-2': 9,
+        }),
+      );
+      expect(
+        dtoStatus.resultAs<Map<String, Object?>>(codec: codec),
+        equals({
+          'task-1': const {'id': 'receipt-1'},
+        }),
+      );
+      expect(
+        dtoStatus.resultJson<_GroupReceipt>(
+          decode: _GroupReceipt.fromJson,
+        ),
+        {
+          'task-1': isA<_GroupReceipt>()
+              .having((value) => value.id, 'id', 'receipt-1'),
+        },
+      );
+      expect(
+        dtoStatus.resultVersionedJson<_GroupReceipt>(
+          version: 2,
+          decode: _GroupReceipt.fromVersionedJson,
+        ),
+        {
+          'task-1': isA<_GroupReceipt>()
+              .having((value) => value.id, 'id', 'receipt-1'),
+        },
+      );
+    });
   });
 
   group('DeadLetterEntry', () {
@@ -168,6 +374,29 @@ void main() {
       expect(decoded.reason, equals('boom'));
       expect(decoded.meta['trace'], equals('abc'));
       expect(decoded.deadAt, equals(DateTime.utc(2025)));
+    });
+
+    test('exposes typed metadata helpers', () {
+      final entry = DeadLetterEntry(
+        envelope: Envelope(name: 'task', args: const {}),
+        deadAt: DateTime.utc(2025),
+        meta: const {
+          PayloadCodec.versionKey: 2,
+          'trace': 'abc',
+        },
+      );
+
+      expect(
+        entry.metaJson<_TraceMeta>(decode: _TraceMeta.fromJson),
+        isA<_TraceMeta>().having((value) => value.trace, 'trace', 'abc'),
+      );
+      expect(
+        entry.metaVersionedJson<_TraceMeta>(
+          version: 2,
+          decode: _TraceMeta.fromVersionedJson,
+        ),
+        isA<_TraceMeta>().having((value) => value.trace, 'trace', 'abc'),
+      );
     });
   });
 
@@ -300,6 +529,71 @@ void main() {
       expect(updated.lastError, isNull);
       expect(updated.enabled, isFalse);
     });
+
+    test('exposes typed args, kwargs, and metadata helpers', () {
+      final entry = ScheduleEntry(
+        id: 'schedule-typed',
+        taskName: 'task',
+        queue: 'default',
+        spec: IntervalScheduleSpec(every: const Duration(minutes: 1)),
+        args: const {
+          PayloadCodec.versionKey: 2,
+          'value': 1,
+        },
+        kwargs: const {
+          PayloadCodec.versionKey: 2,
+          'label': 'nightly',
+        },
+        meta: const {
+          PayloadCodec.versionKey: 2,
+          'source': 'scheduler',
+        },
+      );
+
+      expect(
+        entry.argsJson<_ScheduleArgs>(decode: _ScheduleArgs.fromJson),
+        isA<_ScheduleArgs>().having((value) => value.value, 'value', 1),
+      );
+      expect(
+        entry.argsVersionedJson<_ScheduleArgs>(
+          version: 2,
+          decode: _ScheduleArgs.fromVersionedJson,
+        ),
+        isA<_ScheduleArgs>().having((value) => value.value, 'value', 1),
+      );
+      expect(
+        entry.kwargsJson<_ScheduleKwargs>(decode: _ScheduleKwargs.fromJson),
+        isA<_ScheduleKwargs>().having(
+          (value) => value.label,
+          'label',
+          'nightly',
+        ),
+      );
+      expect(
+        entry.kwargsVersionedJson<_ScheduleKwargs>(
+          version: 2,
+          decode: _ScheduleKwargs.fromVersionedJson,
+        ),
+        isA<_ScheduleKwargs>().having(
+          (value) => value.label,
+          'label',
+          'nightly',
+        ),
+      );
+      expect(
+        entry.metaJson<_ScheduleMeta>(decode: _ScheduleMeta.fromJson),
+        isA<_ScheduleMeta>()
+            .having((value) => value.source, 'source', 'scheduler'),
+      );
+      expect(
+        entry.metaVersionedJson<_ScheduleMeta>(
+          version: 2,
+          decode: _ScheduleMeta.fromVersionedJson,
+        ),
+        isA<_ScheduleMeta>()
+            .having((value) => value.source, 'source', 'scheduler'),
+      );
+    });
   });
 
   test('ScheduleConflictException string includes metadata', () {
@@ -313,4 +607,152 @@ void main() {
     expect(error.toString(), contains('expected: 1'));
     expect(error.toString(), contains('actual: 2'));
   });
+}
+
+class _GroupReceipt {
+  const _GroupReceipt({required this.id});
+
+  factory _GroupReceipt.fromJson(Map<String, dynamic> json) {
+    return _GroupReceipt(id: json['id'] as String);
+  }
+
+  factory _GroupReceipt.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _GroupReceipt(id: json['id'] as String);
+  }
+
+  final String id;
+}
+
+class _ReceiptPayload {
+  const _ReceiptPayload({required this.id});
+
+  factory _ReceiptPayload.fromJson(Map<String, dynamic> json) {
+    return _ReceiptPayload(id: json['id'] as String);
+  }
+
+  factory _ReceiptPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ReceiptPayload(id: json['id'] as String);
+  }
+
+  final String id;
+}
+
+class _TraceMeta {
+  const _TraceMeta({required this.trace});
+
+  factory _TraceMeta.fromJson(Map<String, dynamic> json) {
+    return _TraceMeta(trace: json['trace'] as String);
+  }
+
+  factory _TraceMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TraceMeta.fromJson(json);
+  }
+
+  final String trace;
+}
+
+class _ScheduleArgs {
+  const _ScheduleArgs({required this.value});
+
+  factory _ScheduleArgs.fromJson(Map<String, dynamic> json) {
+    return _ScheduleArgs(value: json['value'] as int);
+  }
+
+  factory _ScheduleArgs.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleArgs.fromJson(json);
+  }
+
+  final int value;
+}
+
+class _ScheduleKwargs {
+  const _ScheduleKwargs({required this.label});
+
+  factory _ScheduleKwargs.fromJson(Map<String, dynamic> json) {
+    return _ScheduleKwargs(label: json['label'] as String);
+  }
+
+  factory _ScheduleKwargs.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleKwargs.fromJson(json);
+  }
+
+  final String label;
+}
+
+class _ScheduleMeta {
+  const _ScheduleMeta({required this.source});
+
+  factory _ScheduleMeta.fromJson(Map<String, dynamic> json) {
+    return _ScheduleMeta(source: json['source'] as String);
+  }
+
+  factory _ScheduleMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ScheduleMeta.fromJson(json);
+  }
+
+  final String source;
+}
+
+class _ErrorMeta {
+  const _ErrorMeta({required this.queue});
+
+  factory _ErrorMeta.fromJson(Map<String, dynamic> json) {
+    return _ErrorMeta(queue: json['queue'] as String);
+  }
+
+  factory _ErrorMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _ErrorMeta.fromJson(json);
+  }
+
+  final String queue;
+}
+
+class _TaskStatusMeta {
+  const _TaskStatusMeta({required this.task, required this.queue});
+
+  factory _TaskStatusMeta.fromJson(Map<String, dynamic> json) {
+    return _TaskStatusMeta(
+      task: json['task'] as String,
+      queue: json['queue'] as String,
+    );
+  }
+
+  factory _TaskStatusMeta.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TaskStatusMeta.fromJson(json);
+  }
+
+  final String task;
+  final String queue;
 }

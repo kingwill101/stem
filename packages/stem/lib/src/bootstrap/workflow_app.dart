@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
@@ -5,35 +7,50 @@ import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/clock.dart';
-import 'package:stem/src/core/contracts.dart' show TaskHandler;
+import 'package:stem/src/core/contracts.dart'
+    show
+        GroupStatus,
+        TaskCall,
+        TaskEnqueueOptions,
+        TaskHandler,
+        TaskOptions,
+        TaskStatus;
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
 import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/core/workflow_watcher.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_runtime.dart';
+import 'package:stem/src/workflow/runtime/workflow_views.dart';
 
 /// Helper that bootstraps a workflow runtime on top of [StemApp].
 ///
 /// This wrapper wires together broker/backend infrastructure, registers flows,
 /// and exposes convenience helpers for scheduling and observing workflow runs
 /// without having to manage [WorkflowRuntime] directly.
-class StemWorkflowApp {
+class StemWorkflowApp
+    implements WorkflowCaller, WorkflowEventEmitter, StemTaskApp {
   StemWorkflowApp._({
     required this.app,
     required this.runtime,
     required this.store,
     required this.eventBus,
+    required this.allowWorkerAutoStart,
+    required this.ownsStemApp,
     required Future<void> Function() disposeStore,
     required Future<void> Function() disposeBus,
   }) : _disposeStore = disposeStore,
@@ -51,10 +68,33 @@ class StemWorkflowApp {
   /// Event bus used to deliver workflow events.
   final EventBus eventBus;
 
+  /// Whether shortcut operations may lazily start the managed worker.
+  final bool allowWorkerAutoStart;
+
+  /// Whether this wrapper owns the provided [app] and may shut it down.
+  final bool ownsStemApp;
+
   final Future<void> Function() _disposeStore;
   final Future<void> Function() _disposeBus;
 
-  bool _started = false;
+  bool _runtimeStarted = false;
+  Future<void>? _runtimeStartFuture;
+
+  /// Whether both the runtime and managed worker have been started.
+  bool get isStarted => isRuntimeStarted && isWorkerStarted;
+
+  /// Whether the workflow runtime has been started.
+  bool get isRuntimeStarted => _runtimeStarted;
+
+  /// Whether the managed worker has been started.
+  bool get isWorkerStarted => app.isStarted;
+
+  Future<void> _ensureReadyForWorkflowStart() async {
+    await startRuntime();
+    if (allowWorkerAutoStart) {
+      await startWorker();
+    }
+  }
 
   /// Starts the workflow runtime and the underlying Stem worker.
   ///
@@ -67,16 +107,123 @@ class StemWorkflowApp {
   /// await app.start();
   /// ```
   Future<void> start() async {
-    if (_started) return;
-    _started = true;
-    await runtime.start();
-    await app.start();
+    await startRuntime();
+    await startWorker();
+  }
+
+  /// Starts the workflow runtime without starting the managed worker.
+  Future<void> startRuntime() async {
+    if (_runtimeStarted) return;
+    final existing = _runtimeStartFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _runtimeStartFuture = completer.future;
+    try {
+      await runtime.start();
+      _runtimeStarted = true;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _runtimeStartFuture = null;
+      _runtimeStarted = false;
+      completer.completeError(error, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Starts the managed worker used for workflow execution.
+  Future<void> startWorker() {
+    return app.start();
+  }
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueueValue(
+      name,
+      value,
+      codec: codec,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return app.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) {
+    return app.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) {
+    return app.getGroupStatus(groupId);
+  }
+
+  @override
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
+  }) {
+    return app.waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: decode,
+      decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
+    );
   }
 
   /// Schedules a workflow run.
   ///
   /// Lazily starts the runtime on the first invocation so simple examples do
-  /// not need to call [start] manually.
+  /// not need to call [start] manually. The managed worker is only auto-started
+  /// when [allowWorkerAutoStart] is `true`.
   ///
   /// Example:
   /// ```dart
@@ -95,18 +242,8 @@ class StemWorkflowApp {
 
     /// Optional policy that enforces automatic run cancellation.
     WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflow(
-          name,
-          params: params,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflow(
       name,
       params: params,
@@ -116,25 +253,82 @@ class StemWorkflowApp {
     );
   }
 
+  /// Starts a workflow from a DTO that already exposes `toJson()`.
+  Future<String> startWorkflowJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) async {
+    await _ensureReadyForWorkflowStart();
+    return runtime.startWorkflowJson(
+      name,
+      paramsJson,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      typeName: typeName,
+    );
+  }
+
+  /// Starts a workflow from a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> startWorkflowValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    await _ensureReadyForWorkflowStart();
+    return runtime.startWorkflowValue(
+      name,
+      value,
+      codec: codec,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts a workflow from a DTO and stores a schema [version] beside the
+  /// JSON payload.
+  Future<String> startWorkflowVersionedJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    required int version,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) async {
+    await _ensureReadyForWorkflowStart();
+    return runtime.startWorkflowVersionedJson(
+      name,
+      paramsJson,
+      version: version,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+      typeName: typeName,
+    );
+  }
+
   /// Schedules a workflow run from a typed [WorkflowRef].
+  @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
     WorkflowRef<TParams, TResult> definition,
     TParams params, {
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
-  }) {
-    if (!_started) {
-      return start().then(
-        (_) => runtime.startWorkflowRef(
-          definition,
-          params,
-          parentRunId: parentRunId,
-          ttl: ttl,
-          cancellationPolicy: cancellationPolicy,
-        ),
-      );
-    }
+  }) async {
+    await _ensureReadyForWorkflowStart();
     return runtime.startWorkflowRef(
       definition,
       params,
@@ -144,7 +338,37 @@ class StemWorkflowApp {
     );
   }
 
+  /// Emits a DTO-backed external event without requiring a manual payload map.
+  Future<void> emitJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    String? typeName,
+  }) {
+    return runtime.emitJson(
+      topic,
+      payloadJson,
+      typeName: typeName,
+    );
+  }
+
+  /// Emits a DTO-backed external event and stores a schema [version] beside
+  /// the JSON payload.
+  Future<void> emitVersionedJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    required int version,
+    String? typeName,
+  }) {
+    return runtime.emitVersionedJson(
+      topic,
+      payloadJson,
+      version: version,
+      typeName: typeName,
+    );
+  }
+
   /// Schedules a workflow run from a prebuilt [WorkflowStartCall].
+  @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   ) {
@@ -160,12 +384,19 @@ class StemWorkflowApp {
   /// Emits a typed event to resume runs waiting on [topic].
   ///
   /// This is a convenience wrapper over [WorkflowRuntime.emitValue].
+  @override
   Future<void> emitValue<T>(
     String topic,
     T value, {
     PayloadCodec<T>? codec,
   }) {
     return runtime.emitValue(topic, value, codec: codec);
+  }
+
+  /// Emits a typed event through a [WorkflowEventRef].
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return runtime.emitEvent(event, value);
   }
 
   /// Returns the current [RunState] of a workflow run, or `null` if not found.
@@ -180,6 +411,127 @@ class StemWorkflowApp {
   /// }
   /// ```
   Future<RunState?> getRun(String runId) => store.get(runId);
+
+  /// Registers all tasks and workflows from [module] into this app.
+  ///
+  /// This is a convenience helper for manual registration flows that need to
+  /// attach generated definitions after bootstrap.
+  void registerModule(StemModule module) {
+    registerModuleTaskHandlers(app.registry, module.tasks);
+    module.registerInto(workflows: runtime.registry);
+  }
+
+  /// Registers all tasks and workflows from [modules] into this app.
+  void registerModules(Iterable<StemModule> modules) {
+    final merged = StemModule.combine(modules: modules);
+    if (merged == null) {
+      return;
+    }
+    registerModule(merged);
+  }
+
+  /// Registers [definition] into this app's workflow registry.
+  void registerWorkflow(WorkflowDefinition definition) {
+    runtime.registerWorkflow(definition);
+  }
+
+  /// Registers [definitions] into this app's workflow registry.
+  void registerWorkflows(Iterable<WorkflowDefinition> definitions) {
+    definitions.forEach(registerWorkflow);
+  }
+
+  /// Registers [flow] into this app's workflow registry.
+  void registerFlow(Flow flow) {
+    registerWorkflow(flow.definition);
+  }
+
+  /// Registers [flows] into this app's workflow registry.
+  void registerFlows(Iterable<Flow> flows) {
+    flows.forEach(registerFlow);
+  }
+
+  /// Registers [script] into this app's workflow registry.
+  void registerScript(WorkflowScript script) {
+    registerWorkflow(script.definition);
+  }
+
+  /// Registers [scripts] into this app's workflow registry.
+  void registerScripts(Iterable<WorkflowScript> scripts) {
+    scripts.forEach(registerScript);
+  }
+
+  /// Returns the normalized run view for [runId], or `null` if not found.
+  Future<WorkflowRunView?> viewRun(String runId) {
+    return runtime.viewRun(runId);
+  }
+
+  /// Returns persisted checkpoint views for [runId].
+  Future<List<WorkflowCheckpointView>> viewCheckpoints(String runId) {
+    return runtime.viewCheckpoints(runId);
+  }
+
+  /// Returns the combined run + checkpoint detail view for [runId].
+  ///
+  /// This is a convenience wrapper over [WorkflowRuntime.viewRunDetail] so
+  /// callers do not need to reach through [runtime] for common inspection.
+  Future<WorkflowRunDetailView?> viewRunDetail(String runId) {
+    return runtime.viewRunDetail(runId);
+  }
+
+  /// Returns normalized workflow run views filtered by workflow/status.
+  Future<List<WorkflowRunView>> listRunViews({
+    String? workflow,
+    WorkflowStatus? status,
+    int limit = 50,
+    int offset = 0,
+  }) {
+    return runtime.listRunViews(
+      workflow: workflow,
+      status: status,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  /// Returns the manifest entries for workflows registered with this app.
+  List<WorkflowManifestEntry> workflowManifest() {
+    return runtime.workflowManifest();
+  }
+
+  /// Executes the workflow run identified by [runId].
+  ///
+  /// This is a convenience wrapper over [WorkflowRuntime.executeRun] for
+  /// examples and application code that need direct run driving without
+  /// reaching through [runtime].
+  Future<void> executeRun(String runId) {
+    return runtime.executeRun(runId);
+  }
+
+  /// Rewinds [runId] to [checkpointName] and marks it runnable again.
+  ///
+  /// This is a convenience wrapper for replay-oriented workflows that need to
+  /// resume execution from an earlier persisted checkpoint.
+  Future<void> rewindToCheckpoint(String runId, String checkpointName) async {
+    await store.rewindToStep(runId, checkpointName);
+    await store.markRunning(runId);
+  }
+
+  /// Lists event watchers registered for [topic].
+  Future<List<WorkflowWatcher>> listWatchers(String topic) {
+    return store.listWatchers(topic);
+  }
+
+  /// Marks all runs due at [now] as resumed and returns their ids.
+  Future<List<String>> resumeDueRuns([DateTime? now]) async {
+    final due = await store.dueRuns(now ?? DateTime.now());
+    final resumed = <String>[];
+    for (final runId in due) {
+      final state = await store.get(runId);
+      await store.markResumed(runId, data: state?.suspensionData);
+      resumed.add(runId);
+    }
+    return resumed;
+  }
 
   /// Polls the workflow store until the run reaches a terminal state.
   ///
@@ -202,7 +554,16 @@ class StemWorkflowApp {
     Duration pollInterval = const Duration(milliseconds: 100),
     Duration? timeout,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
+    assert(
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
+    );
     final startedAt = stemNow();
     while (true) {
       final state = await store.get(runId);
@@ -210,20 +571,31 @@ class StemWorkflowApp {
         return null;
       }
       if (state.isTerminal) {
-        return _buildResult(state, decode, timedOut: false);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
+          timedOut: false,
+        );
       }
       if (timeout != null && stemNow().difference(startedAt) >= timeout) {
-        return _buildResult(state, decode, timedOut: true);
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
+          timedOut: true,
+        );
       }
       await Future<void>.delayed(pollInterval);
     }
   }
 
   /// Waits for [runId] using the decoding rules from a [WorkflowRef].
-  Future<WorkflowResult<TResult>?> waitForWorkflowRef<
-    TParams,
-    TResult extends Object?
-  >(
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
     String runId,
     WorkflowRef<TParams, TResult> definition, {
     Duration pollInterval = const Duration(milliseconds: 100),
@@ -241,9 +613,16 @@ class StemWorkflowApp {
     RunState state,
     T Function(Object? payload)? decode, {
     required bool timedOut,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) {
     final value = state.status == WorkflowStatus.completed
-        ? _decodeResult(state.result, decode)
+        ? _decodeResult(
+            state.result,
+            decode,
+            decodeJson,
+            decodeVersionedJson,
+          )
         : null;
     return WorkflowResult<T>(
       runId: state.id,
@@ -258,9 +637,22 @@ class StemWorkflowApp {
   T? _decodeResult<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   ) {
     if (decode != null) {
       return decode(payload);
+    }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+      );
     }
     return payload as T?;
   }
@@ -276,10 +668,13 @@ class StemWorkflowApp {
   /// ```
   Future<void> shutdown() async {
     await runtime.dispose();
-    await app.shutdown();
+    if (ownsStemApp) {
+      await app.shutdown();
+    }
     await _disposeBus();
     await _disposeStore();
-    _started = false;
+    _runtimeStarted = false;
+    _runtimeStartFuture = null;
   }
 
   /// Alias for [shutdown].
@@ -288,7 +683,10 @@ class StemWorkflowApp {
   /// Creates a workflow app with custom backends and factories.
   ///
   /// Useful for wiring Redis/Postgres adapters or sharing an existing
-  /// [StemApp] instance with job processors.
+  /// [StemApp] instance with job processors. When [module] or [tasks] are
+  /// provided and [StemWorkerConfig.subscription] is omitted, the helper
+  /// infers a worker subscription that includes the workflow queue plus the
+  /// default queues declared on those task handlers.
   ///
   /// Example:
   /// ```dart
@@ -300,6 +698,7 @@ class StemWorkflowApp {
   /// ```
   static Future<StemWorkflowApp> create({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -310,6 +709,8 @@ class StemWorkflowApp {
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
@@ -318,21 +719,41 @@ class StemWorkflowApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
+    bool ownsStemApp = false,
   }) async {
-    final moduleTasks = module?.tasks ?? const <TaskHandler<Object?>>[];
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? stemApp?.module;
+    final moduleTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
     final moduleWorkflowDefinitions =
-        module?.workflowDefinitions ?? const <WorkflowDefinition>[];
+        effectiveModule?.workflowDefinitions ?? const <WorkflowDefinition>[];
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: effectiveModule,
+      tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+    );
     final appInstance =
         stemApp ??
         await StemApp.create(
           broker: broker ?? StemBrokerFactory.inMemory(),
           backend: backend ?? StemBackendFactory.inMemory(),
-          workerConfig: workerConfig,
+          workerConfig: resolvedWorkerConfig,
           encoderRegistry: encoderRegistry,
           resultEncoder: resultEncoder,
           argsEncoder: argsEncoder,
           additionalEncoders: additionalEncoders,
+          allowWorkerAutoStart: allowWorkerAutoStart,
         );
+    if (stemApp != null) {
+      _validateReusableStemApp(
+        appInstance,
+        resolvedWorkerConfig,
+        allowWorkerAutoStart: allowWorkerAutoStart,
+      );
+    }
 
     final storeFactoryInstance =
         storeFactory ?? WorkflowStoreFactory.inMemory();
@@ -346,12 +767,19 @@ class StemWorkflowApp {
       eventBus: eventBus,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
-      queue: workerConfig.queue,
+      queue: resolvedWorkerConfig.queue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       registry: workflowRegistry,
       introspectionSink: introspectionSink,
     );
 
-    [...moduleTasks, ...tasks].forEach(appInstance.register);
+    registerModuleTaskHandlers(
+      appInstance.registry,
+      [...moduleTasks, ...tasks],
+    );
+    appInstance.worker.workflows = runtime;
+    appInstance.worker.workflowEvents = runtime;
     appInstance.register(runtime.workflowRunnerHandler());
 
     [
@@ -366,6 +794,8 @@ class StemWorkflowApp {
       runtime: runtime,
       store: store,
       eventBus: eventBus,
+      allowWorkerAutoStart: allowWorkerAutoStart,
+      ownsStemApp: stemApp == null || ownsStemApp,
       disposeStore: () async => storeFactoryInstance.dispose(store),
       disposeBus: () async => busFactory.dispose(eventBus),
     );
@@ -374,6 +804,10 @@ class StemWorkflowApp {
   /// Creates an in-memory workflow app (in-memory broker, backend, and store).
   ///
   /// Ideal for unit tests and examples since it requires no external services.
+  /// When [module] or [tasks] are provided and
+  /// [StemWorkerConfig.subscription] is omitted, the helper infers a worker
+  /// subscription that includes the workflow queue plus the default queues
+  /// declared on those task handlers.
   ///
   /// Example:
   /// ```dart
@@ -383,11 +817,14 @@ class StemWorkflowApp {
   /// ```
   static Future<StemWorkflowApp> inMemory({
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowRegistry? workflowRegistry,
@@ -396,9 +833,11 @@ class StemWorkflowApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) {
     return StemWorkflowApp.create(
       module: module,
+      modules: modules,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -408,6 +847,8 @@ class StemWorkflowApp {
       storeFactory: WorkflowStoreFactory.inMemory(),
       eventBusFactory: WorkflowEventBusFactory.inMemory(),
       workerConfig: workerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: workflowRegistry,
@@ -416,16 +857,21 @@ class StemWorkflowApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
   /// Creates a workflow app from a single backend URL plus adapter wiring.
   ///
   /// This wires broker/backend and workflow-store factories from one URL and
-  /// optional per-store overrides via [StemStack.fromUrl].
+  /// optional per-store overrides via [StemStack.fromUrl]. When [module] or
+  /// [tasks] are provided and [StemWorkerConfig.subscription] is omitted, the
+  /// helper infers a worker subscription that includes the workflow queue plus
+  /// the default queues declared on those task handlers.
   static Future<StemWorkflowApp> fromUrl(
     String url, {
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -433,6 +879,8 @@ class StemWorkflowApp {
     Iterable<StemStoreAdapter> adapters = const [],
     StemStoreOverrides overrides = const StemStoreOverrides(),
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     bool uniqueTasks = false,
     Duration uniqueTaskDefaultTtl = const Duration(minutes: 5),
     String uniqueTaskNamespace = 'stem:unique',
@@ -448,7 +896,15 @@ class StemWorkflowApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) async {
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: StemModule.combine(module: module, modules: modules),
+      tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+    );
     final stack = StemStack.fromUrl(
       url,
       adapters: adapters,
@@ -461,7 +917,7 @@ class StemWorkflowApp {
       adapters: adapters,
       overrides: overrides,
       stack: stack,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
       uniqueTasks: uniqueTasks,
       uniqueTaskDefaultTtl: uniqueTaskDefaultTtl,
       uniqueTaskNamespace: uniqueTaskNamespace,
@@ -472,11 +928,13 @@ class StemWorkflowApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
 
     try {
       return await create(
         module: module,
+        modules: modules,
         workflows: workflows,
         flows: flows,
         scripts: scripts,
@@ -484,11 +942,15 @@ class StemWorkflowApp {
         stemApp: app,
         storeFactory: stack.workflowStore,
         eventBusFactory: eventBusFactory,
-        workerConfig: workerConfig,
+        workerConfig: resolvedWorkerConfig,
+        continuationQueue: continuationQueue,
+        executionQueue: executionQueue,
         pollInterval: pollInterval,
         leaseExtension: leaseExtension,
         workflowRegistry: workflowRegistry,
         introspectionSink: introspectionSink,
+        allowWorkerAutoStart: allowWorkerAutoStart,
+        ownsStemApp: true,
       );
     } on Object catch (error, stackTrace) {
       // fromUrl owns the app instance; clean it up when workflow bootstrap
@@ -503,9 +965,15 @@ class StemWorkflowApp {
   }
 
   /// Creates a workflow app backed by a shared [StemClient].
+  ///
+  /// When [module] or [tasks] are provided and
+  /// [StemWorkerConfig.subscription] is omitted, the helper infers a worker
+  /// subscription that includes the workflow queue plus the default queues
+  /// declared on those task handlers.
   static Future<StemWorkflowApp> fromClient({
     required StemClient client,
     StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<WorkflowDefinition> workflows = const [],
     Iterable<Flow> flows = const [],
     Iterable<WorkflowScript> scripts = const [],
@@ -513,75 +981,180 @@ class StemWorkflowApp {
     WorkflowStoreFactory? storeFactory,
     WorkflowEventBusFactory? eventBusFactory,
     StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
+    bool allowWorkerAutoStart = true,
   }) async {
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? client.module;
+    final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
+      workerConfig,
+      module: effectiveModule,
+      tasks: tasks,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+    );
     final appInstance = await StemApp.fromClient(
       client,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
     return StemWorkflowApp.create(
-      module: module,
+      module: effectiveModule,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
       stemApp: appInstance,
       storeFactory: storeFactory,
       eventBusFactory: eventBusFactory,
-      workerConfig: workerConfig,
+      workerConfig: resolvedWorkerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       workflowRegistry: client.workflowRegistry,
       introspectionSink: introspectionSink,
+      allowWorkerAutoStart: allowWorkerAutoStart,
+      ownsStemApp: true,
     );
   }
 }
 
-/// Convenience helpers for typed workflow start calls.
-extension WorkflowStartCallAppExtension<TParams, TResult extends Object?>
-    on WorkflowStartCall<TParams, TResult> {
-  /// Starts this workflow call with [app].
-  Future<String> startWithApp(StemWorkflowApp app) {
-    return app.startWorkflowCall(this);
-  }
-
-  /// Starts this workflow call with [app] and waits for the typed result.
-  Future<WorkflowResult<TResult>?> startAndWaitWithApp(
-    StemWorkflowApp app, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
-  }) async {
-    final runId = await app.startWorkflowCall(this);
-    return definition.waitFor(
-      app,
-      runId,
-      pollInterval: pollInterval,
-      timeout: timeout,
-    );
-  }
-
-  /// Starts this workflow call with [runtime].
-  Future<String> startWithRuntime(WorkflowRuntime runtime) {
-    return runtime.startWorkflowCall(this);
-  }
-}
-
-/// Convenience helpers for waiting on workflow results using a typed reference.
-extension WorkflowRefAppExtension<TParams, TResult extends Object?>
-    on WorkflowRef<TParams, TResult> {
-  /// Waits for [runId] using this workflow reference's decode rules.
-  Future<WorkflowResult<TResult>?> waitFor(
-    StemWorkflowApp app,
-    String runId, {
-    Duration pollInterval = const Duration(milliseconds: 100),
-    Duration? timeout,
+/// Convenience helpers for layering workflows onto an existing [StemApp].
+extension StemAppWorkflowExtension on StemApp {
+  /// Creates a workflow app on top of this shared task app.
+  ///
+  /// This reuses the existing broker/backend/worker wiring, so the current
+  /// worker must already subscribe to the workflow queue and any task queues
+  /// required by the supplied module or tasks.
+  Future<StemWorkflowApp> createWorkflowApp({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+    Iterable<WorkflowDefinition> workflows = const [],
+    Iterable<Flow> flows = const [],
+    Iterable<WorkflowScript> scripts = const [],
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    WorkflowStoreFactory? storeFactory,
+    WorkflowEventBusFactory? eventBusFactory,
+    StemWorkerConfig workerConfig = const StemWorkerConfig(queue: 'workflow'),
+    String? continuationQueue,
+    String? executionQueue,
+    Duration pollInterval = const Duration(milliseconds: 500),
+    Duration leaseExtension = const Duration(seconds: 30),
+    WorkflowRegistry? workflowRegistry,
+    WorkflowIntrospectionSink? introspectionSink,
+    bool allowWorkerAutoStart = true,
   }) {
-    return app.waitForWorkflowRef(
-      runId,
-      this,
+    return StemWorkflowApp.create(
+      module:
+          StemModule.combine(module: module, modules: modules) ?? this.module,
+      workflows: workflows,
+      flows: flows,
+      scripts: scripts,
+      tasks: tasks,
+      stemApp: this,
+      storeFactory: storeFactory,
+      eventBusFactory: eventBusFactory,
+      workerConfig: workerConfig,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
       pollInterval: pollInterval,
-      timeout: timeout,
+      leaseExtension: leaseExtension,
+      workflowRegistry: workflowRegistry,
+      introspectionSink: introspectionSink,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
+}
+
+void _validateReusableStemApp(
+  StemApp app,
+  StemWorkerConfig workerConfig,
+  {
+    required bool allowWorkerAutoStart,
+  }
+) {
+  if (app.allowWorkerAutoStart != allowWorkerAutoStart) {
+    throw StateError(
+      'StemWorkflowApp.create(stemApp: ...) requires the reused StemApp '
+      'to use the same allowWorkerAutoStart setting. Create the StemApp with '
+      'allowWorkerAutoStart: $allowWorkerAutoStart or omit stemApp so the '
+      'workflow app can create a matching shortcut wrapper.',
+    );
+  }
+
+  final requiredQueues =
+      workerConfig.subscription?.resolveQueues(
+        workerConfig.queue,
+      ) ??
+      [workerConfig.queue];
+  final workerQueues = app.worker.subscriptionQueues.toSet();
+  final missingQueues = requiredQueues
+      .map((queue) => queue.trim())
+      .where((queue) => queue.isNotEmpty)
+      .where((queue) => !workerQueues.contains(queue))
+      .toList(growable: false);
+
+  final requiredBroadcasts =
+      workerConfig.subscription?.broadcastChannels ?? const <String>[];
+  final workerBroadcasts = app.worker.subscriptionBroadcasts.toSet();
+  final missingBroadcasts = requiredBroadcasts
+      .map((channel) => channel.trim())
+      .where((channel) => channel.isNotEmpty)
+      .where((channel) => !workerBroadcasts.contains(channel))
+      .toList(growable: false);
+
+  if (missingQueues.isEmpty && missingBroadcasts.isEmpty) {
+    return;
+  }
+
+  final details = <String>[
+    if (missingQueues.isNotEmpty) 'queues=${missingQueues.join(",")}',
+    if (missingBroadcasts.isNotEmpty)
+      'broadcasts=${missingBroadcasts.join(",")}',
+  ].join(' ');
+
+  throw StateError(
+    'StemWorkflowApp.create(stemApp: ...) requires the reused StemApp worker '
+    'to already subscribe to the workflow/runtime queues it needs ($details). '
+    'Create the StemApp with a matching workerConfig.subscription, or use '
+    'StemClient.createWorkflowApp(...) / StemWorkflowApp.inMemory(...) so '
+    'subscriptions can be inferred automatically.',
+  );
+}
+
+StemWorkerConfig _resolveWorkflowWorkerConfig(
+  StemWorkerConfig workerConfig, {
+  StemModule? module,
+  Iterable<TaskHandler<Object?>> tasks = const [],
+  String? continuationQueue,
+  String? executionQueue,
+}) {
+  if (workerConfig.subscription != null) {
+    return workerConfig;
+  }
+
+  final inferredSubscription =
+      module?.inferWorkerSubscription(
+        workflowQueue: workerConfig.queue,
+        continuationQueue: continuationQueue,
+        executionQueue: executionQueue,
+        additionalTasks: tasks,
+      ) ??
+      (() {
+        final tempModule = StemModule(tasks: tasks);
+        return tempModule.inferWorkerSubscription(
+          workflowQueue: workerConfig.queue,
+          continuationQueue: continuationQueue,
+          executionQueue: executionQueue,
+        );
+      })();
+
+  if (inferredSubscription == null) {
+    return workerConfig;
+  }
+  return workerConfig.copyWith(subscription: inferredSubscription);
 }

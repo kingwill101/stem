@@ -1,14 +1,18 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_ops_health_suite/shared.dart';
 
 Future<void> main() async {
   final config = StemConfig.fromEnvironment();
-  final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
-  final backend = await connectBackend(backendUrl, tls: config.tls);
-  final tasks = buildTasks();
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
+    tasks: buildTasks(),
+  );
 
   final taskCount = _parseInt('TASKS', fallback: 6, min: 1);
   final delayMs = _parseInt('DELAY_MS', fallback: 400, min: 0);
@@ -17,12 +21,11 @@ Future<void> main() async {
     '[producer] broker=${config.brokerUrl} backend=$backendUrl tasks=$taskCount',
   );
 
-  final stem = Stem(broker: broker, tasks: tasks, backend: backend);
   const options = TaskOptions(queue: opsQueue);
 
   for (var i = 0; i < taskCount; i += 1) {
     final label = 'health-${i + 1}';
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'ops.ping',
       options: options,
       args: {'label': label, 'delayMs': delayMs},
@@ -30,8 +33,7 @@ Future<void> main() async {
     stdout.writeln('[producer] enqueued $label id=$id');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 int _parseInt(String key, {required int fallback, int min = 0}) {

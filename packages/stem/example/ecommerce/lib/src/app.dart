@@ -32,20 +32,19 @@ class EcommerceServer {
     );
     final repository = await EcommerceRepository.open(commerceDatabasePath);
     bindAddToCartWorkflowRepository(repository);
+    final checkoutFlow = buildCheckoutFlow(repository);
+    final checkoutWorkflow = checkoutWorkflowRef(checkoutFlow);
 
     final workflowApp = await StemWorkflowApp.fromUrl(
       'sqlite://$stemDatabasePath',
       adapters: const [StemSqliteAdapter()],
       module: stemModule,
-      flows: [buildCheckoutFlow(repository)],
+      flows: [checkoutFlow],
       tasks: [shipmentReserveTaskHandler],
       workerConfig: StemWorkerConfig(
         queue: 'workflow',
         consumerName: 'ecommerce-worker',
         concurrency: 2,
-        subscription: RoutingSubscription(
-          queues: const ['workflow', 'default'],
-        ),
       ),
     );
 
@@ -59,7 +58,7 @@ class EcommerceServer {
           'stemDatabasePath': stemDatabasePath,
           'workflows': [
             StemWorkflowDefinitions.addToCart.name,
-            checkoutWorkflowName,
+            checkoutWorkflow.name,
           ],
         });
       })
@@ -94,26 +93,22 @@ class EcommerceServer {
           final sku = payload['sku']?.toString() ?? '';
           final quantity = _toInt(payload['quantity']);
 
-          final runId = await StemWorkflowDefinitions.addToCart
-              .call((cartId: cartId, sku: sku, quantity: quantity))
-              .startWithApp(workflowApp);
-
-          final result = await StemWorkflowDefinitions.addToCart.waitFor(
+          final result = await StemWorkflowDefinitions.addToCart.startAndWait(
             workflowApp,
-            runId,
+            params: (cartId: cartId, sku: sku, quantity: quantity),
             timeout: const Duration(seconds: 4),
           );
 
           if (result == null) {
             return _error(500, 'Add-to-cart workflow run not found.', {
-              'runId': runId,
+              'runId': null,
             });
           }
 
           if (result.status != WorkflowStatus.completed ||
               result.value == null) {
             return _error(422, 'Add-to-cart workflow did not complete.', {
-              'runId': runId,
+              'runId': result.runId,
               'status': result.status.name,
               'lastError': result.state.lastError,
             });
@@ -128,24 +123,23 @@ class EcommerceServer {
             unitPriceCents: _toInt(computed['unitPriceCents']),
           );
 
-          return _json(200, {'runId': runId, 'cart': updatedCart});
+          return _json(200, {'runId': result.runId, 'cart': updatedCart});
         } on Object catch (error) {
           return _error(400, 'Failed to add item to cart.', error);
         }
       })
       ..post('/checkout/<cartId>', (Request request, String cartId) async {
         try {
-          final runId = await workflowApp.startWorkflow(
-            checkoutWorkflowName,
-            params: {'cartId': cartId},
+          final runId = await checkoutWorkflow.start(
+            workflowApp,
+            params: cartId,
           );
 
-          final result = await workflowApp
-              .waitForCompletion<Map<String, Object?>>(
-                runId,
-                timeout: const Duration(seconds: 6),
-                decode: _toMap,
-              );
+          final result = await checkoutWorkflow.waitFor(
+            workflowApp,
+            runId,
+            timeout: const Duration(seconds: 6),
+          );
 
           if (result == null) {
             return _error(500, 'Checkout workflow run not found.', {
@@ -175,7 +169,7 @@ class EcommerceServer {
         return _json(200, {'order': order});
       })
       ..get('/runs/<runId>', (Request request, String runId) async {
-        final detail = await workflowApp.runtime.viewRunDetail(runId);
+        final detail = await workflowApp.viewRunDetail(runId);
         if (detail == null) {
           return _error(404, 'Workflow run not found.', {'runId': runId});
         }
@@ -240,16 +234,6 @@ Response _json(int status, Map<String, Object?> payload) {
 
 Response _error(int status, String message, Object? error) {
   return _json(status, {'error': message, 'details': _normalizeError(error)});
-}
-
-Map<String, Object?> _toMap(Object? value) {
-  if (value is Map<String, Object?>) {
-    return value;
-  }
-  if (value is Map) {
-    return value.cast<String, Object?>();
-  }
-  return <String, Object?>{};
 }
 
 Object? _normalizeError(Object? error) {

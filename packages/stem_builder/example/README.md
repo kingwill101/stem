@@ -5,9 +5,12 @@ This example demonstrates:
 - Annotated workflow/task definitions
 - Generated `stemModule`
 - Generated typed workflow refs (no manual workflow-name strings):
-  - `StemWorkflowDefinitions.flow.call(...).startWithRuntime(runtime)`
-  - `StemWorkflowDefinitions.userSignup.call(...).startWithRuntime(runtime)`
-- Generated typed task definitions, enqueue helpers, and typed result wait helpers
+  - `StemWorkflowDefinitions.flow.start(runtime, params: (...))`
+  - `StemWorkflowDefinitions.userSignup.start(runtime, params: (...))`
+- Generated typed task definitions that use the shared `TaskCall` /
+  `TaskDefinition.waitFor(...)` APIs
+- Generated zero-arg task definitions with direct helpers from core:
+  - `StemTaskDefinitions.builderExamplePing.enqueueAndWait(stem)`
 - Generated workflow manifest via `stemModule.workflowManifest`
 - Running generated definitions through `StemWorkflowApp`
 - Runtime manifest + run/step metadata views via `WorkflowRuntime`
@@ -34,5 +37,6 @@ The generated bundle is the default integration surface:
 
 - `StemWorkflowApp.inMemory(module: stemModule)`
 - `StemWorkflowApp.fromUrl(..., module: stemModule)`
-- `StemWorkflowApp.create(stemApp: ..., module: stemModule)`
-- `StemClient.createWorkflowApp(module: stemModule)`
+- `stemApp.createWorkflowApp()` when the shared app already covers the workflow
+  queue
+- `StemClient.fromUrl(..., module: stemModule)` + `createWorkflowApp()`

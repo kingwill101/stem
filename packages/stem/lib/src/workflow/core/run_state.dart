@@ -1,4 +1,5 @@
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -75,15 +76,87 @@ class RunState {
   Map<String, Object?> get workflowParams =>
       WorkflowRunRuntimeMetadata.stripFromParams(params);
 
+  /// Decodes the workflow params payload with [codec].
+  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+    return codec.decode(workflowParams);
+  }
+
+  /// Decodes the workflow params payload with a JSON decoder.
+  TParams paramsJson<TParams>({
+    required TParams Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(workflowParams);
+  }
+
+  /// Decodes the workflow params payload with a version-aware JSON decoder.
+  TParams paramsVersionedJson<TParams>({
+    required int version,
+    required TParams Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(workflowParams);
+  }
+
   /// Run-scoped runtime metadata.
   WorkflowRunRuntimeMetadata get runtimeMetadata =>
       WorkflowRunRuntimeMetadata.fromParams(params);
+
+  /// Parent workflow run identifier, if this run was started as a child.
+  String? get parentRunId =>
+      params[workflowParentRunIdParamKey]?.toString();
 
   /// Timestamp when the workflow run was created.
   final DateTime createdAt;
 
   /// Final result payload when the run completes.
   final Object? result;
+
+  /// Decodes the final result payload with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the final result payload with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the final result payload with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Topic that the run is currently waiting on, if any.
   final String? waitTopic;
@@ -93,6 +166,44 @@ class RunState {
 
   /// Last error payload recorded for the run.
   final Map<String, Object?>? lastError;
+
+  /// Decodes the last error payload with [codec], when present.
+  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the last error payload with a JSON decoder, when present.
+  TError? lastErrorJson<TError>({
+    required TError Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the last error payload with a version-aware JSON decoder, when
+  /// present.
+  TError? lastErrorVersionedJson<TError>({
+    required int version,
+    required TError Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   /// Suspension metadata stored for the waiting step.
   final Map<String, Object?>? suspensionData;
@@ -111,6 +222,85 @@ class RunState {
 
   /// Metadata recorded when the run is cancelled (automatic or manual).
   final Map<String, Object?>? cancellationData;
+
+  /// Decodes the runtime metadata payload with [codec].
+  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+    return codec.decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the runtime metadata payload with a JSON decoder.
+  TRuntime runtimeJson<TRuntime>({
+    required TRuntime Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the runtime metadata payload with a version-aware JSON decoder.
+  TRuntime runtimeVersionedJson<TRuntime>({
+    required int version,
+    required TRuntime Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(runtimeMetadata.toJson());
+  }
+
+  /// Decodes the cancellation payload with [codec], when present.
+  TCancellation? cancellationDataAs<TCancellation>({
+    required PayloadCodec<TCancellation> codec,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the cancellation payload with a JSON decoder, when present.
+  TCancellation? cancellationDataJson<TCancellation>({
+    required TCancellation Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return PayloadCodec<TCancellation>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the cancellation payload with a version-aware JSON decoder, when
+  /// present.
+  TCancellation? cancellationDataVersionedJson<TCancellation>({
+    required int version,
+    required TCancellation Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = cancellationData;
+    if (payload == null) return null;
+    return PayloadCodec<TCancellation>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   static const _unset = Object();
 
@@ -153,6 +343,50 @@ class RunState {
 
   /// Resume payload delivered to the suspended run, when present.
   Object? get suspensionPayload => suspensionData?['payload'];
+
+  /// Decodes the suspension payload with [codec], when present.
+  TPayload? suspensionPayloadAs<TPayload>({
+    required PayloadCodec<TPayload> codec,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension payload with a JSON decoder, when present.
+  TPayload? suspensionPayloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the suspension payload with a version-aware JSON decoder, when
+  /// present.
+  TPayload? suspensionPayloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when a matching event was delivered for this suspension.
   DateTime? get suspensionDeliveredAt =>

@@ -64,24 +64,22 @@ Future<void> main() async {
       concurrency: 4,
     ),
   );
-
-  unawaited(app.start());
-
-  final stem = app.stem;
   // #endregion quickstart-bootstrap
 
   // #region quickstart-enqueue
-  final resizeId = await stem.enqueue(
+  final resizeId = await app.enqueue(
     'media.resize',
     args: {'file': 'report.png'},
   );
 
-  final emailId = await stem.enqueue(
+  final emailId = await app.enqueue(
     'billing.email-receipt',
     args: {'to': 'alice@example.com'},
     options: const TaskOptions(priority: 10),
-    notBefore: DateTime.now().add(const Duration(seconds: 5)),
     meta: {'orderId': 4242},
+    enqueueOptions: const TaskEnqueueOptions(
+      countdown: Duration(seconds: 5),
+    ),
   );
 
   print('Enqueued tasks: resize=$resizeId email=$emailId');
@@ -94,7 +92,7 @@ Future<void> main() async {
 
   // #region quickstart-inspect
   await Future<void>.delayed(const Duration(seconds: 6));
-  final resizeStatus = await app.backend.get(resizeId);
+  final resizeStatus = await app.getTaskStatus(resizeId);
   print('Resize status: ${resizeStatus?.state} (${resizeStatus?.attempt})');
 
   await app.close();

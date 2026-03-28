@@ -238,7 +238,7 @@ OverviewSections buildOverviewSections(
 <tr>
   <td><a class="font-semibold text-sky-200 hover:text-sky-100" href="/tasks/detail?runId=${Uri.encodeQueryComponent(run.runId)}" data-turbo-frame="dashboard-content"><code>${escapeHtml(run.runId)}</code></a></td>
   <td>${escapeHtml(run.workflowName)}</td>
-  <td class="muted">${escapeHtml(run.lastStep ?? '—')}</td>
+  <td class="muted">${escapeHtml(run.lastCheckpoint ?? '—')}</td>
   <td>${formatInt(run.queued)}</td>
   <td>${formatInt(run.running)}</td>
   <td>${formatInt(run.succeeded)}</td>

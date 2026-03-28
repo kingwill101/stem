@@ -1,8 +1,6 @@
 // Best practices snippets for documentation.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
-import 'dart:async';
-
 import 'package:stem/stem.dart';
 
 // #region best-practices-task
@@ -25,8 +23,8 @@ class IdempotentTask extends TaskHandler<void> {
 // #endregion best-practices-task
 
 // #region best-practices-enqueue
-Future<void> enqueueTyped(Stem stem) async {
-  await stem.enqueue(
+Future<void> enqueueTyped(TaskEnqueuer enqueuer) async {
+  await enqueuer.enqueue(
     'orders.sync',
     args: {'orderId': 'order-42'},
     meta: {'requestId': 'req-001'},
@@ -35,22 +33,10 @@ Future<void> enqueueTyped(Stem stem) async {
 // #endregion best-practices-enqueue
 
 Future<void> main() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final tasks = [IdempotentTask()];
-  final stem = Stem(broker: broker, backend: backend, tasks: tasks);
-
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-    queue: 'default',
+  final app = await StemApp.inMemory(
+    tasks: [IdempotentTask()],
   );
-  unawaited(worker.start());
 
-  await enqueueTyped(stem);
-  await Future<void>.delayed(const Duration(milliseconds: 200));
-  await worker.shutdown();
-  await broker.close();
-  await backend.close();
+  await enqueueTyped(app);
+  await app.close();
 }

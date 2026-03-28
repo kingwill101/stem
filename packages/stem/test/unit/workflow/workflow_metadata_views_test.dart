@@ -49,6 +49,27 @@ void main() {
         state.suspensionPayload,
         equals(const <String, Object?>{'invoiceId': 'inv-1'}),
       );
+      expect(
+        state.suspensionPayloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        state.suspensionPayloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
     });
 
     test('exposes runtime queue and serialization metadata', () {
@@ -77,6 +98,17 @@ void main() {
       );
 
       expect(state.workflowParams, equals(const {'tenant': 'acme'}));
+      expect(
+        state.paramsJson<_TenantPayload>(decode: _TenantPayload.fromJson),
+        isA<_TenantPayload>().having((value) => value.tenant, 'tenant', 'acme'),
+      );
+      expect(
+        state.paramsVersionedJson<_TenantPayload>(
+          version: 2,
+          decode: _TenantPayload.fromVersionedJson,
+        ),
+        isA<_TenantPayload>().having((value) => value.tenant, 'tenant', 'acme'),
+      );
       expect(state.orchestrationQueue, equals('workflow'));
       expect(state.continuationQueue, equals('workflow-continue'));
       expect(state.executionQueue, equals('workflow-step'));
@@ -87,6 +119,113 @@ void main() {
       expect(state.encryptionScope, equals('signed-envelope'));
       expect(state.encryptionEnabled, isTrue);
       expect(state.streamId, equals('invoice_run-2'));
+      expect(
+        state.runtimeJson<_RuntimePayload>(decode: _RuntimePayload.fromJson),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+      expect(
+        state.runtimeVersionedJson<_RuntimePayload>(
+          version: 2,
+          decode: _RuntimePayload.fromVersionedJson,
+        ),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+    });
+
+    test('decodes raw result payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-3',
+        workflow: 'invoice',
+        status: WorkflowStatus.completed,
+        cursor: 2,
+        params: const {'tenant': 'acme'},
+        createdAt: DateTime.utc(2026, 2, 25),
+        result: const {'invoiceId': 'inv-2'},
+      );
+
+      expect(
+        state.resultJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-2',
+        ),
+      );
+      expect(
+        state.resultVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-2',
+        ),
+      );
+    });
+
+    test('decodes last-error and cancellation payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-4',
+        workflow: 'invoice',
+        status: WorkflowStatus.cancelled,
+        cursor: 2,
+        params: const {'tenant': 'acme'},
+        createdAt: DateTime.utc(2026, 2, 25),
+        lastError: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'boom',
+        },
+        cancellationData: const {
+          PayloadCodec.versionKey: 2,
+          'reason': 'manual',
+        },
+      );
+
+      expect(
+        state.lastErrorJson<_WorkflowErrorPayload>(
+          decode: _WorkflowErrorPayload.fromJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        state.lastErrorVersionedJson<_WorkflowErrorPayload>(
+          version: 2,
+          decode: _WorkflowErrorPayload.fromVersionedJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        state.cancellationDataJson<_CancellationPayload>(
+          decode: _CancellationPayload.fromJson,
+        ),
+        isA<_CancellationPayload>()
+            .having((value) => value.reason, 'reason', 'manual'),
+      );
+      expect(
+        state.cancellationDataVersionedJson<_CancellationPayload>(
+          version: 2,
+          decode: _CancellationPayload.fromVersionedJson,
+        ),
+        isA<_CancellationPayload>()
+            .having((value) => value.reason, 'reason', 'manual'),
+      );
     });
   });
 
@@ -99,10 +238,12 @@ void main() {
         createdAt: DateTime.utc(2026, 2, 25),
         deadline: DateTime.utc(2026, 2, 25, 0, 15),
         data: const {
+          PayloadCodec.versionKey: 2,
           'type': 'event',
           'iteration': 2,
           'iterationStep': 'approval#2',
           'payload': {'invoiceId': 'inv-1'},
+          'topic': 'invoice.approved',
           'suspendedAt': '2026-02-25T00:01:00Z',
           'requestedResumeAt': '2026-02-25T00:02:00Z',
           'policyDeadline': '2026-02-25T00:15:00Z',
@@ -113,10 +254,12 @@ void main() {
         stepName: 'awaitApproval',
         topic: 'invoice.approved',
         resumeData: const {
+          PayloadCodec.versionKey: 2,
           'type': 'event',
           'iteration': 2,
           'iterationStep': 'approval#2',
           'payload': {'invoiceId': 'inv-1'},
+          'topic': 'invoice.approved',
           'deliveredAt': '2026-02-25T00:01:30Z',
         },
       );
@@ -125,6 +268,42 @@ void main() {
       expect(watcher.iteration, equals(2));
       expect(watcher.iterationStep, equals('approval#2'));
       expect(watcher.payload, equals(const {'invoiceId': 'inv-1'}));
+      expect(
+        watcher.payloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        watcher.payloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        watcher.dataJson<_WatcherMetadata>(decode: _WatcherMetadata.fromJson),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
+      expect(
+        watcher.dataVersionedJson<_WatcherMetadata>(
+          version: 2,
+          decode: _WatcherMetadata.fromVersionedJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
       expect(watcher.suspendedAt, equals(DateTime.utc(2026, 2, 25, 0, 1)));
       expect(
         watcher.requestedResumeAt,
@@ -140,6 +319,44 @@ void main() {
       expect(resolution.iterationStep, equals('approval#2'));
       expect(resolution.payload, equals(const {'invoiceId': 'inv-1'}));
       expect(
+        resolution.payloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        resolution.payloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-1',
+        ),
+      );
+      expect(
+        resolution.resumeDataJson<_WatcherMetadata>(
+          decode: _WatcherMetadata.fromJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
+      expect(
+        resolution.resumeDataVersionedJson<_WatcherMetadata>(
+          version: 2,
+          decode: _WatcherMetadata.fromVersionedJson,
+        ),
+        isA<_WatcherMetadata>()
+            .having((value) => value.topic, 'topic', 'invoice.approved')
+            .having((value) => value.invoiceId, 'invoiceId', 'inv-1'),
+      );
+      expect(
         resolution.deliveredAt,
         equals(DateTime.utc(2026, 2, 25, 0, 1, 30)),
       );
@@ -150,15 +367,332 @@ void main() {
     test('parses base name and iteration suffix', () {
       const step = WorkflowStepEntry(
         name: 'approval#3',
-        value: 'ok',
+        value: {'invoiceId': 'inv-3'},
         position: 2,
       );
-      const plain = WorkflowStepEntry(name: 'finalize', value: null, position: 3);
+      const plain = WorkflowStepEntry(
+        name: 'finalize',
+        value: null,
+        position: 3,
+      );
 
       expect(step.baseName, equals('approval'));
       expect(step.iteration, equals(3));
+      expect(
+        step.valueJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-3',
+        ),
+      );
+      expect(
+        step.valueVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-3',
+        ),
+      );
       expect(plain.baseName, equals('finalize'));
       expect(plain.iteration, isNull);
     });
   });
+
+  group('Workflow view decode helpers', () {
+    test('decodes run results and suspension payloads as DTOs', () {
+      final state = RunState(
+        id: 'run-view-1',
+        workflow: 'invoice',
+        status: WorkflowStatus.suspended,
+        cursor: 2,
+        params: const {
+          PayloadCodec.versionKey: 2,
+          'invoiceId': 'inv-params',
+          'tenant': 'acme',
+          '__stem.workflow.runtime': {
+            PayloadCodec.versionKey: 2,
+            'workflowId': 'abc123',
+            'orchestrationQueue': 'workflow',
+            'continuationQueue': 'workflow-continue',
+            'executionQueue': 'workflow-step',
+            'serializationFormat': 'json',
+            'serializationVersion': '1',
+            'frameFormat': 'stem-envelope',
+            'frameVersion': '1',
+            'encryptionScope': 'signed-envelope',
+            'encryptionEnabled': true,
+            'streamId': 'invoice_run-2',
+          },
+        },
+        createdAt: DateTime.utc(2026, 2, 25),
+        result: const {'invoiceId': 'inv-4'},
+        lastError: const {
+          PayloadCodec.versionKey: 2,
+          'message': 'boom',
+        },
+        suspensionData: const {
+          'type': 'event',
+          'payload': {'invoiceId': 'inv-5'},
+        },
+      );
+      final view = WorkflowRunView.fromState(state);
+
+      expect(
+        view.paramsJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-params',
+        ),
+      );
+      expect(
+        view.paramsVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-params',
+        ),
+      );
+      expect(
+        view.resultJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-4',
+        ),
+      );
+      expect(
+        view.resultVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-4',
+        ),
+      );
+      expect(
+        view.suspensionPayloadJson<_InvoicePayload>(
+          decode: _InvoicePayload.fromJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-5',
+        ),
+      );
+      expect(
+        view.suspensionPayloadVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-5',
+        ),
+      );
+      expect(
+        view.lastErrorJson<_WorkflowErrorPayload>(
+          decode: _WorkflowErrorPayload.fromJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        view.lastErrorVersionedJson<_WorkflowErrorPayload>(
+          version: 2,
+          decode: _WorkflowErrorPayload.fromVersionedJson,
+        ),
+        isA<_WorkflowErrorPayload>()
+            .having((value) => value.message, 'message', 'boom'),
+      );
+      expect(
+        view.runtimeJson<_RuntimePayload>(decode: _RuntimePayload.fromJson),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+      expect(
+        view.runtimeVersionedJson<_RuntimePayload>(
+          version: 2,
+          decode: _RuntimePayload.fromVersionedJson,
+        ),
+        isA<_RuntimePayload>()
+            .having(
+              (value) => value.orchestrationQueue,
+              'orchestrationQueue',
+              'workflow',
+            )
+            .having((value) => value.streamId, 'streamId', 'invoice_run-2'),
+      );
+    });
+
+    test('decodes checkpoint values as DTOs', () {
+      const entry = WorkflowStepEntry(
+        name: 'approval#1',
+        value: {'invoiceId': 'inv-6'},
+        position: 1,
+      );
+      final view = WorkflowCheckpointView.fromEntry(
+        runId: 'run-view-2',
+        workflow: 'invoice',
+        entry: entry,
+      );
+
+      expect(
+        view.valueJson<_InvoicePayload>(decode: _InvoicePayload.fromJson),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-6',
+        ),
+      );
+      expect(
+        view.valueVersionedJson<_InvoicePayload>(
+          version: 2,
+          decode: _InvoicePayload.fromVersionedJson,
+        ),
+        isA<_InvoicePayload>().having(
+          (value) => value.invoiceId,
+          'invoiceId',
+          'inv-6',
+        ),
+      );
+    });
+  });
+}
+
+class _InvoicePayload {
+  const _InvoicePayload({required this.invoiceId});
+
+  factory _InvoicePayload.fromJson(Map<String, dynamic> json) {
+    return _InvoicePayload(invoiceId: json['invoiceId'] as String);
+  }
+
+  factory _InvoicePayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _InvoicePayload(invoiceId: json['invoiceId'] as String);
+  }
+
+  final String invoiceId;
+}
+
+class _TenantPayload {
+  const _TenantPayload({required this.tenant});
+
+  factory _TenantPayload.fromJson(Map<String, dynamic> json) {
+    return _TenantPayload(tenant: json['tenant'] as String);
+  }
+
+  factory _TenantPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _TenantPayload.fromJson(json);
+  }
+
+  final String tenant;
+}
+
+class _WatcherMetadata {
+  const _WatcherMetadata({required this.topic, required this.invoiceId});
+
+  factory _WatcherMetadata.fromJson(Map<String, dynamic> json) {
+    final payload = json['payload'] as Map<String, dynamic>;
+    return _WatcherMetadata(
+      topic: json['topic'] as String,
+      invoiceId: payload['invoiceId'] as String,
+    );
+  }
+
+  factory _WatcherMetadata.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WatcherMetadata.fromJson(json);
+  }
+
+  final String topic;
+  final String invoiceId;
+}
+
+class _RuntimePayload {
+  const _RuntimePayload({
+    required this.orchestrationQueue,
+    required this.streamId,
+  });
+
+  factory _RuntimePayload.fromJson(Map<String, dynamic> json) {
+    return _RuntimePayload(
+      orchestrationQueue: json['orchestrationQueue'] as String,
+      streamId: json['streamId'] as String,
+    );
+  }
+
+  factory _RuntimePayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _RuntimePayload.fromJson(json);
+  }
+
+  final String orchestrationQueue;
+  final String streamId;
+}
+
+class _WorkflowErrorPayload {
+  const _WorkflowErrorPayload({required this.message});
+
+  factory _WorkflowErrorPayload.fromJson(Map<String, dynamic> json) {
+    return _WorkflowErrorPayload(message: json['message'] as String);
+  }
+
+  factory _WorkflowErrorPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _WorkflowErrorPayload.fromJson(json);
+  }
+
+  final String message;
+}
+
+class _CancellationPayload {
+  const _CancellationPayload({required this.reason});
+
+  factory _CancellationPayload.fromJson(Map<String, dynamic> json) {
+    return _CancellationPayload(reason: json['reason'] as String);
+  }
+
+  factory _CancellationPayload.fromVersionedJson(
+    Map<String, dynamic> json,
+    int version,
+  ) {
+    expect(version, 2);
+    return _CancellationPayload.fromJson(json);
+  }
+
+  final String reason;
 }

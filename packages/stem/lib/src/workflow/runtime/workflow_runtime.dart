@@ -43,7 +43,10 @@ import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
+import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -66,7 +69,7 @@ const int _leaseConflictMaxRetries = 1000000;
 /// The runtime is durable: each step is re-executed from the top after a
 /// suspension or worker crash. Handlers must therefore be idempotent and rely
 /// on persisted step outputs or resume payloads to detect prior progress.
-class WorkflowRuntime {
+class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Creates a workflow runtime backed by a [Stem] instance and
   /// [WorkflowStore].
   WorkflowRuntime({
@@ -175,14 +178,15 @@ class WorkflowRuntime {
       continuationQueue: continuationQueue,
       executionQueue: executionQueue,
       serializationFormat: _stem.payloadEncoders.defaultArgsEncoder.id,
-      serializationVersion: '1',
       frameFormat: 'stem-envelope',
-      frameVersion: '1',
       encryptionScope: _stem.signer != null ? 'signed-envelope' : 'none',
       encryptionEnabled: _stem.signer != null,
       streamId: '${name}_$requestedRunId',
     );
-    final persistedParams = runtimeMetadata.attachToParams(params);
+    final persistedParams = runtimeMetadata.attachToParams(
+      params,
+      parentRunId: parentRunId,
+    );
     final runId = await _store.createRun(
       runId: requestedRunId,
       workflow: name,
@@ -208,7 +212,78 @@ class WorkflowRuntime {
     return runId;
   }
 
+  /// Persists a new workflow run from a DTO that already exposes `toJson()`.
+  Future<String> startWorkflowJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    return startWorkflow(
+      name,
+      params: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          paramsJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Persists a new workflow run from a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> startWorkflowValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return startWorkflow(
+      name,
+      params: _encodeWorkflowStartValue(name, value, codec: codec),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Persists a new workflow run from a DTO and stores a schema [version]
+  /// beside the JSON payload.
+  Future<String> startWorkflowVersionedJson<T extends Object>(
+    String name,
+    T paramsJson, {
+    required int version,
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+    String? typeName,
+  }) {
+    return startWorkflow(
+      name,
+      params: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          paramsJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
   /// Starts a workflow from a typed [WorkflowRef].
+  @override
   Future<String> startWorkflowRef<TParams, TResult extends Object?>(
     WorkflowRef<TParams, TResult> definition,
     TParams params, {
@@ -226,6 +301,7 @@ class WorkflowRuntime {
   }
 
   /// Starts a workflow from a prebuilt [WorkflowStartCall].
+  @override
   Future<String> startWorkflowCall<TParams, TResult extends Object?>(
     WorkflowStartCall<TParams, TResult> call,
   ) {
@@ -235,6 +311,67 @@ class WorkflowRuntime {
       parentRunId: call.parentRunId,
       ttl: call.ttl,
       cancellationPolicy: call.cancellationPolicy,
+    );
+  }
+
+  /// Waits for [runId] to reach a terminal state.
+  Future<WorkflowResult<T>?> waitForCompletion<T extends Object?>(
+    String runId, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+    T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
+  }) async {
+    assert(
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
+    );
+    final startedAt = _clock.now();
+    while (true) {
+      final state = await _store.get(runId);
+      if (state == null) {
+        return null;
+      }
+      if (state.isTerminal) {
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
+          timedOut: false,
+        );
+      }
+      if (timeout != null && _clock.now().difference(startedAt) >= timeout) {
+        return _buildResult(
+          state,
+          decode,
+          decodeJson: decodeJson,
+          decodeVersionedJson: decodeVersionedJson,
+          timedOut: true,
+        );
+      }
+      await Future<void>.delayed(pollInterval);
+    }
+  }
+
+  /// Waits for [runId] using the decoding rules from a [WorkflowRef].
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return waitForCompletion<TResult>(
+      runId,
+      pollInterval: pollInterval,
+      timeout: timeout,
+      decode: definition.decode,
     );
   }
 
@@ -276,12 +413,98 @@ class WorkflowRuntime {
     }
   }
 
+  /// Emits a DTO-backed external event without requiring a manual payload map.
+  Future<void> emitJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    String? typeName,
+  }) {
+    return emit(
+      topic,
+      Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          payloadJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+    );
+  }
+
+  /// Emits a DTO-backed external event and stores a schema [version] beside
+  /// the JSON payload.
+  Future<void> emitVersionedJson<T extends Object>(
+    String topic,
+    T payloadJson, {
+    required int version,
+    String? typeName,
+  }) {
+    return emit(
+      topic,
+      Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          payloadJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+    );
+  }
+
+  WorkflowResult<T> _buildResult<T extends Object?>(
+    RunState state,
+    T Function(Object? payload)? decode, {
+    required bool timedOut,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
+  }) {
+    final value = state.status == WorkflowStatus.completed
+        ? _decodeResult(
+            state.result,
+            decode,
+            decodeJson,
+            decodeVersionedJson,
+          )
+        : null;
+    return WorkflowResult<T>(
+      runId: state.id,
+      status: state.status,
+      state: state,
+      value: value,
+      rawResult: state.result,
+      timedOut: timedOut && !state.isTerminal,
+    );
+  }
+
+  T? _decodeResult<T extends Object?>(
+    Object? payload,
+    T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
+  ) {
+    if (decode != null) {
+      return decode(payload);
+    }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'workflow result'),
+      );
+    }
+    return payload as T?;
+  }
+
   /// Emits a typed external event that serializes to the existing map-based
   /// workflow event transport.
   ///
   /// When [codec] is provided, [value] is encoded before being emitted. The
   /// encoded value must be a `Map<String, Object?>` because workflow watcher
   /// resolution and event transport are currently map-shaped.
+  @override
   Future<void> emitValue<T>(
     String topic,
     T value, {
@@ -289,6 +512,12 @@ class WorkflowRuntime {
   }) {
     final encoded = codec != null ? codec.encodeDynamic(value) : value;
     return emit(topic, _coerceEventPayload(topic, encoded));
+  }
+
+  /// Emits a typed external event using a [WorkflowEventRef].
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    return emitValue(event.topic, value, codec: event.codec);
   }
 
   /// Starts periodic polling that resumes runs whose wake-up time has elapsed.
@@ -351,14 +580,14 @@ class WorkflowRuntime {
     return WorkflowRunView.fromState(state);
   }
 
-  /// Returns persisted step views for [runId].
-  Future<List<WorkflowStepView>> viewSteps(String runId) async {
+  /// Returns persisted checkpoint views for [runId].
+  Future<List<WorkflowCheckpointView>> viewCheckpoints(String runId) async {
     final state = await _store.get(runId);
     if (state == null) return const [];
-    final steps = await _store.listSteps(runId);
-    return steps
+    final checkpoints = await _store.listSteps(runId);
+    return checkpoints
         .map(
-          (entry) => WorkflowStepView.fromEntry(
+          (entry) => WorkflowCheckpointView.fromEntry(
             runId: runId,
             workflow: state.workflow,
             entry: entry,
@@ -367,12 +596,12 @@ class WorkflowRuntime {
         .toList(growable: false);
   }
 
-  /// Returns combined run+step drilldown view for [runId].
+  /// Returns combined run+checkpoint drilldown view for [runId].
   Future<WorkflowRunDetailView?> viewRunDetail(String runId) async {
     final run = await viewRun(runId);
     if (run == null) return null;
-    final steps = await viewSteps(runId);
-    return WorkflowRunDetailView(run: run, steps: steps);
+    final checkpoints = await viewCheckpoints(runId);
+    return WorkflowRunDetailView(run: run, checkpoints: checkpoints);
   }
 
   /// Returns uniform run views filtered by workflow/status.
@@ -579,14 +808,18 @@ class WorkflowRuntime {
             baseMeta: stepMeta,
             targetExecutionQueue: runState.executionQueue,
           ),
+          workflows: _ChildWorkflowCaller(runtime: this, parentRunId: runId),
         );
         resumeData = null;
         dynamic result;
+        var suspendedBySignal = false;
         try {
           result = await TaskEnqueueScope.run(
             stepMeta,
             () async => await step.handler(context),
           );
+        } on WorkflowSuspensionSignal {
+          suspendedBySignal = true;
         } on _WorkflowLeaseLost {
           return;
         } catch (error, stack) {
@@ -729,7 +962,7 @@ class WorkflowRuntime {
                 step: step.name,
                 extra: {
                   'workflowSuspensionType': 'event',
-                  'topic': control.topic!,
+                  'topic': control.topic,
                   'workflowIteration': iteration,
                   if (deadline != null) 'deadline': deadline.toIso8601String(),
                   'runtimeId': _runtimeId,
@@ -738,6 +971,12 @@ class WorkflowRuntime {
             );
           }
           return;
+        }
+        if (suspendedBySignal) {
+          throw StateError(
+            'Flow step "${step.name}" threw WorkflowSuspensionSignal without '
+            'scheduling a suspension control.',
+          );
         }
 
         final storedResult = step.encodeValue(result);
@@ -814,14 +1053,15 @@ class WorkflowRuntime {
         ),
       );
     }
-    final steps = await _store.listSteps(runId);
+    final checkpoints = await _store.listSteps(runId);
     final completedIterations = await _loadCompletedIterations(runId);
     Object? previousResult;
-    if (steps.isNotEmpty) {
-      previousResult = definition
-          .stepByName(steps.last.baseName)
-          ?.decodeValue(steps.last.value) ??
-          steps.last.value;
+    if (checkpoints.isNotEmpty) {
+      previousResult =
+          definition
+              .checkpointByName(checkpoints.last.baseName)
+              ?.decodeValue(checkpoints.last.value) ??
+          checkpoints.last.value;
     }
     final execution = _WorkflowScriptExecution(
       runtime: this,
@@ -830,7 +1070,7 @@ class WorkflowRuntime {
       completedIterations: completedIterations,
       definition: definition,
       previousResult: previousResult,
-      initialStepIndex: steps.length,
+      initialStepIndex: checkpoints.length,
       suspensionData: runState.suspensionData,
       policy: runState.cancellationPolicy,
     );
@@ -946,7 +1186,7 @@ class WorkflowRuntime {
     final entries = await _store.listSteps(runId);
     final counts = <String, int>{};
     for (final entry in entries) {
-      final base = _baseStepName(entry.name);
+      final base = _basePersistedNodeName(entry.name);
       final suffix = _parseIterationSuffix(entry.name);
       final nextIndex = suffix != null ? suffix + 1 : 1;
       final current = counts[base] ?? 0;
@@ -1010,8 +1250,8 @@ class WorkflowRuntime {
     return int.tryParse(suffix);
   }
 
-  /// Removes an iteration suffix from a versioned step name.
-  String _baseStepName(String name) {
+  /// Removes an iteration suffix from a persisted step/checkpoint name.
+  String _basePersistedNodeName(String name) {
     final hashIndex = name.indexOf('#');
     if (hashIndex == -1) return name;
     return name.substring(0, hashIndex);
@@ -1055,9 +1295,9 @@ class WorkflowRuntime {
   /// Enqueues a workflow run execution task.
   Future<void> _enqueueRun(
     String runId, {
-    String? workflow,
     required bool continuation,
     required WorkflowContinuationReason reason,
+    String? workflow,
     WorkflowRunRuntimeMetadata? runtimeMetadata,
   }) async {
     final metadata =
@@ -1287,6 +1527,35 @@ class WorkflowRuntime {
   }
 }
 
+Map<String, Object?> _encodeWorkflowStartValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Workflow start payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Workflow start payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
+}
+
 /// Task handler that dispatches workflow run execution for a run id.
 class _WorkflowRunTaskHandler implements TaskHandler<void> {
   _WorkflowRunTaskHandler({required this.runtime});
@@ -1354,10 +1623,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   int? _suspensionIteration;
   Object? _resumePayload;
 
-  /// Whether a script step suspended the run.
+  /// Whether a script checkpoint suspended the run.
   bool get wasSuspended => _wasSuspended;
 
-  /// Last executed step name, if any.
+  /// Last executed checkpoint name, if any.
   String? get lastStepName => _lastStepName;
 
   @override
@@ -1375,7 +1644,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
   }) async {
-    /// Executes a script step with checkpoint replay and suspension handling.
+    /// Executes a script checkpoint with replay and suspension handling.
     _lastStepName = name;
     final policy = this.policy;
     if (policy != null && policy.maxRunDuration != null) {
@@ -1422,13 +1691,13 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       ),
     );
 
-    final declaredStep = definition.stepByName(name);
+    final declaredCheckpoint = definition.checkpointByName(name);
     final cached = await runtime._store.readStep<Object?>(
       runId,
       checkpointName,
     );
     if (cached != null) {
-      final decodedCached = declaredStep?.decodeValue(cached) ?? cached;
+      final decodedCached = declaredCheckpoint?.decodeValue(cached) ?? cached;
       _previousResult = decodedCached;
       await runtime._recordStepEvent(
         WorkflowStepEventType.completed,
@@ -1466,13 +1735,17 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         baseMeta: stepMeta,
         targetExecutionQueue: runState.executionQueue,
       ),
+      workflows: _ChildWorkflowCaller(runtime: runtime, parentRunId: runId),
     );
-    T result;
+    late final T result;
+    var suspendedBySignal = false;
     try {
       result = await TaskEnqueueScope.run(
         stepMeta,
         () async => await handler(stepContext),
       );
+    } on WorkflowSuspensionSignal {
+      suspendedBySignal = true;
     } catch (error, stack) {
       await runtime._recordStepEvent(
         WorkflowStepEventType.failed,
@@ -1491,8 +1764,14 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
         throw const _WorkflowScriptSuspended();
       }
     }
+    if (suspendedBySignal) {
+      throw StateError(
+        'Script checkpoint "$name" threw WorkflowSuspensionSignal without '
+        'scheduling a suspension control.',
+      );
+    }
 
-    final storedResult = declaredStep?.encodeValue(result) ?? result;
+    final storedResult = declaredCheckpoint?.encodeValue(result) ?? result;
     await runtime._store.saveStep(runId, checkpointName, storedResult);
     await runtime._extendLeases(taskContext, runId);
     await runtime._recordStepEvent(
@@ -1512,7 +1791,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return result;
   }
 
-  /// Computes the next iteration for an auto-versioned step.
+  /// Computes the next iteration for an auto-versioned checkpoint.
   int _nextIteration(String name) {
     final completed = _completedIterations[name] ?? 0;
     if (_suspensionStep == name && _suspensionIteration != null) {
@@ -1521,7 +1800,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     return completed;
   }
 
-  /// Returns resume payload if it matches the current step/iteration.
+  /// Returns resume payload if it matches the current checkpoint/iteration.
   Object? _takeResumePayload(String stepName, int? iteration) {
     final matchesStep = _suspensionStep == stepName;
     if (!matchesStep) return null;
@@ -1643,7 +1922,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
           step: stepName,
           extra: {
             'workflowSuspensionType': 'event',
-            'topic': control.topic!,
+            'topic': control.topic,
             'workflowIteration': iteration,
             if (deadline != null) 'deadline': deadline.toIso8601String(),
             'runtimeId': runtime._runtimeId,
@@ -1654,10 +1933,10 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     _wasSuspended = true;
   }
 
-  /// Previously completed step result, if any.
+  /// Previously completed checkpoint result, if any.
   Object? get previousResult => _previousResult;
 
-  /// Builds a stable idempotency key for a step/iteration scope.
+  /// Builds a stable idempotency key for a checkpoint/iteration scope.
   String idempotencyKey(String stepName, int iteration, [String? scope]) {
     final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
     final effectiveScope = (scope == null || scope.isEmpty)
@@ -1667,7 +1946,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   }
 }
 
-/// Workflow script step context used by script-defined workflows.
+/// Workflow script checkpoint context used by script-defined workflows.
 class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   _WorkflowScriptStepContextImpl({
     required this.execution,
@@ -1676,6 +1955,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
     required int iteration,
     Object? resumeData,
     this.enqueuer,
+    this.workflows,
   }) : _stepName = stepName,
        _stepIndex = stepIndex,
        _iteration = iteration,
@@ -1687,6 +1967,28 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   final int _iteration;
   _ScriptControl? _control;
   Object? _resumeData;
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeWorkflowStepValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
 
   /// Consumes any control signal emitted by the step.
   _ScriptControl? takeControl() {
@@ -1707,6 +2009,23 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
       deadline,
       data == null ? null : Map<String, Object?>.from(data),
     );
+  }
+
+  @override
+  Future<void> suspendFor(
+    Duration duration, {
+    Map<String, Object?>? data,
+  }) {
+    return sleep(duration, data: data);
+  }
+
+  @override
+  Future<void> waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    return awaitEvent(topic, deadline: deadline, data: data);
   }
 
   @override
@@ -1764,7 +2083,105 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   final TaskEnqueuer? enqueuer;
 
   @override
+  final WorkflowCaller? workflows;
+
+  @override
   String get workflow => execution.workflow;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      notBefore: notBefore,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('WorkflowScriptStepContext has no enqueuer configured');
+    }
+    return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError(
+        'WorkflowScriptStepContext has no workflow caller configured',
+      );
+    }
+    return caller.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
 }
 
 /// Enqueuer that prefixes workflow step metadata onto spawned tasks.
@@ -1785,6 +2202,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) {
@@ -1799,6 +2217,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
       args: args,
       headers: headers,
       options: resolvedOptions,
+      notBefore: notBefore,
       meta: mergedMeta,
       enqueueOptions: enqueueOptions,
     );
@@ -1810,7 +2229,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
     TaskEnqueueOptions? enqueueOptions,
   }) {
     final mergedMeta = Map<String, Object?>.from(baseMeta)..addAll(call.meta);
-    TaskOptions? resolvedOptions = call.options;
+    var resolvedOptions = call.options;
     if (resolvedOptions == null) {
       final inherited = call.definition.defaultOptions;
       if (inherited.queue == 'default' && executionQueue != 'default') {
@@ -1820,14 +2239,161 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
         executionQueue != 'default') {
       resolvedOptions = resolvedOptions.copyWith(queue: executionQueue);
     }
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
+      headers: call.headers,
       options: resolvedOptions,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
     return delegate.enqueueCall(
       mergedCall,
       enqueueOptions: enqueueOptions,
     );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeWorkflowStepValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+Map<String, Object?> _encodeWorkflowStepValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
+}
+
+class _ChildWorkflowCaller implements WorkflowCaller {
+  const _ChildWorkflowCaller({
+    required this.runtime,
+    required this.parentRunId,
+  });
+
+  final WorkflowRuntime runtime;
+  final String parentRunId;
+
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    return runtime.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: this.parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    return runtime.startWorkflowCall(
+      call.definition.buildStart(
+        params: call.params,
+        parentRunId: parentRunId,
+        ttl: call.ttl,
+        cancellationPolicy: call.cancellationPolicy,
+      ),
+    );
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    return _waitForChildWorkflow(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  Future<WorkflowResult<TResult>?>
+  _waitForChildWorkflow<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    required Duration pollInterval,
+    required Duration? timeout,
+  }) async {
+    final startedAt = runtime.clock.now();
+    while (true) {
+      final state = await runtime._store.get(runId);
+      if (state == null) {
+        return null;
+      }
+      if (state.isTerminal) {
+        return runtime._buildResult(
+          state,
+          definition.decode,
+          timedOut: false,
+        );
+      }
+      if (timeout != null &&
+          runtime.clock.now().difference(startedAt) >= timeout) {
+        return runtime._buildResult(
+          state,
+          definition.decode,
+          timedOut: true,
+        );
+      }
+      await runtime.executeRun(runId);
+      if (pollInterval > Duration.zero) {
+        await Future<void>.delayed(pollInterval);
+      }
+    }
   }
 }
 

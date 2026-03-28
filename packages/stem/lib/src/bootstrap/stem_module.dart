@@ -1,9 +1,27 @@
+import 'dart:collection';
+import 'dart:convert';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/workflow/core/flow.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_script.dart';
 import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
+
+/// Registers task handlers while tolerating re-registration of identical
+/// handler instances.
+void registerModuleTaskHandlers(
+  TaskRegistry registry,
+  Iterable<TaskHandler<Object?>> handlers,
+) {
+  for (final handler in handlers) {
+    final existing = registry.resolve(handler.name);
+    if (identical(existing, handler)) {
+      continue;
+    }
+    registry.register(handler);
+  }
+}
 
 /// Generated or hand-authored bundle of tasks and workflow definitions.
 ///
@@ -29,6 +47,127 @@ class StemModule {
                scripts: scripts,
              ),
        );
+
+  /// Merges [modules] into one bundled module.
+  ///
+  /// Duplicate task or workflow names must resolve to the same underlying
+  /// object instance. Distinct definitions with the same public name fail fast
+  /// so module composition never silently overrides behavior.
+  factory StemModule.merge(Iterable<StemModule> modules) {
+    final mergedWorkflows = <WorkflowDefinition>[];
+    final mergedFlows = <Flow>[];
+    final mergedScripts = <WorkflowScript>[];
+    final mergedTasks = <TaskHandler<Object?>>[];
+    final mergedManifest = <WorkflowManifestEntry>[];
+    final workflowDefinitionsByName = <String, WorkflowDefinition>{};
+    final taskHandlersByName = <String, TaskHandler<Object?>>{};
+    final manifestEntriesByName = <String, WorkflowManifestEntry>{};
+
+    void addWorkflowDefinition(
+      WorkflowDefinition definition, {
+      required String source,
+      required void Function() onFirstSeen,
+    }) {
+      final existing = workflowDefinitionsByName[definition.name];
+      if (existing == null) {
+        workflowDefinitionsByName[definition.name] = definition;
+        onFirstSeen();
+        return;
+      }
+      if (!identical(existing, definition)) {
+        throw ArgumentError(
+          'Workflow "${definition.name}" is declared by multiple modules '
+          'with different definitions ($source).',
+        );
+      }
+    }
+
+    void addTaskHandler(TaskHandler<Object?> handler) {
+      final existing = taskHandlersByName[handler.name];
+      if (existing == null) {
+        taskHandlersByName[handler.name] = handler;
+        mergedTasks.add(handler);
+        return;
+      }
+      if (!identical(existing, handler)) {
+        throw ArgumentError(
+          'Task handler "${handler.name}" is declared by multiple modules '
+          'with different handlers.',
+        );
+      }
+    }
+
+    void addManifestEntry(WorkflowManifestEntry entry) {
+      final existing = manifestEntriesByName[entry.name];
+      if (existing == null) {
+        manifestEntriesByName[entry.name] = entry;
+        mergedManifest.add(entry);
+        return;
+      }
+      if (!_sameManifestEntry(existing, entry)) {
+        throw ArgumentError(
+          'Workflow manifest entry "${entry.name}" conflicts across merged '
+          'modules.',
+        );
+      }
+    }
+
+    for (final module in modules) {
+      for (final workflow in module.workflows) {
+        addWorkflowDefinition(
+          workflow,
+          source: 'workflow definition',
+          onFirstSeen: () => mergedWorkflows.add(workflow),
+        );
+      }
+      for (final flow in module.flows) {
+        addWorkflowDefinition(
+          flow.definition,
+          source: 'flow',
+          onFirstSeen: () => mergedFlows.add(flow),
+        );
+      }
+      for (final script in module.scripts) {
+        addWorkflowDefinition(
+          script.definition,
+          source: 'script',
+          onFirstSeen: () => mergedScripts.add(script),
+        );
+      }
+      module.tasks.forEach(addTaskHandler);
+      module.workflowManifest.forEach(addManifestEntry);
+    }
+
+    return StemModule(
+      workflows: mergedWorkflows,
+      flows: mergedFlows,
+      scripts: mergedScripts,
+      tasks: mergedTasks,
+      workflowManifest: mergedManifest,
+    );
+  }
+
+  /// Combines an optional singular [module] and plural [modules] input.
+  ///
+  /// Returns `null` when no modules are supplied. When exactly one module is
+  /// present it is returned unchanged. Otherwise the modules are merged with
+  /// the same conflict detection as [StemModule.merge].
+  static StemModule? combine({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
+  }) {
+    final combined = <StemModule>[
+      ?module,
+      ...modules,
+    ];
+    if (combined.isEmpty) {
+      return null;
+    }
+    if (combined.length == 1) {
+      return combined.single;
+    }
+    return StemModule.merge(combined);
+  }
 
   /// Raw workflow definitions that are not represented as [Flow] or
   /// [WorkflowScript] instances.
@@ -70,6 +209,161 @@ class StemModule {
     }
   }
 
+  /// Returns the default queues implied by the bundled task handlers.
+  ///
+  /// The [workflowQueue] is always included so workflow orchestration remains
+  /// runnable when the inferred queues are used to bootstrap a worker.
+  List<String> inferredWorkerQueues({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = SplayTreeSet<String>();
+    final normalizedWorkflowQueue = workflowQueue.trim();
+    if (normalizedWorkflowQueue.isNotEmpty) {
+      queues.add(normalizedWorkflowQueue);
+    }
+    final normalizedContinuationQueue = continuationQueue?.trim();
+    if (normalizedContinuationQueue != null &&
+        normalizedContinuationQueue.isNotEmpty) {
+      queues.add(normalizedContinuationQueue);
+    }
+    final normalizedExecutionQueue = executionQueue?.trim();
+    if (normalizedExecutionQueue != null &&
+        normalizedExecutionQueue.isNotEmpty) {
+      queues.add(normalizedExecutionQueue);
+    }
+
+    void addTaskQueue(TaskHandler<Object?> handler) {
+      final queue = handler.options.queue.trim();
+      if (queue.isNotEmpty) {
+        queues.add(queue);
+      }
+    }
+
+    tasks.forEach(addTaskQueue);
+    additionalTasks.forEach(addTaskQueue);
+    return queues.toList(growable: false);
+  }
+
+  /// Returns the queues required to run workflow orchestration plus bundled
+  /// tasks.
+  ///
+  /// This is the explicit inspection helper for workflow-capable workers.
+  /// Bootstrap helpers use the same queue set when inferring workflow worker
+  /// subscriptions from a module.
+  List<String> requiredWorkflowQueues({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    return inferredWorkerQueues(
+      workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      additionalTasks: additionalTasks,
+    );
+  }
+
+  /// Returns the explicit subscription required for workflow-capable workers.
+  RoutingSubscription requiredWorkflowSubscription({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = requiredWorkflowQueues(
+      workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      additionalTasks: additionalTasks,
+    );
+    if (queues.length == 1) {
+      return RoutingSubscription.singleQueue(queues.single);
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
+  /// Infers a worker subscription from the bundled task handlers.
+  ///
+  /// Returns `null` when only the [workflowQueue] is needed, allowing the
+  /// worker's default queue configuration to remain unchanged.
+  RoutingSubscription? inferWorkerSubscription({
+    String workflowQueue = 'workflow',
+    String? continuationQueue,
+    String? executionQueue,
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = inferredWorkerQueues(
+      workflowQueue: workflowQueue,
+      continuationQueue: continuationQueue,
+      executionQueue: executionQueue,
+      additionalTasks: additionalTasks,
+    );
+    if (queues.length <= 1) {
+      return null;
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
+  /// Returns the default queues implied by the bundled task handlers only.
+  List<String> inferredTaskQueues({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = SplayTreeSet<String>();
+
+    void addTaskQueue(TaskHandler<Object?> handler) {
+      final queue = handler.options.queue.trim();
+      if (queue.isNotEmpty) {
+        queues.add(queue);
+      }
+    }
+
+    tasks.forEach(addTaskQueue);
+    additionalTasks.forEach(addTaskQueue);
+    return queues.toList(growable: false);
+  }
+
+  /// Returns the queues required by bundled task handlers only.
+  ///
+  /// This is the explicit inspection helper for task-only workers. Bootstrap
+  /// helpers use the same queue set when inferring plain worker subscriptions
+  /// from a module.
+  List<String> requiredTaskQueues({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    return inferredTaskQueues(additionalTasks: additionalTasks);
+  }
+
+  /// Returns the explicit subscription required for task-only workers.
+  RoutingSubscription requiredTaskSubscription({
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = requiredTaskQueues(additionalTasks: additionalTasks);
+    if (queues.length == 1) {
+      return RoutingSubscription.singleQueue(queues.single);
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
+  /// Infers a worker subscription from bundled task handlers only.
+  ///
+  /// Returns `null` when the bundled tasks only target [defaultQueue], allowing
+  /// the worker's default queue configuration to remain unchanged.
+  RoutingSubscription? inferTaskWorkerSubscription({
+    String defaultQueue = 'default',
+    Iterable<TaskHandler<Object?>> additionalTasks = const [],
+  }) {
+    final queues = inferredTaskQueues(additionalTasks: additionalTasks);
+    if (queues.isEmpty) return null;
+    if (queues.length == 1 && queues.first == defaultQueue.trim()) {
+      return null;
+    }
+    return RoutingSubscription(queues: queues);
+  }
+
   static Iterable<WorkflowManifestEntry> _defaultManifest({
     required Iterable<WorkflowDefinition> workflows,
     required Iterable<Flow> flows,
@@ -85,4 +379,8 @@ class StemModule {
       yield script.definition.toManifestEntry();
     }
   }
+}
+
+bool _sameManifestEntry(WorkflowManifestEntry a, WorkflowManifestEntry b) {
+  return jsonEncode(a.toJson()) == jsonEncode(b.toJson());
 }

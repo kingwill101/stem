@@ -20,18 +20,6 @@ List<TaskHandler<Object?>> buildTasks() => [
       ),
     ];
 
-Stem buildStem({
-  required Broker broker,
-  required Iterable<TaskHandler<Object?>> tasks,
-  ResultBackend? backend,
-}) {
-  return Stem(
-    broker: broker,
-    tasks: tasks,
-    backend: backend,
-  );
-}
-
 Future<RedisStreamsBroker> connectBroker(String uri) =>
     RedisStreamsBroker.connect(uri);
 

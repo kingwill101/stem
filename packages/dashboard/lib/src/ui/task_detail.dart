@@ -12,7 +12,7 @@ String buildTaskDetailContent(
   DashboardTaskStatusEntry? task,
   List<DashboardTaskStatusEntry> runTimeline,
   DashboardWorkflowRunSnapshot? workflowRun,
-  List<DashboardWorkflowStepSnapshot> workflowSteps,
+  List<DashboardWorkflowCheckpointSnapshot> workflowCheckpoints,
 ) {
   if (task == null) {
     return '''
@@ -68,7 +68,7 @@ String buildTaskDetailContent(
       <tr><th scope="row">Updated</th><td class="muted">${formatDateTime(task.updatedAt)}</td></tr>
       <tr><th scope="row">Run ID</th><td>${task.runId == null ? '<span class="muted">—</span>' : '<a href="/tasks/detail?id=${Uri.encodeQueryComponent(task.id)}&runId=${Uri.encodeQueryComponent(task.runId!)}" data-turbo-frame="dashboard-content"><code>${escapeHtml(task.runId!)}</code></a>'}</td></tr>
       <tr><th scope="row">Workflow</th><td>${task.workflowName == null ? '<span class="muted">—</span>' : escapeHtml(task.workflowName!)}</td></tr>
-      <tr><th scope="row">Workflow Step</th><td>${task.workflowStep == null ? '<span class="muted">—</span>' : escapeHtml(task.workflowStep!)}</td></tr>
+      <tr><th scope="row">Workflow Checkpoint</th><td>${task.workflowStep == null ? '<span class="muted">—</span>' : escapeHtml(task.workflowStep!)}</td></tr>
     </tbody>
   </table>
 </section>
@@ -113,14 +113,14 @@ String buildTaskDetailContent(
   </table>
 </section>
 
-${buildWorkflowSection(task, workflowRun, workflowSteps, timeline)}
+${buildWorkflowSection(task, workflowRun, workflowCheckpoints, timeline)}
 ''';
 }
 
 String buildWorkflowSection(
   DashboardTaskStatusEntry task,
   DashboardWorkflowRunSnapshot? workflowRun,
-  List<DashboardWorkflowStepSnapshot> workflowSteps,
+  List<DashboardWorkflowCheckpointSnapshot> workflowCheckpoints,
   List<DashboardTaskStatusEntry> timeline,
 ) {
   if (task.runId == null) {
@@ -182,11 +182,11 @@ String buildWorkflowSection(
       </tr>
     </thead>
     <tbody>
-      ${workflowSteps.isEmpty ? '''
+      ${workflowCheckpoints.isEmpty ? '''
 <tr>
-  <td colspan="4" class="muted">No persisted workflow step checkpoints found.</td>
+  <td colspan="4" class="muted">No persisted workflow checkpoints found.</td>
 </tr>
-''' : workflowSteps.map((step) => '''
+''' : workflowCheckpoints.map((step) => '''
 <tr>
   <td>${escapeHtml(step.name)}</td>
   <td>${formatInt(step.position)}</td>
@@ -207,7 +207,7 @@ String buildWorkflowSection(
       <tr>
         <th scope="col">Task ID</th>
         <th scope="col">Task</th>
-        <th scope="col">Step</th>
+        <th scope="col">Checkpoint</th>
         <th scope="col">State</th>
         <th scope="col">Attempt</th>
         <th scope="col">Updated</th>

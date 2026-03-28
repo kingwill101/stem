@@ -10,14 +10,10 @@ Future<void> main() async {
 
   final routing = buildRoutingRegistry();
   final tasks = buildDemoTasks();
-
-  final broker = await RedisStreamsBroker.connect(
+  final client = await StemClient.fromUrl(
     redisUrl,
-    namespace: 'stem-routing-demo',
-  );
-
-  final stem = Stem(
-    broker: broker,
+    adapters: const [StemRedisAdapter(namespace: 'stem-routing-demo')],
+    overrides: const StemStoreOverrides(backend: 'memory://'),
     tasks: tasks,
     routing: routing,
   );
@@ -25,27 +21,27 @@ Future<void> main() async {
   stdout.writeln('Publishing demo tasks using routing parity features...');
 
   await _enqueueWithRouting(
-    stem,
+    client,
     routing,
     'billing.invoice',
     args: const {'invoiceId': 101},
   );
   await _enqueueWithRouting(
-    stem,
+    client,
     routing,
     'billing.invoice',
     args: const {'invoiceId': 102},
   );
 
   await _enqueueWithRouting(
-    stem,
+    client,
     routing,
     'reports.generate',
     args: const {'subject': 'Quarterly summary', 'priority': 'low'},
     options: const TaskOptions(priority: 1),
   );
   await _enqueueWithRouting(
-    stem,
+    client,
     routing,
     'reports.generate',
     args: const {'subject': 'Incident post-mortem', 'priority': 'high'},
@@ -53,7 +49,7 @@ Future<void> main() async {
   );
 
   await _enqueueWithRouting(
-    stem,
+    client,
     routing,
     'ops.status',
     args: const {'message': 'Maintenance window begins at 02:00 UTC.'},
@@ -61,11 +57,11 @@ Future<void> main() async {
 
   stdout
       .writeln('All demo tasks enqueued. Watch the worker output for results.');
-  await broker.close();
+  await client.close();
 }
 
 Future<void> _enqueueWithRouting(
-  Stem stem,
+  TaskEnqueuer enqueuer,
   RoutingRegistry routing,
   String name, {
   Map<String, Object?> args = const {},
@@ -88,7 +84,7 @@ Future<void> _enqueueWithRouting(
     ...meta,
   };
 
-  final id = await stem.enqueue(
+  final id = await enqueuer.enqueue(
     name,
     args: args,
     headers: headers,

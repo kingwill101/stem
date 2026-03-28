@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_dlq_sandbox/shared.dart';
 
 Future<void> main() async {
@@ -11,13 +12,12 @@ Future<void> main() async {
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
   final tasks = buildTasks();
-  final stem = buildStem(
-    broker: broker,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
-    backend: backend,
   );
 
   final invoices = List.generate(
@@ -29,7 +29,7 @@ Future<void> main() async {
       '[producer] enqueueing invoices $invoices (all expected to fail first)');
   // #region dlq-producer-enqueue
   for (final invoice in invoices) {
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       taskName(),
       args: {
         'invoiceId': invoice,
@@ -49,7 +49,6 @@ Future<void> main() async {
   stdout.writeln('[producer] jobs queued. Waiting 3s before exit...');
   await Future<void>.delayed(const Duration(seconds: 3));
 
-  await broker.close();
-  await backend.close();
+  await client.close();
   stdout.writeln('[producer] done.');
 }

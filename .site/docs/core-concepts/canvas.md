@@ -9,12 +9,15 @@ This guide walks through Stem's task composition primitives—chains, groups, an
 chords—using in-memory brokers and backends. Each snippet references a runnable
 file under `packages/stem/example/docs_snippets/` so you can experiment locally
 with `dart run`. If you bootstrap with `StemApp`, use `app.canvas` to reuse the
-same broker, backend, task handlers, and encoder registry.
+same broker, backend, task handlers, and encoder registry. `StemApp` lazy-starts
+its managed worker for canvas dispatch too, so the common path does not need an
+explicit `await app.start()`.
 
 ## Chains
 
 Chains execute tasks serially. Each step receives the previous result via
-`context.meta['chainPrevResult']`.
+`context.meta`, so prefer typed reads like
+`context.meta.valueOr<String>('chainPrevResult', 'fallback')` over raw casts.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chain.dart#canvas-chain
 
@@ -46,16 +49,19 @@ state:
 
 ## Chords
 
-Chords combine a group with a callback. Once all body tasks succeed, the callback
-runs with `context.meta['chordResults']` populated.
+Chords combine a group with a callback. Once all body tasks succeed, the
+callback runs with `context.meta['chordResults']` populated. Prefer
+`context.meta.valueListOr<T>('chordResults', const [])` over manual list casts
+when reading those results.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/canvas_chord.dart#canvas-chord
 
 ```
 
 If any branch fails, the callback is skipped and the chord group is marked as
-failed. Inspect `backend.getGroup(chordId)` to see which branch failed before
-retrying.
+failed. Inspect the latest group status via `StemApp.getGroupStatus(...)` or
+`StemClient.getGroupStatus(...)` before retrying. If you are operating below
+the runtime layer, read the raw backend directly.
 
 ## Dependency semantics
 
@@ -71,7 +77,10 @@ retrying.
 - `Canvas.group` returns a `GroupDispatch` with a result stream for each child.
 - `Canvas.chord` preserves the original signature order when building
   `chordResults`, so you can map results back to inputs deterministically.
-- `backend.getGroup(groupId)` returns the latest status for each child task.
+- `StemApp.getGroupStatus(...)` and `StemClient.getGroupStatus(...)` return the
+  latest status for each child task. Use `status.resultValues<T>()` for scalar
+  child results or `status.resultJson(...)` / `status.resultAs(codec: ...)` for
+  DTO payloads before dropping down to raw backend reads.
 
 ## Removal semantics
 
@@ -89,8 +98,8 @@ dart run lib/canvas_group.dart
 dart run lib/canvas_chord.dart
 ```
 
-Each script bootstraps a `StemApp` in-memory runtime, starts a worker, and then
-uses `app.canvas` for composition.
+Each script bootstraps a `StemApp` in-memory runtime and then uses `app.canvas`
+for composition.
 
 ## Best practices
 

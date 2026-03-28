@@ -1,4 +1,5 @@
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/core/payload_codec.dart';
 
 /// Describes a workflow event watcher registered by the runtime.
 class WorkflowWatcher {
@@ -42,6 +43,37 @@ class WorkflowWatcher {
   /// Additional metadata supplied when the watcher was registered.
   final Map<String, Object?> data;
 
+  /// Decodes the full watcher metadata with [codec].
+  TData dataAs<TData>({required PayloadCodec<TData> codec}) {
+    return codec.decode(data);
+  }
+
+  /// Decodes the full watcher metadata with a JSON decoder.
+  TData dataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(data);
+  }
+
+  /// Decodes the full watcher metadata with a version-aware JSON decoder.
+  TData dataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(data);
+  }
+
   /// Suspension type (`sleep`, `event`, etc.) when recorded by runtime.
   String? get suspensionType => data['type']?.toString();
 
@@ -53,6 +85,48 @@ class WorkflowWatcher {
 
   /// Effective payload snapshot captured at suspension time.
   Object? get payload => data['payload'];
+
+  /// Decodes the captured watcher payload with [codec], when present.
+  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the captured watcher payload with a JSON decoder, when present.
+  TPayload? payloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the captured watcher payload with a version-aware JSON decoder,
+  /// when present.
+  TPayload? payloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when suspension was recorded.
   DateTime? get suspendedAt => _dateFromJson(data['suspendedAt']);
@@ -109,6 +183,37 @@ class WorkflowWatcherResolution {
   /// Resume data merged from stored metadata and event payload.
   final Map<String, Object?> resumeData;
 
+  /// Decodes the full resume data payload with [codec].
+  TData resumeDataAs<TData>({required PayloadCodec<TData> codec}) {
+    return codec.decode(resumeData);
+  }
+
+  /// Decodes the full resume data payload with a JSON decoder.
+  TData resumeDataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(resumeData);
+  }
+
+  /// Decodes the full resume data payload with a version-aware JSON decoder.
+  TData resumeDataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(resumeData);
+  }
+
   /// Suspension type (`sleep`, `event`, etc.) propagated to resume payload.
   String? get suspensionType => resumeData['type']?.toString();
 
@@ -120,6 +225,48 @@ class WorkflowWatcherResolution {
 
   /// Resume payload delivered to workflow step.
   Object? get payload => resumeData['payload'];
+
+  /// Decodes the resume payload with [codec], when present.
+  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the resume payload with a JSON decoder, when present.
+  TPayload? payloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the resume payload with a version-aware JSON decoder, when
+  /// present.
+  TPayload? payloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Timestamp when event delivery was recorded.
   DateTime? get deliveredAt => _dateFromJson(resumeData['deliveredAt']);

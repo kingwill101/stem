@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_rate_limit_delay_demo/shared.dart';
 
 Future<void> main() async {
@@ -11,14 +12,13 @@ Future<void> main() async {
 
   stdout.writeln('[producer] connecting broker=$brokerUrl backend=$backendUrl');
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
   final tasks = buildTasks();
   final routing = buildRoutingRegistry();
-  final stem = buildStem(
-    broker: broker,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
-    backend: backend,
     routing: routing,
   );
 
@@ -45,7 +45,7 @@ Future<void> main() async {
     );
     final appliedPriority = route.effectivePriority(priority);
 
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       taskName(),
       args: {
         'job': i + 1,
@@ -75,7 +75,6 @@ Future<void> main() async {
   stdout.writeln('[producer] all jobs queued. Waiting 5s before shutdown...');
   await Future<void>.delayed(const Duration(seconds: 5));
 
-  await broker.close();
-  await backend.close();
+  await client.close();
   stdout.writeln('[producer] done.');
 }

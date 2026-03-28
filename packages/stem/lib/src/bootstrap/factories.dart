@@ -228,4 +228,51 @@ class StemWorkerConfig {
 
   /// Optional payload signer used to verify envelopes.
   final PayloadSigner? signer;
+
+  /// Returns a copy of this worker configuration with the provided overrides.
+  StemWorkerConfig copyWith({
+    String? queue,
+    String? consumerName,
+    int? concurrency,
+    int? prefetchMultiplier,
+    int? prefetch,
+    RateLimiter? rateLimiter,
+    List<Middleware>? middleware,
+    RevokeStore? revokeStore,
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    RetryStrategy? retryStrategy,
+    RoutingSubscription? subscription,
+    Duration? heartbeatInterval,
+    Duration? workerHeartbeatInterval,
+    HeartbeatTransport? heartbeatTransport,
+    String? heartbeatNamespace,
+    WorkerAutoscaleConfig? autoscale,
+    WorkerLifecycleConfig? lifecycle,
+    ObservabilityConfig? observability,
+    PayloadSigner? signer,
+  }) {
+    return StemWorkerConfig(
+      queue: queue ?? this.queue,
+      consumerName: consumerName ?? this.consumerName,
+      concurrency: concurrency ?? this.concurrency,
+      prefetchMultiplier: prefetchMultiplier ?? this.prefetchMultiplier,
+      prefetch: prefetch ?? this.prefetch,
+      rateLimiter: rateLimiter ?? this.rateLimiter,
+      middleware: middleware ?? this.middleware,
+      revokeStore: revokeStore ?? this.revokeStore,
+      uniqueTaskCoordinator:
+          uniqueTaskCoordinator ?? this.uniqueTaskCoordinator,
+      retryStrategy: retryStrategy ?? this.retryStrategy,
+      subscription: subscription ?? this.subscription,
+      heartbeatInterval: heartbeatInterval ?? this.heartbeatInterval,
+      workerHeartbeatInterval:
+          workerHeartbeatInterval ?? this.workerHeartbeatInterval,
+      heartbeatTransport: heartbeatTransport ?? this.heartbeatTransport,
+      heartbeatNamespace: heartbeatNamespace ?? this.heartbeatNamespace,
+      autoscale: autoscale ?? this.autoscale,
+      lifecycle: lifecycle ?? this.lifecycle,
+      observability: observability ?? this.observability,
+      signer: signer ?? this.signer,
+    );
+  }
 }

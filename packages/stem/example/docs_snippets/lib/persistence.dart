@@ -9,9 +9,11 @@ import 'package:stem_postgres/stem_postgres.dart';
 import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
+final demoTaskDefinition = TaskDefinition.noArgs<void>(name: 'demo');
+
 final demoTasks = [
   FunctionTaskHandler<void>(
-    name: 'demo',
+    name: demoTaskDefinition.name,
     entrypoint: (context, args) async {
       print('Handled demo task');
       return null;
@@ -21,63 +23,54 @@ final demoTasks = [
 
 // #region persistence-backend-in-memory
 Future<void> connectInMemoryBackend() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
-    tasks: demoTasks,
-  );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  final client = await StemClient.inMemory(tasks: demoTasks);
+  await demoTaskDefinition.enqueue(client);
+  await client.close();
 }
 // #endregion persistence-backend-in-memory
 
 // #region persistence-backend-redis
 Future<void> connectRedisBackend() async {
-  final backend = await RedisResultBackend.connect('redis://localhost:6379/1');
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'redis://localhost:6379/1',
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await demoTaskDefinition.enqueue(client);
+  await client.close();
 }
 // #endregion persistence-backend-redis
 
 // #region persistence-backend-postgres
 Future<void> connectPostgresBackend() async {
-  final backend = await PostgresResultBackend.connect(
-    connectionString: 'postgres://postgres:postgres@localhost:5432/stem',
-  );
-  final broker = await RedisStreamsBroker.connect('redis://localhost:6379');
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    'redis://localhost:6379',
+    adapters: const [StemRedisAdapter(), StemPostgresAdapter()],
+    overrides: const StemStoreOverrides(
+      backend: 'postgres://postgres:postgres@localhost:5432/stem',
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await demoTaskDefinition.enqueue(client);
+  await client.close();
 }
 // #endregion persistence-backend-postgres
 
 // #region persistence-backend-sqlite
 Future<void> connectSqliteBackend() async {
-  final broker = await SqliteBroker.open(File('stem_broker.sqlite'));
-  final backend = await SqliteResultBackend.open(File('stem_backend.sqlite'));
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    'sqlite:///${File('stem_broker.sqlite').absolute.path}',
+    adapters: const [StemSqliteAdapter()],
+    overrides: StemStoreOverrides(
+      backend: 'sqlite:///${File('stem_backend.sqlite').absolute.path}',
+    ),
     tasks: demoTasks,
   );
-  await stem.enqueue('demo', args: {});
-  await backend.close();
-  await broker.close();
+  await demoTaskDefinition.enqueue(client);
+  await client.close();
 }
 // #endregion persistence-backend-sqlite
 

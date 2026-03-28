@@ -2,6 +2,8 @@ import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
 
 /// Status of a workflow run emitted via signals.
@@ -211,6 +213,43 @@ class TaskPostrunPayload implements StemEvent {
   /// The result returned by the task.
   final Object? result;
 
+  /// Decodes the task result with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the task result with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the task result with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// The final state of the task.
   final TaskState state;
 
@@ -314,6 +353,43 @@ class TaskSuccessPayload implements StemEvent {
 
   /// The result returned by the successful task.
   final Object? result;
+
+  /// Decodes the task result with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the task result with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the task result with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   final DateTime _occurredAt;
 
@@ -555,6 +631,95 @@ class WorkflowRunPayload implements StemEvent {
   /// Additional metadata associated with the workflow run.
   final Map<String, Object?> metadata;
 
+  /// Returns the decoded metadata value for [key], or `null` when absent.
+  ///
+  /// When [codec] is supplied, the stored durable payload is decoded through
+  /// that codec before being returned.
+  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return metadata.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with [codec].
+  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+    return metadata.value<T>(key, codec: codec);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(metadata);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a JSON decoder.
+  T? metadataJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return metadata.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metadataPayloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(metadata);
+  }
+
+  /// Decodes the metadata value for [key] as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? metadataVersionedJson<T>(
+    String key, {
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return metadata.valueJson<T>(
+      key,
+      decode: (json) => PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decode,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: typeName,
+      ).decode(json),
+      typeName: typeName,
+    );
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metadataPayloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(metadata);
+  }
+
+  /// Returns the decoded metadata value for [key], or [fallback] when absent.
+  T metadataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return metadata.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded metadata value for [key], throwing when absent.
+  T requiredMetadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+    return metadata.requiredValue<T>(key, codec: codec);
+  }
+
   /// Optional canonical signal name when this payload is emitted.
   final String? signalName;
 
@@ -743,8 +908,134 @@ class ControlCommandCompletedPayload implements StemEvent {
   /// The response data from the command execution, if any.
   final Map<String, Object?>? response;
 
+  /// Returns the decoded response value for [key], or `null` when absent.
+  T? responseValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = response;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded response value for [key], or [fallback] when absent.
+  T responseValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = response;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded response value for [key], throwing when absent.
+  T requiredResponseValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = response;
+    if (payload == null) {
+      throw StateError(
+        'ControlCommandCompletedPayload.response does not contain "$key".',
+      );
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the full response payload as a typed DTO with [codec].
+  T? responseAs<T>({required PayloadCodec<T> codec}) {
+    final payload = response;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full response payload as a typed DTO with a JSON decoder.
+  T? responseJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = response;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full response payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T? responseVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = response;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
   /// Error information if the command failed, if any.
   final Map<String, Object?>? error;
+
+  /// Returns the decoded error value for [key], or `null` when absent.
+  T? errorValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = error;
+    if (payload == null) return null;
+    return payload.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded error value for [key], or [fallback] when absent.
+  T errorValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    final payload = error;
+    if (payload == null) return fallback;
+    return payload.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded error value for [key], throwing when absent.
+  T requiredErrorValue<T>(String key, {PayloadCodec<T>? codec}) {
+    final payload = error;
+    if (payload == null) {
+      throw StateError(
+        'ControlCommandCompletedPayload.error does not contain "$key".',
+      );
+    }
+    return payload.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Decodes the full error payload as a typed DTO with [codec].
+  T? errorAs<T>({required PayloadCodec<T> codec}) {
+    final payload = error;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the full error payload as a typed DTO with a JSON decoder.
+  T? errorJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = error;
+    if (payload == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the full error payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? errorVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = error;
+    if (payload == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   final DateTime _occurredAt;
 

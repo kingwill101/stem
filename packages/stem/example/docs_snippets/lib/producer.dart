@@ -8,7 +8,7 @@ import 'package:stem_redis/stem_redis.dart';
 
 // #region producer-in-memory
 Future<void> enqueueInMemory() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: [
       FunctionTaskHandler<void>(
         name: 'hello.print',
@@ -20,14 +20,17 @@ Future<void> enqueueInMemory() async {
       ),
     ],
   );
+  final app = await client.createApp();
 
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'hello.print',
     args: {'name': 'Stem'},
   );
+  await app.waitForTask<void>(taskId);
 
   print('Enqueued $taskId');
   await app.close();
+  await client.close();
 }
 // #endregion producer-in-memory
 
@@ -36,8 +39,6 @@ Future<void> enqueueWithRedis() async {
   final brokerUrl =
       Platform.environment['STEM_BROKER_URL'] ?? 'redis://localhost:6379';
 
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final backend = await RedisResultBackend.connect('$brokerUrl/1');
   final tasks = [
     FunctionTaskHandler<void>(
       name: 'reports.generate',
@@ -49,31 +50,26 @@ Future<void> enqueueWithRedis() async {
     ),
   ];
 
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: '$brokerUrl/1'),
     tasks: tasks,
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'reports.generate',
     args: {'reportId': 'monthly-2025-10'},
     options: const TaskOptions(queue: 'reports', maxRetries: 3),
     meta: {'requestedBy': 'finance'},
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion producer-redis
 
 // #region producer-signed
 Future<void> enqueueWithSigning() async {
   final config = StemConfig.fromEnvironment();
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
-  final backend = InMemoryResultBackend();
   final tasks = [
     FunctionTaskHandler<void>(
       name: 'billing.charge',
@@ -84,20 +80,20 @@ Future<void> enqueueWithSigning() async {
       },
     ),
   ];
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: const StemStoreOverrides(backend: 'memory://'),
     tasks: tasks,
     signer: PayloadSigner.maybe(config.signing),
   );
 
-  await stem.enqueue(
+  await client.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
     notBefore: DateTime.now().add(const Duration(minutes: 5)),
   );
-  await backend.close();
-  await broker.close();
+  await client.close();
 }
 // #endregion producer-signed
 
@@ -122,25 +118,24 @@ class GenerateReportTask extends TaskHandler<String> {
 
   @override
   Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final id = args['reportId'] as String;
-    return await generateReport(id);
+    final id = args['reportId'] as String?;
+    return generateReport(id!);
   }
 }
 
 Future<void> enqueueTyped() async {
-  final app = await StemApp.inMemory(tasks: [GenerateReportTask()]);
-  await app.start();
+  final client = await StemClient.inMemory(tasks: [GenerateReportTask()]);
+  final app = await client.createApp();
 
-  final call = GenerateReportTask.definition.call(
+  final result = await GenerateReportTask.definition.enqueueAndWait(
+    app,
     const ReportPayload(reportId: 'monthly-2025-10'),
     options: const TaskOptions(priority: 5),
     headers: const {'x-requested-by': 'analytics'},
   );
-
-  final taskId = await app.stem.enqueueCall(call);
-  final result = await app.stem.waitForTask<String>(taskId);
   print(result?.value);
   await app.close();
+  await client.close();
 }
 // #endregion producer-typed
 
@@ -154,14 +149,16 @@ class AesPayloadEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> configureProducerEncoders() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: const [],
     argsEncoder: const AesPayloadEncoder(),
     resultEncoder: const JsonTaskPayloadEncoder(),
     additionalEncoders: const [CustomBinaryEncoder()],
   );
+  final app = await client.createApp();
 
   await app.close();
+  await client.close();
 }
 // #endregion producer-encoders
 

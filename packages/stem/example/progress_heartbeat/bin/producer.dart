@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_progress_heartbeat/shared.dart';
 
 Future<void> main() async {
@@ -17,19 +18,16 @@ Future<void> main() async {
     '[producer] broker=$brokerUrl backend=$backendUrl tasks=$taskCount',
   );
 
-  final broker = await connectBroker(brokerUrl);
-  final backend = await connectBackend(backendUrl);
-  final tasks = buildTasks();
-
-  final stem = Stem(
-    broker: broker,
-    tasks: tasks,
-    backend: backend,
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    overrides: StemStoreOverrides(backend: backendUrl),
+    tasks: buildTasks(),
   );
   const taskOptions = TaskOptions(queue: progressQueue);
 
   for (var i = 0; i < taskCount; i += 1) {
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'progress.demo',
       options: taskOptions,
       args: {'steps': steps, 'delayMs': delayMs},
@@ -37,6 +35,5 @@ Future<void> main() async {
     stdout.writeln('[producer] enqueued progress.demo id=$id');
   }
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }

@@ -39,16 +39,16 @@ In code, wire the signer into both producers and workers:
 ```
 
 </TabItem>
-<TabItem value="bootstrap" label="Tasks + storage">
+<TabItem value="bootstrap" label="Tasks">
 
 ```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-registry
 
 ```
 
 </TabItem>
-<TabItem value="stem" label="Stem setup (signing enabled)">
+<TabItem value="client" label="Client setup (signing enabled)">
 
-```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-stem
+```dart title="lib/production_checklist.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/production_checklist.dart#production-signing-client
 
 ```
 

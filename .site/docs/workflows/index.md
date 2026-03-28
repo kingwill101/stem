@@ -75,6 +75,7 @@ final workflowApp = await client.createWorkflowApp(
 );
 ```
 
-If your service already owns a `StemApp`, reuse it directly with
-`StemWorkflowApp.create(stemApp: ..., flows: ..., scripts: ..., tasks: ...)`
-rather than bootstrapping a second broker/backend/task boundary.
+If your service already owns a `StemApp`, layer workflows on top of it with
+`stemApp.createWorkflowApp(...)`. That path reuses the existing worker, so the
+app must already subscribe to the workflow queue plus any task queues the
+workflows need.

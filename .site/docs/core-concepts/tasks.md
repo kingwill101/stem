@@ -36,9 +36,13 @@ routing, retry behavior, timeouts, and isolation.
 
 Stem ships with `TaskDefinition<TArgs, TResult>` so producers get compile-time
 checks for required arguments and result types. A definition bundles the task
-name, argument encoder, optional metadata, and default `TaskOptions`. Build a
-call with `.call(args)` or `TaskEnqueueBuilder` and hand it to `Stem.enqueueCall`
-or `Canvas` helpers:
+name, argument encoder, optional metadata, and default `TaskOptions`. For the
+common path, use the direct
+`definition.enqueue(stem, args)` / `definition.enqueueAndWait(...)`
+helpers. When you need a reusable prebuilt request, use
+`definition.buildCall(args, ...)` and hand the resulting `TaskCall` to any
+`TaskResultCaller` / `TaskEnqueuer` surface. Treat `TaskCall` as the
+explicit low-level transport object, not the normal happy path:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-typed-definition
 
@@ -48,6 +52,75 @@ Typed results flow through `TaskResult<TResult>` when you call
 `Stem.waitForTask<TResult>`, `Canvas.group<T>`, `Canvas.chain<T>`, or
 `Canvas.chord<T>`. Supplying a custom `decode` callback on the task signature
 lets you deserialize complex objects before they reach application code.
+Use `result.requiredValue()` when a completed task must have a decoded value
+and you want a fail-fast read instead of manual nullable handling.
+For low-level DTO waits through `Stem.waitForTask<TResult>`, prefer
+`decodeJson:` for plain DTOs or `decodeVersionedJson:` when the stored payload
+persists an explicit schema version.
+If you already have a raw `TaskStatus`, use `status.payloadJson(...)` or
+`status.payloadAs(codec: ...)` to decode the whole payload DTO without a
+separate cast/closure. Use `status.payloadVersionedJson(...)` when the stored
+payload carries an explicit `__stemPayloadVersion`. If the whole task metadata
+map is one DTO, use `status.metaJson(...)` or `status.metaAs(codec: ...)`
+instead of manual `status.meta[...]` casts.
+If you already have a raw `TaskResult<Object?>`, use `result.payloadJson(...)`
+or `result.payloadAs(codec: ...)` to decode the stored task result DTO
+without another cast/closure. Use `result.payloadVersionedJson(...)` for the
+same versioned DTO path on persisted task results.
+If you are inspecting a low-level `TaskError`, use `error.metaJson(...)`,
+`error.metaVersionedJson(...)`, or `error.metaAs(codec: ...)` instead of
+manual `error.meta[...]` casts.
+
+If your manual task args are DTOs, prefer `TaskDefinition.json(...)`
+when the type already has `toJson()`. Use `TaskDefinition.versionedJson(...)`
+when the payload schema is expected to evolve and the published payload should
+persist an explicit `__stemPayloadVersion`. Use `TaskDefinition.codec(...)`
+when you need a custom `PayloadCodec<T>`. Task args still need to encode to a
+string-keyed map (typically `Map<String, dynamic>`) because they are published
+as JSON-shaped data. For low-level name-based enqueue APIs, use
+`enqueueVersionedJson(...)` for the same versioned DTO path.
+If the args need a custom map encoder and still need an explicit stored schema
+version, use `TaskDefinition.versionedMap(...)`.
+If the args stay unversioned but the stored result carries an explicit schema
+version, `TaskDefinition.json(...)` also accepts
+`decodeResultVersionedJson:` plus `defaultDecodeVersion:`.
+
+For manual handlers, prefer the typed payload readers on the argument map
+instead of repeating raw casts:
+
+```dart
+final customerId = args.requiredValue<String>('customerId');
+final tenant = args.valueOr<String>('tenant', 'global');
+```
+
+When the whole task arg payload is one DTO, prefer decoding it directly from
+the execution context:
+
+```dart
+final request = context.argsJson<InvoicePayload>(
+  decode: InvoicePayload.fromJson,
+);
+```
+
+Use `buildCall(...)` when you need an explicit low-level transport object and
+provide the final headers, metadata, options, or scheduling overrides up
+front. For the normal case, prefer direct `enqueue(...)` /
+`enqueueAndWait(...)`.
+
+For tasks with no producer inputs, use `TaskDefinition.noArgs<TResult>(...)`
+instead. That gives you direct `enqueue(...)` /
+`enqueueAndWait(...)` helpers without passing a fake empty map and the same
+`waitFor(...)` decoding surface as normal typed definitions.
+
+If a no-arg task returns a DTO, prefer `TaskDefinition.noArgsJson(...)` when
+the result already has `toJson()` and `Type.fromJson(...)`. Use
+`TaskDefinition.noArgsVersionedJson(...)` when the stored result should carry
+an explicit schema version, and `TaskDefinition.noArgsCodec(...)` only when
+you need a custom payload codec.
+
+For argful manual tasks, `TaskDefinition.versionedJson(...)` also accepts
+`decodeResultVersionedJson:` when the stored result should carry an explicit
+schema version.
 
 ## Configuring Retries
 
@@ -79,20 +152,39 @@ every retry signal and shows how the strategy interacts with broker timings.
 - `context.heartbeat()` – extend the lease to avoid timeouts.
 - `context.extendLease(Duration by)` – request additional processing time.
 - `context.progress(percent, data: {...})` – emit progress signals for UI hooks.
+- `context.progressJson(percent, dto)` – emit DTO progress payloads without
+  hand-built maps.
+- `context.progressVersionedJson(percent, dto, version: n)` – emit DTO progress
+  payloads with an explicit persisted schema version.
+- `context.retry(...)` – request an immediate retry with optional per-call
+  retry policy overrides.
+- when you inspect a raw `ProgressSignal`, prefer
+  `signal.dataJson('key', ...)`, `signal.dataVersionedJson('key', ...)`, or
+  `signal.dataValue<T>('key')` for keyed reads, or
+  `signal.payloadJson(...)`, `signal.payloadVersionedJson(...)`, and
+  `signal.payloadAs(codec: ...)` when the whole progress payload is one DTO.
 
 Use the context to build idempotent handlers. Re-enqueue work, cancel jobs, or
 store audit details in `context.meta`.
 
+For handler inputs, prefer the typed arg helpers on the task context when
+available:
+
+```dart
+final customerId = context.requiredArg<String>('customerId');
+final tenant = context.argOr<String>('tenant', 'global');
+```
+
 See the `packages/stem/example/task_context_mixed` demo for a runnable sample that exercises
 inline + isolate enqueue, TaskRetryPolicy overrides, and enqueue options.
-The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory TaskContext and
-TaskInvocationContext patterns without external dependencies.
+The `packages/stem/example/task_usage_patterns.dart` sample shows in-memory
+`TaskExecutionContext` patterns without external dependencies.
 
 ### Enqueue from a running task
 
-Use `TaskContext.enqueue`/`spawn` to schedule follow-up work with the same
-defaults as `Stem.enqueue`. For isolate entrypoints, `TaskInvocationContext`
-exposes the same API plus the fluent builder.
+Use `TaskExecutionContext.enqueue`/`spawn` to schedule follow-up work with the
+same defaults as `Stem.enqueue`. Concrete runtimes like `TaskContext` and
+`TaskInvocationContext` expose the same API.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-context-enqueue
 
@@ -103,6 +195,18 @@ Inside isolate entrypoints:
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/tasks.dart#tasks-invocation-builder
 
 ```
+
+When a task runs inside a workflow-enabled runtime like `StemWorkflowApp`,
+`TaskExecutionContext` also implements `WorkflowCaller`, so handlers and
+isolate entrypoints can start or wait for
+typed child workflows without dropping to raw workflow-name APIs. For manual
+flows and scripts, prefer `childFlow.startAndWait(context)` or
+`childWorkflowRef.startAndWait(context, params: value)` for the simple case.
+Use a builder only when you need advanced overrides.
+
+That same shared task context also implements `WorkflowEventEmitter`, so tasks
+can resume waiting workflows through `emitValue(...)` or typed `WorkflowEventRef<T>`
+instances when a workflow runtime is attached.
 
 ### Retry from a running task
 

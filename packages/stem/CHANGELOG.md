@@ -1,57 +1,32 @@
 # Changelog
 
-## 0.1.1
+## 0.2.0
 
-- Added `StemModule`, typed `WorkflowRef`/`WorkflowStartCall` helpers, and bundle-first `StemWorkflowApp`/`StemClient` composition for generated workflow and task definitions.
-- Added `PayloadCodec`, typed workflow resume helpers, codec-backed workflow checkpoint/result persistence, typed task result waiting, and typed workflow event emit helpers for DTO-shaped payloads.
-- Added workflow manifests, runtime metadata views, and run/step drilldown APIs
-  for inspecting workflow definitions and persisted execution state.
-- Clarified the workflow authoring model by distinguishing flow steps from
-  script checkpoints in manifests, docs, dashboard wording, and generated
-  workflow output.
-- Improved workflow store contracts and runtime compatibility for caller-
-  supplied run ids and persisted runtime metadata attached to workflow params.
-- Restored the deprecated `SimpleTaskRegistry` alias for source compatibility
-  and fixed workflow continuation routing to honor persisted queue metadata
-  when resuming suspended runs after runtime configuration changes.
-- Added `tasks:`-first wiring across `Stem`, `Worker`, `Canvas`, and
-  `StemWorkflowApp`, removing the need for manual default-registry setup in
-  normal application code and examples.
-- Renamed the default in-memory task registry surface to
-  `InMemoryTaskRegistry` and refreshed docs/examples to teach `tasks: [...]`
-  rather than explicit registry construction.
-- Improved workflow logging with richer run/step context on worker lifecycle
-  lines plus enqueue/suspend/fail/complete runtime events.
-- Exported logging types from `package:stem/stem.dart`, including `Level`,
-  `Logger`, and `Context`.
-- Added an end-to-end ecommerce workflow example using mixed annotated/manual
-  workflows, `StemWorkflowApp`, and Ormed-backed SQLite models/migrations.
-- Expanded span attribution across enqueue/consume/execute with task identity,
-  queue, worker, host, lineage, namespace, and workflow step metadata
-  (`run_id`, `step`, `step_id`, `step_index`, `step_attempt`, `iteration`).
-- Improved worker retry republish behavior to preserve optional payload signing
-  when retrying deliveries.
-- Added workflow metadata quality-of-life getters and watcher/run-state helpers
-  to make workflow introspection easier from task metadata.
-- Strengthened tracing and workflow-related test coverage for metadata
-  propagation and contract behavior.
-- Expanded the microservice example with richer workload generation, queue
-  diversity, updated scheduler/demo flows, and full local observability wiring
-  for Jaeger/Prometheus/Grafana through nginx.
-- Improved bootstrap DX with explicit fail-fast errors across broker/backend/
-  workflow/schedule/lock/revoke resolution paths in `StemStack.fromUrl`,
-  including actionable hints when adapters support a URL but do not implement
-  the requested store kind.
-- Refreshed docs to lead with `StemClient` and document adapter-focused Task
-  workflows.
-- Aligned in-memory broker and result backend semantics with shared adapter
-  contracts, including broadcast fan-out behavior for in-memory broker tests.
-- Added Taskfile support for package-scoped test orchestration.
-- Added Taskfile-based workflows for complex examples (microservice, encrypted
-  payloads, signing key rotation, security profiles, and Postgres TLS),
-  including secret/certificate bootstrap and binary build/run helpers.
-- Added shared logger injection via `setStemLogger` and reusable structured
-  context helpers for consistent logging metadata across core components.
+- Added `StemClient.fromStack(...)` and `StemStack.createClient(...)` so
+  adapter-resolved broker/backend stacks have the same direct bootstrap path
+  as the higher-level app helpers.
+- Narrowed the public task and workflow invocation APIs around direct
+  `enqueue(...)` / `enqueueAndWait(...)` and `start(...)` / `startAndWait(...)`
+  calls, with explicit transport objects left as the advanced low-level path.
+- Removed duplicate transport helpers and wrapper builder entrypoints such as
+  `.call(...)`, `prepareStart(...)`, `prepareEnqueue(...)`, builder dispatch
+  methods, and `copyWith(...)` on transport objects.
+- Added shared execution-context interfaces for workflows and tasks so manual
+  handlers and checkpoints can use one typed context surface instead of several
+  partially overlapping ones.
+- Added expression-style suspension and event APIs for workflows, plus direct
+  typed event emit/wait helpers on workflow event refs.
+- Added module-first bootstrap improvements including module merge/combine,
+  inferred worker subscriptions, queue/subscription inspection helpers, and
+  shared app/client workflow bootstrap helpers.
+- Expanded manual serialization support with `json(...)`, `versionedJson(...)`,
+  `versionedMap(...)`, registry-backed versioned factories, and codec-backed
+  low-level publish/start/emit helpers for tasks, workflows, and queue events.
+- Added broad typed decode helpers across runtime, inspection, signal, queue,
+  status, and context surfaces so DTO reads no longer require raw map casts in
+  the common path.
+- Refreshed examples and docs to use the narrowed happy-path APIs and to treat
+  transport objects as explicit advanced APIs rather than peer entrypoints.
 
 ## 0.1.0
 

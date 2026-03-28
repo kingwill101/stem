@@ -60,6 +60,8 @@ import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
 import 'package:stem/stem.dart' show Flow;
@@ -87,6 +89,7 @@ class WorkflowDefinition<T extends Object?> {
     required this.name,
     required WorkflowDefinitionKind kind,
     required List<FlowStep> steps,
+    List<WorkflowCheckpoint> checkpoints = const [],
     List<WorkflowEdge> edges = const [],
     this.version,
     this.description,
@@ -96,6 +99,7 @@ class WorkflowDefinition<T extends Object?> {
     Object? Function(Object? payload)? resultDecoder,
   }) : _kind = kind,
        _steps = steps,
+       _checkpoints = checkpoints,
        _edges = edges,
        _resultEncoder = resultEncoder,
        _resultDecoder = resultDecoder,
@@ -105,10 +109,19 @@ class WorkflowDefinition<T extends Object?> {
   factory WorkflowDefinition.fromJson(Map<String, Object?> json) {
     final kind = _kindFromJson(json['kind']);
     final stepsJson = (json['steps'] as List?) ?? const [];
-    final steps = stepsJson
-        .whereType<Map<String, Object?>>()
-        .map(FlowStep.fromJson)
-        .toList();
+    final steps = kind == WorkflowDefinitionKind.flow
+        ? stepsJson
+              .whereType<Map<String, Object?>>()
+              .map(FlowStep.fromJson)
+              .toList()
+        : <FlowStep>[];
+    final checkpointsJson = (json['checkpoints'] as List?) ?? stepsJson;
+    final checkpoints = kind == WorkflowDefinitionKind.script
+        ? checkpointsJson
+              .whereType<Map<String, Object?>>()
+              .map(WorkflowCheckpoint.fromJson)
+              .toList()
+        : <WorkflowCheckpoint>[];
     final edgesJson = (json['edges'] as List?) ?? const [];
     final edges = edgesJson
         .whereType<Map<String, Object?>>()
@@ -119,6 +132,7 @@ class WorkflowDefinition<T extends Object?> {
         name: json['name']?.toString() ?? '',
         kind: kind,
         steps: steps,
+        checkpoints: checkpoints,
         edges: edges,
         version: json['version']?.toString(),
         description: json['description']?.toString(),
@@ -129,6 +143,7 @@ class WorkflowDefinition<T extends Object?> {
       name: json['name']?.toString() ?? '',
       kind: kind,
       steps: steps,
+      checkpoints: checkpoints,
       edges: edges,
       version: json['version']?.toString(),
       description: json['description']?.toString(),
@@ -144,7 +159,13 @@ class WorkflowDefinition<T extends Object?> {
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? resultTypeName,
   }) {
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
     final steps = <FlowStep>[];
     build(FlowBuilder(steps));
     final edges = <WorkflowEdge>[];
@@ -153,13 +174,17 @@ class WorkflowDefinition<T extends Object?> {
     }
     Object? Function(Object?)? resultEncoder;
     Object? Function(Object?)? resultDecoder;
-    if (resultCodec != null) {
-      resultEncoder = (Object? value) {
-        return resultCodec.encodeDynamic(value);
-      };
-      resultDecoder = (Object? payload) {
-        return resultCodec.decodeDynamic(payload);
-      };
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<T>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$T',
+              ));
+    if (resolvedResultCodec != null) {
+      resultEncoder = resolvedResultCodec.encodeDynamic;
+      resultDecoder = resolvedResultCodec.decodeDynamic;
     }
     return WorkflowDefinition._(
       name: name,
@@ -174,32 +199,141 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Creates a flow-based workflow definition whose final result uses a custom
+  /// payload codec.
+  factory WorkflowDefinition.flowCodec({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required PayloadCodec<T> resultCodec,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a flow-based workflow definition whose final result is a DTO
+  /// backed by a JSON payload.
+  factory WorkflowDefinition.flowJson({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Creates a flow-based workflow definition whose final result is a
+  /// versioned DTO-backed JSON payload.
+  factory WorkflowDefinition.flowVersionedJson({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
+  /// Creates a flow-based workflow definition whose final result is a
+  /// versioned custom map payload.
+  factory WorkflowDefinition.flowVersionedMap({
+    required String name,
+    required void Function(FlowBuilder builder) build,
+    required Object? Function(T value) encodeResult,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.flow(
+      name: name,
+      build: build,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedMap(
+        encode: encodeResult,
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
   /// Creates a script-based workflow definition.
   factory WorkflowDefinition.script({
     required String name,
     required WorkflowScriptBody<T> run,
-    Iterable<FlowStep> steps = const [],
-    Iterable<FlowStep> checkpoints = const [],
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
     String? version,
     String? description,
     Map<String, Object?>? metadata,
     PayloadCodec<T>? resultCodec,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? resultTypeName,
   }) {
-    final declaredCheckpoints = checkpoints.isNotEmpty ? checkpoints : steps;
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
     Object? Function(Object?)? resultEncoder;
     Object? Function(Object?)? resultDecoder;
-    if (resultCodec != null) {
-      resultEncoder = (Object? value) {
-        return resultCodec.encodeDynamic(value);
-      };
-      resultDecoder = (Object? payload) {
-        return resultCodec.decodeDynamic(payload);
-      };
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<T>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$T',
+              ));
+    if (resolvedResultCodec != null) {
+      resultEncoder = resolvedResultCodec.encodeDynamic;
+      resultDecoder = resolvedResultCodec.decodeDynamic;
     }
     return WorkflowDefinition._(
       name: name,
       kind: WorkflowDefinitionKind.script,
-      steps: List<FlowStep>.unmodifiable(declaredCheckpoints),
+      steps: const <FlowStep>[],
+      checkpoints: List<WorkflowCheckpoint>.unmodifiable(checkpoints),
       version: version,
       description: description,
       metadata: metadata,
@@ -209,10 +343,119 @@ class WorkflowDefinition<T extends Object?> {
     );
   }
 
+  /// Creates a script-based workflow definition whose final result uses a
+  /// custom payload codec.
+  factory WorkflowDefinition.scriptCodec({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required PayloadCodec<T> resultCodec,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result is a DTO
+  /// backed by a JSON payload.
+  factory WorkflowDefinition.scriptJson({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required T Function(Map<String, dynamic> payload) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? version,
+    String? description,
+    Map<String, Object?>? metadata,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: version,
+      description: description,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result is a
+  /// versioned custom map payload.
+  factory WorkflowDefinition.scriptVersionedMap({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required Object? Function(T value) encodeResult,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedMap(
+        encode: encodeResult,
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
+  /// Creates a script-based workflow definition whose final result is a
+  /// versioned DTO-backed JSON payload.
+  factory WorkflowDefinition.scriptVersionedJson({
+    required String name,
+    required WorkflowScriptBody<T> run,
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decodeResult,
+    Iterable<WorkflowCheckpoint> checkpoints = const [],
+    String? workflowVersion,
+    String? description,
+    Map<String, Object?>? metadata,
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return WorkflowDefinition<T>.script(
+      name: name,
+      run: run,
+      checkpoints: checkpoints,
+      version: workflowVersion,
+      description: description,
+      metadata: metadata,
+      resultCodec: PayloadCodec<T>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$T',
+      ),
+    );
+  }
+
   /// Workflow name used for registration and scheduling.
   final String name;
   final WorkflowDefinitionKind _kind;
   final List<FlowStep> _steps;
+  final List<WorkflowCheckpoint> _checkpoints;
   final List<WorkflowEdge> _edges;
 
   /// Optional version identifier for the workflow definition.
@@ -233,17 +476,30 @@ class WorkflowDefinition<T extends Object?> {
   /// Ordered list of steps for flow-based workflows.
   List<FlowStep> get steps => List.unmodifiable(_steps);
 
+  /// Declared checkpoints for script-based workflows.
+  List<WorkflowCheckpoint> get checkpoints => List.unmodifiable(_checkpoints);
+
   /// Directed edges describing the workflow graph.
   List<WorkflowEdge> get edges => List.unmodifiable(_edges);
 
   /// Whether this definition represents a script-based workflow.
   bool get isScript => _kind == WorkflowDefinitionKind.script;
 
-  /// Looks up a declared step/checkpoint by its base name.
+  /// Looks up a declared flow step by its base name.
   FlowStep? stepByName(String name) {
     for (final step in _steps) {
       if (step.name == name) {
         return step;
+      }
+    }
+    return null;
+  }
+
+  /// Looks up declared script checkpoint metadata by its base name.
+  WorkflowCheckpoint? checkpointByName(String name) {
+    for (final checkpoint in _checkpoints) {
+      if (checkpoint.name == name) {
+        return checkpoint;
       }
     }
     return null;
@@ -265,6 +521,155 @@ class WorkflowDefinition<T extends Object?> {
     return decoder(payload);
   }
 
+  /// Builds a typed [WorkflowRef] from this definition without repeating the
+  /// registered workflow name.
+  WorkflowRef<TParams, T> ref<TParams>({
+    required Map<String, Object?> Function(TParams params) encodeParams,
+  }) {
+    return WorkflowRef<TParams, T>(
+      name: name,
+      encodeParams: encodeParams,
+      decodeResult: (payload) => decodeResult(payload) as T,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
+  WorkflowRef<TParams, T> refCodec<TParams>({
+    required PayloadCodec<TParams> paramsCodec,
+  }) {
+    return WorkflowRef<TParams, T>.codec(
+      name: name,
+      paramsCodec: paramsCodec,
+      decodeResult: (payload) => decodeResult(payload) as T,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()`.
+  WorkflowRef<TParams, T> refJson<TParams>({
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.json(
+      name: name,
+      decodeResultJson: decodeResultJson,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      decodeResult:
+          decodeResultJson == null && decodeResultVersionedJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  WorkflowRef<TParams, T> refVersionedJson<TParams>({
+    required int version,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedJson(
+      name: name,
+      version: version,
+      decodeResultJson: decodeResultJson,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      decodeResult:
+          decodeResultJson == null && decodeResultVersionedJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for DTO params that already expose
+  /// `toJson()` and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedJsonRegistry<TParams>({
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedJsonRegistry(
+      name: name,
+      version: version,
+      resultRegistry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for custom map params that persist a schema
+  /// [version] beside the payload.
+  WorkflowRef<TParams, T> refVersionedMap<TParams>({
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    T Function(Map<String, dynamic> payload)? decodeResultJson,
+    T Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedMap(
+      name: name,
+      encodeParams: encodeParams,
+      version: version,
+      decodeResultJson: decodeResultJson,
+      decodeResultVersionedJson: decodeResultVersionedJson,
+      defaultDecodeVersion: defaultDecodeVersion,
+      decodeResult:
+          decodeResultJson == null && decodeResultVersionedJson == null
+          ? (payload) => decodeResult(payload) as T
+          : null,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [WorkflowRef] for custom map params that persist a schema
+  /// [version] and decode versioned results through a reusable registry.
+  WorkflowRef<TParams, T> refVersionedMapRegistry<TParams>({
+    required Object? Function(TParams params) encodeParams,
+    required int version,
+    required PayloadVersionRegistry<T> resultRegistry,
+    int? defaultDecodeVersion,
+    String? paramsTypeName,
+    String? resultTypeName,
+  }) {
+    return WorkflowRef<TParams, T>.versionedMapRegistry(
+      name: name,
+      encodeParams: encodeParams,
+      version: version,
+      resultRegistry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      paramsTypeName: paramsTypeName,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Builds a typed [NoArgsWorkflowRef] from this definition.
+  NoArgsWorkflowRef<T> ref0() {
+    return NoArgsWorkflowRef<T>(
+      name: name,
+      decodeResult: (payload) => decodeResult(payload) as T,
+    );
+  }
+
   /// Stable identifier derived from immutable workflow definition fields.
   String get stableId {
     final basis = StringBuffer()
@@ -274,25 +679,43 @@ class WorkflowDefinition<T extends Object?> {
       ..write('|')
       ..write(version ?? '')
       ..write('|');
-    for (final step in _steps) {
-      basis
-        ..write(step.name)
-        ..write(':')
-        ..write(step.kind.name)
-        ..write(':')
-        ..write(step.autoVersion ? '1' : '0')
-        ..write('|');
+    if (isScript) {
+      for (final checkpoint in _checkpoints) {
+        basis
+          ..write(checkpoint.name)
+          ..write(':')
+          ..write(checkpoint.kind.name)
+          ..write(':')
+          ..write(checkpoint.autoVersion ? '1' : '0')
+          ..write('|');
+      }
+    } else {
+      for (final step in _steps) {
+        basis
+          ..write(step.name)
+          ..write(':')
+          ..write(step.kind.name)
+          ..write(':')
+          ..write(step.autoVersion ? '1' : '0')
+          ..write('|');
+      }
     }
     return _stableHexDigest(basis.toString());
   }
 
   /// Serialize the workflow definition for introspection.
   Map<String, Object?> toJson() {
-    final steps = <Map<String, Object?>>[];
+    final serializedSteps = <Map<String, Object?>>[];
     for (var i = 0; i < _steps.length; i += 1) {
       final step = _steps[i].toJson();
       step['position'] = i;
-      steps.add(step);
+      serializedSteps.add(step);
+    }
+    final serializedCheckpoints = <Map<String, Object?>>[];
+    for (var i = 0; i < _checkpoints.length; i += 1) {
+      final checkpoint = _checkpoints[i].toJson();
+      checkpoint['position'] = i;
+      serializedCheckpoints.add(checkpoint);
     }
     return {
       'name': name,
@@ -300,7 +723,8 @@ class WorkflowDefinition<T extends Object?> {
       if (version != null) 'version': version,
       if (description != null) 'description': description,
       if (metadata != null) 'metadata': metadata,
-      'steps': steps,
+      if (_steps.isNotEmpty) 'steps': serializedSteps,
+      if (_checkpoints.isNotEmpty) 'checkpoints': serializedCheckpoints,
       'edges': _edges.map((edge) => edge.toJson()).toList(),
     };
   }
@@ -308,8 +732,10 @@ class WorkflowDefinition<T extends Object?> {
 
 String _stableHexDigest(String input) {
   final bytes = utf8.encode(input);
+  // FNV-1a uses this exact 64-bit offset basis; keep the literal stable.
+  // ignore: avoid_js_rounded_ints
   var hash = 0xcbf29ce484222325;
-  const prime = 0x00000100000001B3;
+  const prime = 0x100000001b3;
   for (final value in bytes) {
     hash ^= value;
     hash = (hash * prime) & 0xFFFFFFFFFFFFFFFF;

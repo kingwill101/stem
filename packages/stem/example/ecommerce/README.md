@@ -35,8 +35,14 @@ From those annotations, this example uses generated APIs:
 
 - `stemModule` (generated workflow/task bundle)
 - `StemWorkflowDefinitions.addToCart`
+- `StemWorkflowDefinitions.addToCart.startAndWait(...)`
 - `StemTaskDefinitions.ecommerceAuditLog`
-- `TaskEnqueuer.enqueueEcommerceAuditLog(...)`
+- direct task definition helpers like
+  `StemTaskDefinitions.ecommerceAuditLog.enqueue(...)`
+
+The manual checkout flow also derives a typed ref from its `Flow` definition:
+
+- `checkoutWorkflowRef(checkoutFlow)`
 
 The server wires generated and manual tasks together in one place:
 
@@ -49,6 +55,12 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   tasks: [shipmentReserveTaskHandler],
 );
 ```
+
+That bootstrap path auto-subscribes the worker to the workflow queue plus the
+default queues declared on the bundled module tasks and
+`shipmentReserveTaskHandler`.
+You only need an explicit `workerConfig.subscription` if you route work to
+additional queues beyond those task defaults.
 
 This is why the run command always includes:
 

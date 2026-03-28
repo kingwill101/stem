@@ -5,6 +5,9 @@ handlers) and `TaskInvocationContext` (inline + isolate entrypoints). It also
 shows the full `TaskEnqueueOptions` / `TaskRetryPolicy` surface that mirrors
 Celery-style `apply_async` controls.
 
+Both concrete contexts share the same `TaskExecutionContext` surface for
+enqueueing, progress reporting, workflow/event calls, and retry requests.
+
 ## Requirements
 
 - Dart 3.3+

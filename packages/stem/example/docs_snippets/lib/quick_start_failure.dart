@@ -28,13 +28,12 @@ class EmailReceiptTask extends TaskHandler<void> {
 
 Future<void> main() async {
   final app = await StemApp.inMemory(tasks: [EmailReceiptTask()]);
-  await app.start();
 
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'billing.email-receipt',
     args: {'to': 'demo@example.com'},
   );
-  final result = await app.stem.waitForTask<void>(
+  final result = await app.waitForTask<void>(
     taskId,
     timeout: const Duration(seconds: 5),
   );

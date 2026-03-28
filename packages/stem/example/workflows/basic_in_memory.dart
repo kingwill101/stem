@@ -4,19 +4,19 @@
 import 'package:stem/stem.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory(
-    flows: [
-      Flow(
-        name: 'basic.hello',
-        build: (flow) {
-          flow.step('greet', (ctx) async => 'Hello Stem');
-        },
-      ),
-    ],
+  final basicHello = Flow<String>(
+    name: 'basic.hello',
+    build: (flow) {
+      flow.step('greet', (ctx) async => 'Hello Stem');
+    },
   );
 
-  final runId = await app.startWorkflow('basic.hello');
-  final result = await app.waitForCompletion<String>(runId);
+  final app = await StemWorkflowApp.inMemory(
+    flows: [basicHello],
+  );
+
+  final runId = await basicHello.start(app);
+  final result = await basicHello.waitFor(app, runId);
   print('Workflow $runId finished with result: ${result?.value}');
 
   await app.close();

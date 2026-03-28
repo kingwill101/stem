@@ -27,6 +27,20 @@ is that for script workflows those are **checkpoints**, not the plan itself.
 
 ```
 
+Manual flows can also derive a typed workflow ref from the definition:
+
+```dart
+final approvalsRef = approvalsFlow.ref<Map<String, Object?>>(
+  encodeParams: (draft) => <String, Object?>{'draft': draft},
+);
+```
+
+When a flow has no start params, start directly from the flow itself with
+`flow.start(...)` or `flow.startAndWait(...)`. Keep
+`flow.ref0().asRef.buildStart(params: ())` for the rarer cases where you want to assemble
+or adjust overrides before dispatch.
+Use `ref0()` only when another API specifically needs a `NoArgsWorkflowRef`.
+
 Use `Flow` when:
 
 - the sequence of durable actions should be obvious from the definition
@@ -38,6 +52,20 @@ Use `Flow` when:
 ```dart title="lib/workflows/retry_script.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/workflows.dart#workflows-script
 
 ```
+
+Manual scripts support the same pattern:
+
+```dart
+final retryRef = retryScript.ref<Map<String, Object?>>(
+  encodeParams: (params) => params,
+);
+```
+
+When a script has no start params, start directly from the script itself with
+`retryScript.start(...)` or `retryScript.startAndWait(...)`. Keep
+`retryScript.ref0().asRef.buildStart(params: ())` for the rarer cases where you want to
+assemble or adjust overrides before dispatch. Use `ref0()` only when another API
+specifically needs a `NoArgsWorkflowRef`.
 
 Use `WorkflowScript` when:
 

@@ -1,3 +1,12 @@
+import 'package:ansicolor/ansicolor.dart' show ansiColorDisabled;
+import 'package:contextual/contextual.dart'
+    show
+        LogDriver,
+        LogEntry,
+        LogRecord,
+        LoggerChannelSelection,
+        PlainTextLogFormatter,
+        PrettyLogFormatter;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -21,6 +30,74 @@ void main() {
     configureStemLogging(level: Level.warning);
   });
 
+  test('createStemLogger defaults to a silent logger', () async {
+    final logger = createStemLogger()..info('default silent mode');
+
+    final driver = _RecordingLogDriver();
+    logger.addChannel('recording', driver);
+    logger.channel('recording').info('explicit recording mode');
+    await logger.shutdown();
+
+    expect(driver.entries, hasLength(1));
+  });
+
+  test('createStemLogFormatter returns the pretty formatter', () {
+    final originalAnsiSetting = ansiColorDisabled;
+    addTearDown(() => ansiColorDisabled = originalAnsiSetting);
+    ansiColorDisabled = false;
+
+    final formatter = createStemLogFormatter(StemLogFormat.pretty);
+    final output = formatter.format(
+      LogRecord(
+        time: DateTime.utc(2026, 3, 21, 12),
+        level: Level.info,
+        message: 'hello',
+      ),
+    );
+
+    expect(output, contains('\x1B[38;5;12m'));
+    expect(output, isNot(contains('\x1B[38;5;255m')));
+    expect(formatter, isNot(isA<PrettyLogFormatter>()));
+  });
+
+  test(
+    'configureStemLogging can switch the shared logger to pretty mode',
+    () async {
+      final original = stemLogger;
+      addTearDown(() => setStemLogger(original));
+      final replacement = createStemLogger();
+      final driver = _RecordingLogDriver();
+      replacement.addChannel('recording', driver);
+      setStemLogger(replacement);
+
+      configureStemLogging(format: StemLogFormat.pretty);
+      stemLogger.channel('recording').info('pretty shared mode');
+      await stemLogger.shutdown();
+
+      expect(driver.entries, hasLength(1));
+      expect(
+        createStemLogFormatter(StemLogFormat.pretty),
+        isNot(isA<PrettyLogFormatter>()),
+      );
+    },
+  );
+
+  test('configureStemLogging can keep the shared logger silent', () {
+    final original = stemLogger;
+    addTearDown(() => setStemLogger(original));
+    final replacement = createStemLogger(enableConsole: true);
+    setStemLogger(replacement);
+
+    configureStemLogging(enableConsole: false);
+  });
+
+  test('createStemLogFormatter returns the plain formatter', () {
+    expect(
+      createStemLogFormatter(StemLogFormat.plain),
+      isA<PlainTextLogFormatter>(),
+    );
+  });
+
   test('setStemLogger replaces the shared logger', () {
     final original = stemLogger;
     addTearDown(() => setStemLogger(original));
@@ -41,4 +118,15 @@ void main() {
     expect(context['subsystem'], 'worker');
     expect(context['queue'], 'default');
   });
+}
+
+class _RecordingLogDriver extends LogDriver {
+  _RecordingLogDriver() : entries = <LogEntry>[], super('recording');
+
+  final List<LogEntry> entries;
+
+  @override
+  Future<void> log(LogEntry entry) async {
+    entries.add(entry);
+  }
 }

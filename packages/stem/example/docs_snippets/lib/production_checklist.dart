@@ -15,8 +15,6 @@ Future<void> configureSigning() async {
   // #endregion production-signing-signer
 
   // #region production-signing-registry
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
   final tasks = [
     FunctionTaskHandler<void>(
       name: 'audit.log',
@@ -29,33 +27,27 @@ Future<void> configureSigning() async {
   // #endregion production-signing-registry
 
   // #region production-signing-runtime
-  // #region production-signing-stem
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  // #region production-signing-client
+  final client = await StemClient.create(
+    broker: StemBrokerFactory.inMemory(),
+    backend: StemBackendFactory.inMemory(),
     tasks: tasks,
     signer: signer,
   );
-  // #endregion production-signing-stem
+  // #endregion production-signing-client
 
   // #region production-signing-worker
-  final worker = Worker(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-    signer: signer,
-  );
+  final worker = await client.createWorker();
   // #endregion production-signing-worker
   // #endregion production-signing-runtime
 
   // #region production-signing-enqueue
-  await stem.enqueue('audit.log', args: {'message': 'hello'});
+  await client.enqueue('audit.log', args: {'message': 'hello'});
   // #endregion production-signing-enqueue
 
   // #region production-signing-shutdown
   await worker.shutdown();
-  await backend.close();
-  await broker.close();
+  await client.close();
   // #endregion production-signing-shutdown
 }
 

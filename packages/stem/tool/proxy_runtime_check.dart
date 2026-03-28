@@ -3,7 +3,11 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 
 class ScriptDef {
-  Future<String> run(WorkflowScriptContext script) async {
+  Future<String> run({WorkflowScriptContext? context}) async {
+    assert(
+      context == null || context.runId.isNotEmpty,
+      'workflow context should carry a runId',
+    );
     return sendEmail('user@example.com');
   }
 
@@ -42,7 +46,7 @@ Future<void> main() async {
   runtime.registerWorkflow(
     WorkflowScript(
       name: 'proxy.script',
-      run: (script) => ScriptProxy(script).run(script),
+      run: (script) => ScriptProxy(script).run(context: script),
     ).definition,
   );
 
@@ -50,10 +54,12 @@ Future<void> main() async {
   await runtime.executeRun(runId);
   final detail = await runtime.viewRunDetail(runId);
   stdout.writeln(
-    'result=${detail?.run.result} checkpoints=${detail?.steps.length}',
+    'result=${detail?.run.result} checkpoints=${detail?.checkpoints.length}',
   );
-  if ((detail?.steps.length ?? 0) > 0) {
-    stdout.writeln('checkpointName=${detail!.steps.first.stepName}');
+  if ((detail?.checkpoints.length ?? 0) > 0) {
+    stdout.writeln(
+      'checkpointName=${detail!.checkpoints.first.checkpointName}',
+    );
   }
 
   await runtime.dispose();

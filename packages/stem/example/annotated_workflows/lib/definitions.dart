@@ -7,9 +7,9 @@ class WelcomeRequest {
 
   final String email;
 
-  Map<String, Object?> toJson() => {'email': email};
+  Map<String, dynamic> toJson() => {'email': email};
 
-  factory WelcomeRequest.fromJson(Map<String, Object?> json) {
+  factory WelcomeRequest.fromJson(Map<String, dynamic> json) {
     return WelcomeRequest(email: json['email'] as String);
   }
 }
@@ -27,14 +27,14 @@ class EmailDispatch {
   final String body;
   final List<String> tags;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'email': email,
     'subject': subject,
     'body': body,
     'tags': tags,
   };
 
-  factory EmailDispatch.fromJson(Map<String, Object?> json) {
+  factory EmailDispatch.fromJson(Map<String, dynamic> json) {
     return EmailDispatch(
       email: json['email'] as String,
       subject: json['subject'] as String,
@@ -59,9 +59,9 @@ class EmailDeliveryReceipt {
   final String email;
   final String subject;
   final List<String> tags;
-  final Map<String, Object?> meta;
+  final Map<String, dynamic> meta;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'taskId': taskId,
     'attempt': attempt,
     'email': email,
@@ -70,14 +70,14 @@ class EmailDeliveryReceipt {
     'meta': meta,
   };
 
-  factory EmailDeliveryReceipt.fromJson(Map<String, Object?> json) {
+  factory EmailDeliveryReceipt.fromJson(Map<String, dynamic> json) {
     return EmailDeliveryReceipt(
       taskId: json['taskId'] as String,
       attempt: json['attempt'] as int,
       email: json['email'] as String,
       subject: json['subject'] as String,
       tags: (json['tags'] as List<Object?>).cast<String>(),
-      meta: Map<String, Object?>.from(json['meta'] as Map),
+      meta: Map<String, dynamic>.from(json['meta'] as Map),
     );
   }
 }
@@ -91,12 +91,12 @@ class WelcomePreparation {
   final String normalizedEmail;
   final String subject;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'normalizedEmail': normalizedEmail,
     'subject': subject,
   };
 
-  factory WelcomePreparation.fromJson(Map<String, Object?> json) {
+  factory WelcomePreparation.fromJson(Map<String, dynamic> json) {
     return WelcomePreparation(
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
@@ -115,13 +115,13 @@ class WelcomeWorkflowResult {
   final String subject;
   final String followUp;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'normalizedEmail': normalizedEmail,
     'subject': subject,
     'followUp': followUp,
   };
 
-  factory WelcomeWorkflowResult.fromJson(Map<String, Object?> json) {
+  factory WelcomeWorkflowResult.fromJson(Map<String, dynamic> json) {
     return WelcomeWorkflowResult(
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
@@ -140,6 +140,8 @@ class ContextCaptureResult {
     required this.idempotencyKey,
     required this.normalizedEmail,
     required this.subject,
+    required this.childRunId,
+    required this.childResult,
   });
 
   final String workflow;
@@ -150,8 +152,10 @@ class ContextCaptureResult {
   final String idempotencyKey;
   final String normalizedEmail;
   final String subject;
+  final String childRunId;
+  final WelcomeWorkflowResult childResult;
 
-  Map<String, Object?> toJson() => {
+  Map<String, dynamic> toJson() => {
     'workflow': workflow,
     'runId': runId,
     'stepName': stepName,
@@ -160,9 +164,11 @@ class ContextCaptureResult {
     'idempotencyKey': idempotencyKey,
     'normalizedEmail': normalizedEmail,
     'subject': subject,
+    'childRunId': childRunId,
+    'childResult': childResult.toJson(),
   };
 
-  factory ContextCaptureResult.fromJson(Map<String, Object?> json) {
+  factory ContextCaptureResult.fromJson(Map<String, dynamic> json) {
     return ContextCaptureResult(
       workflow: json['workflow'] as String,
       runId: json['runId'] as String,
@@ -172,6 +178,10 @@ class ContextCaptureResult {
       idempotencyKey: json['idempotencyKey'] as String,
       normalizedEmail: json['normalizedEmail'] as String,
       subject: json['subject'] as String,
+      childRunId: json['childRunId'] as String,
+      childResult: WelcomeWorkflowResult.fromJson(
+        Map<String, dynamic>.from(json['childResult'] as Map),
+      ),
     );
   }
 }
@@ -179,12 +189,18 @@ class ContextCaptureResult {
 @WorkflowDefn(name: 'annotated.flow')
 class AnnotatedFlowWorkflow {
   @WorkflowStep()
-  Future<Map<String, Object?>?> start(FlowContext ctx) async {
-    final resume = ctx.takeResumeData();
-    if (resume == null) {
-      ctx.sleep(const Duration(milliseconds: 50));
+  Future<Map<String, Object?>?> start({
+    WorkflowExecutionContext? context,
+  }) async {
+    final ctx = context!;
+    if (!ctx.sleepUntilResumed(const Duration(milliseconds: 50))) {
       return null;
     }
+    final childResult = await StemWorkflowDefinitions.script.startAndWait(
+      ctx,
+      params: const WelcomeRequest(email: 'flow-child@example.com'),
+      timeout: const Duration(seconds: 2),
+    );
     return {
       'workflow': ctx.workflow,
       'runId': ctx.runId,
@@ -192,6 +208,8 @@ class AnnotatedFlowWorkflow {
       'stepIndex': ctx.stepIndex,
       'iteration': ctx.iteration,
       'idempotencyKey': ctx.idempotencyKey(),
+      'childRunId': childResult?.runId,
+      'childResult': childResult?.value?.toJson(),
     };
   }
 }
@@ -243,24 +261,26 @@ class AnnotatedScriptWorkflow {
 
 @WorkflowDefn(name: 'annotated.context_script', kind: WorkflowKind.script)
 class AnnotatedContextScriptWorkflow {
-  @WorkflowRun()
   Future<ContextCaptureResult> run(
-    WorkflowScriptContext script,
-    WelcomeRequest request,
-  ) async {
-    return script.step<ContextCaptureResult>(
-      'enter-context-step',
-      (ctx) => captureContext(ctx, request),
-    );
+    WelcomeRequest request, {
+    WorkflowScriptContext? context,
+  }) async {
+    return captureContext(request);
   }
 
   @WorkflowStep(name: 'capture-context')
   Future<ContextCaptureResult> captureContext(
-    WorkflowScriptStepContext ctx,
-    WelcomeRequest request,
-  ) async {
+    WelcomeRequest request, {
+    WorkflowExecutionContext? context,
+  }) async {
+    final ctx = context!;
     final normalizedEmail = await normalizeEmail(request.email);
     final subject = await buildWelcomeSubject(normalizedEmail);
+    final childResult = await StemWorkflowDefinitions.script.startAndWait(
+      ctx,
+      params: WelcomeRequest(email: normalizedEmail),
+      timeout: const Duration(seconds: 2),
+    );
     return ContextCaptureResult(
       workflow: ctx.workflow,
       runId: ctx.runId,
@@ -270,6 +290,8 @@ class AnnotatedContextScriptWorkflow {
       idempotencyKey: ctx.idempotencyKey('welcome'),
       normalizedEmail: normalizedEmail,
       subject: subject,
+      childRunId: childResult!.runId,
+      childResult: childResult.value!,
     );
   }
 
@@ -286,17 +308,20 @@ class AnnotatedContextScriptWorkflow {
 
 @TaskDefn(name: 'send_email', options: TaskOptions(maxRetries: 1))
 Future<void> sendEmail(
-  TaskInvocationContext ctx,
-  Map<String, Object?> args,
-) async {
+  Map<String, Object?> args, {
+  TaskExecutionContext? context,
+}) async {
+  final ctx = context!;
+  ctx.heartbeat();
   // No-op task for example purposes.
 }
 
 @TaskDefn(name: 'send_email_typed', options: TaskOptions(maxRetries: 1))
 Future<EmailDeliveryReceipt> sendEmailTyped(
-  TaskInvocationContext ctx,
-  EmailDispatch dispatch,
-) async {
+  EmailDispatch dispatch, {
+  TaskExecutionContext? context,
+}) async {
+  final ctx = context!;
   ctx.heartbeat();
   await ctx.progress(
     100,

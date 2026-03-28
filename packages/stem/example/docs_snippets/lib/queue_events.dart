@@ -1,5 +1,5 @@
 // Queue custom event examples for documentation.
-// ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
+// ignore_for_file: avoid_print
 
 import 'dart:async';
 
@@ -16,14 +16,17 @@ Future<void> queueEventsProducerListener(Broker broker) async {
   await listener.start();
 
   final subscription = listener.on('order.created').listen((event) {
-    print('Order created: ${event.payload['orderId']}');
+    final created = event.payloadJson<_OrderCreatedEvent>(
+      decode: _OrderCreatedEvent.fromJson,
+    );
+    print('Order created: ${created.orderId}');
     print('Trace id: ${event.headers['x-trace-id']}');
   });
 
-  await producer.emit(
+  await producer.emitJson(
     'orders',
     'order.created',
-    payload: const {'orderId': 'ord-1001'},
+    const _OrderCreatedEvent(orderId: 'ord-1001'),
     headers: const {'x-trace-id': 'trace-123'},
     meta: const {'tenant': 'acme'},
   );
@@ -51,13 +54,23 @@ Future<void> queueEventsFanout(Broker broker) async {
   await listenerB.start();
 
   final subscriptionA = listenerA.events.listen((event) {
-    print('A saw ${event.name}');
+    final updated = event.payloadJson<_OrderUpdatedEvent>(
+      decode: _OrderUpdatedEvent.fromJson,
+    );
+    print('A saw ${event.name} for ${updated.id}');
   });
   final subscriptionB = listenerB.events.listen((event) {
-    print('B saw ${event.name}');
+    final updated = event.payloadJson<_OrderUpdatedEvent>(
+      decode: _OrderUpdatedEvent.fromJson,
+    );
+    print('B saw ${event.name} for ${updated.id}');
   });
 
-  await producer.emit('orders', 'order.updated', payload: const {'id': 'o-1'});
+  await producer.emitJson(
+    'orders',
+    'order.updated',
+    const _OrderUpdatedEvent(id: 'o-1'),
+  );
 
   await Future<void>.delayed(const Duration(milliseconds: 200));
   await subscriptionA.cancel();
@@ -67,3 +80,27 @@ Future<void> queueEventsFanout(Broker broker) async {
 }
 
 // #endregion queue-events-fanout
+
+class _OrderCreatedEvent {
+  const _OrderCreatedEvent({required this.orderId});
+
+  factory _OrderCreatedEvent.fromJson(Map<String, dynamic> json) {
+    return _OrderCreatedEvent(orderId: json['orderId'] as String);
+  }
+
+  final String orderId;
+
+  Map<String, Object?> toJson() => {'orderId': orderId};
+}
+
+class _OrderUpdatedEvent {
+  const _OrderUpdatedEvent({required this.id});
+
+  factory _OrderUpdatedEvent.fromJson(Map<String, dynamic> json) {
+    return _OrderUpdatedEvent(id: json['id'] as String);
+  }
+
+  final String id;
+
+  Map<String, Object?> toJson() => {'id': id};
+}

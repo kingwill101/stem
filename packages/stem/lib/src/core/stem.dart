@@ -62,6 +62,7 @@ import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
@@ -74,8 +75,27 @@ import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 
+/// Shared typed task-dispatch surface used by producers, apps, and contexts.
+abstract interface class TaskResultCaller implements TaskEnqueuer {
+  /// Reads the latest task status by task id.
+  Future<TaskStatus?> getTaskStatus(String taskId);
+
+  /// Reads the latest group status by group id.
+  Future<GroupStatus?> getGroupStatus(String groupId);
+
+  /// Waits for a task result by task id.
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
+  });
+}
+
 /// Facade used by producer applications to enqueue tasks.
-class Stem implements TaskEnqueuer {
+class Stem implements TaskResultCaller {
   /// Creates a Stem producer facade with the provided dependencies.
   Stem({
     required this.broker,
@@ -155,21 +175,42 @@ class Stem implements TaskEnqueuer {
     }
   }
 
-  /// Enqueue a typed task using a [TaskCall] wrapper produced by a
-  /// [TaskDefinition].
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) async {
+    final resolved = backend;
+    if (resolved == null) return null;
+    return resolved.get(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) async {
+    final resolved = backend;
+    if (resolved == null) return null;
+    return resolved.getGroup(groupId);
+  }
+
+  /// Enqueue a typed task using an explicit [TaskCall] transport object,
+  /// typically produced by `TaskDefinition.buildCall(...)`.
   @override
   Future<String> enqueueCall<TArgs, TResult>(
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   }) {
-    return enqueue(
-      call.name,
+    final definition = call.definition;
+    final resolvedOptions = call.resolveOptions();
+    final metadata = definition.metadata;
+    return _enqueueResolved(
+      name: call.name,
       args: call.encodeArgs(),
       headers: call.headers,
-      options: call.resolveOptions(),
+      options: resolvedOptions,
+      fallbackOptions: definition.defaultOptions,
       notBefore: call.notBefore,
       meta: call.meta,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+      metadata: metadata,
+      argsEncoder: _resolveArgsEncoderFromMetadata(metadata),
+      resultEncoder: _resolveResultEncoderFromMetadata(metadata),
     );
   }
 
@@ -184,22 +225,72 @@ class Stem implements TaskEnqueuer {
     Map<String, Object?> meta = const {},
     TaskEnqueueOptions? enqueueOptions,
   }) async {
-    final tracer = StemTracer.instance;
-    final queueOverride = enqueueOptions?.queue ?? options.queue;
-    final decision = routing.resolve(
-      RouteRequest(task: name, headers: headers, queue: queueOverride),
-    );
-    final targetName = decision.targetName;
-    final basePriority = enqueueOptions?.priority ?? options.priority;
-    final resolvedPriority = decision.effectivePriority(basePriority);
-
     final handler = registry.resolve(name);
     if (handler == null) {
       throw ArgumentError.value(name, 'name', 'Task is not registered');
     }
-    final metadata = handler.metadata;
-    final argsEncoder = _resolveArgsEncoder(handler);
-    final resultEncoder = _resolveResultEncoder(handler);
+    return _enqueueResolved(
+      name: name,
+      args: args,
+      headers: headers,
+      options: options,
+      fallbackOptions: handler.options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+      metadata: handler.metadata,
+      argsEncoder: _resolveArgsEncoder(handler),
+      resultEncoder: _resolveResultEncoder(handler),
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeStemTaskValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  Future<String> _enqueueResolved({
+    required String name,
+    required Map<String, Object?> args,
+    required Map<String, String> headers,
+    required TaskOptions options,
+    required TaskOptions fallbackOptions,
+    required DateTime? notBefore,
+    required Map<String, Object?> meta,
+    required TaskEnqueueOptions? enqueueOptions,
+    required TaskMetadata metadata,
+    required TaskPayloadEncoder argsEncoder,
+    required TaskPayloadEncoder resultEncoder,
+  }) async {
+    final effectiveOptions = _resolveEffectiveTaskOptions(
+      options,
+      fallbackOptions,
+    );
+    final tracer = StemTracer.instance;
+    final queueOverride = enqueueOptions?.queue ?? effectiveOptions.queue;
+    final decision = routing.resolve(
+      RouteRequest(task: name, headers: headers, queue: queueOverride),
+    );
+    final targetName = decision.targetName;
+    final basePriority = enqueueOptions?.priority ?? effectiveOptions.priority;
+    final resolvedPriority = decision.effectivePriority(basePriority);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = scopeMeta == null
         ? meta
@@ -214,9 +305,9 @@ class Stem implements TaskEnqueuer {
     if (!enrichedMeta.containsKey('stem.task')) {
       enrichedMeta['stem.task'] = name;
     }
-    if (options.retryPolicy != null &&
+    if (effectiveOptions.retryPolicy != null &&
         !enrichedMeta.containsKey('stem.retryPolicy')) {
-      enrichedMeta['stem.retryPolicy'] = options.retryPolicy!.toJson();
+      enrichedMeta['stem.retryPolicy'] = effectiveOptions.retryPolicy!.toJson();
     }
 
     final scheduledAt = _resolveNotBefore(
@@ -224,8 +315,7 @@ class Stem implements TaskEnqueuer {
       enqueueOptions,
     );
     final maxRetries = _resolveMaxRetries(
-      options,
-      handler.options,
+      effectiveOptions,
       enqueueOptions,
     );
     final taskId = enqueueOptions?.taskId ?? generateEnvelopeId();
@@ -285,11 +375,11 @@ class Stem implements TaskEnqueuer {
           notBefore: scheduledAt,
           priority: resolvedPriority,
           maxRetries: maxRetries,
-          visibilityTimeout: options.visibilityTimeout,
+          visibilityTimeout: effectiveOptions.visibilityTimeout,
           meta: encodedMeta,
         );
 
-        if (options.unique) {
+        if (effectiveOptions.unique) {
           final coordinator = uniqueTaskCoordinator;
           if (coordinator == null) {
             throw StateError(
@@ -299,7 +389,7 @@ class Stem implements TaskEnqueuer {
           }
           final claim = await coordinator.acquire(
             envelope: envelope,
-            options: options,
+            options: effectiveOptions,
           );
           if (!claim.isAcquired) {
             final existingId = claim.existingTaskId;
@@ -397,14 +487,66 @@ class Stem implements TaskEnqueuer {
     );
   }
 
+  TaskOptions _resolveEffectiveTaskOptions(
+    TaskOptions options,
+    TaskOptions fallbackOptions,
+  ) {
+    const defaults = TaskOptions();
+    return TaskOptions(
+      queue: options.queue != defaults.queue
+          ? options.queue
+          : fallbackOptions.queue,
+      maxRetries: options.maxRetries != defaults.maxRetries
+          ? options.maxRetries
+          : fallbackOptions.maxRetries,
+      softTimeLimit: options.softTimeLimit ?? fallbackOptions.softTimeLimit,
+      hardTimeLimit: options.hardTimeLimit ?? fallbackOptions.hardTimeLimit,
+      rateLimit: options.rateLimit ?? fallbackOptions.rateLimit,
+      groupRateLimit: options.groupRateLimit ?? fallbackOptions.groupRateLimit,
+      groupRateKey: options.groupRateKey ?? fallbackOptions.groupRateKey,
+      groupRateKeyHeader:
+          options.groupRateKeyHeader != defaults.groupRateKeyHeader
+          ? options.groupRateKeyHeader
+          : fallbackOptions.groupRateKeyHeader,
+      groupRateLimiterFailureMode:
+          options.groupRateLimiterFailureMode !=
+              defaults.groupRateLimiterFailureMode
+          ? options.groupRateLimiterFailureMode
+          : fallbackOptions.groupRateLimiterFailureMode,
+      unique: options.unique != defaults.unique
+          ? options.unique
+          : fallbackOptions.unique,
+      uniqueFor: options.uniqueFor ?? fallbackOptions.uniqueFor,
+      priority: options.priority != defaults.priority
+          ? options.priority
+          : fallbackOptions.priority,
+      acksLate: options.acksLate != defaults.acksLate
+          ? options.acksLate
+          : fallbackOptions.acksLate,
+      visibilityTimeout:
+          options.visibilityTimeout ?? fallbackOptions.visibilityTimeout,
+      retryPolicy: options.retryPolicy ?? fallbackOptions.retryPolicy,
+    );
+  }
+
   /// Waits for [taskId] to reach a terminal state and returns a typed view of
   /// the final [TaskStatus]. Requires [backend] to be configured; otherwise a
   /// [StateError] is thrown.
+  @override
   Future<TaskResult<T>?> waitForTask<T extends Object?>(
     String taskId, {
     Duration? timeout,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
+    assert(
+      [decode, decodeJson, decodeVersionedJson]
+              .whereType<Object>()
+              .length <=
+          1,
+      'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
+    );
     final resultBackend = backend;
     if (resultBackend == null) {
       throw StateError(
@@ -417,7 +559,12 @@ class Stem implements TaskEnqueuer {
         taskId: taskId,
         status: lastStatus,
         value: lastStatus.state == TaskState.succeeded
-            ? _decodeTaskPayload(lastStatus.payload, decode)
+            ? _decodeTaskPayload(
+                lastStatus.payload,
+                decode,
+                decodeJson,
+                decodeVersionedJson,
+              )
             : null,
         rawPayload: lastStatus.payload,
       );
@@ -440,7 +587,12 @@ class Stem implements TaskEnqueuer {
           taskId: taskId,
           status: status,
           value: status.state == TaskState.succeeded
-              ? _decodeTaskPayload(status.payload, decode)
+              ? _decodeTaskPayload(
+                  status.payload,
+                  decode,
+                  decodeJson,
+                  decodeVersionedJson,
+                )
               : null,
           rawPayload: status.payload,
           timedOut: timedOut && !status.state.isTerminal,
@@ -469,40 +621,6 @@ class Stem implements TaskEnqueuer {
     }
 
     return completer.future;
-  }
-
-  /// Waits for [taskId] using the decoding rules from a [TaskDefinition].
-  Future<TaskResult<TResult>?> waitForTaskDefinition<
-    TArgs,
-    TResult extends Object?
-  >(
-    String taskId,
-    TaskDefinition<TArgs, TResult> definition, {
-    Duration? timeout,
-  }) {
-    return waitForTask<TResult>(
-      taskId,
-      timeout: timeout,
-      decode: (payload) {
-        TResult? value;
-        try {
-          value = definition.decode(payload);
-        } on Object {
-          if (payload is TResult) {
-            value = payload;
-          } else {
-            rethrow;
-          }
-        }
-        if (value == null && null is! TResult) {
-          throw StateError(
-            'Task definition "${definition.name}" decoded a null result '
-            'for non-nullable type $TResult.',
-          );
-        }
-        return value as TResult;
-      },
-    );
   }
 
   /// Executes the enqueue middleware chain in order.
@@ -540,7 +658,6 @@ class Stem implements TaskEnqueuer {
   /// handler defaults.
   int _resolveMaxRetries(
     TaskOptions options,
-    TaskOptions handlerOptions,
     TaskEnqueueOptions? enqueueOptions,
   ) {
     final policyMax = enqueueOptions?.retryPolicy?.maxRetries;
@@ -554,7 +671,7 @@ class Stem implements TaskEnqueuer {
     if (options.maxRetries != 0) {
       return options.maxRetries;
     }
-    return handlerOptions.maxRetries;
+    return 0;
   }
 
   /// Maps enqueue-only settings into envelope metadata.
@@ -880,14 +997,24 @@ class Stem implements TaskEnqueuer {
 
   /// Resolves the args encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveArgsEncoder(TaskHandler<Object?> handler) {
-    final encoder = handler.metadata.argsEncoder;
-    payloadEncoders.register(encoder);
-    return encoder ?? payloadEncoders.defaultArgsEncoder;
+    return _resolveArgsEncoderFromMetadata(handler.metadata);
   }
 
   /// Resolves the result encoder for a handler and registers it if needed.
   TaskPayloadEncoder _resolveResultEncoder(TaskHandler<Object?> handler) {
-    final encoder = handler.metadata.resultEncoder;
+    return _resolveResultEncoderFromMetadata(handler.metadata);
+  }
+
+  /// Resolves the args encoder for producer-side task metadata.
+  TaskPayloadEncoder _resolveArgsEncoderFromMetadata(TaskMetadata metadata) {
+    final encoder = metadata.argsEncoder;
+    payloadEncoders.register(encoder);
+    return encoder ?? payloadEncoders.defaultArgsEncoder;
+  }
+
+  /// Resolves the result encoder for producer-side task metadata.
+  TaskPayloadEncoder _resolveResultEncoderFromMetadata(TaskMetadata metadata) {
+    final encoder = metadata.resultEncoder;
     payloadEncoders.register(encoder);
     return encoder ?? payloadEncoders.defaultResultEncoder;
   }
@@ -956,28 +1083,234 @@ class Stem implements TaskEnqueuer {
   T? _decodeTaskPayload<T extends Object?>(
     Object? payload,
     T Function(Object? payload)? decode,
+    T Function(Map<String, dynamic> payload)? decodeJson,
+    T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   ) {
     if (payload == null) return null;
     if (decode != null) {
       return decode(payload);
     }
+    if (decodeVersionedJson != null) {
+      return decodeVersionedJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'task result'),
+        PayloadCodec.readPayloadVersion(payload),
+      );
+    }
+    if (decodeJson != null) {
+      return decodeJson(
+        PayloadCodec.decodeJsonMap(payload, typeName: 'task result'),
+      );
+    }
     return payload as T?;
   }
 }
 
-/// Convenience helpers for enqueuing [TaskEnqueueBuilder] instances.
-extension TaskEnqueueBuilderExtension<TArgs, TResult>
-    on TaskEnqueueBuilder<TArgs, TResult> {
-  /// Builds the call and enqueues it with the provided [enqueuer] instance.
-  Future<String> enqueueWith(TaskEnqueuer enqueuer) {
-    final call = build();
-    final scopeMeta = TaskEnqueueScope.currentMeta();
-    if (scopeMeta == null || scopeMeta.isEmpty) {
-      return enqueuer.enqueueCall(call);
+Map<String, Object?> _encodeStemTaskValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
     }
-    final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
+}
+
+Future<String> _enqueueBuiltTaskCall(
+  TaskEnqueuer enqueuer,
+  TaskCall<dynamic, dynamic> call, {
+  TaskEnqueueOptions? enqueueOptions,
+}) {
+  final resolvedEnqueueOptions = enqueueOptions ?? call.enqueueOptions;
+  final scopeMeta = TaskEnqueueScope.currentMeta();
+  if (scopeMeta == null || scopeMeta.isEmpty) {
     return enqueuer.enqueueCall(
-      call.copyWith(meta: Map.unmodifiable(mergedMeta)),
+      call,
+      enqueueOptions: resolvedEnqueueOptions,
     );
+  }
+  final mergedMeta = Map<String, Object?>.from(scopeMeta)..addAll(call.meta);
+  return enqueuer.enqueueCall(
+    call.definition.buildCall(
+      call.args,
+      headers: call.headers,
+      options: call.options,
+      notBefore: call.notBefore,
+      meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
+    ),
+    enqueueOptions: resolvedEnqueueOptions,
+  );
+}
+
+TResult _decodeTaskDefinitionResult<TArgs, TResult extends Object?>(
+  TaskDefinition<TArgs, TResult> definition,
+  Object? payload,
+) {
+  TResult? value;
+  try {
+    value = definition.decode(payload);
+  } on Object {
+    if (payload is TResult) {
+      value = payload;
+    } else {
+      rethrow;
+    }
+  }
+  if (value == null && null is! TResult) {
+    throw StateError(
+      'Task definition "${definition.name}" decoded a null result '
+      'for non-nullable type $TResult.',
+    );
+  }
+  return value as TResult;
+}
+
+
+/// Convenience helpers for waiting on typed task definitions.
+extension TaskDefinitionExtension<TArgs, TResult extends Object?>
+    on TaskDefinition<TArgs, TResult> {
+  /// Enqueues this typed task definition directly with [enqueuer].
+  Future<String> enqueue(
+    TaskEnqueuer enqueuer,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return _enqueueBuiltTaskCall(
+      enqueuer,
+      buildCall(
+        args,
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueues this typed task definition and waits for its typed result.
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) {
+    final call = buildCall(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return _enqueueBuiltTaskCall(
+      caller,
+      call,
+      enqueueOptions: enqueueOptions,
+    ).then(
+      (taskId) => call.definition.waitFor(
+        caller,
+        taskId,
+        timeout: timeout,
+      ),
+    );
+  }
+
+  /// Waits for [taskId] using this definition's decoding rules.
+  Future<TaskResult<TResult>?> waitFor(
+    TaskResultCaller caller,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return caller.waitForTask<TResult>(
+      taskId,
+      timeout: timeout,
+      decode: (payload) => _decodeTaskDefinitionResult(this, payload),
+    );
+  }
+}
+
+/// Convenience helpers for waiting on typed no-arg task definitions.
+extension NoArgsTaskDefinitionExtension<TResult extends Object?>
+    on NoArgsTaskDefinition<TResult> {
+  /// Enqueues this no-arg task definition with [enqueuer].
+  Future<String> enqueue(
+    TaskEnqueuer enqueuer, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return _enqueueBuiltTaskCall(
+      enqueuer,
+      asDefinition.buildCall(
+        (),
+        headers: headers,
+        options: options,
+        notBefore: notBefore,
+        meta: meta,
+        enqueueOptions: enqueueOptions,
+      ),
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Waits for [taskId] using this definition's decoding rules.
+  Future<TaskResult<TResult>?> waitFor(
+    TaskResultCaller caller,
+    String taskId, {
+    Duration? timeout,
+  }) {
+    return asDefinition.waitFor(caller, taskId, timeout: timeout);
+  }
+
+  /// Enqueues this no-arg task definition and waits for the typed result.
+  Future<TaskResult<TResult>?> enqueueAndWait(
+    TaskResultCaller caller, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TaskEnqueueOptions? enqueueOptions,
+    Duration? timeout,
+  }) async {
+    final taskId = await enqueue(
+      caller,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+    return waitFor(caller, taskId, timeout: timeout);
   }
 }

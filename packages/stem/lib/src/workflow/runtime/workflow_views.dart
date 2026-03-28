@@ -1,3 +1,4 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
@@ -11,11 +12,11 @@ class WorkflowRunView {
     required this.status,
     required this.cursor,
     required this.createdAt,
+    required this.params,
+    required this.runtime,
     this.updatedAt,
     this.result,
     this.lastError,
-    required this.params,
-    required this.runtime,
     this.suspensionData,
   });
 
@@ -57,17 +58,205 @@ class WorkflowRunView {
   /// Final result payload when completed.
   final Object? result;
 
+  /// Decodes the final result payload with [codec].
+  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+    final stored = result;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the final result payload with a JSON decoder.
+  TResult? resultJson<TResult>({
+    required TResult Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the final result payload with a version-aware JSON decoder.
+  TResult? resultVersionedJson<TResult>({
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = result;
+    if (stored == null) return null;
+    return PayloadCodec<TResult>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Last error payload, if present.
   final Map<String, Object?>? lastError;
+
+  /// Decodes the last error payload with [codec], when present.
+  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return codec.decode(payload);
+  }
+
+  /// Decodes the last error payload with a JSON decoder, when present.
+  TError? lastErrorJson<TError>({
+    required TError Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(payload);
+  }
+
+  /// Decodes the last error payload with a version-aware JSON decoder, when
+  /// present.
+  TError? lastErrorVersionedJson<TError>({
+    required int version,
+    required TError Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final payload = lastError;
+    if (payload == null) return null;
+    return PayloadCodec<TError>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(payload);
+  }
 
   /// Public user-supplied workflow params.
   final Map<String, Object?> params;
 
+  /// Decodes the workflow params payload with [codec].
+  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+    return codec.decode(params);
+  }
+
+  /// Decodes the workflow params payload with a JSON decoder.
+  TParams paramsJson<TParams>({
+    required TParams Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(params);
+  }
+
+  /// Decodes the workflow params payload with a version-aware JSON decoder.
+  TParams paramsVersionedJson<TParams>({
+    required int version,
+    required TParams Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TParams>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(params);
+  }
+
   /// Run-scoped runtime metadata (queues/channel/serialization framing).
   final Map<String, Object?> runtime;
 
+  /// Decodes the runtime metadata payload with [codec].
+  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+    return codec.decode(runtime);
+  }
+
+  /// Decodes the runtime metadata payload with a JSON decoder.
+  TRuntime runtimeJson<TRuntime>({
+    required TRuntime Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(runtime);
+  }
+
+  /// Decodes the runtime metadata payload with a version-aware JSON decoder.
+  TRuntime runtimeVersionedJson<TRuntime>({
+    required int version,
+    required TRuntime Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<TRuntime>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(runtime);
+  }
+
   /// Suspension payload, if run is suspended.
   final Map<String, Object?>? suspensionData;
+
+  /// Resume payload delivered to the suspended run, when present.
+  Object? get suspensionPayload => suspensionData?['payload'];
+
+  /// Decodes the suspension payload with [codec], when present.
+  TPayload? suspensionPayloadAs<TPayload>({
+    required PayloadCodec<TPayload> codec,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension payload with a JSON decoder, when present.
+  TPayload? suspensionPayloadJson<TPayload>({
+    required TPayload Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the suspension payload with a version-aware JSON decoder, when
+  /// present.
+  TPayload? suspensionPayloadVersionedJson<TPayload>({
+    required int version,
+    required TPayload Function(
+      Map<String, dynamic> payload,
+      int version,
+    )
+    decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = suspensionPayload;
+    if (stored == null) return null;
+    return PayloadCodec<TPayload>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 
   /// Serializes this view into JSON.
   Map<String, Object?> toJson() {
@@ -87,31 +276,31 @@ class WorkflowRunView {
   }
 }
 
-/// Uniform workflow checkpoint view for dashboard/CLI step drilldowns.
-class WorkflowStepView {
-  /// Creates an immutable step view.
-  const WorkflowStepView({
+/// Uniform workflow checkpoint view for dashboard/CLI drilldowns.
+class WorkflowCheckpointView {
+  /// Creates an immutable checkpoint view.
+  const WorkflowCheckpointView({
     required this.runId,
     required this.workflow,
-    required this.stepName,
-    required this.baseStepName,
-    this.iteration,
+    required this.checkpointName,
+    required this.baseCheckpointName,
     required this.position,
+    this.iteration,
     this.completedAt,
     this.value,
   });
 
-  /// Creates a step view from a [WorkflowStepEntry].
-  factory WorkflowStepView.fromEntry({
+  /// Creates a checkpoint view from a [WorkflowStepEntry].
+  factory WorkflowCheckpointView.fromEntry({
     required String runId,
     required String workflow,
     required WorkflowStepEntry entry,
   }) {
-    return WorkflowStepView(
+    return WorkflowCheckpointView(
       runId: runId,
       workflow: workflow,
-      stepName: entry.name,
-      baseStepName: entry.baseName,
+      checkpointName: entry.name,
+      baseCheckpointName: entry.baseName,
       iteration: entry.iteration,
       position: entry.position,
       completedAt: entry.completedAt,
@@ -126,10 +315,10 @@ class WorkflowStepView {
   final String workflow;
 
   /// Persisted checkpoint name.
-  final String stepName;
+  final String checkpointName;
 
   /// Base step name without iteration suffix.
-  final String baseStepName;
+  final String baseCheckpointName;
 
   /// Optional iteration suffix.
   final int? iteration;
@@ -143,13 +332,50 @@ class WorkflowStepView {
   /// Persisted checkpoint value.
   final Object? value;
 
+  /// Decodes the persisted checkpoint value with [codec].
+  TValue? valueAs<TValue>({required PayloadCodec<TValue> codec}) {
+    final stored = value;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a JSON decoder.
+  TValue? valueJson<TValue>({
+    required TValue Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the persisted checkpoint value with a version-aware JSON decoder.
+  TValue? valueVersionedJson<TValue>({
+    required int version,
+    required TValue Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = value;
+    if (stored == null) return null;
+    return PayloadCodec<TValue>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
   /// Serializes this view into JSON.
   Map<String, Object?> toJson() {
     return {
       'runId': runId,
       'workflow': workflow,
-      'stepName': stepName,
-      'baseStepName': baseStepName,
+      'checkpointName': checkpointName,
+      'baseCheckpointName': baseCheckpointName,
       if (iteration != null) 'iteration': iteration,
       'position': position,
       if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
@@ -158,20 +384,20 @@ class WorkflowStepView {
   }
 }
 
-/// Combined run + step drilldown view.
+/// Combined run + checkpoint drilldown view.
 class WorkflowRunDetailView {
   /// Creates an immutable run detail view.
-  const WorkflowRunDetailView({required this.run, required this.steps});
+  const WorkflowRunDetailView({required this.run, required this.checkpoints});
 
   /// Run summary view.
   final WorkflowRunView run;
 
-  /// Persisted step views.
-  final List<WorkflowStepView> steps;
+  /// Persisted checkpoint views.
+  final List<WorkflowCheckpointView> checkpoints;
 
   /// Serializes this detail view into JSON.
   Map<String, Object?> toJson() => {
     'run': run.toJson(),
-    'steps': steps.map((step) => step.toJson()).toList(),
+    'checkpoints': checkpoints.map((step) => step.toJson()).toList(),
   };
 }

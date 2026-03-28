@@ -50,6 +50,19 @@ class FlowStep {
        taskNames = List.unmodifiable(taskNames),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
+  /// Rehydrates a flow step from serialized JSON.
+  factory FlowStep.fromJson(Map<String, Object?> json) {
+    return FlowStep(
+      name: json['name']?.toString() ?? '',
+      title: json['title']?.toString(),
+      kind: _kindFromJson(json['kind']),
+      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
+      autoVersion: json['autoVersion'] == true,
+      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
+      handler: (_) async {},
+    );
+  }
+
   /// Creates a step definition backed by a typed [valueCodec].
   static FlowStep typed<T>({
     required String name,
@@ -71,19 +84,6 @@ class FlowStep {
       kind: kind,
       taskNames: taskNames,
       metadata: metadata,
-    );
-  }
-
-  /// Rehydrates a flow step from serialized JSON.
-  factory FlowStep.fromJson(Map<String, Object?> json) {
-    return FlowStep(
-      name: json['name']?.toString() ?? '',
-      title: json['title']?.toString(),
-      kind: _kindFromJson(json['kind']),
-      taskNames: (json['taskNames'] as List?)?.cast<String>() ?? const [],
-      autoVersion: json['autoVersion'] == true,
-      metadata: (json['metadata'] as Map?)?.cast<String, Object?>(),
-      handler: (_) async {},
     );
   }
 
@@ -182,6 +182,69 @@ class FlowStepControl {
   factory FlowStepControl.continueRun() =>
       FlowStepControl._(FlowControlType.continueRun);
 
+  /// Suspend the run until [duration] elapses with a DTO payload.
+  static FlowStepControl sleepJson<T>(
+    Duration duration,
+    T value, {
+    String? typeName,
+  }) => FlowStepControl.sleep(
+    duration,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
+  );
+
+  /// Suspend the run until [duration] elapses with a versioned DTO payload.
+  static FlowStepControl sleepVersionedJson<T>(
+    Duration duration,
+    T value, {
+    required int version,
+    String? typeName,
+  }) => FlowStepControl.sleep(
+    duration,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeVersionedJsonMap(
+        value,
+        version: version,
+        typeName: typeName,
+      ),
+    ),
+  );
+
+  /// Suspend the run until an event with [topic] arrives with a DTO payload.
+  static FlowStepControl awaitTopicJson<T>(
+    String topic,
+    T value, {
+    DateTime? deadline,
+    String? typeName,
+  }) => FlowStepControl.awaitTopic(
+    topic,
+    deadline: deadline,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeJsonMap(value, typeName: typeName),
+    ),
+  );
+
+  /// Suspend the run until an event with [topic] arrives with a versioned DTO
+  /// payload.
+  static FlowStepControl awaitTopicVersionedJson<T>(
+    String topic,
+    T value, {
+    required int version,
+    DateTime? deadline,
+    String? typeName,
+  }) => FlowStepControl.awaitTopic(
+    topic,
+    deadline: deadline,
+    data: Map<String, Object?>.from(
+      PayloadCodec.encodeVersionedJsonMap(
+        value,
+        version: version,
+        typeName: typeName,
+      ),
+    ),
+  );
+
   /// Control type emitted by the step.
   final FlowControlType type;
 
@@ -196,6 +259,44 @@ class FlowStepControl {
 
   /// Additional data to persist with the suspension.
   final Map<String, Object?>? data;
+
+  /// Decodes the suspension metadata with [codec], when present.
+  TData? dataAs<TData>({required PayloadCodec<TData> codec}) {
+    final stored = data;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the suspension metadata with a JSON decoder, when present.
+  TData? dataJson<TData>({
+    required TData Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = data;
+    if (stored == null) return null;
+    return PayloadCodec<TData>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the suspension metadata with a version-aware JSON decoder, when
+  /// present.
+  TData? dataVersionedJson<TData>({
+    required int version,
+    required TData Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = data;
+    if (stored == null) return null;
+    return PayloadCodec<TData>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
 }
 
 /// Enumerates the suspension control types.

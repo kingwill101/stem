@@ -15,7 +15,7 @@ class EmailTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final to = args['to'] as String? ?? 'anonymous';
+    final to = context.argOr<String>('to', 'anonymous');
     print('Emailing $to (attempt ${context.attempt})');
   }
 }
@@ -50,13 +50,20 @@ final redisTasks = [RedisEmailTask()];
 class InvoicePayload {
   const InvoicePayload({required this.invoiceId});
   final String invoiceId;
+
+  Map<String, dynamic> toJson() => {'invoiceId': invoiceId};
+
+  factory InvoicePayload.fromJson(Map<String, dynamic> json) {
+    return InvoicePayload(invoiceId: json['invoiceId']! as String);
+  }
 }
 
 class PublishInvoiceTask extends TaskHandler<void> {
-  static final definition = TaskDefinition<InvoicePayload, bool>(
+  static final definition = TaskDefinition<InvoicePayload, bool>.json(
     name: 'invoice.publish',
-    encodeArgs: (payload) => {'invoiceId': payload.invoiceId},
-    metadata: const TaskMetadata(description: 'Publishes invoices downstream'),
+    metadata: const TaskMetadata(
+      description: 'Publishes invoices downstream',
+    ),
     defaultOptions: const TaskOptions(queue: 'billing'),
   );
 
@@ -68,34 +75,31 @@ class PublishInvoiceTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final invoiceId = args['invoiceId'] as String;
+    final invoiceId = context.requiredArg<String>('invoiceId');
     await publishInvoice(invoiceId);
   }
 }
 
 Future<void> runTypedDefinitionExample() async {
-  final broker = InMemoryBroker();
-  final backend = InMemoryResultBackend();
-  final stem = Stem(
-    broker: broker,
-    backend: backend,
+  final client = await StemClient.inMemory(
     tasks: [PublishInvoiceTask()],
   );
+  final app = await client.createApp();
 
-  final taskId = await stem.enqueueCall(
-    PublishInvoiceTask.definition(const InvoicePayload(invoiceId: 'inv_42')),
+  final result = await PublishInvoiceTask.definition.enqueueAndWait(
+    app,
+    const InvoicePayload(invoiceId: 'inv_42'),
   );
-  final result = await stem.waitForTask<bool>(taskId);
   if (result?.isSucceeded == true) {
     print('Invoice published');
   }
-  await backend.close();
-  await broker.close();
+  await app.close();
+  await client.close();
 }
 // #endregion tasks-typed-definition
 
 // #region tasks-context-enqueue
-Future<void> enqueueFromContext(TaskContext context) async {
+Future<void> enqueueFromContext(TaskExecutionContext context) async {
   await context.enqueue(
     'tasks.child',
     args: {'id': '123'},
@@ -127,27 +131,20 @@ final childDefinition = TaskDefinition<ChildArgs, void>(
 );
 
 // #region tasks-invocation-builder
-Future<void> enqueueWithBuilder(TaskInvocationContext invocation) async {
-  final call = invocation
-      .enqueueBuilder(
-        definition: childDefinition,
-        args: const ChildArgs('value'),
-      )
-      .queue('critical')
-      .priority(9)
-      .delay(const Duration(seconds: 5))
-      .enqueueOptions(
-        const TaskEnqueueOptions(
-          retry: true,
-          retryPolicy: TaskRetryPolicy(
-            backoff: true,
-            defaultDelay: Duration(seconds: 1),
-          ),
-        ),
-      )
-      .build();
-
-  await invocation.enqueueCall(call);
+Future<void> enqueueWithBuilder(TaskExecutionContext context) async {
+  final call = childDefinition.buildCall(
+    const ChildArgs('value'),
+    options: const TaskOptions(queue: 'critical', priority: 9),
+    notBefore: DateTime.now().add(const Duration(seconds: 5)),
+    enqueueOptions: const TaskEnqueueOptions(
+      retry: true,
+      retryPolicy: TaskRetryPolicy(
+        backoff: true,
+        defaultDelay: Duration(seconds: 1),
+      ),
+    ),
+  );
+  await context.enqueueCall(call);
 }
 // #endregion tasks-invocation-builder
 
@@ -173,13 +170,15 @@ class Base64PayloadEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> configureEncoders() async {
-  final app = await StemApp.inMemory(
+  final client = await StemClient.inMemory(
     tasks: [EmailTask()],
     argsEncoder: const Base64PayloadEncoder(),
     resultEncoder: const Base64PayloadEncoder(),
     additionalEncoders: const [MyOtherEncoder()],
   );
+  final app = await client.createApp();
   await app.close();
+  await client.close();
 }
 // #endregion tasks-encoders-global
 
@@ -222,18 +221,19 @@ class MyOtherEncoder extends TaskPayloadEncoder {
 }
 
 Future<void> main() async {
-  final app = await StemApp.inMemory(tasks: [EmailTask()]);
-  await app.start();
+  final client = await StemClient.inMemory(tasks: [EmailTask()]);
+  final app = await client.createApp();
 
-  final taskId = await app.stem.enqueue(
+  final taskId = await app.enqueue(
     'email.send',
     args: {'to': 'demo@example.com'},
   );
-  final result = await app.stem.waitForTask<void>(
+  final result = await app.waitForTask<void>(
     taskId,
     timeout: const Duration(seconds: 5),
   );
   print('Email task state: ${result?.status.state}');
 
   await app.close();
+  await client.close();
 }

@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_client.dart';
+import 'package:stem/src/bootstrap/stem_module.dart';
 import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
@@ -15,25 +20,34 @@ import 'package:stem/src/worker/worker.dart';
 import 'package:stem_memory/stem_memory.dart' show InMemoryRevokeStore;
 
 /// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
-class StemApp {
+abstract interface class StemTaskApp implements TaskResultCaller {}
+
+/// Convenience bootstrap for setting up a Stem runtime with sensible defaults.
+class StemApp implements StemTaskApp {
   StemApp._({
+    required this.module,
     required this.registry,
     required this.broker,
     required this.backend,
     required this.stem,
     required this.worker,
+    required this.allowWorkerAutoStart,
     required List<Future<void> Function()> disposers,
   }) : _disposers = disposers {
-    canvas = Canvas(
+    canvas = _ManagedCanvas(
       broker: broker,
       backend: backend,
       registry: registry,
       encoderRegistry: stem.payloadEncoders,
+      onBeforeDispatch: _maybeAutoStart,
     );
   }
 
   /// Task registry containing all registered handlers.
   final TaskRegistry registry;
+
+  /// Optional default bundle registered into this app.
+  final StemModule? module;
 
   /// Active broker instance used by the helper.
   final Broker broker;
@@ -47,15 +61,137 @@ class StemApp {
   /// Worker managed by the helper.
   final Worker worker;
 
+  /// Whether shortcut operations may lazily start the managed worker.
+  final bool allowWorkerAutoStart;
+
   /// Canvas facade used for chains, groups, and chords.
   late final Canvas canvas;
 
   final List<Future<void> Function()> _disposers;
 
   bool _started = false;
+  Future<void>? _startFuture;
+
+  /// Whether the managed worker has been started.
+  bool get isStarted => _started;
+
+  Future<void> _maybeAutoStart() {
+    if (_started || !allowWorkerAutoStart) {
+      return Future.value();
+    }
+    return start();
+  }
 
   /// Registers an additional task handler with the underlying registry.
   void register(TaskHandler<Object?> handler) => registry.register(handler);
+
+  /// Registers [handler] with the underlying registry.
+  void registerTask(TaskHandler<Object?> handler) => register(handler);
+
+  /// Registers [handlers] with the underlying registry.
+  void registerTasks(Iterable<TaskHandler<Object?>> handlers) {
+    handlers.forEach(register);
+  }
+
+  /// Registers all task handlers from [module] into this app.
+  void registerModule(StemModule module) {
+    registerTasks(module.tasks);
+  }
+
+  /// Registers all task handlers from [modules] into this app.
+  void registerModules(Iterable<StemModule> modules) {
+    final merged = StemModule.combine(modules: modules);
+    if (merged == null) {
+      return;
+    }
+    registerModule(merged);
+  }
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    await _maybeAutoStart();
+    return stem.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    await _maybeAutoStart();
+    return stem.enqueueValue(
+      name,
+      value,
+      codec: codec,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    await _maybeAutoStart();
+    return stem.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  @override
+  Future<TaskStatus?> getTaskStatus(String taskId) async {
+    await _maybeAutoStart();
+    return stem.getTaskStatus(taskId);
+  }
+
+  @override
+  Future<GroupStatus?> getGroupStatus(String groupId) async {
+    await _maybeAutoStart();
+    return stem.getGroupStatus(groupId);
+  }
+
+  @override
+  Future<TaskResult<TResult>?> waitForTask<TResult extends Object?>(
+    String taskId, {
+    Duration? timeout,
+    TResult Function(Object? payload)? decode,
+    TResult Function(Map<String, dynamic> payload)? decodeJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeVersionedJson,
+  }) async {
+    await _maybeAutoStart();
+    return stem.waitForTask(
+      taskId,
+      timeout: timeout,
+      decode: decode,
+      decodeJson: decodeJson,
+      decodeVersionedJson: decodeVersionedJson,
+    );
+  }
 
   void _insertAutoDisposers(
     List<Future<void> Function()> autoDisposers,
@@ -70,8 +206,24 @@ class StemApp {
   /// Starts the managed worker if it is not already running.
   Future<void> start() async {
     if (_started) return;
-    _started = true;
-    await worker.start();
+    final existing = _startFuture;
+    if (existing != null) {
+      await existing;
+      return;
+    }
+
+    final completer = Completer<void>();
+    _startFuture = completer.future;
+    try {
+      await worker.start();
+      _started = true;
+      completer.complete();
+    } catch (error, stackTrace) {
+      _startFuture = null;
+      _started = false;
+      completer.completeError(error, stackTrace);
+      rethrow;
+    }
   }
 
   /// Shuts down the worker and disposes any managed resources.
@@ -80,6 +232,7 @@ class StemApp {
       await disposer();
     }
     _started = false;
+    _startFuture = null;
   }
 
   /// Alias for [shutdown].
@@ -87,6 +240,8 @@ class StemApp {
 
   /// Creates a new Stem application with the provided configuration.
   static Future<StemApp> create({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     StemBrokerFactory? broker,
@@ -102,9 +257,17 @@ class StemApp {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) async {
+    final effectiveModule = StemModule.combine(
+      module: module,
+      modules: modules,
+    );
+    final bundledTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
     final taskRegistry = registry ?? InMemoryTaskRegistry();
-    tasks.forEach(taskRegistry.register);
+    registerModuleTaskHandlers(taskRegistry, allTasks);
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
@@ -143,6 +306,18 @@ class StemApp {
     final workerUniqueTaskCoordinator =
         workerConfig.uniqueTaskCoordinator ?? uniqueTaskCoordinator;
     final workerSigner = workerConfig.signer ?? signer;
+    final inferredSubscription =
+        workerConfig.subscription ??
+        effectiveModule?.inferTaskWorkerSubscription(
+          defaultQueue: workerConfig.queue,
+          additionalTasks: tasks,
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: workerConfig.queue,
+          );
+        })();
 
     final worker = Worker(
       broker: brokerInstance,
@@ -154,7 +329,7 @@ class StemApp {
       uniqueTaskCoordinator: workerUniqueTaskCoordinator,
       retryStrategy: workerRetryStrategy,
       queue: workerConfig.queue,
-      subscription: workerConfig.subscription,
+      subscription: inferredSubscription,
       consumerName: workerConfig.consumerName,
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
@@ -183,25 +358,32 @@ class StemApp {
     ];
 
     return StemApp._(
+      module: effectiveModule,
       registry: taskRegistry,
       broker: brokerInstance,
       backend: encodedBackend,
       stem: stem,
       worker: worker,
+      allowWorkerAutoStart: allowWorkerAutoStart,
       disposers: disposers,
     );
   }
 
   /// Creates an in-memory Stem application (broker + result backend).
   static Future<StemApp> inMemory({
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
     TaskPayloadEncoderRegistry? encoderRegistry,
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+    bool allowWorkerAutoStart = true,
   }) {
     return StemApp.create(
+      module: module,
+      modules: modules,
       tasks: tasks,
       broker: StemBrokerFactory.inMemory(),
       backend: StemBackendFactory.inMemory(),
@@ -210,6 +392,7 @@ class StemApp {
       resultEncoder: resultEncoder,
       argsEncoder: argsEncoder,
       additionalEncoders: additionalEncoders,
+      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -219,6 +402,8 @@ class StemApp {
   /// can optionally auto-wire revoke and unique-task coordination stores.
   static Future<StemApp> fromUrl(
     String url, {
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
     Iterable<StemStoreAdapter> adapters = const [],
@@ -239,6 +424,7 @@ class StemApp {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
     StemStack? stack,
+    bool allowWorkerAutoStart = true,
   }) async {
     final needsUniqueLockStore =
         uniqueTasks &&
@@ -292,6 +478,8 @@ class StemApp {
 
     try {
       final app = await create(
+        module: module,
+        modules: modules,
         tasks: tasks,
         registry: registry,
         broker: resolvedStack.broker,
@@ -307,6 +495,7 @@ class StemApp {
         resultEncoder: resultEncoder,
         argsEncoder: argsEncoder,
         additionalEncoders: additionalEncoders,
+        allowWorkerAutoStart: allowWorkerAutoStart,
       );
 
       // Dispose auto-provisioned lock/revoke stores after worker shutdown and
@@ -331,14 +520,35 @@ class StemApp {
   /// Creates a Stem app using a shared [StemClient].
   static Future<StemApp> fromClient(
     StemClient client, {
+    StemModule? module,
+    Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig workerConfig = const StemWorkerConfig(),
+    bool allowWorkerAutoStart = true,
   }) async {
-    tasks.forEach(client.taskRegistry.register);
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? client.module;
+    final bundledTasks =
+        effectiveModule?.tasks ?? const <TaskHandler<Object?>>[];
+    final allTasks = [...bundledTasks, ...tasks];
+    final taskRegistry = client.taskRegistry;
+    registerModuleTaskHandlers(taskRegistry, allTasks);
+    final inferredSubscription =
+        workerConfig.subscription ??
+        effectiveModule?.inferTaskWorkerSubscription(
+          defaultQueue: workerConfig.queue,
+          additionalTasks: tasks,
+        ) ??
+        (() {
+          final tempModule = StemModule(tasks: tasks);
+          return tempModule.inferTaskWorkerSubscription(
+            defaultQueue: workerConfig.queue,
+          );
+        })();
 
     final worker = Worker(
       broker: client.broker,
-      registry: client.taskRegistry,
+      registry: taskRegistry,
       backend: client.backend,
       enqueuer: client.stem,
       rateLimiter: workerConfig.rateLimiter,
@@ -348,7 +558,7 @@ class StemApp {
           workerConfig.uniqueTaskCoordinator ?? client.uniqueTaskCoordinator,
       retryStrategy: workerConfig.retryStrategy ?? client.retryStrategy,
       queue: workerConfig.queue,
-      subscription: workerConfig.subscription,
+      subscription: inferredSubscription,
       consumerName: workerConfig.consumerName,
       concurrency: workerConfig.concurrency,
       prefetchMultiplier: workerConfig.prefetchMultiplier,
@@ -365,16 +575,78 @@ class StemApp {
     );
 
     return StemApp._(
-      registry: client.taskRegistry,
+      module: effectiveModule,
+      registry: taskRegistry,
       broker: client.broker,
       backend: client.backend,
       stem: client.stem,
       worker: worker,
+      allowWorkerAutoStart: allowWorkerAutoStart,
       disposers: [
         () async {
           await worker.shutdown();
         },
       ],
+    );
+  }
+}
+
+class _ManagedCanvas extends Canvas {
+  _ManagedCanvas({
+    required super.broker,
+    required super.backend,
+    required super.registry,
+    required super.encoderRegistry,
+    required Future<void> Function() onBeforeDispatch,
+  }) : _onBeforeDispatch = onBeforeDispatch;
+
+  final Future<void> Function() _onBeforeDispatch;
+
+  @override
+  Future<String> send(TaskSignature signature) async {
+    await _onBeforeDispatch();
+    return super.send(signature);
+  }
+
+  @override
+  Future<GroupDispatch<T>> group<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? groupId,
+  }) async {
+    await _onBeforeDispatch();
+    return super.group(signatures, groupId: groupId);
+  }
+
+  @override
+  Future<BatchSubmission> submitBatch<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    String? batchId,
+    Duration? ttl,
+  }) async {
+    await _onBeforeDispatch();
+    return super.submitBatch(signatures, batchId: batchId, ttl: ttl);
+  }
+
+  @override
+  Future<TaskChainResult<T>> chain<T extends Object?>(
+    List<TaskSignature<T>> signatures, {
+    void Function(int index, TaskStatus status, T? value)? onStepCompleted,
+  }) async {
+    await _onBeforeDispatch();
+    return super.chain(signatures, onStepCompleted: onStepCompleted);
+  }
+
+  @override
+  Future<ChordResult<T>> chord<T extends Object?>({
+    required List<TaskSignature<T>> body,
+    required TaskSignature callback,
+    Duration pollInterval = const Duration(milliseconds: 100),
+  }) async {
+    await _onBeforeDispatch();
+    return super.chord(
+      body: body,
+      callback: callback,
+      pollInterval: pollInterval,
     );
   }
 }

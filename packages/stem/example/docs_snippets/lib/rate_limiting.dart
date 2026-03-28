@@ -92,7 +92,7 @@ class GroupRateLimitedTask extends TaskHandler<void> {
 // #endregion rate-limit-group-task-options
 
 // #region rate-limit-producer
-Future<String> enqueueRateLimited(Stem stem) async {
+Future<String> enqueueRateLimited(TaskEnqueuer stem) async {
   return stem.enqueue(
     'demo.rateLimited',
     args: {'actor': 'acme'},
@@ -116,12 +116,8 @@ Future<void> main() async {
   );
   // #endregion rate-limit-demo-registry
 
-  // #region rate-limit-demo-worker-start
-  await app.start();
-  // #endregion rate-limit-demo-worker-start
-
   // #region rate-limit-demo-stem
-  final stem = app.stem;
+  final stem = app;
   // #endregion rate-limit-demo-stem
   // #region rate-limit-demo-enqueue
   await enqueueRateLimited(stem);

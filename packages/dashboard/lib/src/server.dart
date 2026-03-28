@@ -550,9 +550,10 @@ Future<Response> _renderPage(
     final workflowRun = page == DashboardPage.taskDetail && runId != null
         ? await service.fetchWorkflowRun(runId)
         : null;
-    final workflowSteps = page == DashboardPage.taskDetail && runId != null
-        ? await service.fetchWorkflowSteps(runId)
-        : const <DashboardWorkflowStepSnapshot>[];
+    final workflowCheckpoints =
+        page == DashboardPage.taskDetail && runId != null
+        ? await service.fetchWorkflowCheckpoints(runId)
+        : const <DashboardWorkflowCheckpointSnapshot>[];
 
     final content = buildPageContent(
       page: page,
@@ -562,7 +563,7 @@ Future<Response> _renderPage(
       taskDetail: taskDetail,
       runTimeline: runTimeline,
       workflowRun: workflowRun,
-      workflowSteps: workflowSteps,
+      workflowCheckpoints: workflowCheckpoints,
       auditEntries: page == DashboardPage.search || page == DashboardPage.audit
           ? state.auditEntries
           : const <DashboardAuditEntry>[],

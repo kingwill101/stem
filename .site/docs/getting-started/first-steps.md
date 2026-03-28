@@ -6,8 +6,8 @@ slug: /getting-started/first-steps
 ---
 
 This walkthrough stays in-memory so you can learn the pipeline without running
-external services. It defines a task, starts a worker, enqueues a message, then
-verifies the result inside a single Dart process.
+external services. It defines a task, bootstraps `StemApp`, enqueues a
+message, then verifies the result inside a single Dart process.
 
 ## 1. Define a task handler
 
@@ -19,7 +19,9 @@ Create a task handler (StemApp will register it for you):
 
 ## 2. Bootstrap the in-memory runtime
 
-Use `StemApp` to create the broker, backend, and worker in memory:
+Use `StemApp` to create the broker, backend, and worker in memory. The worker
+lazy-starts on the first enqueue or wait call, so the common path does not need
+an explicit `await app.start()`:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/first_steps.dart#first-steps-bootstrap
 

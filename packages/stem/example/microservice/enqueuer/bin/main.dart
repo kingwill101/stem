@@ -88,20 +88,12 @@ Future<void> main(List<String> args) async {
   observability.applyMetricExporters();
   observability.applySignalConfiguration();
 
-  final broker = await RedisStreamsBroker.connect(
-    config.brokerUrl,
-    tls: config.tls,
-  );
   final backendUrl = config.resultBackendUrl;
   if (backendUrl == null) {
     throw StateError(
       'STEM_RESULT_BACKEND_URL must be configured for the microservice enqueuer.',
     );
   }
-  final backend = await RedisResultBackend.connect(
-    backendUrl,
-    tls: config.tls,
-  );
   // #region signing-producer-signer
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-producer-signer
@@ -118,20 +110,17 @@ Future<void> main(List<String> args) async {
       .toList(growable: false);
 
   // #region signing-producer-stem
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
-    backend: backend,
     signer: signer,
   );
   // #endregion signing-producer-stem
-  final canvas = Canvas(
-    broker: broker,
-    backend: backend,
-    tasks: tasks,
-  );
+  final canvas = client.createCanvas(tasks: tasks);
   final autoFill = _AutoFillController(
-    stem: stem,
+    enqueuer: client,
     enabled: _boolFromEnv(
       Platform.environment['ENQUEUER_AUTOFILL_ENABLED'],
       defaultValue: true,
@@ -172,7 +161,7 @@ Future<void> main(List<String> args) async {
       }
       final name = (body['name'] as String?)?.trim();
       final entity = (name == null || name.isEmpty) ? 'friend' : name;
-      final taskId = await stem.enqueue(
+      final taskId = await client.enqueue(
         taskSpec.name,
         args: {
           'name': entity,
@@ -221,7 +210,7 @@ Future<void> main(List<String> args) async {
       );
     })
     ..get('/group/<groupId>', (Request request, String groupId) async {
-      final status = await backend.getGroup(groupId);
+      final status = await client.getGroupStatus(groupId);
       if (status == null) {
         return Response.notFound(
           jsonEncode({'error': 'Unknown group or expired results'}),
@@ -266,8 +255,7 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Shutting down enqueue service ($signal)...');
     autoFill.stop();
     await server.close(force: true);
-    await broker.close();
-    await backend.close();
+    await client.close();
     exit(0);
   }
 
@@ -300,14 +288,14 @@ SecurityContext? _buildHttpSecurityContext() {
 
 class _AutoFillController {
   _AutoFillController({
-    required this.stem,
+    required this.enqueuer,
     required this.enabled,
     required this.interval,
     required this.batchSize,
     required this.failureEvery,
   });
 
-  final Stem stem;
+  final TaskEnqueuer enqueuer;
   final bool enabled;
   final Duration interval;
   final int batchSize;
@@ -368,7 +356,7 @@ class _AutoFillController {
     required bool shouldFail,
     Map<String, Object?> extraMeta = const {},
   }) {
-    return stem.enqueue(
+    return enqueuer.enqueue(
       spec.name,
       args: {
         'name': label,

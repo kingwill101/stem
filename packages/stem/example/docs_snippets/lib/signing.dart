@@ -1,4 +1,5 @@
 // Signing examples for documentation.
+// These snippets intentionally show the lower-level producer/worker/Beat wiring.
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'dart:async';
@@ -98,8 +99,8 @@ void logActiveSigningKey() {
 // #endregion signing-rotation-producer-active-key
 
 // #region signing-rotation-producer-enqueue
-Future<void> enqueueDuringRotation(Stem stem) async {
-  await stem.enqueue(
+Future<void> enqueueDuringRotation(TaskEnqueuer enqueuer) async {
+  await enqueuer.enqueue(
     'billing.charge',
     args: {'customerId': 'cust_123', 'amount': 4200},
   );

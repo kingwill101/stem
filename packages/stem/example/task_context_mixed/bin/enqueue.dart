@@ -4,16 +4,19 @@ import 'package:stem/stem.dart';
 import 'package:stem_task_context_mixed_example/shared.dart';
 
 Future<void> main(List<String> args) async {
-  final broker = await connectBroker();
   final tasks = buildTasks();
-  final stem = Stem(broker: broker, tasks: tasks);
+  final client = await StemClient.create(
+    broker: StemBrokerFactory(create: connectBroker),
+    backend: StemBackendFactory.inMemory(),
+    tasks: tasks,
+  );
 
   final forceFail = args.contains('--fail');
   final overwrite = args.contains('--overwrite');
   final runId = DateTime.now().millisecondsSinceEpoch.toString();
 
   final taskId = overwrite ? 'task-context-mixed' : null;
-  final firstId = await stem.enqueue(
+  final firstId = await client.enqueue(
     'demo.inline_parent',
     args: {'runId': runId, 'forceFail': forceFail},
     enqueueOptions: TaskEnqueueOptions(taskId: taskId, queue: mixedQueue),
@@ -23,7 +26,7 @@ Future<void> main(List<String> args) async {
   );
 
   if (overwrite) {
-    final overwriteId = await stem.enqueue(
+    final overwriteId = await client.enqueue(
       'demo.inline_parent',
       args: {'runId': '${runId}_overwrite', 'forceFail': forceFail},
       enqueueOptions: TaskEnqueueOptions(taskId: taskId, queue: mixedQueue),
@@ -31,5 +34,5 @@ Future<void> main(List<String> args) async {
     stdout.writeln('Overwrote task id=$overwriteId');
   }
 
-  await broker.close();
+  await client.close();
 }

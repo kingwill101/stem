@@ -12,28 +12,26 @@ Future<void> main() async {
 
   registerSignalLogging('producer');
 
-  final broker = await RedisStreamsBroker.connect(brokerUrl);
-  final tasks = buildTasks();
-  final stem = Stem(
-    broker: broker,
-    tasks: tasks,
-    backend: InMemoryResultBackend(),
+  final client = await StemClient.fromUrl(
+    brokerUrl,
+    adapters: const [StemRedisAdapter()],
+    tasks: buildTasks(),
   );
 
   final timer = Timer.periodic(const Duration(seconds: 5), (_) async {
-    await stem.enqueue(
+    await client.enqueue(
       'tasks.hello',
       args: {'name': 'from-producer'},
     );
-    await stem.enqueue('tasks.flaky');
-    await stem.enqueue('tasks.always_fail');
+    await flakyTaskDefinition.enqueue(client);
+    await alwaysFailTaskDefinition.enqueue(client);
   });
 
   void scheduleShutdown(ProcessSignal signal) async {
     // ignore: avoid_print
     print('[signals][producer] received $signal, shutting down');
     timer.cancel();
-    await broker.close();
+    await client.close();
     exit(0);
   }
 

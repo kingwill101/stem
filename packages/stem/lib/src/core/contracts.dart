@@ -33,12 +33,17 @@ library;
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/envelope.dart';
+import 'package:stem/src/core/payload_codec.dart';
+import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 import 'package:stem/src/scheduler/schedule_spec.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Subscription describing the queues and broadcast channels a worker should
 /// consume from.
@@ -251,11 +256,106 @@ class TaskStatus {
   /// The payload associated with this task, if any.
   final Object? payload;
 
+  /// Returns the decoded payload value, or `null` when no payload is present.
+  ///
+  /// When [codec] is supplied, the stored durable payload is decoded through
+  /// that codec before being returned.
+  T? payloadValue<T>({PayloadCodec<T>? codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    if (codec != null) {
+      return codec.decode(stored);
+    }
+    return stored as T;
+  }
+
+  /// Decodes the entire payload as a typed DTO with [codec].
+  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+    final stored = payload;
+    if (stored == null) return null;
+    return codec.decode(stored);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a JSON decoder.
+  T? payloadJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Decodes the entire payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T? payloadVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    final stored = payload;
+    if (stored == null) return null;
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(stored);
+  }
+
+  /// Returns the decoded payload value, or [fallback] when it is absent.
+  T payloadValueOr<T>(T fallback, {PayloadCodec<T>? codec}) {
+    return payloadValue<T>(codec: codec) ?? fallback;
+  }
+
+  /// Returns the decoded payload value, throwing when it is absent.
+  T requiredPayloadValue<T>({PayloadCodec<T>? codec}) {
+    if (payload == null) {
+      throw StateError("Task '$id' does not have a payload.");
+    }
+    return payloadValue<T>(codec: codec) as T;
+  }
+
   /// The error that occurred during task execution, if any.
   final TaskError? error;
 
   /// Additional metadata for this task status.
   final Map<String, Object?> meta;
+
+  /// Decodes the full task metadata payload with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full task metadata payload with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full task metadata payload with a version-aware JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// The attempt number for this task execution.
   final int attempt;
@@ -554,6 +654,39 @@ class TaskError {
   /// Additional metadata for this error.
   final Map<String, Object?> meta;
 
+  /// Decodes the full error metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full error metadata payload as a typed DTO with a JSON
+  /// decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full error metadata payload as a typed DTO with a
+  /// version-aware JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
   /// Serializes the error metadata to JSON.
   Map<String, Object?> toJson() => {
     'type': type,
@@ -625,6 +758,38 @@ class DeadLetterEntry {
 
   /// Additional metadata captured at failure time.
   final Map<String, Object?> meta;
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// Timestamp when the task was dead-lettered.
   final DateTime deadAt;
@@ -819,8 +984,72 @@ class ScheduleEntry {
   /// Positional arguments to pass to the task.
   final Map<String, Object?> args;
 
+  /// Decodes the full args payload as a typed DTO with [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full args payload as a typed DTO with a JSON decoder.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full args payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T argsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
   /// Keyword-style arguments passed to the task.
   final Map<String, Object?> kwargs;
+
+  /// Decodes the full kwargs payload as a typed DTO with [codec].
+  T kwargsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(kwargs);
+  }
+
+  /// Decodes the full kwargs payload as a typed DTO with a JSON decoder.
+  T kwargsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(kwargs);
+  }
+
+  /// Decodes the full kwargs payload as a typed DTO with a version-aware JSON
+  /// decoder.
+  T kwargsVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(kwargs);
+  }
 
   /// Whether this schedule entry is enabled.
   final bool enabled;
@@ -866,6 +1095,38 @@ class ScheduleEntry {
 
   /// Additional metadata for this schedule entry.
   final Map<String, Object?> meta;
+
+  /// Decodes the full metadata payload as a typed DTO with [codec].
+  T metaAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a JSON decoder.
+  T metaJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(meta);
+  }
+
+  /// Decodes the full metadata payload as a typed DTO with a version-aware
+  /// JSON decoder.
+  T metaVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: version,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    ).decode(meta);
+  }
 
   /// Optimistic locking version assigned by the underlying store.
   final int version;
@@ -1644,6 +1905,22 @@ abstract class TaskEnqueuer {
     Map<String, Object?> args,
     Map<String, String> headers,
     TaskOptions options,
+    DateTime? notBefore,
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  });
+
+  /// Enqueue a dynamic-name task using a typed value plus optional [codec].
+  ///
+  /// When [codec] is omitted, [value] must already be a string-keyed durable
+  /// map payload.
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers,
+    TaskOptions options,
+    DateTime? notBefore,
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
   });
@@ -1653,6 +1930,35 @@ abstract class TaskEnqueuer {
     TaskCall<TArgs, TResult> call, {
     TaskEnqueueOptions? enqueueOptions,
   });
+}
+
+Map<String, Object?> _encodeEnqueuedValue<T>(
+  String taskName,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $taskName must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $taskName must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
 }
 
 /// Provides ambient metadata for task enqueue operations.
@@ -1680,47 +1986,406 @@ class TaskEnqueueScope {
   }
 }
 
+/// Shared input surface for task execution contexts that retain invocation
+/// args.
+abstract interface class TaskInputContext {
+  /// Arguments supplied to the current task invocation.
+  Map<String, Object?> get args;
+}
+
+/// Typed read helpers for task invocation args.
+extension TaskInputContextArgs on TaskInputContext {
+  /// Decodes the full task-argument payload through [codec].
+  T argsAs<T>({required PayloadCodec<T> codec}) {
+    return codec.decode(args);
+  }
+
+  /// Decodes the full task-argument payload as a DTO.
+  T argsJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.json(
+      decode: decode,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Decodes the full task-argument payload as a version-aware DTO.
+  T argsVersionedJson<T>({
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return PayloadCodec<T>.versionedJson(
+      version: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion ?? defaultVersion,
+      typeName: typeName,
+    ).decode(args);
+  }
+
+  /// Returns the decoded task arg for [key], or `null`.
+  T? arg<T>(String key, {PayloadCodec<T>? codec}) {
+    return args.value<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded task arg for [key], or [fallback].
+  T argOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+    return args.valueOr<T>(key, fallback, codec: codec);
+  }
+
+  /// Returns the decoded task arg for [key], throwing when absent.
+  T requiredArg<T>(String key, {PayloadCodec<T>? codec}) {
+    return args.requiredValue<T>(key, codec: codec);
+  }
+
+  /// Returns the decoded task arg DTO for [key], or `null`.
+  T? argJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO for [key], or [fallback].
+  T argJsonOr<T>(
+    String key,
+    T fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO for [key], throwing when absent.
+  T requiredArgJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.requiredValueJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO for [key], or `null`.
+  T? argVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO for [key], or [fallback].
+  T argVersionedJsonOr<T>(
+    String key,
+    T fallback, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueVersionedJsonOr<T>(
+      key,
+      fallback,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO for [key], throwing when
+  /// absent.
+  T requiredArgVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.requiredValueVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO list for [key], or `null`.
+  List<T>? argListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO list for [key], or [fallback].
+  List<T> argListJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.valueListJsonOr<T>(
+      key,
+      fallback,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded task arg DTO list for [key], throwing when absent.
+  List<T> requiredArgListJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return args.requiredValueListJson<T>(
+      key,
+      decode: decode,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], or `null`.
+  List<T>? argListVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueListVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], or
+  /// [fallback].
+  List<T> argListVersionedJsonOr<T>(
+    String key,
+    List<T> fallback, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.valueListVersionedJsonOr<T>(
+      key,
+      fallback,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+
+  /// Returns the decoded version-aware task arg DTO list for [key], throwing
+  /// when absent.
+  List<T> requiredArgListVersionedJson<T>(
+    String key, {
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int defaultVersion = 1,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return args.requiredValueListVersionedJson<T>(
+      key,
+      defaultVersion: defaultVersion,
+      decode: decode,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: typeName,
+    );
+  }
+}
+
+/// Shared execution surface for task handlers and isolate entrypoints.
+abstract interface class TaskExecutionContext
+    implements
+        TaskEnqueuer,
+        WorkflowCaller,
+        WorkflowEventEmitter,
+        TaskInputContext {
+  /// The unique identifier of the task.
+  String get id;
+
+  /// The current attempt number.
+  int get attempt;
+
+  /// Headers associated with the task.
+  Map<String, String> get headers;
+
+  /// Metadata for the task invocation.
+  Map<String, Object?> get meta;
+
+  /// Notify the worker that the task is still running.
+  void heartbeat();
+
+  /// Request an extension of the current lease by [by].
+  Future<void> extendLease(Duration by);
+
+  /// Report progress back to the worker.
+  Future<void> progress(double percentComplete, {Map<String, Object?>? data});
+
+  /// Request a retry of the current task.
+  Future<void> retry({
+    Duration? countdown,
+    DateTime? eta,
+    TaskRetryPolicy? retryPolicy,
+    int? maxRetries,
+    Duration? timeLimit,
+    Duration? softTimeLimit,
+  });
+
+  /// Alias for [enqueue] when spawning follow-up work from the current task.
+  Future<String> spawn(
+    String name, {
+    Map<String, Object?> args,
+    Map<String, String> headers,
+    TaskOptions options,
+    DateTime? notBefore,
+    Map<String, Object?> meta,
+    TaskEnqueueOptions? enqueueOptions,
+  });
+}
+
+/// Shared task-progress helpers for execution contexts.
+extension TaskExecutionContextProgressX on TaskExecutionContext {
+  /// Report progress with a JSON-serializable DTO payload.
+  Future<void> progressJson<T>(
+    double percentComplete,
+    T value, {
+    String? typeName,
+  }) {
+    return progress(
+      percentComplete,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Report progress with a versioned JSON-serializable DTO payload.
+  Future<void> progressVersionedJson<T>(
+    double percentComplete,
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return progress(
+      percentComplete,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
+}
+
 /// Context passed to handler implementations during execution.
-class TaskContext implements TaskEnqueuer {
+class TaskContext implements TaskExecutionContext {
   /// Creates a task execution context for a handler invocation.
   TaskContext({
     required this.id,
     required this.attempt,
     required this.headers,
     required this.meta,
-    required this.heartbeat,
-    required this.extendLease,
-    required this.progress,
+    required void Function() heartbeat,
+    required Future<void> Function(Duration) extendLease,
+    required Future<void> Function(
+      double percentComplete, {
+      Map<String, Object?>? data,
+    })
+    progress,
+    this.args = const {},
     this.enqueuer,
-  });
+    this.workflows,
+    this.workflowEvents,
+  }) : _heartbeat = heartbeat,
+       _extendLease = extendLease,
+       _progress = progress;
 
   /// The unique identifier of the task.
+  @override
   final String id;
 
+  @override
+  final Map<String, Object?> args;
+
   /// The current attempt number.
+  @override
   final int attempt;
 
   /// Headers associated with the task.
+  @override
   final Map<String, String> headers;
 
   /// Metadata for the task.
+  @override
   final Map<String, Object?> meta;
-
-  /// Function to send a heartbeat.
-  final void Function() heartbeat;
-
-  /// Function to extend the lease by a given duration.
-  final Future<void> Function(Duration) extendLease;
-
-  /// Function to report progress.
+  final void Function() _heartbeat;
+  final Future<void> Function(Duration) _extendLease;
   final Future<void> Function(
     double percentComplete, {
     Map<String, Object?>? data,
   })
-  progress;
+  _progress;
 
   /// Optional enqueuer for scheduling additional tasks.
   final TaskEnqueuer? enqueuer;
+
+  /// Optional workflow caller for starting child workflows.
+  final WorkflowCaller? workflows;
+
+  /// Optional workflow event emitter for resuming waiting workflows.
+  final WorkflowEventEmitter? workflowEvents;
+
+  @override
+  void heartbeat() => _heartbeat();
+
+  @override
+  Future<void> extendLease(Duration by) => _extendLease(by);
+
+  @override
+  Future<void> progress(double percentComplete, {Map<String, Object?>? data}) =>
+      _progress(percentComplete, data: data);
 
   /// Enqueue a task with default context propagation.
   ///
@@ -1734,6 +2399,7 @@ class TaskContext implements TaskEnqueuer {
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     final delegate = enqueuer;
@@ -1761,7 +2427,30 @@ class TaskContext implements TaskEnqueuer {
       args: args,
       headers: mergedHeaders,
       options: options,
+      notBefore: notBefore,
       meta: mergedMeta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeEnqueuedValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -1796,9 +2485,13 @@ class TaskContext implements TaskEnqueuer {
       mergedMeta.putIfAbsent('stem.rootTaskId', () => id);
     }
 
-    final mergedCall = call.copyWith(
+    final mergedCall = call.definition.buildCall(
+      call.args,
       headers: Map.unmodifiable(mergedHeaders),
+      options: call.options,
+      notBefore: call.notBefore,
       meta: Map.unmodifiable(mergedMeta),
+      enqueueOptions: call.enqueueOptions,
     );
 
     return delegate.enqueueCall(
@@ -1807,13 +2500,89 @@ class TaskContext implements TaskEnqueuer {
     );
   }
 
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.startWorkflowCall(call);
+  }
+
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) {
+    final delegate = workflows;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow caller configured');
+    }
+    return delegate.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+
+  @override
+  Future<void> emitValue<T>(
+    String topic,
+    T value, {
+    PayloadCodec<T>? codec,
+  }) {
+    final delegate = workflowEvents;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow event emitter configured');
+    }
+    return delegate.emitValue(topic, value, codec: codec);
+  }
+
+  @override
+  Future<void> emitEvent<T>(WorkflowEventRef<T> event, T value) {
+    final delegate = workflowEvents;
+    if (delegate == null) {
+      throw StateError('TaskContext has no workflow event emitter configured');
+    }
+    return delegate.emitEvent(event, value);
+  }
+
   /// Alias for [enqueue].
+  @override
   Future<String> spawn(
     String name, {
     Map<String, Object?> args = const {},
     Map<String, String> headers = const {},
     Map<String, Object?> meta = const {},
     TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
     TaskEnqueueOptions? enqueueOptions,
   }) {
     return enqueue(
@@ -1822,6 +2591,7 @@ class TaskContext implements TaskEnqueuer {
       headers: headers,
       meta: meta,
       options: options,
+      notBefore: notBefore,
       enqueueOptions: enqueueOptions,
     );
   }
@@ -1831,6 +2601,7 @@ class TaskContext implements TaskEnqueuer {
   /// Throws a [TaskRetryRequest] which is intercepted by the worker to
   /// schedule the retry. Override retry policies/time limits per invocation
   /// by passing the optional parameters.
+  @override
   Future<void> retry({
     Duration? countdown,
     DateTime? eta,
@@ -1922,10 +2693,6 @@ class InMemoryTaskRegistry implements TaskRegistry {
   Stream<TaskRegistrationEvent> get onRegister => _registerController.stream;
 }
 
-/// Backwards-compatible alias for the default in-memory registry.
-@Deprecated('Use InMemoryTaskRegistry instead.')
-typedef SimpleTaskRegistry = InMemoryTaskRegistry;
-
 /// Optional task metadata for documentation and tooling.
 class TaskMetadata {
   /// Creates task metadata for documentation and tooling.
@@ -2000,6 +2767,364 @@ class TaskDefinition<TArgs, TResult> {
   }) : _encodeArgs = encodeArgs,
        _encodeMeta = encodeMeta;
 
+  /// Creates a typed task definition backed by payload codecs.
+  factory TaskDefinition.codec({
+    required String name,
+    required PayloadCodec<TArgs> argsCodec,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    PayloadCodec<TResult>? resultCodec,
+  }) {
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeCodecArgs(name, argsCodec, args),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()`.
+  factory TaskDefinition.json({
+    required String name,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: defaultDecodeVersion ?? 1,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: resultTypeName ?? '$TResult',
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeJsonArgs(args, argsTypeName ?? '$TArgs'),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()` and persist a schema [version] beside the payload.
+  factory TaskDefinition.versionedJson({
+    required String name,
+    required int version,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: version,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: resultTypeName ?? '$TResult',
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeVersionedJsonArgs(
+        args,
+        version: version,
+        typeName: argsTypeName ?? '$TArgs',
+      ),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(name, metadata, resultCodec),
+      decodeResult: resultCodec?.decode,
+    );
+  }
+
+  /// Creates a typed task definition for DTO args that already expose
+  /// `toJson()` and decode versioned results through a reusable registry.
+  factory TaskDefinition.versionedJsonRegistry({
+    required String name,
+    required int version,
+    required PayloadVersionRegistry<TResult> resultRegistry,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    return TaskDefinition<TArgs, TResult>(
+      name: name,
+      encodeArgs: (args) => _encodeVersionedJsonArgs(
+        args,
+        version: version,
+        typeName: argsTypeName ?? '$TArgs',
+      ),
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: _metadataWithResultCodec(
+        name,
+        metadata,
+        PayloadCodec<TResult>.versionedJsonRegistry(
+          version: version,
+          registry: resultRegistry,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: resultTypeName ?? '$TResult',
+        ),
+      ),
+      decodeResult: PayloadCodec<TResult>.versionedJsonRegistry(
+        version: version,
+        registry: resultRegistry,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$TResult',
+      ).decode,
+    );
+  }
+
+  /// Creates a typed task definition for custom map args that persist a schema
+  /// [version] beside the payload.
+  factory TaskDefinition.versionedMap({
+    required String name,
+    required Object? Function(TArgs args) encodeArgs,
+    required int version,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    TResult Function(Map<String, dynamic> payload, int version)?
+    decodeResultVersionedJson,
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    assert(
+      decodeResultJson == null || decodeResultVersionedJson == null,
+      'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
+    );
+    final argsCodec = PayloadCodec<TArgs>.versionedMap(
+      encode: encodeArgs,
+      version: version,
+      decode: (payload, _) => throw UnsupportedError(
+        'TaskDefinition.versionedMap($name) only uses the args codec for '
+        'encoding. Decoding is not supported at the definition layer.',
+      ),
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: argsTypeName ?? '$TArgs',
+    );
+    final resultCodec =
+        decodeResultVersionedJson != null
+        ? PayloadCodec<TResult>.versionedJson(
+            version: version,
+            decode: decodeResultVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: resultTypeName ?? '$TResult',
+          )
+        : (decodeResultJson == null
+              ? null
+              : PayloadCodec<TResult>.json(
+                  decode: decodeResultJson,
+                  typeName: resultTypeName ?? '$TResult',
+                ));
+    return TaskDefinition<TArgs, TResult>.codec(
+      name: name,
+      argsCodec: argsCodec,
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a typed task definition for custom map args that persist a schema
+  /// [version] and decode versioned results through a reusable registry.
+  factory TaskDefinition.versionedMapRegistry({
+    required String name,
+    required Object? Function(TArgs args) encodeArgs,
+    required int version,
+    required PayloadVersionRegistry<TResult> resultRegistry,
+    TaskMetaBuilder<TArgs>? encodeMeta,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    int? defaultDecodeVersion,
+    String? argsTypeName,
+    String? resultTypeName,
+  }) {
+    final argsCodec = PayloadCodec<TArgs>.versionedMap(
+      encode: encodeArgs,
+      version: version,
+      decode: (payload, _) => throw UnsupportedError(
+        'TaskDefinition.versionedMapRegistry($name) only uses the args codec '
+        'for encoding. Decoding is not supported at the definition layer.',
+      ),
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: argsTypeName ?? '$TArgs',
+    );
+    final resultCodec = PayloadCodec<TResult>.versionedJsonRegistry(
+      version: version,
+      registry: resultRegistry,
+      defaultDecodeVersion: defaultDecodeVersion,
+      typeName: resultTypeName ?? '$TResult',
+    );
+    return TaskDefinition<TArgs, TResult>.codec(
+      name: name,
+      argsCodec: argsCodec,
+      encodeMeta: encodeMeta,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args.
+  static NoArgsTaskDefinition<TResult> noArgsCodec<TResult>({
+    required String name,
+    required PayloadCodec<TResult> resultCodec,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: resultCodec,
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args.
+  static NoArgsTaskDefinition<TResult> noArgsJson<TResult>({
+    required String name,
+    required TResult Function(Map<String, dynamic> payload) decodeResult,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    String? resultTypeName,
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      decodeResultJson: decodeResult,
+      resultTypeName: resultTypeName,
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args whose
+  /// result is a versioned DTO-backed JSON value.
+  static NoArgsTaskDefinition<TResult> noArgsVersionedJson<TResult>({
+    required String name,
+    required int version,
+    required TResult Function(Map<String, dynamic> payload, int version)
+    decodeResult,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: PayloadCodec<TResult>.versionedJson(
+        version: version,
+        decode: decodeResult,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$TResult',
+      ),
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args whose
+  /// result uses a reusable version registry.
+  static NoArgsTaskDefinition<TResult> noArgsVersionedJsonRegistry<TResult>({
+    required String name,
+    required int version,
+    required PayloadVersionRegistry<TResult> resultRegistry,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    int? defaultDecodeVersion,
+    String? resultTypeName,
+  }) {
+    return noArgs<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: metadata,
+      resultCodec: PayloadCodec<TResult>.versionedJsonRegistry(
+        version: version,
+        registry: resultRegistry,
+        defaultDecodeVersion: defaultDecodeVersion,
+        typeName: resultTypeName ?? '$TResult',
+      ),
+    );
+  }
+
+  /// Creates a typed task definition for handlers with no producer args.
+  static NoArgsTaskDefinition<TResult> noArgs<TResult>({
+    required String name,
+    TaskOptions defaultOptions = const TaskOptions(),
+    TaskMetadata metadata = const TaskMetadata(),
+    TaskResultDecoder<TResult>? decodeResult,
+    PayloadCodec<TResult>? resultCodec,
+    TResult Function(Map<String, dynamic> payload)? decodeResultJson,
+    String? resultTypeName,
+  }) {
+    assert(
+      resultCodec == null || decodeResultJson == null,
+      'Specify either resultCodec or decodeResultJson, not both.',
+    );
+    final resolvedResultCodec =
+        resultCodec ??
+        (decodeResultJson == null
+            ? null
+            : PayloadCodec<TResult>.json(
+                decode: decodeResultJson,
+                typeName: resultTypeName ?? '$TResult',
+              ));
+    return NoArgsTaskDefinition<TResult>(
+      name: name,
+      defaultOptions: defaultOptions,
+      metadata: TaskDefinition._metadataWithResultCodec(
+        name,
+        metadata,
+        resolvedResultCodec,
+      ),
+      decodeResult: decodeResult ?? resolvedResultCodec?.decode,
+    );
+  }
+
   /// The logical task name registered in the registry.
   final String name;
 
@@ -2015,8 +3140,60 @@ class TaskDefinition<TArgs, TResult> {
   final TaskArgsEncoder<TArgs> _encodeArgs;
   final TaskMetaBuilder<TArgs>? _encodeMeta;
 
-  /// Build a typed call which can be passed to `Stem.enqueueCall`.
-  TaskCall<TArgs, TResult> call(
+  static Map<String, Object?> _encodeCodecArgs<T>(
+    String taskName,
+    PayloadCodec<T> codec,
+    T args,
+  ) {
+    return _encodeEnqueuedValue(taskName, args, codec: codec);
+  }
+
+  static Map<String, Object?> _encodeJsonArgs<T>(T args, String typeName) {
+    final payload = PayloadCodec.encodeJsonMap(
+      args,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
+  }
+
+  static Map<String, Object?> _encodeVersionedJsonArgs<T>(
+    T args, {
+    required int version,
+    required String typeName,
+  }) {
+    final payload = PayloadCodec.encodeVersionedJsonMap(
+      args,
+      version: version,
+      typeName: typeName,
+    );
+    return Map<String, Object?>.from(payload);
+  }
+
+  static TaskMetadata _metadataWithResultCodec<TResult>(
+    String taskName,
+    TaskMetadata metadata,
+    PayloadCodec<TResult>? resultCodec,
+  ) {
+    if (resultCodec == null) {
+      return metadata;
+    }
+    return TaskMetadata(
+      description: metadata.description,
+      tags: metadata.tags,
+      idempotent: metadata.idempotent,
+      attributes: metadata.attributes,
+      argsEncoder: metadata.argsEncoder,
+      resultEncoder:
+          metadata.resultEncoder ??
+          CodecTaskPayloadEncoder<TResult>(
+            idValue: '$taskName.result.codec',
+            codec: resultCodec,
+          ),
+    );
+  }
+
+  /// Builds an explicit [TaskCall] from this definition and [args].
+  TaskCall<TArgs, TResult> buildCall(
     TArgs args, {
     Map<String, String> headers = const {},
     TaskOptions? options,
@@ -2056,6 +3233,42 @@ class TaskDefinition<TArgs, TResult> {
     }
     return payload as TResult?;
   }
+}
+
+/// Typed producer-facing definition for tasks that take no input args.
+class NoArgsTaskDefinition<TResult> {
+  /// Creates a typed task definition for handlers with no producer args.
+  const NoArgsTaskDefinition({
+    required this.name,
+    this.defaultOptions = const TaskOptions(),
+    this.metadata = const TaskMetadata(),
+    this.decodeResult,
+  });
+
+  /// The logical task name registered in the registry.
+  final String name;
+
+  /// Default options applied to every call unless overridden.
+  final TaskOptions defaultOptions;
+
+  /// Metadata associated with this task for documentation/tooling.
+  final TaskMetadata metadata;
+
+  /// Optional decoder for converting persisted payloads into a typed result.
+  final TaskResultDecoder<TResult>? decodeResult;
+
+  /// The underlying task definition for generic enqueue/wait surfaces.
+  TaskDefinition<(), TResult> get asDefinition => TaskDefinition<(), TResult>(
+    name: name,
+    encodeArgs: (_) => const <String, Object?>{},
+    defaultOptions: defaultOptions,
+    metadata: metadata,
+    decodeResult: decodeResult,
+  );
+
+  /// Decodes a persisted payload into a typed result.
+  TResult? decode(Object? payload) => asDefinition.decode(payload);
+
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].
@@ -2100,132 +3313,68 @@ class TaskCall<TArgs, TResult> {
   /// Resolve final options combining call overrides with defaults.
   TaskOptions resolveOptions() => options ?? definition.defaultOptions;
 
-  /// Returns a copy of this call with updated properties.
-  TaskCall<TArgs, TResult> copyWith({
-    Map<String, String>? headers,
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return TaskCall._(
-      definition: definition,
-      args: args,
-      headers: headers ?? this.headers,
-      options: options ?? this.options,
-      notBefore: notBefore ?? this.notBefore,
-      meta: meta ?? this.meta,
-      enqueueOptions: enqueueOptions ?? this.enqueueOptions,
-    );
-  }
 }
 
-/// Fluent builder used to construct rich enqueue requests.
-///
-/// Build a [TaskCall] and dispatch it via `TaskEnqueuer.enqueueCall`.
-class TaskEnqueueBuilder<TArgs, TResult> {
-  /// Creates a fluent builder for enqueue calls.
-  TaskEnqueueBuilder({required this.definition, required this.args});
-
-  /// Task definition used to construct the call.
-  final TaskDefinition<TArgs, TResult> definition;
-
-  /// Typed arguments for the task invocation.
-  final TArgs args;
-
-  Map<String, String>? _headers;
-  TaskOptions? _optionsOverride;
-  DateTime? _notBefore;
-  Map<String, Object?>? _meta;
-  TaskEnqueueOptions? _enqueueOptions;
-
-  /// Replaces headers entirely.
-  TaskEnqueueBuilder<TArgs, TResult> headers(Map<String, String> headers) {
-    _headers = Map<String, String>.from(headers);
-    return this;
-  }
-
-  /// Adds or overrides a single header entry.
-  TaskEnqueueBuilder<TArgs, TResult> header(String key, String value) {
-    final current = Map<String, String>.from(_headers ?? const {});
-    current[key] = value;
-    _headers = current;
-    return this;
-  }
-
-  /// Replaces metadata entirely.
-  TaskEnqueueBuilder<TArgs, TResult> metadata(Map<String, Object?> meta) {
-    _meta = Map<String, Object?>.from(meta);
-    return this;
-  }
-
-  /// Adds or overrides a metadata entry.
-  TaskEnqueueBuilder<TArgs, TResult> meta(String key, Object? value) {
-    final current = Map<String, Object?>.from(_meta ?? const {});
-    current[key] = value;
-    _meta = current;
-    return this;
-  }
-
-  /// Replaces the options for this call.
-  TaskEnqueueBuilder<TArgs, TResult> options(TaskOptions options) {
-    _optionsOverride = options;
-    return this;
-  }
-
-  /// Sets the queue for this enqueue.
-  TaskEnqueueBuilder<TArgs, TResult> queue(String queue) {
-    final base = _optionsOverride ?? definition.defaultOptions;
-    _optionsOverride = base.copyWith(queue: queue);
-    return this;
-  }
-
-  /// Sets the priority for this enqueue.
-  TaskEnqueueBuilder<TArgs, TResult> priority(int priority) {
-    final base = _optionsOverride ?? definition.defaultOptions;
-    _optionsOverride = base.copyWith(priority: priority);
-    return this;
-  }
-
-  /// Sets the earliest execution time.
-  TaskEnqueueBuilder<TArgs, TResult> notBefore(DateTime instant) {
-    _notBefore = instant;
-    return this;
-  }
-
-  /// Sets a relative delay before execution.
-  TaskEnqueueBuilder<TArgs, TResult> delay(Duration duration) {
-    _notBefore = stemNow().add(duration);
-    return this;
-  }
-
-  /// Replaces the enqueue options for this call.
-  TaskEnqueueBuilder<TArgs, TResult> enqueueOptions(
-    TaskEnqueueOptions options,
-  ) {
-    _enqueueOptions = options;
-    return this;
-  }
-
-  /// Builds the [TaskCall] with accumulated overrides.
-  TaskCall<TArgs, TResult> build() {
-    final base = definition(args);
-    final mergedHeaders = Map<String, String>.from(base.headers);
-    if (_headers != null) {
-      mergedHeaders.addAll(_headers!);
-    }
-    final mergedMeta = Map<String, Object?>.from(base.meta);
-    if (_meta != null) {
-      mergedMeta.addAll(_meta!);
-    }
-    return base.copyWith(
-      headers: Map.unmodifiable(mergedHeaders),
-      options: _optionsOverride ?? base.options,
-      notBefore: _notBefore ?? base.notBefore,
-      meta: Map.unmodifiable(mergedMeta),
-      enqueueOptions: _enqueueOptions ?? base.enqueueOptions,
+/// Convenience helpers for building typed enqueue requests directly from a task
+/// enqueuer.
+extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
+  /// Enqueues a name-based task from a DTO that already exposes `toJson()`.
+  Future<String> enqueueJson<T extends Object>(
+    String name,
+    T argsJson, {
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+    String? typeName,
+  }) {
+    return enqueue(
+      name,
+      args: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(
+          argsJson,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
     );
   }
+
+  /// Enqueues a name-based task from a DTO and persists a schema [version]
+  /// beside the JSON payload.
+  Future<String> enqueueVersionedJson<T extends Object>(
+    String name,
+    T argsJson, {
+    required int version,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+    String? typeName,
+  }) {
+    return enqueue(
+      name,
+      args: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          argsJson,
+          version: version,
+          typeName: typeName ?? '$T',
+        ),
+      ),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
 }
 
 /// Retry strategy used to compute the next backoff delay.
@@ -2387,6 +3536,58 @@ class GroupStatus {
 
   /// Additional metadata for the group.
   final Map<String, Object?> meta;
+
+  /// Returns the decoded payload value for each collected child result.
+  ///
+  /// When [codec] is supplied, each stored durable payload is decoded through
+  /// that codec before being returned.
+  Map<String, T?> resultValues<T>({PayloadCodec<T>? codec}) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadValue<T>(codec: codec),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with [codec].
+  Map<String, T?> resultAs<T>({required PayloadCodec<T> codec}) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadAs(codec: codec),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with a JSON decoder.
+  Map<String, T?> resultJson<T>({
+    required T Function(Map<String, dynamic> payload) decode,
+    String? typeName,
+  }) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadJson(
+          decode: decode,
+          typeName: typeName,
+        ),
+    });
+  }
+
+  /// Decodes each collected child result as a typed DTO with a version-aware
+  /// JSON decoder.
+  Map<String, T?> resultVersionedJson<T>({
+    required int version,
+    required T Function(Map<String, dynamic> payload, int version) decode,
+    int? defaultDecodeVersion,
+    String? typeName,
+  }) {
+    return Map.unmodifiable({
+      for (final entry in results.entries)
+        entry.key: entry.value.payloadVersionedJson(
+          version: version,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: typeName,
+        ),
+    });
+  }
 
   /// The number of completed results.
   int get completed => results.length;

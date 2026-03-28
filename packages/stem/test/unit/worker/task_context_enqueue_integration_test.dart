@@ -13,6 +13,45 @@ final _childDefinition = TaskDefinition<_ChildArgs, void>(
   encodeArgs: (args) => {'value': args.value},
 );
 
+final Flow<String> _childWorkflow = Flow<String>(
+  name: 'tasks.child.workflow',
+  build: (flow) {
+    flow.step('complete', (context) async => 'workflow-child');
+  },
+);
+
+final NoArgsWorkflowRef<String> _childWorkflowRef = _childWorkflow.ref0();
+
+const PayloadCodec<_WorkflowEventPayload> _workflowEventPayloadCodec =
+    PayloadCodec<_WorkflowEventPayload>(
+      encode: _encodeWorkflowEventPayload,
+      decode: _decodeWorkflowEventPayload,
+    );
+
+const WorkflowEventRef<_WorkflowEventPayload> _workflowEventRef =
+    WorkflowEventRef<_WorkflowEventPayload>(
+      topic: 'tasks.workflow.ready',
+      codec: _workflowEventPayloadCodec,
+    );
+
+final Flow<String> _waitingWorkflow = Flow<String>(
+  name: 'tasks.waiting.workflow',
+  build: (flow) {
+    flow.step('wait-for-event', (context) async {
+      final event = context.waitForEventValue<_WorkflowEventPayload>(
+        _workflowEventRef.topic,
+        codec: _workflowEventPayloadCodec,
+      );
+      if (event == null) {
+        return null;
+      }
+      return event.value;
+    });
+  },
+);
+
+final NoArgsWorkflowRef<String> _waitingWorkflowRef = _waitingWorkflow.ref0();
+
 void main() {
   group('TaskInvocationContext enqueue', () {
     test('enqueues from isolate entrypoint using builder', () async {
@@ -55,6 +94,49 @@ void main() {
 
       await worker.shutdown();
       broker.dispose();
+    });
+
+    test('starts child workflows from isolate entrypoints', () async {
+      final app = await StemWorkflowApp.inMemory(
+        tasks: [_IsolateStartWorkflowTask()],
+        flows: [_childWorkflow],
+      );
+
+      final taskId = await app.enqueue('tasks.isolate.start.workflow');
+      final result = await app.waitForTask<String>(
+        taskId,
+        timeout: const Duration(seconds: 3),
+      );
+
+      expect(result?.isSucceeded, isTrue);
+      expect(result?.value, equals('workflow-child'));
+
+      await app.close();
+    });
+
+    test('emits workflow events from isolate entrypoints', () async {
+      final app = await StemWorkflowApp.inMemory(
+        tasks: [_IsolateEmitWorkflowEventTask()],
+        flows: [_waitingWorkflow],
+      );
+
+      final runId = await _waitingWorkflowRef.start(app);
+      final taskId = await app.enqueue('tasks.isolate.emit.workflow.event');
+
+      final taskResult = await app.waitForTask<void>(
+        taskId,
+        timeout: const Duration(seconds: 3),
+      );
+      final workflowResult = await _waitingWorkflowRef.waitFor(
+        app,
+        runId,
+        timeout: const Duration(seconds: 3),
+      );
+
+      expect(taskResult?.isSucceeded, isTrue);
+      expect(workflowResult?.value, equals('workflow-ready'));
+
+      await app.close();
     });
   });
 
@@ -139,7 +221,9 @@ void main() {
       await stem.enqueue(
         'tasks.primary.success',
         enqueueOptions: TaskEnqueueOptions(
-          link: [linkDefinition(const _ChildArgs('linked'))],
+          link: [
+            linkDefinition.buildCall(const _ChildArgs('linked')),
+          ],
         ),
       );
 
@@ -196,7 +280,9 @@ void main() {
       await stem.enqueue(
         'tasks.primary.fail',
         enqueueOptions: TaskEnqueueOptions(
-          linkError: [linkDefinition(const _ChildArgs('linked'))],
+          linkError: [
+            linkDefinition.buildCall(const _ChildArgs('linked')),
+          ],
         ),
       );
 
@@ -426,6 +512,12 @@ class _ChildArgs {
   final String value;
 }
 
+class _WorkflowEventPayload {
+  const _WorkflowEventPayload(this.value);
+
+  final String value;
+}
+
 class _IsolateEnqueueTask implements TaskHandler<void> {
   @override
   String get name => 'tasks.isolate.enqueue';
@@ -447,10 +539,77 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
-  final builder = context.enqueueBuilder(
-    definition: _childDefinition,
-    args: const _ChildArgs('from-isolate'),
+  final call = _childDefinition.buildCall(
+    const _ChildArgs('from-isolate'),
   );
-  await builder.enqueueWith(context);
+  await context.enqueueCall(call);
   return null;
+}
+
+class _IsolateStartWorkflowTask implements TaskHandler<String> {
+  @override
+  String get name => 'tasks.isolate.start.workflow';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => _isolateStartWorkflowEntrypoint;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    return '';
+  }
+}
+
+FutureOr<Object?> _isolateStartWorkflowEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  final result = await _childWorkflowRef.startAndWait(
+    context,
+    timeout: const Duration(seconds: 2),
+  );
+  return result?.value;
+}
+
+class _IsolateEmitWorkflowEventTask implements TaskHandler<void> {
+  @override
+  String get name => 'tasks.isolate.emit.workflow.event';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => _isolateEmitWorkflowEventEntrypoint;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {}
+}
+
+FutureOr<Object?> _isolateEmitWorkflowEventEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  await context.emitEvent(
+    _workflowEventRef,
+    const _WorkflowEventPayload('workflow-ready'),
+  );
+  return null;
+}
+
+Map<String, Object?> _encodeWorkflowEventPayload(_WorkflowEventPayload value) {
+  return {'value': value.value};
+}
+
+_WorkflowEventPayload _decodeWorkflowEventPayload(Object? payload) {
+  return _WorkflowEventPayload(
+    (payload! as Map<String, Object?>)['value']! as String,
+  );
 }

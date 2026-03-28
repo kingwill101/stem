@@ -1,6 +1,11 @@
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
+import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_execution_context.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/src/workflow/core/workflow_result.dart';
 
 /// Context provided to each workflow step invocation.
 ///
@@ -13,7 +18,7 @@ import 'package:stem/src/workflow/core/workflow_clock.dart';
 /// [iteration] indicates how many times the step has already completed when
 /// `autoVersion` is enabled, allowing handlers to branch per loop iteration or
 /// derive unique identifiers.
-class FlowContext {
+class FlowContext implements WorkflowExecutionContext {
   /// Creates a workflow step context.
   FlowContext({
     required this.workflow,
@@ -26,36 +31,71 @@ class FlowContext {
     WorkflowClock clock = const SystemWorkflowClock(),
     Object? resumeData,
     this.enqueuer,
+    this.workflows,
   }) : _clock = clock,
        _resumeData = resumeData;
 
   /// Name of the workflow.
+  @override
   final String workflow;
 
   /// Identifier of the workflow run.
+  @override
   final String runId;
 
   /// Name of the current step.
+  @override
   final String stepName;
 
   /// Parameters passed when the workflow was started.
+  @override
   final Map<String, Object?> params;
 
   /// Result of the previous step, if any.
+  @override
   final Object? previousResult;
 
   /// Zero-based index of the current step.
+  @override
   final int stepIndex;
 
   /// Current iteration when auto-versioning is enabled.
+  @override
   final int iteration;
 
   /// Optional enqueuer for scheduling tasks with workflow metadata.
+  @override
   final TaskEnqueuer? enqueuer;
+
+  /// Optional typed workflow caller for spawning child workflows.
+  @override
+  final WorkflowCaller? workflows;
   final WorkflowClock _clock;
 
   FlowStepControl? _control;
   Object? _resumeData;
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    Map<String, Object?> meta = const {},
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeFlowContextValue(name, value, codec: codec),
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      enqueueOptions: enqueueOptions,
+    );
+  }
 
   /// Suspends the workflow until the delay elapses.
   ///
@@ -89,6 +129,35 @@ class FlowContext {
     return _control!;
   }
 
+  /// Suspends the workflow for [duration] with a JSON-serializable DTO payload.
+  FlowStepControl sleepJson<T>(Duration duration, T value, {String? typeName}) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Suspends the workflow for [duration] with a versioned DTO payload.
+  FlowStepControl sleepVersionedJson<T>(
+    Duration duration,
+    T value, {
+    required int version,
+    String? typeName,
+  }) {
+    return sleep(
+      duration,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
+
   /// Suspends the workflow until an event with [topic] is emitted.
   ///
   /// When the event bus resumes the run, the payload is made available via
@@ -107,6 +176,57 @@ class FlowContext {
     return _control!;
   }
 
+  /// Suspends the workflow until [topic] arrives with a DTO payload.
+  FlowStepControl awaitEventJson<T>(
+    String topic,
+    T value, {
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeJsonMap(value, typeName: typeName),
+      ),
+    );
+  }
+
+  /// Suspends the workflow until [topic] arrives with a versioned DTO payload.
+  FlowStepControl awaitEventVersionedJson<T>(
+    String topic,
+    T value, {
+    required int version,
+    DateTime? deadline,
+    String? typeName,
+  }) {
+    return awaitEvent(
+      topic,
+      deadline: deadline,
+      data: Map<String, Object?>.from(
+        PayloadCodec.encodeVersionedJsonMap(
+          value,
+          version: version,
+          typeName: typeName,
+        ),
+      ),
+    );
+  }
+
+  @override
+  void suspendFor(Duration duration, {Map<String, Object?>? data}) {
+    sleep(duration, data: data);
+  }
+
+  @override
+  void waitForTopic(
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
+    awaitEvent(topic, deadline: deadline, data: data);
+  }
+
   /// Injects a payload that will be returned the next time [takeResumeData] is
   /// called. Primarily used by the runtime; tests may also leverage it to mock
   /// resumption data.
@@ -122,6 +242,7 @@ class FlowContext {
   /// The method consumes the payload so subsequent calls during the same step
   /// return `null`. This makes it safe to guard control-flow with a simple
   /// `if (takeResumeData() == null) { ... }` pattern.
+  @override
   Object? takeResumeData() {
     final value = _resumeData;
     _resumeData = null;
@@ -139,6 +260,7 @@ class FlowContext {
   /// Returns a stable idempotency key derived from the workflow, run, and
   /// [scope]. Defaults to the current [stepName] (including iteration suffix
   /// when [iteration] > 0) when no scope is provided.
+  @override
   String idempotencyKey([String? scope]) {
     final defaultScope = iteration > 0 ? '$stepName#$iteration' : stepName;
     final effectiveScope = (scope == null || scope.isEmpty)
@@ -146,4 +268,130 @@ class FlowContext {
         : scope;
     return '$workflow/$runId/$effectiveScope';
   }
+
+  /// Enqueues a task using the workflow-scoped enqueuer.
+  ///
+  /// Workflow metadata propagation is handled by the runtime-provided
+  /// enqueuer implementation.
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('FlowContext has no enqueuer configured');
+    }
+    return delegate.enqueue(
+      name,
+      args: args,
+      headers: headers,
+      meta: meta,
+      options: options,
+      notBefore: notBefore,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+
+  /// Enqueues a typed task call using the workflow-scoped enqueuer.
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    final delegate = enqueuer;
+    if (delegate == null) {
+      throw StateError('FlowContext has no enqueuer configured');
+    }
+    return delegate.enqueueCall(call, enqueueOptions: enqueueOptions);
+  }
+
+  /// Starts a typed child workflow using the workflow-scoped caller.
+  @override
+  Future<String> startWorkflowRef<TParams, TResult extends Object?>(
+    WorkflowRef<TParams, TResult> definition,
+    TParams params, {
+    String? parentRunId,
+    Duration? ttl,
+    WorkflowCancellationPolicy? cancellationPolicy,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.startWorkflowRef(
+      definition,
+      params,
+      parentRunId: parentRunId,
+      ttl: ttl,
+      cancellationPolicy: cancellationPolicy,
+    );
+  }
+
+  /// Starts a prebuilt child workflow call using the workflow-scoped caller.
+  @override
+  Future<String> startWorkflowCall<TParams, TResult extends Object?>(
+    WorkflowStartCall<TParams, TResult> call,
+  ) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.startWorkflowCall(call);
+  }
+
+  /// Waits for a typed child workflow run using the workflow-scoped caller.
+  @override
+  Future<WorkflowResult<TResult>?>
+  waitForWorkflowRef<TParams, TResult extends Object?>(
+    String runId,
+    WorkflowRef<TParams, TResult> definition, {
+    Duration pollInterval = const Duration(milliseconds: 100),
+    Duration? timeout,
+  }) async {
+    final caller = workflows;
+    if (caller == null) {
+      throw StateError('FlowContext has no workflow caller configured');
+    }
+    return caller.waitForWorkflowRef(
+      runId,
+      definition,
+      pollInterval: pollInterval,
+      timeout: timeout,
+    );
+  }
+}
+
+Map<String, Object?> _encodeFlowContextValue<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    final normalized = <String, Object?>{};
+    for (final entry in payload.entries) {
+      final key = entry.key;
+      if (key is! String) {
+        throw StateError(
+          'Task payload for $name must use string keys, got '
+          '${key.runtimeType}.',
+        );
+      }
+      normalized[key] = entry.value;
+    }
+    return normalized;
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
+  );
 }

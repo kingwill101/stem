@@ -1,25 +1,25 @@
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem_redis/stem_redis.dart';
 import 'package:stem_signing_key_rotation/shared.dart';
 
 Future<void> main() async {
   // #region signing-rotation-producer-config
   final config = StemConfig.fromEnvironment();
   // #endregion signing-rotation-producer-config
-  final broker = await connectBroker(config.brokerUrl, tls: config.tls);
   final backendUrl = config.resultBackendUrl ?? config.brokerUrl;
-  final backend = await connectBackend(backendUrl, tls: config.tls);
   // #region signing-rotation-producer-signer
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-rotation-producer-signer
 
   final tasks = buildTasks();
   // #region signing-rotation-producer-stem
-  final stem = Stem(
-    broker: broker,
+  final client = await StemClient.fromUrl(
+    config.brokerUrl,
+    adapters: [StemRedisAdapter(tls: config.tls)],
+    overrides: StemStoreOverrides(backend: backendUrl),
     tasks: tasks,
-    backend: backend,
     signer: signer,
   );
   // #endregion signing-rotation-producer-stem
@@ -40,7 +40,7 @@ Future<void> main() async {
   const options = TaskOptions(queue: rotationQueue);
   for (var i = 0; i < taskCount; i += 1) {
     final label = 'rotation-${i + 1}';
-    final id = await stem.enqueue(
+    final id = await client.enqueue(
       'rotation.demo',
       options: options,
       args: {'label': label, 'key': keyId},
@@ -49,8 +49,7 @@ Future<void> main() async {
   }
   // #endregion signing-rotation-producer-enqueue
 
-  await broker.close();
-  await backend.close();
+  await client.close();
 }
 
 int _parseInt(String key, {required int fallback, int min = 0}) {

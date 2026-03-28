@@ -331,7 +331,7 @@ class Canvas {
     String? groupId,
   }) async {
     final id = groupId ?? _generateId('grp');
-    if (groupId == null) {
+    if (groupId == null || await backend.getGroup(id) == null) {
       await backend.initGroup(
         GroupDescriptor(id: id, expected: signatures.length),
       );
@@ -934,7 +934,7 @@ extension TaskDefinitionCanvasX<TArgs, TResult extends Object?>
     Map<String, Object?>? meta,
     TResult Function(Object? payload)? decode,
   }) {
-    final call = this.call(
+    final call = buildCall(
       args,
       headers: headers,
       options: options,

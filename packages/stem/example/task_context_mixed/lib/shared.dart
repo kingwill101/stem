@@ -218,12 +218,11 @@ class InlineCoordinatorTask extends TaskHandler<void> {
       ),
     );
 
-    final auditId = await context.enqueueCall(
-      auditDefinition.call(
-        AuditArgs(
-          runId: runId,
-          message: 'inline parent scheduled child tasks',
-        ),
+    final auditId = await auditDefinition.enqueue(
+      context,
+      AuditArgs(
+        runId: runId,
+        message: 'inline parent scheduled child tasks',
       ),
     );
 
@@ -251,12 +250,12 @@ class InlineCoordinatorTask extends TaskHandler<void> {
       publishConnection: const {'adapter': 'sqlite'},
       producer: const {'app': 'task-context-mixed'},
       link: [
-        linkSuccessDefinition.call(
+        linkSuccessDefinition.buildCall(
           <String, Object?>{'runId': runId, 'source': 'link'},
         ),
       ],
       linkError: [
-        linkErrorDefinition.call(
+        linkErrorDefinition.buildCall(
           <String, Object?>{'runId': runId, 'source': 'link_error'},
         ),
       ],
@@ -286,14 +285,13 @@ FutureOr<Object?> inlineEntrypoint(
     '[inline_entrypoint] id=${context.id} attempt=${context.attempt} runId=$runId meta=${context.meta}',
   );
 
-  await context.enqueueCall(
-    auditDefinition.call(
-      AuditArgs(
-        runId: runId,
-        message: 'inline entrypoint completed',
-      ),
-      enqueueOptions: const TaskEnqueueOptions(priority: 4),
+  await auditDefinition.enqueue(
+    context,
+    AuditArgs(
+      runId: runId,
+      message: 'inline entrypoint completed',
     ),
+    enqueueOptions: const TaskEnqueueOptions(priority: 4),
   );
 
   return 'inline-ok';
@@ -308,21 +306,17 @@ FutureOr<Object?> isolateChildEntrypoint(
     '[isolate_child] id=${context.id} attempt=${context.attempt} runId=$runId',
   );
 
-  final call = context
-      .enqueueBuilder(
-        definition: auditDefinition,
-        args: AuditArgs(
-          runId: runId,
-          message: 'isolate child used enqueueBuilder',
-        ),
-      )
-      .header('x-child', 'isolate')
-      .meta('origin', 'isolate-child')
-      .delay(const Duration(milliseconds: 200))
-      .enqueueOptions(const TaskEnqueueOptions(shadow: 'audit-shadow'))
-      .build();
-
-  await context.enqueueCall(call);
+  await auditDefinition.enqueue(
+    context,
+    AuditArgs(
+      runId: runId,
+      message: 'isolate child used direct enqueue',
+    ),
+    headers: const {'x-child': 'isolate'},
+    meta: const {'origin': 'isolate-child'},
+    notBefore: stemNow().add(const Duration(milliseconds: 200)),
+    enqueueOptions: const TaskEnqueueOptions(shadow: 'audit-shadow'),
+  );
   return 'isolate-ok';
 }
 

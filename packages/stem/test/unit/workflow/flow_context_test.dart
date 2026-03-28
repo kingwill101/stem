@@ -1,6 +1,10 @@
+import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
+import 'package:stem/stem.dart'
+    show TaskCall, TaskEnqueueOptions, TaskEnqueuer, TaskOptions;
 import 'package:test/test.dart';
 
 void main() {
@@ -48,6 +52,50 @@ void main() {
     expect(second, isNull);
   });
 
+  test('FlowContext JSON suspension helpers encode DTO payloads', () {
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-2b',
+      stepName: 'wait',
+      params: const {},
+      previousResult: null,
+      stepIndex: 1,
+    );
+
+    final sleep = context.sleepJson(
+      const Duration(seconds: 3),
+      const _SuspensionPayload(stage: 'sleeping'),
+    );
+    final wait = context.awaitEventJson(
+      'topic',
+      const _SuspensionPayload(stage: 'waiting'),
+      deadline: DateTime.parse('2025-01-01T00:00:00Z'),
+    );
+    final versionedSleep = context.sleepVersionedJson(
+      const Duration(seconds: 4),
+      const _SuspensionPayload(stage: 'versioned-sleep'),
+      version: 2,
+    );
+    final versionedWait = context.awaitEventVersionedJson(
+      'topic.versioned',
+      const _SuspensionPayload(stage: 'versioned-wait'),
+      version: 2,
+      deadline: DateTime.parse('2025-01-01T00:00:01Z'),
+    );
+
+    expect(sleep.data, equals(const {'stage': 'sleeping'}));
+    expect(wait.data, equals(const {'stage': 'waiting'}));
+    expect(wait.deadline, DateTime.parse('2025-01-01T00:00:00Z'));
+    expect(versionedSleep.data, {
+      PayloadCodec.versionKey: 2,
+      'stage': 'versioned-sleep',
+    });
+    expect(versionedWait.data, {
+      PayloadCodec.versionKey: 2,
+      'stage': 'versioned-wait',
+    });
+  });
+
   test(
     'FlowContext resume data is consumed and idempotency key derives scope',
     () {
@@ -71,5 +119,175 @@ void main() {
       );
       expect(context.idempotencyKey('custom'), 'demo/run-3/custom');
     },
+  );
+
+  test('startWith throws when workflow caller support is unavailable', () {
+      final context = FlowContext(
+        workflow: 'demo',
+        runId: 'run-4',
+        stepName: 'spawn',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.flow',
+        encodeParams: (params) => params,
+      );
+
+      expect(
+        () => childRef.start(context, params: const {'value': 'x'}),
+        throwsStateError,
+      );
+    },
+  );
+
+  test(
+    'startAndWaitWith throws when workflow caller support is unavailable',
+    () {
+      final context = FlowContext(
+        workflow: 'demo',
+        runId: 'run-5',
+        stepName: 'spawn',
+        params: const {},
+        previousResult: null,
+        stepIndex: 0,
+      );
+      final childRef = WorkflowRef<Map<String, Object?>, String>(
+        name: 'child.flow',
+        encodeParams: (params) => params,
+      );
+
+      expect(
+        () => childRef.startAndWait(
+          context,
+          params: const {'value': 'x'},
+        ),
+        throwsStateError,
+      );
+    },
+  );
+
+  test('FlowContext.enqueue delegates to the configured enqueuer', () async {
+    final enqueuer = _RecordingEnqueuer();
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-6',
+      stepName: 'dispatch',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+      enqueuer: enqueuer,
+    );
+
+    final taskId = await context.enqueue(
+      'tasks.child',
+      args: const {'value': 42},
+      meta: const {'source': 'flow'},
+    );
+
+    expect(taskId, equals('recorded-1'));
+    expect(enqueuer.lastName, equals('tasks.child'));
+    expect(enqueuer.lastArgs, equals({'value': 42}));
+    expect(enqueuer.lastMeta, containsPair('source', 'flow'));
+  });
+
+  test('FlowContext.enqueue throws when no enqueuer is configured', () {
+    final context = FlowContext(
+      workflow: 'demo',
+      runId: 'run-7',
+      stepName: 'dispatch',
+      params: const {},
+      previousResult: null,
+      stepIndex: 0,
+    );
+
+    expect(() => context.enqueue('tasks.child'), throwsStateError);
+  });
+}
+
+class _SuspensionPayload {
+  const _SuspensionPayload({required this.stage});
+
+  final String stage;
+
+  Map<String, dynamic> toJson() => {'stage': stage};
+}
+
+class _RecordingEnqueuer implements TaskEnqueuer {
+  String? lastName;
+  Map<String, Object?>? lastArgs;
+  Map<String, Object?>? lastMeta;
+
+  @override
+  Future<String> enqueue(
+    String name, {
+    Map<String, Object?> args = const {},
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  }) async {
+    lastName = name;
+    lastArgs = Map<String, Object?>.from(args);
+    lastMeta = Map<String, Object?>.from(meta);
+    return 'recorded-1';
+  }
+
+  @override
+  Future<String> enqueueCall<TArgs, TResult>(
+    TaskCall<TArgs, TResult> call, {
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      call.name,
+      args: call.encodeArgs(),
+      headers: call.headers,
+      meta: call.meta,
+      options: call.resolveOptions(),
+      notBefore: call.notBefore,
+      enqueueOptions: enqueueOptions ?? call.enqueueOptions,
+    );
+  }
+
+  @override
+  Future<String> enqueueValue<T>(
+    String name,
+    T value, {
+    PayloadCodec<T>? codec,
+    Map<String, String> headers = const {},
+    Map<String, Object?> meta = const {},
+    TaskOptions options = const TaskOptions(),
+    DateTime? notBefore,
+    TaskEnqueueOptions? enqueueOptions,
+  }) {
+    return enqueue(
+      name,
+      args: _encodeFlowTaskArgs(name, value, codec: codec),
+      headers: headers,
+      meta: meta,
+      options: options,
+      notBefore: notBefore,
+      enqueueOptions: enqueueOptions,
+    );
+  }
+}
+
+Map<String, Object?> _encodeFlowTaskArgs<T>(
+  String name,
+  T value, {
+  PayloadCodec<T>? codec,
+}) {
+  final payload = codec == null ? value : codec.encode(value);
+  if (payload is Map<String, Object?>) {
+    return Map<String, Object?>.from(payload);
+  }
+  if (payload is Map) {
+    return payload.map((key, value) => MapEntry(key.toString(), value));
+  }
+  throw StateError(
+    'Task payload for $name must encode to Map<String, Object?>, got '
+    '${payload.runtimeType}.',
   );
 }

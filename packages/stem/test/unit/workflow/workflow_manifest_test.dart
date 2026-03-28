@@ -21,15 +21,10 @@ void main() {
     expect(manifest.id, equals(firstId));
     expect(manifest.name, equals('manifest.flow'));
     expect(manifest.kind, equals(WorkflowDefinitionKind.flow));
-    expect(manifest.stepCollectionLabel, equals('steps'));
-    expect(manifest.checkpoints, hasLength(2));
     expect(manifest.steps, hasLength(2));
+    expect(manifest.checkpoints, isEmpty);
     expect(manifest.steps.first.position, equals(0));
     expect(manifest.steps.first.name, equals('first'));
-    expect(
-      manifest.steps.first.role,
-      equals(WorkflowManifestStepRole.flowStep),
-    );
     expect(manifest.steps.first.id, isNotEmpty);
     expect(manifest.steps.first.id, isNot(equals(manifest.steps.last.id)));
   });
@@ -38,41 +33,38 @@ void main() {
     final definition = WorkflowScript<Map<String, Object?>>(
       name: 'manifest.script',
       run: (script) async {
-        final email = script.params['email'] as String;
+        final email = script.params['email']! as String;
         return {'email': email, 'status': 'done'};
       },
       checkpoints: [
-        FlowStep(
+        WorkflowCheckpoint(
           name: 'create-user',
           title: 'Create user',
-          kind: WorkflowStepKind.task,
           taskNames: const ['user.create'],
-          handler: (context) async => {'id': '1'},
         ),
-        FlowStep(
+        WorkflowCheckpoint(
           name: 'send-welcome-email',
           title: 'Send welcome email',
-          kind: WorkflowStepKind.task,
           taskNames: const ['email.send'],
-          handler: (context) async => null,
         ),
       ],
     ).definition;
 
     final manifest = definition.toManifestEntry();
     expect(manifest.kind, equals(WorkflowDefinitionKind.script));
-    expect(manifest.stepCollectionLabel, equals('checkpoints'));
     expect(manifest.checkpoints, hasLength(2));
-    expect(manifest.steps, hasLength(2));
-    expect(manifest.steps.first.name, equals('create-user'));
-    expect(manifest.steps.first.position, equals(0));
+    expect(manifest.steps, isEmpty);
+    expect(manifest.checkpoints.first.name, equals('create-user'));
+    expect(manifest.checkpoints.first.position, equals(0));
     expect(
-      manifest.steps.first.role,
-      equals(WorkflowManifestStepRole.scriptCheckpoint),
+      manifest.checkpoints.first.taskNames,
+      equals(const ['user.create']),
     );
-    expect(manifest.steps.first.taskNames, equals(const ['user.create']));
-    expect(manifest.steps.last.name, equals('send-welcome-email'));
-    expect(manifest.steps.last.position, equals(1));
-    expect(manifest.steps.last.taskNames, equals(const ['email.send']));
+    expect(manifest.checkpoints.last.name, equals('send-welcome-email'));
+    expect(manifest.checkpoints.last.position, equals(1));
+    expect(
+      manifest.checkpoints.last.taskNames,
+      equals(const ['email.send']),
+    );
   });
 }

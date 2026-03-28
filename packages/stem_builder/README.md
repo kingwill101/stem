@@ -54,19 +54,20 @@ class HelloScript {
 
 @TaskDefn(name: 'hello.task')
 Future<void> helloTask(
-  TaskInvocationContext context,
   String email,
+  {TaskExecutionContext? context}
 ) async {
   // ...
 }
 ```
 
-Script workflows can use a plain `run(...)` method (no extra annotation
-required). `@WorkflowRun` is still supported for backward compatibility.
-`run(...)` may optionally take `WorkflowScriptContext` as its first parameter,
-followed by required positional serializable parameters.
+Script workflows can use a plain `run(...)` method with no extra annotation.
+When you need runtime metadata, add an optional named
+`WorkflowScriptContext? context` parameter. The direct annotated checkpoint
+call still stays the default path.
 
-The intended usage is to call annotated step methods directly from `run(...)`:
+The intended usage is to call annotated checkpoint methods directly from
+`run(...)`:
 
 ```dart
 Future<Map<String, Object?>> run(String email) async {
@@ -87,23 +88,39 @@ Conceptually:
 - script workflows: `run(...)` is the execution plan, and declared checkpoints
   are metadata for manifests/tooling
 
-Choose the entry shape based on whether you need step context:
+Script workflows use one entry model:
 
-- plain direct-call style
-  - `Future<T> run(String email, ...)`
-  - use when annotated step methods only need serializable parameters
-- context-aware style
-  - `@WorkflowRun()`
-  - `Future<T> run(WorkflowScriptContext script, String email, ...)`
-  - use when you need to enter through `script.step(...)` so the step body can
-    receive `WorkflowScriptStepContext`
+- start with a plain direct-call `run(String email, ...)`
+- add an optional named injected context when you need runtime metadata
+  - `Future<T> run(String email, {WorkflowScriptContext? context})`
+  - `Future<T> checkpoint(String email, {WorkflowExecutionContext? context})`
+- direct annotated checkpoint calls stay the default path
 
 Supported context injection points:
 
-- flow steps: `FlowContext`
+- flow steps: `FlowContext` or `WorkflowExecutionContext`
 - script runs: `WorkflowScriptContext`
-- script steps: `WorkflowScriptStepContext`
-- tasks: `TaskInvocationContext`
+- script checkpoints: `WorkflowScriptStepContext` or
+  `WorkflowExecutionContext`
+- tasks: `TaskExecutionContext`
+
+Durable workflow execution contexts enqueue tasks directly:
+
+- `WorkflowExecutionContext.enqueue(...)`
+- typed task definitions can target those contexts via `enqueue(...)`
+
+Child workflows should be started from durable boundaries:
+
+- `ref.start(context, params: value)` inside flow steps
+- `ref.startAndWait(context, params: value)` inside script checkpoints
+- pass `ttl:`, `parentRunId:`, or `cancellationPolicy:` directly to
+  `ref.start(...)` / `ref.startAndWait(...)` for the normal override cases
+- build an explicit transport request with `ref.buildStart(...)` only for the
+  rarer low-level cases where you need to pass a `WorkflowStartCall` around
+
+Avoid starting child workflows directly from the raw
+`WorkflowScriptContext` body unless you are explicitly handling replay
+semantics yourself.
 
 Serializable parameter rules are enforced by the generator:
 
@@ -115,7 +132,7 @@ Serializable parameter rules are enforced by the generator:
   - Dart classes with `toJson()` plus a named `fromJson(...)` constructor
     taking `Map<String, Object?>`
 - unsupported directly:
-  - optional/named parameters on generated workflow/task entrypoints
+  - optional/named business parameters on generated workflow/task entrypoints
 
 Typed task results can use the same DTO convention.
 
@@ -131,8 +148,8 @@ The intended DX is:
 - pass generated `stemModule` into `StemWorkflowApp` or `StemClient`
 - start workflows through generated workflow refs instead of raw
   workflow-name strings
-- enqueue annotated tasks through generated `enqueueXxx(...)` helpers instead
-  of raw task-name strings
+- enqueue annotated tasks through generated task definitions instead of raw
+  task-name strings
 
 You can customize generated workflow ref names via `@WorkflowDefn`:
 
@@ -154,18 +171,25 @@ Run build_runner to generate `*.stem.g.dart` part files:
 dart run build_runner build
 ```
 
-The generated part exports a bundle plus typed helpers so you can avoid raw
-workflow-name and task-name strings (for example
-`StemWorkflowDefinitions.userSignup.call((email: 'user@example.com'))` or
-`stem.enqueueBuilderExampleTask(args: {...})`).
+The generated part exports a bundle plus typed refs/definitions so you can
+avoid raw workflow-name and task-name strings (for example
+`StemWorkflowDefinitions.userSignup.start(
+workflowApp,
+params: 'user@example.com',
+)`
+or `StemTaskDefinitions.builderExamplePing.enqueue(stem)`).
 
 Generated output includes:
 
 - `stemModule`
 - `StemWorkflowDefinitions`
 - `StemTaskDefinitions`
-- typed enqueue helpers on `TaskEnqueuer`
-- typed result wait helpers on `Stem`
+- typed `TaskDefinition` objects whose advanced explicit transport path uses
+  `TaskCall`, alongside direct `enqueue(...)` / `enqueueAndWait(...)`
+
+Generated task definitions are producer-safe. `Stem.enqueueCall(...)` can use
+the definition metadata directly, so a producer can publish typed task calls
+without registering the worker handler locally first.
 
 ## Wiring Into StemWorkflowApp
 
@@ -177,10 +201,16 @@ final workflowApp = await StemWorkflowApp.fromUrl(
   module: stemModule,
 );
 
-final result = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startAndWaitWithApp(workflowApp);
+final result = await StemWorkflowDefinitions.userSignup.startAndWait(
+  workflowApp,
+  params: 'user@example.com',
+);
 ```
+
+When you use `module: stemModule`, the workflow app infers the worker
+subscription from the workflow queue plus the default queues declared on the
+bundled task handlers. Override `workerConfig.subscription` only when your
+routing sends work to additional queues.
 
 If your application already owns a `StemApp`, reuse it:
 
@@ -188,14 +218,36 @@ If your application already owns a `StemApp`, reuse it:
 final stemApp = await StemApp.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
-  tasks: stemModule.tasks,
+  module: stemModule,
+  workerConfig: StemWorkerConfig(
+    queue: 'workflow',
+    subscription: RoutingSubscription(
+      queues: ['workflow', 'default'],
+    ),
+  ),
 );
 
-final workflowApp = await StemWorkflowApp.create(
-  stemApp: stemApp,
+final workflowApp = await stemApp.createWorkflowApp();
+```
+
+That shared-app path only works when the existing `StemApp` worker already
+subscribes to the workflow queue plus any task queues the workflows need.
+If you want subscription inference, prefer `StemClient.createWorkflowApp()`.
+
+For task-only services, use the same bundle directly with `StemApp`:
+
+```dart
+final taskApp = await StemApp.fromUrl(
+  'redis://localhost:6379',
+  adapters: const [StemRedisAdapter()],
   module: stemModule,
 );
 ```
+
+Plain `StemApp` bootstrap also infers task queue subscriptions from the
+bundled or explicitly supplied task handlers when
+`workerConfig.subscription` is omitted, and it lazy-starts on the first
+enqueue or wait call.
 
 If you already centralize wiring in a `StemClient`, prefer the shared-client
 path:
@@ -204,26 +256,34 @@ path:
 final client = await StemClient.fromUrl(
   'redis://localhost:6379',
   adapters: const [StemRedisAdapter()],
+  module: stemModule,
 );
 
-final workflowApp = await client.createWorkflowApp(module: stemModule);
+final workflowApp = await client.createWorkflowApp();
 ```
 
-The generated workflow refs work on `WorkflowRuntime` too:
+If you reuse an existing `StemApp`, its worker subscription stays in charge.
+Workflow-side queue inference only applies when `StemWorkflowApp` is creating
+the worker for you.
+
+When you are intentionally using the low-level `WorkflowRuntime`, the
+generated workflow refs work there too:
 
 ```dart
 final runtime = workflowApp.runtime;
-final runId = await StemWorkflowDefinitions.userSignup
-    .call((email: 'user@example.com'))
-    .startWithRuntime(runtime);
-await runtime.executeRun(runId);
+final runId = await StemWorkflowDefinitions.userSignup.start(
+  runtime,
+  params: 'user@example.com',
+);
+await workflowApp.executeRun(runId);
 ```
 
-Annotated tasks also get generated definitions and enqueue helpers:
+Annotated tasks also get generated definitions:
 
 ```dart
-final taskId = await workflowApp.app.stem.enqueueBuilderExampleTask(
-  args: const {'kind': 'welcome'},
+final taskId = await StemTaskDefinitions.builderExampleTask.enqueue(
+  workflowApp,
+  const {'kind': 'welcome'},
 );
 ```
 
@@ -233,5 +293,5 @@ See [`example/README.md`](example/README.md) for runnable examples, including:
 
 - Generated registration + execution with `StemWorkflowApp`
 - Runtime manifest + run detail views with `WorkflowRuntime`
-- Plain direct-call script steps and context-aware script steps
-- Typed `@TaskDefn` parameters with `TaskInvocationContext`
+- Plain direct-call script checkpoints and context-aware script checkpoints
+- Typed `@TaskDefn` parameters with `TaskExecutionContext`

@@ -8,7 +8,7 @@ final List<Flow> _stemFlows = <Flow>[
     name: "builder.example.flow",
     build: (flow) {
       final impl = BuilderExampleFlow();
-      flow.step(
+      flow.step<String>(
         "greet",
         (ctx) => impl.greet((_stemRequireArg(ctx.params, "name") as String)),
         kind: WorkflowStepKind.task,
@@ -50,21 +50,18 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "builder.example.user_signup",
     checkpoints: [
-      FlowStep(
+      WorkflowCheckpoint(
         name: "create-user",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "send-welcome-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "send-one-week-check-in-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -76,25 +73,29 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
 ];
 
 abstract final class StemWorkflowDefinitions {
-  static final WorkflowRef<Map<String, Object?>, String> flow =
-      WorkflowRef<Map<String, Object?>, String>(
-        name: "builder.example.flow",
-        encodeParams: (params) => params,
-      );
-  static final WorkflowRef<({String email}), Map<String, Object?>> userSignup =
-      WorkflowRef<({String email}), Map<String, Object?>>(
+  static final WorkflowRef<String, String> flow = WorkflowRef<String, String>(
+    name: "builder.example.flow",
+    encodeParams: (params) => <String, Object?>{"name": params},
+  );
+  static final WorkflowRef<String, Map<String, Object?>> userSignup =
+      WorkflowRef<String, Map<String, Object?>>(
         name: "builder.example.user_signup",
-        encodeParams: (params) => <String, Object?>{"email": params.email},
+        encodeParams: (params) => <String, Object?>{"email": params},
       );
 }
-
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {
     throw ArgumentError('Missing required argument "$name".');
   }
   return args[name];
+}
+
+Future<Object?> _stemTaskAdapter0(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  return await Future<Object?>.value(builderPingTask());
 }
 
 abstract final class StemTaskDefinitions {
@@ -105,47 +106,24 @@ abstract final class StemTaskDefinitions {
     defaultOptions: const TaskOptions(),
     metadata: const TaskMetadata(),
   );
-}
-
-extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
-  Future<String> enqueueBuilderExampleTask({
-    required Map<String, Object?> args,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.builderExampleTask.call(
-        args,
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-}
-
-extension StemGeneratedTaskResults on Stem {
-  Future<TaskResult<Object?>?> waitForBuilderExampleTask(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.builderExampleTask,
-      timeout: timeout,
-    );
-  }
+  static final NoArgsTaskDefinition<String> builderExamplePing =
+      NoArgsTaskDefinition<String>(
+        name: "builder.example.ping",
+        defaultOptions: const TaskOptions(),
+        metadata: const TaskMetadata(),
+      );
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "builder.example.task",
     entrypoint: builderExampleTask,
+    options: const TaskOptions(),
+    metadata: const TaskMetadata(),
+  ),
+  FunctionTaskHandler<Object?>(
+    name: "builder.example.ping",
+    entrypoint: _stemTaskAdapter0,
     options: const TaskOptions(),
     metadata: const TaskMetadata(),
   ),

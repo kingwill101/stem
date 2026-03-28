@@ -3,65 +3,36 @@
 
 part of 'definitions.dart';
 
-Map<String, Object?> _stemPayloadMap(Object? value, String typeName) {
-  if (value is Map<String, Object?>) {
-    return Map<String, Object?>.from(value);
-  }
-  if (value is Map) {
-    final result = <String, Object?>{};
-    value.forEach((key, entry) {
-      if (key is! String) {
-        throw StateError('$typeName payload must use string keys.');
-      }
-      result[key] = entry;
-    });
-    return result;
-  }
-  throw StateError(
-    '$typeName payload must decode to Map<String, Object?>, got ${value.runtimeType}.',
-  );
-}
-
 abstract final class StemPayloadCodecs {
   static final PayloadCodec<WelcomeWorkflowResult> welcomeWorkflowResult =
-      PayloadCodec<WelcomeWorkflowResult>(
-        encode: (value) => value.toJson(),
-        decode: (payload) => WelcomeWorkflowResult.fromJson(
-          _stemPayloadMap(payload, "WelcomeWorkflowResult"),
-        ),
+      PayloadCodec<WelcomeWorkflowResult>.json(
+        decode: WelcomeWorkflowResult.fromJson,
+        typeName: "WelcomeWorkflowResult",
       );
   static final PayloadCodec<WelcomeRequest> welcomeRequest =
-      PayloadCodec<WelcomeRequest>(
-        encode: (value) => value.toJson(),
-        decode: (payload) =>
-            WelcomeRequest.fromJson(_stemPayloadMap(payload, "WelcomeRequest")),
+      PayloadCodec<WelcomeRequest>.json(
+        decode: WelcomeRequest.fromJson,
+        typeName: "WelcomeRequest",
       );
   static final PayloadCodec<WelcomePreparation> welcomePreparation =
-      PayloadCodec<WelcomePreparation>(
-        encode: (value) => value.toJson(),
-        decode: (payload) => WelcomePreparation.fromJson(
-          _stemPayloadMap(payload, "WelcomePreparation"),
-        ),
+      PayloadCodec<WelcomePreparation>.json(
+        decode: WelcomePreparation.fromJson,
+        typeName: "WelcomePreparation",
       );
   static final PayloadCodec<ContextCaptureResult> contextCaptureResult =
-      PayloadCodec<ContextCaptureResult>(
-        encode: (value) => value.toJson(),
-        decode: (payload) => ContextCaptureResult.fromJson(
-          _stemPayloadMap(payload, "ContextCaptureResult"),
-        ),
+      PayloadCodec<ContextCaptureResult>.json(
+        decode: ContextCaptureResult.fromJson,
+        typeName: "ContextCaptureResult",
       );
   static final PayloadCodec<EmailDispatch> emailDispatch =
-      PayloadCodec<EmailDispatch>(
-        encode: (value) => value.toJson(),
-        decode: (payload) =>
-            EmailDispatch.fromJson(_stemPayloadMap(payload, "EmailDispatch")),
+      PayloadCodec<EmailDispatch>.json(
+        decode: EmailDispatch.fromJson,
+        typeName: "EmailDispatch",
       );
   static final PayloadCodec<EmailDeliveryReceipt> emailDeliveryReceipt =
-      PayloadCodec<EmailDeliveryReceipt>(
-        encode: (value) => value.toJson(),
-        decode: (payload) => EmailDeliveryReceipt.fromJson(
-          _stemPayloadMap(payload, "EmailDeliveryReceipt"),
-        ),
+      PayloadCodec<EmailDeliveryReceipt>.json(
+        decode: EmailDeliveryReceipt.fromJson,
+        typeName: "EmailDeliveryReceipt",
       );
 }
 
@@ -72,7 +43,7 @@ final List<Flow> _stemFlows = <Flow>[
       final impl = AnnotatedFlowWorkflow();
       flow.step<Map<String, Object?>?>(
         "start",
-        (ctx) => impl.start(ctx),
+        (ctx) => impl.start(context: ctx),
         kind: WorkflowStepKind.task,
         taskNames: [],
       );
@@ -129,12 +100,12 @@ class _StemScriptProxy1 extends AnnotatedContextScriptWorkflow {
   final WorkflowScriptContext _script;
   @override
   Future<ContextCaptureResult> captureContext(
-    WorkflowScriptStepContext context,
-    WelcomeRequest request,
-  ) {
+    WelcomeRequest request, {
+    WorkflowExecutionContext? context,
+  }) {
     return _script.step<ContextCaptureResult>(
       "capture-context",
-      (context) => super.captureContext(context, request),
+      (context) => super.captureContext(request, context: context),
     );
   }
 
@@ -159,34 +130,29 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "annotated.script",
     checkpoints: [
-      FlowStep.typed<WelcomePreparation>(
+      WorkflowCheckpoint.typed<WelcomePreparation>(
         name: "prepare-welcome",
-        handler: _stemScriptManifestStepNoop,
         valueCodec: StemPayloadCodecs.welcomePreparation,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "normalize-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-welcome-subject",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "deliver-welcome",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-follow-up",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
@@ -201,61 +167,53 @@ final List<WorkflowScript> _stemScripts = <WorkflowScript>[
   WorkflowScript(
     name: "annotated.context_script",
     checkpoints: [
-      FlowStep.typed<ContextCaptureResult>(
+      WorkflowCheckpoint.typed<ContextCaptureResult>(
         name: "capture-context",
-        handler: _stemScriptManifestStepNoop,
         valueCodec: StemPayloadCodecs.contextCaptureResult,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "normalize-email",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
-      FlowStep(
+      WorkflowCheckpoint(
         name: "build-welcome-subject",
-        handler: _stemScriptManifestStepNoop,
         kind: WorkflowStepKind.task,
         taskNames: [],
       ),
     ],
     resultCodec: StemPayloadCodecs.contextCaptureResult,
     run: (script) => _StemScriptProxy1(script).run(
-      script,
       StemPayloadCodecs.welcomeRequest.decode(
         _stemRequireArg(script.params, "request"),
       ),
+      context: script,
     ),
   ),
 ];
 
 abstract final class StemWorkflowDefinitions {
-  static final WorkflowRef<Map<String, Object?>, Map<String, Object?>?> flow =
-      WorkflowRef<Map<String, Object?>, Map<String, Object?>?>(
-        name: "annotated.flow",
-        encodeParams: (params) => params,
+  static final NoArgsWorkflowRef<Map<String, Object?>?> flow =
+      NoArgsWorkflowRef<Map<String, Object?>?>(name: "annotated.flow");
+  static final WorkflowRef<WelcomeRequest, WelcomeWorkflowResult> script =
+      WorkflowRef<WelcomeRequest, WelcomeWorkflowResult>(
+        name: "annotated.script",
+        encodeParams: (params) => <String, Object?>{
+          "request": StemPayloadCodecs.welcomeRequest.encode(params),
+        },
+        decodeResult: StemPayloadCodecs.welcomeWorkflowResult.decode,
       );
-  static final WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>
-  script = WorkflowRef<({WelcomeRequest request}), WelcomeWorkflowResult>(
-    name: "annotated.script",
-    encodeParams: (params) => <String, Object?>{
-      "request": StemPayloadCodecs.welcomeRequest.encode(params.request),
-    },
-    decodeResult: StemPayloadCodecs.welcomeWorkflowResult.decode,
-  );
-  static final WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>
-  contextScript = WorkflowRef<({WelcomeRequest request}), ContextCaptureResult>(
-    name: "annotated.context_script",
-    encodeParams: (params) => <String, Object?>{
-      "request": StemPayloadCodecs.welcomeRequest.encode(params.request),
-    },
-    decodeResult: StemPayloadCodecs.contextCaptureResult.decode,
-  );
+  static final WorkflowRef<WelcomeRequest, ContextCaptureResult> contextScript =
+      WorkflowRef<WelcomeRequest, ContextCaptureResult>(
+        name: "annotated.context_script",
+        encodeParams: (params) => <String, Object?>{
+          "request": StemPayloadCodecs.welcomeRequest.encode(params),
+        },
+        decodeResult: StemPayloadCodecs.contextCaptureResult.decode,
+      );
 }
-
-Future<Object?> _stemScriptManifestStepNoop(FlowContext context) async => null;
 
 Object? _stemRequireArg(Map<String, Object?> args, String name) {
   if (!args.containsKey(name)) {
@@ -268,10 +226,17 @@ Future<Object?> _stemTaskAdapter0(
   TaskInvocationContext context,
   Map<String, Object?> args,
 ) async {
+  return await Future<Object?>.value(sendEmail(args, context: context));
+}
+
+Future<Object?> _stemTaskAdapter1(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
   return await Future<Object?>.value(
     sendEmailTyped(
-      context,
       StemPayloadCodecs.emailDispatch.decode(_stemRequireArg(args, "dispatch")),
+      context: context,
     ),
   );
 }
@@ -284,95 +249,28 @@ abstract final class StemTaskDefinitions {
         defaultOptions: const TaskOptions(maxRetries: 1),
         metadata: const TaskMetadata(),
       );
-  static final TaskDefinition<({EmailDispatch dispatch}), EmailDeliveryReceipt>
-  sendEmailTyped =
-      TaskDefinition<({EmailDispatch dispatch}), EmailDeliveryReceipt>(
-        name: "send_email_typed",
-        encodeArgs: (args) => <String, Object?>{
-          "dispatch": StemPayloadCodecs.emailDispatch.encode(args.dispatch),
-        },
-        defaultOptions: const TaskOptions(maxRetries: 1),
-        metadata: const TaskMetadata(),
-        decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
-      );
-}
-
-extension StemGeneratedTaskEnqueuer on TaskEnqueuer {
-  Future<String> enqueueSendEmail({
-    required Map<String, Object?> args,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.sendEmail.call(
-        args,
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-
-  Future<String> enqueueSendEmailTyped({
-    required EmailDispatch dispatch,
-    Map<String, String> headers = const {},
-    TaskOptions? options,
-    DateTime? notBefore,
-    Map<String, Object?>? meta,
-    TaskEnqueueOptions? enqueueOptions,
-  }) {
-    return enqueueCall(
-      StemTaskDefinitions.sendEmailTyped.call(
-        (dispatch: dispatch),
-        headers: headers,
-        options: options,
-        notBefore: notBefore,
-        meta: meta,
-        enqueueOptions: enqueueOptions,
-      ),
-    );
-  }
-}
-
-extension StemGeneratedTaskResults on Stem {
-  Future<TaskResult<Object?>?> waitForSendEmail(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.sendEmail,
-      timeout: timeout,
-    );
-  }
-
-  Future<TaskResult<EmailDeliveryReceipt>?> waitForSendEmailTyped(
-    String taskId, {
-    Duration? timeout,
-  }) {
-    return waitForTaskDefinition(
-      taskId,
-      StemTaskDefinitions.sendEmailTyped,
-      timeout: timeout,
-    );
-  }
+  static final TaskDefinition<EmailDispatch, EmailDeliveryReceipt>
+  sendEmailTyped = TaskDefinition<EmailDispatch, EmailDeliveryReceipt>(
+    name: "send_email_typed",
+    encodeArgs: (args) => <String, Object?>{
+      "dispatch": StemPayloadCodecs.emailDispatch.encode(args),
+    },
+    defaultOptions: const TaskOptions(maxRetries: 1),
+    metadata: const TaskMetadata(),
+    decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
+  );
 }
 
 final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
   FunctionTaskHandler<Object?>(
     name: "send_email",
-    entrypoint: sendEmail,
+    entrypoint: _stemTaskAdapter0,
     options: const TaskOptions(maxRetries: 1),
     metadata: const TaskMetadata(),
   ),
   FunctionTaskHandler<Object?>(
     name: "send_email_typed",
-    entrypoint: _stemTaskAdapter0,
+    entrypoint: _stemTaskAdapter1,
     options: const TaskOptions(maxRetries: 1),
     metadata: TaskMetadata(
       tags: [],

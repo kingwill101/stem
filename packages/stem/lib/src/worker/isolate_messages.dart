@@ -179,6 +179,7 @@ void taskWorkerIsolate(SendPort handshakePort) {
     if (message is TaskRunRequest) {
       final invocationContext = TaskInvocationContext.remote(
         id: message.id,
+        args: message.args,
         controlPort: message.controlPort,
         headers: message.headers,
         meta: message.meta,
