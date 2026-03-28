@@ -280,7 +280,14 @@ void main() {
           builder.step('hello', (ctx) async => 'flow-ok');
         },
       );
-      final hostApp = await StemApp.inMemory(tasks: [hostTask]);
+      final hostApp = await StemApp.inMemory(
+        tasks: [hostTask],
+        workerConfig: StemWorkerConfig(
+          subscription: RoutingSubscription(
+            queues: ['default', 'workflow'],
+          ),
+        ),
+      );
       final hostTaskDef = TaskDefinition.noArgs<String>(name: hostTask.name);
 
       await hostApp.start();

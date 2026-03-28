@@ -45,6 +45,7 @@ Future<StemPostgresTestHarness> createStemPostgresTestHarness({
   final config = setUpOrmed(
     dataSource: dataSource,
     runMigrations: _runTestMigrations,
+    migrateBaseDatabase: false,
     adapterFactory: (dbName) {
       final schemaUrl = _withSearchPath(connectionString, dbName);
       return PostgresDriverAdapter.custom(
