@@ -50,6 +50,7 @@ class StemWorkflowApp
     required this.store,
     required this.eventBus,
     required this.allowWorkerAutoStart,
+    required this.ownsStemApp,
     required Future<void> Function() disposeStore,
     required Future<void> Function() disposeBus,
   }) : _disposeStore = disposeStore,
@@ -69,6 +70,9 @@ class StemWorkflowApp
 
   /// Whether shortcut operations may lazily start the managed worker.
   final bool allowWorkerAutoStart;
+
+  /// Whether this wrapper owns the provided [app] and may shut it down.
+  final bool ownsStemApp;
 
   final Future<void> Function() _disposeStore;
   final Future<void> Function() _disposeBus;
@@ -664,7 +668,9 @@ class StemWorkflowApp
   /// ```
   Future<void> shutdown() async {
     await runtime.dispose();
-    await app.shutdown();
+    if (ownsStemApp) {
+      await app.shutdown();
+    }
     await _disposeBus();
     await _disposeStore();
     _runtimeStarted = false;
@@ -714,6 +720,7 @@ class StemWorkflowApp
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
     bool allowWorkerAutoStart = true,
+    bool ownsStemApp = false,
   }) async {
     final effectiveModule =
         StemModule.combine(module: module, modules: modules) ?? stemApp?.module;
@@ -788,6 +795,7 @@ class StemWorkflowApp
       store: store,
       eventBus: eventBus,
       allowWorkerAutoStart: allowWorkerAutoStart,
+      ownsStemApp: stemApp == null || ownsStemApp,
       disposeStore: () async => storeFactoryInstance.dispose(store),
       disposeBus: () async => busFactory.dispose(eventBus),
     );
@@ -942,6 +950,7 @@ class StemWorkflowApp
         workflowRegistry: workflowRegistry,
         introspectionSink: introspectionSink,
         allowWorkerAutoStart: allowWorkerAutoStart,
+        ownsStemApp: true,
       );
     } on Object catch (error, stackTrace) {
       // fromUrl owns the app instance; clean it up when workflow bootstrap
@@ -979,9 +988,11 @@ class StemWorkflowApp
     WorkflowIntrospectionSink? introspectionSink,
     bool allowWorkerAutoStart = true,
   }) async {
+    final effectiveModule =
+        StemModule.combine(module: module, modules: modules) ?? client.module;
     final resolvedWorkerConfig = _resolveWorkflowWorkerConfig(
       workerConfig,
-      module: StemModule.combine(module: module, modules: modules),
+      module: effectiveModule,
       tasks: tasks,
       continuationQueue: continuationQueue,
       executionQueue: executionQueue,
@@ -992,8 +1003,7 @@ class StemWorkflowApp
       allowWorkerAutoStart: allowWorkerAutoStart,
     );
     return StemWorkflowApp.create(
-      module: module,
-      modules: modules,
+      module: effectiveModule,
       workflows: workflows,
       flows: flows,
       scripts: scripts,
@@ -1008,6 +1018,7 @@ class StemWorkflowApp
       workflowRegistry: client.workflowRegistry,
       introspectionSink: introspectionSink,
       allowWorkerAutoStart: allowWorkerAutoStart,
+      ownsStemApp: true,
     );
   }
 }

@@ -132,6 +132,33 @@ void main() {
     );
 
     test(
+      'StemWorkflowApp.fromClient falls back to client module for '
+      'subscription inference',
+      () async {
+        final queuedTask = FunctionTaskHandler<String>(
+          name: 'workflow.module.from-client-task',
+          options: const TaskOptions(queue: 'priority'),
+          entrypoint: (context, args) async => 'queued-ok',
+          runInIsolate: false,
+        );
+        final client = await StemClient.inMemory(
+          module: StemModule(tasks: [queuedTask]),
+        );
+
+        final workflowApp = await StemWorkflowApp.fromClient(client: client);
+        try {
+          expect(
+            workflowApp.app.worker.subscription.queues,
+            unorderedEquals(['workflow', 'priority']),
+          );
+        } finally {
+          await workflowApp.shutdown();
+          await client.close();
+        }
+      },
+    );
+
+    test(
       'explicit workflow subscription overrides inferred module queues',
       () async {
       final helperTask = FunctionTaskHandler<String>(
@@ -238,6 +265,38 @@ void main() {
         expect(taskResult?.value, 'task-ok');
       } finally {
         await workflowApp.shutdown();
+      }
+    });
+
+    test('shutdown preserves a borrowed StemApp', () async {
+      final hostTask = FunctionTaskHandler<String>(
+        name: 'workflow.module.host-task',
+        entrypoint: (context, args) async => 'host-ok',
+        runInIsolate: false,
+      );
+      final flow = Flow<String>(
+        name: 'workflow.module.borrowed-app',
+        build: (builder) {
+          builder.step('hello', (ctx) async => 'flow-ok');
+        },
+      );
+      final hostApp = await StemApp.inMemory(tasks: [hostTask]);
+      final hostTaskDef = TaskDefinition.noArgs<String>(name: hostTask.name);
+
+      await hostApp.start();
+      final workflowApp = await hostApp.createWorkflowApp(flows: [flow]);
+      try {
+        await workflowApp.shutdown();
+
+        expect(hostApp.isStarted, isTrue);
+
+        final result = await hostTaskDef.enqueueAndWait(
+          hostApp,
+          timeout: const Duration(seconds: 2),
+        );
+        expect(result?.value, 'host-ok');
+      } finally {
+        await hostApp.shutdown();
       }
     });
   });
