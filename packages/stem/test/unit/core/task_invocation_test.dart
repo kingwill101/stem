@@ -277,10 +277,13 @@ void main() {
         version: 2,
       );
 
-      expect(progressSignal?.data, equals(const {
-        PayloadCodec.versionKey: 2,
-        'stage': 'warming',
-      }));
+      expect(
+        progressSignal?.data,
+        equals(const {
+          PayloadCodec.versionKey: 2,
+          'stage': 'warming',
+        }),
+      );
     },
   );
 
@@ -530,38 +533,48 @@ void main() {
     );
 
     expect(
-      enqueue.argsVersionedJson<_ProgressUpdate>(
-        version: 2,
-        decode: _ProgressUpdate.fromVersionedJson,
-      ).stage,
+      enqueue
+          .argsVersionedJson<_ProgressUpdate>(
+            version: 2,
+            decode: _ProgressUpdate.fromVersionedJson,
+          )
+          .stage,
       'warming',
     );
     expect(
-      enqueue.metaVersionedJson<_QueueLabel>(
-        version: 2,
-        decode: _QueueLabel.fromVersionedJson,
-      ).label,
+      enqueue
+          .metaVersionedJson<_QueueLabel>(
+            version: 2,
+            decode: _QueueLabel.fromVersionedJson,
+          )
+          .label,
       'queued',
     );
     expect(
-      start.paramsVersionedJson<_WorkflowStartPayload>(
-        version: 2,
-        decode: _WorkflowStartPayload.fromVersionedJson,
-      ).value,
+      start
+          .paramsVersionedJson<_WorkflowStartPayload>(
+            version: 2,
+            decode: _WorkflowStartPayload.fromVersionedJson,
+          )
+          .value,
       'child',
     );
     expect(
-      wait.resultVersionedJson<_WorkflowResultPayload>(
-        version: 2,
-        decode: _WorkflowResultPayload.fromVersionedJson,
-      )?.value,
+      wait
+          .resultVersionedJson<_WorkflowResultPayload>(
+            version: 2,
+            decode: _WorkflowResultPayload.fromVersionedJson,
+          )
+          ?.value,
       'done',
     );
     expect(
-      emit.payloadVersionedJson<_WorkflowEventPayload>(
-        version: 2,
-        decode: _WorkflowEventPayload.fromVersionedJson,
-      ).value,
+      emit
+          .payloadVersionedJson<_WorkflowEventPayload>(
+            version: 2,
+            decode: _WorkflowEventPayload.fromVersionedJson,
+          )
+          .value,
       'event',
     );
   });

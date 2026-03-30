@@ -25,7 +25,7 @@ Future<void> main(List<String> args) async {
       name: 'email.send',
       entrypoint: _placeholderEntrypoint,
       options: const TaskOptions(queue: 'emails', maxRetries: 3),
-      ),
+    ),
   ];
 
   final client = await StemClient.fromUrl(
@@ -82,7 +82,9 @@ Future<void> main(List<String> args) async {
   }
 
   ProcessSignal.sigint.watch().listen(shutdown);
-  ProcessSignal.sigterm.watch().listen(shutdown);
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen(shutdown);
+  }
 }
 
 FutureOr<Object?> _placeholderEntrypoint(

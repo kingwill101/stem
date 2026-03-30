@@ -90,8 +90,7 @@ class SqliteWorkflowStore implements WorkflowStore {
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
     final now = _clock.now().toUtc();
-    final id =
-        (runId != null && runId.trim().isNotEmpty)
+    final id = (runId != null && runId.trim().isNotEmpty)
         ? runId.trim()
         : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final policyJson = cancellationPolicy == null || cancellationPolicy.isEmpty

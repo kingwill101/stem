@@ -112,8 +112,7 @@ class RunState {
       WorkflowRunRuntimeMetadata.fromParams(params);
 
   /// Parent workflow run identifier, if this run was started as a child.
-  String? get parentRunId =>
-      params[workflowParentRunIdParamKey]?.toString();
+  String? get parentRunId => params[workflowParentRunIdParamKey]?.toString();
 
   /// Timestamp when the workflow run was created.
   final DateTime createdAt;

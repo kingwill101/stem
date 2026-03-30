@@ -139,32 +139,32 @@ void main() {
     test(
       'enqueueValue encodes typed payloads through the supplied codec',
       () async {
-      final enqueuer = _RecordingEnqueuer();
-      final context = TaskContext(
-        id: 'parent-3b',
-        attempt: 1,
-        headers: const {'x-trace-id': 'trace-2'},
-        meta: const {'tenant': 'acme'},
-        heartbeat: () {},
-        extendLease: (_) async {},
-        progress: (_, {data}) async {},
-        enqueuer: enqueuer,
-      );
+        final enqueuer = _RecordingEnqueuer();
+        final context = TaskContext(
+          id: 'parent-3b',
+          attempt: 1,
+          headers: const {'x-trace-id': 'trace-2'},
+          meta: const {'tenant': 'acme'},
+          heartbeat: () {},
+          extendLease: (_) async {},
+          progress: (_, {data}) async {},
+          enqueuer: enqueuer,
+        );
 
-      await context.enqueueValue(
-        'tasks.child',
-        const _InvitePayload(email: 'ops@example.com'),
-        codec: const PayloadCodec<_InvitePayload>.json(
-          decode: _InvitePayload.fromJson,
-          typeName: '_InvitePayload',
-        ),
-      );
+        await context.enqueueValue(
+          'tasks.child',
+          const _InvitePayload(email: 'ops@example.com'),
+          codec: const PayloadCodec<_InvitePayload>.json(
+            decode: _InvitePayload.fromJson,
+            typeName: '_InvitePayload',
+          ),
+        );
 
-      final record = enqueuer.last!;
-      expect(record.args, equals({'email': 'ops@example.com'}));
-      expect(record.meta[_parentTaskIdKey], equals('parent-3b'));
-      expect(record.meta[_parentAttemptKey], equals(1));
-      expect(record.headers['x-trace-id'], equals('trace-2'));
+        final record = enqueuer.last!;
+        expect(record.args, equals({'email': 'ops@example.com'}));
+        expect(record.meta[_parentTaskIdKey], equals('parent-3b'));
+        expect(record.meta[_parentAttemptKey], equals(1));
+        expect(record.headers['x-trace-id'], equals('trace-2'));
       },
     );
 

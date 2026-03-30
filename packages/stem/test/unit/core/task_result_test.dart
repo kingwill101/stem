@@ -105,13 +105,13 @@ void main() {
     expect(
       result.requiredValue,
       throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            contains('task-1'),
-          ),
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('task-1'),
         ),
-      );
+      ),
+    );
     expect(result.valueOr(7), 7);
   });
 }

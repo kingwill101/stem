@@ -163,18 +163,18 @@ void main() {
     test(
       'NoArgsTaskDefinition.asDefinition.buildCall builds an empty call',
       () {
-      final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+        final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
 
-      final call = definition.asDefinition.buildCall(
-        (),
-        headers: const {'h': 'v'},
-        meta: const {'m': 1},
-      );
+        final call = definition.asDefinition.buildCall(
+          (),
+          headers: const {'h': 'v'},
+          meta: const {'m': 1},
+        );
 
-      expect(call.name, 'demo.no_args');
-      expect(call.encodeArgs(), isEmpty);
-      expect(call.headers, containsPair('h', 'v'));
-      expect(call.meta, containsPair('m', 1));
+        expect(call.name, 'demo.no_args');
+        expect(call.encodeArgs(), isEmpty);
+        expect(call.headers, containsPair('h', 'v'));
+        expect(call.meta, containsPair('m', 1));
       },
     );
 
@@ -194,21 +194,21 @@ void main() {
     test(
       'NoArgsTaskDefinition.enqueue uses the TaskEnqueuer surface',
       () async {
-      final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
-      final enqueuer = _RecordingTaskEnqueuer();
+        final definition = TaskDefinition.noArgs<void>(name: 'demo.no_args');
+        final enqueuer = _RecordingTaskEnqueuer();
 
-      final taskId = await definition.enqueue(
-        enqueuer,
-        headers: const {'h': 'v'},
-        meta: const {'m': 1},
-      );
+        final taskId = await definition.enqueue(
+          enqueuer,
+          headers: const {'h': 'v'},
+          meta: const {'m': 1},
+        );
 
-      expect(taskId, 'task-1');
-      expect(enqueuer.lastCall, isNotNull);
-      expect(enqueuer.lastCall!.name, 'demo.no_args');
-      expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
-      expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
-      expect(enqueuer.lastCall!.meta, containsPair('m', 1));
+        expect(taskId, 'task-1');
+        expect(enqueuer.lastCall, isNotNull);
+        expect(enqueuer.lastCall!.name, 'demo.no_args');
+        expect(enqueuer.lastCall!.encodeArgs(), isEmpty);
+        expect(enqueuer.lastCall!.headers, containsPair('h', 'v'));
+        expect(enqueuer.lastCall!.meta, containsPair('m', 1));
       },
     );
   });

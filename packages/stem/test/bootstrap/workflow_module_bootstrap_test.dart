@@ -161,23 +161,23 @@ void main() {
     test(
       'explicit workflow subscription overrides inferred module queues',
       () async {
-      final helperTask = FunctionTaskHandler<String>(
-        name: 'workflow.module.explicit-subscription',
-        entrypoint: (context, args) async => 'ignored',
-        runInIsolate: false,
-      );
-      final workflowApp = await StemWorkflowApp.inMemory(
-        module: StemModule(tasks: [helperTask]),
-        workerConfig: StemWorkerConfig(
-          queue: 'workflow',
-          subscription: RoutingSubscription.singleQueue('workflow'),
-        ),
-      );
-      try {
-        expect(workflowApp.app.worker.subscription.queues, ['workflow']);
-      } finally {
-        await workflowApp.shutdown();
-      }
+        final helperTask = FunctionTaskHandler<String>(
+          name: 'workflow.module.explicit-subscription',
+          entrypoint: (context, args) async => 'ignored',
+          runInIsolate: false,
+        );
+        final workflowApp = await StemWorkflowApp.inMemory(
+          module: StemModule(tasks: [helperTask]),
+          workerConfig: StemWorkerConfig(
+            queue: 'workflow',
+            subscription: RoutingSubscription.singleQueue('workflow'),
+          ),
+        );
+        try {
+          expect(workflowApp.app.worker.subscription.queues, ['workflow']);
+        } finally {
+          await workflowApp.shutdown();
+        }
       },
     );
 

@@ -38,8 +38,9 @@ abstract class DashboardDataSource {
   Future<DashboardWorkflowRunSnapshot?> fetchWorkflowRun(String runId);
 
   /// Fetches persisted workflow checkpoints, if a workflow store is available.
-  Future<List<DashboardWorkflowCheckpointSnapshot>>
-  fetchWorkflowCheckpoints(String runId);
+  Future<List<DashboardWorkflowCheckpointSnapshot>> fetchWorkflowCheckpoints(
+    String runId,
+  );
 
   /// Enqueues a task request through the backing broker.
   Future<void> enqueueTask(EnqueueRequest request);

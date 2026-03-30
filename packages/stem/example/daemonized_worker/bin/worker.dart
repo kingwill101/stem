@@ -18,8 +18,10 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  ProcessSignal.sigterm.watch().listen((_) => complete());
   ProcessSignal.sigint.watch().listen((_) => complete());
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) => complete());
+  }
   // #endregion daemonized-worker-signal-handlers
 
   // Simulate background work.

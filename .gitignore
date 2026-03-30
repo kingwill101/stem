@@ -35,3 +35,5 @@ packages/cloud/
 /test_screenshots/
 third_party/
 packages/stem/workflow.sqlite*
+# Local serinus module (gitignored per user)
+packages/stem_serinus/

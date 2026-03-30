@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1-wip
+
+- Guarded worker and example process signal registration so Windows only
+  installs supported shutdown watchers, avoiding unsupported `SIGTERM` /
+  `SIGQUIT` subscriptions during graceful shutdown setup.
+
 ## 0.2.0
 
 - Added `StemClient.fromStack(...)` and `StemStack.createClient(...)` so

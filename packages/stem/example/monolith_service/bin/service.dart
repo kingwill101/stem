@@ -148,7 +148,9 @@ Future<void> main(List<String> args) async {
   }
 
   ProcessSignal.sigint.watch().listen(handleShutdown);
-  ProcessSignal.sigterm.watch().listen(handleShutdown);
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen(handleShutdown);
+  }
 }
 
 FutureOr<Object?> _greetingEntrypoint(

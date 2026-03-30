@@ -76,16 +76,14 @@ void main() {
       result.payloadJson<_WorkflowReceipt>(
         decode: _WorkflowReceipt.fromJson,
       ),
-      isA<_WorkflowReceipt>()
-          .having((value) => value.id, 'id', 'receipt-1'),
+      isA<_WorkflowReceipt>().having((value) => value.id, 'id', 'receipt-1'),
     );
     expect(
       result.payloadVersionedJson<_WorkflowReceipt>(
         version: 2,
         decode: _WorkflowReceipt.fromVersionedJson,
       ),
-      isA<_WorkflowReceipt>()
-          .having((value) => value.id, 'id', 'receipt-1'),
+      isA<_WorkflowReceipt>().having((value) => value.id, 'id', 'receipt-1'),
     );
   });
 
@@ -108,13 +106,13 @@ void main() {
     expect(
       result.requiredValue,
       throwsA(
-          isA<StateError>().having(
-            (error) => error.message,
-            'message',
-            contains('run-1'),
-          ),
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('run-1'),
         ),
-      );
+      ),
+    );
     expect(result.valueOr(7), 7);
   });
 }

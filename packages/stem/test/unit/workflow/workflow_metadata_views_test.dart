@@ -200,31 +200,43 @@ void main() {
         state.lastErrorJson<_WorkflowErrorPayload>(
           decode: _WorkflowErrorPayload.fromJson,
         ),
-        isA<_WorkflowErrorPayload>()
-            .having((value) => value.message, 'message', 'boom'),
+        isA<_WorkflowErrorPayload>().having(
+          (value) => value.message,
+          'message',
+          'boom',
+        ),
       );
       expect(
         state.lastErrorVersionedJson<_WorkflowErrorPayload>(
           version: 2,
           decode: _WorkflowErrorPayload.fromVersionedJson,
         ),
-        isA<_WorkflowErrorPayload>()
-            .having((value) => value.message, 'message', 'boom'),
+        isA<_WorkflowErrorPayload>().having(
+          (value) => value.message,
+          'message',
+          'boom',
+        ),
       );
       expect(
         state.cancellationDataJson<_CancellationPayload>(
           decode: _CancellationPayload.fromJson,
         ),
-        isA<_CancellationPayload>()
-            .having((value) => value.reason, 'reason', 'manual'),
+        isA<_CancellationPayload>().having(
+          (value) => value.reason,
+          'reason',
+          'manual',
+        ),
       );
       expect(
         state.cancellationDataVersionedJson<_CancellationPayload>(
           version: 2,
           decode: _CancellationPayload.fromVersionedJson,
         ),
-        isA<_CancellationPayload>()
-            .having((value) => value.reason, 'reason', 'manual'),
+        isA<_CancellationPayload>().having(
+          (value) => value.reason,
+          'reason',
+          'manual',
+        ),
       );
     });
   });
@@ -506,16 +518,22 @@ void main() {
         view.lastErrorJson<_WorkflowErrorPayload>(
           decode: _WorkflowErrorPayload.fromJson,
         ),
-        isA<_WorkflowErrorPayload>()
-            .having((value) => value.message, 'message', 'boom'),
+        isA<_WorkflowErrorPayload>().having(
+          (value) => value.message,
+          'message',
+          'boom',
+        ),
       );
       expect(
         view.lastErrorVersionedJson<_WorkflowErrorPayload>(
           version: 2,
           decode: _WorkflowErrorPayload.fromVersionedJson,
         ),
-        isA<_WorkflowErrorPayload>()
-            .having((value) => value.message, 'message', 'boom'),
+        isA<_WorkflowErrorPayload>().having(
+          (value) => value.message,
+          'message',
+          'boom',
+        ),
       );
       expect(
         view.runtimeJson<_RuntimePayload>(decode: _RuntimePayload.fromJson),

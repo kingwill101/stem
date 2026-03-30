@@ -357,8 +357,7 @@ return 1
   }) async {
     final now = _clock.now();
     final nowIso = now.toIso8601String();
-    final id =
-        (runId != null && runId.trim().isNotEmpty)
+    final id = (runId != null && runId.trim().isNotEmpty)
         ? runId.trim()
         : 'wf-${now.microsecondsSinceEpoch}-${_idCounter++}';
     final result = await _send([

@@ -10,9 +10,9 @@ Future<void> main() async {
   try {
     print('--- Generated manifest (builder output) ---');
     print(
-      const JsonEncoder.withIndent(
-        '  ',
-      ).convert(stemModule.workflowManifest.map((entry) => entry.toJson()).toList()),
+      const JsonEncoder.withIndent('  ').convert(
+        stemModule.workflowManifest.map((entry) => entry.toJson()).toList(),
+      ),
     );
 
     print('\n--- Runtime manifest (registered definitions) ---');
@@ -31,11 +31,10 @@ Future<void> main() async {
     );
     await app.executeRun(flowRunId);
 
-    final scriptRunId = await StemWorkflowDefinitions.userSignup
-        .start(
-          runtime,
-          params: 'dev@stem.dev',
-        );
+    final scriptRunId = await StemWorkflowDefinitions.userSignup.start(
+      runtime,
+      params: 'dev@stem.dev',
+    );
     await app.executeRun(scriptRunId);
 
     final runViews = await app.listRunViews(limit: 10);

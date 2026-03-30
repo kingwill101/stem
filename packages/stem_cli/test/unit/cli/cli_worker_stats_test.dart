@@ -510,4 +510,3 @@ Future<void> _assertTaskRemainsQueued(
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 }
-

@@ -143,7 +143,6 @@ class WorkflowEventRef<T> {
 
   /// Optional codec for encoding and decoding event payloads.
   final PayloadCodec<T>? codec;
-
 }
 
 /// Convenience helpers for dispatching typed workflow events.

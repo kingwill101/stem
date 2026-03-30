@@ -558,10 +558,7 @@ class StemWorkflowApp
     T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      [decode, decodeJson, decodeVersionedJson]
-              .whereType<Object>()
-              .length <=
-          1,
+      [decode, decodeJson, decodeVersionedJson].whereType<Object>().length <= 1,
       'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final startedAt = stemNow();
@@ -1072,11 +1069,9 @@ extension StemAppWorkflowExtension on StemApp {
 
 void _validateReusableStemApp(
   StemApp app,
-  StemWorkerConfig workerConfig,
-  {
-    required bool allowWorkerAutoStart,
-  }
-) {
+  StemWorkerConfig workerConfig, {
+  required bool allowWorkerAutoStart,
+}) {
   if (app.allowWorkerAutoStart != allowWorkerAutoStart) {
     throw StateError(
       'StemWorkflowApp.create(stemApp: ...) requires the reused StemApp '

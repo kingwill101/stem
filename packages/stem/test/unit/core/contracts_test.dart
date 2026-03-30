@@ -342,8 +342,11 @@ void main() {
           decode: _GroupReceipt.fromJson,
         ),
         {
-          'task-1': isA<_GroupReceipt>()
-              .having((value) => value.id, 'id', 'receipt-1'),
+          'task-1': isA<_GroupReceipt>().having(
+            (value) => value.id,
+            'id',
+            'receipt-1',
+          ),
         },
       );
       expect(
@@ -352,8 +355,11 @@ void main() {
           decode: _GroupReceipt.fromVersionedJson,
         ),
         {
-          'task-1': isA<_GroupReceipt>()
-              .having((value) => value.id, 'id', 'receipt-1'),
+          'task-1': isA<_GroupReceipt>().having(
+            (value) => value.id,
+            'id',
+            'receipt-1',
+          ),
         },
       );
     });
@@ -582,16 +588,22 @@ void main() {
       );
       expect(
         entry.metaJson<_ScheduleMeta>(decode: _ScheduleMeta.fromJson),
-        isA<_ScheduleMeta>()
-            .having((value) => value.source, 'source', 'scheduler'),
+        isA<_ScheduleMeta>().having(
+          (value) => value.source,
+          'source',
+          'scheduler',
+        ),
       );
       expect(
         entry.metaVersionedJson<_ScheduleMeta>(
           version: 2,
           decode: _ScheduleMeta.fromVersionedJson,
         ),
-        isA<_ScheduleMeta>()
-            .having((value) => value.source, 'source', 'scheduler'),
+        isA<_ScheduleMeta>().having(
+          (value) => value.source,
+          'source',
+          'scheduler',
+        ),
       );
     });
   });

@@ -3211,24 +3211,29 @@ class Worker {
   /// Installs process signal handlers for graceful shutdown.
   void _installSignalHandlers() {
     if (!lifecycleConfig.installSignalHandlers) return;
-    _sigtermSub ??= _safeWatch(ProcessSignal.sigterm, () {
-      if (_running) {
-        unawaited(shutdown(mode: WorkerShutdownMode.warm));
-      }
-    });
     _sigintSub ??= _safeWatch(ProcessSignal.sigint, () {
       if (_running) {
         unawaited(shutdown(mode: WorkerShutdownMode.soft));
       }
     });
-    _sigquitSub ??= _safeWatch(ProcessSignal.sigquit, () {
-      if (_running) {
-        unawaited(shutdown());
-      }
-    });
+
+    // Windows does not support the full Unix signal set. Only install the
+    // additional handlers when the platform can actually deliver them.
+    if (!Platform.isWindows) {
+      _sigtermSub ??= _safeWatch(ProcessSignal.sigterm, () {
+        if (_running) {
+          unawaited(shutdown(mode: WorkerShutdownMode.warm));
+        }
+      });
+      _sigquitSub ??= _safeWatch(ProcessSignal.sigquit, () {
+        if (_running) {
+          unawaited(shutdown());
+        }
+      });
+    }
   }
 
-  /// Wraps [ProcessSignal.watch] to guard against unsupported platforms.
+  /// Wraps [ProcessSignal.watch] to guard against unsupported runtimes.
   StreamSubscription<ProcessSignal>? _safeWatch(
     ProcessSignal signal,
     void Function() handler,
