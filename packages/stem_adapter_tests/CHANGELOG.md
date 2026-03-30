@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.2-wip
+## 0.1.2
 
 - Updated the `stem` dependency range to admit the in-progress `0.2.1-wip`
   core prerelease during workspace resolution.

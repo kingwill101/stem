@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1-wip
+## 0.1.1
 
 - Updated internal package constraints to accept the in-progress `stem`
   prerelease and matching adapter-test prereleases during workspace
