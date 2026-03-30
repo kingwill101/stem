@@ -171,8 +171,7 @@ ${renderTasksAlert(options)}
     options: DashboardTaskTableOptions(
       emptyMessage: 'No task statuses match the current filters.',
       expandableRows: true,
-      actionsBuilder: (task) =>
-          buildTaskLifecycleActions(task, redirectPath: taskActionRedirect),
+      actionsBuilder: (task) => buildTaskLifecycleActions(task, redirectPath: taskActionRedirect),
     ),
   )}
   ${buildTaskPaginationBar(options, taskStatuses.length)}

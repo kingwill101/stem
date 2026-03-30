@@ -488,8 +488,8 @@ void main() {
         stepIndex: 0,
       );
 
-      final firstResult =
-          firstContext.waitForEventValueVersionedJson<_ResumePayload>(
+      final firstResult = firstContext
+          .waitForEventValueVersionedJson<_ResumePayload>(
             'demo.event',
             defaultVersion: 2,
             decode: _ResumePayload.fromVersionedJson,
@@ -514,8 +514,8 @@ void main() {
         },
       );
 
-      final resumed =
-          resumedContext.waitForEventValueVersionedJson<_ResumePayload>(
+      final resumed = resumedContext
+          .waitForEventValueVersionedJson<_ResumePayload>(
             'demo.event',
             defaultVersion: 2,
             decode: _ResumePayload.fromVersionedJson,

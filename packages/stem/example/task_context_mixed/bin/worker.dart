@@ -24,10 +24,12 @@ Future<void> main() async {
     stdout.writeln('Shutdown requested.');
     unawaited(_shutdown(worker, broker, backend));
   });
-  ProcessSignal.sigterm.watch().listen((_) {
-    stdout.writeln('Shutdown requested.');
-    unawaited(_shutdown(worker, broker, backend));
-  });
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) {
+      stdout.writeln('Shutdown requested.');
+      unawaited(_shutdown(worker, broker, backend));
+    });
+  }
 
   final paths = resolveDatabasePaths();
   stdout.writeln(

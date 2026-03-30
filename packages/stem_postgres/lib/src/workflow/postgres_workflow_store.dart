@@ -106,8 +106,7 @@ class PostgresWorkflowStore implements WorkflowStore {
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
   }) async {
-    final id =
-        (runId != null && runId.trim().isNotEmpty)
+    final id = (runId != null && runId.trim().isNotEmpty)
         ? runId.trim()
         : _uuid.v7();
     final now = _clock.now().toUtc();

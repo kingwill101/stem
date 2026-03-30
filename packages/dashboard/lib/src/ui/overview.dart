@@ -68,11 +68,9 @@ OverviewSections buildOverviewSections(
   List<QueueSummary> queues,
   List<WorkerStatus> workers,
   DashboardThroughput? throughput,
-  List<DashboardTaskStatusEntry> taskStatuses,
-  {
-    String defaultNamespace = 'stem',
-  }
-) {
+  List<DashboardTaskStatusEntry> taskStatuses, {
+  String defaultNamespace = 'stem',
+}) {
   final totalPending = queues.fold<int>(
     0,
     (total, summary) => total + summary.pending,
@@ -331,14 +329,14 @@ OverviewSections buildOverviewSections(
       '''
 <section id="overview-recent-tasks" class="table-card mt-7 ring-1 ring-inset ring-sky-300/10">
   ${buildTaskStatusTable(
-    taskStatuses.take(8).toList(growable: false),
-    options: const DashboardTaskTableOptions(
-      showAttempt: false,
-      showError: false,
-      showActions: false,
-      emptyMessage: 'No persisted task statuses yet.',
-    ),
-  )}
+        taskStatuses.take(8).toList(growable: false),
+        options: const DashboardTaskTableOptions(
+          showAttempt: false,
+          showError: false,
+          showActions: false,
+          emptyMessage: 'No persisted task statuses yet.',
+        ),
+      )}
 </section>
 ''';
 

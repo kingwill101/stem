@@ -13,17 +13,19 @@ String buildJobsContent({
   final jobs = buildJobSummaries(taskStatuses, limit: 500);
   final taskFilter = options.task?.toLowerCase();
   final queueFilter = options.queue?.toLowerCase();
-  final filtered = jobs.where((entry) {
-    final matchesTask =
-        taskFilter == null ||
-        taskFilter.isEmpty ||
-        entry.taskName.toLowerCase().contains(taskFilter);
-    final matchesQueue =
-        queueFilter == null ||
-        queueFilter.isEmpty ||
-        entry.sampleQueue.toLowerCase().contains(queueFilter);
-    return matchesTask && matchesQueue;
-  }).toList(growable: false);
+  final filtered = jobs
+      .where((entry) {
+        final matchesTask =
+            taskFilter == null ||
+            taskFilter.isEmpty ||
+            entry.taskName.toLowerCase().contains(taskFilter);
+        final matchesQueue =
+            queueFilter == null ||
+            queueFilter.isEmpty ||
+            entry.sampleQueue.toLowerCase().contains(queueFilter);
+        return matchesTask && matchesQueue;
+      })
+      .toList(growable: false);
 
   final total = filtered.fold<int>(0, (sum, entry) => sum + entry.total);
   final running = filtered.fold<int>(0, (sum, entry) => sum + entry.running);

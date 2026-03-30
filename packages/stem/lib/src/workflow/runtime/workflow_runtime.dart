@@ -324,10 +324,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      [decode, decodeJson, decodeVersionedJson]
-              .whereType<Object>()
-              .length <=
-          1,
+      [decode, decodeJson, decodeVersionedJson].whereType<Object>().length <= 1,
       'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final startedAt = _clock.now();

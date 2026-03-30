@@ -541,10 +541,7 @@ class Stem implements TaskResultCaller {
     T Function(Map<String, dynamic> payload, int version)? decodeVersionedJson,
   }) async {
     assert(
-      [decode, decodeJson, decodeVersionedJson]
-              .whereType<Object>()
-              .length <=
-          1,
+      [decode, decodeJson, decodeVersionedJson].whereType<Object>().length <= 1,
       'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
     final resultBackend = backend;
@@ -1183,7 +1180,6 @@ TResult _decodeTaskDefinitionResult<TArgs, TResult extends Object?>(
   }
   return value as TResult;
 }
-
 
 /// Convenience helpers for waiting on typed task definitions.
 extension TaskDefinitionExtension<TArgs, TResult extends Object?>

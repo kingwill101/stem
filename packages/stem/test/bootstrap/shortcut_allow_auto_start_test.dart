@@ -40,47 +40,50 @@ void main() {
       }
     });
 
-    test('StemWorkflowApp can create runs without starting the worker', () async {
-      final flow = Flow<String>(
-        name: 'shortcut.workflow',
-        build: (builder) {
-          builder.step('done', (context) async => 'workflow-done');
-        },
-      );
-
-      final app = await StemWorkflowApp.inMemory(
-        flows: [flow],
-        allowWorkerAutoStart: false,
-      );
-
-      try {
-        final runId = await flow.start(app);
-        expect(app.isRuntimeStarted, isTrue);
-        expect(app.isWorkerStarted, isFalse);
-
-        final pending = await app.waitForCompletion<String>(
-          runId,
-          timeout: const Duration(milliseconds: 10),
+    test(
+      'StemWorkflowApp can create runs without starting the worker',
+      () async {
+        final flow = Flow<String>(
+          name: 'shortcut.workflow',
+          build: (builder) {
+            builder.step('done', (context) async => 'workflow-done');
+          },
         );
-        expect(pending, isNotNull);
-        expect(pending!.timedOut, isTrue);
-        expect(pending.status, WorkflowStatus.running);
 
-        await app.startWorker();
-        expect(app.isRuntimeStarted, isTrue);
-        expect(app.isWorkerStarted, isTrue);
-        expect(app.isStarted, isTrue);
-
-        final completed = await flow.waitFor(
-          app,
-          runId,
-          timeout: const Duration(seconds: 1),
+        final app = await StemWorkflowApp.inMemory(
+          flows: [flow],
+          allowWorkerAutoStart: false,
         );
-        expect(completed?.isCompleted, isTrue);
-        expect(completed?.value, 'workflow-done');
-      } finally {
-        await app.shutdown();
-      }
-    });
+
+        try {
+          final runId = await flow.start(app);
+          expect(app.isRuntimeStarted, isTrue);
+          expect(app.isWorkerStarted, isFalse);
+
+          final pending = await app.waitForCompletion<String>(
+            runId,
+            timeout: const Duration(milliseconds: 10),
+          );
+          expect(pending, isNotNull);
+          expect(pending!.timedOut, isTrue);
+          expect(pending.status, WorkflowStatus.running);
+
+          await app.startWorker();
+          expect(app.isRuntimeStarted, isTrue);
+          expect(app.isWorkerStarted, isTrue);
+          expect(app.isStarted, isTrue);
+
+          final completed = await flow.waitFor(
+            app,
+            runId,
+            timeout: const Duration(seconds: 1),
+          );
+          expect(completed?.isCompleted, isTrue);
+          expect(completed?.value, 'workflow-done');
+        } finally {
+          await app.shutdown();
+        }
+      },
+    );
   });
 }

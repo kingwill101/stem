@@ -2804,8 +2804,7 @@ class TaskDefinition<TArgs, TResult> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: defaultDecodeVersion ?? 1,
             decode: decodeResultVersionedJson,
@@ -2847,8 +2846,7 @@ class TaskDefinition<TArgs, TResult> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: version,
             decode: decodeResultVersionedJson,
@@ -2946,8 +2944,7 @@ class TaskDefinition<TArgs, TResult> {
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: argsTypeName ?? '$TArgs',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: version,
             decode: decodeResultVersionedJson,
@@ -3268,7 +3265,6 @@ class NoArgsTaskDefinition<TResult> {
 
   /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) => asDefinition.decode(payload);
-
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].
@@ -3312,7 +3308,6 @@ class TaskCall<TArgs, TResult> {
 
   /// Resolve final options combining call overrides with defaults.
   TaskOptions resolveOptions() => options ?? definition.defaultOptions;
-
 }
 
 /// Convenience helpers for building typed enqueue requests directly from a task
@@ -3374,7 +3369,6 @@ extension TaskEnqueuerBuilderExtension on TaskEnqueuer {
       enqueueOptions: enqueueOptions,
     );
   }
-
 }
 
 /// Retry strategy used to compute the next backoff delay.

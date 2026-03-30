@@ -191,7 +191,6 @@ void main() {
       final handler = _TestHandler('meta', description: 'Example task');
       expect(handler.metadata.description, 'Example task');
     });
-
   });
 
   group('TaskDefinition', () {

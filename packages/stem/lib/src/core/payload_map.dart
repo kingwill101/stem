@@ -86,10 +86,11 @@ extension PayloadMapX on Map<String, Object?> {
       throw StateError("Missing required payload key '$key'.");
     }
     return valueJson<T>(
-      key,
-      decode: decode,
-      typeName: typeName,
-    ) as T;
+          key,
+          decode: decode,
+          typeName: typeName,
+        )
+        as T;
   }
 
   /// Decodes the value for [key] as a version-aware typed DTO, or [fallback]
@@ -125,12 +126,13 @@ extension PayloadMapX on Map<String, Object?> {
       throw StateError("Missing required payload key '$key'.");
     }
     return valueVersionedJson<T>(
-      key,
-      defaultVersion: defaultVersion,
-      decode: decode,
-      defaultDecodeVersion: defaultDecodeVersion,
-      typeName: typeName,
-    ) as T;
+          key,
+          defaultVersion: defaultVersion,
+          decode: decode,
+          defaultDecodeVersion: defaultDecodeVersion,
+          typeName: typeName,
+        )
+        as T;
   }
 
   /// Returns the decoded list value for [key], or `null` when it is absent.

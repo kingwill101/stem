@@ -36,7 +36,9 @@ Future<void> main() async {
   }
 
   ProcessSignal.sigint.watch().listen(scheduleShutdown);
-  ProcessSignal.sigterm.watch().listen(scheduleShutdown);
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen(scheduleShutdown);
+  }
 
   await Completer<void>().future;
 }

@@ -121,7 +121,9 @@ void main() {
     },
   );
 
-  test('startWith throws when workflow caller support is unavailable', () {
+  test(
+    'startWith throws when workflow caller support is unavailable',
+    () {
       final context = FlowContext(
         workflow: 'demo',
         runId: 'run-4',

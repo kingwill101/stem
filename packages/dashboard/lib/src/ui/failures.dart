@@ -108,8 +108,7 @@ ${renderFailuresAlert(options)}
     options: DashboardTaskTableOptions(
       showState: false,
       emptyMessage: 'No individual failures to inspect.',
-      actionsBuilder: (task) =>
-          buildTaskReplayAction(task, redirectPath: redirectPath),
+      actionsBuilder: (task) => buildTaskReplayAction(task, redirectPath: redirectPath),
     ),
   )}
 </section>

@@ -19,16 +19,18 @@ Future<void> main(List<String> args) async {
       completer.complete();
     }
   });
-  ProcessSignal.sigterm.watch().listen((_) {
-    if (!completer.isCompleted) {
-      completer.complete();
-    }
-  });
   ProcessSignal.sigint.watch().listen((_) {
     if (!completer.isCompleted) {
       completer.complete();
     }
   });
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+  }
 
   await completer.future;
   fallback.cancel();

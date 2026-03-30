@@ -40,7 +40,6 @@ class PayloadVersionRegistry<T> {
   }
 }
 
-
 /// Encodes and decodes a strongly-typed payload value.
 ///
 /// This author-facing codec layer is used by generated workflow/task helpers to

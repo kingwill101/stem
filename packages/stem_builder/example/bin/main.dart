@@ -11,9 +11,9 @@ Future<void> main() async {
 
   print('\nGenerated workflow manifest:');
   print(
-    const JsonEncoder.withIndent(
-      '  ',
-    ).convert(stemModule.workflowManifest.map((entry) => entry.toJson()).toList()),
+    const JsonEncoder.withIndent('  ').convert(
+      stemModule.workflowManifest.map((entry) => entry.toJson()).toList(),
+    ),
   );
 
   final app = await StemWorkflowApp.inMemory(module: stemModule);
@@ -43,10 +43,7 @@ Future<void> main() async {
   final taskApp = await StemApp.inMemory(module: stemModule);
   try {
     final taskResult = await StemTaskDefinitions.builderExamplePing
-        .enqueueAndWait(
-      taskApp,
-      timeout: const Duration(seconds: 2),
-    );
+        .enqueueAndWait(taskApp, timeout: const Duration(seconds: 2));
     print('\nNo-arg task result: ${taskResult?.value}');
   } finally {
     await taskApp.shutdown();

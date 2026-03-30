@@ -20,8 +20,10 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  ProcessSignal.sigterm.watch().listen((_) => shutdown());
   ProcessSignal.sigint.watch().listen((_) => shutdown());
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen((_) => shutdown());
+  }
   // #endregion daemonization-signal-handlers
 
   // #region daemonization-loop

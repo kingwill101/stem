@@ -160,7 +160,7 @@ class WorkerAutoscaleConfig {
 /// Lifecycle guard configuration for worker isolates and shutdown semantics.
 ///
 /// Controls how the worker handles:
-/// - **Process Signals**: SIGTERM, SIGINT, SIGQUIT handling
+/// - **Process Signals**: Platform-appropriate shutdown signal handling
 /// - **Shutdown Behavior**: Grace periods and forced termination
 /// - **Isolate Recycling**: When to recycle isolates based on usage
 ///
@@ -171,9 +171,12 @@ class WorkerAutoscaleConfig {
 ///
 /// | Signal | Default Behavior |
 /// |--------|-----------------|
-/// | SIGTERM | Soft shutdown |
 /// | SIGINT | Soft shutdown |
-/// | SIGQUIT | Hard shutdown |
+/// | SIGTERM | Warm shutdown on platforms that support it |
+/// | SIGQUIT | Hard shutdown on platforms that support it |
+///
+/// Windows only installs the SIGINT handler because SIGTERM/SIGQUIT are not
+/// consistently available there.
 ///
 /// ## Isolate Recycling
 ///
@@ -208,7 +211,7 @@ class WorkerLifecycleConfig {
     this.maxMemoryPerIsolateBytes,
   });
 
-  /// Whether to install default signal handlers (SIGTERM/SIGINT/SIGQUIT).
+  /// Whether to install default process signal handlers for the host platform.
   final bool installSignalHandlers;
 
   /// Grace period before escalating a soft shutdown to hard termination.

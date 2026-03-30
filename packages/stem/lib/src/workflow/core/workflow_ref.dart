@@ -45,8 +45,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: defaultDecodeVersion ?? 1,
             decode: decodeResultVersionedJson,
@@ -84,8 +83,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: version,
             decode: decodeResultVersionedJson,
@@ -165,8 +163,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
       defaultDecodeVersion: defaultDecodeVersion,
       typeName: paramsTypeName ?? '$TParams',
     );
-    final resultCodec =
-        decodeResultVersionedJson != null
+    final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: version,
             decode: decodeResultVersionedJson,
@@ -490,7 +487,6 @@ class WorkflowStartCall<TParams, TResult extends Object?> {
 
   /// Encodes typed parameters into the workflow parameter map.
   Map<String, Object?> encodeParams() => definition.encodeParams(params);
-
 }
 
 /// Convenience helpers for waiting on typed workflow refs using a generic

@@ -1031,34 +1031,36 @@ List<DashboardTaskStatusEntry> _applyTaskViewFilters(
   final namespaceFilter = options.namespaceFilter?.toLowerCase();
   final taskFilter = options.taskFilter?.toLowerCase();
   final runFilter = options.runId?.toLowerCase();
-  return tasks.where((entry) {
-    if (options.hasFilter) {
-      final queue = entry.queue.toLowerCase();
-      if (!(queueFilter != null && queue.contains(queueFilter))) {
-        return false;
-      }
-    }
-    if (options.hasNamespaceFilter &&
-        entry.namespace.toLowerCase() != namespaceFilter) {
-      return false;
-    }
-    if (options.hasTaskFilter) {
-      final name = entry.taskName.toLowerCase();
-      if (!(taskFilter != null && name.contains(taskFilter))) {
-        return false;
-      }
-    }
-    if (options.hasRunIdFilter) {
-      final runId = entry.runId?.toLowerCase() ?? '';
-      if (!(runFilter != null && runId.contains(runFilter))) {
-        return false;
-      }
-    }
-    if (options.hasStateFilter && entry.state != options.stateFilter) {
-      return false;
-    }
-    return true;
-  }).toList(growable: false);
+  return tasks
+      .where((entry) {
+        if (options.hasFilter) {
+          final queue = entry.queue.toLowerCase();
+          if (!(queueFilter != null && queue.contains(queueFilter))) {
+            return false;
+          }
+        }
+        if (options.hasNamespaceFilter &&
+            entry.namespace.toLowerCase() != namespaceFilter) {
+          return false;
+        }
+        if (options.hasTaskFilter) {
+          final name = entry.taskName.toLowerCase();
+          if (!(taskFilter != null && name.contains(taskFilter))) {
+            return false;
+          }
+        }
+        if (options.hasRunIdFilter) {
+          final runId = entry.runId?.toLowerCase() ?? '';
+          if (!(runFilter != null && runId.contains(runFilter))) {
+            return false;
+          }
+        }
+        if (options.hasStateFilter && entry.state != options.stateFilter) {
+          return false;
+        }
+        return true;
+      })
+      .toList(growable: false);
 }
 
 String _resolveDefaultNamespace(

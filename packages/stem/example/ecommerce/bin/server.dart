@@ -39,5 +39,7 @@ Future<void> main() async {
   }
 
   ProcessSignal.sigint.watch().listen(shutdown);
-  ProcessSignal.sigterm.watch().listen(shutdown);
+  if (!Platform.isWindows) {
+    ProcessSignal.sigterm.watch().listen(shutdown);
+  }
 }
