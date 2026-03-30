@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1-wip
+## 0.2.1
 
 - Guarded worker and example process signal registration so Windows only
   installs supported shutdown watchers, avoiding unsupported `SIGTERM` /

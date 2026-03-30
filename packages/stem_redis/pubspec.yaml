@@ -10,12 +10,12 @@ dependencies:
   async: ^2.13.0
   collection: ^1.19.1
   redis: ^4.0.0
-  stem: ">=0.2.0-dev <0.3.0"
+  stem: ">=0.2.1 <0.3.0"
   uuid: ^4.5.2
 
 dev_dependencies:
   coverage: ^1.15.0
   lints: ^6.0.0
-  stem_adapter_tests: ">=0.1.1-dev <0.2.0"
+  stem_adapter_tests: ">=0.1.2 <0.2.0"
   test: ^1.29.0
   very_good_analysis: ^10.0.0
