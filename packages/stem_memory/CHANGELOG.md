@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1-wip
+
+- Updated internal package constraints to accept the in-progress `stem`
+  prerelease and matching adapter-test prereleases during workspace
+  development.
+
 ## 0.1.0
 
 - Updated the in-memory workflow store to honor caller-provided run ids,

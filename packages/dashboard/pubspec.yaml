@@ -1,6 +1,6 @@
 name: stem_dashboard
 description: Hotwire + Routed dashboard for the Stem runtime.
-version: 0.1.0
+version: 0.1.1-wip
 publish_to: "none"
 environment:
   sdk: ">=3.9.2 <4.0.0"
@@ -13,10 +13,10 @@ dependencies:
   routed: ^0.3.2
   routed_hotwire: ^0.1.2
   stem: ">=0.2.0-dev <0.3.0"
-  stem_cli: ^0.1.0
-  stem_postgres: ^0.1.0
-  stem_redis: ^0.1.0
-  stem_sqlite: ^0.1.0
+  stem_cli: ">=0.1.0-dev <0.2.0"
+  stem_postgres: ">=0.1.0-dev <0.2.0"
+  stem_redis: ">=0.1.0-dev <0.2.0"
+  stem_sqlite: ">=0.1.0-dev <0.2.0"
 
 dev_dependencies:
   lints: ^6.0.0

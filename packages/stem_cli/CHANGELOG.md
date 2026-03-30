@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1-wip
+
+- Updated internal package constraints to accept the in-progress `stem`
+  prerelease and matching adapter prereleases during workspace development.
+
 ## 0.1.0
 
 - Updated CLI adapter wiring and docker test stack to the Ormed-backed

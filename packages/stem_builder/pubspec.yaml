@@ -1,6 +1,6 @@
 name: stem_builder
 description: Build-time registry generator for annotated Stem workflows and tasks.
-version: 0.2.0
+version: 0.2.1-wip
 
 repository: https://github.com/kingwill101/stem
 resolution: workspace

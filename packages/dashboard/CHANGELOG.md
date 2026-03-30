@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1-wip
+
+- Updated internal package constraints to accept the in-progress `stem`
+  prerelease and matching sibling package prereleases during workspace
+  development.
+
 ## 0.1.0
 
 - Updated the dashboard data layer to use Ormed 0.2.0.

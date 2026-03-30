@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2-wip
+
+- Updated the `stem` dependency range to admit the in-progress `0.2.1-wip`
+  core prerelease during workspace resolution.
+
 ## 0.1.1
 
 - Added workflow-store contract coverage for caller-provided run ids and

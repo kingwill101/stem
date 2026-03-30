@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1-wip
+
+- Updated the `stem` dependency range to admit the in-progress `0.2.1-wip`
+  core prerelease during workspace resolution.
+
 ## 0.2.0
 
 - Generated output now centers on `stemModule`, `StemWorkflowDefinitions`, and
