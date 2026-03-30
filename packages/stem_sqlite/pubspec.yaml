@@ -14,7 +14,7 @@ dependencies:
   ormed: ^0.2.0
   ormed_sqlite: ^0.2.0
   path: ^1.9.1
-  stem: ^0.2.0
+  stem: ">=0.2.0-dev <0.3.0"
   uuid: ^4.5.2
 
 dev_dependencies:
