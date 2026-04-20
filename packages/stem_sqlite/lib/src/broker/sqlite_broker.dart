@@ -508,9 +508,27 @@ class SqliteBroker implements Broker {
 
   void _startSweeper() {
     _sweeperTimer?.cancel();
+    if (sweeperInterval <= Duration.zero) {
+      _sweeperTimer = null;
+      return;
+    }
     _sweeperTimer = Timer.periodic(sweeperInterval, (_) {
       if (_closed) return;
-      unawaited(_runSweeperCycle());
+      unawaited(
+        _runSweeperCycle().catchError((Object error, StackTrace stackTrace) {
+          stemLogger.warning(
+            'SQLite broker sweeper cycle failed: $error',
+            stemLogContext(
+              component: 'stem_sqlite',
+              subsystem: 'broker_sweeper',
+              fields: <String, Object?>{
+                'namespace': namespace,
+                'stack': stackTrace.toString(),
+              },
+            ),
+          );
+        }),
+      );
     });
   }
 
