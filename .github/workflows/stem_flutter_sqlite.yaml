@@ -1,0 +1,50 @@
+name: stem_flutter_sqlite
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - 'packages/stem_flutter_sqlite/**'
+      - 'packages/stem_flutter/**'
+      - 'packages/stem_sqlite/**'
+      - 'packages/stem/**'
+      - 'pubspec.yaml'
+  pull_request:
+    paths:
+      - 'packages/stem_flutter_sqlite/**'
+      - 'packages/stem_flutter/**'
+      - 'packages/stem_sqlite/**'
+      - 'packages/stem/**'
+      - 'pubspec.yaml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sqlite3 libsqlite3-dev
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Get Dart packages cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+      - name: Install dependencies
+        run: dart pub get
+      - name: Analyze stem_flutter_sqlite
+        working-directory: packages/stem_flutter_sqlite
+        run: flutter analyze
+      - name: Run stem_flutter_sqlite tests
+        working-directory: packages/stem_flutter_sqlite
+        run: flutter test
