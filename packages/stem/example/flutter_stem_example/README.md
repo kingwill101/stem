@@ -44,6 +44,22 @@ written their first status row to the backend. That state means the job was
 published successfully, but the backend does not yet have a tracked status
 record for it.
 
+## Why Jobs Can Look "Stuck"
+
+This example intentionally separates observation from execution:
+
+- the UI polls queue and status state
+- the worker isolate actually consumes and executes jobs
+
+So if a job appears queued for longer than expected, the first questions are:
+
+- is the worker isolate running?
+- is the task currently inflight but still within the visibility timeout?
+- did SQLite hit temporary lock contention?
+
+Polling does not wake the worker up. It only reports what the broker and
+backend currently say.
+
 ## Run
 
 ```bash
@@ -55,7 +71,7 @@ flutter run -d android
 Other Dart VM Flutter targets such as Linux, macOS, and iOS also work with the
 same structure.
 
-## Notes
+## Troubleshooting
 
 - `SqliteResultBackend.watch(taskId)` is process-local. For cross-isolate or
   cross-process monitoring, poll `getTaskStatus()` or `listTaskStatuses()`
@@ -63,3 +79,12 @@ same structure.
 - If the app is hot-restarted while a task is inflight, the broker may need one
   visibility-timeout cycle before the task is claimable again. This example
   keeps that timeout short to make development behavior easier to understand.
+- The example enables Stem logs during startup. If the worker says `stopped` or
+  never reports `ready`, the logs are the fastest way to see whether isolate
+  bootstrap failed.
+- Separate broker and backend files reduce SQLite contention, but they do not
+  remove it completely. Short-lived `database is locked` errors still indicate
+  concurrent file pressure, not a broken polling loop.
+- If you adapt this example for production, treat the UI isolate as a producer
+  and status surface. Keep actual task execution in a worker isolate or another
+  process.
