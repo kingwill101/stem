@@ -82,5 +82,24 @@ void main() {
 
       expect(fatal.message, contains('Bad state: boom'));
     });
+
+    test('replays the latest signal to late subscribers', () async {
+      final host = await StemFlutterWorkerHost.spawn<SendPort>(
+        entrypoint: _readyWorkerEntry,
+        messageBuilder: (sendPort) => sendPort,
+      );
+      addTearDown(host.dispose);
+
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+
+      final ready = await host.signals
+          .firstWhere(
+            (signal) => signal.type == StemFlutterWorkerSignalType.ready,
+          )
+          .timeout(const Duration(seconds: 2));
+
+      expect(ready.detail, 'ready');
+      expect(ready.commandPort, isNotNull);
+    });
   });
 }

@@ -86,20 +86,23 @@ void main() {
         );
         addTearDown(host.dispose);
 
-        final ready = await host.signals
+        final readyFuture = host.signals
             .firstWhere(
               (signal) => signal.type == StemFlutterWorkerSignalType.ready,
             )
             .timeout(const Duration(seconds: 5));
-        expect(ready.commandPort, isNotNull);
-
-        final running = await host.signals
+        final runningFuture = host.signals
             .firstWhere(
               (signal) =>
                   signal.type == StemFlutterWorkerSignalType.status &&
                   signal.status == StemFlutterWorkerStatus.running,
             )
             .timeout(const Duration(seconds: 5));
+
+        final ready = await readyFuture;
+        expect(ready.commandPort, isNotNull);
+
+        final running = await runningFuture;
 
         final detailParts = running.detail!.split('|');
         expect(detailParts[0], layout.brokerFile.path);

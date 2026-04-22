@@ -46,9 +46,7 @@ class StemFlutterStorageLayout {
     String brokerFileName = 'broker.sqlite',
     String backendFileName = 'backend.sqlite',
   }) async {
-    if (!root.existsSync()) {
-      root.createSync(recursive: true);
-    }
+    await root.create(recursive: true);
     return StemFlutterStorageLayout(
       root: root,
       brokerFile: File('${root.path}${Platform.pathSeparator}$brokerFileName'),

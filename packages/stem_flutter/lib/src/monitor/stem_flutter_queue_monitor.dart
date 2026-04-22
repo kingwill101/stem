@@ -44,6 +44,7 @@ class StemFlutterQueueMonitor {
   StemFlutterQueueSnapshot _snapshot = const StemFlutterQueueSnapshot();
   bool _refreshInFlight = false;
   bool _started = false;
+  StemFlutterWorkerStatus? _stickyWorkerStatus;
 
   /// The most recently emitted queue snapshot.
   StemFlutterQueueSnapshot get snapshot => _snapshot;
@@ -58,16 +59,26 @@ class StemFlutterQueueMonitor {
   Future<void> start() async {
     if (_started) return;
     _started = true;
-    await refresh();
-    _timer = Timer.periodic(_pollInterval, (_) => unawaited(refresh()));
+    try {
+      await refresh();
+      _timer = Timer.periodic(
+        _pollInterval,
+        (_) => unawaited(_refreshSafely()),
+      );
+    } catch (_) {
+      _started = false;
+      rethrow;
+    }
   }
 
   /// Binds worker signals emitted by a supervised worker isolate.
   ///
   /// When multiple signal streams are bound over time, the previous
   /// subscription is replaced.
-  void bindWorkerSignals(Stream<StemFlutterWorkerSignal> signals) {
-    unawaited(_workerSignalsSub?.cancel());
+  Future<void> bindWorkerSignals(
+    Stream<StemFlutterWorkerSignal> signals,
+  ) async {
+    await _workerSignalsSub?.cancel();
     _workerSignalsSub = signals.listen(_applyWorkerSignal);
   }
 
@@ -91,7 +102,7 @@ class StemFlutterQueueMonitor {
                   taskId: status.id,
                   label: _labelResolver(status),
                   state: status.state,
-                  result: status.payloadValue<String>(),
+                  result: _stringifyResult(status.payload),
                   errorMessage: status.error?.message,
                   updatedAt: record.updatedAt.toUtc(),
                 );
@@ -122,8 +133,7 @@ class StemFlutterQueueMonitor {
         inflightCount: inflightCount,
       );
 
-      if (next.workerStatus != StemFlutterWorkerStatus.error &&
-          next.workerStatus != StemFlutterWorkerStatus.stopped) {
+      if (_stickyWorkerStatus == null) {
         if (hasFreshHeartbeat) {
           next = next.copyWith(
             workerStatus: StemFlutterWorkerStatus.running,
@@ -135,10 +145,18 @@ class StemFlutterQueueMonitor {
             workerDetail:
                 'Last heartbeat ${_formatTimestamp(latestHeartbeatAt)}',
           );
+        } else if (next.workerStatus == StemFlutterWorkerStatus.error) {
+          next = next.copyWith(
+            workerStatus: StemFlutterWorkerStatus.starting,
+            clearWorkerDetail: true,
+          );
         }
       }
 
       _emit(next);
+    } catch (error, stackTrace) {
+      _applyRefreshFailure(error, stackTrace);
+      rethrow;
     } finally {
       _refreshInFlight = false;
     }
@@ -152,6 +170,17 @@ class StemFlutterQueueMonitor {
   }
 
   void _applyWorkerSignal(StemFlutterWorkerSignal signal) {
+    _stickyWorkerStatus = switch (signal.type) {
+      StemFlutterWorkerSignalType.ready => null,
+      StemFlutterWorkerSignalType.status => switch (signal.status) {
+        StemFlutterWorkerStatus.error ||
+        StemFlutterWorkerStatus.stopped => signal.status,
+        _ => null,
+      },
+      StemFlutterWorkerSignalType.warning => _stickyWorkerStatus,
+      StemFlutterWorkerSignalType.fatal => StemFlutterWorkerStatus.error,
+    };
+
     final next = switch (signal.type) {
       StemFlutterWorkerSignalType.ready => _snapshot.copyWith(
         workerStatus: StemFlutterWorkerStatus.running,
@@ -173,12 +202,40 @@ class StemFlutterQueueMonitor {
     }
   }
 
+  Future<void> _refreshSafely() async {
+    try {
+      await refresh();
+    } on Object {
+      // Periodic polling errors are surfaced via snapshot state.
+    }
+  }
+
+  void _applyRefreshFailure(Object error, StackTrace _) {
+    if (_stickyWorkerStatus != null) {
+      return;
+    }
+    _emit(
+      _snapshot.copyWith(
+        workerStatus: StemFlutterWorkerStatus.error,
+        workerDetail: 'Queue monitor refresh failed: $error',
+      ),
+    );
+  }
+
   void _emit(StemFlutterQueueSnapshot next) {
     _snapshot = next;
     if (!_controller.isClosed) {
       _controller.add(next);
     }
   }
+}
+
+String? _stringifyResult(Object? payload) {
+  if (payload == null) return null;
+  return switch (payload) {
+    final String value => value,
+    _ => payload.toString(),
+  };
 }
 
 String _formatTimestamp(DateTime? value) {

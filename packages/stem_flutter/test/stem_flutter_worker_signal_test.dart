@@ -27,5 +27,14 @@ void main() {
       expect(parsed!.type, StemFlutterWorkerSignalType.fatal);
       expect(parsed.message, 'database locked');
     });
+
+    test('ignores unknown status enum values', () {
+      final parsed = StemFlutterWorkerSignal.tryParse(<String, Object?>{
+        'type': 'status',
+        'state': 'paused',
+      });
+
+      expect(parsed, isNull);
+    });
   });
 }

@@ -30,10 +30,24 @@ class StemFlutterWorkerHost {
   late final StreamSubscription<dynamic> _exitSub;
 
   SendPort? _commandPort;
+  StemFlutterWorkerSignal? _lastSignal;
   bool _disposed = false;
 
   /// A stream of worker signals emitted by the supervised isolate.
-  Stream<StemFlutterWorkerSignal> get signals => _controller.stream;
+  Stream<StemFlutterWorkerSignal> get signals =>
+      Stream<StemFlutterWorkerSignal>.multi((controller) {
+        final lastSignal = _lastSignal;
+        if (lastSignal != null) {
+          controller.add(lastSignal);
+        }
+
+        final subscription = _controller.stream.listen(
+          controller.add,
+          onError: controller.addError,
+          onDone: controller.close,
+        );
+        controller.onCancel = subscription.cancel;
+      }, isBroadcast: true);
 
   /// The latest command port reported by the worker.
   SendPort? get commandPort => _commandPort;
@@ -74,7 +88,7 @@ class StemFlutterWorkerHost {
       if (signal.type == StemFlutterWorkerSignalType.ready) {
         host._commandPort = signal.commandPort;
       }
-      host._controller.add(signal);
+      host._emitSignal(signal);
     });
 
     // ignore: cancel_subscriptions, reason: Owned by the host and cancelled in dispose().
@@ -83,12 +97,12 @@ class StemFlutterWorkerHost {
         final List<Object?> values => values.join('\n'),
         _ => raw.toString(),
       };
-      host._controller.add(StemFlutterWorkerSignal.fatal(detail));
+      host._emitSignal(StemFlutterWorkerSignal.fatal(detail));
     });
 
     // ignore: cancel_subscriptions, reason: Owned by the host and cancelled in dispose().
     final exitSub = exit.listen((dynamic _) {
-      host._controller.add(
+      host._emitSignal(
         const StemFlutterWorkerSignal.status(
           status: StemFlutterWorkerStatus.stopped,
           detail: 'Worker isolate exited.',
@@ -130,5 +144,12 @@ class StemFlutterWorkerHost {
     _errors.close();
     _exit.close();
     await _controller.close();
+  }
+
+  void _emitSignal(StemFlutterWorkerSignal signal) {
+    _lastSignal = signal;
+    if (!_controller.isClosed) {
+      _controller.add(signal);
+    }
   }
 }

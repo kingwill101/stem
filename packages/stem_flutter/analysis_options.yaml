@@ -4,4 +4,3 @@ analyzer:
   exclude:
     - "**/*.g.dart"
     - "**/*.orm.dart"
-

@@ -93,7 +93,8 @@ Future<void> bootstrap(List<TaskHandler<Object?>> taskHandlers) async {
     broker: runtime.broker,
     queueName: 'mobile-demo',
     workerId: 'mobile-worker',
-  )..bindWorkerSignals(workerHost.signals);
+  );
+  await monitor.bindWorkerSignals(workerHost.signals);
 
   await monitor.start();
 }
@@ -125,23 +126,25 @@ Future<void> workerMain(Map<String, Object?> message) async {
     consumerName: 'mobile-worker',
   );
 
-  await worker.start();
-  bootstrap.sendPort.send(
-    StemFlutterWorkerSignal.ready(
-      commandPort: commands.sendPort,
-      detail: 'Worker isolate ready.',
-    ).toMessage(),
-  );
+  try {
+    await worker.start();
+    bootstrap.sendPort.send(
+      StemFlutterWorkerSignal.ready(
+        commandPort: commands.sendPort,
+        detail: 'Worker isolate ready.',
+      ).toMessage(),
+    );
 
-  await for (final dynamic command in commands) {
-    if (command is Map && command['type'] == 'shutdown') {
-      break;
+    await for (final dynamic command in commands) {
+      if (command is Map && command['type'] == 'shutdown') {
+        break;
+      }
     }
+  } finally {
+    await worker.shutdown();
+    await stores.close();
+    commands.close();
   }
-
-  await worker.shutdown();
-  await stores.close();
-  commands.close();
 }
 ```
 

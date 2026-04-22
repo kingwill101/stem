@@ -118,12 +118,7 @@ class StemFlutterWorkerSignal {
         commandPort: raw['sendPort'] as SendPort?,
         detail: raw['detail']?.toString(),
       ),
-      'status' => StemFlutterWorkerSignal.status(
-        status: StemFlutterWorkerStatus.values.byName(
-          raw['state']?.toString() ?? StemFlutterWorkerStatus.starting.name,
-        ),
-        detail: raw['detail']?.toString(),
-      ),
+      'status' => _parseStatusSignal(raw),
       'warning' => StemFlutterWorkerSignal.warning(
         raw['warning']?.toString() ?? 'warning',
       ),
@@ -133,4 +128,28 @@ class StemFlutterWorkerSignal {
       _ => null,
     };
   }
+}
+
+StemFlutterWorkerSignal? _parseStatusSignal(Map<Object?, Object?> raw) {
+  final rawState = raw['state']?.toString();
+  final status = switch (rawState) {
+    null => StemFlutterWorkerStatus.starting,
+    final String value => _workerStatusByName(value),
+  };
+  if (status == null) {
+    return null;
+  }
+  return StemFlutterWorkerSignal.status(
+    status: status,
+    detail: raw['detail']?.toString(),
+  );
+}
+
+StemFlutterWorkerStatus? _workerStatusByName(String name) {
+  for (final status in StemFlutterWorkerStatus.values) {
+    if (status.name == name) {
+      return status;
+    }
+  }
+  return null;
 }

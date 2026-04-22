@@ -63,7 +63,7 @@ backend currently say.
 ## Run
 
 ```bash
-cd stem/packages/stem/example/flutter_stem_example
+cd packages/stem/example/flutter_stem_example
 flutter pub get
 flutter run -d android
 ```

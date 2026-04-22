@@ -86,7 +86,8 @@ Future<void> startMobileWorker({
     broker: broker,
     queueName: 'mobile-demo',
     workerId: 'mobile-worker',
-  )..bindWorkerSignals(host.signals);
+  );
+  await monitor.bindWorkerSignals(host.signals);
 
   await monitor.start();
 }

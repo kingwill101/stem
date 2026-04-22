@@ -154,7 +154,7 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
         pollInterval: _monitorPollInterval,
         heartbeatInterval: _workerHeartbeatInterval,
       );
-      monitor.bindWorkerSignals(workerHost.signals);
+      await monitor.bindWorkerSignals(workerHost.signals);
 
       final monitorSub = monitor.snapshots.listen((snapshot) {
         if (!mounted) return;
@@ -389,6 +389,7 @@ Future<void> _workerIsolateMain(Map<String, Object?> config) async {
   Worker? worker;
   StemFlutterSqliteWorkerStores? stores;
   ReceivePort? commands;
+  var workerStarted = false;
 
   try {
     configureStemLogging(
@@ -455,6 +456,7 @@ Future<void> _workerIsolateMain(Map<String, Object?> config) async {
     });
 
     await worker.start();
+    workerStarted = true;
     stemLogger.info('Worker started');
     bootstrap.sendPort.send(
       StemFlutterWorkerSignal.ready(
@@ -476,7 +478,7 @@ Future<void> _workerIsolateMain(Map<String, Object?> config) async {
     );
   } finally {
     await eventsSub?.cancel();
-    if (worker != null) {
+    if (worker != null && workerStarted) {
       await worker.shutdown(mode: WorkerShutdownMode.warm);
     }
     await stores?.close();
