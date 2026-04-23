@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3-wip
+## 0.1.3
 
 - Updated `ormed_sqlite` to 0.3.0 and raised the package SDK floor to Dart
   3.10, matching the new unified native/web SQLite adapter release.
