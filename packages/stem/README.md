@@ -14,7 +14,21 @@ Stem is a Dart-first background job and workflow platform: enqueue work, run wor
 For full docs, API references, and in-depth guides, visit
 https://kingwill101.github.io/stem.
 
+## Packages
 
+| Package | Description | pub.dev |
+|---------|-------------|---------|
+| [`stem`](https://github.com/kingwill101/stem/tree/master/packages/stem) | Core runtime: contracts, worker, scheduler, in-memory adapters, signals, Canvas, workflows | [![pub](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem) |
+| [`stem_cli`](https://github.com/kingwill101/stem/tree/master/packages/stem_cli) | Command-line tooling (`stem` executable) and CLI utilities | [![pub](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli) |
+| [`stem_memory`](https://github.com/kingwill101/stem/tree/master/packages/stem_memory) | In-memory adapter package (broker/backend/workflow/scheduler factories) | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
+| [`stem_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
+| [`stem_redis`](https://github.com/kingwill101/stem/tree/master/packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
+| [`stem_postgres`](https://github.com/kingwill101/stem/tree/master/packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
+| [`stem_flutter`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter) | Adapter-neutral Flutter helpers for mobile worker isolates and queue monitoring | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
+| [`stem_flutter_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter_sqlite) | Flutter SQLite runtime/storage helpers for mobile Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
+| [`stem_builder`](https://github.com/kingwill101/stem/tree/master/packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
+| [`stem_adapter_tests`](https://github.com/kingwill101/stem/tree/master/packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
+| [`stem_dashboard`](https://github.com/kingwill101/stem/tree/master/packages/dashboard) | Hotwire-based operations dashboard (experimental) | — |
 
 ## Features
 
