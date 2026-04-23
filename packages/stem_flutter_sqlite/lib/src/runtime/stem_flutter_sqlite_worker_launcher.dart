@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
-// ignore: implementation_imports, reason: First-party adapter uses internal Flutter bootstrap helpers without exposing them publicly.
-import 'package:stem_flutter/src/runtime/stem_flutter_dependency_bootstrap.dart';
 import 'package:stem_flutter/stem_flutter.dart';
 import 'package:stem_flutter_sqlite/src/runtime/stem_flutter_sqlite_worker_bootstrap.dart';
 import 'package:stem_flutter_sqlite/src/runtime/stem_flutter_storage_layout.dart';

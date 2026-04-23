@@ -53,7 +53,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
 
 dependency_overrides:
-  meta: ^1.17.0
+  meta: ^1.18.0
   stem:
     path: ../..
   stem_flutter:

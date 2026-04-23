@@ -46,13 +46,24 @@ class StemFlutterStorageLayout {
     String brokerFileName = 'broker.sqlite',
     String backendFileName = 'backend.sqlite',
   }) async {
+    final brokerFile = File(
+      '${root.path}${Platform.pathSeparator}$brokerFileName',
+    );
+    final backendFile = File(
+      '${root.path}${Platform.pathSeparator}$backendFileName',
+    );
+    if (brokerFile.absolute.path == backendFile.absolute.path) {
+      throw ArgumentError.value(
+        backendFileName,
+        'backendFileName',
+        'must resolve to a different file than brokerFileName',
+      );
+    }
     await root.create(recursive: true);
     return StemFlutterStorageLayout(
       root: root,
-      brokerFile: File('${root.path}${Platform.pathSeparator}$brokerFileName'),
-      backendFile: File(
-        '${root.path}${Platform.pathSeparator}$backendFileName',
-      ),
+      brokerFile: brokerFile,
+      backendFile: backendFile,
     );
   }
 }

@@ -106,7 +106,7 @@ void main() {
         broker: _FakeBroker(pendingCountValue: 3, inflightCountValue: 1),
         queueName: 'jobs',
         workerId: 'worker-a',
-        heartbeatInterval: const Duration(seconds: 1),
+        heartbeatInterval: const Duration(seconds: 10),
       );
       addTearDown(monitor.dispose);
 
@@ -161,6 +161,7 @@ void main() {
         broker: _FakeBroker(pendingCountValue: 0, inflightCountValue: 0),
         queueName: 'jobs',
         workerId: 'worker-a',
+        heartbeatInterval: const Duration(seconds: 10),
       );
       addTearDown(monitor.dispose);
 
@@ -222,7 +223,7 @@ void main() {
         broker: _FakeBroker(pendingCountValue: 0, inflightCountValue: 0),
         queueName: 'jobs',
         workerId: 'worker-a',
-        heartbeatInterval: const Duration(seconds: 1),
+        heartbeatInterval: const Duration(seconds: 10),
       );
       final signals = StreamController<StemFlutterWorkerSignal>();
       addTearDown(() async {

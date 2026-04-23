@@ -28,6 +28,19 @@ void main() {
       expect(parsed.message, 'database locked');
     });
 
+    test('ignores malformed ready command ports', () {
+      final parsed = StemFlutterWorkerSignal.tryParse(<String, Object?>{
+        'type': 'ready',
+        'sendPort': 'not-a-port',
+        'detail': 'ready',
+      });
+
+      expect(parsed, isNotNull);
+      expect(parsed!.type, StemFlutterWorkerSignalType.ready);
+      expect(parsed.commandPort, isNull);
+      expect(parsed.detail, 'ready');
+    });
+
     test('ignores unknown status enum values', () {
       final parsed = StemFlutterWorkerSignal.tryParse(<String, Object?>{
         'type': 'status',

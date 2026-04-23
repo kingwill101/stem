@@ -117,13 +117,13 @@ Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
     await dataSource.init();
   }
   final driver = dataSource.connection.driver;
-  await driver.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');
-  await driver.executeRaw('PRAGMA journal_mode=WAL;');
-  await driver.executeRaw('PRAGMA synchronous=NORMAL;');
   if (driver is! SchemaDriver) {
     throw StateError('Expected a SchemaDriver for SQLite migrations.');
   }
   final schemaDriver = driver as SchemaDriver;
+  await driver.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');
+  await driver.executeRaw('PRAGMA journal_mode=WAL;');
+  await driver.executeRaw('PRAGMA synchronous=NORMAL;');
 
   final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
   await ledger.ensureInitialized();

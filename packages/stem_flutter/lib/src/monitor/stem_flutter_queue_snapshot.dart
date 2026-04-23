@@ -74,8 +74,11 @@ class StemFlutterQueueSnapshot {
     String? workerDetail,
     bool clearWorkerDetail = false,
     DateTime? lastHeartbeatAt,
+    bool clearLastHeartbeatAt = false,
     int? pendingCount,
+    bool clearPendingCount = false,
     int? inflightCount,
+    bool clearInflightCount = false,
     List<StemFlutterTrackedJob>? jobs,
   }) {
     return StemFlutterQueueSnapshot(
@@ -83,9 +86,15 @@ class StemFlutterQueueSnapshot {
       workerDetail: clearWorkerDetail
           ? null
           : workerDetail ?? this.workerDetail,
-      lastHeartbeatAt: lastHeartbeatAt ?? this.lastHeartbeatAt,
-      pendingCount: pendingCount ?? this.pendingCount,
-      inflightCount: inflightCount ?? this.inflightCount,
+      lastHeartbeatAt: clearLastHeartbeatAt
+          ? null
+          : lastHeartbeatAt ?? this.lastHeartbeatAt,
+      pendingCount: clearPendingCount
+          ? null
+          : pendingCount ?? this.pendingCount,
+      inflightCount: clearInflightCount
+          ? null
+          : inflightCount ?? this.inflightCount,
       jobs: jobs ?? this.jobs,
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:time_machine2/time_machine2.dart' as tm;
@@ -8,9 +7,23 @@ Future<void>? _foregroundInitialization;
 
 /// Initializes Flutter-side dependency state needed before opening adapters.
 Future<void> ensureStemFlutterDependenciesInitialized() {
-  return _foregroundInitialization ??= tm.TimeMachine.initialize(
-    <String, dynamic>{'rootBundle': rootBundle},
-  );
+  final pending = _foregroundInitialization;
+  if (pending != null) return pending;
+
+  final initialization = _initializeForegroundDependencies();
+  _foregroundInitialization = initialization;
+  return initialization;
+}
+
+Future<void> _initializeForegroundDependencies() async {
+  try {
+    await tm.TimeMachine.initialize(<String, dynamic>{
+      'rootBundle': rootBundle,
+    });
+  } on Object {
+    _foregroundInitialization = null;
+    rethrow;
+  }
 }
 
 /// Loads dependency assets that must be forwarded into background isolates.
@@ -39,11 +52,12 @@ Future<void> initializeStemFlutterBackgroundDependencies(
   });
 }
 
-class _StemFlutterDependencyAssetBundle {
-  const _StemFlutterDependencyAssetBundle(this.assets);
+class _StemFlutterDependencyAssetBundle extends CachingAssetBundle {
+  _StemFlutterDependencyAssetBundle(this.assets);
 
   final Map<String, Uint8List> assets;
 
+  @override
   Future<ByteData> load(String key) async {
     final normalized = key.startsWith('packages/time_machine2/data/')
         ? key.substring('packages/time_machine2/data/'.length)
@@ -53,18 +67,5 @@ class _StemFlutterDependencyAssetBundle {
       throw Exception('Missing Flutter asset: $key');
     }
     return ByteData.sublistView(asset);
-  }
-
-  Future<T> loadStructuredBinaryData<T>(
-    String key,
-    FutureOr<T> Function(ByteData data) parser,
-  ) async {
-    final data = await load(key);
-    return parser(data);
-  }
-
-  Future<String> loadString(String key, {bool cache = true}) async {
-    final data = await load(key);
-    return utf8.decode(data.buffer.asUint8List());
   }
 }

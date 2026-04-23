@@ -10,6 +10,11 @@ export 'src/monitor/stem_flutter_queue_monitor.dart'
     show StemFlutterQueueMonitor;
 export 'src/monitor/stem_flutter_queue_snapshot.dart'
     show StemFlutterQueueSnapshot, StemFlutterTrackedJob;
+export 'src/runtime/stem_flutter_dependency_bootstrap.dart'
+    show
+        ensureStemFlutterDependenciesInitialized,
+        initializeStemFlutterBackgroundDependencies,
+        preloadStemFlutterDependencyAssets;
 export 'src/runtime/stem_flutter_worker_host.dart' show StemFlutterWorkerHost;
 export 'src/runtime/stem_flutter_worker_signal.dart'
     show

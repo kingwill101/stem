@@ -31,6 +31,7 @@ class StemFlutterWorkerHost {
 
   SendPort? _commandPort;
   StemFlutterWorkerSignal? _lastSignal;
+  final Completer<void> _stoppedCompleter = Completer<void>();
   bool _disposed = false;
 
   /// A stream of worker signals emitted by the supervised isolate.
@@ -81,7 +82,8 @@ class StemFlutterWorkerHost {
       controller: controller,
     );
 
-    // ignore: cancel_subscriptions, reason: Owned by the host and cancelled in dispose().
+    // Owned by the host and cancelled in dispose().
+    // ignore: cancel_subscriptions
     final messagesSub = messages.listen((dynamic raw) {
       final signal = StemFlutterWorkerSignal.tryParse(raw);
       if (signal == null) return;
@@ -91,7 +93,8 @@ class StemFlutterWorkerHost {
       host._emitSignal(signal);
     });
 
-    // ignore: cancel_subscriptions, reason: Owned by the host and cancelled in dispose().
+    // Owned by the host and cancelled in dispose().
+    // ignore: cancel_subscriptions
     final errorsSub = errors.listen((dynamic raw) {
       final detail = switch (raw) {
         final List<Object?> values => values.join('\n'),
@@ -100,7 +103,8 @@ class StemFlutterWorkerHost {
       host._emitSignal(StemFlutterWorkerSignal.fatal(detail));
     });
 
-    // ignore: cancel_subscriptions, reason: Owned by the host and cancelled in dispose().
+    // Owned by the host and cancelled in dispose().
+    // ignore: cancel_subscriptions
     final exitSub = exit.listen((dynamic _) {
       host._emitSignal(
         const StemFlutterWorkerSignal.status(
@@ -123,12 +127,16 @@ class StemFlutterWorkerHost {
   /// If the worker has not reported a command port yet, this method returns
   /// immediately.
   Future<void> requestShutdown({
-    Duration gracePeriod = const Duration(milliseconds: 400),
+    Duration gracePeriod = const Duration(seconds: 5),
   }) async {
     final port = _commandPort;
     if (port == null) return;
     port.send(const <String, Object?>{'type': 'shutdown'});
-    await Future<void>.delayed(gracePeriod);
+    if (gracePeriod <= Duration.zero) return;
+    await _stoppedCompleter.future.timeout(
+      gracePeriod,
+      onTimeout: () {},
+    );
   }
 
   /// Tears down this host and kills the supervised isolate.
@@ -148,8 +156,18 @@ class StemFlutterWorkerHost {
 
   void _emitSignal(StemFlutterWorkerSignal signal) {
     _lastSignal = signal;
+    if (signal.type == StemFlutterWorkerSignalType.fatal ||
+        signal.status == StemFlutterWorkerStatus.stopped) {
+      _completeStopped();
+    }
     if (!_controller.isClosed) {
       _controller.add(signal);
+    }
+  }
+
+  void _completeStopped() {
+    if (!_stoppedCompleter.isCompleted) {
+      _stoppedCompleter.complete();
     }
   }
 }

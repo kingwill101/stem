@@ -72,7 +72,22 @@ Future<void> workerMain(Map<String, Object?> message) async {
   commands.close();
 }
 
-Future<void> startMobileWorker({
+class MobileWorkerHandles {
+  const MobileWorkerHandles({
+    required this.host,
+    required this.monitor,
+  });
+
+  final StemFlutterWorkerHost host;
+  final StemFlutterQueueMonitor monitor;
+
+  Future<void> dispose() async {
+    await monitor.dispose();
+    await host.dispose();
+  }
+}
+
+Future<MobileWorkerHandles> startMobileWorker({
   required Broker broker,
   required ResultBackend backend,
 }) async {
@@ -90,6 +105,7 @@ Future<void> startMobileWorker({
   await monitor.bindWorkerSignals(host.signals);
 
   await monitor.start();
+  return MobileWorkerHandles(host: host, monitor: monitor);
 }
 ```
 

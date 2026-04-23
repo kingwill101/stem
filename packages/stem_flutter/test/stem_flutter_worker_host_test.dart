@@ -27,7 +27,7 @@ Future<void> _readyWorkerEntry(SendPort sendPort) async {
   }
 }
 
-Future<void> _failingWorkerEntry(SendPort sendPort) async {
+Future<void> _failingWorkerEntry(SendPort _) async {
   await Future<void>.delayed(const Duration(milliseconds: 20));
   throw StateError('boom');
 }

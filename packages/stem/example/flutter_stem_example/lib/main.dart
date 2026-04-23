@@ -199,10 +199,10 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
   }
 
   Future<void> _shutdownResources() async {
-    await (_monitorSub?.cancel() ?? Future<void>.value());
-    await (_workerHost?.dispose() ?? Future<void>.value());
-    await (_monitor?.dispose() ?? Future<void>.value());
-    await (_runtime?.close() ?? Future<void>.value());
+    await _monitorSub?.cancel();
+    await _monitor?.dispose();
+    await _workerHost?.dispose();
+    await _runtime?.close();
 
     _workerHost = null;
     _monitor = null;

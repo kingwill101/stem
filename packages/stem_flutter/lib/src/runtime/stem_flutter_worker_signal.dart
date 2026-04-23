@@ -114,10 +114,7 @@ class StemFlutterWorkerSignal {
     if (raw is! Map<Object?, Object?>) return null;
     final type = raw['type']?.toString();
     return switch (type) {
-      'ready' => StemFlutterWorkerSignal.ready(
-        commandPort: raw['sendPort'] as SendPort?,
-        detail: raw['detail']?.toString(),
-      ),
+      'ready' => _parseReadySignal(raw),
       'status' => _parseStatusSignal(raw),
       'warning' => StemFlutterWorkerSignal.warning(
         raw['warning']?.toString() ?? 'warning',
@@ -128,6 +125,14 @@ class StemFlutterWorkerSignal {
       _ => null,
     };
   }
+}
+
+StemFlutterWorkerSignal _parseReadySignal(Map<Object?, Object?> raw) {
+  final sendPort = raw['sendPort'];
+  return StemFlutterWorkerSignal.ready(
+    commandPort: sendPort is SendPort ? sendPort : null,
+    detail: raw['detail']?.toString(),
+  );
 }
 
 StemFlutterWorkerSignal? _parseStatusSignal(Map<Object?, Object?> raw) {

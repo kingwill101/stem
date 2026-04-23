@@ -31,4 +31,20 @@ void main() {
       );
     },
   );
+
+  test('forRoot rejects broker and backend path collisions', () async {
+    final sandbox = await Directory.systemTemp.createTemp(
+      'stem_flutter_storage_layout_test_',
+    );
+    addTearDown(() => sandbox.delete(recursive: true));
+
+    await expectLater(
+      StemFlutterStorageLayout.forRoot(
+        sandbox,
+        brokerFileName: 'runtime.sqlite',
+        backendFileName: 'runtime.sqlite',
+      ),
+      throwsArgumentError,
+    );
+  });
 }

@@ -34,4 +34,23 @@ void main() {
     expect(updated.workerStatus, StemFlutterWorkerStatus.running);
     expect(updated.workerDetail, isNull);
   });
+
+  test('copyWith can clear nullable queue metrics', () {
+    final snapshot = StemFlutterQueueSnapshot(
+      workerStatus: StemFlutterWorkerStatus.running,
+      lastHeartbeatAt: DateTime.utc(2026, 4, 20, 12),
+      pendingCount: 2,
+      inflightCount: 1,
+    );
+
+    final updated = snapshot.copyWith(
+      clearLastHeartbeatAt: true,
+      clearPendingCount: true,
+      clearInflightCount: true,
+    );
+
+    expect(updated.lastHeartbeatAt, isNull);
+    expect(updated.pendingCount, isNull);
+    expect(updated.inflightCount, isNull);
+  });
 }

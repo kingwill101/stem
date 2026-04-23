@@ -1,7 +1,7 @@
 name: stem_and_friends
 publish_to: none
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  sdk: ">=3.10.0 <4.0.0"
 workspace:
   - packages/stem
   - packages/dashboard
@@ -18,7 +18,7 @@ dev_dependencies:
   coverage: ^1.15.0
   very_good_analysis: ^10.0.0
 dependency_overrides:
-  meta: ^1.17.0
+  meta: ^1.18.0
   liquify: ^1.5.0
   timezone: 0.11.0
   pointycastle: ^4.0.0

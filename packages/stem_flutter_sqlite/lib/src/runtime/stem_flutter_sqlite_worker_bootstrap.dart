@@ -2,8 +2,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:flutter/services.dart';
-// ignore: implementation_imports, reason: First-party adapter uses internal Flutter bootstrap helpers without exposing them publicly.
-import 'package:stem_flutter/src/runtime/stem_flutter_dependency_bootstrap.dart';
+import 'package:stem_flutter/stem_flutter.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
 /// Serializable bootstrap payload for a Flutter SQLite worker isolate.
