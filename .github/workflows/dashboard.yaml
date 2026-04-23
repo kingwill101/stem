@@ -26,9 +26,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sqlite3 libsqlite3-dev
       - uses: ./.github/actions/setup-test-services
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: stable
+          channel: stable
+          cache: true
       - name: Get Dart packages cache
         uses: actions/cache@v4
         with:
@@ -37,7 +38,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pub-
       - name: Install dependencies
-        run: dart pub get --offline
+        run: flutter pub get --offline
         continue-on-error: true
       - name: Run dashboard tests
         run: echo "Dashboard tests skipped - external dependencies unavailable in CI"

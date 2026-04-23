@@ -28,9 +28,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y sqlite3 libsqlite3-dev lcov
       - uses: ./.github/actions/setup-test-services
-      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
         with:
-          sdk: stable
+          channel: stable
+          cache: true
       - name: Get Dart packages cache
         uses: actions/cache@v4
         with:
@@ -39,7 +40,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pub-
       - name: Install dependencies
-        run: dart pub get
+        run: flutter pub get
       - name: Run stem_sqlite tests
         working-directory: packages/stem_sqlite
         run: dart test --coverage=coverage

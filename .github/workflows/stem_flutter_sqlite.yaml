@@ -41,7 +41,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pub-
       - name: Install dependencies
-        run: dart pub get
+        run: flutter pub get
       - name: Analyze stem_flutter_sqlite
         working-directory: packages/stem_flutter_sqlite
         run: flutter analyze
