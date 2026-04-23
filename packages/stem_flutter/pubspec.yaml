@@ -1,0 +1,23 @@
+name: stem_flutter
+description: Flutter integration helpers for mobile-friendly Stem runtimes.
+version: 0.1.0
+repository: https://github.com/kingwill101/stem/tree/master/packages/stem_flutter
+issue_tracker: https://github.com/kingwill101/stem/issues
+resolution: workspace
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  stem: ">=0.2.0-dev <0.3.0"
+  time_machine2: ^0.13.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.0.0
+
+flutter:
+  uses-material-design: false

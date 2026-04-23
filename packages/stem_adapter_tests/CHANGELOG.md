@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Updated the `stem` dependency range for the 0.2.1 core release.
+
 ## 0.1.1
 
 - Added workflow-store contract coverage for caller-provided run ids and

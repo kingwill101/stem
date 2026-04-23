@@ -3,6 +3,7 @@
 .packages
 pubspec.lock
 build/
+**/.flutter-plugins-dependencies
 textwrap/
 examples/microservice/certs/
 examples/security/*/certs/

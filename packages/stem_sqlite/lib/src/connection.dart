@@ -6,6 +6,8 @@ import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:stem_sqlite/orm_registry.g.dart';
 import 'package:stem_sqlite/src/database/migrations.dart';
 
+const int _sqliteBusyTimeoutMs = 5000;
+
 /// Holds an active SQLite data source and query helpers.
 class SqliteConnections {
   /// Wraps an existing data source without running migrations.
@@ -77,8 +79,9 @@ Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
 
   final dataSource = buildOrmRegistry().sqliteFileDataSource(path: file.path);
   await dataSource.init();
+  final driver = dataSource.connection.driver;
+  await driver.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');
   if (!readOnly) {
-    final driver = dataSource.connection.driver;
     await driver.executeRaw('PRAGMA journal_mode=WAL;');
     await driver.executeRaw('PRAGMA synchronous=NORMAL;');
   }
@@ -92,6 +95,9 @@ Future<void> _runMigrations(File file) async {
 
   final adapter = SqliteDriverAdapter.file(file.path);
   try {
+    await adapter.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');
+    await adapter.executeRaw('PRAGMA journal_mode=WAL;');
+    await adapter.executeRaw('PRAGMA synchronous=NORMAL;');
     final ledger = SqlMigrationLedger(adapter, tableName: 'orm_migrations');
     await ledger.ensureInitialized();
 
@@ -115,6 +121,9 @@ Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
     throw StateError('Expected a SchemaDriver for SQLite migrations.');
   }
   final schemaDriver = driver as SchemaDriver;
+  await driver.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');
+  await driver.executeRaw('PRAGMA journal_mode=WAL;');
+  await driver.executeRaw('PRAGMA synchronous=NORMAL;');
 
   final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
   await ledger.ensureInitialized();

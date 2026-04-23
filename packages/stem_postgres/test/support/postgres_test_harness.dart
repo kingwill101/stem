@@ -4,6 +4,7 @@ import 'package:ormed/ormed.dart';
 import 'package:ormed_postgres/ormed_postgres.dart';
 import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:stem_postgres/src/database/migrations.dart';
+import 'package:stem_postgres/src/database/postgres_migration_lock.dart';
 
 /// Test harness wiring Postgres DataSource + ormedGroup isolation.
 class StemPostgresTestHarness {
@@ -84,14 +85,16 @@ Future<void> _runTestMigrations(DataSource dataSource) async {
     await schemaDriver.setCurrentSchema(schema);
   }
 
-  final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
-  await ledger.ensureInitialized();
+  await withPostgresMigrationLock(driver, () async {
+    final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
+    await ledger.ensureInitialized();
 
-  final runner = MigrationRunner(
-    schemaDriver: schemaDriver,
-    ledger: ledger,
-    migrations: buildMigrations(),
-    defaultSchema: schema,
-  );
-  await runner.applyAll();
+    final runner = MigrationRunner(
+      schemaDriver: schemaDriver,
+      ledger: ledger,
+      migrations: buildMigrations(),
+      defaultSchema: schema,
+    );
+    await runner.applyAll();
+  });
 }

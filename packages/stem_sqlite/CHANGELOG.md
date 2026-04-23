@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.3
+
+- Updated `ormed_sqlite` to 0.3.0 and raised the package SDK floor to Dart
+  3.10, matching the new unified native/web SQLite adapter release.
+- Guarded DataSource-backed migrations before applying SQLite PRAGMAs so
+  non-schema drivers fail before any migration side effects.
+
+## 0.1.2
+
+- Updated internal package constraints to accept the in-progress `stem`
+  prerelease and matching adapter-test prereleases during workspace
+  development.
+
 ## 0.1.1
 
 - Updated Ormed dependencies to 0.2.0, including the new split

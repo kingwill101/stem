@@ -2,6 +2,7 @@ import 'package:ormed/ormed.dart';
 
 import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:stem_postgres/src/database/migrations.dart';
+import 'package:stem_postgres/src/database/postgres_migration_lock.dart';
 
 /// Holds an active Postgres data source and query helpers.
 class PostgresConnections {
@@ -143,16 +144,18 @@ Future<void> _runMigrationsForDataSource(DataSource dataSource) async {
     await schemaDriver.setCurrentSchema(schema);
   }
 
-  final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
-  await ledger.ensureInitialized();
+  await withPostgresMigrationLock(driver, () async {
+    final ledger = SqlMigrationLedger(driver, tableName: 'orm_migrations');
+    await ledger.ensureInitialized();
 
-  final runner = MigrationRunner(
-    schemaDriver: schemaDriver,
-    ledger: ledger,
-    migrations: buildMigrations(),
-    defaultSchema: schema,
-  );
-  await runner.applyAll();
+    final runner = MigrationRunner(
+      schemaDriver: schemaDriver,
+      ledger: ledger,
+      migrations: buildMigrations(),
+      defaultSchema: schema,
+    );
+    await runner.applyAll();
+  });
 }
 
 extension on PostgresConnections {
