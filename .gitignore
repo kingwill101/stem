@@ -5,8 +5,12 @@ pubspec.lock
 build/
 **/.flutter-plugins-dependencies
 textwrap/
-examples/microservice/certs/
-examples/security/*/certs/
+packages/stem/example/microservice/certs/
+packages/stem/example/postgres_tls/certs/
+packages/stem/example/security/*/certs/
+packages/stem_cli/docker/testing/postgres/certs/*.crt
+packages/stem_cli/docker/testing/postgres/certs/*.key
+packages/stem_cli/docker/testing/postgres/certs/*.srl
 packages/dashboard/storage/
 .beads/
 mcp_agent_mail/

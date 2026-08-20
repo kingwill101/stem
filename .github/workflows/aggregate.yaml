@@ -1,0 +1,274 @@
+name: aggregate
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-hygiene:
+    name: repository / hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject committed certificate and key fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          matches="$(find packages -type f \( \
+            -name '*.key' -o -name '*.pem' -o -name '*.crt' -o \
+            -name '*.srl' -o -name '*.cnf' \
+          \) -print)"
+          if [[ -n "$matches" ]]; then
+            printf 'Certificate/key-like files must be generated during test setup:\n%s\n' "$matches"
+            exit 1
+          fi
+      - name: Reject duplicate legacy PostgreSQL CA path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e packages/stem_cli/docker/testing/certs/postgres-root.crt
+          ! rg -n 'docker/testing/certs|certs/postgres-root' \
+            packages .gitignore
+
+  cross-platform-core:
+    name: core / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - name: Resolve core dependencies
+        run: dart pub get
+        working-directory: packages/stem
+      - name: Check core formatting
+        run: dart format lib test --set-exit-if-changed
+        working-directory: packages/stem
+      - name: Analyze core
+        run: dart analyze --fatal-infos
+        working-directory: packages/stem
+      - name: Test core
+        run: dart test --exclude-tags soak --fail-fast
+        working-directory: packages/stem
+
+  cross-platform-packages:
+    name: portable package / ${{ matrix.package }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - package: packages/stem
+            tool: dart
+            test_args: --exclude-tags soak
+          - package: packages/stem_builder
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_sqlite
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_flutter
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_flutter_sqlite
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_memory
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_adapter_tests
+            tool: dart
+            test_args: --fail-fast
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.tool == 'dart'
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - if: matrix.tool == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve package dependencies
+        run: ${{ matrix.tool }} pub get
+        working-directory: ${{ matrix.package }}
+      - name: Check package formatting
+        run: dart format lib test --set-exit-if-changed
+        working-directory: ${{ matrix.package }}
+      - name: Analyze package
+        run: ${{ matrix.tool }} analyze --fatal-infos
+        working-directory: ${{ matrix.package }}
+      - name: Test package
+        run: ${{ matrix.tool }} test ${{ matrix.test_args }}
+        working-directory: ${{ matrix.package }}
+
+  package-quality:
+    name: quality / ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: packages/stem
+            tool: dart
+            test_args: --exclude-tags soak
+          - package: packages/stem_builder
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_sqlite
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_flutter
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_flutter_sqlite
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_memory
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_adapter_tests
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_redis
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_postgres
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_cli
+            tool: dart
+            test_args: --fail-fast
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y sqlite3 libsqlite3-dev
+      - uses: ./.github/actions/setup-test-services
+      - if: matrix.tool == 'dart'
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - if: matrix.tool == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve workspace dependencies
+        run: ${{ matrix.tool }} pub get
+        working-directory: ${{ matrix.package }}
+      - name: Check package metadata
+        shell: bash
+        run: |
+          test -f CHANGELOG.md
+          test -f LICENSE
+        working-directory: ${{ matrix.package }}
+      - name: Check formatting
+        run: dart format lib test --set-exit-if-changed
+        working-directory: ${{ matrix.package }}
+      - name: Analyze
+        run: ${{ matrix.tool }} analyze --fatal-infos
+        working-directory: ${{ matrix.package }}
+      - name: Test
+        run: ${{ matrix.tool }} test ${{ matrix.test_args }}
+        working-directory: ${{ matrix.package }}
+
+  standalone-resolution:
+    name: standalone source / ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: packages/stem
+            tool: dart
+            test_args: --exclude-tags soak
+          - package: packages/stem_builder
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_sqlite
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_flutter
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_flutter_sqlite
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_memory
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_adapter_tests
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_redis
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_postgres
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_cli
+            tool: dart
+            test_args: --fail-fast
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.tool == 'dart'
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - if: matrix.tool == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve release tooling
+        run: dart pub get
+      - name: Stage package outside the workspace
+        id: copy
+        env:
+          PACKAGE_PATH: ${{ matrix.package }}
+        run: |
+          standalone_dir="$(mktemp -d)"
+          staged_package="$(dart run tool/stage_workspace.dart \
+            --package "$PACKAGE_PATH" --output "$standalone_dir")"
+          echo "dir=$staged_package" >> "$GITHUB_OUTPUT"
+      - name: Resolve staged source without workspace overrides
+        working-directory: ${{ steps.copy.outputs.dir }}
+        run: ${{ matrix.tool }} pub get
+      - name: Check staged package formatting
+        working-directory: ${{ steps.copy.outputs.dir }}
+        run: dart format lib test --set-exit-if-changed
+      - name: Analyze staged package
+        working-directory: ${{ steps.copy.outputs.dir }}
+        run: ${{ matrix.tool }} analyze --fatal-infos
+      - name: Test staged package
+        working-directory: ${{ steps.copy.outputs.dir }}
+        run: ${{ matrix.tool }} test ${{ matrix.test_args }}
+
+  examples:
+    name: examples / workspace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve release tooling
+        run: dart pub get
+      - name: Check every workspace example
+        run: dart run tool/check_examples.dart

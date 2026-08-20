@@ -4,7 +4,6 @@ environment:
   sdk: ">=3.10.0 <4.0.0"
 workspace:
   - packages/stem
-  - packages/dashboard
   - packages/stem_builder
   - packages/stem_sqlite
   - packages/stem_flutter
@@ -16,9 +15,5 @@ workspace:
   - packages/stem_cli
 dev_dependencies:
   coverage: ^1.15.0
+  yaml: ^3.1.3
   very_good_analysis: ^10.0.0
-dependency_overrides:
-  meta: ^1.18.0
-  liquify: ^1.5.0
-  timezone: 0.11.0
-  pointycastle: ^4.0.0

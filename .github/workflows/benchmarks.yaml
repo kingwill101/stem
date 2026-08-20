@@ -1,0 +1,41 @@
+name: benchmarks
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-throughput:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - name: Resolve dependencies
+        run: dart pub get
+      - name: Check benchmark formatting
+        run: dart format benchmark --set-exit-if-changed
+      - name: Run throughput regression gate
+        run: dart run benchmark/stem_throughput.dart --check-baseline
+
+  sqlite-throughput:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - name: Resolve SQLite package dependencies
+        working-directory: packages/stem_sqlite
+        run: dart pub get
+      - name: Check SQLite benchmark formatting
+        working-directory: packages/stem_sqlite
+        run: dart format benchmark --set-exit-if-changed
+      - name: Run SQLite throughput regression gate
+        working-directory: packages/stem_sqlite
+        run: dart run benchmark/sqlite_throughput.dart --check-baseline
