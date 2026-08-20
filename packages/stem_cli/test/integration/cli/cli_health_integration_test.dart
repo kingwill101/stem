@@ -22,7 +22,8 @@ void main() {
     // Postgres adapters resolve ormed.yaml relative to cwd; point at the
     // package config so health checks can open connections.
     final originalDir = Directory.current;
-    Directory.current = Directory('../stem_postgres').absolute;
+    final postgresDir = _findPostgresPackageDirectory();
+    Directory.current = postgresDir;
     addTearDown(() {
       Directory.current = originalDir;
     });
@@ -50,6 +51,21 @@ void main() {
     );
     expect(stderrBuffer.isEmpty, isTrue);
   });
+}
+
+Directory _findPostgresPackageDirectory() {
+  final candidates = [
+    Directory('../stem_postgres'),
+    Directory('../packages/stem_postgres'),
+    Directory('packages/stem_postgres'),
+  ];
+  for (final candidate in candidates) {
+    final absolute = candidate.absolute;
+    if (absolute.existsSync()) return absolute;
+  }
+  throw StateError(
+    'Could not locate packages/stem_postgres from ${Directory.current.path}.',
+  );
 }
 
 Future<bool> _canConnect(String host, int port) async {

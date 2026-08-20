@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/schedule.dart';

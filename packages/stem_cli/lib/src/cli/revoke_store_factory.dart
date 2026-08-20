@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 // import 'package:stem_cloud_worker/stem_cloud_worker.dart';
 import 'package:stem_postgres/stem_postgres.dart';

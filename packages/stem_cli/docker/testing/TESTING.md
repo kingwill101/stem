@@ -26,7 +26,7 @@ source ../../_init_test_env
 export STEM_TEST_REDIS_URL="redis://127.0.0.1:56379"
 export STEM_TEST_POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
 export STEM_TEST_POSTGRES_TLS_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
-export STEM_TEST_POSTGRES_TLS_CA_CERT="$(pwd)/certs/postgres-root.crt"
+export STEM_TEST_POSTGRES_TLS_CA_CERT="$(pwd)/postgres/certs/root.crt"
 ```
 
 ### 3. Run Tests
@@ -191,11 +191,11 @@ The PostgreSQL service is configured with TLS support using self-signed certific
 
 ```bash
 # TLS certificate location
-packages/stem_cli/docker/testing/certs/postgres-root.crt
+packages/stem_cli/docker/testing/postgres/certs/root.crt
 
 # TLS environment variables (exported by _init_test_env)
 export STEM_TEST_POSTGRES_TLS_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
-export STEM_TEST_POSTGRES_TLS_CA_CERT="packages/stem_cli/docker/testing/certs/postgres-root.crt"
+export STEM_TEST_POSTGRES_TLS_CA_CERT="packages/stem_cli/docker/testing/postgres/certs/root.crt"
 
 # Run TLS integration tests
 dart test packages/stem_postgres/test/integration -r expanded
@@ -310,7 +310,7 @@ dart test packages/stem_postgres -r expanded
 | `STEM_TEST_REDIS_URL` | `redis://127.0.0.1:56379` | Redis broker connection |
 | `STEM_TEST_POSTGRES_URL` | `postgresql://postgres:postgres@127.0.0.1:65432/stem_test` | PostgreSQL connection |
 | `STEM_TEST_POSTGRES_TLS_URL` | Same as above (TLS enabled) | PostgreSQL TLS connection |
-| `STEM_TEST_POSTGRES_TLS_CA_CERT` | `./certs/postgres-root.crt` | PostgreSQL TLS CA certificate |
+| `STEM_TEST_POSTGRES_TLS_CA_CERT` | `./postgres/certs/root.crt` | PostgreSQL TLS CA certificate |
 | `STEM_BROKER_URL` | Depends on broker choice | Broker connection string |
 | `STEM_RESULT_BACKEND_URL` | Depends on backend choice | Result backend connection string |
 

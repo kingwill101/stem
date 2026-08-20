@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/file_schedule_repository.dart';
@@ -70,6 +72,58 @@ void main() {
       expect(code, equals(0));
       final lines = out.toString().trim().split('\n');
       expect(lines, hasLength(3));
+    });
+
+    test('trigger publishes once without changing the schedule', () async {
+      final repo = FileScheduleRepository(path: scheduleFile);
+      final entry = ScheduleEntry(
+        id: 'cleanup',
+        taskName: 'noop',
+        queue: 'priority',
+        args: const {'limit': 3},
+        spec: IntervalScheduleSpec(every: const Duration(minutes: 1)),
+      );
+      await repo.save([entry]);
+
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final received = <Envelope>[];
+      final subscription = broker
+          .consume(
+            RoutingSubscription.singleQueue('priority'),
+            consumerName: 'schedule-trigger-test',
+          )
+          .listen((delivery) async {
+            received.add(delivery.envelope);
+            await broker.ack(delivery);
+          });
+
+      final out = StringBuffer();
+      final code = await runStemCli(
+        ['schedule', 'trigger', 'cleanup'],
+        out: out,
+        scheduleFilePath: scheduleFile,
+        contextBuilder: () async => CliContext(
+          broker: broker,
+          backend: backend,
+          routing: RoutingRegistry(RoutingConfig.legacy()),
+          dispose: () async {},
+        ),
+      );
+
+      await _waitUntil(() => received.isNotEmpty);
+      expect(code, equals(0));
+      expect(received.single.name, equals('noop'));
+      expect(received.single.args, equals({'limit': 3}));
+      expect(received.single.meta['stem.schedule.trigger'], isTrue);
+      expect(out.toString(), contains('Triggered schedule "cleanup"'));
+      final unchanged = (await repo.load()).single;
+      expect(unchanged.totalRunCount, equals(entry.totalRunCount));
+      expect(unchanged.lastRunAt, isNull);
+      expect(await backend.get(received.single.id), isNotNull);
+
+      await subscription.cancel();
+      broker.dispose();
     });
 
     test('delete removes schedule', () async {
@@ -361,6 +415,18 @@ void main() {
       expect(reloaded.single.enabled, isFalse);
     });
   });
+}
+
+Future<void> _waitUntil(
+  FutureOr<bool> Function() predicate, {
+  Duration timeout = const Duration(seconds: 2),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(deadline)) {
+    if (await predicate()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  throw TimeoutException('Condition was not met within $timeout.');
 }
 
 class FlakyScheduleStore implements ScheduleStore {

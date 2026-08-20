@@ -20,15 +20,18 @@ if ! command -v docker >/dev/null 2>&1; then
   if [ "$SOURCED" -eq 1 ]; then return 1; else exit 1; fi
 fi
 
+"$SCRIPT_DIR/docker/testing/generate_certs.sh"
+
 echo "Starting Redis/Postgres test services (docker compose)..."
 STEM_TEST_REDIS_TLS_PORT="${STEM_TEST_REDIS_TLS_PORT:-56380}"
 STEM_TEST_REDIS_MTLS_PORT="${STEM_TEST_REDIS_MTLS_PORT:-56381}"
 export STEM_TEST_REDIS_TLS_PORT STEM_TEST_REDIS_MTLS_PORT
-docker compose -f "$COMPOSE_FILE" up -d postgres postgres_tls redis redis_tls redis_mtls
+docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 60 \
+  postgres postgres_tls redis redis_tls redis_mtls
 
 REDIS_URL="redis://127.0.0.1:56379"
 POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:65432/stem_test"
-CA_CERT_PATH="$SCRIPT_DIR/docker/testing/certs/postgres-root.crt"
+CA_CERT_PATH="$SCRIPT_DIR/docker/testing/postgres/certs/root.crt"
 REDIS_TLS_CA_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/ca.crt"
 REDIS_MTLS_CLIENT_CERT_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.crt"
 REDIS_MTLS_CLIENT_KEY_PATH="$SCRIPT_DIR/../stem/example/microservice/certs/client.key"

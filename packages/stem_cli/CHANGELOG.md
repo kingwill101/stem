@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0
+
+- Updated CLI adapter dependencies for the Stem 0.3.0 release train.
+- Kept worker startup explicit and retained `schedule trigger` support.
+- Made Docker-backed integration setup reuse disposable TLS assets and wait for
+  Redis/Postgres health before exporting test endpoints.
+
+## 0.1.2
+
+- Added `stem schedule trigger` for one-off execution without mutating the
+  persisted recurring schedule.
+- Hardened CLI integration discovery and documented explicit worker startup.
+- Removed the prerelease core dependency range from the published-package
+  manifest.
+
 ## 0.1.0
 
 - Updated CLI adapter wiring and docker test stack to the Ormed-backed
