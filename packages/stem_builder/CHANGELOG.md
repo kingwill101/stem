@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0
+
+- Updated generated task adapters and workflow definitions for Stem 0.3.0.
+- Generated tasks now preserve typed handler boundaries and isolate entrypoints
+  without exposing raw map transport code to application code.
+- Generated registrations now declare `TaskExecutionMode` explicitly, making
+  inline versus isolate execution visible in generated source.
+
+## 0.2.1
+
+- Updated the `stem` dependency range to admit the in-progress `0.2.1-wip`
+  core prerelease during workspace resolution.
+- Generated task registrations now use `TypedTaskHandler` adapters backed by
+  the generated task definition, including generated isolate entrypoints.
+
 ## 0.2.0
 
 - Generated output now centers on `stemModule`, `StemWorkflowDefinitions`, and

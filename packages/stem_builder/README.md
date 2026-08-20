@@ -246,8 +246,8 @@ final taskApp = await StemApp.fromUrl(
 
 Plain `StemApp` bootstrap also infers task queue subscriptions from the
 bundled or explicitly supplied task handlers when
-`workerConfig.subscription` is omitted, and it lazy-starts on the first
-enqueue or wait call.
+`workerConfig.subscription` is omitted. Start the app explicitly with
+`await taskApp.start()` before enqueueing or waiting for work.
 
 If you already centralize wiring in a `StemClient`, prefer the shared-client
 path:

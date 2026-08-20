@@ -1,3 +1,6 @@
+// This executable prints generated manifests so users can inspect the output.
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
 
 import 'package:stem/stem.dart';
@@ -16,8 +19,11 @@ Future<void> main() async {
     ),
   );
 
-  final app = await StemWorkflowApp.inMemory(module: stemModule);
+  final app = await StemWorkflowApp.inMemory(
+    module: stemModule,
+  );
   try {
+    await app.start();
     final runtimeManifest = app
         .workflowManifest()
         .map((entry) => entry.toJson())
@@ -40,8 +46,11 @@ Future<void> main() async {
     await app.close();
   }
 
-  final taskApp = await StemApp.inMemory(module: stemModule);
+  final taskApp = await StemApp.inMemory(
+    module: stemModule,
+  );
   try {
+    await taskApp.start();
     final taskResult = await StemTaskDefinitions.builderExamplePing
         .enqueueAndWait(taskApp, timeout: const Duration(seconds: 2));
     print('\nNo-arg task result: ${taskResult?.value}');

@@ -1,13 +1,19 @@
+// This executable prints generated runtime metadata so users can inspect it.
+// ignore_for_file: avoid_print
+
 import 'dart:convert';
 
 import 'package:stem/stem.dart';
 import 'package:stem_builder_example/definitions.dart';
 
 Future<void> main() async {
-  final app = await StemWorkflowApp.inMemory(module: stemModule);
+  final app = await StemWorkflowApp.inMemory(
+    module: stemModule,
+  );
   final runtime = app.runtime;
 
   try {
+    await app.start();
     print('--- Generated manifest (builder output) ---');
     print(
       const JsonEncoder.withIndent('  ').convert(
