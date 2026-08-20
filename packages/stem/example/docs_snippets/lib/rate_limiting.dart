@@ -57,7 +57,7 @@ class RateLimitedTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-    rateLimit: '10/s',
+    rateLimit: const RateLimit.perSecond(10),
     maxRetries: 3,
   );
 
@@ -77,7 +77,7 @@ class GroupRateLimitedTask extends TaskHandler<void> {
 
   @override
   TaskOptions get options => const TaskOptions(
-    groupRateLimit: '20/m',
+    groupRateLimit: const RateLimit.perMinute(20),
     groupRateKeyHeader: 'tenant',
     groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
     maxRetries: 5,
@@ -114,6 +114,9 @@ Future<void> main() async {
     tasks: [RateLimitedTask()],
     workerConfig: workerConfig,
   );
+  // #region rate-limit-demo-worker-start
+  await app.start();
+  // #endregion rate-limit-demo-worker-start
   // #endregion rate-limit-demo-registry
 
   // #region rate-limit-demo-stem

@@ -5,8 +5,6 @@ import 'dart:io';
 import 'package:stem/stem.dart';
 import 'package:stem_redis/stem_redis.dart';
 
-import 'rate_limiter.dart';
-
 const _taskName = 'demo.throttled.render';
 
 List<TaskHandler<Object?>> buildTasks() {
@@ -18,7 +16,7 @@ List<TaskHandler<Object?>> buildTasks() {
         queue: 'throttled',
         maxRetries: 0,
         visibilityTimeout: Duration(seconds: 60),
-        rateLimit: '3/s',
+        rateLimit: const RateLimit.perSecond(3),
       ),
       entrypoint: _renderEntrypoint,
     ),
@@ -46,8 +44,8 @@ Future<RedisResultBackend> connectBackend(String uri) =>
     RedisResultBackend.connect(uri);
 
 // #region rate-limit-redis-connector
-Future<RedisFixedWindowRateLimiter> connectRateLimiter(String uri) =>
-    RedisFixedWindowRateLimiter.connect(uri);
+Future<RedisRateLimiter> connectRateLimiter(String uri) =>
+    RedisRateLimiter.connect(uri);
 // #endregion rate-limit-redis-connector
 
 List<SignalSubscription> attachSignalLogging() {

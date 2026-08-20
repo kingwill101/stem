@@ -27,7 +27,10 @@ class EmailReceiptTask extends TaskHandler<void> {
 // #endregion quickstart-email-failure
 
 Future<void> main() async {
-  final app = await StemApp.inMemory(tasks: [EmailReceiptTask()]);
+  final app = await StemApp.inMemory(
+    tasks: [EmailReceiptTask()],
+  );
+  await app.start();
 
   final taskId = await app.enqueue(
     'billing.email-receipt',

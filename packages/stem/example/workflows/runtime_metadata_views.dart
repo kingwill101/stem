@@ -5,6 +5,7 @@
 import 'dart:convert';
 
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 
 Future<void> main() async {
   final app = await StemApp.create(

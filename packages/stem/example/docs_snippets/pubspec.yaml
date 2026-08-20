@@ -1,15 +1,25 @@
 name: stem_examples
 description: Runnable code examples for Stem documentation
 publish_to: none
-resolution: workspace
 environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
   stem:
+    path: ../..
   stem_redis:
+    path: ../../../stem_redis
   stem_postgres:
+    path: ../../../stem_postgres
   contextual: ^2.0.0
 
 dev_dependencies:
   test: ^1.28.0
+
+dependency_overrides:
+  stem:
+    path: ../..
+  stem_redis:
+    path: ../../../stem_redis
+  stem_postgres:
+    path: ../../../stem_postgres

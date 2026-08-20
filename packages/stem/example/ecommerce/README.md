@@ -82,7 +82,8 @@ Database boot sequence on startup:
   [`lib/src/database/migrations.dart`](/run/media/kingwill101/disk2/code/code/dart_packages/stem/packages/stem/example/ecommerce/lib/src/database/migrations.dart)
 - seeds default catalog records if empty
 
-Optional CLI migration command (when your local `ormed_cli` dependency set is compatible):
+Optional CLI migration command (install a compatible `ormed_cli` separately when
+you need to manage the example database):
 
 ```bash
 dart run ormed_cli:ormed migrate --config ormed.yaml

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:stem_flutter/stem_flutter.dart';
 import 'package:stem_flutter_sqlite/stem_flutter_sqlite.dart';
@@ -52,14 +53,12 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
       );
       stemLogger.info(
         'Opening producer/runtime stores',
-        stemLogContext(
-          component: 'flutter_example',
-          subsystem: 'bootstrap',
-          fields: <String, Object?>{
-            'brokerPath': layout.brokerFile.path,
-            'backendPath': layout.backendFile.path,
-          },
-        ),
+        fields: <String, Object?>{
+          'component': 'flutter_example',
+          'subsystem': 'bootstrap',
+          'brokerPath': layout.brokerFile.path,
+          'backendPath': layout.backendFile.path,
+        },
       );
 
       final runtime = await StemFlutterSqliteRuntime.open(
@@ -130,7 +129,10 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
         _isBooting = false;
       });
     } catch (error, stackTrace) {
-      stemLogger.error('Flutter example bootstrap failed: $error', stackTrace);
+      stemLogger.error(
+        'Flutter example bootstrap failed: $error',
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
       setState(() {
         _bootError = '$error\n$stackTrace';
@@ -173,11 +175,12 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
     );
     stemLogger.info(
       'Queued demo task',
-      stemLogContext(
-        component: 'flutter_example',
-        subsystem: 'producer',
-        fields: <String, Object?>{'taskId': taskId, 'label': label},
-      ),
+      fields: <String, Object?>{
+        'component': 'flutter_example',
+        'subsystem': 'producer',
+        'taskId': taskId,
+        'label': label,
+      },
     );
 
     await _monitor?.refresh();

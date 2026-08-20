@@ -31,6 +31,7 @@ Future<void> runInMemoryDemo() async {
       consumerName: 'first-steps-worker',
     ),
   );
+  await app.start();
   // #endregion first-steps-bootstrap
 
   // #region first-steps-enqueue

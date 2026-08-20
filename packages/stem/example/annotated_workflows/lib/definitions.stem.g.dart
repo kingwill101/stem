@@ -222,6 +222,29 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
   return args[name];
 }
 
+TaskInvocationContext _stemTaskInvocationContext(
+  TaskExecutionContext context,
+  Map<String, Object?> args,
+) {
+  if (context case final TaskInvocationContext value) {
+    return value;
+  }
+  return TaskInvocationContext.local(
+    id: context.id,
+    args: args,
+    headers: context.headers,
+    meta: context.meta,
+    attempt: context.attempt,
+    heartbeat: context.heartbeat,
+    extendLease: context.extendLease,
+    progress: (percent, {data}) => context.progress(percent, data: data),
+    cancellation: context.cancellation,
+    enqueuer: context,
+    workflows: context,
+    workflowEvents: context,
+  );
+}
+
 Future<Object?> _stemTaskAdapter0(
   TaskInvocationContext context,
   Map<String, Object?> args,
@@ -246,6 +269,7 @@ abstract final class StemTaskDefinitions {
       TaskDefinition<Map<String, Object?>, Object?>(
         name: "send_email",
         encodeArgs: (args) => args,
+        decodeArgs: (args) => args,
         defaultOptions: const TaskOptions(maxRetries: 1),
         metadata: const TaskMetadata(),
       );
@@ -255,23 +279,10 @@ abstract final class StemTaskDefinitions {
     encodeArgs: (args) => <String, Object?>{
       "dispatch": StemPayloadCodecs.emailDispatch.encode(args),
     },
+    decodeArgs: (args) => StemPayloadCodecs.emailDispatch.decode(
+      _stemRequireArg(args, "dispatch"),
+    ),
     defaultOptions: const TaskOptions(maxRetries: 1),
-    metadata: const TaskMetadata(),
-    decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
-  );
-}
-
-final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
-  FunctionTaskHandler<Object?>(
-    name: "send_email",
-    entrypoint: _stemTaskAdapter0,
-    options: const TaskOptions(maxRetries: 1),
-    metadata: const TaskMetadata(),
-  ),
-  FunctionTaskHandler<Object?>(
-    name: "send_email_typed",
-    entrypoint: _stemTaskAdapter1,
-    options: const TaskOptions(maxRetries: 1),
     metadata: TaskMetadata(
       tags: [],
       idempotent: false,
@@ -281,8 +292,35 @@ final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
         codec: StemPayloadCodecs.emailDeliveryReceipt,
       ),
     ),
-  ),
-];
+    decodeResult: StemPayloadCodecs.emailDeliveryReceipt.decode,
+  );
+}
+
+final List<TypedTaskHandler<Object?, Object?>> _stemTasks =
+    <TypedTaskHandler<Object?, Object?>>[
+      StemTaskDefinitions.sendEmail.handler(
+        entrypoint: (context, args) => sendEmail(
+          args,
+          context: _stemTaskInvocationContext(
+            context,
+            StemTaskDefinitions.sendEmail.encodeArgs(args),
+          ),
+        ),
+        executionMode: TaskExecutionMode.isolate,
+        isolateEntrypoint: _stemTaskAdapter0,
+      ),
+      StemTaskDefinitions.sendEmailTyped.handler(
+        entrypoint: (context, args) => sendEmailTyped(
+          args,
+          context: _stemTaskInvocationContext(
+            context,
+            StemTaskDefinitions.sendEmailTyped.encodeArgs(args),
+          ),
+        ),
+        executionMode: TaskExecutionMode.isolate,
+        isolateEntrypoint: _stemTaskAdapter1,
+      ),
+    ];
 
 final List<WorkflowManifestEntry> _stemWorkflowManifest =
     <WorkflowManifestEntry>[

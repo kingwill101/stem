@@ -36,6 +36,7 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
+  await app.start();
   final chainResult = await app.canvas.chain<Object?>([
     task('fetch.user'),
     task('enrich.user'),

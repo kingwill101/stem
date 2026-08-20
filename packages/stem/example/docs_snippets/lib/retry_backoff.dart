@@ -66,6 +66,7 @@ Future<void> main() async {
     tasks: [FlakyTask()],
     workerConfig: workerConfig,
   );
+  await app.start();
 
   final taskId = await FlakyTask.definition.enqueue(app);
   await app.waitForTask<void>(taskId, timeout: const Duration(seconds: 5));

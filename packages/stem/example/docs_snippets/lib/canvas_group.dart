@@ -24,6 +24,7 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
+  await app.start();
 
   final canvas = app.canvas;
   final dispatch = await canvas.group([

@@ -85,6 +85,7 @@ Future<void> runTypedDefinitionExample() async {
     tasks: [PublishInvoiceTask()],
   );
   final app = await client.createApp();
+  await app.start();
 
   final result = await PublishInvoiceTask.definition.enqueueAndWait(
     app,
@@ -223,6 +224,7 @@ class MyOtherEncoder extends TaskPayloadEncoder {
 Future<void> main() async {
   final client = await StemClient.inMemory(tasks: [EmailTask()]);
   final app = await client.createApp();
+  await app.start();
 
   final taskId = await app.enqueue(
     'email.send',

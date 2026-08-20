@@ -2,7 +2,7 @@
 
 This example exercises Stem’s rate limiting, delayed delivery, and priority
 clamping features using Redis. A burst of tasks is enqueued with different
-priorities and optional `notBefore` timestamps. A custom Redis-backed rate
+priorities and optional `notBefore` timestamps. The shipped Redis-backed rate
 limiter enforces a global `3/s` token bucket; denied tasks are rescheduled with
 backoff, and priority values are clamped to the queue’s `[1,5]` range.
 
@@ -10,8 +10,8 @@ backoff, and priority values are clamped to the queue’s `[1,5]` range.
 
 - **Redis** – shared broker, result backend, and rate limiter store.
 - **Producer** – enqueues jobs with mixed delays and priority overrides.
-- **Worker** – processes the `throttled` queue with a fixed-window rate limiter,
-  logging when work is deferred.
+- **Worker** – processes the `throttled` queue with a distributed token bucket,
+  rescheduling work when the bucket is empty.
 
 ## Quick Start (Docker Compose)
 
@@ -24,9 +24,7 @@ You should see logs similar to:
 
 ```
 rate-limit-delay-producer-1  | [producer] job=1 priority=9 applied=5 delay=0s id=...
-rate-limit-delay-worker-1    | [rate-limiter][granted] key=demo.throttled.render:global tokens=3 window=1000ms -> available immediately
 rate-limit-delay-worker-1    | [worker][start] job=1 attempt=0 requestedPriority=9 appliedPriority=5 rateLimited=false ...
-rate-limit-delay-worker-1    | [rate-limiter][denied] key=demo.throttled.render:global tokens=3 window=1000ms -> retry in 872ms
 rate-limit-delay-worker-1    | [signal][retry] task=demo.throttled.render retry=0 next=...
 ```
 
@@ -61,8 +59,8 @@ rate-limit-delay-worker-1    | [signal][retry] task=demo.throttled.render retry=
 
 ## What to Observe
 
-- **Rate limiting:** the custom Redis fixed-window limiter logs whether tokens
-  were granted or denied, with `retryAfter` durations surfaced in the worker.
+- **Rate limiting:** the Redis token bucket shares permits across worker
+  processes, with `retryAfter` durations surfaced in the worker.
 - **Delayed delivery:** half the jobs include a `notBefore` timestamp—watch the
   worker start times versus the scheduled time in the log output.
 - **Priority clamping:** tasks request priority 9, but the routing config clamps

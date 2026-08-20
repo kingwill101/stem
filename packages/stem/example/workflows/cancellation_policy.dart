@@ -28,6 +28,7 @@ Future<void> main() async {
   final app = await StemWorkflowApp.inMemory(
     flows: [reportsGenerate],
   );
+  await app.start();
 
   final runId = await reportsGenerate.start(
     app,

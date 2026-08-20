@@ -32,6 +32,7 @@ Future<void> runTroubleshootingDemo() async {
       concurrency: 1,
     ),
   );
+  await app.start();
   // #endregion troubleshooting-bootstrap
 
   // #region troubleshooting-enqueue

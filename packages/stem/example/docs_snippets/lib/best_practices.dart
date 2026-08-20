@@ -36,6 +36,7 @@ Future<void> main() async {
   final app = await StemApp.inMemory(
     tasks: [IdempotentTask()],
   );
+  await app.start();
 
   await enqueueTyped(app);
   await app.close();

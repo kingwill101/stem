@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:stem/stem.dart';
+import 'package:stem/observability.dart';
 import 'package:stem_flutter/stem_flutter.dart';
 import 'package:stem_flutter_sqlite/stem_flutter_sqlite.dart';
 
@@ -20,7 +21,7 @@ Future<void> workerIsolateMain(Map<String, Object?> config) async {
 
   try {
     configureStemLogging(
-      level: Level.debug,
+      level: StemLogLevel.debug,
       format: StemLogFormat.plain,
       enableConsole: true,
     );
@@ -38,14 +39,12 @@ Future<void> workerIsolateMain(Map<String, Object?> config) async {
     stores = await StemFlutterSqliteWorkerStores.open(bootstrap);
     stemLogger.info(
       'Worker stores ready',
-      stemLogContext(
-        component: 'flutter_example',
-        subsystem: 'worker',
-        fields: <String, Object?>{
-          'brokerPath': bootstrap.brokerPath,
-          'backendPath': bootstrap.backendPath,
-        },
-      ),
+      fields: <String, Object?>{
+        'component': 'flutter_example',
+        'subsystem': 'worker',
+        'brokerPath': bootstrap.brokerPath,
+        'backendPath': bootstrap.backendPath,
+      },
     );
 
     worker = Worker(
@@ -63,14 +62,12 @@ Future<void> workerIsolateMain(Map<String, Object?> config) async {
     eventsSub = worker.events.listen((event) {
       stemLogger.info(
         'Worker event ${event.type.name}',
-        stemLogContext(
-          component: 'flutter_example',
-          subsystem: 'worker_event',
-          fields: <String, Object?>{
-            'envelopeId': event.envelopeId,
-            'error': event.error?.toString(),
-          },
-        ),
+        fields: <String, Object?>{
+          'component': 'flutter_example',
+          'subsystem': 'worker_event',
+          'envelopeId': event.envelopeId,
+          'error': event.error?.toString(),
+        },
       );
       if (event.type == WorkerEventType.error ||
           event.type == WorkerEventType.timeout) {
@@ -99,7 +96,10 @@ Future<void> workerIsolateMain(Map<String, Object?> config) async {
       }
     }
   } catch (error, stackTrace) {
-    stemLogger.error('Worker isolate bootstrap failed: $error', stackTrace);
+    stemLogger.error(
+      'Worker isolate bootstrap failed: $error',
+      stackTrace: stackTrace,
+    );
     bootstrap.sendPort.send(
       StemFlutterWorkerSignal.fatal('$error\n$stackTrace').toMessage(),
     );

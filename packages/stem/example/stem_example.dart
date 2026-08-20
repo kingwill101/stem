@@ -21,7 +21,7 @@ class HelloTask implements TaskHandler<void> {
   TaskOptions get options => const TaskOptions(
     queue: 'default',
     maxRetries: 3,
-    rateLimit: '10/s',
+    rateLimit: const RateLimit.perSecond(10),
     visibilityTimeout: Duration(seconds: 60),
   );
   // #endregion getting-started-task-options
