@@ -69,4 +69,3 @@ dart run tool/publish.dart --plan
 A real release requires a clean tree and the exact commit used to produce the
 artifacts. The aggregate CI workflow repeats package checks on Linux, Windows
 and macOS, tests standalone source staging, and checks workspace examples.
-

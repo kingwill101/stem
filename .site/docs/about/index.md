@@ -14,4 +14,3 @@ prioritised before new platform features.
 Stem is not presented as production-ready. Production use requires validating
 the selected broker, backend, failure semantics and operational procedures for
 the workload being deployed.
-
