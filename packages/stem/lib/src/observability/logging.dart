@@ -3,14 +3,7 @@ import 'dart:convert';
 import 'package:ansicolor/ansicolor.dart';
 import 'package:contextual/contextual.dart';
 
-/// Available output formats for the shared Stem logger.
-enum StemLogFormat {
-  /// Plain logfmt-style output without ANSI color codes.
-  plain,
-
-  /// Colored terminal output intended for interactive local development.
-  pretty,
-}
+import 'package:stem/src/observability/logging_types.dart';
 
 /// Creates a formatter matching the shared Stem logging presets.
 LogMessageFormatter createStemLogFormatter(StemLogFormat format) {

@@ -5,7 +5,7 @@ sidebar_position: 2
 slug: /deployment/hardening
 ---
 
-This checklist captures production-ready defaults for Stem services—producers,
+This checklist captures hardening defaults for experimental Stem services—producers,
 workers, beat, and the supporting Redis infrastructure.
 
 ## Configuration & secrets

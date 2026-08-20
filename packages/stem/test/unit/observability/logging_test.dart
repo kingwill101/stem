@@ -1,17 +1,21 @@
 import 'package:ansicolor/ansicolor.dart' show ansiColorDisabled;
 import 'package:contextual/contextual.dart'
     show
+        Context,
+        Level,
         LogDriver,
         LogEntry,
         LogRecord,
+        Logger,
         LoggerChannelSelection,
         PlainTextLogFormatter,
         PrettyLogFormatter;
-import 'package:stem/stem.dart';
+import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/logging_types.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('package:stem exports logging types used by the public API', () {
+  test('internal logging implementation supports contextual integration', () {
     void acceptsStemLogger(Logger logger, Level level) {
       logger.setLevel(level);
     }

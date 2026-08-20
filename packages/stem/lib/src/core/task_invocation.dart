@@ -562,6 +562,7 @@ class TaskInvocationContext implements TaskExecutionContext {
       Map<String, Object?>? data,
     })
     progress,
+    TaskCancellationToken cancellation = const TaskCancellationToken.none(),
     Map<String, Object?> args = const {},
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
@@ -575,6 +576,7 @@ class TaskInvocationContext implements TaskExecutionContext {
     heartbeat: heartbeat,
     extendLease: extendLease,
     progress: progress,
+    cancellation: cancellation,
     enqueuer: enqueuer,
     workflows: workflows,
     workflowEvents: workflowEvents,
@@ -587,6 +589,7 @@ class TaskInvocationContext implements TaskExecutionContext {
     required Map<String, String> headers,
     required Map<String, Object?> meta,
     required int attempt,
+    TaskCancellationToken cancellation = const TaskCancellationToken.none(),
     Map<String, Object?> args = const {},
   }) => TaskInvocationContext._(
     id: id,
@@ -598,6 +601,7 @@ class TaskInvocationContext implements TaskExecutionContext {
     extendLease: (by) async => controlPort.send(ExtendLeaseSignal(by)),
     progress: (percent, {data}) async =>
         controlPort.send(ProgressSignal(percent, data: data)),
+    cancellation: cancellation,
     enqueuer: _RemoteTaskEnqueuer(controlPort),
     workflows: _RemoteWorkflowCaller(controlPort),
     workflowEvents: _RemoteWorkflowEventEmitter(controlPort),
@@ -617,6 +621,7 @@ class TaskInvocationContext implements TaskExecutionContext {
       Map<String, Object?>? data,
     })
     progress,
+    required this.cancellation,
     TaskEnqueuer? enqueuer,
     WorkflowCaller? workflows,
     WorkflowEventEmitter? workflowEvents,
@@ -645,6 +650,9 @@ class TaskInvocationContext implements TaskExecutionContext {
   /// Current attempt count.
   @override
   final int attempt;
+
+  @override
+  final TaskCancellationToken cancellation;
 
   final void Function() _heartbeat;
   final Future<void> Function(Duration) _extendLease;
@@ -700,7 +708,7 @@ class TaskInvocationContext implements TaskExecutionContext {
       ..addAll(headers);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = <String, Object?>{
-      if (scopeMeta != null) ...scopeMeta,
+      ...?scopeMeta,
       ...this.meta,
       ...meta,
     };
@@ -762,7 +770,7 @@ class TaskInvocationContext implements TaskExecutionContext {
       ..addAll(call.headers);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = <String, Object?>{
-      if (scopeMeta != null) ...scopeMeta,
+      ...?scopeMeta,
       ...meta,
       ...call.meta,
     };

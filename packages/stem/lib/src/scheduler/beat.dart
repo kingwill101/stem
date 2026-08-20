@@ -53,7 +53,7 @@ class Beat {
   final ScheduleStore store;
 
   /// Broker used to publish scheduled tasks.
-  final Broker broker;
+  final QueueBroker broker;
 
   /// Optional lock store for distributed scheduling.
   final LockStore? lockStore;
@@ -177,6 +177,7 @@ class Beat {
     Lock? lock;
     Timer? renewalTimer;
     Duration? jitterDelay;
+    var leaseLost = false;
     if (lockStore != null) {
       lock = await lockStore!.acquire(
         'stem:schedule:${entry.id}',
@@ -200,6 +201,7 @@ class Beat {
       renewalTimer = Timer.periodic(Duration(milliseconds: renewMs), (_) async {
         final renewed = await lock!.renew(lockTtl);
         if (!renewed) {
+          leaseLost = true;
           StemMetrics.instance.increment(
             'stem.scheduler.lock.renew_failed',
             tags: {'schedule': entry.id},
@@ -225,11 +227,40 @@ class Beat {
         await Future<void>.delayed(jitterDelay);
       }
 
+      // Revalidate ownership immediately before publication. The periodic
+      // renewal timer protects long jitter/dispatch windows, but a scheduler
+      // must not publish after it has already lost the distributed lock.
+      if (lock != null) {
+        final alreadyLost = leaseLost;
+        if (alreadyLost || !await lock.renew(lockTtl)) {
+          leaseLost = true;
+          if (!alreadyLost) {
+            StemMetrics.instance.increment(
+              'stem.scheduler.lock.renew_failed',
+              tags: {'schedule': entry.id},
+            );
+          }
+          throw StateError(
+            'Scheduler lock was lost before publishing schedule '
+            '"${entry.id}".',
+          );
+        }
+      }
+
+      final headers = <String, String>{
+        'scheduled-from': 'beat',
+        'schedule-id': entry.id,
+      };
+      final fencingToken = lock?.fencingToken;
+      if (fencingToken != null) {
+        headers['stem-lock-fencing-token'] = fencingToken.toString();
+      }
+
       var envelope = Envelope(
         name: entry.taskName,
         args: entry.args,
         queue: entry.queue,
-        headers: {'scheduled-from': 'beat', 'schedule-id': entry.id},
+        headers: headers,
         meta: entry.kwargs.isEmpty
             ? entry.meta
             : {...entry.meta, 'kwargs': entry.kwargs},

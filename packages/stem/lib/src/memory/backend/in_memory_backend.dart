@@ -1,6 +1,5 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
-// ignore_for_file: implementation_imports
 import 'dart:async';
 
 import 'package:stem/src/core/chord_metadata.dart';
@@ -9,7 +8,8 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/observability/heartbeat.dart';
 
 /// Simple in-memory result backend used for tests and local development.
-class InMemoryResultBackend implements ResultBackend {
+class InMemoryResultBackend
+    implements ResultBackend, AtomicTerminalResultBackend {
   /// Creates an in-memory backend with configurable TTLs.
   InMemoryResultBackend({
     this.defaultTtl = const Duration(days: 1),
@@ -51,6 +51,9 @@ class InMemoryResultBackend implements ResultBackend {
   final Map<String, Timer> _heartbeatExpiry = {};
 
   @override
+  bool get supportsAtomicTerminalWrites => true;
+
+  @override
   Future<void> set(
     String taskId,
     TaskState state, {
@@ -60,27 +63,48 @@ class InMemoryResultBackend implements ResultBackend {
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) async {
-    final now = stemNow();
-    final existing = _entries[taskId];
-    final createdAt = existing?.createdAt ?? now;
-    final status = TaskStatus(
-      id: taskId,
-      state: state,
-      payload: payload,
-      error: error,
-      attempt: attempt,
-      meta: meta,
+    _write(
+      TaskStatus(
+        id: taskId,
+        state: state,
+        payload: payload,
+        error: error,
+        attempt: attempt,
+        meta: meta,
+      ),
+      ttl: ttl,
     );
+  }
 
-    _entries[taskId] = _Entry(
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    final existing = _entries[status.id];
+    if (existing != null && existing.expiresAt.isBefore(stemNow())) {
+      _remove(status.id);
+    } else if (existing?.status.state.isTerminal == true) {
+      return false;
+    }
+
+    // This method intentionally performs the check and write without an
+    // asynchronous gap. It is atomic for this single-isolate backend.
+    _write(status, ttl: ttl);
+    return true;
+  }
+
+  void _write(TaskStatus status, {Duration? ttl}) {
+    final now = stemNow();
+    final existing = _entries[status.id];
+    _entries[status.id] = _Entry(
       status: status,
-      expiresAt: stemNow().add(ttl ?? defaultTtl),
-      createdAt: createdAt,
+      expiresAt: now.add(ttl ?? defaultTtl),
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     );
-
-    _scheduleExpiry(taskId, ttl ?? defaultTtl);
-    _watchers[taskId]?.add(status);
+    _scheduleExpiry(status.id, ttl ?? defaultTtl);
+    _watchers[status.id]?.add(status);
   }
 
   @override
@@ -310,10 +334,11 @@ class InMemoryResultBackend implements ResultBackend {
       timer.cancel();
     }
     _expiryTimers.clear();
-    for (final controller in _watchers.values) {
+    final controllers = _watchers.values.toList(growable: false);
+    _watchers.clear();
+    for (final controller in controllers) {
       await controller.close();
     }
-    _watchers.clear();
 
     for (final timer in _groupExpiry.values) {
       timer.cancel();

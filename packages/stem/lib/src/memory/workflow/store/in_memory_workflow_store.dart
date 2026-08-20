@@ -1,6 +1,5 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
-// ignore_for_file: implementation_imports
 import 'dart:collection';
 
 import 'package:stem/src/workflow/core/run_state.dart';
@@ -87,9 +86,9 @@ class InMemoryWorkflowStore implements WorkflowStore {
   @override
   /// Creates a new workflow run and returns its generated id.
   Future<String> createRun({
-    String? runId,
     required String workflow,
     required Map<String, Object?> params,
+    String? runId,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,

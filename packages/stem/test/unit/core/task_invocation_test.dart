@@ -178,7 +178,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
 
     expect(context.requiredArg<String>('customerId'), equals('cus-42'));
@@ -201,7 +201,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
 
     expect(
@@ -244,7 +244,7 @@ void main() {
         attempt: 0,
         heartbeat: () {},
         extendLease: (_) async {},
-        progress: (percent, {Map<String, Object?>? data}) async {
+        progress: (percent, {data}) async {
           progressSignal = ProgressSignal(percent, data: data);
         },
       );
@@ -266,7 +266,7 @@ void main() {
         attempt: 0,
         heartbeat: () {},
         extendLease: (_) async {},
-        progress: (percent, {Map<String, Object?>? data}) async {
+        progress: (percent, {data}) async {
           progressSignal = ProgressSignal(percent, data: data);
         },
       );
@@ -342,7 +342,7 @@ void main() {
       attempt: 2,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       enqueuer: enqueuer,
     );
 
@@ -369,7 +369,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       enqueuer: enqueuer,
     );
     final scheduledAt = DateTime.now().add(const Duration(minutes: 5));
@@ -388,7 +388,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       enqueuer: enqueuer,
     );
     final scheduledAt = DateTime.now().add(const Duration(minutes: 5));
@@ -406,7 +406,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
 
     expect(
@@ -435,7 +435,7 @@ void main() {
         attempt: 1,
         heartbeat: () {},
         extendLease: (_) async {},
-        progress: (_, {Map<String, Object?>? data}) async {},
+        progress: (_, {data}) async {},
         enqueuer: enqueuer,
       );
 
@@ -468,7 +468,7 @@ void main() {
       attempt: 1,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       workflows: workflows,
     );
     final definition = WorkflowRef<Map<String, Object?>, String>(
@@ -498,7 +498,7 @@ void main() {
       attempt: 1,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       workflowEvents: workflowEvents,
     );
 
@@ -790,7 +790,7 @@ void main() {
       attempt: 0,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
       enqueuer: _CapturingEnqueuer('noop'),
     );
 

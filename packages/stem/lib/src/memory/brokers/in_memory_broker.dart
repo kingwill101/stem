@@ -1,6 +1,5 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
-// ignore_for_file: implementation_imports
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -12,7 +11,13 @@ import 'package:stem/src/core/envelope.dart';
 import 'package:uuid/uuid.dart';
 
 /// In-memory broker for testing and local development.
-class InMemoryBroker implements Broker {
+class InMemoryBroker
+    implements
+        Broker,
+        LeaseBroker,
+        InspectableBroker,
+        DeadLetterBroker,
+        BrokerCapabilitiesProvider {
   /// Creates an in-memory broker with configurable timing defaults.
   InMemoryBroker({
     this.namespace = 'stem',
@@ -69,6 +74,18 @@ class InMemoryBroker implements Broker {
 
   @override
   bool get supportsPriority => false;
+
+  @override
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: false,
+    deliveryGuarantee: BrokerDeliveryGuarantee.atLeastOnce,
+    supportsBroadcastFanout: true,
+    supportsQueueInspection: true,
+    supportsLeaseExtension: true,
+    supportsDeadLettering: true,
+    supportsDeadLetterReplay: true,
+  );
 
   /// Releases timers and in-memory queue state.
   void dispose() {

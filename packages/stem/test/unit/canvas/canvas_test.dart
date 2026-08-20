@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -19,12 +20,24 @@ void main() {
       canvas = Canvas(
         broker: broker,
         backend: backend,
-        tasks: [_EchoTask(), _SumTask()],
+        tasks: [
+          _EchoTask(),
+          _FailTask(),
+          _SumTask(),
+          _StringifyTask(),
+          _LengthTask(),
+        ],
       );
       worker = Worker(
         broker: broker,
         backend: backend,
-        tasks: [_EchoTask(), _SumTask()],
+        tasks: [
+          _EchoTask(),
+          _FailTask(),
+          _SumTask(),
+          _StringifyTask(),
+          _LengthTask(),
+        ],
         consumerName: 'canvas-worker',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -87,6 +100,30 @@ void main() {
       expect(result.finalStatus?.state, TaskState.succeeded);
     });
 
+    test(
+      'typedChain enforces and executes heterogeneous transitions',
+      () async {
+        final stringify = TaskDefinition<int, String>(
+          name: 'stringify',
+          encodeArgs: (value) => {'value': value},
+          decodeResult: (payload) => payload.toString(),
+        );
+        final length = TaskDefinition<String, int>(
+          name: 'length',
+          encodeArgs: (value) => {'value': value},
+          decodeResult: (payload) => (payload! as num).toInt(),
+        );
+
+        final result = await canvas
+            .typedChain(stringify, 42)
+            .then(length)
+            .run();
+
+        expect(result.value, equals(2));
+        expect(result.finalStatus?.state, TaskState.succeeded);
+      },
+    );
+
     test('chord returns typed body results', () async {
       final result = await canvas.chord<int>(
         body: [
@@ -100,6 +137,50 @@ void main() {
       final status = await _waitForSuccess(backend, result.callbackTaskId);
       expect(status.payload, equals(5));
     });
+
+    test(
+      'chord policies can collect failures and allow a partial quorum',
+      () async {
+        final collected = await canvas.chord<int>(
+          body: [
+            task<int>('echo', args: {'value': 2}),
+            task<int>('fail'),
+          ],
+          callback: task('sum'),
+          policy: const ChordPolicy.collectTerminalResults(),
+        );
+
+        expect(collected.policy, const ChordPolicy.collectTerminalResults());
+        expect(collected.values, equals(<int?>[2, null]));
+        expect(collected.failures, hasLength(1));
+        final collectedCallback = await _waitForSuccess(
+          backend,
+          collected.callbackTaskId,
+        );
+        expect(collectedCallback.payload, equals(2));
+
+        final partial = await canvas.chord<int>(
+          body: [
+            task<int>('echo', args: {'value': 3}),
+            task<int>('fail'),
+          ],
+          callback: task('sum'),
+          policy: const ChordPolicy.allowPartial(minSuccessful: 1),
+        );
+
+        expect(
+          partial.policy,
+          const ChordPolicy.allowPartial(minSuccessful: 1),
+        );
+        expect(partial.values, equals(<int?>[3, null]));
+        expect(partial.failures, hasLength(1));
+        final partialCallback = await _waitForSuccess(
+          backend,
+          partial.callbackTaskId,
+        );
+        expect(partialCallback.payload, equals(3));
+      },
+    );
 
     test(
       'submitBatch returns stable id and terminal lifecycle summary',
@@ -249,6 +330,25 @@ class _EchoTask implements TaskHandler<int> {
   }
 }
 
+class _FailTask implements TaskHandler<int> {
+  @override
+  String get name => 'fail';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<int> call(TaskContext context, Map<String, Object?> args) {
+    throw StateError('expected chord failure');
+  }
+}
+
 class _SumTask implements TaskHandler<int> {
   @override
   String get name => 'sum';
@@ -275,5 +375,43 @@ class _SumTask implements TaskHandler<int> {
     final previousValue = previous is num ? previous.toInt() : 0;
     final addValue = (args['add'] as num?)?.toInt() ?? 0;
     return previousValue + addValue;
+  }
+}
+
+class _StringifyTask implements TaskHandler<String> {
+  @override
+  String get name => 'stringify';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    return '${args['value']}';
+  }
+}
+
+class _LengthTask implements TaskHandler<int> {
+  @override
+  String get name => 'length';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<int> call(TaskContext context, Map<String, Object?> args) async {
+    return (args['value']! as String).length;
   }
 }

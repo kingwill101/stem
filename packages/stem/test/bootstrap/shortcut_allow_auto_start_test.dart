@@ -2,10 +2,42 @@ import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('shortcut allowWorkerAutoStart', () {
+  group('explicit worker lifecycle', () {
+    test('StemApp does not start the worker by default', () async {
+      final app = await StemApp.inMemory(
+        tasks: [
+          FunctionTaskHandler<String>(
+            name: 'shortcut.default-stop.echo',
+            entrypoint: (context, args) async => 'done',
+          ),
+        ],
+      );
+
+      try {
+        final taskId = await app.enqueue('shortcut.default-stop.echo');
+        expect(app.isStarted, isFalse);
+
+        final pending = await app.waitForTask<String>(
+          taskId,
+          timeout: const Duration(milliseconds: 10),
+        );
+        expect(pending?.status.state, TaskState.queued);
+        expect(app.isStarted, isFalse);
+
+        await app.start();
+        final completed = await app.waitForTask<String>(
+          taskId,
+          timeout: const Duration(seconds: 1),
+        );
+        expect(completed?.isSucceeded, isTrue);
+        expect(completed?.value, 'done');
+      } finally {
+        await app.shutdown();
+      }
+    });
+
     test('StemApp can enqueue without starting the worker', () async {
       final app = await StemApp.inMemory(
-        allowWorkerAutoStart: false,
         tasks: [
           FunctionTaskHandler<String>(
             name: 'shortcut.echo',
@@ -16,6 +48,10 @@ void main() {
 
       try {
         final taskId = await app.enqueue('shortcut.echo');
+        expect(app.isStarted, isFalse);
+
+        final status = await app.getTaskStatus(taskId);
+        expect(status?.state, TaskState.queued);
         expect(app.isStarted, isFalse);
 
         final pending = await app.waitForTask<String>(
@@ -52,7 +88,6 @@ void main() {
 
         final app = await StemWorkflowApp.inMemory(
           flows: [flow],
-          allowWorkerAutoStart: false,
         );
 
         try {

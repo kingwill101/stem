@@ -23,6 +23,13 @@
 /// │                         │                               │
 /// │                         ▼                               │
 /// │  ┌──────────────────────────────────────────────────┐   │
+/// │  │        WorkerExecutionSupervisor                 │   │
+/// │  │  • Inline/isolate mode • Hard limits              │   │
+/// │  │  • Pool lifecycle      • Recycling               │   │
+/// │  └──────────────────────┬───────────────────────────┘   │
+/// │                         │                               │
+/// │                         ▼                               │
+/// │  ┌──────────────────────────────────────────────────┐   │
 /// │  │               TaskIsolatePool                    │   │
 /// │  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐     │   │
 /// │  │  │Isolate1│ │Isolate2│ │Isolate3│ │IsolateN│     │   │
@@ -102,6 +109,7 @@ import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
 import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/chord_policy.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
@@ -124,7 +132,12 @@ import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
+import 'package:stem/src/worker/worker_acknowledgement.dart';
 import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/worker/worker_consumer_loop.dart';
+import 'package:stem/src/worker/worker_delivery_tracker.dart';
+import 'package:stem/src/worker/worker_execution_supervisor.dart';
+import 'package:stem/src/worker/worker_lease_coordinator.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
@@ -308,7 +321,7 @@ class Worker {
   /// - [argsEncoder]: Default encoder for task arguments.
   /// - [additionalEncoders]: Additional payload encoders to register.
   Worker({
-    required Broker broker,
+    required QueueBroker broker,
     required ResultBackend backend,
     Iterable<TaskHandler<Object?>> tasks = const [],
     TaskRegistry? registry,
@@ -488,6 +501,37 @@ class Worker {
     subscriptionQueues = List.unmodifiable(normalizedQueues);
     subscriptionBroadcasts = List.unmodifiable(normalizedBroadcasts);
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
+    _consumer = WorkerConsumerLoop(broker: broker);
+    _execution = WorkerExecutionSupervisor(
+      concurrency: _currentConcurrency,
+      lifecycle: lifecycleConfig,
+      onRecycle: _handleIsolateRecycle,
+      onSpawned: (isolateId) {
+        unawaited(
+          _signals.workerChildLifecycle(
+            _workerInfoSnapshot,
+            isolateId,
+            initializing: true,
+          ),
+        );
+      },
+      onDisposed: (isolateId) {
+        unawaited(
+          _signals.workerChildLifecycle(
+            _workerInfoSnapshot,
+            isolateId,
+            initializing: false,
+          ),
+        );
+      },
+    );
+    _acknowledgements = WorkerAcknowledgementCoordinator(broker);
+    _leases = WorkerLeaseCoordinator(
+      broker: broker,
+      onLeaseUpdated: _noteLeaseRenewal,
+      onLeaseRenewed: _recordLeaseRenewal,
+      onRenewalFailure: _handleLeaseRenewalFailure,
+    );
   }
 
   static TaskRegistry _resolveTaskRegistry(
@@ -500,7 +544,19 @@ class Worker {
   }
 
   /// Broker used to consume and acknowledge deliveries.
-  final Broker broker;
+  final QueueBroker broker;
+
+  /// Coordinates recoverable terminal acknowledgements.
+  late final WorkerAcknowledgementCoordinator _acknowledgements;
+
+  /// Coordinates automatic lease renewal for active deliveries.
+  late final WorkerLeaseCoordinator _leases;
+
+  /// Supervises inline and isolate-backed task execution.
+  late final WorkerExecutionSupervisor _execution;
+
+  /// Owns broker subscription replacement and cancellation.
+  late final WorkerConsumerLoop _consumer;
 
   /// Task registry containing handlers and metadata.
   final TaskRegistry registry;
@@ -595,12 +651,8 @@ class Worker {
   String get primaryQueue =>
       _effectiveQueues.isNotEmpty ? _effectiveQueues.first : queue;
 
-  final Map<String, Timer> _leaseTimers = {};
-  final Map<String, Timer> _heartbeatTimers = {};
-  final Map<String, StreamSubscription<Delivery>> _subscriptions = {};
+  final Map<Delivery, Timer> _heartbeatTimers = {};
   final StreamController<WorkerEvent> _events = StreamController.broadcast();
-  TaskIsolatePool? _isolatePool;
-  Future<TaskIsolatePool>? _poolFuture;
   late final int _maxConcurrency;
   late int _currentConcurrency;
   Timer? _autoscaleTimer;
@@ -616,10 +668,11 @@ class Worker {
   StreamSubscription<ProcessSignal>? _sigquitSub;
 
   bool _running = false;
-  final Map<String, _ActiveDelivery> _activeDeliveries = {};
-  final Map<String, int> _inflightPerQueue = {};
-  final Set<String> _queueSubscriptionNames = <String>{};
-  int _inflight = 0;
+  final WorkerDeliveryTracker _deliveryTracker = WorkerDeliveryTracker();
+  Map<int, WorkerActiveDelivery> get _activeDeliveries =>
+      _deliveryTracker.active;
+  Map<String, int> get _inflightPerQueue => _deliveryTracker.inflightPerQueue;
+  int get _inflight => _deliveryTracker.inflight;
   Timer? _workerHeartbeatTimer;
   DateTime? _lastLeaseRenewal;
   int? _lastQueueDepth;
@@ -636,6 +689,17 @@ class Worker {
   ///
   /// Includes events like task start, completion, failure, and heartbeats.
   Stream<WorkerEvent> get events => _events.stream;
+
+  /// Emits an event while the worker event stream is still open.
+  ///
+  /// Broker callbacks, timers, and isolate completions can race with
+  /// shutdown. Those callbacks must not turn a successful shutdown into an
+  /// asynchronous `Bad state: Cannot add new events` error.
+  void _emitEvent(WorkerEvent event) {
+    if (!_events.isClosed) {
+      _events.add(event);
+    }
+  }
 
   /// Current active concurrency for isolate-backed tasks.
   int get activeConcurrency => _currentConcurrency;
@@ -731,8 +795,7 @@ class Worker {
     _revocations.clear();
     _queuePauses.clear();
     _latestRevocationVersion = 0;
-    _inflightPerQueue.clear();
-    _inflight = 0;
+    _deliveryTracker.clear();
     _idleSince = null;
     _recordConcurrencyGauge();
 
@@ -751,6 +814,7 @@ class Worker {
     final envelope = delivery.envelope;
     final tracer = StemTracer.instance;
     final parentContext = tracer.extractTraceContext(envelope.headers);
+    final traceLinks = tracer.extractTraceLinks(envelope.headers);
     final baseSpanAttributes = _deliverySpanAttributes(envelope);
     final consumeSpanAttributes = <String, Object>{
       ...baseSpanAttributes,
@@ -764,36 +828,102 @@ class Worker {
     await tracer.trace(
       'stem.consume',
       () async {
-        final handler = registry.resolve(envelope.name);
-        if (handler == null) {
-          await broker.deadLetter(delivery, reason: 'unregistered-task');
-          await _releaseUniqueLock(envelope);
-          return;
-        }
+        // Start lease protection as soon as the delivery enters the worker.
+        // Consume middleware, signature verification, status lookups, and
+        // rate-limit calls all happen before handler execution and can be
+        // slower than a short broker visibility timeout.
+        _scheduleLeaseRenewal(delivery);
+        var deliveryTracked = false;
+        try {
+          final handler = registry.resolve(envelope.name);
+          if (handler == null) {
+            await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
+            await _releaseUniqueLock(envelope);
+            return;
+          }
 
-        final argsEncoder = _resolveArgsEncoder(handler);
-        final resultEncoder = _resolveResultEncoder(handler);
+          final argsEncoder = _resolveArgsEncoder(handler);
+          final resultEncoder = _resolveResultEncoder(handler);
 
-        await _runConsumeMiddleware(delivery);
+          await _runConsumeMiddleware(delivery);
 
-        final groupId = envelope.headers['stem-group-id'];
+          final groupId = envelope.headers['stem-group-id'];
 
-        if (_isTaskRevoked(envelope.id)) {
-          await _handleRevokedDelivery(
-            delivery,
-            envelope,
-            resultEncoder,
-            groupId: groupId,
-          );
-          await _releaseUniqueLock(envelope);
-          return;
-        }
+          if (_isTaskRevoked(envelope.id)) {
+            await _handleRevokedDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              groupId: groupId,
+            );
+            await _releaseUniqueLock(envelope);
+            return;
+          }
 
-        if (signer != null) {
+          if (signer != null) {
+            try {
+              await signer!.verify(envelope);
+            } on SignatureVerificationException catch (error, stack) {
+              await _handleSignatureFailure(
+                delivery,
+                envelope,
+                resultEncoder,
+                error,
+                stack,
+                groupId,
+              );
+              await _releaseUniqueLock(envelope);
+              return;
+            }
+          }
+
+          if (_isExpired(envelope)) {
+            await _handleExpiredDelivery(delivery, envelope, resultEncoder);
+            await _releaseUniqueLock(envelope);
+            return;
+          }
+
+          final priorStatus = await backend.get(envelope.id);
+          if (priorStatus?.state.isTerminal == true) {
+            // An acknowledgement can be lost after the result is durable. Do
+            // not execute a redelivered terminal task a second time.
+            await _acknowledgements.tryAcknowledge(
+              delivery,
+              envelope: envelope,
+              phase: 'terminal recovery',
+            );
+            await _releaseUniqueLock(envelope);
+            return;
+          }
+
+          if (_deliveryTracker.containsEnvelopeId(envelope.id)) {
+            // A short lease or broker retry can deliver the same envelope to
+            // this worker while its first delivery is still in progress. The
+            // active delivery owns execution; acknowledging this duplicate
+            // avoids concurrent side effects without affecting recovery after
+            // a process-wide worker failure.
+            StemMetrics.instance.increment(
+              'stem.tasks.duplicate_suppressed',
+              tags: {'task': envelope.name, 'queue': envelope.queue},
+            );
+            await _acknowledgements.tryAcknowledge(
+              delivery,
+              envelope: envelope,
+              phase: 'active duplicate recovery',
+            );
+            return;
+          }
+
+          if (_isQueuePaused(envelope.queue)) {
+            await _handlePausedQueueDelivery(delivery, envelope, resultEncoder);
+            return;
+          }
+
+          Map<String, Object?> decodedArgs;
           try {
-            await signer!.verify(envelope);
-          } on SignatureVerificationException catch (error, stack) {
-            await _handleSignatureFailure(
+            decodedArgs = _decodeArgs(envelope, argsEncoder);
+          } on Object catch (error, stack) {
+            await _handlePayloadDecodeFailure(
               delivery,
               envelope,
               resultEncoder,
@@ -804,39 +934,103 @@ class Worker {
             await _releaseUniqueLock(envelope);
             return;
           }
-        }
 
-        if (_isExpired(envelope)) {
-          await _handleExpiredDelivery(delivery, envelope, resultEncoder);
-          await _releaseUniqueLock(envelope);
-          return;
-        }
+          final groupRateSpec = handler.options.groupRateLimit;
+          if (rateLimiter != null && groupRateSpec != null) {
+            final groupKey = _groupRateLimitKey(handler.options, envelope);
+            try {
+              final decision = await rateLimiter!.acquire(
+                'group:$groupKey',
+                tokens: groupRateSpec.tokens,
+                interval: groupRateSpec.interval,
+                meta: {'task': envelope.name, 'queue': envelope.queue},
+              );
+              if (!decision.allowed) {
+                final backoff =
+                    decision.retryAfter ??
+                    retryStrategy.nextDelay(
+                      envelope.attempt,
+                      StateError('group-rate-limit'),
+                      StackTrace.current,
+                    );
+                await _retryDelivery(
+                  delivery,
+                  envelope,
+                  resultEncoder,
+                  backoff: backoff,
+                  extra: {
+                    'rateLimited': true,
+                    'groupRateLimited': true,
+                    'groupKey': groupKey,
+                    'retryAfterMs': backoff.inMilliseconds,
+                  },
+                );
+                return;
+              }
+            } on Object catch (error, stack) {
+              final mode = handler.options.groupRateLimiterFailureMode;
+              if (mode == RateLimiterFailureMode.failOpen) {
+                StemMetrics.instance.increment(
+                  'stem.rate_limiter.degraded',
+                  tags: {
+                    'task': envelope.name,
+                    'queue': envelope.queue,
+                    'scope': 'group',
+                    'mode': mode.name,
+                  },
+                );
+                stemLogger.warning(
+                  'Group rate limiter unavailable; continuing in '
+                  'fail-open mode',
+                  Context(
+                    _logContext({
+                      'task': envelope.name,
+                      'id': envelope.id,
+                      'queue': envelope.queue,
+                      'group': groupKey,
+                      'error': error.toString(),
+                      'stack': stack.toString(),
+                    }),
+                  ),
+                );
+              } else {
+                final backoff = retryStrategy.nextDelay(
+                  envelope.attempt,
+                  error,
+                  stack,
+                );
+                await _retryDelivery(
+                  delivery,
+                  envelope,
+                  resultEncoder,
+                  backoff: backoff,
+                  extra: {
+                    'groupRateLimited': true,
+                    'groupKey': groupKey,
+                    'rateLimiterUnavailable': true,
+                    'failureMode': mode.name,
+                    'error': error.toString(),
+                  },
+                );
+                return;
+              }
+            }
+          }
 
-        if (_isQueuePaused(envelope.queue)) {
-          await _handlePausedQueueDelivery(delivery, envelope, resultEncoder);
-          return;
-        }
-
-        final decodedArgs = _decodeArgs(envelope, argsEncoder);
-
-        final groupRateSpec = handler.options.groupRateLimit != null
-            ? _parseRate(handler.options.groupRateLimit!)
-            : null;
-        if (rateLimiter != null && groupRateSpec != null) {
-          final groupKey = _groupRateLimitKey(handler.options, envelope);
-          try {
+          final rateSpec = handler.options.rateLimit;
+          if (rateLimiter != null && rateSpec != null) {
             final decision = await rateLimiter!.acquire(
-              'group:$groupKey',
-              tokens: groupRateSpec.tokens,
-              interval: groupRateSpec.period,
-              meta: {'task': envelope.name, 'queue': envelope.queue},
+              _rateLimitKey(handler.options, envelope),
+              tokens: rateSpec.tokens,
+              interval: rateSpec.interval,
+              meta: {'task': envelope.name},
             );
             if (!decision.allowed) {
               final backoff =
                   decision.retryAfter ??
                   retryStrategy.nextDelay(
                     envelope.attempt,
-                    StateError('group-rate-limit'),
+                    StateError('rate-limit'),
                     StackTrace.current,
                   );
               await _retryDelivery(
@@ -846,304 +1040,279 @@ class Worker {
                 backoff: backoff,
                 extra: {
                   'rateLimited': true,
-                  'groupRateLimited': true,
-                  'groupKey': groupKey,
                   'retryAfterMs': backoff.inMilliseconds,
                 },
               );
               return;
             }
-          } on Object catch (error, stack) {
-            final mode = handler.options.groupRateLimiterFailureMode;
-            if (mode == RateLimiterFailureMode.failOpen) {
-              StemMetrics.instance.increment(
-                'stem.rate_limiter.degraded',
-                tags: {
-                  'task': envelope.name,
-                  'queue': envelope.queue,
-                  'scope': 'group',
-                  'mode': mode.name,
-                },
-              );
-              stemLogger.warning(
-                'Group rate limiter unavailable; continuing in fail-open mode',
-                Context(
-                  _logContext({
-                    'task': envelope.name,
-                    'id': envelope.id,
-                    'queue': envelope.queue,
-                    'group': groupKey,
-                    'error': error.toString(),
-                    'stack': stack.toString(),
-                  }),
-                ),
-              );
-            } else {
-              final backoff = retryStrategy.nextDelay(
-                envelope.attempt,
-                error,
-                stack,
-              );
-              await _retryDelivery(
-                delivery,
-                envelope,
-                resultEncoder,
-                backoff: backoff,
-                extra: {
-                  'groupRateLimited': true,
-                  'groupKey': groupKey,
-                  'rateLimiterUnavailable': true,
-                  'failureMode': mode.name,
-                  'error': error.toString(),
-                },
-              );
-              return;
-            }
           }
-        }
 
-        final rateSpec = handler.options.rateLimit != null
-            ? _parseRate(handler.options.rateLimit!)
-            : null;
-        if (rateLimiter != null && rateSpec != null) {
-          final decision = await rateLimiter!.acquire(
-            _rateLimitKey(handler.options, envelope),
-            tokens: rateSpec.tokens,
-            interval: rateSpec.period,
-            meta: {'task': envelope.name},
+          _trackDelivery(delivery);
+          deliveryTracked = true;
+
+          await _signals.taskReceived(envelope, _workerInfoSnapshot);
+
+          stemLogger.debug(
+            'Task {task} started',
+            Context(_deliveryLogContext(envelope)),
           );
-          if (!decision.allowed) {
-            final backoff =
-                decision.retryAfter ??
-                retryStrategy.nextDelay(
-                  envelope.attempt,
-                  StateError('rate-limit'),
-                  StackTrace.current,
-                );
-            await _retryDelivery(
-              delivery,
-              envelope,
-              resultEncoder,
-              backoff: backoff,
-              extra: {
-                'rateLimited': true,
-                'retryAfterMs': backoff.inMilliseconds,
-              },
-            );
-            return;
-          }
-        }
-
-        _trackDelivery(delivery);
-
-        await _signals.taskReceived(envelope, _workerInfoSnapshot);
-
-        stemLogger.debug(
-          'Task {task} started',
-          Context(_deliveryLogContext(envelope)),
-        );
-        StemMetrics.instance.increment(
-          'stem.tasks.started',
-          tags: {'task': envelope.name, 'queue': envelope.queue},
-        );
-        _startedCount += 1;
-
-        String? startedAtIso;
-        final startedAt = stemNow().toUtc();
-        final runningMeta = _statusMeta(
-          envelope,
-          resultEncoder,
-          extra: {
-            'queue': envelope.queue,
-            'worker': consumerName,
-            'startedAt': (startedAtIso = startedAt.toIso8601String()),
-          },
-        );
-        await backend.set(
-          envelope.id,
-          TaskState.running,
-          attempt: envelope.attempt,
-          meta: runningMeta,
-        );
-
-        void checkTermination() => _enforceTerminationIfRequested(envelope.id);
-
-        final context = TaskContext(
-          id: envelope.id,
-          args: envelope.args,
-          attempt: envelope.attempt,
-          headers: envelope.headers,
-          meta: envelope.meta,
-          heartbeat: () {
-            checkTermination();
-            _sendHeartbeat(envelope.id);
-          },
-          extendLease: (duration) async {
-            checkTermination();
-            await broker.extendLease(delivery, duration);
-            _recordLeaseRenewal(delivery);
-            _restartLeaseTimer(delivery, duration);
-            _noteLeaseRenewal(delivery);
-          },
-          progress: (progress, {data}) async {
-            checkTermination();
-            _reportProgress(envelope, progress, data: data);
-          },
-          enqueuer: _enqueuer,
-          workflows: workflows,
-          workflowEvents: workflowEvents,
-        );
-
-        await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
-
-        Timer? heartbeatTimer;
-        Timer? softTimer;
-        _scheduleLeaseRenewal(delivery);
-
-        dynamic result;
-        var completionState = TaskState.running;
-
-        try {
-          checkTermination();
-          heartbeatTimer = _startHeartbeat(envelope.id);
-          softTimer = _scheduleSoftLimit(envelope, handler.options);
-
-          result = await tracer.trace(
-            'stem.execute.${envelope.name}',
-            () => _invokeWithMiddleware(
-              context,
-              () => _executeWithHardLimit(
-                handler,
-                context,
-                envelope,
-                decodedArgs,
-              ),
-            ),
-            attributes: executeSpanAttributes,
+          StemMetrics.instance.increment(
+            'stem.tasks.started',
+            tags: {'task': envelope.name, 'queue': envelope.queue},
           );
+          _startedCount += 1;
 
-          _cancelLeaseTimer(delivery.receipt);
-          _heartbeatTimers.remove(envelope.id)?.cancel();
-
-          final ignoreResult = _shouldIgnoreResult(envelope);
-          final persistedResult = ignoreResult ? null : result;
-          final successMeta = _statusMeta(
+          String? startedAtIso;
+          final startedAt = stemNow().toUtc();
+          final runningMeta = _statusMeta(
             envelope,
             resultEncoder,
             extra: {
               'queue': envelope.queue,
               'worker': consumerName,
-              'completedAt': stemNow().toIso8601String(),
-              'startedAt': startedAtIso,
+              'startedAt': (startedAtIso = startedAt.toIso8601String()),
             },
           );
-          final successStatus = TaskStatus(
-            id: envelope.id,
-            state: TaskState.succeeded,
-            payload: persistedResult,
-            attempt: envelope.attempt,
-            meta: successMeta,
-          );
-          await broker.ack(delivery);
           await backend.set(
             envelope.id,
-            TaskState.succeeded,
-            payload: persistedResult,
+            TaskState.running,
             attempt: envelope.attempt,
-            meta: successMeta,
+            meta: runningMeta,
           );
-          GroupStatus? groupStatus;
-          if (groupId != null) {
-            groupStatus = await backend.addGroupResult(groupId, successStatus);
+
+          final cancellation = TaskCancellationToken(
+            isCancelled: () => _revocationFor(envelope.id)?.terminate == true,
+          );
+
+          void checkTermination() {
+            try {
+              _enforceTerminationIfRequested(envelope.id);
+            } on TaskRevokedException {
+              cancellation.cancel();
+              rethrow;
+            }
           }
-          StemMetrics.instance.increment(
-            'stem.tasks.succeeded',
-            tags: {'task': envelope.name, 'queue': envelope.queue},
+
+          final context = TaskContext(
+            id: envelope.id,
+            args: envelope.args,
+            attempt: envelope.attempt,
+            headers: envelope.headers,
+            meta: envelope.meta,
+            heartbeat: () {
+              checkTermination();
+              _sendHeartbeat(envelope.id);
+            },
+            extendLease: (duration) async {
+              checkTermination();
+              await broker.extendLease(delivery, duration);
+              _recordLeaseRenewal(delivery);
+              _restartLeaseTimer(delivery, duration);
+              _noteLeaseRenewal(delivery);
+            },
+            progress: (progress, {data}) async {
+              checkTermination();
+              _reportProgress(envelope, progress, data: data);
+            },
+            cancellation: cancellation,
+            enqueuer: _enqueuer,
+            workflows: workflows,
+            workflowEvents: workflowEvents,
           );
-          _completedCount += 1;
-          stemLogger.debug(
-            'Task {task} succeeded',
-            Context(_deliveryLogContext(envelope)),
-          );
-          _events.add(
-            WorkerEvent(type: WorkerEventType.completed, envelope: envelope),
-          );
-          await _signals.taskSucceeded(
-            envelope,
-            _workerInfoSnapshot,
-            result: result,
-          );
-          if (groupStatus != null) {
-            await _maybeDispatchChord(groupStatus);
+
+          await _signals.taskPrerun(envelope, _workerInfoSnapshot, context);
+
+          Timer? heartbeatTimer;
+          Timer? softTimer;
+
+          dynamic result;
+          var completionState = TaskState.running;
+          var terminalWriteOwned = false;
+
+          try {
+            checkTermination();
+            heartbeatTimer = _startHeartbeat(delivery);
+            softTimer = _scheduleSoftLimit(envelope, handler.options);
+
+            result = await tracer.trace(
+              'stem.execute.${envelope.name}',
+              () => _invokeWithMiddleware(
+                context,
+                () => _executeWithHardLimit(
+                  handler,
+                  context,
+                  envelope,
+                  decodedArgs,
+                ),
+              ),
+              attributes: executeSpanAttributes,
+            );
+
+            _heartbeatTimers.remove(delivery)?.cancel();
+
+            final ignoreResult = _shouldIgnoreResult(envelope);
+            final persistedResult = ignoreResult ? null : result;
+            final successMeta = _statusMeta(
+              envelope,
+              resultEncoder,
+              extra: {
+                'queue': envelope.queue,
+                'worker': consumerName,
+                'completedAt': stemNow().toIso8601String(),
+                'startedAt': startedAtIso,
+              },
+            );
+            final successStatus = TaskStatus(
+              id: envelope.id,
+              state: TaskState.succeeded,
+              payload: persistedResult,
+              attempt: envelope.attempt,
+              meta: successMeta,
+            );
+            final terminal = await _writeTerminalStatus(successStatus);
+            completionState = terminal.status.state;
+            terminalWriteOwned = terminal.applied;
+            GroupStatus? groupStatus;
+            if (terminal.applied) {
+              if (groupId != null) {
+                groupStatus = await backend.addGroupResult(
+                  groupId,
+                  successStatus,
+                );
+              }
+              StemMetrics.instance.increment(
+                'stem.tasks.succeeded',
+                tags: {'task': envelope.name, 'queue': envelope.queue},
+              );
+              _completedCount += 1;
+              stemLogger.debug(
+                'Task {task} succeeded',
+                Context(_deliveryLogContext(envelope)),
+              );
+              _emitEvent(
+                WorkerEvent(
+                  type: WorkerEventType.completed,
+                  envelope: envelope,
+                ),
+              );
+              await _signals.taskSucceeded(
+                envelope,
+                _workerInfoSnapshot,
+                result: result,
+              );
+              if (groupStatus != null) {
+                await _maybeDispatchChord(groupStatus);
+              }
+            }
+            // Persisting success before acknowledgement makes an uncertain
+            // acknowledgement safe to recover as an at-least-once duplicate.
+            // A later delivery can observe the terminal result and avoid
+            // executing the handler again.
+            await _acknowledgements.tryAcknowledge(
+              delivery,
+              envelope: envelope,
+              phase: 'terminal success',
+            );
+          } on TaskCancellationException catch (_) {
+            _heartbeatTimers.remove(delivery)?.cancel();
+            final completion = await _handleRevokedDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              groupId: groupId,
+            );
+            completionState = completion.state;
+            terminalWriteOwned = completion.terminalWriteOwned;
+          } on TaskRevokedException catch (_) {
+            _heartbeatTimers.remove(delivery)?.cancel();
+            final completion = await _handleRevokedDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              groupId: groupId,
+            );
+            completionState = completion.state;
+            terminalWriteOwned = completion.terminalWriteOwned;
+          } on TaskRetryRequest catch (request) {
+            _heartbeatTimers.remove(delivery)?.cancel();
+            final completion = await _handleRetryRequest(
+              handler,
+              delivery,
+              envelope,
+              resultEncoder,
+              request,
+              groupId,
+            );
+            completionState = completion.state;
+            terminalWriteOwned = completion.terminalWriteOwned;
+          } on Object catch (error, stack) {
+            await _notifyErrorMiddleware(context, error, stack);
+            _heartbeatTimers.remove(delivery)?.cancel();
+            final completion = await _handleFailure(
+              handler,
+              delivery,
+              envelope,
+              resultEncoder,
+              error,
+              stack,
+              groupId,
+              startedAtIso,
+            );
+            completionState = completion.state;
+            terminalWriteOwned = completion.terminalWriteOwned;
+          } finally {
+            if (terminalWriteOwned && completionState == TaskState.succeeded) {
+              await _dispatchLinkedTasks(envelope, onSuccess: true);
+            } else if (terminalWriteOwned &&
+                completionState == TaskState.failed) {
+              await _dispatchLinkedTasks(envelope, onSuccess: false);
+            }
+            heartbeatTimer?.cancel();
+            softTimer?.cancel();
+            final completed = _releaseDelivery(delivery);
+            if (completed != null) {
+              final duration = stemNow().toUtc().difference(
+                completed.startedAt,
+              );
+              StemMetrics.instance.recordDuration(
+                'stem.task.duration',
+                duration,
+                tags: {'task': envelope.name, 'queue': envelope.queue},
+              );
+            }
+            await _signals.taskPostrun(
+              envelope,
+              _workerInfoSnapshot,
+              context,
+              result: result,
+              state: completionState,
+            );
+            if (terminalWriteOwned && _isTerminalState(completionState)) {
+              await _releaseUniqueLock(envelope);
+            }
+            // Keep the broker lease alive through terminal result persistence,
+            // group/chord bookkeeping, retry or dead-letter publication, linked
+            // task dispatch, acknowledgement, postrun hooks, and unique-lock
+            // release. Those operations can outlive the handler itself and
+            // must not create a duplicate delivery by allowing the lease to
+            // expire before the lifecycle is complete.
+            _cancelLeaseTimer(delivery);
+            if (deliveryTracked) {
+              // The normal lifecycle finally releases this entry. Keep the
+              // outer guard for failures in prerun/status setup before that
+              // inner finally is entered.
+              _releaseDelivery(delivery);
+            }
           }
-          completionState = TaskState.succeeded;
-        } on TaskRevokedException catch (_) {
-          _cancelLeaseTimer(delivery.receipt);
-          _heartbeatTimers.remove(envelope.id)?.cancel();
-          await _handleRevokedDelivery(
-            delivery,
-            envelope,
-            resultEncoder,
-            groupId: groupId,
-          );
-          completionState = TaskState.cancelled;
-        } on TaskRetryRequest catch (request) {
-          _cancelLeaseTimer(delivery.receipt);
-          _heartbeatTimers.remove(envelope.id)?.cancel();
-          completionState = await _handleRetryRequest(
-            handler,
-            delivery,
-            envelope,
-            resultEncoder,
-            request,
-            groupId,
-          );
-        } on Object catch (error, stack) {
-          await _notifyErrorMiddleware(context, error, stack);
-          _cancelLeaseTimer(delivery.receipt);
-          _heartbeatTimers.remove(envelope.id)?.cancel();
-          completionState = await _handleFailure(
-            handler,
-            delivery,
-            envelope,
-            resultEncoder,
-            error,
-            stack,
-            groupId,
-            startedAtIso,
-          );
         } finally {
-          if (completionState == TaskState.succeeded) {
-            await _dispatchLinkedTasks(envelope, onSuccess: true);
-          } else if (completionState == TaskState.failed) {
-            await _dispatchLinkedTasks(envelope, onSuccess: false);
-          }
-          heartbeatTimer?.cancel();
-          softTimer?.cancel();
-          final completed = _releaseDelivery(envelope);
-          if (completed != null) {
-            final duration = stemNow().toUtc().difference(
-              completed.startedAt,
-            );
-            StemMetrics.instance.recordDuration(
-              'stem.task.duration',
-              duration,
-              tags: {'task': envelope.name, 'queue': envelope.queue},
-            );
-          }
-          await _signals.taskPostrun(
-            envelope,
-            _workerInfoSnapshot,
-            context,
-            result: result,
-            state: completionState,
-          );
-          if (_isTerminalState(completionState)) {
-            await _releaseUniqueLock(envelope);
-          }
+          // Early exits before handler execution use the same lease cleanup as
+          // normal terminal handling. The inner lifecycle finally also
+          // cancels this timer after acknowledgement and task postrun hooks.
+          _cancelLeaseTimer(delivery);
         }
       },
       context: parentContext,
+      links: traceLinks,
       spanKind: dotel.SpanKind.consumer,
       attributes: consumeSpanAttributes,
     );
@@ -1274,19 +1443,13 @@ class Worker {
     Map<String, Object?> args,
   ) {
     final hard = _resolveHardTimeLimit(envelope, handler.options);
-    if (_shouldUseIsolate(handler)) {
-      return _runInIsolate(handler, context, envelope, args, hardTimeout: hard);
-    }
-
-    final future = handler.call(context, args);
-    if (hard == null) {
-      return future;
-    }
-    return future.timeout(
-      hard,
-      onTimeout: () => throw TimeoutException(
-        'hard time limit exceeded for ${handler.name}',
-      ),
+    return _execution.execute(
+      handler: handler,
+      context: context,
+      envelope: envelope,
+      args: args,
+      controlHandler: _controlHandler(context),
+      hardTimeout: hard,
     );
   }
 
@@ -1306,7 +1469,7 @@ class Worker {
     final soft = _resolveSoftTimeLimit(envelope, options);
     if (soft == null) return null;
     return Timer(soft, () {
-      _events.add(
+      _emitEvent(
         WorkerEvent(
           type: WorkerEventType.timeout,
           envelope: envelope,
@@ -1321,24 +1484,29 @@ class Worker {
   /// Heartbeats are emitted at [heartbeatInterval] intervals and serve as:
   /// - Keep-alive signals to monitoring systems
   /// - Progress indicators for long-running tasks
-  /// - Lease renewal triggers for broker visibility
   ///
-  /// The timer is stored in [_heartbeatTimers] and cancelled when the task
-  /// completes or is revoked.
+  /// Broker lease renewal is handled by [WorkerLeaseCoordinator]. A heartbeat
+  /// is an observability signal; task code should call `extendLease` when it
+  /// needs an explicit lease extension.
+  ///
+  /// The timer is stored in [_heartbeatTimers] by delivery identity and
+  /// cancelled when that delivery completes or is revoked.
   ///
   /// Returns `null` if heartbeat interval is zero or negative.
-  Timer? _startHeartbeat(String envelopeId) {
+  Timer? _startHeartbeat(Delivery delivery) {
     if (heartbeatInterval <= Duration.zero) return null;
     final timer = Timer.periodic(
       heartbeatInterval,
-      (_) => _sendHeartbeat(envelopeId),
+      (_) => _sendHeartbeat(delivery.envelope.id),
     );
-    _heartbeatTimers[envelopeId]?.cancel();
-    _heartbeatTimers[envelopeId] = timer;
+    _heartbeatTimers[delivery]?.cancel();
+    _heartbeatTimers[delivery] = timer;
     return timer;
   }
 
-  /// Schedules automatic lease/visibility renewal while a task is running.
+  /// Schedules automatic lease/visibility renewal as soon as a delivery is
+  /// accepted by the worker, including consume middleware and pre-execution
+  /// validation.
   ///
   /// ## Implementation Details
   ///
@@ -1351,7 +1519,7 @@ class Worker {
   ///
   /// 1. Get the lease expiration time from `delivery.leaseExpiresAt`
   /// 2. Calculate remaining time: `expiresAt - now`
-  /// 3. Set renewal interval to half the remaining time, clamped to 1-30s
+  /// 3. Set renewal interval to half the remaining time, capped at 30s
   /// 4. Start a periodic timer that calls `broker.extendLease`
   ///
   /// The "half remaining" strategy ensures we renew well before expiration
@@ -1361,23 +1529,16 @@ class Worker {
   ///
   /// - If `leaseExpiresAt` is null: broker doesn't support leases, skip
   /// - If remaining time <= 0: lease already expired, skip
-  /// - Minimum interval: 1 second (prevents tight loops)
+  /// - Minimum interval: 1 second for ordinary leases; short leases use the
+  ///   shorter deadline-safe interval instead of being delayed past expiry
   /// - Maximum interval: 30 seconds (ensures timely renewal)
   ///
   /// ## State Changes
   ///
-  /// - Adds timer to `_leaseTimers` keyed by receipt
+  /// - Adds a renewal timer keyed by the delivery identity
   /// - Updates `_lastLeaseRenewal` via `_noteLeaseRenewal`
   void _scheduleLeaseRenewal(Delivery delivery) {
-    final expiresAt = delivery.leaseExpiresAt;
-    if (expiresAt == null) return;
-    final remainingMs = expiresAt.difference(stemNow()).inMilliseconds;
-    if (remainingMs <= 0) return;
-    final interval = Duration(
-      milliseconds: (remainingMs ~/ 2).clamp(1000, 30000),
-    );
-    _startLeaseTimer(delivery, interval);
-    _noteLeaseRenewal(delivery);
+    _leases.schedule(delivery);
   }
 
   /// Restarts the lease timer after a successful manual renewal.
@@ -1386,7 +1547,9 @@ class Worker {
   ///
   /// Called when task code explicitly extends its lease via
   /// [TaskContext.extendLease]. The new timer interval is calculated as
-  /// half the granted [duration], clamped to 1-30 seconds.
+  /// half the granted [duration], capped at 30 seconds. Short explicit
+  /// extensions use the shorter interval so the configured minimum cannot
+  /// delay renewal past the new deadline.
   ///
   /// This differs from [_scheduleLeaseRenewal] in that:
   /// - It uses a provided duration rather than calculating from expiry time
@@ -1398,51 +1561,17 @@ class Worker {
   /// - Creates new timer with recalculated interval
   /// - Updates [_lastLeaseRenewal] timestamp
   void _restartLeaseTimer(Delivery delivery, Duration duration) {
-    final intervalMs = (duration.inMilliseconds ~/ 2).clamp(1000, 30000);
-    _startLeaseTimer(delivery, Duration(milliseconds: intervalMs));
-    _noteLeaseRenewal(delivery);
+    _leases.restart(delivery, duration);
   }
 
-  /// Starts or replaces the lease renewal timer for a delivery.
+  /// Cancels and removes the lease renewal timer for a delivery.
   ///
   /// ## Implementation Details
   ///
-  /// Creates a [Timer.periodic] that fires every [interval] to extend
-  /// the broker lease. The timer callback:
-  ///
-  /// 1. Calls `broker.extendLease` to renew visibility
-  /// 2. Increments the 'stem.lease.renewed' metric via `_recordLeaseRenewal`
-  /// 3. Updates internal tracking via `_noteLeaseRenewal`
-  ///
-  /// ## Timer Management
-  ///
-  /// - Keyed by `delivery.receipt` (unique broker message ID)
-  /// - Any existing timer for the same receipt is cancelled first
-  /// - Timer stored in `_leaseTimers` map for later cancellation
-  ///
-  /// ## Thread Safety
-  ///
-  /// The timer callback is async but runs in the main isolate's event loop.
-  /// If task completes before callback fires, the timer is cancelled via
-  /// `_cancelLeaseTimer` and the callback becomes a no-op.
-  void _startLeaseTimer(Delivery delivery, Duration interval) {
-    _leaseTimers[delivery.receipt]?.cancel();
-    final timer = Timer.periodic(interval, (_) async {
-      await broker.extendLease(delivery, interval);
-      _recordLeaseRenewal(delivery);
-      _noteLeaseRenewal(delivery);
-    });
-    _leaseTimers[delivery.receipt] = timer;
-  }
-
-  /// Cancels and removes the lease renewal timer for a broker receipt.
-  ///
-  /// ## Implementation Details
-  ///
-  /// Called when:
-  /// - Task completes successfully or fails
-  /// - Task is revoked
-  /// - Worker is shutting down
+  /// Called after the delivery's terminal handling is complete, including
+  /// result persistence, group/chord bookkeeping, retry or dead-letter
+  /// publication, linked-task dispatch, and acknowledgement. It is also
+  /// called when a delivery is revoked or the worker is shutting down.
   ///
   /// Uses [Map.remove] with null-safe chaining to atomically remove
   /// and cancel in one operation. If no timer exists for the receipt,
@@ -1450,10 +1579,34 @@ class Worker {
   ///
   /// ## Parameters
   ///
-  /// - [receipt]: The broker-assigned unique message identifier
-  ///   (e.g., SQS ReceiptHandle, RabbitMQ delivery tag)
-  void _cancelLeaseTimer(String receipt) {
-    _leaseTimers.remove(receipt)?.cancel();
+  /// - [delivery]: The broker delivery whose timer should be cancelled.
+  void _cancelLeaseTimer(Delivery delivery) {
+    _leases.cancel(delivery);
+  }
+
+  /// Records a failed lease renewal without escaping the timer callback.
+  void _handleLeaseRenewalFailure(
+    Delivery delivery,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    StemMetrics.instance.increment(
+      'stem.lease.renewal_failed',
+      tags: {'task': delivery.envelope.name, 'queue': delivery.envelope.queue},
+    );
+    stemLogger.warning(
+      'Task lease renewal failed',
+      Context(
+        _logContext({
+          'task': delivery.envelope.name,
+          'id': delivery.envelope.id,
+          'queue': delivery.envelope.queue,
+          'receipt': delivery.receipt,
+          'error': error.toString(),
+          'stack': stackTrace.toString(),
+        }),
+      ),
+    );
   }
 
   /// Records the timestamp of the most recent lease renewal.
@@ -1465,11 +1618,11 @@ class Worker {
   /// 1. **Worker-level**: [_lastLeaseRenewal] - used in worker heartbeats
   ///    to show when any task last renewed its lease
   ///
-  /// 2. **Per-delivery**: [_ActiveDelivery.lastLeaseRenewal] - used for
+  /// 2. **Per-delivery**: [WorkerActiveDelivery.lastLeaseRenewal] - used for
   ///    per-task observability and debugging stalled tasks
   ///
   /// This is called after every successful lease extension, both automatic
-  /// (from [_startLeaseTimer]) and manual (from [TaskContext.extendLease]).
+  /// (from the lease coordinator) and manual (from [TaskContext.extendLease]).
   ///
   /// ## Difference from [_recordLeaseRenewal]
   ///
@@ -1478,7 +1631,7 @@ class Worker {
   void _noteLeaseRenewal(Delivery delivery) {
     final now = stemNow().toUtc();
     _lastLeaseRenewal = now;
-    final active = _activeDeliveries[delivery.envelope.id];
+    final active = _deliveryTracker.forDelivery(delivery);
     if (active != null) {
       active.lastLeaseRenewal = now;
     }
@@ -1596,18 +1749,34 @@ class Worker {
   /// - `stem.chords.dispatched`: Successful callback enqueue
   /// - `stem.chords.dispatch_failed`: Failed callback enqueue
   Future<void> _maybeDispatchChord(GroupStatus status) async {
-    if (!status.isComplete) return;
-    final allSucceeded = status.results.values.every(
-      (s) => s.state == TaskState.succeeded,
-    );
-    if (!allSucceeded) return;
+    final policy = ChordPolicy.fromJson(status.meta[ChordMetadata.policy]);
+    if (!policy.shouldDispatch(status)) return;
 
     final callbackData = status.meta[ChordMetadata.callbackEnvelope];
     if (callbackData is! Map) {
       return;
     }
 
-    final resultsPayload = status.results.values.map((s) => s.payload).toList();
+    final resultsPayload = status.results.values
+        .map(
+          (result) =>
+              result.state == TaskState.succeeded ? result.payload : null,
+        )
+        .toList();
+    final failurePayload = status.results.values
+        .where(
+          (result) =>
+              result.state == TaskState.failed ||
+              result.state == TaskState.cancelled,
+        )
+        .map(
+          (result) => {
+            'taskId': result.id,
+            'state': result.state.name,
+            if (result.error != null) 'error': result.error!.toJson(),
+          },
+        )
+        .toList(growable: false);
     final dispatchedAt = stemNow().toUtc();
     final callbackTaskId =
         (callbackData['id'] as String?) ?? generateEnvelopeId();
@@ -1632,6 +1801,8 @@ class Worker {
           ...callbackEnvelope.meta,
           'chordId': status.id,
           'chordResults': resultsPayload,
+          ChordMetadata.policy: policy.toJson(),
+          if (failurePayload.isNotEmpty) ChordMetadata.failures: failurePayload,
         },
       );
 
@@ -1891,7 +2062,7 @@ class Worker {
   ///
   /// This method doesn't throw - all errors are handled internally
   /// to ensure the task is properly failed and cleaned up.
-  Future<void> _handleSignatureFailure(
+  Future<_TaskCompletion> _handleSignatureFailure(
     Delivery delivery,
     Envelope envelope,
     TaskPayloadEncoder resultEncoder,
@@ -1899,15 +2070,6 @@ class Worker {
     StackTrace stack,
     String? groupId,
   ) async {
-    await broker.deadLetter(
-      delivery,
-      reason: 'signature-invalid',
-      meta: {
-        'error': error.message,
-        if (error.keyId != null) 'keyId': error.keyId,
-      },
-    );
-
     final failureMeta = _statusMeta(
       envelope,
       resultEncoder,
@@ -1935,12 +2097,25 @@ class Worker {
       meta: failureMeta,
     );
 
-    await backend.set(
-      envelope.id,
-      TaskState.failed,
-      attempt: envelope.attempt,
-      error: failureStatus.error,
-      meta: failureMeta,
+    final terminal = await _writeTerminalStatus(failureStatus);
+    if (!terminal.applied) {
+      await _acknowledgements.tryAcknowledge(
+        delivery,
+        envelope: envelope,
+        phase: 'terminal signature duplicate',
+      );
+      return _TaskCompletion(
+        state: terminal.status.state,
+        terminalWriteOwned: false,
+      );
+    }
+    await _deadLetterOrDiscard(
+      delivery,
+      reason: 'signature-invalid',
+      meta: {
+        'error': error.message,
+        if (error.keyId != null) 'keyId': error.keyId,
+      },
     );
     if (groupId != null) {
       await backend.addGroupResult(groupId, failureStatus);
@@ -1968,7 +2143,7 @@ class Worker {
       ),
     );
 
-    _events.add(
+    _emitEvent(
       WorkerEvent(
         type: WorkerEventType.failed,
         envelope: envelope,
@@ -1982,6 +2157,10 @@ class Worker {
       _workerInfoSnapshot,
       error: error,
       stackTrace: stack,
+    );
+    return const _TaskCompletion(
+      state: TaskState.failed,
+      terminalWriteOwned: true,
     );
   }
 
@@ -2028,7 +2207,7 @@ class Worker {
   /// ## Returns
   ///
   /// The resulting [TaskState]: either `retried` or `failed`.
-  Future<TaskState> _handleFailure(
+  Future<_TaskCompletion> _handleFailure(
     TaskHandler<Object?> handler,
     Delivery delivery,
     Envelope envelope,
@@ -2078,7 +2257,7 @@ class Worker {
         'stem.tasks.retried',
         tags: {'task': envelope.name, 'queue': envelope.queue},
       );
-      _events.add(
+      _emitEvent(
         WorkerEvent(
           type: WorkerEventType.retried,
           envelope: envelope,
@@ -2107,7 +2286,10 @@ class Worker {
           ),
         ),
       );
-      return TaskState.retried;
+      return const _TaskCompletion(
+        state: TaskState.retried,
+        terminalWriteOwned: false,
+      );
     } else {
       final failureMeta = _statusMeta(
         envelope,
@@ -2130,20 +2312,29 @@ class Worker {
         attempt: envelope.attempt,
         meta: failureMeta,
       );
-      await broker.deadLetter(
+      final terminal = await _writeTerminalStatus(failureStatus);
+      if (!terminal.applied) {
+        await _acknowledgements.tryAcknowledge(
+          delivery,
+          envelope: envelope,
+          phase: 'terminal failure duplicate',
+        );
+        return _TaskCompletion(
+          state: terminal.status.state,
+          terminalWriteOwned: false,
+        );
+      }
+      await _deadLetterOrDiscard(
         delivery,
         reason: 'max-retries-exhausted',
         meta: {'error': error.toString()},
       );
-      await backend.set(
-        envelope.id,
-        TaskState.failed,
-        attempt: envelope.attempt,
-        error: failureStatus.error,
-        meta: failureMeta,
-      );
+      GroupStatus? groupStatus;
       if (groupId != null) {
-        await backend.addGroupResult(groupId, failureStatus);
+        groupStatus = await backend.addGroupResult(groupId, failureStatus);
+      }
+      if (groupStatus != null) {
+        await _maybeDispatchChord(groupStatus);
       }
       StemMetrics.instance.increment(
         'stem.tasks.failed',
@@ -2162,7 +2353,7 @@ class Worker {
           ),
         ),
       );
-      _events.add(
+      _emitEvent(
         WorkerEvent(
           type: WorkerEventType.failed,
           envelope: envelope,
@@ -2176,12 +2367,15 @@ class Worker {
         error: error,
         stackTrace: stack,
       );
-      return TaskState.failed;
+      return const _TaskCompletion(
+        state: TaskState.failed,
+        terminalWriteOwned: true,
+      );
     }
   }
 
   /// Handles explicit retry requests surfaced from task handlers.
-  Future<TaskState> _handleRetryRequest(
+  Future<_TaskCompletion> _handleRetryRequest(
     TaskHandler<Object?> handler,
     Delivery delivery,
     Envelope envelope,
@@ -2205,18 +2399,38 @@ class Worker {
           'retryExhausted': true,
         },
       );
-      await broker.nack(delivery, requeue: false);
-      await backend.set(
-        envelope.id,
-        TaskState.failed,
+      const failureError = TaskError(
+        type: 'RetryExhausted',
+        message: 'retry requested but max retries exceeded',
+      );
+      final failureStatus = TaskStatus(
+        id: envelope.id,
+        state: TaskState.failed,
+        error: failureError,
         attempt: envelope.attempt,
-        error: const TaskError(
-          type: 'RetryExhausted',
-          message: 'retry requested but max retries exceeded',
-        ),
         meta: failureMeta,
       );
-      _events.add(
+      final terminal = await _writeTerminalStatus(failureStatus);
+      if (!terminal.applied) {
+        await _acknowledgements.tryAcknowledge(
+          delivery,
+          envelope: envelope,
+          phase: 'terminal retry-exhausted duplicate',
+        );
+        return _TaskCompletion(
+          state: terminal.status.state,
+          terminalWriteOwned: false,
+        );
+      }
+      await broker.nack(delivery, requeue: false);
+      GroupStatus? groupStatus;
+      if (groupId != null) {
+        groupStatus = await backend.addGroupResult(groupId, failureStatus);
+      }
+      if (groupStatus != null) {
+        await _maybeDispatchChord(groupStatus);
+      }
+      _emitEvent(
         WorkerEvent(
           type: WorkerEventType.failed,
           envelope: envelope,
@@ -2232,7 +2446,10 @@ class Worker {
       if (_isTerminalState(TaskState.failed)) {
         await _releaseUniqueLock(envelope);
       }
-      return TaskState.failed;
+      return const _TaskCompletion(
+        state: TaskState.failed,
+        terminalWriteOwned: true,
+      );
     }
 
     final scheduledAt =
@@ -2285,7 +2502,7 @@ class Worker {
       ),
       meta: retriedMeta,
     );
-    _events.add(
+    _emitEvent(
       WorkerEvent(
         type: WorkerEventType.retried,
         envelope: envelope,
@@ -2311,7 +2528,10 @@ class Worker {
         ),
       ),
     );
-    return TaskState.retried;
+    return const _TaskCompletion(
+      state: TaskState.retried,
+      terminalWriteOwned: false,
+    );
   }
 
   /// Builds a rate-limit key based on task options and the envelope.
@@ -2356,7 +2576,7 @@ class Worker {
       attempt: envelope.attempt,
       meta: _statusMeta(envelope, resultEncoder, extra: data),
     );
-    _events.add(
+    _emitEvent(
       WorkerEvent(
         type: WorkerEventType.retried,
         envelope: envelope,
@@ -2375,6 +2595,24 @@ class Worker {
     await broker.publish(signed);
   }
 
+  /// Retains a failed delivery when the broker supports dead letters, or
+  /// discards it safely when the transport only implements [QueueBroker].
+  ///
+  /// A queue-only adapter must not fail task processing merely because it has
+  /// no dead-letter store. The terminal task status remains persisted in the
+  /// result backend; the broker fallback removes the delivery without
+  /// requeueing it.
+  Future<void> _deadLetterOrDiscard(
+    Delivery delivery, {
+    String? reason,
+    Map<String, Object?>? meta,
+  }) {
+    if (broker.capabilities.supportsDeadLettering) {
+      return broker.deadLetter(delivery, reason: reason, meta: meta);
+    }
+    return broker.nack(delivery, requeue: false);
+  }
+
   /// Requeues deliveries from paused queues without executing handlers.
   Future<void> _handlePausedQueueDelivery(
     Delivery delivery,
@@ -2391,57 +2629,24 @@ class Worker {
     );
   }
 
-  /// Parses a rate limit string such as "10/m" into a spec.
-  _RateSpec? _parseRate(String rate) {
-    final parts = rate.split('/');
-    if (parts.length != 2) return null;
-    final tokens = int.tryParse(parts[0]);
-    if (tokens == null || tokens <= 0) return null;
-    switch (parts[1]) {
-      case 's':
-        return _RateSpec(tokens: tokens, period: const Duration(seconds: 1));
-      case 'm':
-        return _RateSpec(tokens: tokens, period: const Duration(minutes: 1));
-      case 'h':
-        return _RateSpec(tokens: tokens, period: const Duration(hours: 1));
-      default:
-        return null;
-    }
-  }
-
   /// Emits a heartbeat update for a running task.
   void _sendHeartbeat(String id) {
-    _events.add(WorkerEvent(type: WorkerEventType.heartbeat, envelopeId: id));
+    _emitEvent(WorkerEvent(type: WorkerEventType.heartbeat, envelopeId: id));
   }
 
   /// Tracks an in-flight delivery for lease renewal and metrics.
   void _trackDelivery(Delivery delivery) {
-    final envelope = delivery.envelope;
-    final id = envelope.id;
-    final queueName = envelope.queue;
-    final startedAt = stemNow().toUtc();
-    _activeDeliveries[id] = _ActiveDelivery(
-      queue: queueName,
-      startedAt: startedAt,
-      envelope: envelope,
-      delivery: delivery,
+    _deliveryTracker.track(
+      delivery,
+      startedAt: stemNow().toUtc(),
     );
-    _inflight += 1;
-    _inflightPerQueue[queueName] = (_inflightPerQueue[queueName] ?? 0) + 1;
     _recordInflightGauge();
   }
 
   /// Removes an in-flight delivery from tracking.
-  _ActiveDelivery? _releaseDelivery(Envelope envelope) {
-    final entry = _activeDeliveries.remove(envelope.id);
+  WorkerActiveDelivery? _releaseDelivery(Delivery delivery) {
+    final entry = _deliveryTracker.release(delivery);
     if (entry != null) {
-      _inflight = math.max(0, _inflight - 1);
-      final queueCount = (_inflightPerQueue[entry.queue] ?? 0) - 1;
-      if (queueCount <= 0) {
-        _inflightPerQueue.remove(entry.queue);
-      } else {
-        _inflightPerQueue[entry.queue] = queueCount;
-      }
       if (_activeDeliveries.isEmpty) {
         _lastLeaseRenewal = null;
         final drain = _drainCompleter;
@@ -2513,26 +2718,6 @@ class Worker {
 
   /// Refreshes queue subscriptions after pause/resume changes.
   Future<void> _refreshQueueSubscriptions() async {
-    final existing = List<String>.from(_queueSubscriptionNames);
-    for (final queueName in existing) {
-      final subscription = _subscriptions.remove(queueName);
-      _queueSubscriptionNames.remove(queueName);
-      if (subscription == null) continue;
-      try {
-        await subscription.cancel();
-      } on Object catch (error, stack) {
-        stemLogger.warning(
-          'Failed to cancel queue subscription: $error',
-          Context(
-            _logContext({
-              'queue': queueName,
-              'stack': stack.toString(),
-            }),
-          ),
-        );
-      }
-    }
-
     final activeQueues = _effectiveQueues
         .where((queueName) => !_isQueuePaused(queueName))
         .toList(growable: false);
@@ -2546,78 +2731,42 @@ class Worker {
           }),
         ),
       );
-      return;
     }
 
-    for (var index = 0; index < activeQueues.length; index += 1) {
-      final queueName = activeQueues[index];
-      final stream = broker.consume(
-        RoutingSubscription(
-          queues: [queueName],
-          broadcastChannels: index == 0
-              ? _broadcastSubscriptions
-              : const <String>[],
-        ),
-        prefetch: prefetch,
-        consumerName: consumerName,
-      );
-      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
-      // ignore: cancel_subscriptions
-      final subscription = stream.listen(
-        (delivery) {
-          final task = _handle(delivery);
-          unawaited(
-            task.catchError((Object error, StackTrace stack) {
-              _events.add(
-                WorkerEvent(
-                  type: WorkerEventType.error,
-                  envelope: delivery.envelope,
-                  error: error,
-                  stackTrace: stack,
-                ),
-              );
-            }),
-          );
-        },
-        onError: (Object error, StackTrace stack) {
-          _events.add(
-            WorkerEvent(
-              type: WorkerEventType.error,
-              error: error,
-              stackTrace: stack,
-            ),
-          );
-        },
-      );
-      _subscriptions[queueName] = subscription;
-      _queueSubscriptionNames.add(queueName);
-    }
+    await _consumer.replaceQueueSubscriptions(
+      queues: activeQueues,
+      broadcastChannels: _broadcastSubscriptions,
+      prefetch: prefetch,
+      consumerName: consumerName,
+      onDelivery: _handle,
+      onDeliveryError: (delivery, error, stack) {
+        _emitEvent(
+          WorkerEvent(
+            type: WorkerEventType.error,
+            envelope: delivery.envelope,
+            error: error,
+            stackTrace: stack,
+          ),
+        );
+      },
+      onStreamError: (error, stack) {
+        _emitEvent(
+          WorkerEvent(
+            type: WorkerEventType.error,
+            error: error,
+            stackTrace: stack,
+          ),
+        );
+      },
+    );
   }
 
   /// Cancels broker subscriptions and clears tracking state.
-  Future<void> _cancelAllSubscriptions() async {
-    if (_subscriptions.isEmpty) return;
-    final subs = List<StreamSubscription<Delivery>>.from(_subscriptions.values);
-    _subscriptions.clear();
-    _queueSubscriptionNames.clear();
-    for (final sub in subs) {
-      try {
-        await sub.cancel();
-      } on Object catch (error, stack) {
-        stemLogger.warning(
-          'Failed to cancel subscription: $error',
-          Context(_logContext({'stack': stack.toString()})),
-        );
-      }
-    }
-  }
+  Future<void> _cancelAllSubscriptions() => _consumer.close();
 
   /// Cancels active timers used by the worker runtime.
   void _cancelTimers() {
-    for (final timer in _leaseTimers.values) {
-      timer.cancel();
-    }
-    _leaseTimers.clear();
+    _leases.cancelAll();
     for (final timer in _heartbeatTimers.values) {
       timer.cancel();
     }
@@ -2626,24 +2775,21 @@ class Worker {
     _workerHeartbeatTimer = null;
   }
 
-  /// Disposes the isolate pool if one is active.
+  /// Disposes the execution supervisor if an isolate pool is active.
   Future<void> _disposePool() async {
-    final pool = _isolatePool;
-    _isolatePool = null;
-    _poolFuture = null;
-    if (pool != null) {
-      await pool.dispose();
-    }
+    await _execution.dispose();
   }
 
   /// Forcibly stops active tasks, requeuing deliveries when possible.
   Future<void> _forceStopActiveTasks() async {
-    final deliveries = List<_ActiveDelivery>.from(_activeDeliveries.values);
+    final deliveries = List<WorkerActiveDelivery>.from(
+      _activeDeliveries.values,
+    );
     if (deliveries.isEmpty) return;
     for (final active in deliveries) {
-      _cancelLeaseTimer(active.delivery.receipt);
-      _heartbeatTimers.remove(active.envelope.id)?.cancel();
-      _releaseDelivery(active.envelope);
+      _cancelLeaseTimer(active.delivery);
+      _heartbeatTimers.remove(active.delivery)?.cancel();
+      _releaseDelivery(active.delivery);
       try {
         await broker.nack(active.delivery);
       } on Object catch (error, stack) {
@@ -3160,10 +3306,7 @@ class Worker {
       _idleSince = null;
     }
 
-    final pool = _isolatePool;
-    if (pool != null) {
-      await pool.resize(_currentConcurrency);
-    }
+    await _execution.resize(_currentConcurrency);
 
     _recordConcurrencyGauge();
 
@@ -3310,9 +3453,9 @@ class Worker {
   /// Builds a worker heartbeat payload from current runtime state.
   WorkerHeartbeat _buildHeartbeat() {
     final now = stemNow().toUtc();
-    final isolatePool = _isolatePool;
-    final activeIsolates =
-        isolatePool?.activeCount ?? math.min(_inflight, _currentConcurrency);
+    final activeIsolates = _execution.activeIsolates == 0
+        ? math.min(_inflight, _currentConcurrency)
+        : _execution.activeIsolates;
     final queues =
         _inflightPerQueue.entries
             .where((entry) => entry.value > 0)
@@ -3453,7 +3596,7 @@ class Worker {
     double progress, {
     Map<String, Object?>? data,
   }) {
-    _events.add(
+    _emitEvent(
       WorkerEvent(
         type: WorkerEventType.progress,
         envelope: envelope,
@@ -3806,6 +3949,43 @@ class Worker {
     return Duration(milliseconds: jittered);
   }
 
+  /// Persists a terminal status with backend arbitration when available.
+  ///
+  /// Terminal writes use the optional backend arbitration capability so a
+  /// late duplicate delivery cannot replace a terminal result persisted by a
+  /// different worker. Non-capable custom backends retain the historical
+  /// unconditional write behavior.
+  Future<_TerminalWriteResult> _writeTerminalStatus(TaskStatus status) async {
+    final candidate = backend;
+    if (candidate is AtomicTerminalResultBackend &&
+        (candidate as AtomicTerminalResultBackend)
+            .supportsAtomicTerminalWrites) {
+      final atomic = candidate as AtomicTerminalResultBackend;
+      final applied = await atomic.setTerminalIfAbsent(status);
+      if (!applied) {
+        final existing = await backend.get(status.id);
+        if (existing != null && existing.state.isTerminal) {
+          StemMetrics.instance.increment(
+            'stem.tasks.terminal_write_lost',
+            tags: {'state': status.state.name},
+          );
+          return _TerminalWriteResult(applied: false, status: existing);
+        }
+      }
+      return _TerminalWriteResult(applied: applied, status: status);
+    }
+
+    await backend.set(
+      status.id,
+      status.state,
+      payload: status.payload,
+      error: status.error,
+      attempt: status.attempt,
+      meta: status.meta,
+    );
+    return _TerminalWriteResult(applied: true, status: status);
+  }
+
   /// Builds status metadata for result backend writes.
   Map<String, Object?> _statusMeta(
     Envelope envelope,
@@ -3832,14 +4012,13 @@ class Worker {
   }
 
   /// Marks revoked deliveries and ensures the broker is acknowledged.
-  Future<void> _handleRevokedDelivery(
+  Future<_TaskCompletion> _handleRevokedDelivery(
     Delivery delivery,
     Envelope envelope,
     TaskPayloadEncoder resultEncoder, {
     String? groupId,
   }) async {
     final revokeEntry = _revocationFor(envelope.id);
-    await broker.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -3860,12 +4039,19 @@ class Worker {
       attempt: envelope.attempt,
       meta: meta,
     );
-    await backend.set(
-      envelope.id,
-      TaskState.cancelled,
-      attempt: envelope.attempt,
-      meta: meta,
-    );
+    final terminal = await _writeTerminalStatus(status);
+    if (!terminal.applied) {
+      await _acknowledgements.tryAcknowledge(
+        delivery,
+        envelope: envelope,
+        phase: 'terminal revocation duplicate',
+      );
+      return _TaskCompletion(
+        state: terminal.status.state,
+        terminalWriteOwned: false,
+      );
+    }
+    await broker.ack(delivery);
     if (groupId != null) {
       await backend.addGroupResult(groupId, status);
     }
@@ -3884,7 +4070,7 @@ class Worker {
         }),
       ),
     );
-    _events.add(
+    _emitEvent(
       WorkerEvent(
         type: WorkerEventType.revoked,
         envelope: envelope,
@@ -3900,6 +4086,10 @@ class Worker {
       reason: revokeEntry?.reason ?? 'revoked',
     );
     _revocations.remove(envelope.id);
+    return const _TaskCompletion(
+      state: TaskState.cancelled,
+      terminalWriteOwned: true,
+    );
   }
 
   /// Returns true when the delivery is past its expiration time.
@@ -3914,12 +4104,11 @@ class Worker {
   }
 
   /// Marks expired deliveries and acknowledges them.
-  Future<void> _handleExpiredDelivery(
+  Future<_TaskCompletion> _handleExpiredDelivery(
     Delivery delivery,
     Envelope envelope,
     TaskPayloadEncoder resultEncoder,
   ) async {
-    await broker.ack(delivery);
     final meta = _statusMeta(
       envelope,
       resultEncoder,
@@ -3930,15 +4119,130 @@ class Worker {
         'stem.expired': true,
       },
     );
-    await backend.set(
-      envelope.id,
-      TaskState.cancelled,
+    final status = TaskStatus(
+      id: envelope.id,
+      state: TaskState.cancelled,
       attempt: envelope.attempt,
       error: const TaskError(
         type: 'TaskExpired',
         message: 'Task expired before execution',
       ),
       meta: meta,
+    );
+    final terminal = await _writeTerminalStatus(status);
+    await _acknowledgements.tryAcknowledge(
+      delivery,
+      envelope: envelope,
+      phase: terminal.applied
+          ? 'expired task'
+          : 'terminal expiration duplicate',
+    );
+    return _TaskCompletion(
+      state: terminal.status.state,
+      terminalWriteOwned: terminal.applied,
+    );
+  }
+
+  /// Permanently rejects a delivery whose arguments cannot be decoded.
+  ///
+  /// A payload-decoding error is a poison message, not a handler failure. It
+  /// cannot be repaired by retrying the same bytes, so the delivery is
+  /// terminally failed and dead-lettered even when the task's normal retry
+  /// policy allows handler retries.
+  Future<_TaskCompletion> _handlePayloadDecodeFailure(
+    Delivery delivery,
+    Envelope envelope,
+    TaskPayloadEncoder resultEncoder,
+    Object error,
+    StackTrace stack,
+    String? groupId,
+  ) async {
+    final meta = _statusMeta(
+      envelope,
+      resultEncoder,
+      extra: {
+        'queue': envelope.queue,
+        'worker': consumerName,
+        'failedAt': stemNow().toIso8601String(),
+        'invalidPayload': true,
+      },
+    );
+    final status = TaskStatus(
+      id: envelope.id,
+      state: TaskState.failed,
+      attempt: envelope.attempt,
+      error: TaskError(
+        type: error.runtimeType.toString(),
+        message: error.toString(),
+        stack: stack.toString(),
+        meta: const {'reason': 'invalid-payload'},
+      ),
+      meta: meta,
+    );
+    final terminal = await _writeTerminalStatus(status);
+    if (!terminal.applied) {
+      await _acknowledgements.tryAcknowledge(
+        delivery,
+        envelope: envelope,
+        phase: 'terminal invalid-payload duplicate',
+      );
+      return _TaskCompletion(
+        state: terminal.status.state,
+        terminalWriteOwned: false,
+      );
+    }
+
+    await _deadLetterOrDiscard(
+      delivery,
+      reason: 'invalid-payload',
+      meta: {
+        'error': error.toString(),
+        'errorType': error.runtimeType.toString(),
+      },
+    );
+    if (groupId != null) {
+      await backend.addGroupResult(groupId, status);
+    }
+    StemMetrics.instance.increment(
+      'stem.tasks.invalid_payload',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+    StemMetrics.instance.increment(
+      'stem.tasks.failed',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+    _failedCount += 1;
+    stemLogger.error(
+      'Task {task} payload decoding failed',
+      Context(
+        _deliveryLogContext(
+          envelope,
+          extra: {
+            'error': error.toString(),
+            'stack': stack.toString(),
+            'reason': 'invalid-payload',
+          },
+        ),
+      ),
+    );
+    _emitEvent(
+      WorkerEvent(
+        type: WorkerEventType.failed,
+        envelope: envelope,
+        error: error,
+        stackTrace: stack,
+        data: const {'reason': 'invalid-payload'},
+      ),
+    );
+    await _signals.taskFailed(
+      envelope,
+      _workerInfoSnapshot,
+      error: error,
+      stackTrace: stack,
+    );
+    return const _TaskCompletion(
+      state: TaskState.failed,
+      terminalWriteOwned: true,
     );
   }
 
@@ -4060,7 +4364,7 @@ class Worker {
         _latestRevocationVersion = entry.version;
       }
       applied.add(entry.taskId);
-      if (_activeDeliveries.containsKey(entry.taskId)) {
+      if (_deliveryTracker.containsEnvelopeId(entry.taskId)) {
         inflight.add(entry.taskId);
       }
     }
@@ -4173,18 +4477,27 @@ class Worker {
       ControlQueueNames.broadcast(namespace),
     };
     for (final queueName in controlQueues) {
-      if (_subscriptions.containsKey(queueName)) {
+      if (_consumer.contains(queueName)) {
         continue;
       }
-      final stream = broker.consume(
-        RoutingSubscription.singleQueue(queueName),
+      _consumer.subscribe(
+        name: queueName,
+        routing: RoutingSubscription.singleQueue(queueName),
         consumerName: '$_workerIdentifier-control',
-      );
-      // Subscriptions are tracked and cancelled in _cancelAllSubscriptions().
-      // ignore: cancel_subscriptions
-      final subscription = stream.listen(
-        (delivery) => unawaited(_processControlCommandDelivery(delivery)),
-        onError: (Object error, StackTrace stack) {
+        onDelivery: _processControlCommandDelivery,
+        onDeliveryError: (delivery, error, stack) {
+          stemLogger.warning(
+            'Control command error: $error',
+            Context(
+              _logContext({
+                'queue': queueName,
+                'task': delivery.envelope.id,
+                'stack': stack.toString(),
+              }),
+            ),
+          );
+        },
+        onStreamError: (error, stack) {
           stemLogger.warning(
             'Control channel error: $error',
             Context(
@@ -4193,7 +4506,6 @@ class Worker {
           );
         },
       );
-      _subscriptions[queueName] = subscription;
     }
   }
 
@@ -4456,51 +4768,6 @@ class Worker {
     };
   }
 
-  bool _shouldUseIsolate(TaskHandler<Object?> handler) =>
-      handler.isolateEntrypoint != null;
-
-  Future<Object?> _runInIsolate(
-    TaskHandler<Object?> handler,
-    TaskContext context,
-    Envelope envelope,
-    Map<String, Object?> args, {
-    Duration? hardTimeout,
-  }) async {
-    final entrypoint = handler.isolateEntrypoint;
-    if (entrypoint == null) {
-      return handler.call(context, args);
-    }
-
-    final pool = await _ensureIsolatePool();
-
-    final outcome = await pool.execute(
-      entrypoint,
-      args,
-      envelope.headers,
-      envelope.meta,
-      envelope.attempt,
-      _controlHandler(context),
-      taskName: handler.name,
-      taskId: envelope.id,
-      hardTimeout: hardTimeout,
-    );
-
-    if (outcome is TaskExecutionSuccess) {
-      return outcome.value;
-    } else if (outcome is TaskExecutionRetry) {
-      throw outcome.request;
-    } else if (outcome is TaskExecutionFailure) {
-      Error.throwWithStackTrace(outcome.error, outcome.stackTrace);
-    } else if (outcome is TaskExecutionTimeout) {
-      throw TimeoutException(
-        'hard time limit exceeded for ${outcome.taskName}',
-        outcome.limit,
-      );
-    }
-
-    throw StateError('Unexpected execution outcome: $outcome');
-  }
-
   /// Returns a [TaskControlHandler] that manages signals from isolate tasks.
   ///
   /// The handler processes [HeartbeatSignal]s, [ExtendLeaseSignal]s,
@@ -4634,53 +4901,6 @@ class Worker {
       name: name,
       encodeParams: (params) => params,
     );
-  }
-
-  /// Lazily creates or returns the worker isolate pool.
-  Future<TaskIsolatePool> _ensureIsolatePool() {
-    final existing = _isolatePool;
-    if (existing != null) return Future.value(existing);
-    final future = _poolFuture;
-    if (future != null) return future;
-    final creation = _createPool();
-    _poolFuture = creation;
-    return creation;
-  }
-
-  /// Creates and configures the [TaskIsolatePool] for this worker.
-  ///
-  /// Connects the pool's lifecycle events to the worker's internal state
-  /// for metrics tracking and logging.
-  Future<TaskIsolatePool> _createPool() async {
-    final pool =
-        TaskIsolatePool(
-          size: _currentConcurrency,
-          onRecycle: _handleIsolateRecycle,
-          onSpawned: (isolateId) {
-            unawaited(
-              _signals.workerChildLifecycle(
-                _workerInfoSnapshot,
-                isolateId,
-                initializing: true,
-              ),
-            );
-          },
-          onDisposed: (isolateId) {
-            unawaited(
-              _signals.workerChildLifecycle(
-                _workerInfoSnapshot,
-                isolateId,
-                initializing: false,
-              ),
-            );
-          },
-        )..updateRecyclePolicy(
-          maxTasksPerIsolate: lifecycleConfig.maxTasksPerIsolate,
-          maxMemoryBytes: lifecycleConfig.maxMemoryPerIsolateBytes,
-        );
-    await pool.start();
-    _isolatePool = pool;
-    return pool;
   }
 
   static int _normalizeConcurrency(int? value) =>
@@ -4886,6 +5106,26 @@ enum WorkerEventType {
   error,
 }
 
+class _TaskCompletion {
+  const _TaskCompletion({
+    required this.state,
+    required this.terminalWriteOwned,
+  });
+
+  final TaskState state;
+  final bool terminalWriteOwned;
+}
+
+class _TerminalWriteResult {
+  const _TerminalWriteResult({
+    required this.applied,
+    required this.status,
+  });
+
+  final bool applied;
+  final TaskStatus status;
+}
+
 /// Exception thrown when a task is revoked during execution.
 class TaskRevokedException implements Exception {
   /// Creates a revoked-task exception.
@@ -4902,53 +5142,4 @@ class TaskRevokedException implements Exception {
 
   @override
   String toString() => 'Task $taskId revoked';
-}
-
-/// Parsed rate limit specification for a specific task or queue.
-///
-/// Encapsulates the token-bucket or sliding-window parameters used to
-/// enforce throughput constraints.
-class _RateSpec {
-  /// Creates a rate spec.
-  ///
-  /// [tokens] is the number allowed per [period].
-  const _RateSpec({required this.tokens, required this.period});
-
-  /// The number of tokens allowed.
-  final int tokens;
-
-  /// The period over which tokens apply.
-  final Duration period;
-}
-
-/// Tracks an active task delivery during its lifecycle in the worker.
-///
-/// This internal structure links a [Delivery] with its execution [Future],
-/// start time, and any active lease timers. It is used to monitor in-flight
-/// work and handle graceful shutdown.
-class _ActiveDelivery {
-  /// Creates an active delivery record.
-  ///
-  /// [queue] is the queue name. [startedAt] is the start time.
-  _ActiveDelivery({
-    required this.queue,
-    required this.startedAt,
-    required this.envelope,
-    required this.delivery,
-  });
-
-  /// The queue this delivery belongs to.
-  final String queue;
-
-  /// When the task started.
-  final DateTime startedAt;
-
-  /// The original envelope for this task.
-  final Envelope envelope;
-
-  /// The underlying delivery from the broker.
-  final Delivery delivery;
-
-  /// The last lease renewal time.
-  DateTime? lastLeaseRenewal;
 }

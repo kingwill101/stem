@@ -628,32 +628,35 @@ class _DartasticMetricsRuntime {
         : Map<String, Object>.from(event.tags);
     switch (event.type) {
       case MetricType.counter:
-        final counter = _counters.putIfAbsent(instrumentName, () {
-          return _meter!.createCounter<double>(
-            name: instrumentName,
-            unit: event.unit == 'count' ? null : event.unit,
-          );
-        });
-        counter.addWithMap(event.value, attributes);
+        _counters
+            .putIfAbsent(instrumentName, () {
+              return _meter!.createCounter<double>(
+                name: instrumentName,
+                unit: event.unit == 'count' ? null : event.unit,
+              );
+            })
+            .addWithMap(event.value, attributes);
       case MetricType.histogram:
-        final histogram = _histograms.putIfAbsent(instrumentName, () {
-          return _meter!.createHistogram<double>(
-            name: instrumentName,
-            unit: _normalizedHistogramUnit(event.unit),
-          );
-        });
-        histogram.recordWithMap(
-          _normalizedHistogramValue(event.value, event.unit),
-          attributes,
-        );
+        _histograms
+            .putIfAbsent(instrumentName, () {
+              return _meter!.createHistogram<double>(
+                name: instrumentName,
+                unit: _normalizedHistogramUnit(event.unit),
+              );
+            })
+            .recordWithMap(
+              _normalizedHistogramValue(event.value, event.unit),
+              attributes,
+            );
       case MetricType.gauge:
-        final gauge = _gauges.putIfAbsent(instrumentName, () {
-          return _meter!.createGauge<double>(
-            name: instrumentName,
-            unit: event.unit,
-          );
-        });
-        gauge.recordWithMap(event.value, attributes);
+        _gauges
+            .putIfAbsent(instrumentName, () {
+              return _meter!.createGauge<double>(
+                name: instrumentName,
+                unit: event.unit,
+              );
+            })
+            .recordWithMap(event.value, attributes);
     }
   }
 

@@ -1,6 +1,5 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
-// ignore_for_file: implementation_imports
 /// Volatile, in-memory implementation of a lock store.
 ///
 /// This library provides [InMemoryLockStore], which is primarily intended for
@@ -20,6 +19,7 @@ import 'package:uuid/uuid.dart';
 /// an owner and an expiration timestamp.
 class InMemoryLockStore implements LockStore {
   final Map<String, _InMemoryLock> _locks = {};
+  final Map<String, int> _fencingTokens = {};
 
   @override
   Future<Lock?> acquire(
@@ -36,7 +36,15 @@ class InMemoryLockStore implements LockStore {
     }
 
     final resolvedOwner = owner ?? _InMemoryLock.generateOwner();
-    final lock = _InMemoryLock(key, resolvedOwner, now.add(ttl), this);
+    final fencingToken = (_fencingTokens[key] ?? 0) + 1;
+    _fencingTokens[key] = fencingToken;
+    final lock = _InMemoryLock(
+      key,
+      resolvedOwner,
+      fencingToken,
+      now.add(ttl),
+      this,
+    );
     _locks[key] = lock;
     return lock;
   }
@@ -95,8 +103,14 @@ class InMemoryLockStore implements LockStore {
 }
 
 /// Internal representation of an active or expired memory lock.
-class _InMemoryLock implements Lock {
-  _InMemoryLock(this.key, this.owner, this.expiresAt, this.store);
+class _InMemoryLock implements FencedLock {
+  _InMemoryLock(
+    this.key,
+    this.owner,
+    this.fencingToken,
+    this.expiresAt,
+    this.store,
+  );
 
   /// Generates a unique owner identifier using UUID v7.
   static String generateOwner() => const Uuid().v7();
@@ -107,6 +121,9 @@ class _InMemoryLock implements Lock {
   /// The unique identifier that "holds" this lock.
   @override
   final String owner;
+
+  @override
+  final int fencingToken;
 
   /// The absolute point in time when this lock will automatically expire.
   DateTime expiresAt;

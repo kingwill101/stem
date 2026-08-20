@@ -1,5 +1,107 @@
 # Changelog
 
+## 0.3.0
+
+- Promoted the typed stable/advanced API boundary and removed implicit worker
+  startup from producer, inspection, Canvas, and workflow operations.
+- Added capability-aware queue transports, public cooperative cancellation,
+  explicit task execution modes,
+  typed rate limits, heterogeneous Canvas chains, explicit chord policies, and
+  OpenTelemetry Canvas fan-out span links.
+- Scheduler dispatch now revalidates distributed lock ownership immediately
+  before publication and records lease-loss failures instead of publishing
+  after ownership has expired.
+- Added compatibility-safe fencing-token support to lock handles. Memory,
+  Redis, and Postgres acquisitions expose monotonically increasing tokens;
+  Beat propagates the token on scheduled envelopes for downstream enforcement.
+- This release intentionally contains breaking API changes from the 0.2 line.
+- The observability entrypoint now exposes Stem-owned logging types and a
+  structured logging facade; the `contextual` logger types remain internal.
+- Lease renewal derives its cadence from the remaining lease, so short
+  visibility leases are renewed before expiry instead of being forced onto the
+  default one-second minimum interval.
+- Failed automatic renewals retry on a shorter cadence, and late in-flight
+  renewals cannot recreate timers after a delivery has been cancelled.
+- Active-delivery accounting uses worker-local delivery handles, so concurrent
+  redeliveries of one envelope no longer overwrite shutdown or in-flight state.
+- Lease timers are keyed by delivery identity rather than receipt text, which
+  keeps same-receipt redeliveries independent for adapters that reuse row IDs.
+- Automatic heartbeat timers now use the same delivery identity, preventing a
+  concurrent redelivery from cancelling the original task's heartbeat.
+- Lease renewal now remains active through terminal result persistence,
+  group/chord bookkeeping, retry or dead-letter publication, linked-task
+  dispatch, and acknowledgement; slow terminal handling cannot expire the
+  delivery before the worker releases it.
+- Lease renewal now starts when a delivery enters the worker, covering slow
+  consume middleware, signature validation, backend lookups, and rate-limit
+  decisions before handler execution.
+- Concurrent redeliveries of an envelope already active in the same worker are
+  acknowledged without a second handler invocation; process-wide failures
+  still rely on normal at-least-once recovery.
+- Documentation now distinguishes heartbeat/liveness signals from broker lease
+  extension; use automatic renewal or `context.extendLease(...)` for leases.
+- Added the optional `AtomicTerminalResultBackend` capability. Built-in result
+  backends arbitrate terminal writes so a late cross-worker completion cannot
+  replace the first terminal result; custom backends remain source compatible
+  and retain their previous non-atomic fallback behavior.
+- Worker terminal side effects such as group/chord bookkeeping, linked-task
+  dispatch, terminal signals, and unique-lock release now belong only to the
+  worker that wins terminal-result arbitration.
+- Added a deterministic lease-loss recovery regression: renewal failure lets a
+  delivery expire, a replacement worker can complete the redelivery, and the
+  original late completion cannot overwrite that terminal result.
+- Payload-decoding failures are now terminally failed and dead-lettered as
+  `invalid-payload` instead of escaping before acknowledgement and redelivering
+  indefinitely. Retry-storm coverage verifies that normal retry budgets remain
+  bounded under concurrent failure.
+- Hard-shutdown coverage now verifies that a full broker prefetch window is
+  requeued and completed by a replacement worker, not only a single active
+  isolate delivery.
+- Added a warmed-up core throughput benchmark with a checked regression
+  baseline and scheduled CI execution.
+
+## 0.2.3
+
+- Added additive `QueueBroker`, `LeaseBroker`, `InspectableBroker`, and
+  `DeadLetterBroker` capability interfaces for new adapter integrations.
+- Made managed worker startup explicit for every bootstrap path. Enqueue,
+  status, result-wait, Canvas, and workflow operations never start a worker;
+  applications must call `start()` (or `startWorker()`) deliberately.
+- Added `stable.dart` and `advanced.dart` entrypoints to make the intended API
+  boundary explicit while retaining the historical `stem.dart` compatibility
+  barrel.
+- Made `QueueBroker` independently implementable; lease, inspection, purge,
+  and dead-letter operations are now optional capability interfaces with
+  compatibility defaults on `Broker`.
+- Extracted isolate execution and pool lifecycle into an internal execution
+  supervisor, and hardened shutdown against late delivery errors after the
+  worker event stream closes.
+- Centralized worker event emission so late timers, retries, heartbeats,
+  progress callbacks, and revocation notifications are safely ignored after
+  shutdown.
+- Extracted broker subscription ownership and stream error boundaries into an
+  internal worker consumer loop, including safe queue-subscription replacement
+  during pause and resume operations.
+
+## 0.2.2
+
+- Replaced string rate-limit fields with typed `RateLimit` values while
+  retaining legacy parsing at JSON/configuration boundaries.
+- Added cooperative task cancellation through
+  `TaskExecutionContext.cancellation`.
+- Made memory adapters available through the explicit
+  `package:stem/memory.dart` library.
+- Prevented status and result-wait operations from implicitly starting a
+  worker.
+- Moved release validation to dependency-ordered workspace automation and
+  added aggregate package quality gates.
+- Added a source-compatible `BrokerCapabilities` snapshot so adapters can
+  declare optional delivery, inspection, broadcast, lease, and dead-letter
+  behavior without expanding the base broker contract.
+- Added queue-broker extension methods for optional dead-letter inspection,
+  replay, and purge operations, allowing integrations to depend on
+  `QueueBroker` without reverting to the legacy broad `Broker` type.
+
 ## 0.2.1
 
 - Guarded worker and example process signal registration so Windows only

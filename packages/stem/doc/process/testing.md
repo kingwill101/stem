@@ -2,7 +2,8 @@
 title: Testing & Quality Gates
 ---
 
-> **Note:** Primary content is published via `.site/docs/testing-guide.md`.
+> **Note:** Primary content is published via
+> `.site/docs/about/testing.md`.
 
 The project ships with a consolidated quality workflow that contributors and CI
 use to enforce formatting, static analysis, tests, coverage, and chaos
@@ -11,14 +12,17 @@ resilience checks.
 ## Running the full suite
 
 ```
-cd packages/stem/example/quality_gates
-just quality
+cd packages/stem
+dart format lib test --set-exit-if-changed
+dart analyze --fatal-infos
+dart test --exclude-tags soak --fail-fast
 ```
 
 For a faster loop:
 
 ```
-just quick
+dart analyze --fatal-infos
+dart test --exclude-tags soak --fail-fast
 ```
 
 The quality runner executes:
@@ -26,8 +30,8 @@ The quality runner executes:
 1. `dart format --set-exit-if-changed .`
 2. `dart analyze`
 3. `dart test --exclude-tags soak`
-4. Chaos + performance suites (see `example/quality_gates/justfile`)
-5. Coverage (see `tool/quality/coverage.sh` for thresholded runs)
+4. Package-specific integration and adapter contract suites
+5. Coverage and soak tests when their explicit gates are requested
 
 If you prefer running the core gates directly:
 
@@ -74,11 +78,12 @@ dart test --tags soak
 
 ## CI workflow
 
-The GitHub Actions workflow (`.github/workflows/ci.yml`) now:
+The GitHub Actions aggregate workflow (`.github/workflows/aggregate.yaml`) now:
 
-- Provisions a Redis service container for chaos tests.
-- Executes format, analyze, unit tests, chaos tests, and coverage gates (either
-  via `example/quality_gates` or by calling the commands directly).
+- Runs package quality gates for every publishable workspace package.
+- Checks standalone dependency resolution without workspace overrides.
+- Runs core checks on Ubuntu, Windows, and macOS, plus every example project
+  discovered under the root workspace packages.
 
 Any failures in format, analyze, unit/integration tests, coverage, or chaos
 recovery cause the pipeline to fail.

@@ -242,8 +242,8 @@ void main() {
       final client = await StemClient.inMemory(
         module: StemModule(tasks: [moduleTask]),
       );
-
       final app = await client.createApp();
+
       await app.start();
       try {
         expect(app.registry.resolve('module.client.task'), same(moduleTask));

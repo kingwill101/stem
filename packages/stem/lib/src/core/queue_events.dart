@@ -159,7 +159,7 @@ class QueueEventsProducer {
   const QueueEventsProducer({required this.broker});
 
   /// Broker used for event delivery.
-  final Broker broker;
+  final QueueBroker broker;
 
   /// Emits [eventName] on [queue] and returns the event id.
   Future<String> emit(
@@ -319,7 +319,7 @@ class QueueEvents {
            'stem-queue-events-${generateEnvelopeId().replaceAll('-', '')}';
 
   /// Broker used for event consumption.
-  final Broker broker;
+  final QueueBroker broker;
 
   /// Queue scope for this listener.
   final String queue;

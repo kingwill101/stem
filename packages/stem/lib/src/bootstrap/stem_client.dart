@@ -181,7 +181,7 @@ abstract class StemClient implements TaskResultCaller {
   }
 
   /// Underlying broker used by the client.
-  Broker get broker;
+  QueueBroker get broker;
 
   /// Result backend used by workers and producers.
   ResultBackend get backend;
@@ -380,7 +380,6 @@ abstract class StemClient implements TaskResultCaller {
     Duration pollInterval = const Duration(milliseconds: 500),
     Duration leaseExtension = const Duration(seconds: 30),
     WorkflowIntrospectionSink? introspectionSink,
-    bool allowWorkerAutoStart = true,
   }) {
     final effectiveModule =
         StemModule.combine(module: module, modules: modules) ?? this.module;
@@ -398,7 +397,6 @@ abstract class StemClient implements TaskResultCaller {
       pollInterval: pollInterval,
       leaseExtension: leaseExtension,
       introspectionSink: introspectionSink,
-      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -408,7 +406,6 @@ abstract class StemClient implements TaskResultCaller {
     Iterable<StemModule> modules = const [],
     Iterable<TaskHandler<Object?>> tasks = const [],
     StemWorkerConfig? workerConfig,
-    bool allowWorkerAutoStart = true,
   }) {
     final effectiveModule =
         StemModule.combine(module: module, modules: modules) ?? this.module;
@@ -417,7 +414,6 @@ abstract class StemClient implements TaskResultCaller {
       module: effectiveModule,
       tasks: tasks,
       workerConfig: workerConfig ?? defaultWorkerConfig,
-      allowWorkerAutoStart: allowWorkerAutoStart,
     );
   }
 
@@ -517,7 +513,7 @@ class _DefaultStemClient extends StemClient {
   }
 
   @override
-  final Broker broker;
+  final QueueBroker broker;
 
   @override
   final ResultBackend backend;

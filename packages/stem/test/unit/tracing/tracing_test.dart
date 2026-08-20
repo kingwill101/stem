@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -257,6 +258,65 @@ void main() {
         .map((span) => span.spanContext.traceId.hexString)
         .toSet();
     expect(consumeTraceIds.length, equals(2));
+  });
+
+  test('Canvas group links body consumption to its composition span', () async {
+    final broker = InMemoryBroker();
+    final backend = InMemoryResultBackend();
+    final registry = InMemoryTaskRegistry()
+      ..register(
+        FunctionTaskHandler<void>.inline(
+          name: 'trace.group',
+          entrypoint: (context, args) async => null,
+        ),
+      );
+    final canvas = Canvas(
+      broker: broker,
+      backend: backend,
+      registry: registry,
+    );
+    final worker = Worker(
+      broker: broker,
+      registry: registry,
+      backend: backend,
+      consumerName: 'trace-group-worker',
+      heartbeatTransport: const NoopHeartbeatTransport(),
+      concurrency: 2,
+    );
+    await worker.start();
+
+    final dispatch = await canvas.group<void>([
+      task<void>('trace.group'),
+      task<void>('trace.group'),
+    ]);
+    final results = await dispatch.results.toList();
+    await dispatch.dispose();
+    await worker.shutdown();
+    broker.dispose();
+
+    expect(results, hasLength(2));
+    final compositionSpan = exporter.spans.firstWhere(
+      (span) => span.name == 'stem.canvas.group',
+    );
+    final consumeSpans = exporter.spans
+        .where(
+          (span) =>
+              span.name == 'stem.consume' &&
+              span.attributes.getString('stem.task') == 'trace.group',
+        )
+        .toList(growable: false);
+    expect(consumeSpans, hasLength(2));
+    for (final span in consumeSpans) {
+      expect(
+        span.spanLinks?.any(
+              (link) =>
+                  link.spanContext.spanId.hexString ==
+                  compositionSpan.spanContext.spanId.hexString,
+            ) ??
+            false,
+        isTrue,
+      );
+    }
   });
 
   test(

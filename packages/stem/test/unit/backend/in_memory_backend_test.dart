@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
+import 'package:stem/testing.dart' show FakeStemClock;
 import 'package:test/test.dart';
 
 void main() {
@@ -25,6 +27,30 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 10));
 
     expect(await backend.get('task-1'), isNull);
+  });
+
+  test('terminal writes are first-writer-wins', () async {
+    final backend = InMemoryResultBackend();
+    addTearDown(backend.dispose);
+
+    await backend.set('terminal-task', TaskState.running);
+    final first = TaskStatus(
+      id: 'terminal-task',
+      state: TaskState.succeeded,
+      payload: 'first',
+      attempt: 1,
+    );
+    final late = TaskStatus(
+      id: 'terminal-task',
+      state: TaskState.failed,
+      error: const TaskError(type: 'LateFailure', message: 'late'),
+      attempt: 1,
+    );
+
+    expect(await backend.setTerminalIfAbsent(first), isTrue);
+    expect(await backend.setTerminalIfAbsent(late), isFalse);
+    expect((await backend.get('terminal-task'))?.payload, 'first');
+    expect((await backend.get('terminal-task'))?.state, TaskState.succeeded);
   });
 
   test('InMemoryResultBackend lists task statuses with filters', () async {
@@ -110,23 +136,26 @@ void main() {
 
   test('InMemoryResultBackend worker heartbeats expire', () async {
     final backend = InMemoryResultBackend(
-      heartbeatTtl: const Duration(milliseconds: 5),
+      heartbeatTtl: const Duration(seconds: 5),
     );
     addTearDown(backend.dispose);
+    final clock = FakeStemClock(DateTime.utc(2026));
 
     final heartbeat = WorkerHeartbeat(
       workerId: 'worker-1',
-      timestamp: DateTime.now(),
+      timestamp: clock.now(),
       isolateCount: 1,
       inflight: 0,
       queues: [QueueHeartbeat(name: 'default', inflight: 0)],
     );
 
-    await backend.setWorkerHeartbeat(heartbeat);
-    expect(await backend.getWorkerHeartbeat('worker-1'), isNotNull);
+    await withStemClock(clock, () async {
+      await backend.setWorkerHeartbeat(heartbeat);
+      expect(await backend.getWorkerHeartbeat('worker-1'), isNotNull);
 
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    expect(await backend.getWorkerHeartbeat('worker-1'), isNull);
-    expect(await backend.listWorkerHeartbeats(), isEmpty);
+      clock.advance(const Duration(seconds: 6));
+      expect(await backend.getWorkerHeartbeat('worker-1'), isNull);
+      expect(await backend.listWorkerHeartbeats(), isEmpty);
+    });
   });
 }

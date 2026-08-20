@@ -1,6 +1,8 @@
 # Security Checklist
 
-> **Note:** Maintained version is published via `.site/docs/security-checklist.md`.
+> **Note:** The public deployment checklist is
+> `.site/docs/getting-started/production-checklist.md`. This internal checklist
+> contains additional review prompts.
 
 ## Transport & Secrets
 - [ ] Enforce TLS for Redis connections (`rediss://`); document certificate management.

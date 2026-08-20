@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -124,6 +125,43 @@ void main() {
       broker.dispose();
     });
 
+    test(
+      'propagates the scheduler fencing token to scheduled envelopes',
+      () async {
+        final broker = InMemoryBroker();
+        final store = InMemoryScheduleStore();
+        final beat = Beat(
+          store: store,
+          broker: broker,
+          lockStore: InMemoryLockStore(),
+          tickInterval: const Duration(milliseconds: 10),
+        );
+        final deliveryFuture = broker
+            .consume(
+              RoutingSubscription.singleQueue('default'),
+              consumerName: 'beat-fencing-test',
+            )
+            .first
+            .timeout(const Duration(seconds: 1));
+
+        await store.upsert(
+          ScheduleEntry(
+            id: 'fenced-schedule',
+            taskName: 'fenced.task',
+            queue: 'default',
+            spec: ClockedScheduleSpec(runAt: DateTime.now()),
+          ),
+        );
+        await beat.start();
+
+        final delivery = await deliveryFuture;
+        expect(delivery.envelope.headers['stem-lock-fencing-token'], '1');
+        await broker.ack(delivery);
+        await beat.stop();
+        broker.dispose();
+      },
+    );
+
     test('disables one-shot schedules after execution', () async {
       final broker = InMemoryBroker();
       final registry = InMemoryTaskRegistry()..register(_NoopTask());
@@ -221,6 +259,32 @@ void main() {
       await worker.shutdown();
       await beatA.stop();
       await beatB.stop();
+      broker.dispose();
+    });
+
+    test('does not publish after losing the schedule lease', () async {
+      final broker = InMemoryBroker();
+      final store = InMemoryScheduleStore();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        lockStore: _LeaseLossLockStore(),
+      );
+      await store.upsert(
+        ScheduleEntry(
+          id: 'lease-loss',
+          taskName: 'noop',
+          queue: 'default',
+          spec: IntervalScheduleSpec(every: const Duration(seconds: 1)),
+          nextRunAt: DateTime.now().subtract(const Duration(seconds: 1)),
+        ),
+      );
+
+      await beat.runOnce();
+
+      expect(await broker.pendingCount('default'), equals(0));
+      expect((await store.get('lease-loss'))?.lastError, contains('lock'));
+      await beat.stop();
       broker.dispose();
     });
 
@@ -348,4 +412,40 @@ class _ThrowingBroker extends InMemoryBroker {
     }
     return super.publish(envelope, routing: routing);
   }
+}
+
+class _LeaseLossLockStore implements LockStore {
+  @override
+  Future<Lock?> acquire(
+    String key, {
+    Duration ttl = const Duration(seconds: 30),
+    String? owner,
+  }) async {
+    return _LeaseLossLock(key, owner ?? 'lease-loss-owner');
+  }
+
+  @override
+  Future<String?> ownerOf(String key) async => 'lease-loss-owner';
+
+  @override
+  Future<bool> release(String key, String owner) async => true;
+
+  @override
+  Future<bool> renew(String key, String owner, Duration ttl) async => false;
+}
+
+class _LeaseLossLock implements Lock {
+  _LeaseLossLock(this.key, this.owner);
+
+  @override
+  final String key;
+
+  @override
+  final String owner;
+
+  @override
+  Future<bool> renew(Duration ttl) async => false;
+
+  @override
+  Future<void> release() async {}
 }

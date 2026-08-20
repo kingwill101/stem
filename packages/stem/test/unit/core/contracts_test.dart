@@ -1,3 +1,4 @@
+import 'package:stem/memory.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
@@ -5,6 +6,37 @@ import 'package:stem/src/scheduler/schedule_spec.dart';
 import 'package:test/test.dart';
 
 void main() {
+  group('BrokerCapabilities', () {
+    test('keeps optional adapter behavior in one snapshot', () {
+      const capabilities = BrokerCapabilities(
+        supportsDelayedDelivery: true,
+        supportsPriorityOrdering: false,
+        supportsBroadcastFanout: true,
+        supportsQueueInspection: true,
+      );
+
+      expect(capabilities.supportsDelayedDelivery, isTrue);
+      expect(capabilities.supportsPriorityOrdering, isFalse);
+      expect(
+        capabilities.deliveryGuarantee,
+        BrokerDeliveryGuarantee.unknown,
+      );
+      expect(capabilities.supportsBroadcastFanout, isTrue);
+      expect(capabilities.supportsQueueInspection, isTrue);
+      expect(capabilities.supportsLeaseExtension, isFalse);
+      expect(capabilities.supportsDeadLetterReplay, isFalse);
+    });
+
+    test('built-in memory broker declares optional capabilities', () {
+      final broker = InMemoryBroker();
+
+      expect(broker, isA<QueueBroker>());
+      expect(broker, isA<LeaseBroker>());
+      expect(broker, isA<InspectableBroker>());
+      expect(broker, isA<DeadLetterBroker>());
+    });
+  });
+
   group('RoutingSubscription', () {
     test('trims inputs and rejects empty', () {
       expect(
@@ -452,7 +484,7 @@ void main() {
       expect(options.maxRetries, equals(5));
       expect(options.softTimeLimit, equals(const Duration(milliseconds: 1000)));
       expect(options.hardTimeLimit, equals(const Duration(milliseconds: 2000)));
-      expect(options.groupRateLimit, equals('25/m'));
+      expect(options.groupRateLimit, equals(const RateLimit.perMinute(25)));
       expect(options.groupRateKey, equals('tenant:acme'));
       expect(options.groupRateKeyHeader, equals('x-tenant'));
       expect(
@@ -491,6 +523,18 @@ void main() {
       expect(decoded.maxRetries, equals(4));
       expect(decoded.autoRetryFor, equals(['Timeout']));
       expect(decoded.dontAutoRetryFor, equals(['StateError']));
+    });
+
+    test('RateLimit provides typed constructors and legacy parsing', () {
+      const perSecond = RateLimit.perSecond(10);
+      const perMinute = RateLimit.perMinute(25);
+
+      expect(perSecond.tokens, equals(10));
+      expect(perSecond.interval, const Duration(seconds: 1));
+      expect(perSecond.toString(), equals('10/s'));
+      expect(RateLimit.parse('25/m'), equals(perMinute));
+      expect(RateLimit.parse(perSecond), same(perSecond));
+      expect(RateLimit.parse('invalid'), isNull);
     });
   });
 

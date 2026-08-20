@@ -1,13 +1,7 @@
 import 'package:stem/src/control/revoke_store.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
-import 'package:stem/src/observability/config.dart';
-import 'package:stem/src/observability/heartbeat_transport.dart';
-import 'package:stem/src/security/signing.dart';
-import 'package:stem/src/worker/worker_config.dart';
-import 'package:stem/src/workflow/core/event_bus.dart';
-import 'package:stem/src/workflow/core/workflow_store.dart';
-import 'package:stem_memory/stem_memory.dart'
+import 'package:stem/src/memory.dart'
     show
         InMemoryBroker,
         InMemoryEventBus,
@@ -16,6 +10,12 @@ import 'package:stem_memory/stem_memory.dart'
         InMemoryRevokeStore,
         InMemoryScheduleStore,
         InMemoryWorkflowStore;
+import 'package:stem/src/observability/config.dart';
+import 'package:stem/src/observability/heartbeat_transport.dart';
+import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/workflow/core/event_bus.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
 
 /// Wrapper for constructing and disposing Stem resources lazily.
 class StemResourceFactory<T> {
@@ -41,8 +41,8 @@ class StemResourceFactory<T> {
   }
 }
 
-/// Factory for building [Broker] instances.
-class StemBrokerFactory extends StemResourceFactory<Broker> {
+/// Factory for building [QueueBroker] instances.
+class StemBrokerFactory extends StemResourceFactory<QueueBroker> {
   /// Creates a broker factory from create/dispose hooks.
   StemBrokerFactory({required super.create, super.dispose});
 

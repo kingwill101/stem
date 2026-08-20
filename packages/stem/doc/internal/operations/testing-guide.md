@@ -9,17 +9,13 @@ Stem uses a consolidated quality workflow to keep local checks aligned with CI.
 
 ## Quality gates
 
-Use the `just` runner in `example/quality_gates`:
+Run the package gates directly:
 
 ```bash
-cd packages/stem/example/quality_gates
-just quality
-```
-
-For a faster loop:
-
-```bash
-just quick
+cd packages/stem
+dart format lib test --set-exit-if-changed
+dart analyze --fatal-infos
+dart test --exclude-tags soak --fail-fast
 ```
 
 Expanded steps:
@@ -27,9 +23,8 @@ Expanded steps:
 1. `dart format --set-exit-if-changed .`
 2. `dart analyze`
 3. `dart test --exclude-tags soak`
-4. Chaos + performance suites (see `example/quality_gates/justfile`)
-5. Coverage via `tool/quality/coverage.sh` (threshold 60% unless overridden via
-   `COVERAGE_THRESHOLD`)
+4. Package-specific integration and adapter contract suites
+5. Coverage via the package coverage tasks (thresholds vary by package)
 
 ### Chaos suite against Redis
 
@@ -53,10 +48,12 @@ dart test --tags soak
 
 ## Continuous Integration
 
-`.github/workflows/ci.yml` now:
+`.github/workflows/aggregate.yaml` now:
 
-- Starts a Redis 7 service container for chaos tests.
-- Runs format, analyze, unit tests, chaos tests, and coverage gates.
+- Runs quality gates for every publishable workspace package.
+- Checks standalone dependency resolution without workspace overrides.
+- Runs core checks on Ubuntu, Windows, and macOS, plus every example project
+  discovered under the root workspace packages.
 - Fails immediately if any quality step fails.
 
 This keeps local and CI behaviour aligned and ensures resilience regressions

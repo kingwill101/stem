@@ -1,6 +1,5 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
-// ignore_for_file: implementation_imports
 import 'dart:async';
 
 import 'package:collection/collection.dart';

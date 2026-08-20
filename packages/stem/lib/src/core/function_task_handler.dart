@@ -6,7 +6,8 @@ import 'package:stem/src/core/task_invocation.dart';
 /// Convenience task handler that delegates execution to a top-level function
 /// suitable for isolate execution. Set [runInIsolate] to `false` or use
 /// [FunctionTaskHandler.inline] to keep execution in the worker isolate.
-class FunctionTaskHandler<R> implements TaskHandler<R> {
+class FunctionTaskHandler<R>
+    implements TaskHandler<R>, TaskExecutionModeProvider {
   /// Creates a task handler that delegates to a top-level [entrypoint].
   FunctionTaskHandler({
     required this.name,
@@ -49,6 +50,11 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
   @override
   TaskEntrypoint? get isolateEntrypoint => runInIsolate ? _entrypoint : null;
 
+  /// Execution mode selected by [runInIsolate].
+  @override
+  TaskExecutionMode get executionMode =>
+      runInIsolate ? TaskExecutionMode.isolate : TaskExecutionMode.inline;
+
   @override
   /// Invokes the entrypoint with a normalized invocation context.
   Future<R> call(TaskContext context, Map<String, Object?> args) async {
@@ -61,6 +67,7 @@ class FunctionTaskHandler<R> implements TaskHandler<R> {
       heartbeat: context.heartbeat,
       extendLease: context.extendLease,
       progress: (percent, {data}) => context.progress(percent, data: data),
+      cancellation: context.cancellation,
       enqueuer: context.enqueuer,
       workflows: context.workflows,
       workflowEvents: context.workflowEvents,

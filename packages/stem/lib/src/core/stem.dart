@@ -75,8 +75,8 @@ import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/signals/emitter.dart';
 
-/// Shared typed task-dispatch surface used by producers, apps, and contexts.
-abstract interface class TaskResultCaller implements TaskEnqueuer {
+/// Observation surface for task and group lifecycle state.
+abstract interface class TaskObserver {
   /// Reads the latest task status by task id.
   Future<TaskStatus?> getTaskStatus(String taskId);
 
@@ -93,6 +93,27 @@ abstract interface class TaskResultCaller implements TaskEnqueuer {
     decodeVersionedJson,
   });
 }
+
+/// Producer-only task enqueue surface.
+///
+/// Depend on this contract in HTTP handlers, schedulers, and application
+/// services that publish work. It intentionally exposes no worker lifecycle
+/// or task-consumption controls.
+abstract interface class StemProducer implements TaskEnqueuer {}
+
+/// Observer-only task result surface.
+///
+/// Depend on this contract in dashboards, health endpoints, and API processes
+/// that inspect work without being able to start a worker through the type
+/// system.
+abstract interface class StemObserver implements TaskObserver {}
+
+/// Shared typed task-dispatch surface used by producers, apps, and contexts.
+///
+/// This compatibility contract combines [StemProducer] and [StemObserver].
+/// New application boundaries should prefer one of those narrower roles.
+abstract interface class TaskResultCaller
+    implements StemProducer, StemObserver {}
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem implements TaskResultCaller {
@@ -132,7 +153,7 @@ class Stem implements TaskResultCaller {
   }
 
   /// Broker used to publish task envelopes.
-  final Broker broker;
+  final QueueBroker broker;
 
   /// Task registry used to resolve handlers and metadata.
   final TaskRegistry registry;

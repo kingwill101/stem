@@ -1,7 +1,8 @@
 # Worker Control CLI
 
-> **Note:** This doc is now mirrored on the published site at
-> `.site/docs/worker-control.md`; keep both versions aligned.
+> **Note:** The public version is
+> `.site/docs/workers/worker-control.md`. This file retains the longer
+> operator-oriented process notes.
 
 Stem ships a broker-backed control plane that lets operators inspect and revoke
 work without restarts. The CLI subcommands live under `stem worker` and use the

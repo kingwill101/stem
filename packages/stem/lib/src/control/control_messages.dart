@@ -282,7 +282,7 @@ extension ControlCommandEnvelope on ControlCommandMessage {
       name: ControlEnvelopeTypes.command,
       queue: queue,
       args: toMap(),
-      headers: {'stem-control': '1', if (headers != null) ...headers},
+      headers: {'stem-control': '1', ...?headers},
     );
   }
 }
@@ -295,7 +295,7 @@ extension ControlReplyEnvelope on ControlReplyMessage {
       name: ControlEnvelopeTypes.reply,
       queue: queue,
       args: toMap(),
-      headers: {'stem-control-reply': '1', if (headers != null) ...headers},
+      headers: {'stem-control-reply': '1', ...?headers},
     );
   }
 }
