@@ -180,17 +180,19 @@ when the entrypoint captures state that cannot cross isolate boundaries.
 
 ```
 
-`stem worker revoke --terminate` throws `TaskRevokedException` the next time an
-inline handler calls `TaskContext.heartbeat`, `extendLease`, or `progress`,
-allowing the worker to cancel and record the task as cancelled. Isolate handlers
-must emit cooperative checkpoints (heartbeat/lease/progress) to be interrupted;
-otherwise they finish naturally.
+`stem worker revoke --terminate` is observed by inline handlers through the
+public `TaskContext.cancellation` token. Existing heartbeat, lease and progress
+helpers remain checkpoints and also enforce termination. Isolate handlers must
+emit cooperative checkpoints (heartbeat/lease/progress) to be interrupted;
+otherwise they finish naturally unless the isolate is terminated by a hard
+timeout or hard shutdown.
 
 ### Cooperative checkpoints for isolate handlers
 
 Make sure isolate entrypoints call one of the cooperative helpers inside any
-long-running loop. Each helper throws `TaskRevokedException` when a terminate
-revoke is pending, which lets the handler fail fast.
+long-running loop. Handlers can also call
+`context.cancellation.throwIfCancelled()` at safe points; it throws
+`TaskCancellationException` when a terminate revoke is pending.
 
 ```dart title="tasks/crunch.dart" file=<rootDir>/../packages/stem/example/docs_snippets/lib/worker_control.dart#worker-control-crunch
 

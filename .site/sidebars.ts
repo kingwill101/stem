@@ -118,6 +118,12 @@ const sidebars: SidebarsConfig = {
       label: "Brokers",
       items: ["brokers/overview", "brokers/sqlite", "brokers/caveats"],
     },
+    {
+      type: "category",
+      label: "About",
+      link: { type: "doc", id: "about/index" },
+      items: ["about/roadmap", "about/testing"],
+    },
   ],
 };
 

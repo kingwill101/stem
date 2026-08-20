@@ -149,7 +149,9 @@ every retry signal and shows how the strategy interacts with broker timings.
 `TaskContext` provides metadata and control helpers:
 
 - `context.attempt` – current attempt number (0-based).
-- `context.heartbeat()` – extend the lease to avoid timeouts.
+- `context.heartbeat()` – emit a liveness signal for monitoring. Automatic
+  lease renewal is handled by the worker; use `context.extendLease(...)` when
+  task code needs an explicit lease extension.
 - `context.extendLease(Duration by)` – request additional processing time.
 - `context.progress(percent, data: {...})` – emit progress signals for UI hooks.
 - `context.progressJson(percent, dto)` – emit DTO progress payloads without
@@ -245,8 +247,21 @@ Set soft/hard timeouts to guard against runaway tasks:
 
 - **Soft timeouts** trigger `WorkerEventType.timeout` so you can log or notify.
 - **Hard timeouts** raise `TimeoutException` to force retries or failure.
-- Provide an `isolateEntrypoint` to run the task in a dedicated isolate when
-  enforcing hard limits or dealing with CPU-intensive code.
+- Task handlers declare `TaskExecutionMode.inline` or
+  `TaskExecutionMode.isolate`. Isolate mode requires a top-level
+  `isolateEntrypoint`; generated handlers set both values for you.
+- Use isolate mode for CPU-intensive code or when enforcing a hard limit. Use
+  inline mode for handlers that need coordinator-isolate state and can observe
+  cooperative cancellation.
+
+Timeout guarantees depend on the execution mode:
+
+- For isolate-backed handlers, a hard timeout can terminate the execution
+  isolate, so the timed-out handler does not continue running there.
+- For inline handlers, a hard timeout stops the worker from awaiting the
+  result, but Dart cannot forcibly cancel an arbitrary `Future`; the handler
+  may continue until it returns. Use `context.cancellation` and cooperative
+  checkpoints for inline cancellation.
 
 ## Idempotency Checklist
 

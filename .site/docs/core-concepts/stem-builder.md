@@ -194,8 +194,9 @@ final taskApp = await client.createApp();
 ```
 
 Plain `StemApp` bootstrap infers task queue subscriptions from the bundled or
-explicitly supplied task handlers when `workerConfig.subscription` is omitted,
-and it lazy-starts on the first enqueue or wait call.
+explicitly supplied task handlers when `workerConfig.subscription` is omitted.
+Worker startup is always an explicit lifecycle operation: call `start()` in the
+process that is intended to consume work.
 
 If you already centralize broker/backend wiring in a `StemClient`, stay on the
 shared-client path:

@@ -139,7 +139,8 @@ stem worker diagnose --node web-1 \
 
 Before every deployment run through these guardrails:
 
-- **Quality gates** – run `packages/stem/example/quality_gates` (`just quality`) to execute
+- **Quality gates** – run the aggregate workflow or execute `dart format`,
+  `dart analyze --fatal-infos`, and the package test suites locally to execute
   format, analyze, unit/chaos/perf tests, and coverage targets.
 - **Observability** – confirm Grafana dashboards (task success rate, latency
   p95, queue depth) and OpenTelemetry exporters are healthy.

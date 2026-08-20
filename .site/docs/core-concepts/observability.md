@@ -49,6 +49,11 @@ Traces include spans for `stem.enqueue`, `stem.consume`, and task execution.
 Use attributes (`stem.task`, `stem.queue`, `stem.retry.attempt`) to filter in
 your tracing backend.
 
+Canvas fan-out also emits a `stem.canvas.group` composition span. Each group
+body's `stem.consume` span links back to that composition span while retaining
+its normal task trace parent, so groups and chords remain understandable in
+backends that support OpenTelemetry span links.
+
 ## Signals
 
 `StemSignals` fire lifecycle hooks for tasks, workers, scheduler events, and
@@ -82,13 +87,16 @@ your own tracing/logging systems.
 class LoggingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {
   @override
   Future<void> recordStepEvent(WorkflowStepEvent event) async {
-    stemLogger.info('workflow.execution', {
-      'run': event.runId,
-      'workflow': event.workflow,
-      'step': event.stepId,
-      'type': event.type.name,
-      'iteration': event.iteration,
-    });
+    stemLogger.info(
+      'workflow.execution',
+      fields: {
+        'run': event.runId,
+        'workflow': event.workflow,
+        'step': event.stepId,
+        'type': event.type.name,
+        'iteration': event.iteration,
+      },
+    );
   }
 }
 ```
@@ -114,14 +122,16 @@ Persisted worker heartbeats expose the same typed decode path on `extras` via
 
 ## Logging
 
-Use `stemLogger` (Contextual logger) for structured logs.
+Import `package:stem/observability.dart` when you need Stem's structured
+logging facade. It accepts Stem-owned severity and field types; the underlying
+logging dependency is kept out of the public API.
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/observability.dart#observability-logging
 
 ```
 
 The shared `stemLogger` starts silent by default, so opt in explicitly with
-`configureStemLogging(level: Level.info, format: StemLogFormat.pretty)`.
+`configureStemLogging(level: StemLogLevel.info, format: StemLogFormat.pretty)`.
 When you want machine-oriented output for production log shipping, switch to
 `configureStemLogging(format: StemLogFormat.plain)`.
 

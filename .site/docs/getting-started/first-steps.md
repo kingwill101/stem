@@ -19,9 +19,8 @@ Create a task handler (StemApp will register it for you):
 
 ## 2. Bootstrap the in-memory runtime
 
-Use `StemApp` to create the broker, backend, and worker in memory. The worker
-lazy-starts on the first enqueue or wait call, so the common path does not need
-an explicit `await app.start()`:
+Use the in-memory shortcut to create the broker, backend, and worker. It does
+not start the worker implicitly; start it explicitly before enqueueing work:
 
 ```dart file=<rootDir>/../packages/stem/example/docs_snippets/lib/first_steps.dart#first-steps-bootstrap
 
