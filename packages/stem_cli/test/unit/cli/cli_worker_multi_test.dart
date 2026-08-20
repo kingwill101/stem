@@ -55,7 +55,10 @@ void main() {
 
     Future<void> expectLogNotEmpty(String node) async {
       final file = File(logTemplate.replaceAll('%n', node));
-      final deadline = DateTime.now().add(const Duration(seconds: 2));
+      // Detached Dart processes can take a few seconds to start on a fresh
+      // container or a loaded CI runner. Keep the assertion strict, but give
+      // the child enough time to execute its first log write.
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
       while (file.existsSync() && file.lengthSync() == 0) {
         if (DateTime.now().isAfter(deadline)) {
           break;

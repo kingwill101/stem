@@ -36,6 +36,21 @@ jobs:
           ! rg -n 'docker/testing/certs|certs/postgres-root' \
             packages .gitignore
 
+  dagger-root-test:
+    name: integration / Dagger root gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Keep the CI invocation on the same Dagger Go module and engine version
+      # used by `task test:dagger` locally.
+      - name: Run Dagger-backed root test gate
+        uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: v0.21.7
+          module: .dagger
+          call: check --source=.
+          dagger-flags: --progress plain
+
   cross-platform-core:
     name: core / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

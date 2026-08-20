@@ -14,7 +14,7 @@ runs:
         export STEM_TEST_REDIS_TLS_PORT="${STEM_TEST_REDIS_TLS_PORT:-0}"
         export STEM_TEST_REDIS_MTLS_PORT="${STEM_TEST_REDIS_MTLS_PORT:-0}"
         for attempt in 1 2 3; do
-          if docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d --wait --wait-timeout 60 \
+          if docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d --build --force-recreate --wait --wait-timeout 60 \
             postgres postgres_tls redis redis_tls redis_mtls; then
             break
           fi

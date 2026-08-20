@@ -30,6 +30,17 @@ includes:
     dir: ./packages/stem_sqlite
 
 tasks:
+  deps:
+    desc: Resolve workspace and dashboard package dependencies.
+    cmds:
+      - |
+        if command -v flutter >/dev/null 2>&1; then
+          flutter pub get
+        else
+          dart pub get
+        fi
+      - task dashboard:deps
+
   test:with-env:
     internal: true
     requires:
@@ -61,6 +72,7 @@ tasks:
             exit 1
           fi
 
+          task deps
           {{.RUN}}
         '
 
@@ -72,6 +84,11 @@ tasks:
           TASK_NAME: test
           REQUIRED_VARS: "STEM_TEST_REDIS_URL STEM_TEST_POSTGRES_URL"
           RUN: task test:no-env
+
+  test:dagger:
+    desc: Run the complete test gate in Dagger-managed services and tooling.
+    cmds:
+      - bash ./tool/dagger_test.sh
 
   test:no-env:
     desc: Run all workspace package tests without bootstrapping integration env.

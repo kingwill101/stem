@@ -9,8 +9,8 @@ dependencies:
   intl: ^0.20.2
   meta: ^1.18.0
   ormed: ^0.2.0
-  routed: ^0.3.2
-  routed_hotwire: ^0.1.2
+  routed: ^0.5.0
+  routed_hotwire: ^0.1.5
   stem:
     path: ../stem
   stem_cli: ^0.2.0
@@ -21,16 +21,17 @@ dependencies:
 dev_dependencies:
   lints: ^6.0.0
   property_testing: ^0.3.2
-  routed_testing: ^0.3.2
-  server_testing: ^0.3.2
+  routed_testing: ^0.4.0
+  server_testing: ^0.4.0
   test: ^1.29.0
   very_good_analysis: ^10.0.0
 
-# The dashboard is an unpublished experimental companion. Its test harness
-# currently spans server_testing's incompatible artisanal ranges, so keep this
-# override local to the dashboard rather than the release workspace.
+# The dashboard is an unpublished experimental companion. Its local Stem
+# packages still declare the older artisanal range, while the current Routed
+# testing packages require artisanal 0.5.x. Keep this compatibility override
+# local to the dashboard rather than changing the published Stem packages here.
 dependency_overrides:
-  artisanal: ^0.2.0
+  artisanal: ^0.5.0
   stem:
     path: ../stem
   stem_cli:

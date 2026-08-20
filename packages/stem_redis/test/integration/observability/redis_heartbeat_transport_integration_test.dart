@@ -6,17 +6,23 @@ import 'package:test/test.dart';
 
 void main() {
   const namespace = 'integration-heartbeat';
-  const redisUrl = 'redis://127.0.0.1:56379';
-  const redissUrl = 'rediss://127.0.0.1:56379';
+  final redisUrl =
+      Platform.environment['STEM_TEST_REDIS_URL'] ?? 'redis://127.0.0.1:56379';
+  final parsedRedisUrl = Uri.parse(redisUrl);
+  final redissUrl = parsedRedisUrl.replace(scheme: 'rediss').toString();
   final tlsUrl = Platform.environment['STEM_TEST_REDIS_TLS_URL'];
   final tlsCa = Platform.environment['STEM_TEST_REDIS_TLS_CA_CERT'];
 
   Future<void> ensureRedisAvailable() async {
-    final available = await _canConnect('127.0.0.1', 56379);
+    final available = await _canConnect(
+      parsedRedisUrl.host,
+      parsedRedisUrl.port == 0 ? 6379 : parsedRedisUrl.port,
+    );
     if (!available) {
       fail(
-        'Redis test service is not reachable on 127.0.0.1:56379. '
-        'Start docker/testing/docker-compose.yml before running integration tests.',
+        'Redis test service is not reachable at $redisUrl. '
+        'Set STEM_TEST_REDIS_URL or start docker/testing/docker-compose.yml '
+        'before running integration tests.',
       );
     }
   }

@@ -26,7 +26,7 @@ echo "Starting Redis/Postgres test services (docker compose)..."
 STEM_TEST_REDIS_TLS_PORT="${STEM_TEST_REDIS_TLS_PORT:-56380}"
 STEM_TEST_REDIS_MTLS_PORT="${STEM_TEST_REDIS_MTLS_PORT:-56381}"
 export STEM_TEST_REDIS_TLS_PORT STEM_TEST_REDIS_MTLS_PORT
-docker compose -f "$COMPOSE_FILE" up -d --wait --wait-timeout 60 \
+docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate --wait --wait-timeout 60 \
   postgres postgres_tls redis redis_tls redis_mtls
 
 REDIS_URL="redis://127.0.0.1:56379"
