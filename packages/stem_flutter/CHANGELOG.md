@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Updated the Flutter integration for Stem 0.3.0 and explicit worker startup.
+
 ## 0.1.0
 
 - Initial Flutter integration package for Stem.
