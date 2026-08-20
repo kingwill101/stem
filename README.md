@@ -276,6 +276,7 @@ stem health
 ### Prerequisites
 
 - Dart 3.9.2+
+- Flutter 3.47.0+ (for the local Flutter package gate)
 - Docker (for adapter integration tests)
 - Dagger CLI v0.21.7 (for the reproducible Dagger gate)
 
@@ -292,7 +293,7 @@ dart pub get
 # Run quality gates
 dart format --output=none --set-exit-if-changed .
 dart analyze
-task test:no-env
+task test:all
 ```
 
 ### Adapter Tests
@@ -319,17 +320,18 @@ is the recommended path when the local toolchain or Docker Compose state is
 not trustworthy:
 
 ```bash
-# Runs the same root task order with disposable PostgreSQL/Redis services.
+# Runs every Dart and Flutter package test with disposable PostgreSQL/Redis
+# services and a pinned Flutter SDK.
 task test:dagger
 
 # If Dagger is not on PATH:
 DAGGER_BIN=/path/to/dagger task test:dagger
 ```
 
-The Dagger module uses the Go SDK, pins the Dagger engine and Task release, and
-generates disposable TLS assets during the run. Its root gate covers the
-non-Flutter packages selected by `task test`; Flutter packages remain covered
-by the dedicated Flutter CI jobs.
+The Dagger module uses the Go SDK, pins the Dagger engine, Task release and
+Flutter SDK, and generates disposable TLS assets during the run. The aggregate
+GitHub Actions test gate calls this same Dagger module; package-specific test
+workflows are intentionally not maintained separately.
 
 Targeted adapter tasks now bootstrap integration environment automatically.
 If bootstrap still fails (for example Docker unavailable), run:

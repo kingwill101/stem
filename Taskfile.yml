@@ -86,9 +86,36 @@ tasks:
           RUN: task test:no-env
 
   test:dagger:
-    desc: Run the complete test gate in Dagger-managed services and tooling.
+    desc: Run every package test in Dagger-managed services and tooling.
     cmds:
-      - bash ./tool/dagger_test.sh
+      - bash ./tool/dagger_test.sh all
+
+  test:flutter:
+    desc: Run the Flutter package analysis and tests.
+    cmds:
+      - |
+        if ! command -v flutter >/dev/null 2>&1; then
+          echo "Flutter SDK is required for task test:flutter." >&2
+          exit 1
+        fi
+        (
+          cd packages/stem_flutter
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test
+        )
+        (
+          cd packages/stem_flutter_sqlite
+          flutter pub get
+          flutter analyze --fatal-infos
+          flutter test
+        )
+
+  test:all:
+    desc: Run all Dart and Flutter package tests from the repository root.
+    cmds:
+      - task test
+      - task test:flutter
 
   test:no-env:
     desc: Run all workspace package tests without bootstrapping integration env.

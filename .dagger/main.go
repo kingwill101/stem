@@ -14,6 +14,10 @@ import (
 
 const (
 	dartImage      = "dart:3.10.0"
+	flutterVersion = "3.47.0"
+	flutterArchive = "flutter_linux_3.47.0-stable.tar.xz"
+	flutterSHA256  = "26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296"
+	flutterRoot    = "/opt/flutter"
 	taskVersion    = "3.53.1"
 	taskSHA256     = "a54a408f6861ff921f6e87774180db31bacd8c1e7c944ca696db9fea49a82fc7"
 	workspaceDir   = "/workspace"
@@ -47,6 +51,82 @@ func (m *StemCi) Check(ctx context.Context, source *dagger.Directory) (string, e
 		return "", fmt.Errorf("Stem test gate failed: %w", err)
 	}
 	return stdout, nil
+}
+
+// All runs every package test, including the Flutter packages. It is the
+// default CI entrypoint; Check remains available for the faster Dart-only
+// integration gate while developing the Dagger module.
+func (m *StemCi) All(ctx context.Context, source *dagger.Directory) (string, error) {
+	dartOutput, err := m.Check(ctx, source)
+	if err != nil {
+		return "", err
+	}
+
+	flutterOutput, err := m.runFlutterTests(
+		m.flutterContainer(source),
+	).Stdout(ctx)
+	if err != nil {
+		return "", fmt.Errorf("Stem Flutter test gate failed: %w", err)
+	}
+
+	return "Dart gate:\n" + dartOutput + "\nFlutter gate:\n" + flutterOutput, nil
+}
+
+// flutterContainer installs the pinned Flutter SDK from the official Linux
+// release archive. This avoids depending on an unpinned or third-party image
+// for the Flutter portion of the gate.
+func (m *StemCi) flutterContainer(source *dagger.Directory) *dagger.Container {
+	return dag.Container().
+		From(dartImage).
+		WithEnvVariable(
+			"PATH",
+			flutterRoot+"/bin:"+
+				flutterRoot+"/bin/cache/dart-sdk/bin:"+
+				"/root/.pub-cache/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin",
+		).
+		WithMountedCache("/root/.pub-cache", dag.CacheVolume("stem-flutter-pub-cache")).
+		WithDirectory(workspaceDir, source, dagger.ContainerWithDirectoryOpts{Gitignore: true}).
+		WithWorkdir(workspaceDir).
+		WithExec([]string{
+			"bash",
+			"-c",
+			fmt.Sprintf(
+				"set -euo pipefail\n"+
+					"apt-get update\n"+
+					"DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "+
+					"ca-certificates curl git libglu1-mesa unzip xz-utils\n"+
+					"rm -rf /var/lib/apt/lists/*\n"+
+					"mkdir -p /opt\n"+
+					"curl -fsSL -o /tmp/%s https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/%s\n"+
+					"printf '%s  /tmp/%s\\n' | sha256sum -c -\n"+
+					"tar -xJf /tmp/%s -C /opt\n"+
+					"git config --global --add safe.directory "+flutterRoot+"\n"+
+					"flutter config --no-analytics\n"+
+					"flutter --version\n"+
+					"curl -fsSL -o /tmp/task.tar.gz https://github.com/go-task/task/releases/download/v%s/task_linux_amd64.tar.gz\n"+
+					"printf '%s  /tmp/task.tar.gz\\n' | sha256sum -c -\n"+
+					"tar -xzf /tmp/task.tar.gz -C /usr/local/bin task\n"+
+					"chmod 0755 %s\n"+
+					"task --version\n",
+				flutterArchive,
+				flutterArchive,
+				flutterSHA256,
+				flutterArchive,
+				flutterArchive,
+				taskVersion,
+				taskSHA256,
+				taskBinaryPath,
+			),
+		})
+}
+
+func (m *StemCi) runFlutterTests(container *dagger.Container) *dagger.Container {
+	return container.WithExec([]string{
+		"bash",
+		"-c",
+		"set -euo pipefail\n" +
+			"task test:flutter\n",
+	})
 }
 
 // tlsAssets creates separate disposable certificate authorities for Redis and
