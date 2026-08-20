@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
-import 'package:stem/stem.dart'
-    show TaskState, generateEnvelopeId, stemLogContext, stemLogger;
+import 'package:stem/observability.dart' show stemLogger;
+import 'package:stem/stem.dart' show TaskState, generateEnvelopeId;
 import 'package:stem_dashboard/src/config/config.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
@@ -105,15 +105,13 @@ Future<void> runDashboardServer({
 
   stemLogger.info(
     'Starting dashboard server',
-    stemLogContext(
-      component: 'dashboard',
-      subsystem: 'server',
-      fields: {
-        'host': options.host,
-        'port': options.port,
-        'basePath': dashboardUrlPath,
-      },
-    ),
+    fields: {
+      'component': 'dashboard',
+      'subsystem': 'server',
+      'host': options.host,
+      'port': options.port,
+      'basePath': dashboardUrlPath,
+    },
   );
 
   try {
@@ -141,11 +139,11 @@ Future<void> _waitForShutdownSignal() async {
   void complete(ProcessSignal signal) {
     stemLogger.info(
       'Shutdown signal received',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {'signal': signal.toString()},
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'signal': signal.toString(),
+      },
     );
     if (!completer.isCompleted) {
       completer.complete();
@@ -409,14 +407,12 @@ Future<Response> _renderOverviewPartials(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Failed to render overview partials',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     return ctx.turboHtml(
       '<div class="muted">Failed to refresh overview metrics.</div>',
@@ -596,15 +592,13 @@ Future<Response> _renderPage(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Failed to render dashboard page',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'page': page.name,
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'page': page.name,
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     final errorContent = _renderErrorPanel(error);
     if (turbo.isFrameRequest) {
@@ -748,14 +742,12 @@ Future<Response> _enqueueTask(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard enqueue failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -887,14 +879,12 @@ Future<Response> _taskAction(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard task action failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -1222,14 +1212,12 @@ Future<Response> _controlWorkers(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard control command failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -1331,14 +1319,12 @@ Future<Response> _replayDeadLetters(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard dead-letter replay failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
