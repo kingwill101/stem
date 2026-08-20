@@ -1,13 +1,13 @@
-import 'package:contextual/contextual.dart' as contextual;
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
-import 'package:stem/stem.dart' show stemLogger;
+import 'package:stem/observability.dart' show StemLogger, stemLogger;
 import 'package:stem_sqlite/orm_registry.g.dart';
+import 'package:stem_sqlite/src/database/stem_orm_logger.dart';
 
 /// Creates a new DataSource instance using the project configuration.
 DataSource createDataSource({
   bool logging = false,
-  contextual.Logger? logger,
+  StemLogger? logger,
 }) {
   var config = loadOrmConfig();
   if (logging) {
@@ -23,7 +23,7 @@ DataSource createDataSource({
 /// Creates a new DataSource instance using a resolved ORM project config.
 DataSource createDataSourceFromConfig(
   OrmProjectConfig config, {
-  contextual.Logger? logger,
+  StemLogger? logger,
 }) {
   final registry = bootstrapOrm();
   final options = Map<String, Object?>.from(config.driver.options);
@@ -45,5 +45,9 @@ DataSource createDataSourceFromConfig(
           tablePrefix: options['table_prefix']?.toString() ?? '',
           defaultSchema: options['default_schema']?.toString(),
         );
-  return DataSource(dataSourceOptions.copyWith(logger: logger));
+  return DataSource(
+    dataSourceOptions.copyWith(
+      logger: createOrmLogger(logger ?? stemLogger),
+    ),
+  );
 }

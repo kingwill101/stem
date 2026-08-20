@@ -513,8 +513,7 @@ class StemScheduleEntryModelFactory {
 
   static ModelFactoryBuilder<StemScheduleEntry> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemScheduleEntry>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemScheduleEntry>(
     generatorProvider: generatorProvider,
   );
 }
@@ -1441,20 +1440,20 @@ class $StemScheduleEntry extends StemScheduleEntry
     required DateTime updatedAt,
     String? args,
     String? kwargs,
-    required bool enabled,
+    bool enabled = true,
     int? jitter,
     DateTime? lastRunAt,
     DateTime? nextRunAt,
     int? lastJitter,
     String? lastError,
     String? timezone,
-    required int totalRunCount,
+    int totalRunCount = 0,
     DateTime? lastSuccessAt,
     DateTime? lastErrorAt,
     int? drift,
     DateTime? expireAt,
     String? meta,
-    int? version,
+    int? version = 0,
   }) : super(
          id: id,
          namespace: namespace,

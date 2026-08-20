@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ormed/ormed.dart';
@@ -14,15 +15,32 @@ class SqliteConnections {
   ///
   /// The caller remains responsible for disposing [dataSource].
   factory SqliteConnections.fromDataSource(DataSource dataSource) =>
-      SqliteConnections._(dataSource, ownsDataSource: false);
+      SqliteConnections._(
+        dataSource,
+        ownsDataSource: false,
+        coordinationKey: _databaseCoordinationKey(dataSource),
+      );
 
   /// Creates a connection wrapper for an initialized data source.
-  SqliteConnections._(this.dataSource, {required bool ownsDataSource})
-    : _ownsDataSource = ownsDataSource;
+  SqliteConnections._(
+    this.dataSource, {
+    required bool ownsDataSource,
+    String? coordinationKey,
+  }) : _ownsDataSource = ownsDataSource,
+       _coordinationKey = coordinationKey;
 
   /// Underlying data source instance.
   final DataSource dataSource;
   final bool _ownsDataSource;
+  final String? _coordinationKey;
+
+  // The native SQLite driver keeps transaction depth on the connection and
+  // uses savepoints for nested transactions. Since transaction callbacks are
+  // asynchronous, two callers can otherwise interleave on the same ORM
+  // connection and make one caller release or roll back the other's
+  // savepoint. Serialize the transaction boundary at the wrapper, where all
+  // Stem SQLite stores already converge.
+  Future<void> _transactionTail = Future<void>.value();
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => dataSource.connection;
@@ -40,7 +58,11 @@ class SqliteConnections {
         await _runMigrations(file);
       }
       final dataSource = await _openDataSource(file, readOnly: readOnly);
-      return SqliteConnections._(dataSource, ownsDataSource: true);
+      return SqliteConnections._(
+        dataSource,
+        ownsDataSource: true,
+        coordinationKey: file.absolute.path,
+      );
     });
   }
 
@@ -51,25 +73,77 @@ class SqliteConnections {
     DataSource dataSource,
   ) async {
     await _runMigrationsForDataSource(dataSource);
-    return SqliteConnections._(dataSource, ownsDataSource: false);
+    return SqliteConnections._(
+      dataSource,
+      ownsDataSource: false,
+      coordinationKey: _databaseCoordinationKey(dataSource),
+    );
   }
 
   /// Runs [action] inside a database transaction.
   Future<T> runInTransaction<T>(
     Future<T> Function(QueryContext context) action,
   ) async {
-    if (!dataSource.isInitialized) {
-      await dataSource.init();
+    final previous = _transactionTail;
+    final release = Completer<void>();
+    _transactionTail = release.future;
+
+    await previous;
+    try {
+      Future<T> transaction() async {
+        if (!dataSource.isInitialized) {
+          await dataSource.init();
+        }
+        return dataSource.connection.transaction(
+          () => action(dataSource.context),
+        );
+      }
+
+      final key = _coordinationKey;
+      return await (key == null
+          ? transaction()
+          : _serializeFileTransactionForKey(key, transaction));
+    } finally {
+      release.complete();
     }
-    return dataSource.connection.transaction(() => action(dataSource.context));
   }
 
   /// Closes the data source.
   Future<void> close() async {
+    await _transactionTail;
     if (_ownsDataSource) {
       await dataSource.dispose();
     }
   }
+}
+
+final Map<String, Future<void>> _fileTransactionTails = {};
+
+Future<T> _serializeFileTransactionForKey<T>(
+  String key,
+  Future<T> Function() action,
+) async {
+  final previous = _fileTransactionTails[key] ?? Future<void>.value();
+  final release = Completer<void>();
+  _fileTransactionTails[key] = release.future;
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release.complete();
+    if (identical(_fileTransactionTails[key], release.future)) {
+      unawaited(_fileTransactionTails.remove(key));
+    }
+  }
+}
+
+String? _databaseCoordinationKey(DataSource dataSource) {
+  final path = dataSource.isInitialized
+      ? (dataSource.connection.options['path'] ??
+            dataSource.connection.options['database'])
+      : dataSource.options.database;
+  if (path == null || path == ':memory:') return null;
+  return File(path.toString()).absolute.path;
 }
 
 Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {

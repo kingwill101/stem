@@ -7,6 +7,9 @@ import 'package:ormed/migrations.dart';
 import 'package:stem_postgres/src/database/migrations/m_20251227071920_stem.dart';
 import 'package:stem_postgres/src/database/migrations/m_20251231160000_add_namespace_scoping.dart';
 import 'package:stem_postgres/src/database/migrations/m_20260116121000_add_workflow_run_leases.dart'; // </ORM-MIGRATION-IMPORTS>
+import 'package:stem_postgres/src/database/migrations/m_20260819090000_add_task_outbox.dart';
+import 'package:stem_postgres/src/database/migrations/m_20260819100000_add_rate_limit_buckets.dart';
+import 'package:stem_postgres/src/database/migrations/m_20260820110000_add_lock_fencing_tokens.dart';
 
 final List<MigrationEntry> _entries = [
   // <ORM-MIGRATION-REGISTRY>
@@ -27,6 +30,27 @@ final List<MigrationEntry> _entries = [
       'm_20260116121000_add_workflow_run_leases',
     ),
     migration: const AddWorkflowRunLeases(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2026, 8, 19, 9),
+      'm_20260819090000_add_task_outbox',
+    ),
+    migration: const AddTaskOutbox(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2026, 8, 19, 10),
+      'm_20260819100000_add_rate_limit_buckets',
+    ),
+    migration: const AddRateLimitBuckets(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime(2026, 8, 20, 11),
+      'm_20260820110000_add_lock_fencing_tokens',
+    ),
+    migration: const AddLockFencingTokens(),
   ),
 ];
 

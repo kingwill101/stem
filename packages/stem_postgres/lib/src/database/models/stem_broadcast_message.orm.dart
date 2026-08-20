@@ -267,8 +267,7 @@ class StemBroadcastMessageModelFactory {
 
   static ModelFactoryBuilder<StemBroadcastMessage> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemBroadcastMessage>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemBroadcastMessage>(
     generatorProvider: generatorProvider,
   );
 }

@@ -77,6 +77,9 @@ class RedisLockStore implements LockStore {
   }
 
   String _key(String key) => '$namespace:lock:$key';
+
+  String _tokenKey(String key) => '$namespace:lock-token:$key';
+
   String _owner(String? owner) => owner ?? const Uuid().v7();
 
   Future<dynamic> _send(List<Object> command) => _command.send_object(command);
@@ -88,24 +91,48 @@ class RedisLockStore implements LockStore {
     String? owner,
   }) async {
     final redisKey = _key(key);
+    final tokenKey = _tokenKey(key);
     final value = _owner(owner);
+    // Keep the acquisition and token allocation atomic. The counter is a
+    // separate key so deleting an expired lock never reuses its token.
+    const script = '''
+if redis.call("EXISTS", KEYS[1]) == 0 then
+  local token = redis.call("INCR", KEYS[2])
+  redis.call("HSET", KEYS[1], "owner", ARGV[1], "token", token)
+  redis.call("PEXPIRE", KEYS[1], ARGV[2])
+  return token
+else
+  return 0
+end
+''';
     final result = await _send([
-      'SET',
+      'EVAL',
+      script,
+      '2',
       redisKey,
+      tokenKey,
       value,
-      'NX',
-      'PX',
       ttl.inMilliseconds.toString(),
     ]);
-    if (result != 'OK') {
+    final fencingToken = _asInt(result);
+    if (fencingToken <= 0) {
       return null;
     }
-    return _RedisLock(store: this, key: key, redisKey: redisKey, owner: value);
+    return _RedisLock(
+      store: this,
+      key: key,
+      redisKey: redisKey,
+      owner: value,
+      fencingToken: fencingToken,
+    );
   }
 
   Future<bool> _renew(String redisKey, String owner, Duration ttl) async {
     const script = '''
-if redis.call("GET", KEYS[1]) == ARGV[1] then
+local kind = redis.call("TYPE", KEYS[1]).ok
+if kind == "hash" and redis.call("HGET", KEYS[1], "owner") == ARGV[1] then
+  return redis.call("PEXPIRE", KEYS[1], ARGV[2])
+elseif kind == "string" and redis.call("GET", KEYS[1]) == ARGV[1] then
   return redis.call("PEXPIRE", KEYS[1], ARGV[2])
 else
   return 0
@@ -124,7 +151,10 @@ end
 
   Future<bool> _release(String redisKey, String owner) async {
     const script = '''
-if redis.call("GET", KEYS[1]) == ARGV[1] then
+local kind = redis.call("TYPE", KEYS[1]).ok
+local matches = (kind == "hash" and redis.call("HGET", KEYS[1], "owner") == ARGV[1])
+  or (kind == "string" and redis.call("GET", KEYS[1]) == ARGV[1])
+if matches then
   return redis.call("DEL", KEYS[1])
 else
   return 0
@@ -136,7 +166,11 @@ end
 
   @override
   Future<String?> ownerOf(String key) async {
-    final result = await _send(['GET', _key(key)]);
+    final redisKey = _key(key);
+    final type = await _send(['TYPE', redisKey]);
+    final result = type == 'hash'
+        ? await _send(['HGET', redisKey, 'owner'])
+        : await _send(['GET', redisKey]);
     return result is String ? result : result?.toString();
   }
 
@@ -146,14 +180,20 @@ end
 
   @override
   Future<bool> release(String key, String owner) => _release(_key(key), owner);
+
+  static int _asInt(Object? value) {
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
 }
 
-class _RedisLock implements Lock {
+class _RedisLock implements FencedLock {
   _RedisLock({
     required this.store,
     required this.key,
     required this.redisKey,
     required this.owner,
+    required this.fencingToken,
   });
 
   final RedisLockStore store;
@@ -162,6 +202,9 @@ class _RedisLock implements Lock {
   final String redisKey;
   @override
   final String owner;
+
+  @override
+  final int fencingToken;
 
   @override
   Future<bool> renew(Duration ttl) => store._renew(redisKey, owner, ttl);

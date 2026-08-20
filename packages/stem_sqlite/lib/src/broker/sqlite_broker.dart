@@ -5,13 +5,20 @@ import 'dart:io';
 
 import 'package:meta/meta.dart';
 import 'package:ormed/ormed.dart';
+import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:stem_sqlite/src/connection.dart';
 import 'package:stem_sqlite/src/models/models.dart';
 import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [Broker].
-class SqliteBroker implements Broker {
+class SqliteBroker
+    implements
+        Broker,
+        LeaseBroker,
+        InspectableBroker,
+        DeadLetterBroker,
+        BrokerCapabilitiesProvider {
   SqliteBroker._(
     this._connections, {
     required this.namespace,
@@ -101,6 +108,18 @@ class SqliteBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+    deliveryGuarantee: BrokerDeliveryGuarantee.atLeastOnce,
+    supportsBroadcastFanout: true,
+    supportsQueueInspection: true,
+    supportsLeaseExtension: true,
+    supportsDeadLettering: true,
+    supportsDeadLetterReplay: true,
+  );
 
   /// Closes the broker and releases any database resources.
   @override
@@ -211,11 +230,13 @@ class SqliteBroker implements Broker {
       return;
     }
     final jobId = _parseReceipt(delivery.receipt);
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .whereEquals('namespace', namespace)
-        .delete();
+    await _connections.runInTransaction(
+      (txn) => txn
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .delete(),
+    );
   }
 
   @override
@@ -229,18 +250,20 @@ class SqliteBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     final now = stemNow();
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .whereEquals('namespace', namespace)
-        .update({
-          'lockedAt': null,
-          'lockedUntil': null,
-          'lockedBy': null,
-          'attempt': delivery.envelope.attempt + 1,
-          'notBefore': null,
-          'updatedAt': now,
-        });
+    await _connections.runInTransaction(
+      (txn) => txn
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .update({
+            'lockedAt': null,
+            'lockedUntil': null,
+            'lockedBy': null,
+            'attempt': delivery.envelope.attempt + 1,
+            'notBefore': null,
+            'updatedAt': now,
+          }),
+    );
   }
 
   @override
@@ -255,29 +278,31 @@ class SqliteBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     final now = stemNow();
 
-    final row = await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .whereEquals('namespace', namespace)
-        .firstOrNull();
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('id', jobId)
-        .whereEquals('namespace', namespace)
-        .delete();
-    if (row != null) {
-      await _context.repository<StemDeadLetter>().insert(
-        StemDeadLetterInsertDto(
-          id: row.id,
-          namespace: namespace,
-          queue: row.queue,
-          envelope: row.envelope,
-          reason: reason,
-          meta: meta,
-          deadAt: now,
-        ),
-      );
-    }
+    await _connections.runInTransaction((txn) async {
+      final row = await txn
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .firstOrNull();
+      await txn
+          .query<StemQueueJob>()
+          .whereEquals('id', jobId)
+          .whereEquals('namespace', namespace)
+          .delete();
+      if (row != null) {
+        await txn.repository<StemDeadLetter>().insert(
+          StemDeadLetterInsertDto(
+            id: row.id,
+            namespace: namespace,
+            queue: row.queue,
+            envelope: row.envelope,
+            reason: reason,
+            meta: meta,
+            deadAt: now,
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -287,19 +312,23 @@ class SqliteBroker implements Broker {
     }
     final jobId = _parseReceipt(delivery.receipt);
     final now = stemNow();
-    await _context.repository<StemQueueJob>().update(
-      StemQueueJobUpdateDto(lockedUntil: now.add(by)),
-      where: StemQueueJobPartial(id: jobId, namespace: namespace),
+    await _connections.runInTransaction(
+      (txn) => txn.repository<StemQueueJob>().update(
+        StemQueueJobUpdateDto(lockedUntil: now.add(by)),
+        where: StemQueueJobPartial(id: jobId, namespace: namespace),
+      ),
     );
   }
 
   @override
   Future<void> purge(String queue) async {
-    await _context
-        .query<StemQueueJob>()
-        .whereEquals('queue', queue)
-        .whereEquals('namespace', namespace)
-        .delete();
+    await _connections.runInTransaction(
+      (txn) => txn
+          .query<StemQueueJob>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace)
+          .delete(),
+    );
   }
 
   @override
@@ -434,26 +463,30 @@ class SqliteBroker implements Broker {
           .limit(limit)
           .pluck<String>('id');
       if (ids.isEmpty) return 0;
-      await _context
-          .query<StemDeadLetter>()
-          .whereIn('id', ids)
-          .whereEquals('namespace', namespace)
-          .delete();
+      await _connections.runInTransaction(
+        (txn) => txn
+            .query<StemDeadLetter>()
+            .whereIn('id', ids)
+            .whereEquals('namespace', namespace)
+            .delete(),
+      );
       return ids.length;
     }
 
-    var query = _context
-        .query<StemDeadLetter>()
-        .whereEquals('queue', queue)
-        .whereEquals('namespace', namespace);
-    if (since != null) {
-      query = query.where(
-        'deadAt',
-        since,
-        PredicateOperator.greaterThanOrEqual,
-      );
-    }
-    return query.delete();
+    return _connections.runInTransaction((txn) {
+      var transactionalQuery = txn
+          .query<StemDeadLetter>()
+          .whereEquals('queue', queue)
+          .whereEquals('namespace', namespace);
+      if (since != null) {
+        transactionalQuery = transactionalQuery.where(
+          'deadAt',
+          since,
+          PredicateOperator.greaterThanOrEqual,
+        );
+      }
+      return transactionalQuery.delete();
+    });
   }
 
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
@@ -518,14 +551,12 @@ class SqliteBroker implements Broker {
         _runSweeperCycle().catchError((Object error, StackTrace stackTrace) {
           stemLogger.warning(
             'SQLite broker sweeper cycle failed: $error',
-            stemLogContext(
-              component: 'stem_sqlite',
-              subsystem: 'broker_sweeper',
-              fields: <String, Object?>{
-                'namespace': namespace,
-                'stack': stackTrace.toString(),
-              },
-            ),
+            fields: <String, Object?>{
+              'component': 'stem_sqlite',
+              'subsystem': 'broker_sweeper',
+              'namespace': namespace,
+              'stack': stackTrace.toString(),
+            },
           );
         }),
       );

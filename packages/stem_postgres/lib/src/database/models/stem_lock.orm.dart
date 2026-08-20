@@ -43,6 +43,18 @@ const FieldDefinition _$StemLockOwnerField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemLockFencingTokenField = FieldDefinition(
+  name: 'fencingToken',
+  columnName: 'fencing_token',
+  dartType: 'int',
+  resolvedType: 'int',
+  isPrimaryKey: false,
+  isNullable: false,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemLockExpiresAtField = FieldDefinition(
   name: 'expiresAt',
   columnName: 'expires_at',
@@ -76,6 +88,10 @@ Map<String, Object?> _encodeStemLockUntracked(
     'key': registry.encodeField(_$StemLockKeyField, m.key),
     'namespace': registry.encodeField(_$StemLockNamespaceField, m.namespace),
     'owner': registry.encodeField(_$StemLockOwnerField, m.owner),
+    'fencing_token': registry.encodeField(
+      _$StemLockFencingTokenField,
+      m.fencingToken,
+    ),
     'expires_at': registry.encodeField(_$StemLockExpiresAtField, m.expiresAt),
     'created_at': registry.encodeField(_$StemLockCreatedAtField, m.createdAt),
   };
@@ -88,6 +104,7 @@ final ModelDefinition<$StemLock> _$StemLockDefinition = ModelDefinition(
     _$StemLockKeyField,
     _$StemLockNamespaceField,
     _$StemLockOwnerField,
+    _$StemLockFencingTokenField,
     _$StemLockExpiresAtField,
     _$StemLockCreatedAtField,
   ],
@@ -211,8 +228,7 @@ class StemLockModelFactory {
 
   static ModelFactoryBuilder<StemLock> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemLock>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemLock>(
     generatorProvider: generatorProvider,
   );
 }
@@ -228,6 +244,10 @@ class _$StemLockCodec extends ModelCodec<$StemLock> {
         model.namespace,
       ),
       'owner': registry.encodeField(_$StemLockOwnerField, model.owner),
+      'fencing_token': registry.encodeField(
+        _$StemLockFencingTokenField,
+        model.fencingToken,
+      ),
       'expires_at': registry.encodeField(
         _$StemLockExpiresAtField,
         model.expiresAt,
@@ -253,6 +273,12 @@ class _$StemLockCodec extends ModelCodec<$StemLock> {
     final String stemLockOwnerValue =
         registry.decodeField<String>(_$StemLockOwnerField, data['owner']) ??
         (throw StateError('Field owner on StemLock cannot be null.'));
+    final int stemLockFencingTokenValue =
+        registry.decodeField<int>(
+          _$StemLockFencingTokenField,
+          data['fencing_token'],
+        ) ??
+        (throw StateError('Field fencingToken on StemLock cannot be null.'));
     final DateTime stemLockExpiresAtValue =
         registry.decodeField<DateTime>(
           _$StemLockExpiresAtField,
@@ -269,6 +295,7 @@ class _$StemLockCodec extends ModelCodec<$StemLock> {
       key: stemLockKeyValue,
       namespace: stemLockNamespaceValue,
       owner: stemLockOwnerValue,
+      fencingToken: stemLockFencingTokenValue,
       expiresAt: stemLockExpiresAtValue,
       createdAt: stemLockCreatedAtValue,
     );
@@ -276,6 +303,7 @@ class _$StemLockCodec extends ModelCodec<$StemLock> {
       'key': stemLockKeyValue,
       'namespace': stemLockNamespaceValue,
       'owner': stemLockOwnerValue,
+      'fencing_token': stemLockFencingTokenValue,
       'expires_at': stemLockExpiresAtValue,
       'created_at': stemLockCreatedAtValue,
     });
@@ -291,12 +319,14 @@ class StemLockInsertDto implements InsertDto<$StemLock> {
     this.key,
     this.namespace,
     this.owner,
+    this.fencingToken,
     this.expiresAt,
     this.createdAt,
   });
   final String? key;
   final String? namespace;
   final String? owner;
+  final int? fencingToken;
   final DateTime? expiresAt;
   final DateTime? createdAt;
 
@@ -306,6 +336,7 @@ class StemLockInsertDto implements InsertDto<$StemLock> {
       if (key != null) 'key': key,
       if (namespace != null) 'namespace': namespace,
       if (owner != null) 'owner': owner,
+      if (fencingToken != null) 'fencing_token': fencingToken,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (createdAt != null) 'created_at': createdAt,
     };
@@ -317,6 +348,7 @@ class StemLockInsertDto implements InsertDto<$StemLock> {
     Object? key = _copyWithSentinel,
     Object? namespace = _copyWithSentinel,
     Object? owner = _copyWithSentinel,
+    Object? fencingToken = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
   }) {
@@ -328,6 +360,9 @@ class StemLockInsertDto implements InsertDto<$StemLock> {
       owner: identical(owner, _copyWithSentinel)
           ? this.owner
           : owner as String?,
+      fencingToken: identical(fencingToken, _copyWithSentinel)
+          ? this.fencingToken
+          : fencingToken as int?,
       expiresAt: identical(expiresAt, _copyWithSentinel)
           ? this.expiresAt
           : expiresAt as DateTime?,
@@ -350,12 +385,14 @@ class StemLockUpdateDto implements UpdateDto<$StemLock> {
     this.key,
     this.namespace,
     this.owner,
+    this.fencingToken,
     this.expiresAt,
     this.createdAt,
   });
   final String? key;
   final String? namespace;
   final String? owner;
+  final int? fencingToken;
   final DateTime? expiresAt;
   final DateTime? createdAt;
 
@@ -365,6 +402,7 @@ class StemLockUpdateDto implements UpdateDto<$StemLock> {
       if (key != null) 'key': key,
       if (namespace != null) 'namespace': namespace,
       if (owner != null) 'owner': owner,
+      if (fencingToken != null) 'fencing_token': fencingToken,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (createdAt != null) 'created_at': createdAt,
     };
@@ -376,6 +414,7 @@ class StemLockUpdateDto implements UpdateDto<$StemLock> {
     Object? key = _copyWithSentinel,
     Object? namespace = _copyWithSentinel,
     Object? owner = _copyWithSentinel,
+    Object? fencingToken = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
   }) {
@@ -387,6 +426,9 @@ class StemLockUpdateDto implements UpdateDto<$StemLock> {
       owner: identical(owner, _copyWithSentinel)
           ? this.owner
           : owner as String?,
+      fencingToken: identical(fencingToken, _copyWithSentinel)
+          ? this.fencingToken
+          : fencingToken as int?,
       expiresAt: identical(expiresAt, _copyWithSentinel)
           ? this.expiresAt
           : expiresAt as DateTime?,
@@ -409,6 +451,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
     this.key,
     this.namespace,
     this.owner,
+    this.fencingToken,
     this.expiresAt,
     this.createdAt,
   });
@@ -422,6 +465,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
       key: row['key'] as String?,
       namespace: row['namespace'] as String?,
       owner: row['owner'] as String?,
+      fencingToken: row['fencing_token'] as int?,
       expiresAt: row['expires_at'] as DateTime?,
       createdAt: row['created_at'] as DateTime?,
     );
@@ -430,6 +474,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
   final String? key;
   final String? namespace;
   final String? owner;
+  final int? fencingToken;
   final DateTime? expiresAt;
   final DateTime? createdAt;
 
@@ -448,6 +493,10 @@ class StemLockPartial implements PartialEntity<$StemLock> {
     if (ownerValue == null) {
       throw StateError('Missing required field: owner');
     }
+    final int? fencingTokenValue = fencingToken;
+    if (fencingTokenValue == null) {
+      throw StateError('Missing required field: fencingToken');
+    }
     final DateTime? expiresAtValue = expiresAt;
     if (expiresAtValue == null) {
       throw StateError('Missing required field: expiresAt');
@@ -460,6 +509,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
       key: keyValue,
       namespace: namespaceValue,
       owner: ownerValue,
+      fencingToken: fencingTokenValue,
       expiresAt: expiresAtValue,
       createdAt: createdAtValue,
     );
@@ -471,6 +521,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
       if (key != null) 'key': key,
       if (namespace != null) 'namespace': namespace,
       if (owner != null) 'owner': owner,
+      if (fencingToken != null) 'fencing_token': fencingToken,
       if (expiresAt != null) 'expires_at': expiresAt,
       if (createdAt != null) 'created_at': createdAt,
     };
@@ -482,6 +533,7 @@ class StemLockPartial implements PartialEntity<$StemLock> {
     Object? key = _copyWithSentinel,
     Object? namespace = _copyWithSentinel,
     Object? owner = _copyWithSentinel,
+    Object? fencingToken = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
   }) {
@@ -493,6 +545,9 @@ class StemLockPartial implements PartialEntity<$StemLock> {
       owner: identical(owner, _copyWithSentinel)
           ? this.owner
           : owner as String?,
+      fencingToken: identical(fencingToken, _copyWithSentinel)
+          ? this.fencingToken
+          : fencingToken as int?,
       expiresAt: identical(expiresAt, _copyWithSentinel)
           ? this.expiresAt
           : expiresAt as DateTime?,
@@ -521,12 +576,14 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
     required String key,
     required String namespace,
     required String owner,
+    required int fencingToken,
     required DateTime expiresAt,
     required DateTime createdAt,
   }) : super(
          key: key,
          namespace: namespace,
          owner: owner,
+         fencingToken: fencingToken,
          expiresAt: expiresAt,
          createdAt: createdAt,
        ) {
@@ -534,6 +591,7 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
       'key': key,
       'namespace': namespace,
       'owner': owner,
+      'fencing_token': fencingToken,
       'expires_at': expiresAt,
       'created_at': createdAt,
     });
@@ -545,6 +603,7 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
       key: model.key,
       namespace: model.namespace,
       owner: model.owner,
+      fencingToken: model.fencingToken,
       expiresAt: model.expiresAt,
       createdAt: model.createdAt,
     );
@@ -554,6 +613,7 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
     String? key,
     String? namespace,
     String? owner,
+    int? fencingToken,
     DateTime? expiresAt,
     DateTime? createdAt,
   }) {
@@ -561,6 +621,7 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
       key: key ?? this.key,
       namespace: namespace ?? this.namespace,
       owner: owner ?? this.owner,
+      fencingToken: fencingToken ?? this.fencingToken,
       expiresAt: expiresAt ?? this.expiresAt,
       createdAt: createdAt ?? this.createdAt,
     );
@@ -597,6 +658,14 @@ class $StemLock extends StemLock with ModelAttributes implements OrmEntity {
   /// Tracked setter for [owner].
   set owner(String value) => setAttribute('owner', value);
 
+  /// Tracked getter for [fencingToken].
+  @override
+  int get fencingToken =>
+      getAttribute<int>('fencing_token') ?? super.fencingToken;
+
+  /// Tracked setter for [fencingToken].
+  set fencingToken(int value) => setAttribute('fencing_token', value);
+
   /// Tracked getter for [expiresAt].
   @override
   DateTime get expiresAt =>
@@ -630,6 +699,7 @@ extension StemLockOrmExtension on StemLock {
     Object? key = _copyWithSentinel,
     Object? namespace = _copyWithSentinel,
     Object? owner = _copyWithSentinel,
+    Object? fencingToken = _copyWithSentinel,
     Object? expiresAt = _copyWithSentinel,
     Object? createdAt = _copyWithSentinel,
   }) {
@@ -639,6 +709,9 @@ extension StemLockOrmExtension on StemLock {
           ? this.namespace
           : namespace as String,
       owner: identical(owner, _copyWithSentinel) ? this.owner : owner as String,
+      fencingToken: identical(fencingToken, _copyWithSentinel)
+          ? this.fencingToken
+          : fencingToken as int,
       expiresAt: identical(expiresAt, _copyWithSentinel)
           ? this.expiresAt
           : expiresAt as DateTime,
@@ -678,6 +751,8 @@ extension StemLockPredicateFields on PredicateBuilder<StemLock> {
       PredicateField<StemLock, String>(this, 'namespace');
   PredicateField<StemLock, String> get owner =>
       PredicateField<StemLock, String>(this, 'owner');
+  PredicateField<StemLock, int> get fencingToken =>
+      PredicateField<StemLock, int>(this, 'fencingToken');
   PredicateField<StemLock, DateTime> get expiresAt =>
       PredicateField<StemLock, DateTime>(this, 'expiresAt');
   PredicateField<StemLock, DateTime> get createdAt =>

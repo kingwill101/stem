@@ -15,6 +15,10 @@
 include: package:very_good_analysis/analysis_options.yaml
 
 analyzer:
+  # Ormed invokes the CLI `main`, while applications may call this registry
+  # programmatically through `runProjectSeeds`.
+  errors:
+    unreachable_from_main: ignore
   exclude:
     - "**/*.g.dart"
     - "**/*.orm.dart"

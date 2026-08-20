@@ -240,8 +240,7 @@ class StemGroupModelFactory {
 
   static ModelFactoryBuilder<StemGroup> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemGroup>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemGroup>(
     generatorProvider: generatorProvider,
   );
 }

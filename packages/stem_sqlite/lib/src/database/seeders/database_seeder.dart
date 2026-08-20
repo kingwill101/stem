@@ -7,7 +7,8 @@ class AppDatabaseSeeder extends DatabaseSeeder {
 
   @override
   Future<void> run() async {
-    // TODO(stem): add seed logic here
+    // No default seeds are installed by stem; add application-specific data
+    // from the consuming service instead.
     // Examples:
     // await seed<User>([
     //   {'name': 'Admin User', 'email': 'admin@example.com'},

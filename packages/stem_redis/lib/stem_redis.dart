@@ -3,6 +3,8 @@ export 'src/brokers/redis_broker.dart' show RedisStreamsBroker;
 export 'src/control/redis_revoke_store.dart' show RedisRevokeStore;
 export 'src/observability/redis_heartbeat_transport.dart'
     show RedisHeartbeatCommandFactory, RedisHeartbeatTransport;
+export 'src/rate_limiting/redis_rate_limiter.dart'
+    show RedisRateLimiter, RedisRateLimiterCommandFactory;
 export 'src/scheduler/redis_lock_store.dart' show RedisLockStore;
 export 'src/scheduler/redis_schedule_store.dart' show RedisScheduleStore;
 export 'src/stack/redis_adapter.dart'

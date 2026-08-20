@@ -407,8 +407,7 @@ class StemWorkflowRunModelFactory {
 
   static ModelFactoryBuilder<StemWorkflowRun> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemWorkflowRun>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemWorkflowRun>(
     generatorProvider: generatorProvider,
   );
 }

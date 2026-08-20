@@ -1,19 +1,18 @@
 import 'package:contextual/contextual.dart' as contextual;
-import 'package:stem/stem.dart';
+import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem_postgres/src/database/datasource.dart';
 import 'package:test/test.dart';
 
 void main() {
-  test('createDataSource forwards logger and logging flags', () {
-    final logger = contextual.Logger();
+  test('createDataSource accepts a Stem logger and enables ORM logging', () {
     final dataSource = createDataSource(
       connectionString: 'postgresql://user:pass@localhost:5432/stem',
       logging: true,
-      logger: logger,
+      logger: stemLogger,
     );
 
     expect(dataSource.options.logging, isTrue);
-    expect(dataSource.options.logger, same(logger));
+    expect(dataSource.options.logger, isA<contextual.Logger>());
   });
 
   test('createDataSource defaults to stemLogger', () {
@@ -21,6 +20,6 @@ void main() {
       connectionString: 'postgresql://user:pass@localhost:5432/stem',
     );
 
-    expect(dataSource.options.logger, same(stemLogger));
+    expect(dataSource.options.logger, isA<contextual.Logger>());
   });
 }

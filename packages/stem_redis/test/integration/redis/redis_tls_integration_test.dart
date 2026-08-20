@@ -28,6 +28,8 @@ void _runRedisTlsSuite({
 }) {
   final trimmedUrl = url?.trim();
   final trimmedCa = caCertPath?.trim();
+  var resolvedClientCert = clientCertPath;
+  var resolvedClientKey = clientKeyPath;
   if (trimmedUrl == null || trimmedUrl.isEmpty) {
     test(
       'redis $label integration skipped',
@@ -87,14 +89,12 @@ void _runRedisTlsSuite({
       );
       return;
     }
-    clientCertPath = trimmedClientCert;
-    clientKeyPath = trimmedClientKey;
+    resolvedClientCert = trimmedClientCert;
+    resolvedClientKey = trimmedClientKey;
   }
 
   final resolvedUrl = trimmedUrl;
   final resolvedCa = trimmedCa;
-  final resolvedClientCert = clientCertPath;
-  final resolvedClientKey = clientKeyPath;
   final tls = TlsConfig(
     caCertificateFile: resolvedCa,
     clientCertificateFile: resolvedClientCert,

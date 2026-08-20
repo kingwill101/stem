@@ -14,7 +14,15 @@ Future<void> main() async {
       Platform.environment['STEM_TEST_POSTGRES_URL'];
   final caOverride = Platform.environment['STEM_TEST_POSTGRES_TLS_CA_CERT']
       ?.trim();
-  final defaultCa = File('docker/testing/certs/postgres-root.crt');
+  final defaultCaCandidates = [
+    File('docker/testing/postgres/certs/root.crt'),
+    File('packages/stem_cli/docker/testing/postgres/certs/root.crt'),
+    File('../stem_cli/docker/testing/postgres/certs/root.crt'),
+  ];
+  final defaultCa = defaultCaCandidates.firstWhere(
+    (file) => file.existsSync(),
+    orElse: () => defaultCaCandidates.first,
+  );
   final caPath = caOverride?.isNotEmpty ?? false
       ? caOverride
       : (defaultCa.existsSync() ? defaultCa.path : null);

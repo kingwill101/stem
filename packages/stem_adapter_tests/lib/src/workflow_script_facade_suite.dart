@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_adapter_tests/src/workflow_store_contract_suite.dart';
 import 'package:test/test.dart';

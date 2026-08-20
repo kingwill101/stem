@@ -55,6 +55,67 @@ Future<void> main() async {
 }
 ```
 
+### Transactional outbox
+
+Use `PostgresTransactionalOutbox` when a task must be published atomically
+with application data in PostgreSQL. The outbox facade is producer-only:
+enqueue through it inside `outbox.transaction`, and pass the underlying broker
+to the relay.
+
+```dart
+final outbox = await PostgresTransactionalOutbox.connect(
+  'postgresql://postgres:postgres@localhost:5432/stem',
+);
+final broker = await PostgresBroker.connect(
+  'postgresql://postgres:postgres@localhost:5432/stem',
+);
+final producerBroker = outbox.wrap(broker); // accepts any QueueBroker
+final stem = Stem(broker: producerBroker, registry: registry);
+
+await outbox.transaction((transaction) async {
+  await transaction.context.table('orders').create({
+    'id': orderId,
+    'state': 'created',
+  });
+  await stem.enqueue('orders.process', args: {'id': orderId});
+});
+
+await outbox.dispatch(broker: broker);
+
+await broker.close();
+await outbox.close();
+```
+
+The relay is at least once. A crash after broker publication and before the
+outbox row is marked dispatched can publish the same envelope again. Stem's
+Postgres broker deduplicates queue rows by envelope ID, but task handlers and
+external side effects must still be idempotent. Run migrations when opening
+the outbox, or apply the `stem_task_outbox` migration as part of your normal
+deployment process. The transaction boundary covers application writes and
+broker publication records; result-backend status writes and unique-task
+claims remain separate stores and should not be treated as part of the same
+database commit unless they are made transaction-aware by the application.
+
+### Distributed rate limiting
+
+`PostgresRateLimiter` shares a token bucket across worker processes. Refill
+uses PostgreSQL server time, and each acquire locks and updates one bucket row
+inside a transaction.
+
+```dart
+final limiter = await PostgresRateLimiter.connect(
+  'postgresql://postgres:postgres@localhost:5432/stem',
+  namespace: 'billing-worker',
+);
+
+final workerConfig = StemWorkerConfig(rateLimiter: limiter);
+```
+
+Opening the limiter runs the package migrations, including the
+`stem_rate_limit_buckets` table. A denied acquisition includes `retryAfter` so
+the worker can schedule the next attempt. Close the limiter with the worker's
+other resources.
+
 ### Typed `TaskDefinition`
 
 ```dart

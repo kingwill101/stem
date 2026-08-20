@@ -7,7 +7,7 @@ import 'package:redis/redis.dart';
 import 'package:stem/stem.dart';
 
 /// Redis-backed implementation of [ResultBackend].
-class RedisResultBackend implements ResultBackend {
+class RedisResultBackend implements ResultBackend, AtomicTerminalResultBackend {
   RedisResultBackend._(
     this._connection,
     this._command, {
@@ -34,6 +34,9 @@ class RedisResultBackend implements ResultBackend {
 
   final Map<String, StreamController<TaskStatus>> _watchers = {};
   bool _closed = false;
+
+  @override
+  bool get supportsAtomicTerminalWrites => true;
 
   /// Connects to Redis and returns a result backend instance.
   static Future<RedisResultBackend> connect(
@@ -161,6 +164,49 @@ class RedisResultBackend implements ResultBackend {
     final expire = (ttl ?? defaultTtl).inMilliseconds;
     await _send(['SET', key, encoded, 'PX', expire.toString()]);
     _watchers[taskId]?.add(status);
+  }
+
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    final key = _taskKey(status.id);
+    final now = stemNow().toUtc();
+    final value = <String, Object?>{
+      ...status.toJson(),
+      'createdAt': now.toIso8601String(),
+      'updatedAt': now.toIso8601String(),
+    };
+    final expire = (ttl ?? defaultTtl).inMilliseconds;
+    final result = await _send([
+      'EVAL',
+      '''
+local current = redis.call('GET', KEYS[1])
+local value = cjson.decode(ARGV[1])
+if current then
+  local decoded = cjson.decode(current)
+  local state = decoded['state']
+  if state == 'succeeded' or state == 'failed' or state == 'cancelled' then
+    return 0
+  end
+  if decoded['createdAt'] then
+    value['createdAt'] = decoded['createdAt']
+  end
+end
+redis.call('SET', KEYS[1], cjson.encode(value), 'PX', ARGV[2])
+return 1
+''',
+      '1',
+      key,
+      jsonEncode(value),
+      expire.toString(),
+    ]);
+    final applied = result == 1 || result == '1';
+    if (applied) {
+      _watchers[status.id]?.add(status);
+    }
+    return applied;
   }
 
   @override

@@ -128,6 +128,32 @@ void main() async {
     expect(expired, isNull);
   });
 
+  test('terminal writes arbitrate concurrent completion attempts', () async {
+    const taskId = 'integration-terminal-race';
+    await backend.set(taskId, TaskState.running);
+    final applied = await backend.setTerminalIfAbsent(
+      TaskStatus(
+        id: taskId,
+        state: TaskState.succeeded,
+        payload: 'first',
+        attempt: 1,
+      ),
+    );
+    final rejected = await backend.setTerminalIfAbsent(
+      TaskStatus(
+        id: taskId,
+        state: TaskState.failed,
+        error: const TaskError(type: 'late', message: 'late failure'),
+        attempt: 1,
+      ),
+    );
+
+    expect(applied, isTrue);
+    expect(rejected, isFalse);
+    expect((await backend.get(taskId))?.payload, 'first');
+    expect((await backend.get(taskId))?.state, TaskState.succeeded);
+  });
+
   test('RedisResultBackend namespaces isolate data', () async {
     const taskId = 'integration-namespace-task';
     final other = await RedisResultBackend.connect(
@@ -206,7 +232,10 @@ void main() async {
 
     final afterRelease = await lockStore.acquire('integration-lock');
     expect(afterRelease, isNotNull);
-    await afterRelease!.release();
+    final firstFenced = lock as FencedLock;
+    final secondFenced = afterRelease! as FencedLock;
+    expect(secondFenced.fencingToken, greaterThan(firstFenced.fencingToken));
+    await secondFenced.release();
   });
 
   test('UniqueTaskCoordinator deduplicates with RedisLockStore', () async {

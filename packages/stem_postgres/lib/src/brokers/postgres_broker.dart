@@ -1,15 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:contextual/contextual.dart';
 import 'package:ormed/ormed.dart';
+import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
 import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [Broker].
-class PostgresBroker implements Broker {
+class PostgresBroker
+    implements
+        Broker,
+        LeaseBroker,
+        InspectableBroker,
+        DeadLetterBroker,
+        BrokerCapabilitiesProvider {
   PostgresBroker._(
     this._connections, {
     required this.namespace,
@@ -20,7 +26,7 @@ class PostgresBroker implements Broker {
   }) {
     stemLogger.info(
       'PostgresBroker created (namespace=$namespace)',
-      _logContext(),
+      fields: _logContext(),
     );
     _startSweeper();
   }
@@ -118,7 +124,7 @@ class PostgresBroker implements Broker {
     stemLogger.warning(
       'Closing PostgresBroker (namespace=$namespace) '
       'stack=${_closedStack ?? ''}',
-      _logContext({'stack': _closedStack.toString()}),
+      fields: _logContext({'stack': _closedStack.toString()}),
     );
     _closed = true;
     _sweeperTimer?.cancel();
@@ -141,6 +147,17 @@ class PostgresBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+    deliveryGuarantee: BrokerDeliveryGuarantee.atLeastOnce,
+    supportsQueueInspection: true,
+    supportsLeaseExtension: true,
+    supportsDeadLettering: true,
+    supportsDeadLetterReplay: true,
+  );
 
   Future<T> _withDb<T>(Future<T> Function() action) {
     final run = _dbLock.then((_) async {
@@ -219,7 +236,7 @@ class PostgresBroker implements Broker {
     stemLogger.debug(
       'Broker consume requested (namespace=$namespace, '
       'queues=${subscription.queues})',
-      _logContext({'queues': subscription.queues}),
+      fields: _logContext({'queues': subscription.queues}),
     );
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
@@ -249,7 +266,7 @@ class PostgresBroker implements Broker {
         final queueLabel = queue ?? '<broadcast-only>';
         stemLogger.debug(
           'Consumer stream canceled (queue=$queueLabel, worker=$consumer)',
-          _logContext({
+          fields: _logContext({
             'queue': queueLabel,
             'worker': consumer,
           }),
@@ -275,7 +292,9 @@ class PostgresBroker implements Broker {
       stemLogger.warning(
         'Broker already closed; closing consumer stream. '
         'stack=${_closedStack ?? StackTrace.current}',
-        _logContext({'stack': (_closedStack ?? StackTrace.current).toString()}),
+        fields: _logContext({
+          'stack': (_closedStack ?? StackTrace.current).toString(),
+        }),
       );
       scheduleMicrotask(() async {
         await controller.close();
@@ -293,7 +312,7 @@ class PostgresBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     stemLogger.debug(
       'Ack queue job $jobId (${delivery.envelope.queue})',
-      _logContext({
+      fields: _logContext({
         'jobId': jobId,
         'queue': delivery.envelope.queue,
       }),
@@ -320,7 +339,7 @@ class PostgresBroker implements Broker {
     final jobId = _parseReceipt(delivery.receipt);
     stemLogger.debug(
       'Nack queue job $jobId (${delivery.envelope.queue})',
-      _logContext({
+      fields: _logContext({
         'jobId': jobId,
         'queue': delivery.envelope.queue,
       }),
@@ -643,7 +662,7 @@ class PostgresBroker implements Broker {
         if (updated == 0) return null;
         stemLogger.debug(
           'Claimed queue job ${candidate.id} ($queue) by $consumerId',
-          _logContext({
+          fields: _logContext({
             'jobId': candidate.id,
             'queue': queue,
             'worker': consumerId,
@@ -749,13 +768,15 @@ class PostgresBroker implements Broker {
     });
   }
 
-  Context _logContext([Map<String, Object?> fields = const {}]) {
-    return Context({
+  Map<String, Object?> _logContext([
+    Map<String, Object?> fields = const {},
+  ]) {
+    return {
       'component': 'stem_postgres',
       'subsystem': 'broker',
       'namespace': namespace,
       ...fields,
-    });
+    };
   }
 
   String _parseReceipt(String receipt) => receipt;
@@ -824,7 +845,7 @@ class _ConsumerRunner {
     final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
       'Consumer runner started (queue=$queueLabel, worker=$workerId)',
-      broker._logContext({'queue': queueLabel, 'worker': workerId}),
+      fields: broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     unawaited(_loop());
   }
@@ -833,7 +854,7 @@ class _ConsumerRunner {
     final queueLabel = queue ?? '<broadcast-only>';
     stemLogger.debug(
       'Consumer runner stopped (queue=$queueLabel, worker=$workerId)',
-      broker._logContext({'queue': queueLabel, 'worker': workerId}),
+      fields: broker._logContext({'queue': queueLabel, 'worker': workerId}),
     );
     _stopped = true;
   }
@@ -880,7 +901,7 @@ class _ConsumerRunner {
         stemLogger.warning(
           'Consumer loop error (queue=$queueLabel, worker=$workerId): '
           '$error\n$stack',
-          broker._logContext({
+          fields: broker._logContext({
             'queue': queueLabel,
             'worker': workerId,
             'error': error.toString(),

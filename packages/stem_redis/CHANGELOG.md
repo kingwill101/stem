@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+- Added an atomic Redis Lua terminal-result write that preserves the first
+  terminal task state across concurrent workers.
+
+## 0.2.0
+
+- Updated the Redis adapter for Stem 0.3.0 and the capability-aware broker
+  contract.
+- Retained the production distributed Redis rate limiter and added its focused
+  unit and integration coverage.
+- Redis lock acquisition now allocates an atomic, monotonic fencing token while
+  retaining owner-checked renewal and release behavior.
+
+## 0.1.3
+
+- Added the production `RedisRateLimiter`, an atomic Redis Lua token bucket
+  with Redis-server time, retry-after decisions, TLS support, and namespaced
+  keys.
+- Removed the prerelease core dependency range from the published-package
+  manifest.
+
+## 0.1.2
+
+- Added the production `RedisRateLimiter`, an atomic Redis Lua token bucket
+  with Redis-server time, retry-after decisions, TLS support, and namespaced
+  keys.
+
 ## 0.1.1
 
 - Updated the Redis workflow store to honor caller-provided run ids, matching

@@ -1,5 +1,5 @@
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
-import 'package:stem_memory/stem_memory.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -46,7 +46,10 @@ void main() {
     final store = await factory.create();
 
     expect(store, isA<InMemoryWorkflowStore>());
-    final runId = await store.createRun(workflow: 'wf', params: const {});
+    final runId = await store.createRun(
+      workflow: 'wf',
+      params: const <String, Object?>{},
+    );
     expect(runId, isNotEmpty);
   });
 
@@ -96,6 +99,11 @@ void main() {
 
 class _TrackingBroker implements Broker {
   bool closed = false;
+
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: false,
+    supportsPriorityOrdering: false,
+  );
 
   @override
   Future<void> close() async {

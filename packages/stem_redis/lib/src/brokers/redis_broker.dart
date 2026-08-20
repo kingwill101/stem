@@ -7,7 +7,13 @@ import 'package:stem/stem.dart';
 import 'package:uuid/uuid.dart';
 
 /// Redis streams-backed implementation of [Broker].
-class RedisStreamsBroker implements Broker {
+class RedisStreamsBroker
+    implements
+        Broker,
+        LeaseBroker,
+        InspectableBroker,
+        DeadLetterBroker,
+        BrokerCapabilitiesProvider {
   /// Creates a broker instance using injected [connection] and [command].
   ///
   /// This is intended for unit tests that need to stub Redis behaviour without
@@ -172,10 +178,7 @@ class RedisStreamsBroker implements Broker {
     }
     Object? failure;
     StackTrace? failureStack;
-    await runZonedGuarded(() => _connection.close(), (
-      Object error,
-      StackTrace stack,
-    ) {
+    await runZonedGuarded(() => _connection.close(), (error, stack) {
       if (_shouldSuppressClosedError(error)) {
         return;
       }
@@ -304,6 +307,17 @@ class RedisStreamsBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+    deliveryGuarantee: BrokerDeliveryGuarantee.atLeastOnce,
+    supportsQueueInspection: true,
+    supportsLeaseExtension: true,
+    supportsDeadLettering: true,
+    supportsDeadLetterReplay: true,
+  );
 
   Future<void> _ensureGroupForStream(String queue, String streamKey) async {
     final key = '$streamKey|${_groupKey(queue)}';

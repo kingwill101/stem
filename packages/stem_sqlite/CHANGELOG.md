@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
+  facade; the Ormed contextual logger remains an adapter implementation detail.
+- Serialized SQLite transactions and broker mutations across shared file
+  connections to prevent savepoint corruption and `database is locked` errors
+  under concurrent worker/result-backend traffic.
+- Added a file-backed throughput benchmark with a regression baseline.
+- Added conditional terminal-result updates so late completion attempts cannot
+  overwrite an existing terminal state.
+- Added a restart-recovery integration test that reopens a durable SQLite
+  workflow store and resumes a persisted checkpoint with replacement broker,
+  runtime, and worker instances.
+- Added mixed-version queue coverage: a row written against the pre-namespace
+  schema is upgraded and consumed by the current SQLite broker.
+
+## 0.2.0
+
+- Updated the adapter for Stem 0.3.0 and the narrowed broker capability model.
+- Added migration-registry and historical-schema upgrade coverage.
+- Removed the deprecated `StemSqliteDatabase` placeholder API; use
+  `SqliteConnections` and `QueryContext` instead.
+
+## 0.1.4
+
+- Moved shared logger imports to the explicit
+  `package:stem/observability.dart` entrypoint as the stable core barrel was
+  narrowed.
+
 ## 0.1.3
 
 - Updated `ormed_sqlite` to 0.3.0 and raised the package SDK floor to Dart

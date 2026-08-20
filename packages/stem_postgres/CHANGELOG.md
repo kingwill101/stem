@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+- Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
+  facade; the Ormed contextual logger remains an adapter implementation detail.
+- Added conditional terminal-result updates so late completion attempts cannot
+  overwrite an existing terminal state.
+
+## 0.2.0
+
+- Updated the Postgres adapter for Stem 0.3.0 and the capability-aware broker
+  contract.
+- Added the transactional outbox, distributed rate limiter, migration registry,
+  and historical upgrade coverage.
+- Added durable PostgreSQL lock fencing tokens with an additive migration and
+  row-locked acquisition semantics.
+- Historical upgrade coverage verifies that current lock acquisition respects
+  active legacy-schema locks before taking over only after expiry.
+
+## 0.1.3
+
+- Removed the prerelease core dependency range from the published-package
+  manifest.
+- Added a PostgreSQL-backed distributed token-bucket `PostgresRateLimiter`
+  with server-clock refill and transactional row locking.
+- Transactional outbox wrapping and relay now accept the narrow `QueueBroker`
+  contract, so queue-only adapters do not need to implement legacy inspection
+  and dead-letter methods.
+
+## 0.1.2
+
+- Added a PostgreSQL transactional outbox for atomic application writes and
+  task publication records, with leased at-least-once dispatch.
+
 ## 0.1.1
 
 - Updated Ormed dependencies to 0.2.0 for the Postgres adapter stack.
