@@ -7,7 +7,7 @@ environment:
   sdk: ">=3.9.2 <4.0.0"
 
 dependencies:
-  artisanal: ^0.2.0
+  artisanal: ^0.5.0
   stem: ">=0.3.0 <0.4.0"
   stem_redis: ^0.2.0
   stem_postgres: ^0.2.0
