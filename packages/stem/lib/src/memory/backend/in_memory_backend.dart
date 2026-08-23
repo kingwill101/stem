@@ -84,7 +84,7 @@ class InMemoryResultBackend
     final existing = _entries[status.id];
     if (existing != null && existing.expiresAt.isBefore(stemNow())) {
       _remove(status.id);
-    } else if (existing?.status.state.isTerminal == true) {
+    } else if (existing?.status.state.isTerminal ?? false) {
       return false;
     }
 

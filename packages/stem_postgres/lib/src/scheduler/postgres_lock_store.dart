@@ -73,6 +73,30 @@ class PostgresLockStore implements LockStore {
     final now = stemNow().toUtc();
     final expiresAt = now.add(ttl);
     return _connections.runInTransaction((ctx) async {
+      // Insert first so concurrent first-use callers serialize on the unique
+      // key. ON CONFLICT waits for the competing transaction, then the row is
+      // selected and locked below. RETURNING tells us whether this call
+      // created the row, avoiding owner-value heuristics when callers reuse an
+      // owner id.
+      final inserted = await ctx.driver.queryRaw(
+        '''
+INSERT INTO stem_locks
+  (key, namespace, owner, expires_at, created_at, fencing_token)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (key) DO NOTHING
+RETURNING fencing_token
+''',
+        [key, namespace, ownerValue, expiresAt, now, 1],
+      );
+      if (inserted.isNotEmpty) {
+        return _PostgresLock(
+          store: this,
+          key: key,
+          owner: ownerValue,
+          fencingToken: _asInt(inserted.single['fencing_token']),
+        );
+      }
+
       final rows = await ctx.driver.queryRaw(
         '''
 SELECT owner, expires_at, fencing_token
@@ -113,21 +137,7 @@ WHERE key = ? AND namespace = ?
         );
       }
 
-      const fencingToken = 1;
-      await ctx.driver.executeRaw(
-        '''
-INSERT INTO stem_locks
-  (key, namespace, owner, expires_at, created_at, fencing_token)
-VALUES (?, ?, ?, ?, ?, ?)
-''',
-        [key, namespace, ownerValue, expiresAt, now, fencingToken],
-      );
-      return _PostgresLock(
-        store: this,
-        key: key,
-        owner: ownerValue,
-        fencingToken: fencingToken,
-      );
+      throw StateError('Lock row was not created: $namespace/$key');
     });
   }
 

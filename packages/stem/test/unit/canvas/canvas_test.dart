@@ -124,6 +124,42 @@ void main() {
       },
     );
 
+    test('typedChain completes when a result decoder throws', () async {
+      final definition = TaskDefinition<int, int>(
+        name: 'echo',
+        encodeArgs: (value) => {'value': value},
+        decodeResult: (_) => throw const FormatException('invalid result'),
+      );
+
+      await expectLater(
+        canvas
+            .typedChain(definition, 42)
+            .run()
+            .timeout(const Duration(seconds: 1)),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('typedChain completes when its completion callback throws', () async {
+      final definition = TaskDefinition<int, int>(
+        name: 'echo',
+        encodeArgs: (value) => {'value': value},
+        decodeResult: (payload) => (payload! as num).toInt(),
+      );
+
+      await expectLater(
+        canvas
+            .typedChain(definition, 42)
+            .run(
+              onStepCompleted: (_, _, _) {
+                throw StateError('completion callback failed');
+              },
+            )
+            .timeout(const Duration(seconds: 1)),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('chord returns typed body results', () async {
       final result = await canvas.chord<int>(
         body: [

@@ -49,3 +49,56 @@ jobs:
           module: .dagger
           call: all --source=.
           dagger-flags: --progress plain
+
+  cross-platform-packages:
+    name: portable package / ${{ matrix.package }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        include:
+          - package: packages/stem
+            tool: dart
+            test_args: --exclude-tags soak --fail-fast
+          - package: packages/stem_builder
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_sqlite
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_flutter
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_flutter_sqlite
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_memory
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_adapter_tests
+            tool: dart
+            test_args: --fail-fast
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.tool == 'dart'
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - if: matrix.tool == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve package dependencies
+        run: ${{ matrix.tool }} pub get
+        working-directory: ${{ matrix.package }}
+      - name: Check package formatting
+        run: dart format lib test --set-exit-if-changed
+        working-directory: ${{ matrix.package }}
+      - name: Analyze package
+        run: ${{ matrix.tool }} analyze --fatal-infos
+        working-directory: ${{ matrix.package }}
+      - name: Test package
+        run: ${{ matrix.tool }} test ${{ matrix.test_args }}
+        working-directory: ${{ matrix.package }}

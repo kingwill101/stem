@@ -60,5 +60,33 @@ Future<void> main() async {
       await second.release();
       await store.close();
     });
+
+    test(
+      'concurrent first acquisitions return one winner without a conflict',
+      () async {
+        final namespace =
+            'stem_lock_race_${DateTime.now().microsecondsSinceEpoch}';
+        final firstStore = await PostgresLockStore.connect(
+          connectionString,
+          namespace: namespace,
+        );
+        final secondStore = await PostgresLockStore.connect(
+          connectionString,
+          namespace: namespace,
+        );
+        addTearDown(firstStore.close);
+        addTearDown(secondStore.close);
+
+        final results = await Future.wait([
+          firstStore.acquire('new-key', owner: 'first'),
+          secondStore.acquire('new-key', owner: 'second'),
+        ]);
+
+        expect(results.whereType<Lock>(), hasLength(1));
+        for (final result in results.whereType<Lock>()) {
+          await result.release();
+        }
+      },
+    );
   }, config: harness.config);
 }

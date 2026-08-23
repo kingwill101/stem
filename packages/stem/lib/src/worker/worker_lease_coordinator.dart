@@ -80,7 +80,11 @@ class WorkerLeaseCoordinator {
 
     final halfRemaining = Duration(milliseconds: remaining ~/ 2);
     final interval = _clampInterval(halfRemaining);
-    _start(delivery, interval);
+    final leaseDuration = _leaseDuration(
+      delivery,
+      Duration(milliseconds: remaining),
+    );
+    _start(delivery, interval, leaseDuration);
     _onLeaseUpdated(delivery);
   }
 
@@ -90,7 +94,7 @@ class WorkerLeaseCoordinator {
       milliseconds: leaseDuration.inMilliseconds ~/ 2,
     );
     final interval = _clampInterval(halfDuration);
-    _start(delivery, interval);
+    _start(delivery, interval, leaseDuration);
     _onLeaseUpdated(delivery);
   }
 
@@ -117,13 +121,25 @@ class WorkerLeaseCoordinator {
     return value;
   }
 
-  void _start(Delivery delivery, Duration interval) {
+  Duration _leaseDuration(Delivery delivery, Duration remaining) {
+    final configured = delivery.envelope.visibilityTimeout;
+    if (configured != null && configured > Duration.zero) {
+      return configured;
+    }
+    return remaining;
+  }
+
+  void _start(
+    Delivery delivery,
+    Duration interval,
+    Duration leaseDuration,
+  ) {
     cancel(delivery);
     final generation = ++_generationSeed;
     _generations[delivery] = generation;
     final timer = Timer.periodic(interval, (_) {
       if (!_renewalsInFlight.add(delivery)) return;
-      unawaited(_renew(delivery, interval, generation));
+      unawaited(_renew(delivery, interval, leaseDuration, generation));
     });
     _timers[delivery] = timer;
   }
@@ -131,17 +147,18 @@ class WorkerLeaseCoordinator {
   Future<void> _renew(
     Delivery delivery,
     Duration interval,
+    Duration leaseDuration,
     int generation,
   ) async {
     try {
-      await _broker.extendLease(delivery, interval);
+      await _broker.extendLease(delivery, leaseDuration);
       if (!_isCurrent(delivery, generation)) return;
       _onLeaseUpdated(delivery);
       _onLeaseRenewed(delivery);
     } on Object catch (error, stackTrace) {
       if (!_isCurrent(delivery, generation)) return;
       _onRenewalFailure(delivery, error, stackTrace);
-      _start(delivery, _retryInterval(interval));
+      _start(delivery, _retryInterval(interval), leaseDuration);
     } finally {
       _renewalsInFlight.remove(delivery);
     }

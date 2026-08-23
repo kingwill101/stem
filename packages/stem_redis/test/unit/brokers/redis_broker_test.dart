@@ -65,6 +65,40 @@ void main() {
       expect(delTargets.contains('unit:dead:emails'), isTrue);
     });
 
+    test(
+      'extends a pending entry in place without publishing a duplicate',
+      () async {
+        final connection = FakeRedisConnection();
+        final command = FakeRedisCommand(connection);
+        final broker = RedisStreamsBroker.test(
+          connection: connection,
+          command: command,
+          namespace: 'unit',
+          claimInterval: const Duration(seconds: 1),
+        );
+        final delivery = Delivery(
+          envelope: Envelope(name: 'lease.test', args: const {}),
+          receipt: 'unit:stream:default|unit:group:default|consumer|1-0',
+          leaseExpiresAt: DateTime.now().add(const Duration(seconds: 1)),
+        );
+
+        await broker.extendLease(delivery, const Duration(seconds: 5));
+
+        expect(command.sent, hasLength(1));
+        expect(command.sent.single, contains('XCLAIM'));
+        expect(command.sent.single, contains('TIME'));
+        expect(
+          command.sent.where((command) => command.first == 'XACK'),
+          isEmpty,
+        );
+        expect(
+          command.sent.where((command) => command.first == 'ZADD'),
+          isEmpty,
+        );
+        await broker.close();
+      },
+    );
+
     test('subscription cancellation tears down claim timers', () async {
       final connection = FakeRedisConnection();
       final command = FakeRedisCommand(connection);

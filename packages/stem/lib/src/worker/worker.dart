@@ -884,7 +884,7 @@ class Worker {
           }
 
           final priorStatus = await backend.get(envelope.id);
-          if (priorStatus?.state.isTerminal == true) {
+          if (priorStatus?.state.isTerminal ?? false) {
             // An acknowledgement can be lost after the result is durable. Do
             // not execute a redelivered terminal task a second time.
             await _acknowledgements.tryAcknowledge(
@@ -1081,7 +1081,7 @@ class Worker {
           );
 
           final cancellation = TaskCancellationToken(
-            isCancelled: () => _revocationFor(envelope.id)?.terminate == true,
+            isCancelled: () => _revocationFor(envelope.id)?.terminate ?? false,
           );
 
           void checkTermination() {

@@ -90,6 +90,77 @@ tasks:
     cmds:
       - bash ./tool/dagger_test.sh all
 
+  quality:dart:
+    desc: Format and analyze every Dart package.
+    cmds:
+      - |
+        set -euo pipefail
+        for package in \
+          packages/stem \
+          packages/stem_builder \
+          packages/stem_sqlite \
+          packages/stem_memory \
+          packages/stem_adapter_tests \
+          packages/stem_redis \
+          packages/stem_postgres \
+          packages/stem_cli \
+          packages/dashboard; do
+          echo "Checking $package"
+          (
+            cd "$package"
+            dart format lib test --set-exit-if-changed
+            dart analyze --fatal-infos
+          )
+        done
+
+  standalone:dart:
+    desc: Resolve Dart packages outside the workspace dependency graph.
+    cmds:
+      - |
+        set -euo pipefail
+        dart pub get
+        staged_root="$(mktemp -d)"
+        trap 'rm -rf "$staged_root"' EXIT
+        for package in \
+          packages/stem \
+          packages/stem_builder \
+          packages/stem_sqlite \
+          packages/stem_memory \
+          packages/stem_adapter_tests \
+          packages/stem_redis \
+          packages/stem_postgres \
+          packages/stem_cli; do
+          package_root="$staged_root/$(basename "$package")"
+          mkdir -p "$package_root"
+          staged_package="$(dart run tool/stage_workspace.dart \
+            --package "$package" --output "$package_root")"
+          (
+            cd "$staged_package"
+            dart pub get
+          )
+        done
+
+  standalone:flutter:
+    desc: Resolve Flutter packages outside the workspace dependency graph.
+    cmds:
+      - |
+        set -euo pipefail
+        dart pub get
+        staged_root="$(mktemp -d)"
+        trap 'rm -rf "$staged_root"' EXIT
+        for package in \
+          packages/stem_flutter \
+          packages/stem_flutter_sqlite; do
+          package_root="$staged_root/$(basename "$package")"
+          mkdir -p "$package_root"
+          staged_package="$(dart run tool/stage_workspace.dart \
+            --package "$package" --output "$package_root")"
+          (
+            cd "$staged_package"
+            flutter pub get
+          )
+        done
+
   test:flutter:
     desc: Run the Flutter package analysis and tests.
     cmds:
@@ -101,12 +172,14 @@ tasks:
         (
           cd packages/stem_flutter
           flutter pub get
+          dart format lib test --set-exit-if-changed
           flutter analyze --fatal-infos
           flutter test
         )
         (
           cd packages/stem_flutter_sqlite
           flutter pub get
+          dart format lib test --set-exit-if-changed
           flutter analyze --fatal-infos
           flutter test
         )

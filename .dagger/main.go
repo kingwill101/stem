@@ -125,6 +125,7 @@ func (m *StemCi) runFlutterTests(container *dagger.Container) *dagger.Container 
 		"bash",
 		"-c",
 		"set -euo pipefail\n" +
+			"task standalone:flutter\n" +
 			"task test:flutter\n",
 	})
 }
@@ -336,6 +337,9 @@ func (m *StemCi) runTests(container *dagger.Container) *dagger.Container {
 			"if ! command -v flutter >/dev/null 2>&1; then\n" +
 			"  sed -i '/packages\\/stem_flutter/d' pubspec.yaml\n" +
 			"fi\n" +
+			"task deps\n" +
+			"task quality:dart\n" +
+			"task standalone:dart\n" +
 			"task test\n",
 	})
 }

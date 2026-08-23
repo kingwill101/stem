@@ -35,6 +35,38 @@ void main() {
     }
   });
 
+  test('passes the full lease duration instead of the timer cadence', () async {
+    final broker = _RecordingLeaseBroker();
+    final coordinator = WorkerLeaseCoordinator(
+      broker: broker,
+      minimumInterval: const Duration(milliseconds: 5),
+      maximumInterval: const Duration(seconds: 1),
+      onLeaseUpdated: (_) {},
+      onLeaseRenewed: (_) {},
+      onRenewalFailure: (_, error, _) {
+        throw StateError('Unexpected lease renewal failure: $error');
+      },
+    );
+    final delivery = Delivery(
+      envelope: Envelope(
+        name: 'full-lease.test',
+        args: const {},
+        visibilityTimeout: const Duration(milliseconds: 200),
+      ),
+      receipt: 'full-lease-receipt',
+      leaseExpiresAt: DateTime.now().add(const Duration(milliseconds: 200)),
+    );
+
+    coordinator.schedule(delivery);
+    try {
+      await _waitFor(() => broker.attempts >= 1);
+      expect(broker.durations.first, const Duration(milliseconds: 200));
+    } finally {
+      coordinator.cancelAll();
+      broker.dispose();
+    }
+  });
+
   test(
     'restarts a short manually extended lease before the default minimum',
     () async {
@@ -231,10 +263,12 @@ class _RecordingLeaseBroker extends InMemoryBroker {
       );
 
   int attempts = 0;
+  final durations = <Duration>[];
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
     attempts += 1;
+    durations.add(by);
   }
 }
 

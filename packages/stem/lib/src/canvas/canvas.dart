@@ -770,10 +770,10 @@ class Canvas {
           .listen(
             (status) async {
               if (status.state == TaskState.succeeded) {
-                final decoded = step.decode(status.payload);
-                onStepCompleted?.call(index, status, decoded);
-                await subscription.cancel();
                 try {
+                  final decoded = step.decode(status.payload);
+                  onStepCompleted?.call(index, status, decoded);
+                  await subscription.cancel();
                   if (index + 1 < steps.length) {
                     await runStep(index + 1, decoded);
                   } else if (!completer.isCompleted) {
@@ -787,6 +787,7 @@ class Canvas {
                     );
                   }
                 } on Object catch (error, stackTrace) {
+                  await subscription.cancel();
                   if (!completer.isCompleted) {
                     completer.completeError(error, stackTrace);
                   }

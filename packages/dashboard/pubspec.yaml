@@ -32,6 +32,9 @@ dev_dependencies:
 # local to the dashboard rather than changing the published Stem packages here.
 dependency_overrides:
   artisanal: ^0.5.0
+  # routed_auth 0.2.0 currently uses the AuthAdapter/AuthOptions surface from
+  # server_auth 0.1.0; the published 0.2.0 archive is not source-compatible.
+  server_auth: 0.1.0
   stem:
     path: ../stem
   stem_cli:

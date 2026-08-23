@@ -403,7 +403,7 @@ Future<Response> _renderOverviewPartials(
       ),
     ].join('\n');
 
-    return ctx.turboStream(updates);
+    return await ctx.turboStream(updates);
   } on Object catch (error, stack) {
     stemLogger.error(
       'Failed to render overview partials',
@@ -578,10 +578,10 @@ Future<Response> _renderPage(
     final streamPath = dashboardRoute(basePath, '/dash/streams');
 
     if (turbo.isFrameRequest) {
-      return ctx.turboFrame(renderFrame(page, contentWithBasePath));
+      return await ctx.turboFrame(renderFrame(page, contentWithBasePath));
     }
 
-    return ctx.turboHtml(
+    return await ctx.turboHtml(
       renderLayout(
         page,
         contentWithBasePath,
@@ -682,7 +682,7 @@ Future<Response> _enqueueTask(
         actor: 'dashboard',
         summary: 'Task enqueue rejected: queue/task missing.',
       );
-      return ctx.turboSeeOther('$tasksPath?error=missing-fields');
+      return await ctx.turboSeeOther('$tasksPath?error=missing-fields');
     }
 
     final payloadText = (await ctx.postForm('payload')).trim();
@@ -700,7 +700,7 @@ Future<Response> _enqueueTask(
             actor: 'dashboard',
             summary: 'Task enqueue rejected: payload not a JSON object.',
           );
-          return ctx.turboSeeOther('$tasksPath?error=invalid-payload');
+          return await ctx.turboSeeOther('$tasksPath?error=invalid-payload');
         }
       } on Object {
         state.recordAudit(
@@ -710,7 +710,7 @@ Future<Response> _enqueueTask(
           actor: 'dashboard',
           summary: 'Task enqueue rejected: invalid JSON payload.',
         );
-        return ctx.turboSeeOther('$tasksPath?error=invalid-payload');
+        return await ctx.turboSeeOther('$tasksPath?error=invalid-payload');
       }
     }
 
@@ -738,7 +738,7 @@ Future<Response> _enqueueTask(
       summary: 'Queued task "$task" on "$queue".',
       metadata: {'queue': queue, 'task': task},
     );
-    return ctx.turboSeeOther('$tasksPath?flash=queued');
+    return await ctx.turboSeeOther('$tasksPath?flash=queued');
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard enqueue failed',
@@ -784,7 +784,7 @@ Future<Response> _taskAction(
         actor: 'dashboard',
         summary: 'Task action rejected: missing task id.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {'error': 'Task ID is required.'}),
       );
     }
@@ -812,7 +812,7 @@ Future<Response> _taskAction(
             summary: 'Failed to revoke task $taskId.',
             metadata: {'taskId': taskId, 'queue': ?queue},
           );
-          return ctx.turboSeeOther(
+          return await ctx.turboSeeOther(
             _appendRedirectQuery(redirect, {
               'error': 'Unable to revoke task $taskId.',
             }),
@@ -826,7 +826,7 @@ Future<Response> _taskAction(
           summary: 'Revocation requested for $taskId.',
           metadata: {'taskId': taskId, 'queue': ?queue},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'flash': 'Revocation requested for task $taskId.',
           }),
@@ -842,7 +842,7 @@ Future<Response> _taskAction(
             summary: 'Task $taskId was not found in dead letters.',
             metadata: {'taskId': taskId, 'queue': ?queue},
           );
-          return ctx.turboSeeOther(
+          return await ctx.turboSeeOther(
             _appendRedirectQuery(redirect, {
               'error': 'Task $taskId was not found in dead letters.',
             }),
@@ -856,7 +856,7 @@ Future<Response> _taskAction(
           summary: 'Replayed dead-letter task $taskId.',
           metadata: {'taskId': taskId, 'queue': ?queue},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'flash': 'Replayed dead-letter task $taskId as a new envelope.',
           }),
@@ -870,7 +870,7 @@ Future<Response> _taskAction(
           summary: 'Unsupported task action "$action".',
           metadata: {'taskId': taskId},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'error': 'Unsupported task action "$action".',
           }),
@@ -1091,7 +1091,7 @@ Future<Response> _controlWorkers(
         actor: 'dashboard',
         summary: 'Control action missing.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         '$workersPath?error=${Uri.encodeComponent('Control action missing.')}',
       );
     }
@@ -1131,7 +1131,7 @@ Future<Response> _controlWorkers(
       final encodedError = Uri.encodeComponent(
         'Unsupported control action "$rawAction".',
       );
-      return ctx.turboSeeOther('$workersPath?error=$encodedError');
+      return await ctx.turboSeeOther('$workersPath?error=$encodedError');
     }
 
     final payload = <String, Object?>{};
@@ -1188,7 +1188,7 @@ Future<Response> _controlWorkers(
       );
       final encodedMessage = Uri.encodeComponent(message.toString());
       final encodedScope = Uri.encodeComponent(scope);
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         '$workersPath?error=$encodedMessage&scope=$encodedScope',
       );
     }
@@ -1206,7 +1206,7 @@ Future<Response> _controlWorkers(
     );
     final encodedMessage = Uri.encodeComponent(message);
     final encodedScope = Uri.encodeComponent(scope);
-    return ctx.turboSeeOther(
+    return await ctx.turboSeeOther(
       '$workersPath?flash=$encodedMessage&scope=$encodedScope',
     );
   } on Object catch (error, stack) {
@@ -1252,7 +1252,7 @@ Future<Response> _replayDeadLetters(
         actor: 'dashboard',
         summary: 'Replay rejected: missing queue name.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {
           'error': 'Queue name is required for replay.',
         }),
@@ -1286,7 +1286,7 @@ Future<Response> _replayDeadLetters(
         summary: message,
         metadata: {'queue': queue, 'dryRun': dryRun},
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {
           'flash': message,
           'scope': scope,
@@ -1309,7 +1309,7 @@ Future<Response> _replayDeadLetters(
       summary: message,
       metadata: {'queue': queue, 'entries': entryCount, 'dryRun': dryRun},
     );
-    return ctx.turboSeeOther(
+    return await ctx.turboSeeOther(
       _appendRedirectQuery(redirect, {
         'flash': message,
         'scope': scope,
