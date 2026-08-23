@@ -3,6 +3,7 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 workspace:
+  - repodoc
   - packages/stem
   - packages/stem_builder
   - packages/stem_sqlite
