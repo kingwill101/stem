@@ -81,17 +81,19 @@ jobs:
             test_args: --fail-fast
     steps:
       - uses: actions/checkout@v4
+      # The root is a Dart workspace that also contains Flutter packages. Use
+      # Flutter's pub frontend for every portable package so Dart-only entries
+      # can resolve the workspace on both runners as well.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
       - if: matrix.tool == 'dart'
         uses: dart-lang/setup-dart@v1
         with:
           sdk: 3.10.0
-      - if: matrix.tool == 'flutter'
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
       - name: Resolve package dependencies
-        run: ${{ matrix.tool }} pub get
+        run: flutter pub get
         working-directory: ${{ matrix.package }}
       - name: Check package formatting
         run: dart format lib test --set-exit-if-changed
