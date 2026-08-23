@@ -1,3 +1,5 @@
+import 'package:stem/src/core/chord_policy.dart';
+
 /// Metadata keys used for chord coordination.
 class ChordMetadata {
   const ChordMetadata._();
@@ -10,4 +12,10 @@ class ChordMetadata {
 
   /// Identifier of the callback task associated with the chord.
   static const String callbackTaskId = 'stem.chord.callbackTaskId';
+
+  /// Serialized [ChordPolicy] stored on the group descriptor.
+  static const String policy = 'stem.chord.policy';
+
+  /// Failure summaries passed to callbacks for non-failing policies.
+  static const String failures = 'stem.chord.failures';
 }

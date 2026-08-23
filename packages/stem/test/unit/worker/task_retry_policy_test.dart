@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:property_testing/property_testing.dart';
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 

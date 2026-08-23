@@ -1,7 +1,7 @@
 # Stem Signals
 
-> **Note:** This doc is mirrored on the published site at
-> `.site/docs/signals.md`; keep both versions aligned.
+> **Note:** The public version is `.site/docs/core-concepts/signals.md`.
+> This file retains the longer process notes.
 
 Stem exposes Celery-style lifecycle hooks via a strongly typed signal
 dispatcher. Signals supplement middleware so instrumentation, observability,

@@ -105,6 +105,11 @@ class _FakeBroker implements Broker {
   @override
   bool get supportsPriority => true;
 
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+  );
+
   @override
   Future<void> close() async {}
 }
@@ -204,6 +209,54 @@ void main() {
       expect(call.name, 'demo.task');
       expect(call.encodeArgs(), {'value': 42});
       expect(call.resolveOptions(), const TaskOptions());
+    });
+
+    test(
+      'typed handlers decode arguments before invoking application code',
+      () async {
+        final definition = TaskDefinition<_Args, int>.codec(
+          name: 'demo.typed',
+          argsCodec: PayloadCodec<_Args>.map(
+            encode: (args) => {'value': args.value},
+            decode: (payload) => _Args(payload['value'] as int),
+          ),
+        );
+        final handler = definition.handler(
+          entrypoint: (context, args) async => args.value * 2,
+        );
+        final context = TaskContext(
+          id: 'typed-task',
+          attempt: 1,
+          headers: const {},
+          meta: const {},
+          heartbeat: () {},
+          extendLease: (_) async {},
+          progress: (_, {data}) async {},
+        );
+
+        expect(await handler.call(context, {'value': 21}), 42);
+      },
+    );
+
+    test('json definitions can decode arguments for typed handlers', () async {
+      final definition = TaskDefinition<_Args, int>.json(
+        name: 'demo.typed.json',
+        decodeArgsJson: (payload) => _Args(payload['value'] as int),
+      );
+      final handler = definition.handler(
+        entrypoint: (context, args) async => args.value + 1,
+      );
+      final context = TaskContext(
+        id: 'typed-json-task',
+        attempt: 1,
+        headers: const {},
+        meta: const {},
+        heartbeat: () {},
+        extendLease: (_) async {},
+        progress: (_, {data}) async {},
+      );
+
+      expect(await handler.call(context, {'value': 41}), 42);
     });
 
     test('enqueues via Stem.enqueueCall', () async {

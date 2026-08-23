@@ -68,7 +68,7 @@ void main() {
       meta: envelope.meta,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
 
     await middleware.onExecute(context, () async {});
@@ -105,7 +105,7 @@ void main() {
       meta: envelope.meta,
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
 
     await expectLater(

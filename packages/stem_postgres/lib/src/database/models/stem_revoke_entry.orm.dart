@@ -293,8 +293,7 @@ class StemRevokeEntryModelFactory {
 
   static ModelFactoryBuilder<StemRevokeEntry> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemRevokeEntry>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemRevokeEntry>(
     generatorProvider: generatorProvider,
   );
 }

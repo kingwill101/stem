@@ -9,7 +9,8 @@ import 'package:stem_sqlite/src/connection.dart';
 import 'package:stem_sqlite/src/models/models.dart';
 
 /// SQLite-backed implementation of [ResultBackend].
-class SqliteResultBackend implements ResultBackend {
+class SqliteResultBackend
+    implements ResultBackend, AtomicTerminalResultBackend {
   SqliteResultBackend._(
     this._connections, {
     required this.namespace,
@@ -144,6 +145,9 @@ class SqliteResultBackend implements ResultBackend {
   Timer? _cleanupTimer;
   bool _closed = false;
 
+  @override
+  bool get supportsAtomicTerminalWrites => true;
+
   /// Closes the backend and releases any database resources.
   @override
   Future<void> close() async {
@@ -197,6 +201,41 @@ class SqliteResultBackend implements ResultBackend {
     });
 
     _watchers[taskId]?.add(status);
+  }
+
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    final now = stemNow();
+    final expiresAt = now.add(ttl ?? defaultTtl);
+    final updated = await _connections.runInTransaction((txn) {
+      final query = txn
+          .query<StemTaskResult>()
+          .whereEquals('id', status.id)
+          .whereEquals('namespace', namespace)
+          .where('expiresAt', now, PredicateOperator.greaterThan)
+          .where(
+            'state',
+            const ['succeeded', 'failed', 'cancelled'],
+            PredicateOperator.notInValues,
+          );
+      return query.update({
+        'state': status.state.name,
+        'payload': _wrapScalarJson(status.payload),
+        'error': status.error?.toJson(),
+        'attempt': status.attempt,
+        'meta': status.meta,
+        'expiresAt': expiresAt,
+        'updatedAt': now,
+      });
+    });
+    final applied = updated > 0;
+    if (applied) {
+      _watchers[status.id]?.add(status);
+    }
+    return applied;
   }
 
   @override
@@ -434,9 +473,11 @@ class SqliteResultBackend implements ResultBackend {
   @override
   Future<void> expire(String taskId, Duration ttl) async {
     final expiresAt = stemNow().add(ttl);
-    await _context.repository<StemTaskResult>().update(
-      StemTaskResultUpdateDto(expiresAt: expiresAt),
-      where: StemTaskResultPartial(id: taskId, namespace: namespace),
+    await _connections.runInTransaction(
+      (txn) => txn.repository<StemTaskResult>().update(
+        StemTaskResultUpdateDto(expiresAt: expiresAt),
+        where: StemTaskResultPartial(id: taskId, namespace: namespace),
+      ),
     );
   }
 

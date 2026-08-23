@@ -25,6 +25,12 @@ class _FakeBroker implements Broker {
   @override
   bool get supportsPriority => false;
 
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: false,
+    supportsPriorityOrdering: false,
+    supportsQueueInspection: true,
+  );
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

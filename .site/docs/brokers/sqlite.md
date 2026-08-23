@@ -26,7 +26,7 @@ Add the adapter package:
 
 ```yaml
 dependencies:
-  stem_sqlite: ^0.1.1
+  stem_sqlite: ^0.2.0
 ```
 
 ## Quick start (broker)
@@ -80,6 +80,12 @@ contention:
 - **Keep producers off the backend** (let workers be the only writers).
 - **Do not share a single SQLite file** between broker and backend.
 
+Stem serializes its own transactional broker/backend mutations when multiple
+handles point at the same file, which prevents savepoint corruption and
+in-process writer races. This coordination does not cover unrelated processes
+or tools opening the file, and it cannot turn SQLite into a multi-host queue.
+Use separate files when throughput matters.
+
 A simple layout:
 
 ```
@@ -116,6 +122,9 @@ SQLite brokers are intentionally minimal:
 - **Single-queue subscriptions only** (one queue per worker subscription).
 - **Polling-based delivery** (latency depends on `pollInterval`).
 - **Single-writer constraint** (plan your processes and DB files accordingly).
+- Stem coordinates in-process writes across its broker, backend, workflow, and
+  control handles, but external writers and separate processes still need
+  SQLite-compatible locking discipline.
 
 If you need cross-process broadcast control, multi-queue consumption, or
 multi-host scaling,

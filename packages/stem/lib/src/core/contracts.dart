@@ -33,6 +33,7 @@ library;
 import 'dart:async';
 import 'dart:collection';
 
+import 'package:meta/meta.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/payload_map.dart';
@@ -92,9 +93,67 @@ class RoutingSubscription {
   }
 }
 
-/// Abstract broker interface implemented by queue adapters (Redis, SQS, etc).
-/// Since: 0.1.0
-abstract class Broker {
+/// Delivery guarantee advertised by a broker adapter.
+enum BrokerDeliveryGuarantee {
+  /// A delivery may be observed more than once after crashes or lease loss.
+  atLeastOnce,
+
+  /// A delivery is removed before handler execution and may be lost on crash.
+  atMostOnce,
+
+  /// The adapter does not declare a delivery guarantee.
+  unknown,
+}
+
+/// Runtime-declared capabilities of a broker adapter.
+///
+/// This is intentionally additive to the [Broker] contract. Existing
+/// adapters can continue implementing the legacy getters while callers use a
+/// single snapshot when deciding whether to expose optional operations.
+class BrokerCapabilities {
+  /// Creates a broker capability snapshot.
+  const BrokerCapabilities({
+    required this.supportsDelayedDelivery,
+    required this.supportsPriorityOrdering,
+    this.deliveryGuarantee = BrokerDeliveryGuarantee.unknown,
+    this.supportsBroadcastFanout = false,
+    this.supportsQueueInspection = false,
+    this.supportsLeaseExtension = false,
+    this.supportsDeadLettering = false,
+    this.supportsDeadLetterReplay = false,
+  });
+
+  /// Whether the adapter supports broker-native delayed delivery.
+  final bool supportsDelayedDelivery;
+
+  /// Delivery guarantee callers can rely on during worker crashes.
+  final BrokerDeliveryGuarantee deliveryGuarantee;
+
+  /// Whether priority ordering is part of the adapter's delivery contract.
+  final bool supportsPriorityOrdering;
+
+  /// Whether one published broadcast message is delivered to each subscriber.
+  final bool supportsBroadcastFanout;
+
+  /// Whether pending and in-flight queue counts are available.
+  final bool supportsQueueInspection;
+
+  /// Whether an active delivery lease can be extended.
+  final bool supportsLeaseExtension;
+
+  /// Whether failed deliveries can be retained in a dead-letter store.
+  final bool supportsDeadLettering;
+
+  /// Whether dead-letter entries can be replayed into an active queue.
+  final bool supportsDeadLetterReplay;
+}
+
+/// Core queue operations required to publish and consume task deliveries.
+///
+/// This is the narrow transport surface for new adapter integrations. [Broker]
+/// remains the compatibility facade while optional operational capabilities are
+/// migrated to the interfaces below.
+abstract interface class QueueBroker {
   /// Publishes the given [envelope] using [routing] metadata when provided.
   ///
   /// When [routing] is omitted, brokers MUST fall back to [Envelope.queue] and
@@ -121,6 +180,65 @@ abstract class Broker {
   /// If [requeue] is true, the message is requeued for retry.
   Future<void> nack(Delivery delivery, {bool requeue = true});
 
+  /// Releases resources held by the transport.
+  Future<void> close();
+}
+
+/// Optional broker capability for extending active delivery leases.
+// ignore: one_member_abstracts
+abstract interface class LeaseBroker {
+  /// Extends the lease for the [delivery] by [by].
+  Future<void> extendLease(Delivery delivery, Duration by);
+}
+
+/// Optional broker capability for queue-depth inspection.
+abstract interface class InspectableBroker {
+  /// Returns the number of pending messages for [queue], if supported.
+  Future<int?> pendingCount(String queue);
+
+  /// Returns the number of in-flight messages for [queue], if supported.
+  Future<int?> inflightCount(String queue);
+}
+
+/// Optional broker capability for dead-letter inspection and replay.
+abstract interface class DeadLetterBroker {
+  /// Moves a delivery to the dead-letter store.
+  Future<void> deadLetter(
+    Delivery delivery, {
+    String? reason,
+    Map<String, Object?>? meta,
+  });
+
+  /// Lists dead letter queue entries for [queue].
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  });
+
+  /// Retrieves a single dead letter entry by envelope [id].
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id);
+
+  /// Replays dead letter entries back onto the active queue.
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  });
+
+  /// Removes dead letter entries from [queue].
+  Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit});
+}
+
+/// Abstract broker compatibility facade implemented by queue adapters.
+///
+/// New adapters should implement [QueueBroker] plus only the optional
+/// capability interfaces they actually support. Existing adapters may
+/// continue implementing this broader contract during the migration period.
+/// Since: 0.1.0
+abstract class Broker implements QueueBroker {
   /// Sends the [delivery] to the dead letter queue.
   ///
   /// [reason] provides the reason for dead lettering, and [meta] additional
@@ -129,13 +247,15 @@ abstract class Broker {
     Delivery delivery, {
     String? reason,
     Map<String, Object?>? meta,
-  });
+  }) => throw UnsupportedError('Dead-lettering is not supported.');
 
   /// Removes all messages from the [queue].
-  Future<void> purge(String queue);
+  Future<void> purge(String queue) =>
+      throw UnsupportedError('Queue purging is not supported.');
 
   /// Extends the lease for the [delivery] by the [by] duration.
-  Future<void> extendLease(Delivery delivery, Duration by);
+  Future<void> extendLease(Delivery delivery, Duration by) =>
+      throw UnsupportedError('Lease extension is not supported.');
 
   /// Returns the number of pending messages for [queue], if supported.
   Future<int?> pendingCount(String queue) async => null;
@@ -156,11 +276,12 @@ abstract class Broker {
     String queue, {
     int limit = 50,
     int offset = 0,
-  });
+  }) => throw UnsupportedError('Dead-letter inspection is not supported.');
 
   /// Retrieves a single dead letter entry by envelope [id], or `null` if not
   /// found.
-  Future<DeadLetterEntry?> getDeadLetter(String queue, String id);
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) =>
+      throw UnsupportedError('Dead-letter inspection is not supported.');
 
   /// Replays at most [limit] dead letter entries back onto the active queue.
   ///
@@ -175,17 +296,214 @@ abstract class Broker {
     DateTime? since,
     Duration? delay,
     bool dryRun = false,
-  });
+  }) => throw UnsupportedError('Dead-letter replay is not supported.');
 
   /// Removes dead letter entries from [queue].
   ///
   /// When [since] is provided, only entries with `deadAt` greater than or equal
   /// to the timestamp must be removed. When [limit] is set, at most that many
   /// entries are purged. Returns the number of entries removed.
-  Future<int> purgeDeadLetters(String queue, {DateTime? since, int? limit});
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) => throw UnsupportedError('Dead-letter purging is not supported.');
 
   /// Releases any resources held by the broker.
+  @override
   Future<void> close() async {}
+}
+
+/// Optional provider interface for adapters with capability declarations that
+/// are more precise than the legacy [Broker] getters.
+abstract interface class BrokerCapabilitiesProvider {
+  /// Returns the adapter's optional-operation capabilities.
+  BrokerCapabilities get capabilities;
+}
+
+/// Resolves capabilities without making [Broker] implementations add a new
+/// required member. External adapters therefore remain source-compatible and
+/// still receive a useful snapshot from the legacy getters.
+extension BrokerCapabilitiesExtension on Broker {
+  /// Returns the adapter's optional-operation capabilities.
+  BrokerCapabilities get capabilities {
+    if (this is BrokerCapabilitiesProvider) {
+      return (this as BrokerCapabilitiesProvider).capabilities;
+    }
+    return BrokerCapabilities(
+      supportsDelayedDelivery: supportsDelayed,
+      supportsPriorityOrdering: supportsPriority,
+    );
+  }
+}
+
+/// Resolves capabilities for code that accepts the narrow [QueueBroker] type.
+///
+/// Queue-only adapters without a capability provider report only the
+/// operations guaranteed by [QueueBroker]. This avoids making optional
+/// operations appear available merely because the caller received a transport
+/// through the narrow interface.
+extension QueueBrokerCapabilitiesExtension on QueueBroker {
+  /// Returns the adapter's optional-operation capabilities.
+  BrokerCapabilities get capabilities {
+    if (this is BrokerCapabilitiesProvider) {
+      return (this as BrokerCapabilitiesProvider).capabilities;
+    }
+    if (this is Broker) return (this as Broker).capabilities;
+    return const BrokerCapabilities(
+      supportsDelayedDelivery: false,
+      supportsPriorityOrdering: false,
+    );
+  }
+}
+
+/// Optional operations for code that accepts the narrow [QueueBroker] type.
+///
+/// The extension first uses an explicit capability interface, then falls back
+/// to the legacy [Broker] facade. This preserves existing adapters while
+/// allowing new queue-only adapters to omit unsupported operations entirely.
+extension QueueBrokerOptionalOperations on QueueBroker {
+  /// Extends a delivery lease when the adapter supports leases.
+  Future<void> extendLease(Delivery delivery, Duration by) {
+    if (this is LeaseBroker) {
+      return (this as LeaseBroker).extendLease(delivery, by);
+    }
+    if (this is Broker) {
+      return (this as Broker).extendLease(delivery, by);
+    }
+    throw UnsupportedError('Lease extension is not supported.');
+  }
+
+  /// Sends a delivery to the dead-letter store when supported.
+  Future<void> deadLetter(
+    Delivery delivery, {
+    String? reason,
+    Map<String, Object?>? meta,
+  }) {
+    if (this is DeadLetterBroker) {
+      return (this as DeadLetterBroker).deadLetter(
+        delivery,
+        reason: reason,
+        meta: meta,
+      );
+    }
+    if (this is Broker) {
+      return (this as Broker).deadLetter(
+        delivery,
+        reason: reason,
+        meta: meta,
+      );
+    }
+    throw UnsupportedError('Dead-lettering is not supported.');
+  }
+
+  /// Removes all messages from a queue when supported.
+  Future<void> purge(String queue) {
+    if (this is Broker) return (this as Broker).purge(queue);
+    throw UnsupportedError('Queue purging is not supported.');
+  }
+
+  /// Returns a pending queue count when supported.
+  Future<int?> pendingCount(String queue) {
+    if (this is InspectableBroker) {
+      return (this as InspectableBroker).pendingCount(queue);
+    }
+    if (this is Broker) return (this as Broker).pendingCount(queue);
+    return Future<int?>.value();
+  }
+
+  /// Returns an in-flight queue count when supported.
+  Future<int?> inflightCount(String queue) {
+    if (this is InspectableBroker) {
+      return (this as InspectableBroker).inflightCount(queue);
+    }
+    if (this is Broker) return (this as Broker).inflightCount(queue);
+    return Future<int?>.value();
+  }
+
+  /// Lists dead-letter entries when the adapter supports inspection.
+  Future<DeadLetterPage> listDeadLetters(
+    String queue, {
+    int limit = 50,
+    int offset = 0,
+  }) {
+    if (this is DeadLetterBroker) {
+      return (this as DeadLetterBroker).listDeadLetters(
+        queue,
+        limit: limit,
+        offset: offset,
+      );
+    }
+    if (this is Broker) {
+      return (this as Broker).listDeadLetters(
+        queue,
+        limit: limit,
+        offset: offset,
+      );
+    }
+    throw UnsupportedError('Dead-letter inspection is not supported.');
+  }
+
+  /// Retrieves one dead-letter entry when supported.
+  Future<DeadLetterEntry?> getDeadLetter(String queue, String id) {
+    if (this is DeadLetterBroker) {
+      return (this as DeadLetterBroker).getDeadLetter(queue, id);
+    }
+    if (this is Broker) return (this as Broker).getDeadLetter(queue, id);
+    throw UnsupportedError('Dead-letter inspection is not supported.');
+  }
+
+  /// Replays dead-letter entries when supported.
+  Future<DeadLetterReplayResult> replayDeadLetters(
+    String queue, {
+    int limit = 50,
+    DateTime? since,
+    Duration? delay,
+    bool dryRun = false,
+  }) {
+    if (this is DeadLetterBroker) {
+      return (this as DeadLetterBroker).replayDeadLetters(
+        queue,
+        limit: limit,
+        since: since,
+        delay: delay,
+        dryRun: dryRun,
+      );
+    }
+    if (this is Broker) {
+      return (this as Broker).replayDeadLetters(
+        queue,
+        limit: limit,
+        since: since,
+        delay: delay,
+        dryRun: dryRun,
+      );
+    }
+    throw UnsupportedError('Dead-letter replay is not supported.');
+  }
+
+  /// Purges dead-letter entries when supported.
+  Future<int> purgeDeadLetters(
+    String queue, {
+    DateTime? since,
+    int? limit,
+  }) {
+    if (this is DeadLetterBroker) {
+      return (this as DeadLetterBroker).purgeDeadLetters(
+        queue,
+        since: since,
+        limit: limit,
+      );
+    }
+    if (this is Broker) {
+      return (this as Broker).purgeDeadLetters(
+        queue,
+        since: since,
+        limit: limit,
+      );
+    }
+    throw UnsupportedError('Dead-letter purging is not supported.');
+  }
 }
 
 /// Logical task status across enqueue, running, success, failure states.
@@ -904,6 +1222,34 @@ abstract class ResultBackend {
   Future<void> close() async {}
 }
 
+/// Optional atomic terminal-state arbitration for result backends.
+///
+/// Workers can receive the same delivery more than once across processes. A
+/// backend implementing this capability must persist a [TaskStatus] only when
+/// the current record is absent or non-terminal, and must do that check and
+/// write atomically. It returns `true` for the writer that won the terminal
+/// state and `false` when another terminal state was already persisted.
+///
+/// Implementations should normally be used after the producer has created the
+/// task's initial queued record. A backend may return `false` when a task
+/// record is absent if its storage cannot atomically create-and-arbitrate a
+/// missing row.
+///
+/// This is deliberately separate from [ResultBackend] so existing custom
+/// backends remain source compatible. Workers fall back to [ResultBackend.set]
+/// for backends that do not advertise this capability; that fallback is not a
+/// cross-process first-writer-wins guarantee.
+abstract interface class AtomicTerminalResultBackend {
+  /// Whether this backend provides a cross-process atomic terminal write.
+  bool get supportsAtomicTerminalWrites;
+
+  /// Attempts to persist [status] as the task's terminal state.
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  });
+}
+
 /// Schedule entry persisted by a Beat-like scheduler.
 class ScheduleEntry {
   /// Creates a schedule entry for a recurring task.
@@ -1332,8 +1678,8 @@ class TaskOptions {
       maxRetries: (json['maxRetries'] as num?)?.toInt() ?? 0,
       softTimeLimit: _durationFromJson(json['softTimeLimitMs']),
       hardTimeLimit: _durationFromJson(json['hardTimeLimitMs']),
-      rateLimit: json['rateLimit'] as String?,
-      groupRateLimit: json['groupRateLimit'] as String?,
+      rateLimit: RateLimit.parse(json['rateLimit']),
+      groupRateLimit: RateLimit.parse(json['groupRateLimit']),
       groupRateKey: json['groupRateKey'] as String?,
       groupRateKeyHeader: json['groupRateKeyHeader'] as String? ?? 'tenant',
       groupRateLimiterFailureMode: failureMode,
@@ -1359,11 +1705,11 @@ class TaskOptions {
   final Duration? hardTimeLimit;
 
   /// The rate limit for tasks with these options.
-  final String? rateLimit;
+  final RateLimit? rateLimit;
 
   /// Group-scoped rate limit shared by tasks that resolve to
   /// the same group key.
-  final String? groupRateLimit;
+  final RateLimit? groupRateLimit;
 
   /// Optional static group key used for group-scoped rate limiting.
   final String? groupRateKey;
@@ -1398,8 +1744,8 @@ class TaskOptions {
     int? maxRetries,
     Duration? softTimeLimit,
     Duration? hardTimeLimit,
-    String? rateLimit,
-    String? groupRateLimit,
+    RateLimit? rateLimit,
+    RateLimit? groupRateLimit,
     String? groupRateKey,
     String? groupRateKeyHeader,
     RateLimiterFailureMode? groupRateLimiterFailureMode,
@@ -1436,8 +1782,8 @@ class TaskOptions {
     'maxRetries': maxRetries,
     'softTimeLimitMs': softTimeLimit?.inMilliseconds,
     'hardTimeLimitMs': hardTimeLimit?.inMilliseconds,
-    'rateLimit': rateLimit,
-    'groupRateLimit': groupRateLimit,
+    'rateLimit': rateLimit?.toString(),
+    'groupRateLimit': groupRateLimit?.toString(),
     'groupRateKey': groupRateKey,
     'groupRateKeyHeader': groupRateKeyHeader,
     'groupRateLimiterFailureMode': groupRateLimiterFailureMode.name,
@@ -2252,6 +2598,9 @@ abstract interface class TaskExecutionContext
   /// Metadata for the task invocation.
   Map<String, Object?> get meta;
 
+  /// Cooperative cancellation state for this invocation.
+  TaskCancellationToken get cancellation;
+
   /// Notify the worker that the task is still running.
   void heartbeat();
 
@@ -2281,6 +2630,54 @@ abstract interface class TaskExecutionContext
     Map<String, Object?> meta,
     TaskEnqueueOptions? enqueueOptions,
   });
+}
+
+/// Cooperative cancellation state exposed to task code.
+///
+/// Cancellation is advisory for inline handlers: task code must call
+/// [throwIfCancelled] at safe points. Isolate-backed handlers can still be
+/// terminated by the worker's hard timeout or hard shutdown path.
+class TaskCancellationToken {
+  /// Creates a token whose state is optionally resolved by [isCancelled].
+  TaskCancellationToken({bool Function()? isCancelled})
+    : _isCancelled = isCancelled,
+      _state = _CancellationState();
+
+  /// Creates a token that is never cancelled.
+  const TaskCancellationToken.none() : _isCancelled = null, _state = null;
+
+  final bool Function()? _isCancelled;
+  final _CancellationState? _state;
+
+  /// Whether cancellation has been requested.
+  bool get isCancellationRequested =>
+      (_state?.cancelled ?? false) || (_isCancelled?.call() ?? false);
+
+  /// Marks this token as cancelled.
+  void cancel() {
+    final state = _state;
+    if (state != null) state.cancelled = true;
+  }
+
+  /// Throws when cancellation has been requested.
+  void throwIfCancelled() {
+    if (isCancellationRequested) {
+      throw const TaskCancellationException();
+    }
+  }
+}
+
+class _CancellationState {
+  bool cancelled = false;
+}
+
+/// Thrown when a task cooperatively observes cancellation.
+class TaskCancellationException implements Exception {
+  /// Creates a cancellation exception.
+  const TaskCancellationException();
+
+  @override
+  String toString() => 'Task execution was cancelled';
 }
 
 /// Shared task-progress helpers for execution contexts.
@@ -2334,6 +2731,7 @@ class TaskContext implements TaskExecutionContext {
       Map<String, Object?>? data,
     })
     progress,
+    this.cancellation = const TaskCancellationToken.none(),
     this.args = const {},
     this.enqueuer,
     this.workflows,
@@ -2360,6 +2758,9 @@ class TaskContext implements TaskExecutionContext {
   /// Metadata for the task.
   @override
   final Map<String, Object?> meta;
+
+  @override
+  final TaskCancellationToken cancellation;
   final void Function() _heartbeat;
   final Future<void> Function(Duration) _extendLease;
   final Future<void> Function(
@@ -2411,7 +2812,7 @@ class TaskContext implements TaskExecutionContext {
       ..addAll(headers);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = <String, Object?>{
-      if (scopeMeta != null) ...scopeMeta,
+      ...?scopeMeta,
       ...this.meta,
       ...meta,
     };
@@ -2474,7 +2875,7 @@ class TaskContext implements TaskExecutionContext {
       ..addAll(call.headers);
     final scopeMeta = TaskEnqueueScope.currentMeta();
     final mergedMeta = <String, Object?>{
-      if (scopeMeta != null) ...scopeMeta,
+      ...?scopeMeta,
       ...meta,
       ...call.meta,
     };
@@ -2621,6 +3022,31 @@ class TaskContext implements TaskExecutionContext {
   }
 }
 
+/// Selects the isolate in which a task handler executes.
+enum TaskExecutionMode {
+  /// Runs the handler in the worker's coordinator isolate.
+  ///
+  /// A hard time limit stops the worker from awaiting the handler, but Dart
+  /// cannot forcibly cancel arbitrary inline asynchronous work. Inline code
+  /// should therefore observe [TaskExecutionContext.cancellation] at safe
+  /// points when it needs cooperative cancellation.
+  inline,
+
+  /// Runs the handler through the worker's managed isolate pool.
+  ///
+  /// The handler must provide a top-level [TaskEntrypoint]. The worker can
+  /// terminate the execution isolate when a hard time limit or hard shutdown
+  /// is reached.
+  isolate,
+}
+
+/// Optional provider for handlers that explicitly declare their execution
+/// mode.
+abstract interface class TaskExecutionModeProvider {
+  /// Declares where the handler executes.
+  TaskExecutionMode get executionMode;
+}
+
 /// Runtime task handler.
 /// Since: 0.1.0
 abstract class TaskHandler<R> {
@@ -2637,8 +3063,93 @@ abstract class TaskHandler<R> {
   Future<R> call(TaskContext context, Map<String, Object?> args);
 
   /// Optional entrypoint that allows this task to execute inside an isolate
-  /// worker. When `null`, the handler runs in the coordinator isolate.
+  /// worker. When `null`, the default execution mode is
+  /// [TaskExecutionMode.inline].
   TaskEntrypoint? get isolateEntrypoint => null;
+}
+
+/// Resolves the execution mode for a legacy or explicitly-declared handler.
+extension TaskHandlerExecutionModeX<R> on TaskHandler<R> {
+  /// Returns the explicit mode when the handler provides one, otherwise
+  /// preserves the historical entrypoint-based behavior.
+  ///
+  /// Declaring [TaskExecutionMode.isolate] without an entrypoint is rejected
+  /// by the worker with a descriptive error.
+  TaskExecutionMode get executionMode {
+    final provider = this;
+    if (provider is TaskExecutionModeProvider) {
+      return (provider as TaskExecutionModeProvider).executionMode;
+    }
+    return isolateEntrypoint == null
+        ? TaskExecutionMode.inline
+        : TaskExecutionMode.isolate;
+  }
+}
+
+/// Typed task handler for the recommended manual registration path.
+///
+/// The runtime still lowers task arguments to the durable map transport, but
+/// application code receives [TArgs] and returns [TResult]. Generated task
+/// adapters can use the same contract while keeping transport decoding out of
+/// user code.
+class TypedTaskHandler<TArgs, TResult>
+    implements TaskHandler<TResult>, TaskExecutionModeProvider {
+  /// Creates a typed task handler backed by [definition].
+  const TypedTaskHandler({
+    required this.definition,
+    required this.entrypoint,
+    this.argsDecoder,
+    this.isolateEntrypoint,
+    TaskExecutionMode? executionMode,
+  }) : _executionMode = executionMode;
+
+  /// Typed task definition used for naming, options, metadata, and results.
+  final TaskDefinition<TArgs, TResult> definition;
+
+  /// Typed application handler.
+  final Future<TResult> Function(TaskExecutionContext context, TArgs args)
+  entrypoint;
+
+  /// Optional decoder for definitions that only provide an encoder.
+  final TaskArgsDecoder<TArgs>? argsDecoder;
+
+  @override
+  String get name => definition.name;
+
+  @override
+  TaskOptions get options => definition.defaultOptions;
+
+  @override
+  TaskMetadata get metadata => definition.metadata;
+
+  /// Optional top-level adapter used when the task is dispatched to an
+  /// execution isolate. Generated handlers provide this adapter so the
+  /// durable map transport is decoded inside the child isolate.
+  @override
+  final TaskEntrypoint? isolateEntrypoint;
+
+  final TaskExecutionMode? _executionMode;
+
+  /// Explicit execution mode, or the mode inferred from
+  /// [isolateEntrypoint] when omitted.
+  @override
+  TaskExecutionMode get executionMode =>
+      _executionMode ??
+      (isolateEntrypoint == null
+          ? TaskExecutionMode.inline
+          : TaskExecutionMode.isolate);
+
+  @override
+  Future<TResult> call(TaskContext context, Map<String, Object?> args) async {
+    final decoder = argsDecoder ?? definition.decodeArgs;
+    if (decoder == null) {
+      throw StateError(
+        'Task definition "${definition.name}" does not provide an argument '
+        'decoder for TypedTaskHandler.',
+      );
+    }
+    return entrypoint(context, decoder(args));
+  }
 }
 
 /// Registry mapping task names to handler implementations.
@@ -2729,6 +3240,9 @@ class TaskMetadata {
 /// Encodes strongly typed task arguments into a JSON-ready map.
 typedef TaskArgsEncoder<TArgs> = Map<String, Object?> Function(TArgs args);
 
+/// Decodes persisted task arguments into the typed handler input.
+typedef TaskArgsDecoder<TArgs> = TArgs Function(Map<String, Object?> args);
+
 /// Builds metadata for a task invocation using its arguments.
 typedef TaskMetaBuilder<TArgs> = Map<String, Object?> Function(TArgs args);
 
@@ -2760,6 +3274,7 @@ class TaskDefinition<TArgs, TResult> {
   const TaskDefinition({
     required this.name,
     required TaskArgsEncoder<TArgs> encodeArgs,
+    this.decodeArgs,
     TaskMetaBuilder<TArgs>? encodeMeta,
     this.defaultOptions = const TaskOptions(),
     this.metadata = const TaskMetadata(),
@@ -2779,6 +3294,7 @@ class TaskDefinition<TArgs, TResult> {
     return TaskDefinition<TArgs, TResult>(
       name: name,
       encodeArgs: (args) => _encodeCodecArgs(name, argsCodec, args),
+      decodeArgs: (args) => argsCodec.decode(args),
       encodeMeta: encodeMeta,
       defaultOptions: defaultOptions,
       metadata: _metadataWithResultCodec(name, metadata, resultCodec),
@@ -2790,6 +3306,9 @@ class TaskDefinition<TArgs, TResult> {
   /// `toJson()`.
   factory TaskDefinition.json({
     required String name,
+    TArgs Function(Map<String, dynamic> payload)? decodeArgsJson,
+    TArgs Function(Map<String, dynamic> payload, int version)?
+    decodeArgsVersionedJson,
     TaskMetaBuilder<TArgs>? encodeMeta,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
@@ -2804,6 +3323,23 @@ class TaskDefinition<TArgs, TResult> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
+    assert(
+      decodeArgsJson == null || decodeArgsVersionedJson == null,
+      'Specify either decodeArgsJson or decodeArgsVersionedJson, not both.',
+    );
+    final argsCodec = decodeArgsVersionedJson != null
+        ? PayloadCodec<TArgs>.versionedJson(
+            version: defaultDecodeVersion ?? 1,
+            decode: decodeArgsVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: argsTypeName ?? '$TArgs',
+          )
+        : (decodeArgsJson == null
+              ? null
+              : PayloadCodec<TArgs>.json(
+                  decode: decodeArgsJson,
+                  typeName: argsTypeName ?? '$TArgs',
+                ));
     final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: defaultDecodeVersion ?? 1,
@@ -2820,6 +3356,7 @@ class TaskDefinition<TArgs, TResult> {
     return TaskDefinition<TArgs, TResult>(
       name: name,
       encodeArgs: (args) => _encodeJsonArgs(args, argsTypeName ?? '$TArgs'),
+      decodeArgs: argsCodec?.decode,
       encodeMeta: encodeMeta,
       defaultOptions: defaultOptions,
       metadata: _metadataWithResultCodec(name, metadata, resultCodec),
@@ -2832,6 +3369,9 @@ class TaskDefinition<TArgs, TResult> {
   factory TaskDefinition.versionedJson({
     required String name,
     required int version,
+    TArgs Function(Map<String, dynamic> payload)? decodeArgsJson,
+    TArgs Function(Map<String, dynamic> payload, int version)?
+    decodeArgsVersionedJson,
     TaskMetaBuilder<TArgs>? encodeMeta,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
@@ -2846,6 +3386,23 @@ class TaskDefinition<TArgs, TResult> {
       decodeResultJson == null || decodeResultVersionedJson == null,
       'Specify either decodeResultJson or decodeResultVersionedJson, not both.',
     );
+    assert(
+      decodeArgsJson == null || decodeArgsVersionedJson == null,
+      'Specify either decodeArgsJson or decodeArgsVersionedJson, not both.',
+    );
+    final argsCodec = decodeArgsVersionedJson != null
+        ? PayloadCodec<TArgs>.versionedJson(
+            version: version,
+            decode: decodeArgsVersionedJson,
+            defaultDecodeVersion: defaultDecodeVersion,
+            typeName: argsTypeName ?? '$TArgs',
+          )
+        : (decodeArgsJson == null
+              ? null
+              : PayloadCodec<TArgs>.json(
+                  decode: decodeArgsJson,
+                  typeName: argsTypeName ?? '$TArgs',
+                ));
     final resultCodec = decodeResultVersionedJson != null
         ? PayloadCodec<TResult>.versionedJson(
             version: version,
@@ -2866,6 +3423,7 @@ class TaskDefinition<TArgs, TResult> {
         version: version,
         typeName: argsTypeName ?? '$TArgs',
       ),
+      decodeArgs: argsCodec?.decode,
       encodeMeta: encodeMeta,
       defaultOptions: defaultOptions,
       metadata: _metadataWithResultCodec(name, metadata, resultCodec),
@@ -3134,6 +3692,9 @@ class TaskDefinition<TArgs, TResult> {
   /// Optional decoder for converting persisted payloads into a typed result.
   final TaskResultDecoder<TResult>? decodeResult;
 
+  /// Optional decoder used by typed handler adapters.
+  final TaskArgsDecoder<TArgs>? decodeArgs;
+
   final TaskArgsEncoder<TArgs> _encodeArgs;
   final TaskMetaBuilder<TArgs>? _encodeMeta;
 
@@ -3215,6 +3776,27 @@ class TaskDefinition<TArgs, TResult> {
   /// Encodes arguments into a JSON-ready map.
   Map<String, Object?> encodeArgs(TArgs args) => _encodeArgs(args);
 
+  /// Creates a typed inline handler for this definition.
+  ///
+  /// When [executionMode] is omitted, the mode is inferred from
+  /// [isolateEntrypoint]. Set it explicitly when the execution guarantee is
+  /// part of the task's contract.
+  TypedTaskHandler<TArgs, TResult> handler({
+    required Future<TResult> Function(TaskExecutionContext context, TArgs args)
+    entrypoint,
+    TaskArgsDecoder<TArgs>? argsDecoder,
+    TaskEntrypoint? isolateEntrypoint,
+    TaskExecutionMode? executionMode,
+  }) {
+    return TypedTaskHandler<TArgs, TResult>(
+      definition: this,
+      entrypoint: entrypoint,
+      argsDecoder: argsDecoder,
+      isolateEntrypoint: isolateEntrypoint,
+      executionMode: executionMode,
+    );
+  }
+
   /// Builds metadata for the given arguments.
   Map<String, Object?> encodeMeta(TArgs args) {
     final metaBuilder = _encodeMeta;
@@ -3258,6 +3840,7 @@ class NoArgsTaskDefinition<TResult> {
   TaskDefinition<(), TResult> get asDefinition => TaskDefinition<(), TResult>(
     name: name,
     encodeArgs: (_) => const <String, Object?>{},
+    decodeArgs: (_) => const (),
     defaultOptions: defaultOptions,
     metadata: metadata,
     decodeResult: decodeResult,
@@ -3265,6 +3848,23 @@ class NoArgsTaskDefinition<TResult> {
 
   /// Decodes a persisted payload into a typed result.
   TResult? decode(Object? payload) => asDefinition.decode(payload);
+
+  /// Creates a typed handler for a task that takes no input arguments.
+  ///
+  /// When [executionMode] is omitted, the mode is inferred from
+  /// [isolateEntrypoint].
+  TypedTaskHandler<(), TResult> handler({
+    required Future<TResult> Function(TaskExecutionContext context, ())
+    entrypoint,
+    TaskEntrypoint? isolateEntrypoint,
+    TaskExecutionMode? executionMode,
+  }) {
+    return asDefinition.handler(
+      entrypoint: entrypoint,
+      isolateEntrypoint: isolateEntrypoint,
+      executionMode: executionMode,
+    );
+  }
 }
 
 /// Represents a pending enqueue operation built from a [TaskDefinition].
@@ -3380,6 +3980,77 @@ abstract class RetryStrategy {
   Duration nextDelay(int attempt, Object error, StackTrace stackTrace);
 }
 
+/// Typed rate-limit configuration shared across workers.
+/// Since: 0.3.0
+@immutable
+class RateLimit {
+  /// Creates a rate limit allowing [tokens] acquisitions per [interval].
+  const RateLimit({required this.tokens, required this.interval})
+    : assert(tokens > 0, 'tokens must be positive');
+
+  /// Creates a per-second rate limit.
+  const RateLimit.perSecond(int tokens)
+    : this(tokens: tokens, interval: const Duration(seconds: 1));
+
+  /// Creates a per-minute rate limit.
+  const RateLimit.perMinute(int tokens)
+    : this(tokens: tokens, interval: const Duration(minutes: 1));
+
+  /// Creates a per-hour rate limit.
+  const RateLimit.perHour(int tokens)
+    : this(tokens: tokens, interval: const Duration(hours: 1));
+
+  /// Parses the legacy `10/s`, `10/m` or `10/h` representation.
+  ///
+  /// This is intentionally retained for JSON, YAML and environment
+  /// configuration. Dart code should prefer the typed constructors.
+  static RateLimit? parse(Object? value) {
+    if (value == null) return null;
+    if (value is RateLimit) return value;
+    final raw = value.toString().trim().toLowerCase();
+    final parts = raw.split('/');
+    if (parts.length != 2) return null;
+    final tokens = int.tryParse(parts[0]);
+    if (tokens == null || tokens <= 0) return null;
+    final interval = switch (parts[1]) {
+      's' => const Duration(seconds: 1),
+      'm' => const Duration(minutes: 1),
+      'h' => const Duration(hours: 1),
+      _ => null,
+    };
+    return interval == null
+        ? null
+        : RateLimit(tokens: tokens, interval: interval);
+  }
+
+  /// Maximum number of tokens granted in [interval].
+  final int tokens;
+
+  /// Window over which [tokens] are granted.
+  final Duration interval;
+
+  @override
+  String toString() {
+    final suffix = interval == const Duration(seconds: 1)
+        ? 's'
+        : interval == const Duration(minutes: 1)
+        ? 'm'
+        : interval == const Duration(hours: 1)
+        ? 'h'
+        : interval.toString();
+    return '$tokens/$suffix';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is RateLimit &&
+      other.tokens == tokens &&
+      other.interval == interval;
+
+  @override
+  int get hashCode => Object.hash(tokens, interval);
+}
+
 /// Optional rate limiter interface shared across workers.
 /// Since: 0.1.0
 // Intentionally an interface for DI and test doubles.
@@ -3463,6 +4134,25 @@ abstract class Lock {
 
   /// Releases this lock.
   Future<void> release();
+}
+
+/// A lock handle that carries a monotonically increasing fencing token.
+///
+/// The token identifies the acquisition, not merely the owner process. A
+/// downstream storage system can reject writes carrying an older token after
+/// a lease has expired and been acquired by another process. Implementations
+/// of [LockStore] that cannot provide a durable token may continue returning
+/// the base [Lock] contract.
+abstract interface class FencedLock implements Lock {
+  /// Token for this specific lock acquisition.
+  int get fencingToken;
+}
+
+/// Provides the fencing token when a lock implementation supports fencing.
+extension LockFencingTokenX on Lock {
+  /// The acquisition token, or `null` for legacy lock implementations.
+  int? get fencingToken =>
+      this is FencedLock ? (this as FencedLock).fencingToken : null;
 }
 
 /// Middleware hook invoked for lifecycle events around enqueue/consume/execute.

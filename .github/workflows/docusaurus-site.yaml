@@ -4,13 +4,18 @@ on:
   push:
     branches:
       - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
   workflow_dispatch:
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     defaults:
       run:
         working-directory: .site
@@ -28,11 +33,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Type-check site configuration
+        run: npm run typecheck
+
       - name: Build Docusaurus site
         run: npm run build
 
+      - name: Store generated site
+        uses: actions/upload-artifact@v4
+        with:
+          name: docusaurus-site
+          path: .site/build
+          if-no-files-found: error
+
+  deploy-docs:
+    needs: build-docs
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download generated site
+        uses: actions/download-artifact@v4
+        with:
+          name: docusaurus-site
+          path: .site/build
+
       - name: Deploy to GitHub Pages branch
-        if: github.ref == 'refs/heads/master'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

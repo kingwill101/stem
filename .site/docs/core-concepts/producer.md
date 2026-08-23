@@ -69,6 +69,26 @@ If you later inspect the raw `Envelope`, prefer `envelope.argsJson(...)`,
 `envelope.argsVersionedJson(...)`, `envelope.metaJson(...)`, or
 `envelope.metaVersionedJson(...)` over manual map casts.
 
+## Split process roles
+
+When a process only publishes or observes work, depend on the narrow role
+interfaces rather than passing around a full `StemApp`:
+
+```dart
+Future<void> publish(StemProducer producer) async {
+  await producer.enqueue('tasks.email', args: {'to': 'ops@example.com'});
+}
+
+Future<TaskStatus?> inspect(StemObserver observer, String taskId) {
+  return observer.getTaskStatus(taskId);
+}
+```
+
+`StemWorkerHost` is only exposed by managed application wrappers and owns the
+explicit `start()`/`shutdown()` lifecycle. A producer or observer reference
+does not provide worker lifecycle methods, which keeps API and dashboard
+processes from accidentally becoming consumers.
+
 ## Enqueue options
 
 Use `TaskEnqueueOptions` to override scheduling, routing, retry behavior, and

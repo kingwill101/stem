@@ -95,6 +95,7 @@ Future<void> main() async {
     tasks: tasks,
     workerConfig: const StemWorkerConfig(consumerName: 'example-worker'),
   );
+  await app.start();
 
   await ParentTask.definition.enqueue(app);
   await invocationParentDefinition.enqueue(app);

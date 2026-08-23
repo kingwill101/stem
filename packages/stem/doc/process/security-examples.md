@@ -1,7 +1,9 @@
 # Security Configuration Examples
 
-> **Note:** The version served on the docs site lives at
-> `.site/docs/security-examples.md`.
+> **Note:** Public signing examples live in
+> `.site/docs/core-concepts/signing.md`; the production deployment checklist
+> is at `.site/docs/getting-started/production-checklist.md`. This file keeps
+> additional environment-oriented examples for maintainers.
 
 These scenarios illustrate how to wire signing and transport security for Stem
 services (producers, workers, beat, CLI) without referring to any pre-built

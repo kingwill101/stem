@@ -7,7 +7,13 @@ import 'package:stem/stem.dart';
 import 'package:uuid/uuid.dart';
 
 /// Redis streams-backed implementation of [Broker].
-class RedisStreamsBroker implements Broker {
+class RedisStreamsBroker
+    implements
+        Broker,
+        LeaseBroker,
+        InspectableBroker,
+        DeadLetterBroker,
+        BrokerCapabilitiesProvider {
   /// Creates a broker instance using injected [connection] and [command].
   ///
   /// This is intended for unit tests that need to stub Redis behaviour without
@@ -172,10 +178,7 @@ class RedisStreamsBroker implements Broker {
     }
     Object? failure;
     StackTrace? failureStack;
-    await runZonedGuarded(() => _connection.close(), (
-      Object error,
-      StackTrace stack,
-    ) {
+    await runZonedGuarded(() => _connection.close(), (error, stack) {
       if (_shouldSuppressClosedError(error)) {
         return;
       }
@@ -304,6 +307,17 @@ class RedisStreamsBroker implements Broker {
 
   @override
   bool get supportsPriority => true;
+
+  @override
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+    deliveryGuarantee: BrokerDeliveryGuarantee.atLeastOnce,
+    supportsQueueInspection: true,
+    supportsLeaseExtension: true,
+    supportsDeadLettering: true,
+    supportsDeadLetterReplay: true,
+  );
 
   Future<void> _ensureGroupForStream(String queue, String streamKey) async {
     final key = '$streamKey|${_groupKey(queue)}';
@@ -898,6 +912,16 @@ class RedisStreamsBroker implements Broker {
   String _claimTimerKey(String stream, String group, String consumer) =>
       '$stream|$group|$consumer';
 
+  // The timer controls how often we look for stalled deliveries. Redis
+  // should only claim a delivery after its visibility lease has elapsed.
+  // Keeping these values separate prevents a short polling cadence from
+  // turning into an unexpectedly short lease.
+  Duration get _claimIdleThreshold {
+    return defaultVisibilityTimeout > claimInterval
+        ? defaultVisibilityTimeout
+        : claimInterval;
+  }
+
   String _scheduleClaim(
     String stream,
     String group,
@@ -917,7 +941,7 @@ class RedisStreamsBroker implements Broker {
           stream,
           group,
           consumer,
-          claimInterval.inMilliseconds.toString(),
+          _claimIdleThreshold.inMilliseconds.toString(),
           '0-0',
           'COUNT',
           delayedDrainBatch.toString(),
@@ -1112,17 +1136,28 @@ class RedisStreamsBroker implements Broker {
 
   @override
   Future<void> extendLease(Delivery delivery, Duration by) async {
+    if (delivery.route.isBroadcast || by <= Duration.zero) {
+      return;
+    }
     final info = _parseReceipt(delivery.receipt);
-    await _send(['XACK', info.stream, info.group, info.id]);
-    final nextVisibleAt = stemNow().add(by);
-    final delayedEnvelope = delivery.envelope.copyWith(
-      notBefore: nextVisibleAt,
-    );
+    // Redis Streams model visibility as the pending entry's idle time. Reset
+    // the delivery timestamp in place instead of ACKing and publishing a
+    // delayed copy, which would allow the original pending entry to be
+    // claimed while the task is still executing.
+    //
+    // XAUTOCLAIM uses [_claimIdleThreshold] as its minimum idle threshold. A
+    // future delivery timestamp is therefore needed when [by] exceeds that
+    // threshold so the entry remains invisible for the full requested lease.
+    final deliveryTime = stemNow().subtract(_claimIdleThreshold - by);
     await _send([
-      'ZADD',
-      _delayedKey(delayedEnvelope.queue),
-      nextVisibleAt.millisecondsSinceEpoch.toString(),
-      jsonEncode(delayedEnvelope.toJson()),
+      'XCLAIM',
+      info.stream,
+      info.group,
+      info.consumer,
+      '0',
+      info.id,
+      'TIME',
+      deliveryTime.millisecondsSinceEpoch.toString(),
     ]);
   }
 

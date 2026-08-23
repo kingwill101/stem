@@ -2,6 +2,7 @@
 // ignore_for_file: unused_local_variable, unused_import, dead_code
 
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 // #region namespaces-broker

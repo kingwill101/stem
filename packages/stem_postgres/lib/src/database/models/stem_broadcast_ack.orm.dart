@@ -246,8 +246,7 @@ class StemBroadcastAckModelFactory {
 
   static ModelFactoryBuilder<StemBroadcastAck> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemBroadcastAck>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemBroadcastAck>(
     generatorProvider: generatorProvider,
   );
 }

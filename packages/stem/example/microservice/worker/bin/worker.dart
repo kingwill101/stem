@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 import 'package:stem_redis/stem_redis.dart';
 
 const _taskSpecs = <_WorkerTaskSpec>[
@@ -66,12 +67,15 @@ Future<void> main(List<String> args) async {
     config.brokerUrl,
     tls: config.tls,
   );
-  final backend = config.resultBackendUrl != null
-      ? await RedisResultBackend.connect(
-          config.resultBackendUrl!,
-          tls: config.tls,
-        )
-      : InMemoryResultBackend();
+  final ResultBackend backend;
+  if (config.resultBackendUrl != null) {
+    backend = await RedisResultBackend.connect(
+      config.resultBackendUrl!,
+      tls: config.tls,
+    );
+  } else {
+    backend = InMemoryResultBackend();
+  }
   // #region signing-worker-signer
   final signer = PayloadSigner.maybe(config.signing);
   // #endregion signing-worker-signer

@@ -4,8 +4,8 @@ import 'dart:io';
 
 import 'package:routed/routed.dart';
 import 'package:routed_hotwire/routed_hotwire.dart';
-import 'package:stem/stem.dart'
-    show TaskState, generateEnvelopeId, stemLogContext, stemLogger;
+import 'package:stem/observability.dart' show stemLogger;
+import 'package:stem/stem.dart' show TaskState, generateEnvelopeId;
 import 'package:stem_dashboard/src/config/config.dart';
 import 'package:stem_dashboard/src/services/models.dart';
 import 'package:stem_dashboard/src/services/stem_service.dart';
@@ -105,15 +105,13 @@ Future<void> runDashboardServer({
 
   stemLogger.info(
     'Starting dashboard server',
-    stemLogContext(
-      component: 'dashboard',
-      subsystem: 'server',
-      fields: {
-        'host': options.host,
-        'port': options.port,
-        'basePath': dashboardUrlPath,
-      },
-    ),
+    fields: {
+      'component': 'dashboard',
+      'subsystem': 'server',
+      'host': options.host,
+      'port': options.port,
+      'basePath': dashboardUrlPath,
+    },
   );
 
   try {
@@ -141,11 +139,11 @@ Future<void> _waitForShutdownSignal() async {
   void complete(ProcessSignal signal) {
     stemLogger.info(
       'Shutdown signal received',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {'signal': signal.toString()},
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'signal': signal.toString(),
+      },
     );
     if (!completer.isCompleted) {
       completer.complete();
@@ -405,18 +403,16 @@ Future<Response> _renderOverviewPartials(
       ),
     ].join('\n');
 
-    return ctx.turboStream(updates);
+    return await ctx.turboStream(updates);
   } on Object catch (error, stack) {
     stemLogger.error(
       'Failed to render overview partials',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     return ctx.turboHtml(
       '<div class="muted">Failed to refresh overview metrics.</div>',
@@ -582,10 +578,10 @@ Future<Response> _renderPage(
     final streamPath = dashboardRoute(basePath, '/dash/streams');
 
     if (turbo.isFrameRequest) {
-      return ctx.turboFrame(renderFrame(page, contentWithBasePath));
+      return await ctx.turboFrame(renderFrame(page, contentWithBasePath));
     }
 
-    return ctx.turboHtml(
+    return await ctx.turboHtml(
       renderLayout(
         page,
         contentWithBasePath,
@@ -596,15 +592,13 @@ Future<Response> _renderPage(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Failed to render dashboard page',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'page': page.name,
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'page': page.name,
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     final errorContent = _renderErrorPanel(error);
     if (turbo.isFrameRequest) {
@@ -688,7 +682,7 @@ Future<Response> _enqueueTask(
         actor: 'dashboard',
         summary: 'Task enqueue rejected: queue/task missing.',
       );
-      return ctx.turboSeeOther('$tasksPath?error=missing-fields');
+      return await ctx.turboSeeOther('$tasksPath?error=missing-fields');
     }
 
     final payloadText = (await ctx.postForm('payload')).trim();
@@ -706,7 +700,7 @@ Future<Response> _enqueueTask(
             actor: 'dashboard',
             summary: 'Task enqueue rejected: payload not a JSON object.',
           );
-          return ctx.turboSeeOther('$tasksPath?error=invalid-payload');
+          return await ctx.turboSeeOther('$tasksPath?error=invalid-payload');
         }
       } on Object {
         state.recordAudit(
@@ -716,7 +710,7 @@ Future<Response> _enqueueTask(
           actor: 'dashboard',
           summary: 'Task enqueue rejected: invalid JSON payload.',
         );
-        return ctx.turboSeeOther('$tasksPath?error=invalid-payload');
+        return await ctx.turboSeeOther('$tasksPath?error=invalid-payload');
       }
     }
 
@@ -744,18 +738,16 @@ Future<Response> _enqueueTask(
       summary: 'Queued task "$task" on "$queue".',
       metadata: {'queue': queue, 'task': task},
     );
-    return ctx.turboSeeOther('$tasksPath?flash=queued');
+    return await ctx.turboSeeOther('$tasksPath?flash=queued');
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard enqueue failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -792,7 +784,7 @@ Future<Response> _taskAction(
         actor: 'dashboard',
         summary: 'Task action rejected: missing task id.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {'error': 'Task ID is required.'}),
       );
     }
@@ -820,7 +812,7 @@ Future<Response> _taskAction(
             summary: 'Failed to revoke task $taskId.',
             metadata: {'taskId': taskId, 'queue': ?queue},
           );
-          return ctx.turboSeeOther(
+          return await ctx.turboSeeOther(
             _appendRedirectQuery(redirect, {
               'error': 'Unable to revoke task $taskId.',
             }),
@@ -834,7 +826,7 @@ Future<Response> _taskAction(
           summary: 'Revocation requested for $taskId.',
           metadata: {'taskId': taskId, 'queue': ?queue},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'flash': 'Revocation requested for task $taskId.',
           }),
@@ -850,7 +842,7 @@ Future<Response> _taskAction(
             summary: 'Task $taskId was not found in dead letters.',
             metadata: {'taskId': taskId, 'queue': ?queue},
           );
-          return ctx.turboSeeOther(
+          return await ctx.turboSeeOther(
             _appendRedirectQuery(redirect, {
               'error': 'Task $taskId was not found in dead letters.',
             }),
@@ -864,7 +856,7 @@ Future<Response> _taskAction(
           summary: 'Replayed dead-letter task $taskId.',
           metadata: {'taskId': taskId, 'queue': ?queue},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'flash': 'Replayed dead-letter task $taskId as a new envelope.',
           }),
@@ -878,7 +870,7 @@ Future<Response> _taskAction(
           summary: 'Unsupported task action "$action".',
           metadata: {'taskId': taskId},
         );
-        return ctx.turboSeeOther(
+        return await ctx.turboSeeOther(
           _appendRedirectQuery(redirect, {
             'error': 'Unsupported task action "$action".',
           }),
@@ -887,14 +879,12 @@ Future<Response> _taskAction(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard task action failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -1101,7 +1091,7 @@ Future<Response> _controlWorkers(
         actor: 'dashboard',
         summary: 'Control action missing.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         '$workersPath?error=${Uri.encodeComponent('Control action missing.')}',
       );
     }
@@ -1141,7 +1131,7 @@ Future<Response> _controlWorkers(
       final encodedError = Uri.encodeComponent(
         'Unsupported control action "$rawAction".',
       );
-      return ctx.turboSeeOther('$workersPath?error=$encodedError');
+      return await ctx.turboSeeOther('$workersPath?error=$encodedError');
     }
 
     final payload = <String, Object?>{};
@@ -1198,7 +1188,7 @@ Future<Response> _controlWorkers(
       );
       final encodedMessage = Uri.encodeComponent(message.toString());
       final encodedScope = Uri.encodeComponent(scope);
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         '$workersPath?error=$encodedMessage&scope=$encodedScope',
       );
     }
@@ -1216,20 +1206,18 @@ Future<Response> _controlWorkers(
     );
     final encodedMessage = Uri.encodeComponent(message);
     final encodedScope = Uri.encodeComponent(scope);
-    return ctx.turboSeeOther(
+    return await ctx.turboSeeOther(
       '$workersPath?flash=$encodedMessage&scope=$encodedScope',
     );
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard control command failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',
@@ -1264,7 +1252,7 @@ Future<Response> _replayDeadLetters(
         actor: 'dashboard',
         summary: 'Replay rejected: missing queue name.',
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {
           'error': 'Queue name is required for replay.',
         }),
@@ -1298,7 +1286,7 @@ Future<Response> _replayDeadLetters(
         summary: message,
         metadata: {'queue': queue, 'dryRun': dryRun},
       );
-      return ctx.turboSeeOther(
+      return await ctx.turboSeeOther(
         _appendRedirectQuery(redirect, {
           'flash': message,
           'scope': scope,
@@ -1321,7 +1309,7 @@ Future<Response> _replayDeadLetters(
       summary: message,
       metadata: {'queue': queue, 'entries': entryCount, 'dryRun': dryRun},
     );
-    return ctx.turboSeeOther(
+    return await ctx.turboSeeOther(
       _appendRedirectQuery(redirect, {
         'flash': message,
         'scope': scope,
@@ -1331,14 +1319,12 @@ Future<Response> _replayDeadLetters(
   } on Object catch (error, stack) {
     stemLogger.error(
       'Dashboard dead-letter replay failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'server',
-        fields: {
-          'error': error.toString(),
-          'stack': stack.toString(),
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'server',
+        'error': error.toString(),
+        'stack': stack.toString(),
+      },
     );
     state.recordAudit(
       kind: 'action',

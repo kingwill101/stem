@@ -2,6 +2,7 @@
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 
 final InMemoryBroker _autoscaleBroker = InMemoryBroker();
 final InMemoryResultBackend _autoscaleBackend = InMemoryResultBackend();

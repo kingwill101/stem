@@ -20,7 +20,9 @@ void main() {
           encodeParams: (params) => params,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -71,7 +73,9 @@ void main() {
           encodeParams: (params) => params,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -117,7 +121,9 @@ void main() {
           encodeParams: (params) => params,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 

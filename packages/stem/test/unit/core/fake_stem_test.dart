@@ -1,4 +1,5 @@
 import 'package:stem/stem.dart';
+import 'package:stem/testing.dart';
 import 'package:test/test.dart';
 
 class _Args {

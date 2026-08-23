@@ -89,6 +89,29 @@ Future<void> main() async {
 }
 ```
 
+### Distributed rate limiting
+
+`RedisRateLimiter` shares a token bucket across worker processes. The
+`RateLimit` capacity is the number of permits available per interval; each
+acquire consumes one permit.
+
+```dart
+final limiter = await RedisRateLimiter.connect(
+  'rediss://localhost:6380/0',
+  namespace: 'billing-worker',
+  tls: const TlsConfig(
+    caCertificateFile: '/etc/ssl/certs/redis-ca.pem',
+  ),
+);
+
+final workerConfig = StemWorkerConfig(rateLimiter: limiter);
+```
+
+Redis server time is used for refill calculations, and the Lua script performs
+refill and acquisition atomically. A denied acquisition includes `retryAfter`
+for the worker's retry scheduling. Close the limiter with the worker's other
+resources.
+
 ## Tests
 
 Integration suites require the dockerised Redis/Postgres stack provided by the

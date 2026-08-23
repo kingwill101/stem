@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.0
+
+- Updated the compatibility package for Stem 0.3.0 and the core-owned memory
+  entrypoint.
+
+## 0.1.2
+
+- Kept the compatibility package aligned with the core-owned
+  `package:stem/memory.dart` implementation after the adapter layering fix.
+
+## 0.1.1
+
+- Made the package an explicit compatibility export for
+  `package:stem/memory.dart`.
+- Raised the minimum Stem version so the package cannot resolve against a
+  published core artifact that does not expose the memory library.
+
 ## 0.1.0
 
 - Updated the in-memory workflow store to honor caller-provided run ids,

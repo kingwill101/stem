@@ -22,6 +22,9 @@ include: package:very_good_analysis/analysis_options.yaml
 analyzer:
   errors:
     avoid_returning_this: ignore
+    # Dart 3.10 reports this for the nullable field used by the const
+    # all-or-partial policy constructors; newer analyzers do not.
+    prefer_initializing_formals: ignore
   exclude:
     - example/**/**
     - "**/*.g.dart"

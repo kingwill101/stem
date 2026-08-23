@@ -233,6 +233,11 @@ class _RecordingBroker implements Broker {
   @override
   bool get supportsPriority => true;
 
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: true,
+  );
+
   @override
   Future<void> close() async {}
 }

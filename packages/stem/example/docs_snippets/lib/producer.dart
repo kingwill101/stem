@@ -21,6 +21,7 @@ Future<void> enqueueInMemory() async {
     ],
   );
   final app = await client.createApp();
+  await app.start();
 
   final taskId = await app.enqueue(
     'hello.print',
@@ -126,6 +127,7 @@ class GenerateReportTask extends TaskHandler<String> {
 Future<void> enqueueTyped() async {
   final client = await StemClient.inMemory(tasks: [GenerateReportTask()]);
   final app = await client.createApp();
+  await app.start();
 
   final result = await GenerateReportTask.definition.enqueueAndWait(
     app,

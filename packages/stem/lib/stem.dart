@@ -1,8 +1,7 @@
 /// Distributed task queue and worker framework for Dart.
 ///
-/// Stem is a robust, production-ready background job system designed to
-/// orchestrate complex asynchronous workflows across multiple processes
-/// and machines.
+/// Stem is an experimental Dart-native background job system designed to
+/// orchestrate asynchronous workflows across multiple processes and machines.
 ///
 /// ## Key Concepts
 ///
@@ -29,25 +28,34 @@
 /// *   **Coordination**: High-level workflows like Chords, Groups, and Chains,
 ///     plus unique task enforcement.
 ///
+/// Stem-owned structured logging is available from the optional
+/// `package:stem/observability.dart` entrypoint; its logging dependency stays
+/// an implementation detail.
+///
+/// New application code may use `package:stem/stable.dart` for the narrower
+/// high-level surface. This historical barrel remains source-compatible, and
+/// `package:stem/advanced.dart` collects the low-level integration APIs.
+///
 /// ## Quick Start
 ///
 /// ```dart
-/// import 'package:stem/stem.dart';
+/// import 'package:stem/stable.dart';
+/// import 'package:stem/memory.dart';
 ///
 /// void main() async {
 ///   // 1. Define a typed task
 ///   final addDefinition = TaskDefinition<Map<String, int>, int>(
 ///     name: 'add_task',
 ///     encodeArgs: (args) => args,
+///     decodeArgs: (args) => args.cast<String, int>(),
 ///   );
 ///
 ///   // 2. Define the handler
-///   final addHandler = FunctionTaskHandler(
-///       name: 'add_task',
-///       entrypoint: (context, args) async {
-///         return (args['a'] as int) + (args['b'] as int);
-///       },
-///     );
+///   final addHandler = addDefinition.handler(
+///     entrypoint: (context, args) async {
+///       return args['a']! + args['b']!;
+///     },
+///   );
 ///
 ///   // 3. Initialize Stem with a broker (e.g., In-Memory for testing)
 ///   final stem = Stem(
@@ -72,14 +80,6 @@ import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/scheduler/beat.dart';
 import 'package:stem/src/worker/worker.dart';
 
-export 'package:contextual/contextual.dart' show Context, Level, Logger;
-export 'package:stem_memory/stem_memory.dart'
-    show
-        InMemoryBroker,
-        InMemoryLockStore,
-        InMemoryResultBackend,
-        InMemoryRevokeStore,
-        InMemoryScheduleStore;
 export 'src/backend/encoding_result_backend.dart';
 export 'src/bootstrap/factories.dart';
 export 'src/bootstrap/stem_app.dart';
@@ -92,6 +92,7 @@ export 'src/control/control_messages.dart';
 export 'src/control/file_revoke_store.dart';
 export 'src/control/revoke_store.dart';
 export 'src/core/chord_metadata.dart';
+export 'src/core/chord_policy.dart';
 export 'src/core/clock.dart' hide FakeStemClock;
 export 'src/core/config.dart';
 export 'src/core/contracts.dart';
@@ -111,7 +112,6 @@ export 'src/core/unique_task_coordinator.dart';
 export 'src/observability/config.dart';
 export 'src/observability/heartbeat.dart';
 export 'src/observability/heartbeat_transport.dart';
-export 'src/observability/logging.dart';
 export 'src/observability/metrics.dart';
 export 'src/observability/snapshots.dart';
 export 'src/observability/tracing.dart';
@@ -127,7 +127,6 @@ export 'src/signals/middleware.dart';
 export 'src/signals/payloads.dart';
 export 'src/signals/signal.dart';
 export 'src/signals/stem_signals.dart';
-export 'src/testing/fake_stem.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';
 export 'src/workflow/workflow.dart';

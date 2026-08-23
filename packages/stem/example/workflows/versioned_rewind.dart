@@ -17,6 +17,7 @@ Future<void> main() async {
   final app = await StemWorkflowApp.inMemory(
     flows: [versionedWorkflow],
   );
+  await app.start();
 
   final runId = await versionedWorkflow.start(app);
   await app.executeRun(runId);

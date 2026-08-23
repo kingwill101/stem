@@ -9,8 +9,7 @@ Follow these practices to keep Stem projects healthy in automation.
 
 ## Static checks
 
-Run the core quality gates either via `example/quality_gates` (requires `just`)
-or by invoking the commands directly. The default set includes:
+Run the core quality gates directly. The default set includes:
 
 - `dart format --set-exit-if-changed`
 - `dart analyze`
@@ -91,5 +90,5 @@ stem schedule list
 
 Automating these checks catches environment-specific issues early.
 
-For more examples, see the repository's `.github/workflows/ci.yml` and plug the
+For more examples, see the repository's `.github/workflows/aggregate.yaml` and plug the
 steps into your preferred CI system (GitLab, CircleCI, Jenkins, etc.).

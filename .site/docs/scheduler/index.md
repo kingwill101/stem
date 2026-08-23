@@ -48,6 +48,8 @@ Common scheduler CLI commands:
 
 - `stem schedule apply` — load schedule entries from JSON/YAML into the store.
 - `stem schedule list` — inspect entries in the store.
+- `stem schedule trigger <id>` — enqueue one immediate execution without
+  changing the recurring schedule state.
 - `stem schedule dry-run` — preview due times before rollout.
 - `stem observe schedules` — inspect schedule drift and dispatch status.
 

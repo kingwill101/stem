@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 
 class SendDigestTask implements TaskHandler<void> {

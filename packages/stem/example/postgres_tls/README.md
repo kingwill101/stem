@@ -20,7 +20,7 @@ can be reused across brokers and backends.
    ```bash
    export STEM_BROKER_URL=redis://127.0.0.1:${REDIS_PORT:-6379}
    export STEM_RESULT_BACKEND_URL=postgresql://postgres:postgres@127.0.0.1:${POSTGRES_PORT:-5432}/stem_test
-   export STEM_TLS_CA_CERT=../../../stem_cli/docker/testing/certs/postgres-root.crt
+   export STEM_TLS_CA_CERT=../../../stem_cli/docker/testing/postgres/certs/root.crt
    ```
 3. Compile binaries:
    ```bash

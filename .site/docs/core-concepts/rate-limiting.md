@@ -120,19 +120,30 @@ Run the `rate_limit_delay` example for a full demo:
 
 - `packages/stem/example/rate_limit_delay`
 
-## Rate limit syntax
+## Rate limit values
 
-`rateLimit` accepts short strings like:
+In Dart code, use the typed `RateLimit` value object:
+
+```dart
+const TaskOptions(
+  rateLimit: RateLimit.perMinute(100),
+  groupRateLimit: RateLimit.perSecond(5),
+)
+```
+
+String values remain supported at JSON/YAML and environment-configuration
+boundaries:
 
 - `10/s` — 10 tokens per second
 - `100/m` — 100 tokens per minute
 - `500/h` — 500 tokens per hour
 
-`groupRateLimit` uses the same syntax.
+`groupRateLimit` uses the same syntax. The worker receives a validated
+`RateLimit` value rather than parsing strings during task execution.
 
 ## How it works
 
-- The worker parses `rateLimit` for each task.
+- The worker asks the configured limiter to acquire the typed `rateLimit`.
 - The worker asks the `RateLimiter` for an acquire decision.
 - If denied, the task is retried with backoff and `rateLimited=true` metadata.
 - Retry delays come from the limiter `retryAfter` if provided, otherwise the
@@ -157,17 +168,12 @@ Group rate limits share a limiter bucket across related tasks.
 
 ## Redis-backed limiter example
 
-The `packages/stem/example/rate_limit_delay` demo ships a Redis fixed-window limiter. It:
+The `packages/stem/example/rate_limit_delay` demo uses the shipped Redis
+token-bucket limiter. It:
 
 - shares tokens across multiple workers,
-- logs when a token is granted or denied,
+- uses Redis server time and an atomic Lua refill/acquire operation,
 - reschedules denied tasks with retry metadata.
-
-Inspect it here:
-
-```dart title="lib/rate_limiter.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/lib/rate_limiter.dart#rate-limit-redis-limiter
-
-```
 
 ## Observability
 
@@ -194,9 +200,10 @@ The `rate_limit_delay` example reads `STEM_RATE_LIMIT_URL` to point the limiter
 at Redis. Use a dedicated Redis DB or key prefix to keep limiter state isolated
 from your broker/result backend.
 
-```dart title="lib/shared.dart" file=<rootDir>/../packages/stem/example/rate_limit_delay/lib/shared.dart#rate-limit-redis-connector
-
-```
+The Redis limiter is constructed with `RedisRateLimiter.connect(...)` from
+`stem_redis`. `stem_postgres` provides the equivalent
+`PostgresRateLimiter.connect(...)`; it uses a server-clock token bucket with a
+row lock inside one transaction.
 
 ## Tips
 

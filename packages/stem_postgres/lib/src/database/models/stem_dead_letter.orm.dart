@@ -256,8 +256,7 @@ class StemDeadLetterModelFactory {
 
   static ModelFactoryBuilder<StemDeadLetter> factory({
     GeneratorProvider? generatorProvider,
-  }) => ModelFactoryBuilder<StemDeadLetter>(
-    definition: definition,
+  }) => ModelFactoryRegistry.factoryFor<StemDeadLetter>(
     generatorProvider: generatorProvider,
   );
 }

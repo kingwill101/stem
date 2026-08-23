@@ -1,6 +1,16 @@
 version: "3"
 
 tasks:
+  deps:
+    desc: Resolve dashboard package dependencies.
+    cmds:
+      - |
+        if command -v flutter >/dev/null 2>&1; then
+          flutter pub get
+        else
+          dart pub get
+        fi
+
   test:
     desc: Run dashboard package tests.
     cmds:

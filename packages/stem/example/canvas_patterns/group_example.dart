@@ -20,6 +20,7 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
+  await app.start();
   const groupHandle = 'squares-demo';
   final dispatch = await app.canvas.group<int>([
     task<int>('square', args: <String, Object?>{'value': 2}),

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+- Updated shared adapter contracts for the Stem 0.3.0 capability and lifecycle
+  semantics.
+
+## 0.1.3
+
+- Expanded contract fixtures and capability assertions used by the Redis,
+  Postgres, SQLite, and in-memory adapters.
+
 ## 0.1.2
 
 - Updated the `stem` dependency range for the 0.2.1 core release.

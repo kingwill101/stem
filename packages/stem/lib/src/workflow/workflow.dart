@@ -1,5 +1,3 @@
-export 'package:stem_memory/stem_memory.dart'
-    show InMemoryEventBus, InMemoryWorkflowStore;
 export 'annotations.dart';
 export 'core/event_bus.dart';
 export 'core/flow.dart';

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -1185,6 +1186,12 @@ class _RecordingBroker implements Broker {
 
   @override
   bool get supportsPriority => false;
+
+  BrokerCapabilities get capabilities => const BrokerCapabilities(
+    supportsDelayedDelivery: true,
+    supportsPriorityOrdering: false,
+    supportsQueueInspection: true,
+  );
 
   @override
   Future<DeadLetterPage> listDeadLetters(

@@ -1,3 +1,4 @@
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -72,8 +73,8 @@ void main() {
       final client = await StemClient.inMemory(
         module: StemModule(tasks: [moduleTask]),
       );
-
       final app = await client.createApp();
+      await app.start();
 
       expect(
         app.registry.resolve('client.default-module.app-task'),
@@ -97,20 +98,20 @@ void main() {
     },
   );
 
-  test('StemClient createApp lazy-starts on first enqueue', () async {
+  test('StemClient createApp executes after an explicit start', () async {
     final client = await StemClient.inMemory(
       tasks: [
         FunctionTaskHandler<String>(
-          name: 'client.lazy-start',
+          name: 'client.explicit-start',
           entrypoint: (context, args) async => 'task-ok',
           runInIsolate: false,
         ),
       ],
     );
-
     final app = await client.createApp();
+    await app.start();
 
-    final taskId = await app.enqueue('client.lazy-start');
+    final taskId = await app.enqueue('client.explicit-start');
     final result = await app.waitForTask<String>(
       taskId,
       timeout: const Duration(seconds: 2),
@@ -220,6 +221,7 @@ void main() {
         ),
       ],
     );
+    await app.start();
 
     expect(app.worker.subscription.queues, ['priority']);
 
@@ -252,6 +254,7 @@ void main() {
       final app = await client.createApp(
         module: StemModule(tasks: [moduleTask]),
       );
+      await app.start();
 
       expect(app.registry.resolve('client.module.app-task'), same(moduleTask));
       expect(app.worker.subscription.queues, ['priority']);

@@ -1,8 +1,8 @@
 # Observability Runbook
 
-> **Note:** The canonical version of this document lives at
-> `.site/docs/observability-runbook.md` for publication on the docs site. Keep
-> the two files in sync when editing.
+> **Note:** The public operator guide is
+> `.site/docs/getting-started/observability-and-ops.md`. This internal runbook
+> contains SLO and alerting details that are maintained for operations review.
 
 ## SLOs
 | Service Aspect | Target | Measurement Window | Notes |

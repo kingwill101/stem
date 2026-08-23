@@ -1,3 +1,4 @@
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -5,6 +6,22 @@ import 'test_store_adapter.dart';
 
 void main() {
   group('StemApp', () {
+    test('exposes separate producer, observer, and worker roles', () async {
+      final app = await StemApp.inMemory();
+      try {
+        final StemProducer producer = app;
+        final StemObserver observer = app;
+        final StemWorkerHost workerHost = app;
+
+        expect(producer, same(app));
+        expect(observer, same(app));
+        expect(workerHost, same(app));
+        expect(workerHost.isStarted, isFalse);
+      } finally {
+        await app.shutdown();
+      }
+    });
+
     test('inMemory executes tasks', () async {
       final handler = FunctionTaskHandler<void>(
         name: 'test.echo',
@@ -12,7 +29,10 @@ void main() {
         metadata: const TaskMetadata(idempotent: true),
       );
 
-      final app = await StemApp.inMemory(tasks: [handler]);
+      final app = await StemApp.inMemory(
+        tasks: [handler],
+      );
+      await app.start();
       try {
         final taskId = await app.enqueue('test.echo');
         final completed = await app.backend
@@ -25,16 +45,19 @@ void main() {
       }
     });
 
-    test('inMemory lazy-starts on first enqueue', () async {
+    test('inMemory executes after an explicit start', () async {
       final handler = FunctionTaskHandler<String>(
-        name: 'test.lazy-start',
+        name: 'test.explicit-start',
         entrypoint: (context, args) async => 'started',
         runInIsolate: false,
       );
 
-      final app = await StemApp.inMemory(tasks: [handler]);
+      final app = await StemApp.inMemory(
+        tasks: [handler],
+      );
+      await app.start();
       try {
-        final taskId = await app.enqueue('test.lazy-start');
+        final taskId = await app.enqueue('test.explicit-start');
         final completed = await app.waitForTask<String>(
           taskId,
           timeout: const Duration(seconds: 2),
@@ -52,7 +75,10 @@ void main() {
         runInIsolate: false,
       );
 
-      final app = await StemApp.inMemory(tasks: [taskHandler]);
+      final app = await StemApp.inMemory(
+        tasks: [taskHandler],
+      );
+      await app.start();
       try {
         final taskId = await app.enqueue('test.status.task');
         final taskStatus = await app.waitForTask<String>(
@@ -91,6 +117,7 @@ void main() {
         final app = await StemApp.inMemory(
           module: StemModule(tasks: [handler]),
         );
+        await app.start();
         try {
           expect(app.registry.resolve('test.module.queue'), same(handler));
           expect(app.worker.subscription.queues, ['priority']);
@@ -118,7 +145,10 @@ void main() {
         runInIsolate: false,
       );
 
-      final app = await StemApp.inMemory(tasks: [handler]);
+      final app = await StemApp.inMemory(
+        tasks: [handler],
+      );
+      await app.start();
       try {
         expect(app.worker.subscription.queues, ['priority']);
 
@@ -136,7 +166,7 @@ void main() {
       }
     });
 
-    test('inMemory lazy-starts for canvas dispatch', () async {
+    test('inMemory executes Canvas work after an explicit start', () async {
       final handler = FunctionTaskHandler<int>(
         name: 'test.canvas.double',
         entrypoint: (context, args) async {
@@ -146,7 +176,10 @@ void main() {
         runInIsolate: false,
       );
 
-      final app = await StemApp.inMemory(tasks: [handler]);
+      final app = await StemApp.inMemory(
+        tasks: [handler],
+      );
+      await app.start();
       try {
         final result = await app.canvas.chain<int>([
           task('test.canvas.double', args: {'value': 21}),
@@ -175,8 +208,9 @@ void main() {
         entrypoint: (context, args) async => 'extra-ok',
         runInIsolate: false,
       );
-
       final app = await StemApp.inMemory();
+      await app.start();
+
       try {
         app
           ..registerTask(directHandler)
@@ -324,6 +358,7 @@ void main() {
         adapters: [adapter],
         tasks: [handler],
       );
+      await app.start();
       try {
         final taskId = await app.enqueue('test.from-url');
         final completed = await app.backend
@@ -435,7 +470,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.demo');
         final run = await workflowApp
@@ -461,7 +499,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.typed');
         final run = await workflowApp.waitForCompletion<_DemoPayload>(
@@ -494,7 +535,10 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowApp.startWorkflow(
             'workflow.typed.versioned',
@@ -528,7 +572,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflowJson(
           'workflow.json.start',
@@ -561,7 +608,10 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowApp.startWorkflowValue(
             'workflow.codec.start',
@@ -602,7 +652,10 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowApp.startWorkflowVersionedJson(
             'workflow.versioned.json.start',
@@ -650,7 +703,10 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowApp.startWorkflow('workflow.json.emit');
           await workflowApp.executeRun(runId);
@@ -698,7 +754,10 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowApp.startWorkflow(
             'workflow.versioned.json.emit',
@@ -734,7 +793,9 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           var decodeInvocations = 0;
           final runId = await workflowApp.startWorkflow('workflow.cancelled');
@@ -773,7 +834,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.timeout');
         final result = await workflowApp.waitForCompletion(
@@ -814,6 +878,7 @@ void main() {
         adapters: [adapter],
         flows: [flow],
       );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.from-url');
         final result = await workflowApp.waitForCompletion<String>(
@@ -873,7 +938,10 @@ void main() {
       );
       final module = StemModule(flows: [moduleFlow], tasks: [helperTask]);
 
-      final workflowApp = await StemWorkflowApp.inMemory(module: module);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        module: module,
+      );
+      await workflowApp.start();
       try {
         expect(
           workflowApp.app.registry.resolve('workflow.module.helper'),
@@ -905,6 +973,7 @@ void main() {
         final workflowApp = await StemWorkflowApp.inMemory(
           module: StemModule(tasks: [helperTask]),
         );
+        await workflowApp.start();
         try {
           expect(
             workflowApp.app.worker.subscription.queues,
@@ -938,6 +1007,7 @@ void main() {
             subscription: RoutingSubscription.singleQueue('workflow'),
           ),
         );
+        await workflowApp.start();
         try {
           expect(workflowApp.app.worker.subscription.queues, ['workflow']);
         } finally {
@@ -961,7 +1031,10 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [moduleFlow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [moduleFlow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowRef.start(
           workflowApp,
@@ -987,7 +1060,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.detail.helper');
         final result = await workflowApp.waitForCompletion<String>(
@@ -1012,7 +1088,9 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         final manifest = workflowApp.workflowManifest();
         final entry = manifest.singleWhere(
@@ -1041,6 +1119,7 @@ void main() {
         final module = StemModule(flows: [flow], tasks: [taskHandler]);
 
         final workflowApp = await StemWorkflowApp.inMemory();
+        await workflowApp.start();
         try {
           workflowApp.registerModule(module);
 
@@ -1074,6 +1153,7 @@ void main() {
       );
 
       final workflowApp = await StemWorkflowApp.inMemory();
+      await workflowApp.start();
       try {
         workflowApp.registerWorkflow(flow.definition);
 
@@ -1108,6 +1188,7 @@ void main() {
         );
 
         final workflowApp = await StemWorkflowApp.inMemory();
+        await workflowApp.start();
         try {
           workflowApp
             ..registerFlow(flow)
@@ -1154,6 +1235,7 @@ void main() {
         );
 
         final workflowApp = await StemWorkflowApp.inMemory();
+        await workflowApp.start();
         try {
           workflowApp
             ..registerFlows([flow])
@@ -1191,6 +1273,7 @@ void main() {
       );
 
       final workflowApp = await StemWorkflowApp.inMemory();
+      await workflowApp.start();
       try {
         workflowApp.registerWorkflows([definition]);
 
@@ -1215,7 +1298,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.views.helper');
         final result = await workflowApp.waitForCompletion<String>(
@@ -1249,7 +1335,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow(
           'workflow.execute.helper',
@@ -1280,7 +1369,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow('workflow.rewind.helper');
         await workflowApp.executeRun(runId);
@@ -1314,7 +1406,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        scripts: [script],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow(
           'workflow.watchers.helper',
@@ -1348,7 +1443,10 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
+      await workflowApp.start();
       try {
         final runId = await workflowApp.startWorkflow(
           'workflow.resume.due.helper',
@@ -1398,7 +1496,10 @@ void main() {
         );
         final workflowRef = flow.ref0();
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowRef.start(workflowApp);
           final result = await workflowRef.waitFor(
@@ -1460,7 +1561,10 @@ void main() {
         );
         final workflowRef = script.ref0();
 
-        final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          scripts: [script],
+        );
+        await workflowApp.start();
         try {
           final runId = await workflowRef.start(workflowApp);
           final result = await workflowRef.waitFor(

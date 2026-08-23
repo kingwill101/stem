@@ -33,6 +33,7 @@ Future<void> main() async {
       prefetchMultiplier: 1,
     ),
   );
+  await app.start();
   final chordResult = await app.canvas.chord(
     body: [
       task('fetch.metric', args: <String, Object?>{'value': 5}),

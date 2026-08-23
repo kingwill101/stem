@@ -1,3 +1,6 @@
+// These sample definitions keep the focus on generated APIs, not doc noise.
+// ignore_for_file: public_member_api_docs
+
 import 'package:stem/stem.dart';
 
 part 'definitions.stem.g.dart';

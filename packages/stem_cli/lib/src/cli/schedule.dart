@@ -15,6 +15,7 @@ class ScheduleCommand extends Command<int> {
   ScheduleCommand(this.dependencies) {
     addSubcommand(ScheduleListCommand(dependencies));
     addSubcommand(ScheduleShowCommand(dependencies));
+    addSubcommand(ScheduleTriggerCommand(dependencies));
     addSubcommand(ScheduleApplyCommand(dependencies));
     addSubcommand(ScheduleDeleteCommand(dependencies));
     addSubcommand(ScheduleEnableCommand(dependencies));
@@ -139,6 +140,91 @@ class ScheduleShowCommand extends Command<int> {
       final encoder = const JsonEncoder.withIndent('  ');
       dependencies.out.writeln(encoder.convert(entry.toJson()));
       return 0;
+    } finally {
+      await scheduleCtx.dispose();
+    }
+  }
+}
+
+class ScheduleTriggerCommand extends Command<int> {
+  ScheduleTriggerCommand(this.dependencies) {
+    argParser.addOption('id', abbr: 'i', help: 'Schedule identifier');
+  }
+
+  final StemCommandDependencies dependencies;
+
+  @override
+  final String name = 'trigger';
+
+  @override
+  final String description = 'Enqueue one immediate execution.';
+
+  @override
+  Future<int> run() async {
+    final args = argResults!;
+    final id =
+        args['id'] as String? ??
+        (args.rest.isNotEmpty ? args.rest.first : null);
+    if (id == null || id.isEmpty) {
+      dependencies.err.writeln(
+        'Missing schedule identifier (use --id or positional argument).',
+      );
+      return 64;
+    }
+
+    final scheduleCtx = await dependencies.createScheduleContext();
+    try {
+      ScheduleEntry? entry;
+      if (scheduleCtx.store != null) {
+        entry = await scheduleCtx.store!.get(id);
+      } else {
+        final entries = await scheduleCtx.repo!.load();
+        for (final candidate in entries) {
+          if (candidate.id == id) {
+            entry = candidate;
+            break;
+          }
+        }
+      }
+      if (entry == null) {
+        dependencies.err.writeln('Schedule "$id" not found.');
+        return 64;
+      }
+
+      final cliCtx = await dependencies.createCliContext();
+      try {
+        final envelope = Envelope(
+          name: entry.taskName,
+          args: entry.args,
+          queue: entry.queue,
+          headers: {'scheduled-from': 'cli-trigger', 'schedule-id': entry.id},
+          meta: {
+            ...entry.meta,
+            if (entry.kwargs.isNotEmpty) 'kwargs': entry.kwargs,
+            'stem.schedule.trigger': true,
+          },
+        );
+        await cliCtx.broker.publish(envelope);
+        final backend = cliCtx.backend;
+        if (backend != null) {
+          await backend.set(
+            envelope.id,
+            TaskState.queued,
+            attempt: envelope.attempt,
+            meta: {
+              'queue': envelope.queue,
+              'scheduleId': entry.id,
+              'stem.schedule.trigger': true,
+            },
+          );
+        }
+        dependencies.out.writeln(
+          'Triggered schedule "${entry.id}" as task ${envelope.id}.',
+        );
+        return 0;
+      } finally {
+        await cliCtx.dispose();
+      }
     } finally {
       await scheduleCtx.dispose();
     }

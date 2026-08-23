@@ -34,6 +34,15 @@ If a workflow enqueues normal Stem tasks, those tasks still use the normal
 `TaskOptions` retry policy. The workflow and the task are separate retry
 surfaces.
 
+## Acknowledgement uncertainty
+
+Task delivery is at least once. Stem records a successful result before the
+final broker acknowledgement. If that acknowledgement is lost, the broker
+may redeliver the same envelope; the worker recognizes the durable terminal
+result and acknowledges the duplicate without invoking the handler again.
+External side effects must still be idempotent because a process can fail
+before its result is recorded.
+
 ## Cancellation policies
 
 Use `WorkflowCancellationPolicy` when you need to cap:

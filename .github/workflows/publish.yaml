@@ -1,22 +1,41 @@
 name: Publish
 
-# When a pull request is opened or updated the job will run the validation
-# steps (using firehose, this checks for correct pubspec versioning, changelog entries, etc.).
-# When you push a tag (for a package), firehose will attempt to publish that package.
+# Pull requests and release tags run Stem's repository-owned release gate.
+# Tags then continue through Dart's trusted publishing workflow.
 on:
   pull_request:
     branches: [ master ]
     types: [ opened, synchronize, reopened, labeled, unlabeled ]
   push:
     # For mono repos the tag must be prefixed with the package name,
-    # e.g. "routed-v1.0.0". Adjust the regular expression as needed.
+    # e.g. "stem-v0.3.0". Every published package uses this form.
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - '[A-z]+-v[0-9]+.[0-9]+.[0-9]+'
+      - '[A-Za-z0-9_]+-v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
 
 jobs:
+  release-gate:
+    name: release gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.10.0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve workspace dependencies
+        run: dart pub get
+      - name: Validate the complete release train
+        run: dart run tool/publish.dart --skip-published --include-unchanged
+
   publish:
+    needs: release-gate
+    if: startsWith(github.ref, 'refs/tags/') && needs.release-gate.result == 'success'
     # This job uses the common publish workflow provided by the ecosystem.
     # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
     uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main

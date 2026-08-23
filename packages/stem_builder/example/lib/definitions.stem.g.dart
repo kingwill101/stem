@@ -91,6 +91,29 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
   return args[name];
 }
 
+TaskInvocationContext _stemTaskInvocationContext(
+  TaskExecutionContext context,
+  Map<String, Object?> args,
+) {
+  if (context case final TaskInvocationContext value) {
+    return value;
+  }
+  return TaskInvocationContext.local(
+    id: context.id,
+    args: args,
+    headers: context.headers,
+    meta: context.meta,
+    attempt: context.attempt,
+    heartbeat: context.heartbeat,
+    extendLease: context.extendLease,
+    progress: (percent, {data}) => context.progress(percent, data: data),
+    cancellation: context.cancellation,
+    enqueuer: context,
+    workflows: context,
+    workflowEvents: context,
+  );
+}
+
 Future<Object?> _stemTaskAdapter0(
   TaskInvocationContext context,
   Map<String, Object?> args,
@@ -103,6 +126,7 @@ abstract final class StemTaskDefinitions {
   builderExampleTask = TaskDefinition<Map<String, Object?>, Object?>(
     name: "builder.example.task",
     encodeArgs: (args) => args,
+    decodeArgs: (args) => args,
     defaultOptions: const TaskOptions(),
     metadata: const TaskMetadata(),
   );
@@ -114,20 +138,25 @@ abstract final class StemTaskDefinitions {
       );
 }
 
-final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
-  FunctionTaskHandler<Object?>(
-    name: "builder.example.task",
-    entrypoint: builderExampleTask,
-    options: const TaskOptions(),
-    metadata: const TaskMetadata(),
-  ),
-  FunctionTaskHandler<Object?>(
-    name: "builder.example.ping",
-    entrypoint: _stemTaskAdapter0,
-    options: const TaskOptions(),
-    metadata: const TaskMetadata(),
-  ),
-];
+final List<TypedTaskHandler<Object?, Object?>> _stemTasks =
+    <TypedTaskHandler<Object?, Object?>>[
+      StemTaskDefinitions.builderExampleTask.handler(
+        entrypoint: (context, args) => builderExampleTask(
+          _stemTaskInvocationContext(
+            context,
+            StemTaskDefinitions.builderExampleTask.encodeArgs(args),
+          ),
+          args,
+        ),
+        executionMode: TaskExecutionMode.isolate,
+        isolateEntrypoint: builderExampleTask,
+      ),
+      StemTaskDefinitions.builderExamplePing.asDefinition.handler(
+        entrypoint: (context, args) => builderPingTask(),
+        executionMode: TaskExecutionMode.isolate,
+        isolateEntrypoint: _stemTaskAdapter0,
+      ),
+    ];
 
 final List<WorkflowManifestEntry> _stemWorkflowManifest =
     <WorkflowManifestEntry>[

@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:stem/src/backend/encoding_result_backend.dart';
 import 'package:stem/src/core/chord_metadata.dart';
+import 'package:stem/src/core/chord_policy.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
+import 'package:stem/src/observability/tracing.dart';
 import 'package:uuid/uuid.dart';
 
 /// Describes a task to schedule along with optional decoder metadata.
@@ -104,6 +106,73 @@ class TaskChainResult<T extends Object?> {
   bool get isCompleted => finalStatus?.state == TaskState.succeeded;
 }
 
+/// A fluent, heterogeneous typed Canvas chain.
+///
+/// Each call to [then] is type-checked against the previous task's result:
+///
+/// ```dart
+/// final pipeline = canvas
+///     .typedChain(download, request)
+///     .then(resize)
+///     .then(upload);
+/// final result = await pipeline.run();
+/// ```
+///
+/// The existing [Canvas.chain] API remains available for raw signatures and
+/// migration compatibility. This builder decodes each terminal result before
+/// encoding it as the next task's typed arguments.
+class TypedCanvasChain<TInput, TCurrent extends Object?> {
+  const TypedCanvasChain._(this._canvas, this._steps);
+
+  final Canvas _canvas;
+  final List<_TypedCanvasChainStep> _steps;
+
+  /// Appends a task whose arguments accept the current result type.
+  TypedCanvasChain<TInput, TNext> then<TNext extends Object?>(
+    TaskDefinition<TCurrent, TNext> definition, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TNext Function(Object? payload)? decode,
+  }) {
+    return TypedCanvasChain<TInput, TNext>._(
+      _canvas,
+      [
+        ..._steps,
+        _TypedCanvasChainStep(
+          build: (input) => definition
+              .toSignature(
+                input as TCurrent,
+                headers: headers,
+                options: options,
+                notBefore: notBefore,
+                meta: meta,
+                decode: decode,
+              )
+              .call(),
+          decode: decode ?? definition.decode,
+        ),
+      ],
+    );
+  }
+
+  /// Runs the chain and returns the final task's typed result.
+  Future<TaskChainResult<TCurrent>> run({
+    void Function(int index, TaskStatus status, Object? value)? onStepCompleted,
+  }) => _canvas._runTypedChain<TCurrent>(
+    _steps,
+    onStepCompleted: onStepCompleted,
+  );
+}
+
+class _TypedCanvasChainStep {
+  const _TypedCanvasChainStep({required this.build, required this.decode});
+
+  final Envelope Function(Object? previousValue) build;
+  final Object? Function(Object? payload) decode;
+}
+
 /// Handle returned by [Canvas.group] providing a stream of typed results.
 class GroupDispatch<T extends Object?> {
   /// Creates a group dispatch handle.
@@ -140,6 +209,8 @@ class ChordResult<T extends Object?> {
     required this.chordId,
     required this.callbackTaskId,
     required this.values,
+    this.policy = const ChordPolicy.allOrFail(),
+    this.failures = const [],
   });
 
   /// Identifier for the chord group.
@@ -150,6 +221,12 @@ class ChordResult<T extends Object?> {
 
   /// Results from the chord body tasks.
   final List<T?> values;
+
+  /// Policy used to decide whether the callback could run.
+  final ChordPolicy policy;
+
+  /// Terminal body statuses that were not successful.
+  final List<TaskStatus> failures;
 }
 
 /// Lifecycle states for first-class batch submissions.
@@ -286,7 +363,7 @@ class Canvas {
   }
 
   /// The message broker used to publish task envelopes.
-  final Broker broker;
+  final QueueBroker broker;
 
   /// Registry of payload encoders used by the canvas.
   final TaskPayloadEncoderRegistry payloadEncoders;
@@ -337,27 +414,46 @@ class Canvas {
       );
     }
     final taskIds = <String>[];
-    for (final signature in signatures) {
-      final raw = signature();
-      final grouped = raw.copyWith(
-        headers: {...raw.headers, 'stem-group-id': id},
-        meta: {...raw.meta, 'groupId': id},
-      );
-      final (envelope, resultEncoder) = _prepareEnvelope(grouped);
-      taskIds.add(envelope.id);
-      await broker.publish(envelope);
-      final queuedMeta = _withResultEncoderMeta({
-        ...envelope.meta,
-        'queue': envelope.queue,
-        'groupId': id,
-      }, resultEncoder);
-      await backend.set(
-        envelope.id,
-        TaskState.queued,
-        attempt: envelope.attempt,
-        meta: queuedMeta,
-      );
-    }
+    await StemTracer.instance.trace(
+      'stem.canvas.group',
+      () async {
+        final compositionContext = StemTracer.instance.ambientContextOrNull();
+        for (final signature in signatures) {
+          final raw = signature();
+          final traceHeaders = Map<String, String>.from(raw.headers);
+          StemTracer.instance.injectTraceContext(
+            traceHeaders,
+            context: compositionContext,
+          );
+          StemTracer.instance.injectTraceLink(
+            traceHeaders,
+            context: compositionContext,
+          );
+          final grouped = raw.copyWith(
+            headers: {...traceHeaders, 'stem-group-id': id},
+            meta: {...raw.meta, 'groupId': id},
+          );
+          final (envelope, resultEncoder) = _prepareEnvelope(grouped);
+          taskIds.add(envelope.id);
+          await broker.publish(envelope);
+          final queuedMeta = _withResultEncoderMeta({
+            ...envelope.meta,
+            'queue': envelope.queue,
+            'groupId': id,
+          }, resultEncoder);
+          await backend.set(
+            envelope.id,
+            TaskState.queued,
+            attempt: envelope.attempt,
+            meta: queuedMeta,
+          );
+        }
+      },
+      attributes: {
+        'stem.canvas.group.id': id,
+        'stem.canvas.group.task_count': signatures.length,
+      },
+    );
 
     final controller = StreamController<TaskResult<T>>.broadcast();
     if (taskIds.isEmpty) {
@@ -497,6 +593,39 @@ class Canvas {
     return _buildBatchStatus(status);
   }
 
+  /// Starts a fluent heterogeneous typed chain.
+  ///
+  /// Unlike [chain], subsequent tasks are allowed to have different argument
+  /// and result types. The compiler checks each transition when
+  /// [TypedCanvasChain.then] is called.
+  TypedCanvasChain<TArgs, TResult> typedChain<TArgs, TResult extends Object?>(
+    TaskDefinition<TArgs, TResult> definition,
+    TArgs args, {
+    Map<String, String> headers = const {},
+    TaskOptions? options,
+    DateTime? notBefore,
+    Map<String, Object?>? meta,
+    TResult Function(Object? payload)? decode,
+  }) {
+    final signature = definition.toSignature(
+      args,
+      headers: headers,
+      options: options,
+      notBefore: notBefore,
+      meta: meta,
+      decode: decode,
+    );
+    return TypedCanvasChain<TArgs, TResult>._(
+      this,
+      [
+        _TypedCanvasChainStep(
+          build: (_) => signature(),
+          decode: signature.decodePayload,
+        ),
+      ],
+    );
+  }
+
   Future<T> _withBatchSubmissionLock<T>(
     String batchId,
     Future<T> Function() operation,
@@ -606,6 +735,107 @@ class Canvas {
     return completer.future;
   }
 
+  Future<TaskChainResult<TFinal>> _runTypedChain<TFinal>(
+    List<_TypedCanvasChainStep> steps, {
+    void Function(int index, TaskStatus status, Object? value)? onStepCompleted,
+  }) async {
+    if (steps.isEmpty) {
+      throw ArgumentError('Typed chain requires at least one task');
+    }
+
+    final chainId = _generateId('chain');
+    final completer = Completer<TaskChainResult<TFinal>>();
+
+    Future<void> runStep(int index, Object? previousValue) async {
+      final step = steps[index];
+      final raw = step.build(previousValue);
+      final meta = {
+        ...raw.meta,
+        'chainId': chainId,
+        'chainIndex': index,
+        'queue': raw.queue,
+        'chainPrevResult': ?previousValue,
+      };
+      final headers = {
+        ...raw.headers,
+        'stem-chain-id': chainId,
+        'stem-chain-index': '$index',
+      };
+      final envelope = raw.copyWith(headers: headers, meta: meta);
+      final (preparedEnvelope, resultEncoder) = _prepareEnvelope(envelope);
+
+      late StreamSubscription<TaskStatus> subscription;
+      subscription = backend
+          .watch(preparedEnvelope.id)
+          .listen(
+            (status) async {
+              if (status.state == TaskState.succeeded) {
+                try {
+                  final decoded = step.decode(status.payload);
+                  onStepCompleted?.call(index, status, decoded);
+                  await subscription.cancel();
+                  if (index + 1 < steps.length) {
+                    await runStep(index + 1, decoded);
+                  } else if (!completer.isCompleted) {
+                    completer.complete(
+                      TaskChainResult<TFinal>(
+                        chainId: chainId,
+                        finalTaskId: preparedEnvelope.id,
+                        finalStatus: status,
+                        value: decoded as TFinal?,
+                      ),
+                    );
+                  }
+                } on Object catch (error, stackTrace) {
+                  await subscription.cancel();
+                  if (!completer.isCompleted) {
+                    completer.completeError(error, stackTrace);
+                  }
+                }
+              } else if (status.state == TaskState.failed ||
+                  status.state == TaskState.cancelled) {
+                await subscription.cancel();
+                if (!completer.isCompleted) {
+                  completer.completeError(
+                    StateError('Chain $chainId failed at step $index'),
+                  );
+                }
+              }
+            },
+            onError: (Object error, StackTrace stackTrace) {
+              if (!completer.isCompleted) {
+                completer.completeError(error, stackTrace);
+              }
+            },
+          );
+
+      await broker.publish(preparedEnvelope);
+      final queuedMeta = _withResultEncoderMeta(
+        preparedEnvelope.meta,
+        resultEncoder,
+      );
+      await backend.set(
+        preparedEnvelope.id,
+        TaskState.queued,
+        attempt: preparedEnvelope.attempt,
+        meta: queuedMeta,
+      );
+    }
+
+    unawaited(
+      () async {
+        try {
+          await runStep(0, null);
+        } on Object catch (error, stackTrace) {
+          if (!completer.isCompleted) {
+            completer.completeError(error, stackTrace);
+          }
+        }
+      }(),
+    );
+    return completer.future;
+  }
+
   /// Coordinates a chord: a group of tasks followed by a callback.
   ///
   /// Publishes [body] as a group and waits until every task in the group
@@ -617,20 +847,37 @@ class Canvas {
   Future<ChordResult<T>> chord<T extends Object?>({
     required List<TaskSignature<T>> body,
     required TaskSignature callback,
+    ChordPolicy policy = const ChordPolicy.allOrFail(),
     Duration pollInterval = const Duration(milliseconds: 100),
   }) async {
-    final handle = await _startChord<T>(body: body, callback: callback);
+    final handle = await _startChord<T>(
+      body: body,
+      callback: callback,
+      policy: policy,
+    );
     final values = await _awaitChordValues(
       handle.chordId,
       body,
       handle.bodyTaskIds,
+      policy,
       pollInterval,
     );
     final callbackTaskId = await handle.callbackFuture;
+    final groupStatus = await backend.getGroup(handle.chordId);
     return ChordResult<T>(
       chordId: handle.chordId,
       callbackTaskId: callbackTaskId,
       values: values,
+      policy: policy,
+      failures: groupStatus == null
+          ? const []
+          : groupStatus.results.values
+                .where(
+                  (status) =>
+                      status.state == TaskState.failed ||
+                      status.state == TaskState.cancelled,
+                )
+                .toList(growable: false),
     );
   }
 
@@ -638,6 +885,7 @@ class Canvas {
   Future<void> _monitorChord(
     String chordId,
     String callbackId,
+    ChordPolicy policy,
     Completer<String> completer,
   ) async {
     while (true) {
@@ -646,12 +894,11 @@ class Canvas {
         await Future<void>.delayed(const Duration(milliseconds: 100));
         continue;
       }
-      final hasFailure = status.results.values.any(
-        (s) => s.state == TaskState.failed || s.state == TaskState.cancelled,
-      );
-      if (hasFailure) {
+      if (policy.shouldFail(status)) {
         if (!completer.isCompleted) {
-          completer.completeError('Chord $chordId failed due to task failure');
+          completer.completeError(
+            StateError('Chord $chordId failed under ${policy.kind.name}'),
+          );
         }
         return;
       }
@@ -674,6 +921,7 @@ class Canvas {
   Future<_ChordHandle> _startChord<T extends Object?>({
     required List<TaskSignature<T>> body,
     required TaskSignature callback,
+    required ChordPolicy policy,
   }) async {
     if (body.isEmpty) {
       throw ArgumentError('Chord body must have at least one task');
@@ -686,7 +934,10 @@ class Canvas {
       GroupDescriptor(
         id: chordId,
         expected: body.length,
-        meta: {ChordMetadata.callbackEnvelope: callbackEnvelope.toJson()},
+        meta: {
+          ChordMetadata.callbackEnvelope: callbackEnvelope.toJson(),
+          ChordMetadata.policy: policy.toJson(),
+        },
       ),
     );
     final bodyDispatch = await group(body, groupId: chordId);
@@ -694,14 +945,16 @@ class Canvas {
     await bodyDispatch.dispose();
     final completer = Completer<String>();
     unawaited(
-      _monitorChord(chordId, callbackEnvelope.id, completer).catchError((
-        Object error,
-        StackTrace stack,
-      ) {
-        if (!completer.isCompleted) {
-          completer.completeError(error, stack);
-        }
-      }),
+      _monitorChord(chordId, callbackEnvelope.id, policy, completer).catchError(
+        (
+          Object error,
+          StackTrace stack,
+        ) {
+          if (!completer.isCompleted) {
+            completer.completeError(error, stack);
+          }
+        },
+      ),
     );
     return _ChordHandle(
       chordId: chordId,
@@ -714,6 +967,7 @@ class Canvas {
     String chordId,
     List<TaskSignature<T>> body,
     List<String> taskIds,
+    ChordPolicy policy,
     Duration pollInterval,
   ) async {
     while (true) {
@@ -722,16 +976,9 @@ class Canvas {
         await Future<void>.delayed(pollInterval);
         continue;
       }
-      final failures = status.results.entries
-          .where(
-            (entry) =>
-                entry.value.state == TaskState.failed ||
-                entry.value.state == TaskState.cancelled,
-          )
-          .toList();
-      if (failures.isNotEmpty) {
+      if (policy.shouldFail(status)) {
         throw StateError(
-          'Chord $chordId failed due to task ${failures.first.key}',
+          'Chord $chordId failed under ${policy.kind.name}',
         );
       }
       final values = <T?>[];

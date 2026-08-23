@@ -1,4 +1,4 @@
-import 'package:stem/stem.dart';
+import 'package:stem/memory.dart';
 import 'package:stem_adapter_tests/stem_adapter_tests.dart';
 
 void main() {

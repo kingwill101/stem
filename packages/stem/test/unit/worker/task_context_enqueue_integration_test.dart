@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:property_testing/property_testing.dart';
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -101,6 +102,7 @@ void main() {
         tasks: [_IsolateStartWorkflowTask()],
         flows: [_childWorkflow],
       );
+      await app.start();
 
       final taskId = await app.enqueue('tasks.isolate.start.workflow');
       final result = await app.waitForTask<String>(
@@ -119,6 +121,7 @@ void main() {
         tasks: [_IsolateEmitWorkflowEventTask()],
         flows: [_waitingWorkflow],
       );
+      await app.start();
 
       final runId = await _waitingWorkflowRef.start(app);
       final taskId = await app.enqueue('tasks.isolate.emit.workflow.event');

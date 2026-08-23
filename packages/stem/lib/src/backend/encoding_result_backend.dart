@@ -17,7 +17,8 @@ ResultBackend withTaskPayloadEncoder(
 }
 
 /// Result backend decorator that applies [TaskPayloadEncoder] semantics.
-class EncodingResultBackend implements ResultBackend {
+class EncodingResultBackend
+    implements ResultBackend, AtomicTerminalResultBackend {
   /// Creates an encoding wrapper around the provided backend.
   EncodingResultBackend(this._inner, this.registry);
 
@@ -28,6 +29,11 @@ class EncodingResultBackend implements ResultBackend {
 
   /// The wrapped backend used for persistence.
   ResultBackend get inner => _inner;
+
+  @override
+  bool get supportsAtomicTerminalWrites =>
+      _inner is AtomicTerminalResultBackend &&
+      (_inner as AtomicTerminalResultBackend).supportsAtomicTerminalWrites;
 
   @override
   Future<void> set(
@@ -51,6 +57,33 @@ class EncodingResultBackend implements ResultBackend {
       meta: meta,
       ttl: ttl,
     );
+  }
+
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    final encoded = _encodeStatus(status);
+    if (_inner is AtomicTerminalResultBackend &&
+        (_inner as AtomicTerminalResultBackend).supportsAtomicTerminalWrites) {
+      final atomic = _inner as AtomicTerminalResultBackend;
+      return atomic.setTerminalIfAbsent(encoded, ttl: ttl);
+    }
+
+    // Keep custom ResultBackend implementations source compatible. This path
+    // preserves the old behavior but is intentionally not advertised as an
+    // atomic cross-process write.
+    await set(
+      status.id,
+      status.state,
+      payload: status.payload,
+      error: status.error,
+      attempt: status.attempt,
+      meta: status.meta,
+      ttl: ttl,
+    );
+    return true;
   }
 
   @override

@@ -168,7 +168,7 @@ class InlineCoordinatorTask extends TaskHandler<void> {
   TaskOptions get options => const TaskOptions(
         queue: mixedQueue,
         maxRetries: 1,
-        rateLimit: '30/m',
+        rateLimit: const RateLimit.perMinute(30),
         priority: 3,
         retryPolicy: TaskRetryPolicy(
           backoff: true,

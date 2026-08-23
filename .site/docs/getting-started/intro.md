@@ -10,10 +10,10 @@ aliases:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Stem is a Dart-native background work platform that gives you Celery‑level
-capabilities without leaving the Dart ecosystem. This onboarding path assumes
-you have never touched Stem before and walks you from “what is this?” to “I can
-ship a production deployment.”
+Stem is an experimental Dart-native background work platform with Celery-like
+building blocks for queues, workers, and durable workflows. This onboarding
+path assumes you have never touched Stem before and walks you from “what is
+this?” to “I can evaluate a production-shaped deployment.”
 
 ## What is a task queue?
 

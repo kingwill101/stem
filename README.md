@@ -3,13 +3,13 @@
 </p>
 
 <p align="center">
-  <strong>Dart-native background job platform</strong><br>
+  <strong>Experimental Dart-native background job platform</strong><br>
   Queues, retries, scheduling, workflows, and observability — all in pure Dart.
 </p>
 
 <p align="center">
   <a href="https://pub.dev/packages/stem"><img src="https://img.shields.io/pub/v/stem.svg" alt="Pub Version"></a>
-  <a href="https://github.com/kingwill101/stem/actions"><img src="https://github.com/kingwill101/stem/workflows/CI/badge.svg" alt="CI Status"></a>
+  <a href="https://github.com/kingwill101/stem/actions/workflows/aggregate.yaml"><img src="https://github.com/kingwill101/stem/actions/workflows/aggregate.yaml/badge.svg" alt="Aggregate CI Status"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
 </p>
 
@@ -19,7 +19,7 @@
 
 - **Pure Dart** — No external worker processes, no FFI bindings. Runs anywhere Dart runs.
 - **Pluggable backends** — Swap between SQLite, Redis, or Postgres with a single line.
-- **Battle-tested patterns** — Retries with backoff, rate limiting, dead-letter queues, and priority scheduling.
+- **Reliability patterns under active validation** — Retries with backoff, rate limiting, dead-letter queues, and priority scheduling.
 - **Workflows** — Durable, checkpointed execution for complex multi-step processes.
 - **Canvas API** — Compose tasks into groups, chains, and chords.
 - **Observability** — Built-in OpenTelemetry integration for traces and metrics.
@@ -28,10 +28,40 @@
 
 ## Quick Start
 
+### Recommended: generated typed tasks
+
+For application code, define task arguments and results as Dart types and let
+`stem_builder` generate the transport adapter, codecs, registry and typed call
+object:
+
+```dart
+part 'tasks.stem.g.dart';
+
+@TaskDefn(name: 'email.send')
+Future<EmailResult> sendEmail(
+  EmailArgs args, {
+  TaskExecutionContext? context,
+}) async {
+  return EmailResult(await deliver(args));
+}
+```
+
+Run `dart run build_runner build`, then enqueue through the generated
+definition rather than a raw task-name string. See the
+[`stem_builder` guide](./packages/stem_builder/README.md) for the complete DTO and
+workflow example.
+
+### Advanced: raw task handlers
+
+For production-shaped task code, prefer `stem_builder` generated task definitions:
+they keep task arguments and results typed across the enqueue/handler boundary.
+The raw `TaskHandler` example below is intentionally the low-level
+interoperability path for dynamic task names and existing map-based handlers.
+
 ```dart
 import 'dart:async';
 
-import 'package:stem/stem.dart';
+import 'package:stem/advanced.dart';
 
 class EmailTask extends TaskHandler<String> {
   @override
@@ -136,7 +166,7 @@ Future<void> main() async {
 |---------|-------------|---------|
 | [`stem`](./packages/stem) | Core runtime: contracts, worker, scheduler, in-memory adapters, signals, Canvas, workflows | [![pub](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem) |
 | [`stem_cli`](./packages/stem_cli) | Command-line tooling (`stem` executable) and CLI utilities | [![pub](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli) |
-| [`stem_memory`](./packages/stem_memory) | In-memory adapter package (broker/backend/workflow/scheduler factories) | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
+| [`stem_memory`](./packages/stem_memory) | Compatibility package for the explicit `package:stem/memory.dart` in-memory library | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
 | [`stem_sqlite`](./packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_redis`](./packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
 | [`stem_postgres`](./packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
@@ -157,7 +187,7 @@ TaskOptions(
   queue: 'high-priority',      // Target queue
   maxRetries: 5,               // Retry on failure
   priority: 10,                // Higher = processed first
-  rateLimit: '100/m',          // Rate limiting
+  rateLimit: RateLimit.perMinute(100), // Typed rate limiting
   softTimeLimit: Duration(seconds: 30),
   hardTimeLimit: Duration(minutes: 2),
   visibilityTimeout: Duration(minutes: 5),
@@ -246,7 +276,9 @@ stem health
 ### Prerequisites
 
 - Dart 3.9.2+
+- Flutter 3.47.0+ (for the local Flutter package gate)
 - Docker (for adapter integration tests)
+- Dagger CLI v0.21.7 (for the reproducible Dagger gate)
 
 ### Setup
 
@@ -261,7 +293,7 @@ dart pub get
 # Run quality gates
 dart format --output=none --set-exit-if-changed .
 dart analyze
-task test:no-env
+task test:all
 ```
 
 ### Adapter Tests
@@ -280,6 +312,26 @@ task test:contract
 task test:redis
 task test:postgres
 ```
+
+### Reproducible Dagger Gate
+
+The root Taskfile is also executable inside a pinned Dagger environment. This
+is the recommended path when the local toolchain or Docker Compose state is
+not trustworthy:
+
+```bash
+# Runs every Dart and Flutter package test with disposable PostgreSQL/Redis
+# services and a pinned Flutter SDK.
+task test:dagger
+
+# If Dagger is not on PATH:
+DAGGER_BIN=/path/to/dagger task test:dagger
+```
+
+The Dagger module uses the Go SDK, pins the Dagger engine, Task release and
+Flutter SDK, and generates disposable TLS assets during the run. The aggregate
+GitHub Actions test gate calls this same Dagger module; package-specific test
+workflows are intentionally not maintained separately.
 
 Targeted adapter tasks now bootstrap integration environment automatically.
 If bootstrap still fails (for example Docker unavailable), run:

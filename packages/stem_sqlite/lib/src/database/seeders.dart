@@ -1,10 +1,8 @@
-// Ignoring unreachable_from_main because tooling imports use runProjectSeeds.
-// ignore_for_file: unreachable_from_main
-
 import 'package:ormed/ormed.dart';
 import 'package:stem_sqlite/orm_registry.g.dart';
 import 'package:stem_sqlite/src/database/seed_runtime.dart';
 import 'package:stem_sqlite/src/database/seeders/database_seeder.dart';
+
 // <ORM-SEED-IMPORTS>
 // </ORM-SEED-IMPORTS>
 

@@ -61,16 +61,29 @@ The **Worker Package** is the task execution runtime of the Stem task queue fram
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+The worker is an orchestration boundary rather than the owner of every
+subsystem. `TaskHandler.executionMode` is the source of truth for inline
+versus isolate execution. `WorkerExecutionSupervisor` owns that dispatch,
+hard-timeout handling, and isolate-pool lifecycle; `WorkerLeaseCoordinator`,
+`WorkerAcknowledgementCoordinator`, and `WorkerDeliveryTracker` own their
+corresponding stateful mechanics. Delivery state, retries, result persistence,
+and control-plane policy remain in `Worker`.
+
 ---
 
 ## File Structure
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `worker.dart` | 3374 | Main worker runtime - task consumption, lifecycle, observability |
+| `worker.dart` | — | Delivery loop, state transitions, retries, control plane, and lifecycle orchestration |
+| `worker_execution_supervisor.dart` | — | Inline/isolate execution, hard limits, and isolate-pool lifecycle |
+| `worker_consumer_loop.dart` | — | Broker subscription ownership, replacement, and stream error boundaries |
 | `isolate_pool.dart` | 573 | Isolate pool management for concurrent task execution |
 | `isolate_messages.dart` | 177 | Message types for isolate communication |
 | `worker_config.dart` | 136 | Configuration classes for autoscaling and lifecycle |
+| `worker_acknowledgement.dart` | — | Terminal-state acknowledgement recovery |
+| `worker_lease_coordinator.dart` | — | Lease renewal timers and failure containment |
+| `worker_delivery_tracker.dart` | — | Active delivery and in-flight queue tracking |
 
 ---
 
@@ -86,7 +99,7 @@ The main runtime that consumes tasks from a broker and executes handlers.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `broker` | `Broker` | **required** | Message broker for publishing/consuming |
+| `broker` | `QueueBroker` | **required** | Queue transport for publishing/consuming |
 | `registry` | `TaskRegistry` | **required** | Registry containing task handlers |
 | `backend` | `ResultBackend` | **required** | Backend for persisting task state |
 | `enqueuer` | `Stem?` | `null` | Stem instance for spawning child tasks |
@@ -118,7 +131,7 @@ The main runtime that consumes tasks from a broker and executes handlers.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `broker` | `Broker` | Broker for consuming/acknowledging deliveries |
+| `broker` | `QueueBroker` | Broker for consuming/acknowledging deliveries |
 | `registry` | `TaskRegistry` | Task handler registry |
 | `backend` | `ResultBackend` | Result persistence backend |
 | `rateLimiter` | `RateLimiter?` | Optional rate limiter |
@@ -161,13 +174,13 @@ The main runtime that consumes tasks from a broker and executes handlers.
 | `_runConsumeMiddleware(Delivery)` | Executes consume middleware before task handling |
 | `_notifyErrorMiddleware(TaskContext, Object, StackTrace)` | Notifies middleware about task processing errors |
 | `_invokeWithMiddleware(TaskContext, Future<dynamic> Function())` | Invokes handler through middleware chain |
-| `_executeWithHardLimit(TaskHandler, TaskContext, Envelope, Map)` | Runs handler with optional hard time limit |
+| `_executeWithHardLimit(TaskHandler, TaskContext, Envelope, Map)` | Delegates execution and hard limits to `WorkerExecutionSupervisor` |
 | `_scheduleSoftLimit(Envelope, TaskOptions)` | Schedules soft timeout warning |
-| `_startHeartbeat(String)` | Starts heartbeat timer for a task |
-| `_scheduleLeaseRenewal(Delivery)` | Schedules visibility/lease renewal |
-| `_restartLeaseTimer(Delivery, Duration)` | Restarts lease timer after renewal |
-| `_startLeaseTimer(Delivery, Duration)` | Starts lease renewal timer |
-| `_cancelLeaseTimer(String)` | Cancels lease renewal tracking |
+| `_startHeartbeat(Delivery)` | Starts a heartbeat timer for one delivery |
+| `_scheduleLeaseRenewal(Delivery)` | Delegates visibility/lease renewal to the lease coordinator |
+| `_restartLeaseTimer(Delivery, Duration)` | Restarts lease renewal through the coordinator |
+| `_cancelLeaseTimer(Delivery)` | Cancels lease renewal after terminal handling |
+| `WorkerLeaseCoordinator` | Owns renewal timers and contains broker renewal failures |
 | `_noteLeaseRenewal(Delivery)` | Records lease renewal timestamp |
 | `_releaseUniqueLock(Envelope)` | Releases unique task locks |
 | `_maybeDispatchChord(GroupStatus)` | Dispatches chord callbacks when group completes |
@@ -180,17 +193,17 @@ The main runtime that consumes tasks from a broker and executes handlers.
 | `_handleFailure(...)` | Handles task failure with retries and status updates |
 | `_handleRetryRequest(...)` | Handles explicit retry requests from handlers |
 | `_rateLimitKey(TaskOptions, Envelope)` | Builds rate-limit key |
-| `_parseRate(String)` | Parses rate limit string (e.g., "10/m") |
+| `RateLimit` | Typed rate limit value; legacy strings are parsed at configuration boundaries |
 | `_sendHeartbeat(String)` | Emits heartbeat update for running task |
 | `_trackDelivery(Delivery)` | Tracks in-flight delivery |
-| `_releaseDelivery(Envelope)` | Removes delivery from tracking |
+| `_releaseDelivery(Delivery)` | Removes the exact broker delivery from tracking |
 | `_recordInflightGauge()` | Records in-flight task count metric |
 | `_recordConcurrencyGauge()` | Records active concurrency metric |
 | `_recordQueueDepth()` | Updates queue depth metrics |
 | `_collectQueueDepths()` | Collects pending counts per queue |
 | `_cancelAllSubscriptions()` | Cancels broker subscriptions |
 | `_cancelTimers()` | Cancels active runtime timers |
-| `_disposePool()` | Disposes isolate pool |
+| `_disposePool()` | Disposes the execution supervisor and isolate pool |
 | `_forceStopActiveTasks()` | Forcibly stops tasks, requeues deliveries |
 | `_requestTerminationForActiveTasks({String reason})` | Requests cooperative termination |
 | `_awaitDrainWithTimeout(Duration?)` | Waits for tasks to drain with timeout |
@@ -200,7 +213,7 @@ The main runtime that consumes tasks from a broker and executes handlers.
 | `_startWorkerHeartbeatLoop()` | Starts periodic worker heartbeat |
 | `_startAutoscaler()` | Starts autoscaling evaluation timer |
 | `_evaluateAutoscale()` | Evaluates autoscale rules |
-| `_updateConcurrency(int, {String reason, int backlog, int inflight})` | Updates isolate pool size |
+| `_updateConcurrency(int, {String reason, int backlog, int inflight})` | Updates worker concurrency and delegates pool resizing |
 | `_cooldownElapsed(DateTime?, Duration, DateTime)` | Checks autoscale cooldown |
 | `_handleIsolateRecycle(IsolateRecycleEvent)` | Handles isolate pool recycling |
 | `_installSignalHandlers()` | Installs process signal handlers |

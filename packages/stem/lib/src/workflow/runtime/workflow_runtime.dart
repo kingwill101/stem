@@ -2400,7 +2400,7 @@ Map<String, Object?> _coerceEventPayload(String topic, Object? payload) {
   }
   if (payload is Map) {
     final encoded = <String, Object?>{};
-    for (final MapEntry(key: key, value: value) in payload.entries) {
+    for (final MapEntry(:key, :value) in payload.entries) {
       if (key is! String) {
         throw ArgumentError.value(
           payload,

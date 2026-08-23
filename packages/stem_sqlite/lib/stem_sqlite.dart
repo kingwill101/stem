@@ -3,9 +3,6 @@ export 'src/backend/sqlite_result_backend.dart' show SqliteResultBackend;
 export 'src/broker/sqlite_broker.dart' show SqliteBroker;
 export 'src/connection.dart' show SqliteConnections;
 export 'src/control/sqlite_revoke_store.dart' show SqliteRevokeStore;
-// Exported for compatibility with the deprecated StemSqliteDatabase API.
-// ignore: deprecated_member_use_from_same_package
-export 'src/database.dart' show StemSqliteDatabase;
 export 'src/database/datasource.dart' show createDataSource;
 export 'src/models/models.dart';
 export 'src/stack/sqlite_adapter.dart' show StemSqliteAdapter;

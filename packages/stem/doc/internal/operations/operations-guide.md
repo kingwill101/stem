@@ -44,7 +44,7 @@ docker compose -f packages/stem_cli/docker/testing/docker-compose.yml up -d post
 export STEM_TEST_REDIS_URL=redis://127.0.0.1:56379
 export STEM_TEST_POSTGRES_URL=postgresql://postgres:postgres@127.0.0.1:65432/stem_test
 export STEM_TEST_POSTGRES_TLS_URL=$STEM_TEST_POSTGRES_URL
-export STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/certs/postgres-root.crt
+export STEM_TEST_POSTGRES_TLS_CA_CERT=packages/stem_cli/docker/testing/postgres/certs/root.crt
 ```
 
 With the services running, execute `dart test` in `packages/stem_redis`,

@@ -35,6 +35,7 @@ Future<void> main() async {
   final app = await StemWorkflowApp.inMemory(
     scripts: [shipmentWorkflow],
   );
+  await app.start();
 
   final runId = await shipmentWorkflowRef.start(
     app,

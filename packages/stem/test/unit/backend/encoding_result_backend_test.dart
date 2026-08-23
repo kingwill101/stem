@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
@@ -71,6 +72,43 @@ void main() {
 
       final fetched = await backend.getGroup('grp');
       expect(fetched?.results['grp-task']?.payload, 'group-value');
+    });
+
+    test('encodes atomic terminal writes before delegation', () async {
+      final inner = InMemoryResultBackend();
+      const encoder = _PrefixTaskPayloadEncoder();
+      final registry = TaskPayloadEncoderRegistry(
+        defaultResultEncoder: encoder,
+        defaultArgsEncoder: const JsonTaskPayloadEncoder(),
+      );
+      final backend = withTaskPayloadEncoder(inner, registry);
+      final meta = {stemResultEncoderMetaKey: encoder.id};
+
+      await backend.set('atomic-task', TaskState.running, meta: meta);
+      final applied = await (backend as AtomicTerminalResultBackend)
+          .setTerminalIfAbsent(
+            TaskStatus(
+              id: 'atomic-task',
+              state: TaskState.succeeded,
+              payload: 'value',
+              attempt: 1,
+              meta: meta,
+            ),
+          );
+      final rejected = await (backend as AtomicTerminalResultBackend)
+          .setTerminalIfAbsent(
+            TaskStatus(
+              id: 'atomic-task',
+              state: TaskState.failed,
+              attempt: 1,
+              meta: meta,
+            ),
+          );
+
+      expect(applied, isTrue);
+      expect(rejected, isFalse);
+      expect((await backend.get('atomic-task'))?.payload, 'value');
+      expect((await backend.get('atomic-task'))?.state, TaskState.succeeded);
     });
   });
 }

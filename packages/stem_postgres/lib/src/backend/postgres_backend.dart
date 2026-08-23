@@ -6,7 +6,8 @@ import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
-class PostgresResultBackend implements ResultBackend {
+class PostgresResultBackend
+    implements ResultBackend, AtomicTerminalResultBackend {
   PostgresResultBackend._(
     this._connections, {
     required this.namespace,
@@ -61,6 +62,9 @@ class PostgresResultBackend implements ResultBackend {
   final Map<String, StreamController<TaskStatus>> _watchers = {};
   Timer? _cleanupTimer;
   bool _closed = false;
+
+  @override
+  bool get supportsAtomicTerminalWrites => true;
 
   /// Connects to a PostgreSQL database and initializes the required tables.
   ///
@@ -184,6 +188,41 @@ class PostgresResultBackend implements ResultBackend {
     });
 
     _watchers[taskId]?.add(status);
+  }
+
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    final now = stemNow().toUtc();
+    final expiresAt = now.add(ttl ?? defaultTtl);
+    final updated = await _connections.runInTransaction((txn) {
+      final query = txn
+          .query<StemTaskResult>()
+          .whereEquals('id', status.id)
+          .whereEquals('namespace', namespace)
+          .where('expiresAt', now, PredicateOperator.greaterThan)
+          .where(
+            'state',
+            const ['succeeded', 'failed', 'cancelled'],
+            PredicateOperator.notInValues,
+          );
+      return query.update({
+        'state': status.state.name,
+        'payload': status.payload,
+        'error': status.error?.toJson(),
+        'attempt': status.attempt,
+        'meta': status.meta,
+        'expiresAt': expiresAt,
+        'updatedAt': now,
+      });
+    });
+    final applied = updated > 0;
+    if (applied) {
+      _watchers[status.id]?.add(status);
+    }
+    return applied;
   }
 
   @override

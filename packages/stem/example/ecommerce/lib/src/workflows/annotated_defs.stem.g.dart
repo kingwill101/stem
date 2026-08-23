@@ -83,6 +83,29 @@ Object? _stemRequireArg(Map<String, Object?> args, String name) {
   return args[name];
 }
 
+TaskInvocationContext _stemTaskInvocationContext(
+  TaskExecutionContext context,
+  Map<String, Object?> args,
+) {
+  if (context case final TaskInvocationContext value) {
+    return value;
+  }
+  return TaskInvocationContext.local(
+    id: context.id,
+    args: args,
+    headers: context.headers,
+    meta: context.meta,
+    attempt: context.attempt,
+    heartbeat: context.heartbeat,
+    extendLease: context.extendLease,
+    progress: (percent, {data}) => context.progress(percent, data: data),
+    cancellation: context.cancellation,
+    enqueuer: context,
+    workflows: context,
+    workflowEvents: context,
+  );
+}
+
 Future<Object?> _stemTaskAdapter0(
   TaskInvocationContext context,
   Map<String, Object?> args,
@@ -113,20 +136,31 @@ abstract final class StemTaskDefinitions {
           "entityId": args.entityId,
           "detail": args.detail,
         },
+        decodeArgs: (args) => (
+          event: (_stemRequireArg(args, "event") as String),
+          entityId: (_stemRequireArg(args, "entityId") as String),
+          detail: (_stemRequireArg(args, "detail") as String),
+        ),
         defaultOptions: const TaskOptions(queue: "default"),
         metadata: const TaskMetadata(),
       );
 }
 
-final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[
-  FunctionTaskHandler<Object?>(
-    name: "ecommerce.audit.log",
-    entrypoint: _stemTaskAdapter0,
-    options: const TaskOptions(queue: "default"),
-    metadata: const TaskMetadata(),
-    runInIsolate: false,
-  ),
-];
+final List<TypedTaskHandler<Object?, Object?>> _stemTasks =
+    <TypedTaskHandler<Object?, Object?>>[
+      StemTaskDefinitions.ecommerceAuditLog.handler(
+        entrypoint: (context, args) => logAuditEvent(
+          _stemTaskInvocationContext(
+            context,
+            StemTaskDefinitions.ecommerceAuditLog.encodeArgs(args),
+          ),
+          args.event,
+          args.entityId,
+          args.detail,
+        ),
+        executionMode: TaskExecutionMode.inline,
+      ),
+    ];
 
 final List<WorkflowManifestEntry> _stemWorkflowManifest =
     <WorkflowManifestEntry>[

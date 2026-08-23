@@ -10,6 +10,7 @@ class StemLock extends Model<StemLock> {
     required this.key,
     required this.namespace,
     required this.owner,
+    required this.fencingToken,
     required this.expiresAt,
     required this.createdAt,
   });
@@ -25,6 +26,10 @@ class StemLock extends Model<StemLock> {
   /// Owner identifier for the lock.
   @OrmField(columnName: 'owner')
   final String owner;
+
+  /// Monotonically increasing token for this lock acquisition.
+  @OrmField(columnName: 'fencing_token')
+  final int fencingToken;
 
   /// Timestamp when the lock expires.
   @OrmField(columnName: 'expires_at')

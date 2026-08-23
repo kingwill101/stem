@@ -1,0 +1,102 @@
+name: aggregate
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repository-hygiene:
+    name: repository / hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject committed certificate and key fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          matches="$(find packages -type f \( \
+            -name '*.key' -o -name '*.pem' -o -name '*.crt' -o \
+            -name '*.srl' -o -name '*.cnf' \
+          \) -print)"
+          if [[ -n "$matches" ]]; then
+            printf 'Certificate/key-like files must be generated during test setup:\n%s\n' "$matches"
+            exit 1
+          fi
+      - name: Reject duplicate legacy PostgreSQL CA path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e packages/stem_cli/docker/testing/certs/postgres-root.crt
+          ! rg -n 'docker/testing/certs|certs/postgres-root' \
+            packages .gitignore
+
+  dagger-test:
+    name: integration / Dagger all gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Local `task test:dagger` and CI both call the same Go SDK module.
+      - name: Run Dagger-backed all-package test gate
+        uses: dagger/dagger-for-github@v8.4.1
+        with:
+          version: v0.21.7
+          module: .dagger
+          call: all --source=.
+          dagger-flags: --progress plain
+
+  cross-platform-packages:
+    name: portable package / ${{ matrix.package }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+        include:
+          - package: packages/stem
+            tool: dart
+            test_args: --exclude-tags soak --fail-fast
+          - package: packages/stem_builder
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_sqlite
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_flutter
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_flutter_sqlite
+            tool: flutter
+            test_args: --fail-fast
+          - package: packages/stem_memory
+            tool: dart
+            test_args: --fail-fast
+          - package: packages/stem_adapter_tests
+            tool: dart
+            test_args: --fail-fast
+    steps:
+      - uses: actions/checkout@v4
+      # The root is a Dart workspace that also contains Flutter packages. Use
+      # Flutter's pub frontend for every portable package so Dart-only entries
+      # can resolve the workspace on both runners as well.
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve package dependencies
+        run: flutter pub get
+        working-directory: ${{ matrix.package }}
+      - name: Check package formatting
+        run: dart format lib test --set-exit-if-changed
+        working-directory: ${{ matrix.package }}
+      - name: Analyze package
+        run: ${{ matrix.tool }} analyze --fatal-infos
+        working-directory: ${{ matrix.package }}
+      - name: Test package
+        run: ${{ matrix.tool }} test ${{ matrix.test_args }}
+        working-directory: ${{ matrix.package }}

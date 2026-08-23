@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:contextual/contextual.dart';
 import 'package:cryptography/cryptography.dart';
+import 'package:stem/src/observability/logging.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 

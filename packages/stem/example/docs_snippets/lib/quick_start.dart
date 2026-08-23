@@ -18,7 +18,7 @@ class ResizeImageTask extends TaskHandler<void> {
     softTimeLimit: Duration(seconds: 10),
     hardTimeLimit: Duration(seconds: 20),
     priority: 7,
-    rateLimit: '20/m',
+    rateLimit: const RateLimit.perMinute(20),
     visibilityTimeout: Duration(seconds: 60),
   );
 
@@ -64,6 +64,7 @@ Future<void> main() async {
       concurrency: 4,
     ),
   );
+  await app.start();
   // #endregion quickstart-bootstrap
 
   // #region quickstart-enqueue

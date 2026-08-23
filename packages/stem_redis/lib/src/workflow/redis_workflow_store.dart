@@ -348,9 +348,9 @@ return 1
 
   @override
   Future<String> createRun({
-    String? runId,
     required String workflow,
     required Map<String, Object?> params,
+    String? runId,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
@@ -374,9 +374,10 @@ return 1
       nowIso,
       '',
       '',
-      cancellationPolicy != null && !cancellationPolicy.isEmpty
-          ? jsonEncode(cancellationPolicy.toJson())
-          : '',
+      if (cancellationPolicy != null && !cancellationPolicy.isEmpty)
+        jsonEncode(cancellationPolicy.toJson())
+      else
+        '',
     ]);
     if (result != 1 && result != '1') {
       throw StateError('Workflow run "$id" already exists.');

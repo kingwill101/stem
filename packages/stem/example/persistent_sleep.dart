@@ -24,6 +24,7 @@ Future<void> main() async {
   final app = await StemWorkflowApp.inMemory(
     flows: [sleepLoop],
   );
+  await app.start();
 
   final runId = await sleepLoop.start(app);
   await app.executeRun(runId);

@@ -104,7 +104,9 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -148,7 +150,9 @@ void main() {
         encodeParams: (params) => params,
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(scripts: [script]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        scripts: [script],
+      );
       try {
         await workflowApp.start();
 
@@ -182,7 +186,9 @@ void main() {
         paramsCodec: _greetingParamsCodec,
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -210,7 +216,9 @@ void main() {
       );
       final workflowRef = flow.refJson<_GreetingParams>();
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -239,7 +247,9 @@ void main() {
       );
       final workflowRef = flow.refVersionedJson<_GreetingParams>(version: 2);
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -272,7 +282,9 @@ void main() {
         encodeParams: (params) => {'display_name': params.name},
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -304,7 +316,9 @@ void main() {
           decodeResultJson: _GreetingResult.fromJson,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -345,7 +359,9 @@ void main() {
           defaultDecodeVersion: 2,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -380,7 +396,9 @@ void main() {
         paramsCodec: _greetingParamsCodec,
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -637,7 +655,9 @@ void main() {
           decodeResultVersionedJson: _GreetingResult.fromVersionedJson,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -677,7 +697,9 @@ void main() {
           resultRegistry: _greetingResultRegistry,
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -890,7 +912,9 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 
@@ -927,7 +951,9 @@ void main() {
           },
         );
 
-        final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+        final workflowApp = await StemWorkflowApp.inMemory(
+          flows: [flow],
+        );
         try {
           await workflowApp.start();
 
@@ -966,7 +992,9 @@ void main() {
         },
       );
 
-      final workflowApp = await StemWorkflowApp.inMemory(flows: [flow]);
+      final workflowApp = await StemWorkflowApp.inMemory(
+        flows: [flow],
+      );
       try {
         await workflowApp.start();
 

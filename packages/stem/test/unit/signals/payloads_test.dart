@@ -31,7 +31,7 @@ void main() {
       meta: const {},
       heartbeat: () {},
       extendLease: (_) async {},
-      progress: (_, {Map<String, Object?>? data}) async {},
+      progress: (_, {data}) async {},
     );
     final prerun = TaskPrerunPayload(
       envelope: envelope,

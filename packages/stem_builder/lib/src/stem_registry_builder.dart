@@ -1910,23 +1910,33 @@ class _RegistryEmitter {
 
   void _emitTasks(StringBuffer buffer) {
     buffer.writeln(
-      'final List<TaskHandler<Object?>> _stemTasks = <TaskHandler<Object?>>[',
+      'final List<TypedTaskHandler<Object?, Object?>> _stemTasks = <TypedTaskHandler<Object?, Object?>>[',
     );
+    final symbolNames = _symbolNamesForTasks(tasks);
     for (final task in tasks) {
-      final entrypoint =
-          task.adapterName ?? _qualify(task.importAlias, task.function);
-      final metadataCode = _taskMetadataCode(task);
-      buffer.writeln('  FunctionTaskHandler<Object?>(');
-      buffer.writeln('    name: ${_string(task.name)},');
-      buffer.writeln('    entrypoint: $entrypoint,');
-      if (task.options != null) {
-        buffer.writeln('    options: ${_dartObjectToCode(task.options!)},');
-      }
-      if (metadataCode != null) {
-        buffer.writeln('    metadata: $metadataCode,');
-      }
-      if (!task.runInIsolate) {
-        buffer.writeln('    runInIsolate: false,');
+      final symbol = _lowerCamel(symbolNames[task]!);
+      final definition = task.valueParameters.isEmpty && !task.usesLegacyMapArgs
+          ? 'StemTaskDefinitions.$symbol.asDefinition'
+          : 'StemTaskDefinitions.$symbol';
+      final applicationContext = task.acceptsTaskContext
+          ? '_stemTaskInvocationContext(context, $definition.encodeArgs(args))'
+          : null;
+      final callArgs = _taskApplicationInvocation(
+        task,
+        context: applicationContext,
+        args: 'args',
+      );
+      buffer.writeln('  $definition.handler(');
+      buffer.writeln(
+        '    entrypoint: (context, args) => ${_qualify(task.importAlias, task.function)}($callArgs),',
+      );
+      buffer.writeln(
+        '    executionMode: TaskExecutionMode.${task.runInIsolate ? 'isolate' : 'inline'},',
+      );
+      if (task.runInIsolate) {
+        final isolateEntrypoint =
+            task.adapterName ?? _qualify(task.importAlias, task.function);
+        buffer.writeln('    isolateEntrypoint: $isolateEntrypoint,');
       }
       buffer.writeln('  ),');
     }
@@ -1958,6 +1968,7 @@ class _RegistryEmitter {
       buffer.writeln('    name: ${_string(task.name)},');
       if (task.usesLegacyMapArgs) {
         buffer.writeln('    encodeArgs: (args) => args,');
+        buffer.writeln('    decodeArgs: (args) => args,');
       } else if (task.valueParameters.isNotEmpty) {
         buffer.writeln('    encodeArgs: (args) => <String, Object?>{');
         if (singleParameter != null) {
@@ -1974,14 +1985,18 @@ class _RegistryEmitter {
           }
         }
         buffer.writeln('    },');
+        buffer.writeln(
+          '    decodeArgs: (args) => ${_taskArgsDecodeExpression(task)},',
+        );
       }
       if (task.options != null) {
         buffer.writeln(
           '    defaultOptions: ${_dartObjectToCode(task.options!)},',
         );
       }
-      if (task.metadata != null) {
-        buffer.writeln('    metadata: ${_dartObjectToCode(task.metadata!)},');
+      final metadataCode = _taskMetadataCode(task);
+      if (metadataCode != null) {
+        buffer.writeln('    metadata: $metadataCode,');
       }
       if (task.resultPayloadCodecTypeCode != null) {
         final codecField =
@@ -2027,55 +2042,6 @@ class _RegistryEmitter {
       buffer.writeln('}');
       buffer.writeln();
     }
-  }
-
-  void _emitGeneratedHelpers(StringBuffer buffer) {
-    final needsArgHelper =
-        tasks.any((task) => !task.usesLegacyMapArgs) ||
-        workflows.any(
-          (workflow) =>
-              workflow.runValueParameters.isNotEmpty ||
-              workflow.steps.any((step) => step.valueParameters.isNotEmpty),
-        );
-    if (!needsArgHelper) {
-      return;
-    }
-    buffer.writeln('Object? _stemRequireArg(');
-    buffer.writeln('  Map<String, Object?> args,');
-    buffer.writeln('  String name,');
-    buffer.writeln(') {');
-    buffer.writeln('  if (!args.containsKey(name)) {');
-    buffer.writeln(
-      "    throw ArgumentError('Missing required argument \"\$name\".');",
-    );
-    buffer.writeln('  }');
-    buffer.writeln('  return args[name];');
-    buffer.writeln('}');
-    buffer.writeln();
-  }
-
-  void _emitManifest(StringBuffer buffer) {
-    buffer.writeln(
-      'final List<WorkflowManifestEntry> _stemWorkflowManifest = <WorkflowManifestEntry>[',
-    );
-    buffer.writeln(
-      '  ..._stemFlows.map((flow) => flow.definition.toManifestEntry()),',
-    );
-    buffer.writeln(
-      '  ..._stemScripts.map((script) => script.definition.toManifestEntry()),',
-    );
-    buffer.writeln('];');
-    buffer.writeln();
-  }
-
-  void _emitModule(StringBuffer buffer) {
-    buffer.writeln('final StemModule stemModule = StemModule(');
-    buffer.writeln('  flows: _stemFlows,');
-    buffer.writeln('  scripts: _stemScripts,');
-    buffer.writeln('  tasks: _stemTasks,');
-    buffer.writeln('  workflowManifest: _stemWorkflowManifest,');
-    buffer.writeln(');');
-    buffer.writeln();
   }
 
   String? _taskMetadataCode(_TaskInfo task) {
@@ -2135,6 +2101,120 @@ class _RegistryEmitter {
       ].join(),
     );
     return 'TaskMetadata(${fields.join(', ')})';
+  }
+
+  String _taskApplicationInvocation(
+    _TaskInfo task, {
+    required String? context,
+    required String args,
+  }) {
+    final positional = <String>[];
+    if (context != null && !task.taskContextIsNamed) {
+      positional.add(context);
+    }
+    if (task.usesLegacyMapArgs) {
+      positional.add(args);
+    } else {
+      final singleParameter = _singleValueParameter(task.valueParameters);
+      if (singleParameter != null) {
+        positional.add(args);
+      } else {
+        positional.addAll(
+          task.valueParameters.map((parameter) => '$args.${parameter.name}'),
+        );
+      }
+    }
+    return _invocationArgs(
+      positional: positional,
+      named: {
+        if (context != null && task.taskContextIsNamed)
+          task.taskContextParameterName!: context,
+      },
+    );
+  }
+
+  String _taskArgsDecodeExpression(_TaskInfo task) {
+    final singleParameter = _singleValueParameter(task.valueParameters);
+    if (singleParameter != null) {
+      return _decodeArg('args', singleParameter);
+    }
+    return '(${task.valueParameters.map((parameter) => '${parameter.name}: ${_decodeArg('args', parameter)}').join(', ')})';
+  }
+
+  void _emitGeneratedHelpers(StringBuffer buffer) {
+    final needsArgHelper =
+        tasks.any((task) => !task.usesLegacyMapArgs) ||
+        workflows.any(
+          (workflow) =>
+              workflow.runValueParameters.isNotEmpty ||
+              workflow.steps.any((step) => step.valueParameters.isNotEmpty),
+        );
+    if (needsArgHelper) {
+      buffer.writeln('Object? _stemRequireArg(');
+      buffer.writeln('  Map<String, Object?> args,');
+      buffer.writeln('  String name,');
+      buffer.writeln(') {');
+      buffer.writeln('  if (!args.containsKey(name)) {');
+      buffer.writeln(
+        "    throw ArgumentError('Missing required argument \"\$name\".');",
+      );
+      buffer.writeln('  }');
+      buffer.writeln('  return args[name];');
+      buffer.writeln('}');
+      buffer.writeln();
+    }
+
+    if (tasks.any((task) => task.acceptsTaskContext)) {
+      buffer.writeln(
+        'TaskInvocationContext _stemTaskInvocationContext(TaskExecutionContext '
+        'context, Map<String, Object?> args) {',
+      );
+      buffer.writeln('  if (context case final TaskInvocationContext value) {');
+      buffer.writeln('    return value;');
+      buffer.writeln('  }');
+      buffer.writeln('  return TaskInvocationContext.local(');
+      buffer.writeln('    id: context.id,');
+      buffer.writeln('    args: args,');
+      buffer.writeln('    headers: context.headers,');
+      buffer.writeln('    meta: context.meta,');
+      buffer.writeln('    attempt: context.attempt,');
+      buffer.writeln('    heartbeat: context.heartbeat,');
+      buffer.writeln('    extendLease: context.extendLease,');
+      buffer.writeln(
+        '    progress: (percent, {data}) => context.progress(percent, data: data),',
+      );
+      buffer.writeln('    cancellation: context.cancellation,');
+      buffer.writeln('    enqueuer: context,');
+      buffer.writeln('    workflows: context,');
+      buffer.writeln('    workflowEvents: context,');
+      buffer.writeln('  );');
+      buffer.writeln('}');
+      buffer.writeln();
+    }
+  }
+
+  void _emitManifest(StringBuffer buffer) {
+    buffer.writeln(
+      'final List<WorkflowManifestEntry> _stemWorkflowManifest = <WorkflowManifestEntry>[',
+    );
+    buffer.writeln(
+      '  ..._stemFlows.map((flow) => flow.definition.toManifestEntry()),',
+    );
+    buffer.writeln(
+      '  ..._stemScripts.map((script) => script.definition.toManifestEntry()),',
+    );
+    buffer.writeln('];');
+    buffer.writeln();
+  }
+
+  void _emitModule(StringBuffer buffer) {
+    buffer.writeln('final StemModule stemModule = StemModule(');
+    buffer.writeln('  flows: _stemFlows,');
+    buffer.writeln('  scripts: _stemScripts,');
+    buffer.writeln('  tasks: _stemTasks,');
+    buffer.writeln('  workflowManifest: _stemWorkflowManifest,');
+    buffer.writeln(');');
+    buffer.writeln();
   }
 
   String _decodeArg(String sourceMap, _ValueParameterInfo parameter) {

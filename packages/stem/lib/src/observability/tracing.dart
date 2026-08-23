@@ -6,6 +6,9 @@ import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
 class StemTracer {
   StemTracer._();
 
+  static const _traceLinkHeader = 'stem.trace.link';
+  static const _traceLinkStateHeader = 'stem.trace.link.state';
+
   /// Singleton instance used across the runtime.
   static final StemTracer instance = StemTracer._();
 
@@ -35,6 +38,7 @@ class StemTracer {
     Future<T> Function() fn, {
     dotel.Context? context,
     Map<String, Object> attributes = const {},
+    List<dotel_api.SpanLink>? links,
     dotel.SpanKind spanKind = dotel.SpanKind.internal,
   }) async {
     if (!_isTelemetryReady) {
@@ -50,6 +54,7 @@ class StemTracer {
       context: baseContext,
       kind: spanKind,
       attributes: attributeSet,
+      links: links,
     );
     try {
       return await tracer.withSpanAsync(span, fn);
@@ -64,6 +69,7 @@ class StemTracer {
     T Function() fn, {
     dotel.Context? context,
     Map<String, Object> attributes = const {},
+    List<dotel_api.SpanLink>? links,
     dotel.SpanKind spanKind = dotel.SpanKind.internal,
   }) {
     if (!_isTelemetryReady) {
@@ -79,6 +85,7 @@ class StemTracer {
       context: baseContext,
       kind: spanKind,
       attributes: attributeSet,
+      links: links,
     );
     try {
       return tracer.withSpan(span, fn);
@@ -107,6 +114,42 @@ class StemTracer {
     } else {
       headers.remove('tracestate');
     }
+  }
+
+  /// Adds the current span as a causal link for a later fan-out operation.
+  ///
+  /// This is separate from `traceparent`: a Canvas composition span remains
+  /// the useful causal anchor even when a consumer also has a normal parent
+  /// span. The header uses W3C traceparent formatting for interoperability.
+  void injectTraceLink(
+    Map<String, String> headers, {
+    dotel.Context? context,
+  }) {
+    if (!_isTelemetryReady) return;
+    final spanContext = _spanContextFrom(context ?? dotel.Context.current);
+    if (spanContext == null) return;
+    final traceParent = _formatTraceparent(spanContext);
+    if (traceParent == null) return;
+    headers[_traceLinkHeader] = traceParent;
+    final traceState = spanContext.traceState;
+    if (traceState != null && traceState.entries.isNotEmpty) {
+      headers[_traceLinkStateHeader] = traceState.toString();
+    } else {
+      headers.remove(_traceLinkStateHeader);
+    }
+  }
+
+  /// Extracts the optional Canvas fan-out link from task headers.
+  List<dotel_api.SpanLink> extractTraceLinks(Map<String, String> headers) {
+    if (!_isTelemetryReady) return const [];
+    final traceParent = headers[_traceLinkHeader];
+    if (traceParent == null) return const [];
+    final traceHeaders = <String, String>{'traceparent': traceParent};
+    final traceState = headers[_traceLinkStateHeader];
+    if (traceState != null) traceHeaders['tracestate'] = traceState;
+    final spanContext = _parseTraceContext(traceHeaders);
+    if (spanContext == null) return const [];
+    return [dotel.OTel.spanLink(spanContext)];
   }
 
   /// Extracts a trace context from [headers].

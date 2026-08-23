@@ -2,6 +2,7 @@
 // ignore_for_file: unused_local_variable, unused_import, dead_code, avoid_print
 
 import 'package:stem/stem.dart';
+import 'package:stem/observability.dart';
 
 // #region observability-metrics
 void configureMetrics() {
@@ -10,14 +11,10 @@ void configureMetrics() {
 // #endregion observability-metrics
 
 // #region observability-tracing
-Future<StemClient> buildTracedStem(
-  Iterable<TaskHandler<Object?>> tasks,
-) {
+Future<StemClient> buildTracedStem(Iterable<TaskHandler<Object?>> tasks) {
   // Configure OpenTelemetry globally; StemTracer.instance reads from it.
   final _ = StemTracer.instance;
-  return StemClient.inMemory(
-    tasks: tasks,
-  );
+  return StemClient.inMemory(tasks: tasks);
 }
 // #endregion observability-tracing
 
@@ -46,7 +43,7 @@ void logTaskStart(Envelope envelope) {
   configureStemLogging(format: StemLogFormat.pretty);
   stemLogger.info(
     'Task started',
-    Context({'task': envelope.name, 'id': envelope.id}),
+    fields: {'task': envelope.name, 'id': envelope.id},
   );
 }
 // #endregion observability-logging
@@ -79,12 +76,7 @@ Future<void> main() async {
 
   final client = await buildTracedStem(tasks);
 
-  logTaskStart(
-    Envelope(
-      name: traceTaskDefinition.name,
-      args: const {},
-    ),
-  );
+  logTaskStart(Envelope(name: traceTaskDefinition.name, args: const {}));
   await traceTaskDefinition.enqueue(client);
   await client.close();
 }

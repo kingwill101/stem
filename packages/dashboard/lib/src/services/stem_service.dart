@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:stem/memory.dart' show InMemoryWorkflowStore;
+import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:stem_cli/stem_cli.dart';
 import 'package:stem_dashboard/src/config/config.dart';
@@ -607,15 +609,13 @@ class StemDashboardService implements DashboardDataSource {
   void _logReadFailure(String operation, Object error, StackTrace stack) {
     stemLogger.warning(
       'Dashboard data read failed',
-      stemLogContext(
-        component: 'dashboard',
-        subsystem: 'service',
-        fields: {
-          'operation': operation,
-          'error': '$error',
-          'stack': '$stack',
-        },
-      ),
+      fields: {
+        'component': 'dashboard',
+        'subsystem': 'service',
+        'operation': operation,
+        'error': '$error',
+        'stack': '$stack',
+      },
     );
   }
 

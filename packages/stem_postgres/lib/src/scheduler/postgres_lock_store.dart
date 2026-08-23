@@ -72,47 +72,73 @@ class PostgresLockStore implements LockStore {
     final ownerValue = _owner(owner);
     final now = stemNow().toUtc();
     final expiresAt = now.add(ttl);
-    final ctx = _connections.context;
-    final repository = ctx.repository<$StemLock>();
+    return _connections.runInTransaction((ctx) async {
+      // Insert first so concurrent first-use callers serialize on the unique
+      // key. ON CONFLICT waits for the competing transaction, then the row is
+      // selected and locked below. RETURNING tells us whether this call
+      // created the row, avoiding owner-value heuristics when callers reuse an
+      // owner id.
+      final inserted = await ctx.driver.queryRaw(
+        '''
+INSERT INTO stem_locks
+  (key, namespace, owner, expires_at, created_at, fencing_token)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (key) DO NOTHING
+RETURNING fencing_token
+''',
+        [key, namespace, ownerValue, expiresAt, now, 1],
+      );
+      if (inserted.isNotEmpty) {
+        return _PostgresLock(
+          store: this,
+          key: key,
+          owner: ownerValue,
+          fencingToken: _asInt(inserted.single['fencing_token']),
+        );
+      }
 
-    final inserted = await repository.insertOrIgnore(
-      $StemLock(
-        key: key,
-        namespace: namespace,
-        owner: ownerValue,
-        expiresAt: expiresAt,
-        createdAt: now,
-      ),
-    );
-    if (inserted > 0) {
-      return _PostgresLock(store: this, key: key, owner: ownerValue);
-    }
+      final rows = await ctx.driver.queryRaw(
+        '''
+SELECT owner, expires_at, fencing_token
+FROM stem_locks
+WHERE key = ? AND namespace = ?
+FOR UPDATE
+''',
+        [key, namespace],
+      );
+      if (rows.isNotEmpty) {
+        final row = rows.single;
+        final currentExpiry = row['expires_at'];
+        if (currentExpiry is DateTime && currentExpiry.isAfter(now)) {
+          return null;
+        }
 
-    // Lock exists, try to clean up expired and retry.
-    final expired = await ctx
-        .query<$StemLock>()
-        .whereEquals('key', key)
-        .whereEquals('namespace', namespace)
-        .where('expiresAt', now, PredicateOperator.lessThan)
-        .get();
+        final fencingToken = _asInt(row['fencing_token']) + 1;
+        await ctx.driver.executeRaw(
+          '''
+UPDATE stem_locks
+SET owner = ?, expires_at = ?, created_at = ?, fencing_token = ?
+WHERE key = ? AND namespace = ?
+''',
+          [
+            ownerValue,
+            expiresAt,
+            now,
+            fencingToken,
+            key,
+            namespace,
+          ],
+        );
+        return _PostgresLock(
+          store: this,
+          key: key,
+          owner: ownerValue,
+          fencingToken: fencingToken,
+        );
+      }
 
-    for (final lock in expired) {
-      await repository.delete(lock);
-    }
-
-    final retryInserted = await repository.insertOrIgnore(
-      $StemLock(
-        key: key,
-        namespace: namespace,
-        owner: ownerValue,
-        expiresAt: expiresAt,
-        createdAt: now,
-      ),
-    );
-    if (retryInserted > 0) {
-      return _PostgresLock(store: this, key: key, owner: ownerValue);
-    }
-    return null;
+      throw StateError('Lock row was not created: $namespace/$key');
+    });
   }
 
   Future<bool> _renew(String key, String owner, Duration ttl) async {
@@ -154,8 +180,9 @@ class PostgresLockStore implements LockStore {
 
     if (locks.isEmpty) return false;
 
+    final now = stemNow().toUtc();
     for (final lock in locks) {
-      await ctx.repository<$StemLock>().delete(lock);
+      await ctx.repository<$StemLock>().update(lock.copyWith(expiresAt: now));
     }
     return true;
   }
@@ -181,14 +208,27 @@ class PostgresLockStore implements LockStore {
   Future<bool> release(String key, String owner) => _release(key, owner);
 }
 
-class _PostgresLock implements Lock {
-  _PostgresLock({required this.store, required this.key, required this.owner});
+int _asInt(Object? value) {
+  if (value is int) return value;
+  return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+class _PostgresLock implements FencedLock {
+  _PostgresLock({
+    required this.store,
+    required this.key,
+    required this.owner,
+    required this.fencingToken,
+  });
 
   final PostgresLockStore store;
   @override
   final String key;
   @override
   final String owner;
+
+  @override
+  final int fencingToken;
 
   @override
   Future<bool> renew(Duration ttl) => store._renew(key, owner, ttl);

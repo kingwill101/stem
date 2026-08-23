@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:artisanal/args.dart';
 import 'package:ormed/ormed.dart';
-import 'package:stem/stem.dart' show stemLogger;
+import 'package:stem/observability.dart' show stemLogger;
 
 import 'package:stem_postgres/src/database/datasource.dart';
 

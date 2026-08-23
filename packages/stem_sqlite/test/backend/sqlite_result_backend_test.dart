@@ -113,4 +113,41 @@ void main() {
       await backendB.close();
     }
   });
+
+  test('terminal writes arbitrate concurrent completion attempts', () async {
+    final backend = await SqliteResultBackend.open(
+      dbFile,
+      namespace: 'terminal-race',
+      defaultTtl: const Duration(seconds: 2),
+      groupDefaultTtl: const Duration(seconds: 2),
+      heartbeatTtl: const Duration(seconds: 2),
+      cleanupInterval: const Duration(milliseconds: 200),
+    );
+    try {
+      await backend.set('terminal-task', TaskState.running);
+      final applied = await backend.setTerminalIfAbsent(
+        TaskStatus(
+          id: 'terminal-task',
+          state: TaskState.succeeded,
+          payload: 'first',
+          attempt: 1,
+        ),
+      );
+      final rejected = await backend.setTerminalIfAbsent(
+        TaskStatus(
+          id: 'terminal-task',
+          state: TaskState.failed,
+          error: const TaskError(type: 'late', message: 'late failure'),
+          attempt: 1,
+        ),
+      );
+
+      expect(applied, isTrue);
+      expect(rejected, isFalse);
+      expect((await backend.get('terminal-task'))?.payload, 'first');
+      expect((await backend.get('terminal-task'))?.state, TaskState.succeeded);
+    } finally {
+      await backend.close();
+    }
+  });
 }

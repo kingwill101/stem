@@ -47,10 +47,50 @@ void main() {
       expect(result, equals(5));
       expect(argValue, equals('stem'));
       expect(handler.isolateEntrypoint, isNotNull);
+      expect(handler.executionMode, TaskExecutionMode.isolate);
       expect(heartbeats, equals(1));
       expect(extended, equals(const Duration(seconds: 3)));
       expect(progressValue, equals(0.5));
       expect(progressData, equals({'stage': 'halfway'}));
     },
   );
+
+  test('task code can observe cooperative cancellation', () async {
+    final token = TaskCancellationToken();
+    final handler = FunctionTaskHandler<void>.inline(
+      name: 'cancelled.task',
+      entrypoint: (invocation, args) async {
+        invocation.cancellation.throwIfCancelled();
+        return null;
+      },
+    );
+    token.cancel();
+
+    expect(
+      () => handler(
+        TaskContext(
+          id: 'task-2',
+          attempt: 1,
+          headers: const {},
+          meta: const {},
+          cancellation: token,
+          heartbeat: () {},
+          extendLease: (_) async {},
+          progress: (_, {data}) async {},
+        ),
+        const {},
+      ),
+      throwsA(isA<TaskCancellationException>()),
+    );
+  });
+
+  test('inline handlers declare coordinator-isolate execution', () {
+    final handler = FunctionTaskHandler<void>.inline(
+      name: 'inline.task',
+      entrypoint: (invocation, args) async => null,
+    );
+
+    expect(handler.executionMode, TaskExecutionMode.inline);
+    expect(handler.isolateEntrypoint, isNull);
+  });
 }

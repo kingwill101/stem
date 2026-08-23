@@ -1,7 +1,9 @@
 # Security Runbook
 
-> **Note:** The public docs version is `.site/docs/security-runbook.md`; keep
-> both files aligned.
+> **Note:** Public starting points are
+> `.site/docs/core-concepts/signing.md` and
+> `.site/docs/getting-started/production-checklist.md`. This internal runbook
+> contains deeper rotation and TLS procedures.
 
 ## Payload Signing Key Rotation
 

@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:artisanal/args.dart';
 import 'package:redis/redis.dart' as redis;
 import 'package:path/path.dart' as p;
+import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_cli/src/cli/cli_runner.dart';
 import 'package:stem_cli/src/cli/dependencies.dart';
@@ -1202,7 +1203,7 @@ class WorkerStatusCommand extends Command<int> {
     }
 
     try {
-      return _workerStatus(
+      return await _workerStatus(
         argResults!,
         dependencies.out,
         dependencies.err,

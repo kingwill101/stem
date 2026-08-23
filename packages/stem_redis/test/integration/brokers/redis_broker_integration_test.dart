@@ -378,7 +378,7 @@ String _uniqueNamespace() {
 
 Future<void> _safeCloseRedisBroker(RedisStreamsBroker broker) async {
   try {
-    await runZonedGuarded(() => broker.close(), (Object _, StackTrace _) {});
+    await runZonedGuarded(() => broker.close(), (_, _) {});
   } on Object {
     // Ignore broker shutdown errors in cleanup.
   }

@@ -9,10 +9,17 @@
 
 # Stem
 
-Stem is a Dart-first background job and workflow platform: enqueue work, run workers, and orchestrate durable workflows.
+Stem is an experimental Dart-first background job and workflow platform:
+enqueue work, run workers, and orchestrate durable workflows while the runtime
+contracts and adapter guarantees continue to harden.
 
 For full docs, API references, and in-depth guides, visit
 https://kingwill101.github.io/stem.
+
+For production-shaped task definitions, prefer `stem_builder` generated typed
+definitions. Manual `TaskDefinition<TArgs, TResult>` is the supported typed
+fallback. Low-level map handlers live under `package:stem/advanced.dart` for
+transport integrations and migrations.
 
 ## Packages
 
@@ -20,7 +27,7 @@ https://kingwill101.github.io/stem.
 |---------|-------------|---------|
 | [`stem`](https://github.com/kingwill101/stem/tree/master/packages/stem) | Core runtime: contracts, worker, scheduler, in-memory adapters, signals, Canvas, workflows | [![pub](https://img.shields.io/pub/v/stem.svg)](https://pub.dev/packages/stem) |
 | [`stem_cli`](https://github.com/kingwill101/stem/tree/master/packages/stem_cli) | Command-line tooling (`stem` executable) and CLI utilities | [![pub](https://img.shields.io/pub/v/stem_cli.svg)](https://pub.dev/packages/stem_cli) |
-| [`stem_memory`](https://github.com/kingwill101/stem/tree/master/packages/stem_memory) | In-memory adapter package (broker/backend/workflow/scheduler factories) | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
+| [`stem_memory`](https://github.com/kingwill101/stem/tree/master/packages/stem_memory) | Compatibility package for the explicit `package:stem/memory.dart` in-memory library | [![pub](https://img.shields.io/pub/v/stem_memory.svg)](https://pub.dev/packages/stem_memory) |
 | [`stem_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_redis`](https://github.com/kingwill101/stem/tree/master/packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
 | [`stem_postgres`](https://github.com/kingwill101/stem/tree/master/packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
@@ -40,7 +47,8 @@ https://kingwill101.github.io/stem.
 - **Observability** - Dartastic OpenTelemetry metrics/traces, heartbeats, CLI inspection (`stem observe`, `stem dlq`).
 - **Security** - Payload signing (HMAC or Ed25519), TLS automation scripts, revocation persistence.
 - **Adapters** - In-memory drivers included here; Redis Streams and Postgres adapters ship via the `stem_redis` and `stem_postgres` packages.
-- **Specs & tooling** - OpenSpec change workflow, quality gates (see `example/quality_gates`), chaos/regression suites.
+- **Quality tooling** - Package-level format, analysis, test, adapter contract,
+  chaos, benchmark, and standalone-resolution gates in CI.
 
 ## Install
 
@@ -54,39 +62,56 @@ dart pub add -d stem_builder # for annotations/codegen (optional)
 dart pub add -d stem_cli      # for CLI tooling
 ```
 
+New application code can import `package:stem/stable.dart`. The historical
+`package:stem/stem.dart` barrel remains available for compatibility, while
+custom transports and instrumentation can use `package:stem/advanced.dart`.
+
+For local development and tests, import the in-memory implementations
+explicitly with `package:stem/memory.dart`; the `stem_memory` package remains
+as a compatibility export for existing applications.
+
 
 ## Examples
 
-`StemApp` and `StemWorkflowApp` shortcut helpers lazily start their managed
-worker by default. Pass `allowWorkerAutoStart: false` when you want producer
-or orchestration shortcuts without starting that worker in the background,
-then call `start()` explicitly when you're ready. `StemWorkflowApp` also
-exposes `startRuntime()` and `startWorker()` when you want those lifecycles
-split.
+`StemApp` and `StemWorkflowApp` never start their managed worker implicitly.
+Call `start()` explicitly when the process is intended to consume work.
+`StemWorkflowApp` also exposes `startRuntime()` and `startWorker()` when you
+want those lifecycles split.
 
 ### Minimal in-memory task + worker
 
 ```dart
 import "dart:async";
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
 
-class HelloTask extends TaskHandler<void> {
-  @override
-  String get name => "demo.hello";
+class HelloArgs {
+  const HelloArgs({required this.name});
 
-  @override
-  Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    final name = args.valueOr<String>("name", "world");
-    print("Hello $name");
-  }
+  final String name;
+
+  Map<String, dynamic> toJson() => {"name": name};
+
+  factory HelloArgs.fromJson(Map<String, dynamic> json) =>
+      HelloArgs(name: json["name"] as String);
 }
 
+final helloDefinition = TaskDefinition<HelloArgs, void>.json(
+  name: "demo.hello",
+  decodeArgsJson: HelloArgs.fromJson,
+);
+
+final helloTask = helloDefinition.handler(
+  entrypoint: (context, args) async => print("Hello ${args.name}"),
+);
+
 Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [HelloTask()]);
+  final client = await StemClient.inMemory(tasks: [helloTask]);
   final worker = await client.createWorker();
   unawaited(worker.start());
 
-  await client.enqueueValue("demo.hello", const {"name": "Stem"});
+  await client.enqueueCall(
+    helloDefinition.buildCall(const HelloArgs(name: "Stem")),
+  );
   await Future<void>.delayed(const Duration(seconds: 1));
 
   await worker.shutdown();
@@ -97,7 +122,7 @@ Future<void> main() async {
 ### Reusable stack from URL (Redis)
 
 ```dart
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
 import "package:stem_redis/stem_redis.dart";
 
 Future<void> main() async {
@@ -133,28 +158,22 @@ class HelloArgs {
       HelloArgs(name: json["name"] as String);
 }
 
-class HelloTask2 extends TaskHandler<String> {
-  static final definition = TaskDefinition<HelloArgs, String>.json(
-    name: "demo.hello2",
-    metadata: const TaskMetadata(description: "typed hello task"),
-  );
+final helloDefinition = TaskDefinition<HelloArgs, String>.json(
+  name: "demo.hello2",
+  decodeArgsJson: HelloArgs.fromJson,
+  metadata: const TaskMetadata(description: "typed hello task"),
+);
 
-  @override
-  String get name => definition.name;
-
-  @override
-  Future<String> call(TaskContext context, Map<String, Object?> args) async {
-    final payload = HelloArgs.fromJson(args.cast<String, dynamic>());
-    return "Hello ${payload.name}";
-  }
-}
+final helloTask = helloDefinition.handler(
+  entrypoint: (context, args) async => "Hello ${args.name}",
+);
 
 Future<void> main() async {
-  final client = await StemClient.inMemory(tasks: [HelloTask2()]);
+  final client = await StemClient.inMemory(tasks: [helloTask]);
   final worker = await client.createWorker();
   unawaited(worker.start());
 
-  final result = await HelloTask2.definition.enqueueAndWait(
+  final result = await helloDefinition.enqueueAndWait(
     client,
     const HelloArgs(name: "Typed"),
   );
@@ -168,7 +187,7 @@ Future<void> main() async {
 ### Workflow quick-start (Flow)
 
 ```dart
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
 
 final onboardingFlow = Flow<String>(
   name: "demo.onboarding",
@@ -184,7 +203,6 @@ Future<void> main() async {
   final appClient = await StemClient.inMemory();
   final app = await appClient.createWorkflowApp(
     flows: [onboardingFlow],
-    allowWorkerAutoStart: false,
   );
   await app.start();
 
@@ -201,7 +219,7 @@ Future<void> main() async {
 ### Annotated workflow + task with `stem_builder`
 
 ```dart
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
 import "package:stem_builder/stem_builder.dart";
 
 part "definitions.stem.g.dart";
@@ -241,7 +259,7 @@ dart run build_runner build
 ```dart
 // example usage after codegen
 final client = await StemClient.inMemory(module: stemModule);
-final app = await client.createWorkflowApp(allowWorkerAutoStart: false);
+final app = await client.createWorkflowApp();
 await app.start();
 
 final runId = await StemWorkflowDefinitions.builderSignup.startAndWait(
@@ -255,7 +273,8 @@ print(result?.value); // {user: alice@example.com}
 ### Workflow with multiple worker queues
 
 ```dart
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
+import "package:stem/advanced.dart";
 
 final onboardingFlow = Flow<Map<String, String>>(
   name: "workflow.multi_workers",
@@ -353,7 +372,8 @@ stem wf --help
 ### General worker management (multi-worker setup)
 
 ```dart
-import "package:stem/stem.dart";
+import "package:stem/stable.dart";
+import "package:stem/advanced.dart";
 
 class EmailTask extends TaskHandler<void> {
   @override
@@ -452,7 +472,6 @@ see the full docs at https://kingwill101.github.io/stem.
 - [unique_tasks](example/unique_tasks/unique_task_example.dart) - enables `TaskOptions.unique` with a shared lock store.
 - [signing_key_rotation](example/signing_key_rotation) - rotate HMAC signing keys with overlap.
 - [ops_health_suite](example/ops_health_suite) - CLI health checks + queue/worker snapshots.
-- [quality_gates](example/quality_gates) - justfile-driven quality gate runner.
 - [security examples](example/security/*) - payload signing + TLS profiles.
 - [postgres_tls](example/postgres_tls) - Redis broker + Postgres backend secured via the shared `STEM_TLS_*` settings.
 - [otel_metrics](example/otel_metrics) - OTLP collectors + Grafana dashboards.

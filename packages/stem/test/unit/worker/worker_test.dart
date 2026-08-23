@@ -3,11 +3,298 @@ import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:contextual/contextual.dart' show Level, LogDriver, LogEntry;
+import 'package:stem/memory.dart';
+import 'package:stem/src/observability/logging.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('Worker', () {
+    test(
+      'recovers an acknowledgement failure without re-executing',
+      () async {
+        final broker = _AckFailingBroker();
+        final backend = InMemoryResultBackend();
+        var executions = 0;
+        final task = _CountingSuccessTask(() => executions += 1);
+        final worker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'ack-recovery-worker',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        final stem = Stem(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+        );
+        final taskId = await stem.enqueue(task.name);
+
+        await _waitForTaskState(backend, taskId, TaskState.succeeded);
+        await _waitFor(() => broker.ackAttempts >= 2);
+        expect(executions, equals(1));
+
+        await worker.shutdown();
+        broker.dispose();
+      },
+    );
+
+    test(
+      'keeps the lease alive until terminal acknowledgement completes',
+      () async {
+        final broker = _BlockingAckBroker();
+        final backend = InMemoryResultBackend();
+        final task = _CountingSuccessTask(() {});
+        final worker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'terminal-ack-lease-worker',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        try {
+          final stem = Stem(
+            broker: broker,
+            backend: backend,
+            tasks: [task],
+          );
+          final taskId = await stem.enqueue(
+            task.name,
+            options: const TaskOptions(
+              visibilityTimeout: Duration(milliseconds: 80),
+            ),
+          );
+
+          await broker.ackStarted.future.timeout(const Duration(seconds: 2));
+          await _waitFor(
+            () => broker.leaseExtensions > 0,
+          );
+          expect((await backend.get(taskId))?.state, TaskState.succeeded);
+
+          broker.releaseAcknowledgement();
+          await broker.ackCompleted.future.timeout(const Duration(seconds: 2));
+        } finally {
+          broker.releaseAcknowledgement();
+          await worker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'starts lease renewal before consume middleware completes',
+      () async {
+        final broker = _BlockingConsumeBroker();
+        final backend = InMemoryResultBackend();
+        final middleware = _BlockingConsumeMiddleware();
+        final task = _CountingSuccessTask(() {});
+        final worker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          middleware: [middleware],
+          consumerName: 'consume-lease-worker',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        try {
+          final stem = Stem(
+            broker: broker,
+            backend: backend,
+            tasks: [task],
+          );
+          final taskId = await stem.enqueue(
+            task.name,
+            options: const TaskOptions(
+              visibilityTimeout: Duration(milliseconds: 80),
+            ),
+          );
+
+          await middleware.started.future.timeout(const Duration(seconds: 2));
+          await _waitFor(() => broker.leaseExtensions > 0);
+          middleware.release();
+          await _waitForTaskState(backend, taskId, TaskState.succeeded);
+        } finally {
+          middleware.release();
+          await worker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'suppresses a duplicate delivery while the original is active',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 5),
+        );
+        final backend = InMemoryResultBackend();
+        final task = _BlockingSuccessTask();
+        final worker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'duplicate-suppression-worker',
+          concurrency: 2,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        try {
+          final envelope = Envelope(
+            id: 'duplicate-delivery-task',
+            name: task.name,
+            args: const {},
+          );
+          await broker.publish(envelope);
+          await broker.publish(envelope);
+
+          await task.started.future.timeout(const Duration(seconds: 2));
+          await Future<void>.delayed(const Duration(milliseconds: 40));
+          expect(task.calls, equals(1));
+
+          task.release();
+          await _waitForTaskState(
+            backend,
+            envelope.id,
+            TaskState.succeeded,
+          );
+        } finally {
+          task.release();
+          await worker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'does not let a late cross-worker terminal write overwrite the winner',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 5),
+        );
+        final backend = _DelayedTerminalBackend();
+        final task = _SequencedSuccessTask();
+        final firstWorker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'terminal-race-worker-1',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+        final secondWorker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'terminal-race-worker-2',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await firstWorker.start();
+        await secondWorker.start();
+        try {
+          final envelope = Envelope(
+            id: 'cross-worker-terminal-race',
+            name: task.name,
+            args: const {},
+          );
+          await backend.set(envelope.id, TaskState.queued);
+          await broker.publish(envelope);
+          await broker.publish(envelope);
+
+          await backend.firstTerminalEntered.future.timeout(
+            const Duration(seconds: 2),
+          );
+          await _waitFor(() => backend.terminalCalls >= 2);
+          backend.releaseFirstTerminal();
+
+          await _waitForTaskState(
+            backend,
+            envelope.id,
+            TaskState.succeeded,
+          );
+          expect((await backend.get(envelope.id))?.payload, 'result-2');
+          expect(task.calls, equals(2));
+        } finally {
+          backend.releaseFirstTerminal();
+          await firstWorker.shutdown();
+          await secondWorker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'redelivers after lease loss and preserves the later terminal result',
+      () async {
+        final broker = _LeaseLossBroker();
+        final backend = InMemoryResultBackend();
+        final task = _LeaseLossTask();
+        final firstWorker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'lease-loss-worker-1',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+        final secondWorker = Worker(
+          broker: broker,
+          backend: backend,
+          tasks: [task],
+          consumerName: 'lease-loss-worker-2',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await firstWorker.start();
+        await secondWorker.start();
+        try {
+          final stem = Stem(
+            broker: broker,
+            backend: backend,
+            tasks: [task],
+          );
+          final taskId = await stem.enqueue(
+            task.name,
+            options: const TaskOptions(
+              visibilityTimeout: Duration(milliseconds: 80),
+            ),
+          );
+
+          await task.firstStarted.future.timeout(const Duration(seconds: 2));
+          await task.secondStarted.future.timeout(const Duration(seconds: 3));
+          await _waitFor(
+            () async => (await backend.get(taskId))?.payload == 'result-2',
+          );
+
+          task.releaseFirst();
+          await _waitForTaskState(backend, taskId, TaskState.succeeded);
+
+          expect((await backend.get(taskId))?.payload, 'result-2');
+          expect(task.calls, equals(2));
+        } finally {
+          task.releaseFirst();
+          await firstWorker.shutdown();
+          await secondWorker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
     test('executes task and records success', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
@@ -1240,6 +1527,105 @@ void main() {
       broker.dispose();
     });
 
+    test('bounds a retry storm at each task retry budget', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 2),
+        claimInterval: const Duration(milliseconds: 5),
+      );
+      final backend = InMemoryResultBackend();
+      final task = _RetryStormTask();
+      final registry = InMemoryTaskRegistry()..register(task);
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'retry-storm-worker',
+        concurrency: 4,
+        prefetchMultiplier: 1,
+        retryStrategy: ExponentialJitterRetryStrategy(
+          base: const Duration(milliseconds: 1),
+          max: const Duration(milliseconds: 2),
+          seed: 1,
+        ),
+      );
+      const totalTasks = 12;
+      final taskIds = <String>[];
+
+      await worker.start();
+      try {
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        for (var index = 0; index < totalTasks; index++) {
+          taskIds.add(
+            await stem.enqueue(
+              task.name,
+              args: {'job': index},
+            ),
+          );
+        }
+
+        await _waitFor(
+          () async {
+            final dead = await broker.listDeadLetters('default');
+            return dead.entries.length == totalTasks;
+          },
+          timeout: const Duration(seconds: 5),
+        );
+
+        for (final taskId in taskIds) {
+          expect((await backend.get(taskId))?.state, TaskState.failed);
+        }
+        expect(task.calls, equals(totalTasks * 4));
+        expect(await broker.pendingCount('default'), equals(0));
+        expect(await broker.inflightCount('default'), equals(0));
+      } finally {
+        await worker.shutdown();
+        broker.dispose();
+      }
+    });
+
+    test('dead-letters malformed payloads without retrying them', () async {
+      final broker = InMemoryBroker(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 5),
+      );
+      final backend = InMemoryResultBackend();
+      final task = _PoisonPayloadTask();
+      final registry = InMemoryTaskRegistry()..register(task);
+      final worker = Worker(
+        broker: broker,
+        registry: registry,
+        backend: backend,
+        consumerName: 'poison-payload-worker',
+        concurrency: 1,
+        prefetchMultiplier: 1,
+      );
+
+      await worker.start();
+      try {
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue(
+          task.name,
+          args: const {'value': 'poison'},
+        );
+
+        await _waitForTaskState(backend, taskId, TaskState.failed);
+        final dead = await broker.listDeadLetters('default');
+        expect(dead.entries, hasLength(1));
+        expect(dead.entries.single.reason, equals('invalid-payload'));
+        expect(task.calls, equals(0));
+
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        expect(task.calls, equals(0));
+        expect(
+          (await broker.listDeadLetters('default')).entries,
+          hasLength(1),
+        );
+      } finally {
+        await worker.shutdown();
+        broker.dispose();
+      }
+    });
+
     test('executes handler inside isolate when entrypoint provided', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
@@ -1358,6 +1744,268 @@ void main() {
       broker.dispose();
     });
 
+    test(
+      'inline hard time limits stop awaiting but do not cancel handler work',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 10),
+          claimInterval: const Duration(milliseconds: 40),
+        );
+        final backend = InMemoryResultBackend();
+        final handlerFinished = Completer<void>();
+        var underlyingCompletions = 0;
+        final registry = InMemoryTaskRegistry()
+          ..register(
+            FunctionTaskHandler<void>.inline(
+              name: 'tasks.inline-hard-limit',
+              options: const TaskOptions(
+                hardTimeLimit: Duration(milliseconds: 20),
+              ),
+              entrypoint: (context, args) async {
+                await Future<void>.delayed(const Duration(milliseconds: 100));
+                underlyingCompletions++;
+                handlerFinished.complete();
+                return null;
+              },
+            ),
+          );
+        final worker = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'worker-inline-timeout',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+        );
+
+        await worker.start();
+        final stem = Stem(broker: broker, registry: registry, backend: backend);
+        final taskId = await stem.enqueue('tasks.inline-hard-limit');
+
+        await _waitForTaskState(backend, taskId, TaskState.failed);
+        expect(underlyingCompletions, 0);
+
+        await handlerFinished.future.timeout(const Duration(seconds: 1));
+        expect(underlyingCompletions, 1);
+
+        await worker.shutdown();
+        broker.dispose();
+      },
+    );
+
+    test(
+      'hard shutdown requeues an active isolate delivery '
+      'for a replacement worker',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 20),
+        );
+        final backend = InMemoryResultBackend();
+        final registry = InMemoryTaskRegistry()
+          ..register(
+            FunctionTaskHandler<int>(
+              name: 'tasks.shutdown-requeue',
+              entrypoint: _shutdownRequeueEntrypoint,
+              options: const TaskOptions(maxRetries: 1),
+            ),
+          );
+        final workerA = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'worker-shutdown-a',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+          lifecycle: const WorkerLifecycleConfig(
+            installSignalHandlers: false,
+          ),
+        );
+        final workerB = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'worker-shutdown-b',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+          lifecycle: const WorkerLifecycleConfig(
+            installSignalHandlers: false,
+          ),
+        );
+
+        try {
+          await workerA.start();
+          final stem = Stem(
+            broker: broker,
+            registry: registry,
+            backend: backend,
+          );
+          final taskId = await stem.enqueue('tasks.shutdown-requeue');
+
+          await _waitForTaskState(backend, taskId, TaskState.running);
+          await workerA.shutdown();
+
+          await workerB.start();
+          await _waitForTaskState(backend, taskId, TaskState.succeeded);
+          expect((await backend.get(taskId))?.payload, isA<int>());
+        } finally {
+          await workerA.shutdown();
+          await workerB.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'hard shutdown requeues the full prefetched batch for a replacement',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 5),
+        );
+        final backend = InMemoryResultBackend();
+        final registry = InMemoryTaskRegistry()
+          ..register(
+            FunctionTaskHandler<String>(
+              name: 'tasks.prefetch-shutdown',
+              entrypoint: _prefetchShutdownEntrypoint,
+              options: const TaskOptions(maxRetries: 1),
+            ),
+          );
+        final workerA = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'prefetch-shutdown-a',
+          concurrency: 2,
+          prefetch: 6,
+          lifecycle: const WorkerLifecycleConfig(
+            installSignalHandlers: false,
+          ),
+        );
+        final workerB = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'prefetch-shutdown-b',
+          concurrency: 6,
+          prefetch: 6,
+          lifecycle: const WorkerLifecycleConfig(
+            installSignalHandlers: false,
+          ),
+        );
+        const totalTasks = 12;
+        final taskIds = <String>[];
+
+        try {
+          await workerA.start();
+          final stem = Stem(
+            broker: broker,
+            registry: registry,
+            backend: backend,
+          );
+          for (var index = 0; index < totalTasks; index++) {
+            taskIds.add(
+              await stem.enqueue(
+                'tasks.prefetch-shutdown',
+                args: {'index': index},
+              ),
+            );
+          }
+
+          await _waitFor(
+            () async => (await broker.inflightCount('default')) == 6,
+            timeout: const Duration(seconds: 3),
+          );
+          await workerA.shutdown();
+
+          expect(await broker.inflightCount('default'), equals(0));
+          expect(await broker.pendingCount('default'), equals(totalTasks));
+
+          await workerB.start();
+          await _waitFor(
+            () async {
+              for (final taskId in taskIds) {
+                if ((await backend.get(taskId))?.state != TaskState.succeeded) {
+                  return false;
+                }
+              }
+              return true;
+            },
+            timeout: const Duration(seconds: 8),
+          );
+        } finally {
+          await workerA.shutdown();
+          await workerB.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
+    test(
+      'late inline completion cannot write to the closed event stream',
+      () async {
+        final broker = InMemoryBroker(
+          delayedInterval: const Duration(milliseconds: 5),
+          claimInterval: const Duration(milliseconds: 20),
+        );
+        final backend = InMemoryResultBackend();
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        final registry = InMemoryTaskRegistry()
+          ..register(
+            FunctionTaskHandler<void>.inline(
+              name: 'tasks.late-inline-completion',
+              options: const TaskOptions(
+                softTimeLimit: Duration(milliseconds: 10),
+              ),
+              entrypoint: (context, args) async {
+                if (!entered.isCompleted) entered.complete();
+                await release.future;
+                return null;
+              },
+            ),
+          );
+        final worker = Worker(
+          broker: broker,
+          registry: registry,
+          backend: backend,
+          consumerName: 'worker-late-inline-completion',
+          concurrency: 1,
+          prefetchMultiplier: 1,
+          heartbeatInterval: const Duration(milliseconds: 5),
+          lifecycle: const WorkerLifecycleConfig(
+            installSignalHandlers: false,
+          ),
+        );
+        final events = <WorkerEvent>[];
+        final subscription = worker.events.listen(events.add);
+
+        try {
+          await worker.start();
+          final stem = Stem(
+            broker: broker,
+            registry: registry,
+            backend: backend,
+          );
+          await stem.enqueue('tasks.late-inline-completion');
+          await entered.future.timeout(const Duration(seconds: 1));
+          await Future<void>.delayed(const Duration(milliseconds: 25));
+
+          await worker.shutdown();
+          release.complete();
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+
+          expect(events, isNotEmpty);
+        } finally {
+          if (!release.isCompleted) release.complete();
+          await subscription.cancel();
+          await worker.shutdown();
+          broker.dispose();
+        }
+      },
+    );
+
     test('skips revoked tasks from persistent store', () async {
       StemSignals.configure(configuration: const StemSignalConfiguration());
 
@@ -1452,7 +2100,7 @@ void main() {
           FunctionTaskHandler<void>(
             name: 'tasks.group.a',
             options: const TaskOptions(
-              groupRateLimit: '1/s',
+              groupRateLimit: RateLimit.perSecond(1),
             ),
             entrypoint: (context, args) async => null,
           ),
@@ -1461,7 +2109,7 @@ void main() {
           FunctionTaskHandler<void>(
             name: 'tasks.group.b',
             options: const TaskOptions(
-              groupRateLimit: '1/s',
+              groupRateLimit: RateLimit.perSecond(1),
             ),
             entrypoint: (context, args) async => null,
           ),
@@ -1534,7 +2182,7 @@ void main() {
             FunctionTaskHandler<void>(
               name: 'tasks.group.failopen',
               options: const TaskOptions(
-                groupRateLimit: '10/m',
+                groupRateLimit: RateLimit.perMinute(10),
               ),
               entrypoint: (context, args) async => null,
             ),
@@ -1581,7 +2229,7 @@ void main() {
             FunctionTaskHandler<void>(
               name: 'tasks.group.failclosed',
               options: const TaskOptions(
-                groupRateLimit: '10/m',
+                groupRateLimit: RateLimit.perMinute(10),
                 groupRateLimiterFailureMode: RateLimiterFailureMode.failClosed,
                 maxRetries: 5,
               ),
@@ -1632,6 +2280,9 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
+        subscription: RoutingSubscription(
+          queues: const ['default', 'priority'],
+        ),
         consumerName: 'pause-worker-a',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1648,7 +2299,7 @@ void main() {
         ),
         type: 'queue_pause',
         payload: const {
-          'queues': ['default'],
+          'queues': ['default', 'priority'],
         },
       );
       expect(pauseReply.status, equals('ok'));
@@ -1658,6 +2309,9 @@ void main() {
         broker: broker,
         registry: registry,
         backend: backend,
+        subscription: RoutingSubscription(
+          queues: const ['default', 'priority'],
+        ),
         consumerName: 'pause-worker-b',
         concurrency: 1,
         prefetchMultiplier: 1,
@@ -1680,7 +2334,7 @@ void main() {
         ),
         type: 'queue_resume',
         payload: const {
-          'queues': ['default'],
+          'queues': ['default', 'priority'],
         },
       );
       expect(resumeReply.status, equals('ok'));
@@ -1827,6 +2481,326 @@ class _ChordCallbackTask implements TaskHandler<int> {
     return results
         .map((value) => (value as num?)?.toInt() ?? 0)
         .fold<int>(0, (sum, value) => sum + value);
+  }
+}
+
+class _AckFailingBroker extends InMemoryBroker {
+  _AckFailingBroker()
+    : super(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 5),
+        defaultVisibilityTimeout: const Duration(milliseconds: 30),
+      );
+
+  int ackAttempts = 0;
+  bool failNextAck = true;
+
+  @override
+  Future<void> ack(Delivery delivery) async {
+    ackAttempts += 1;
+    if (failNextAck) {
+      failNextAck = false;
+      throw StateError('simulated acknowledgement disconnect');
+    }
+    await super.ack(delivery);
+  }
+}
+
+class _LeaseLossBroker extends InMemoryBroker {
+  _LeaseLossBroker()
+    : super(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 5),
+        defaultVisibilityTimeout: const Duration(milliseconds: 80),
+      );
+
+  @override
+  Stream<Delivery> consume(
+    RoutingSubscription subscription, {
+    int prefetch = 1,
+    String? consumerGroup,
+    String? consumerName,
+  }) {
+    if (consumerName != 'lease-loss-worker-1') {
+      return super.consume(
+        subscription,
+        prefetch: prefetch,
+        consumerGroup: consumerGroup,
+        consumerName: consumerName,
+      );
+    }
+
+    // Model a worker process that stops consuming after receiving its active
+    // delivery. The delivery remains leased until the broker's visibility
+    // timeout, allowing the replacement worker to receive the redelivery.
+    late StreamController<Delivery> controller;
+    controller = StreamController<Delivery>(
+      onListen: () async {
+        try {
+          final delivery = await super
+              .consume(
+                subscription,
+                prefetch: prefetch,
+                consumerGroup: consumerGroup,
+                consumerName: consumerName,
+              )
+              .first;
+          if (!controller.isClosed) {
+            controller.add(delivery);
+          }
+        } on Object catch (error, stackTrace) {
+          if (!controller.isClosed) {
+            controller.addError(error, stackTrace);
+            await controller.close();
+          }
+        }
+      },
+    );
+    return controller.stream;
+  }
+
+  @override
+  Future<void> extendLease(Delivery delivery, Duration by) async {
+    throw StateError('simulated lease renewal disconnect');
+  }
+}
+
+class _BlockingAckBroker extends InMemoryBroker {
+  _BlockingAckBroker()
+    : super(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 5),
+        defaultVisibilityTimeout: const Duration(milliseconds: 80),
+      );
+
+  final Completer<void> ackStarted = Completer<void>();
+  final Completer<void> ackCompleted = Completer<void>();
+  final Completer<void> _ackRelease = Completer<void>();
+  int leaseExtensions = 0;
+
+  @override
+  Future<void> ack(Delivery delivery) async {
+    if (!ackStarted.isCompleted) {
+      ackStarted.complete();
+    }
+    await _ackRelease.future;
+    await super.ack(delivery);
+    if (!ackCompleted.isCompleted) {
+      ackCompleted.complete();
+    }
+  }
+
+  @override
+  Future<void> extendLease(Delivery delivery, Duration by) async {
+    leaseExtensions += 1;
+    await super.extendLease(delivery, by);
+  }
+
+  void releaseAcknowledgement() {
+    if (!_ackRelease.isCompleted) {
+      _ackRelease.complete();
+    }
+  }
+}
+
+class _BlockingConsumeBroker extends InMemoryBroker {
+  _BlockingConsumeBroker()
+    : super(
+        delayedInterval: const Duration(milliseconds: 5),
+        claimInterval: const Duration(milliseconds: 5),
+        defaultVisibilityTimeout: const Duration(milliseconds: 80),
+      );
+
+  int leaseExtensions = 0;
+
+  @override
+  Future<void> extendLease(Delivery delivery, Duration by) async {
+    leaseExtensions += 1;
+    await super.extendLease(delivery, by);
+  }
+}
+
+class _BlockingConsumeMiddleware implements Middleware {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+
+  @override
+  Future<void> onConsume(
+    Delivery delivery,
+    Future<void> Function() next,
+  ) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await _release.future;
+    await next();
+  }
+
+  @override
+  Future<void> onEnqueue(
+    Envelope envelope,
+    Future<void> Function() next,
+  ) => next();
+
+  @override
+  Future<void> onExecute(
+    TaskContext context,
+    Future<void> Function() next,
+  ) => next();
+
+  @override
+  Future<void> onError(
+    TaskContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) async {}
+
+  void release() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
+  }
+}
+
+class _DelayedTerminalBackend extends InMemoryResultBackend {
+  final Completer<void> firstTerminalEntered = Completer<void>();
+  final Completer<void> _firstTerminalRelease = Completer<void>();
+  int terminalCalls = 0;
+
+  @override
+  Future<bool> setTerminalIfAbsent(
+    TaskStatus status, {
+    Duration? ttl,
+  }) async {
+    terminalCalls += 1;
+    if (terminalCalls == 1) {
+      firstTerminalEntered.complete();
+      await _firstTerminalRelease.future;
+    }
+    return super.setTerminalIfAbsent(status, ttl: ttl);
+  }
+
+  void releaseFirstTerminal() {
+    if (!_firstTerminalRelease.isCompleted) {
+      _firstTerminalRelease.complete();
+    }
+  }
+}
+
+class _SequencedSuccessTask implements TaskHandler<String> {
+  int calls = 0;
+
+  @override
+  String get name => 'tasks.sequenced-success';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    calls += 1;
+    return 'result-$calls';
+  }
+}
+
+class _LeaseLossTask implements TaskHandler<String> {
+  final Completer<void> firstStarted = Completer<void>();
+  final Completer<void> secondStarted = Completer<void>();
+  final Completer<void> _firstRelease = Completer<void>();
+  int calls = 0;
+
+  @override
+  String get name => 'tasks.lease-loss';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    calls += 1;
+    if (calls == 1) {
+      firstStarted.complete();
+      await _firstRelease.future;
+      return 'result-1';
+    }
+    secondStarted.complete();
+    return 'result-2';
+  }
+
+  void releaseFirst() {
+    if (!_firstRelease.isCompleted) {
+      _firstRelease.complete();
+    }
+  }
+}
+
+class _CountingSuccessTask implements TaskHandler<String> {
+  _CountingSuccessTask(this.onCall);
+
+  final void Function() onCall;
+
+  @override
+  String get name => 'tasks.counting-success';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    onCall();
+    return 'ok';
+  }
+}
+
+class _BlockingSuccessTask implements TaskHandler<String> {
+  final Completer<void> started = Completer<void>();
+  final Completer<void> _release = Completer<void>();
+  int calls = 0;
+
+  @override
+  String get name => 'tasks.blocking-success';
+
+  @override
+  TaskOptions get options => const TaskOptions();
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<String> call(TaskContext context, Map<String, Object?> args) async {
+    calls += 1;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await _release.future;
+    return 'ok';
+  }
+
+  void release() {
+    if (!_release.isCompleted) {
+      _release.complete();
+    }
   }
 }
 
@@ -2027,6 +3001,69 @@ class _AlwaysFailTask implements TaskHandler<void> {
   }
 }
 
+class _RetryStormTask implements TaskHandler<void> {
+  final Map<int, int> _callsByJob = {};
+
+  int get calls => _callsByJob.values.fold(0, (sum, count) => sum + count);
+
+  @override
+  String get name => 'tasks.retry-storm';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 3);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata();
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    final job = args['job']! as int;
+    _callsByJob[job] = (_callsByJob[job] ?? 0) + 1;
+    throw StateError('retry storm failure for job $job');
+  }
+}
+
+class _PoisonPayloadTask implements TaskHandler<void> {
+  int calls = 0;
+
+  @override
+  String get name => 'tasks.poison-payload';
+
+  @override
+  TaskOptions get options => const TaskOptions(maxRetries: 10);
+
+  @override
+  TaskMetadata get metadata => const TaskMetadata(
+    argsEncoder: _ThrowingArgsEncoder(),
+  );
+
+  @override
+  TaskEntrypoint? get isolateEntrypoint => null;
+
+  @override
+  Future<void> call(TaskContext context, Map<String, Object?> args) async {
+    calls += 1;
+  }
+}
+
+class _ThrowingArgsEncoder extends TaskPayloadEncoder {
+  const _ThrowingArgsEncoder();
+
+  @override
+  String get id => 'poison-test';
+
+  @override
+  Object? encode(Object? value) => value;
+
+  @override
+  Object? decode(Object? stored) {
+    throw const FormatException('payload is intentionally malformed');
+  }
+}
+
 FutureOr<Object?> _isolateEntrypoint(
   TaskInvocationContext context,
   Map<String, Object?> args,
@@ -2060,6 +3097,22 @@ FutureOr<Object?> _sleepyEntrypoint(
 ) async {
   await Future<void>.delayed(const Duration(milliseconds: 150));
   return null;
+}
+
+FutureOr<int> _shutdownRequeueEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  await Future<void>.delayed(const Duration(seconds: 2));
+  return Isolate.current.hashCode;
+}
+
+FutureOr<String> _prefetchShutdownEntrypoint(
+  TaskInvocationContext context,
+  Map<String, Object?> args,
+) async {
+  await Future<void>.delayed(const Duration(milliseconds: 150));
+  return 'completed:${args['index']}';
 }
 
 FutureOr<int> _isolateHashEntrypoint(

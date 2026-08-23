@@ -194,6 +194,7 @@ stem schedule apply \
   --yes
 
 stem schedule list
+stem schedule trigger cleanup
 stem schedule dry-run --spec "every:5m"
 ```
 
@@ -205,8 +206,10 @@ Run Beat from a Dart entrypoint wired to your schedule store:
 
 Requirements:
 
-- `stem schedule apply/list/dry-run` use `STEM_SCHEDULE_STORE_URL` when set,
+- `stem schedule apply/list/trigger/dry-run` use `STEM_SCHEDULE_STORE_URL` when set,
   otherwise they operate on local schedule files.
+- `schedule trigger` also requires `STEM_BROKER_URL` and publishes one task
+  without changing the recurring entry's next-run or execution counters.
 - Beat needs a broker, schedule store, and (for HA) a lock store.
 
 Expected output (schedule list):
@@ -245,6 +248,7 @@ Use this table to sanity-check which connection strings are required:
 | `stem worker shutdown` | ✅ | ❌ | ❌ | ❌ | ❌ |
 | `stem worker pause/resume` | ✅ | ❌ | ❌ | optional | ❌ |
 | `stem schedule apply/list/dry-run` | ❌ | ❌ | ✅ | ❌ | ❌ |
+| `stem schedule trigger` | ✅ | optional | ✅ | ❌ | ❌ |
 | `stem health` | ✅ | optional | ❌ | ❌ | ❌ |
 
 Notes:

@@ -1,14 +1,14 @@
-import 'package:contextual/contextual.dart' as contextual;
 import 'package:ormed/ormed.dart';
 import 'package:ormed_postgres/ormed_postgres.dart';
-import 'package:stem/stem.dart' show stemLogger;
+import 'package:stem/observability.dart' show StemLogger, stemLogger;
 import 'package:stem_postgres/orm_registry.g.dart';
+import 'package:stem_postgres/src/database/stem_orm_logger.dart';
 
 /// Creates a new DataSource instance using the project configuration.
 DataSource createDataSource({
   String? connectionString,
   bool logging = false,
-  contextual.Logger? logger,
+  StemLogger? logger,
 }) {
   if (connectionString != null && connectionString.isNotEmpty) {
     final options = bootstrapOrm()
@@ -16,7 +16,7 @@ DataSource createDataSource({
           environment: {'DATABASE_URL': connectionString},
           logging: logging,
         )
-        .copyWith(logger: logger ?? stemLogger);
+        .copyWith(logger: createOrmLogger(logger ?? stemLogger));
     return DataSource(options);
   }
 
@@ -36,7 +36,7 @@ DataSource createDataSource({
 /// Creates a new DataSource instance using a resolved ORM project config.
 DataSource createDataSourceFromConfig(
   OrmProjectConfig config, {
-  contextual.Logger? logger,
+  StemLogger? logger,
 }) {
   final registry = bootstrapOrm();
   final options = Map<String, Object?>.from(config.driver.options);
@@ -84,5 +84,9 @@ DataSource createDataSourceFromConfig(
               options['schema']?.toString() ??
               'public',
         );
-  return DataSource(dataSourceOptions.copyWith(logger: logger));
+  return DataSource(
+    dataSourceOptions.copyWith(
+      logger: createOrmLogger(logger ?? stemLogger),
+    ),
+  );
 }
