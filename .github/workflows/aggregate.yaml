@@ -88,10 +88,6 @@ jobs:
         with:
           channel: stable
           cache: true
-      - if: matrix.tool == 'dart'
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 3.10.0
       - name: Resolve package dependencies
         run: flutter pub get
         working-directory: ${{ matrix.package }}
