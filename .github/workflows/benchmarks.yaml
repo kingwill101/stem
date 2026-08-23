@@ -19,9 +19,9 @@ jobs:
       - name: Resolve dependencies
         run: dart pub get
       - name: Check benchmark formatting
-        run: dart format benchmark --set-exit-if-changed
+        run: dart format repodoc/lib repodoc/bin --set-exit-if-changed
       - name: Run throughput regression gate
-        run: dart run benchmark/stem_throughput.dart --check-baseline
+        run: dart run repodoc/bin/repodoc.dart benchmark:throughput --check-baseline
 
   sqlite-throughput:
     runs-on: ubuntu-latest
