@@ -36,19 +36,19 @@ jobs:
           ! rg -n 'docker/testing/certs|certs/postgres-root' \
             packages .gitignore
 
-  dagger-test:
-    name: integration / Dagger all gate
+  devenv-gate:
+    name: integration / devenv centralized gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Local `task test:dagger` and CI both call the same Go SDK module.
-      - name: Run Dagger-backed all-package test gate
-        uses: dagger/dagger-for-github@v8.4.1
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
         with:
-          version: v0.21.7
-          module: .dagger
-          call: all --source=.
-          dagger-flags: --progress plain
+          name: devenv
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+      - name: Run the centralized workspace gate
+        run: devenv shell -- stem-ci
 
   cross-platform-packages:
     name: portable package / ${{ matrix.package }} / ${{ matrix.os }}
