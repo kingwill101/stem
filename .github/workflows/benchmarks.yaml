@@ -25,25 +25,36 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: stem-benchmarks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   throughput:
     name: benchmark / throughput report
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
     env:
       STORE_TASKS_INPUT: ${{ inputs.store_tasks || '500' }}
       STORE_WARMUP_INPUT: ${{ inputs.store_warmup || '50' }}
       STORE_BUCKETS_INPUT: ${{ inputs.store_buckets || '4,8,16' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
-      - uses: cachix/cachix-action@v16
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+      - uses: cachix/cachix-action@97e5ff84d02b3b4f9936339f767e17f03c9252ed # v16
         with:
           name: devenv
       - name: Install devenv
         run: nix profile install nixpkgs#devenv
       - name: Start benchmark services
         run: devenv up -d
+      - name: Wait for benchmark services
+        run: devenv processes wait --timeout 120
       - name: Create benchmark artifact directory
         run: mkdir -p .tmp/ci-benchmarks
       - name: Run memory throughput regression gate
@@ -111,9 +122,118 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload benchmark JSON artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: stem-throughput-benchmarks-${{ github.run_id }}
           path: .tmp/ci-benchmarks
           if-no-files-found: warn
           retention-days: 30
+      - name: Publish benchmark report to pull request
+        if: >-
+          always() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          BENCHMARK_DIR: .tmp/ci-benchmarks
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const marker = '<!-- stem-throughput-benchmark-report -->';
+            const root = process.env.GITHUB_WORKSPACE || process.cwd();
+            const benchmarkDir = path.join(root, process.env.BENCHMARK_DIR);
+            const files = [
+              ['Memory', 'memory.json'],
+              ['SQLite', 'sqlite.json'],
+              ['PostgreSQL', 'postgres.json'],
+              ['Redis', 'redis.json'],
+            ];
+
+            const finiteNumber = (value) =>
+              typeof value === 'number' && Number.isFinite(value) ? value : null;
+            const rounded = (value, digits = 2) => {
+              const number = finiteNumber(value);
+              return number === null ? 'n/a' : number.toFixed(digits);
+            };
+            const integer = (value) => {
+              const number = finiteNumber(value);
+              return number === null ? 'n/a' : String(Math.round(number));
+            };
+
+            const rows = [];
+            const missing = [];
+            for (const [label, filename] of files) {
+              const filenamePath = path.join(benchmarkDir, filename);
+              if (!fs.existsSync(filenamePath)) {
+                missing.push(label);
+                continue;
+              }
+              try {
+                const report = JSON.parse(fs.readFileSync(filenamePath, 'utf8'));
+                if (!Array.isArray(report.buckets)) {
+                  missing.push(`${label} (invalid report)`);
+                  continue;
+                }
+                for (const bucket of report.buckets) {
+                  if (!bucket || typeof bucket !== 'object') continue;
+                  rows.push([
+                    label,
+                    integer(bucket.concurrency),
+                    integer(bucket.tasks),
+                    rounded(bucket.enqueue_tasks_per_second, 1),
+                    rounded(bucket.end_to_end_tasks_per_second, 1),
+                  ]);
+                }
+              } catch (error) {
+                missing.push(`${label} (unreadable report)`);
+              }
+            }
+
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const commit = process.env.GITHUB_SHA.slice(0, 12);
+            const lines = [
+              marker,
+              '## Stem throughput benchmarks',
+              '',
+              `Updated by [workflow run #${process.env.GITHUB_RUN_ID}](${runUrl}) for commit \`${commit}\`.`,
+              '',
+            ];
+            if (rows.length > 0) {
+              lines.push(
+                '| Store | Concurrency | Tasks | Enqueue tasks/s | End-to-end tasks/s |',
+                '| --- | ---: | ---: | ---: | ---: |',
+                ...rows.map((row) => `| ${row.join(' | ')} |`),
+                '',
+              );
+            } else {
+              lines.push('No benchmark result JSON was produced. See the workflow check for details.', '');
+            }
+            if (missing.length > 0) {
+              lines.push(`Partial report; unavailable results: ${missing.join(', ')}.`, '');
+            }
+            lines.push('_The memory benchmark is the regression gate; external-store runs are serialized smoke/report benchmarks._');
+
+            const body = lines.join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
