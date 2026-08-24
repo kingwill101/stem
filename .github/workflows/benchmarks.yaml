@@ -36,6 +36,7 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+      # Required to update the sticky benchmark comment on same-repository PRs.
       pull-requests: write
     env:
       STORE_TASKS_INPUT: ${{ inputs.store_tasks || '500' }}
@@ -80,16 +81,25 @@ jobs:
             buckets="$STORE_BUCKETS_INPUT"
           fi
 
+          failed=()
           for store in sqlite postgres redis; do
             echo "Running $store benchmark sequentially (tasks=$tasks warmup=$warmup buckets=$buckets)"
-            devenv shell -- stem-benchmark \
-              --store "$store" \
-              --tasks "$tasks" \
-              --warmup "$warmup" \
-              --buckets "$buckets" \
-              --verbose \
-              --output ".tmp/ci-benchmarks/$store.json"
+            if ! devenv shell -- stem-benchmark \
+                --store "$store" \
+                --tasks "$tasks" \
+                --warmup "$warmup" \
+                --buckets "$buckets" \
+                --verbose \
+                --output ".tmp/ci-benchmarks/$store.json"; then
+              echo "::warning::$store benchmark failed"
+              failed+=("$store")
+            fi
           done
+
+          if [[ ${#failed[@]} -gt 0 ]]; then
+            echo "Failed store benchmarks: ${failed[*]}"
+            exit 1
+          fi
       - name: Write benchmark report to job summary
         if: always()
         shell: bash
@@ -111,7 +121,14 @@ jobs:
               echo
               echo '| Store | Concurrency | Tasks | Enqueue tasks/s | End-to-end tasks/s |'
               echo '| --- | ---: | ---: | ---: | ---: |'
-              jq -r '.buckets[] | "| \(.store) | \(.concurrency) | \(.tasks) | \((.enqueue_tasks_per_second * 100 | round / 100)) | \((.end_to_end_tasks_per_second * 100 | round / 100)) |"' "$file"
+              if ! jq -r '
+                def metric:
+                  if type == "number" then (. * 100 | round / 100) else "n/a" end;
+                .buckets[]? |
+                  "| \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.enqueue_tasks_per_second | metric) | \(.end_to_end_tasks_per_second | metric) |"
+              ' "$file"; then
+                echo '| (unreadable report) | | | | |'
+              fi
               echo
             }
 
