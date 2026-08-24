@@ -148,10 +148,16 @@ final class ThroughputBenchmark {
       };
     } finally {
       stage('shutting down worker');
-      await worker.shutdown();
-      stage('closing store resources');
-      await resources.close();
-      stage('benchmark complete');
+      try {
+        await worker.shutdown();
+      } finally {
+        stage('closing store resources');
+        try {
+          await resources.close();
+        } finally {
+          stage('benchmark complete');
+        }
+      }
     }
   }
 }
