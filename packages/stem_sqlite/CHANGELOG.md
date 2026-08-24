@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
   facade; the Ormed contextual logger remains an adapter implementation detail.
@@ -15,9 +15,6 @@
   runtime, and worker instances.
 - Added mixed-version queue coverage: a row written against the pre-namespace
   schema is upgraded and consumed by the current SQLite broker.
-
-## 0.2.0
-
 - Updated the adapter for Stem 0.3.0 and the narrowed broker capability model.
 - Added migration-registry and historical-schema upgrade coverage.
 - Removed the deprecated `StemSqliteDatabase` placeholder API; use

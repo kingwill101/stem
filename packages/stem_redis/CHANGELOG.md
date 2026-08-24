@@ -1,12 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Added an atomic Redis Lua terminal-result write that preserves the first
   terminal task state across concurrent workers.
-
-## 0.2.0
-
 - Updated the Redis adapter for Stem 0.3.0 and the capability-aware broker
   contract.
 - Retained the production distributed Redis rate limiter and added its focused

@@ -1,14 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
   facade; the Ormed contextual logger remains an adapter implementation detail.
 - Added conditional terminal-result updates so late completion attempts cannot
   overwrite an existing terminal state.
-
-## 0.2.0
-
 - Updated the Postgres adapter for Stem 0.3.0 and the capability-aware broker
   contract.
 - Added the transactional outbox, distributed rate limiter, migration registry,
