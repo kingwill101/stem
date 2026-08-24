@@ -26,19 +26,19 @@ Future<void> main() async {
   );
   tearDownAll(harness.dispose);
 
-  Future<Set<String>> exerciseConnection({
+  Future<List<PostgresOperationTiming>> exerciseConnection({
     required bool separateConsumerConnection,
   }) async {
     final namespace = 'broker-connect-${DateTime.now().microsecondsSinceEpoch}';
     final queue = 'connect-queue-${DateTime.now().microsecondsSinceEpoch}';
-    final components = <String>{};
+    final timings = <PostgresOperationTiming>[];
     final broker = await PostgresBroker.connect(
       connectionString,
       namespace: namespace,
       pollInterval: const Duration(milliseconds: 25),
       sweeperInterval: const Duration(hours: 1),
       separateConsumerConnection: separateConsumerConnection,
-      timingListener: (timing) => components.add(timing.component),
+      timingListener: timings.add,
     );
     try {
       await broker.publish(
@@ -53,36 +53,52 @@ Future<void> main() async {
     } finally {
       await broker.close();
     }
-    return components;
+    return timings;
   }
 
   test('connect can use an independent consumer connection', () async {
-    final components = await exerciseConnection(
+    final timings = await exerciseConnection(
       separateConsumerConnection: true,
     );
-    expect(components, containsAll(['broker', 'broker.consumer']));
+    expect(
+      timings.map((timing) => timing.component),
+      containsAll(['broker', 'broker.consumer']),
+    );
+    expect(
+      timings,
+      anyElement(
+        predicate<PostgresOperationTiming>(
+          (timing) =>
+              timing.component == 'broker.consumer' &&
+              timing.operation == 'broker.ack',
+        ),
+      ),
+    );
   });
 
   test('connect shares one connection by default', () async {
-    final components = await exerciseConnection(
+    final timings = await exerciseConnection(
       separateConsumerConnection: false,
     );
-    expect(components, contains('broker'));
-    expect(components, isNot(contains('broker.consumer')));
+    expect(timings.map((timing) => timing.component), contains('broker'));
+    expect(
+      timings.map((timing) => timing.component),
+      isNot(contains('broker.consumer')),
+    );
   });
 
   test('connect isolates broadcast consumer operations', () async {
     final namespace =
         'broker-broadcast-${DateTime.now().microsecondsSinceEpoch}';
     final channel = 'broadcast-${DateTime.now().microsecondsSinceEpoch}';
-    final components = <String>{};
+    final timings = <PostgresOperationTiming>[];
     final broker = await PostgresBroker.connect(
       connectionString,
       namespace: namespace,
       pollInterval: const Duration(milliseconds: 25),
       sweeperInterval: const Duration(hours: 1),
       separateConsumerConnection: true,
-      timingListener: (timing) => components.add(timing.component),
+      timingListener: timings.add,
     );
     final stream = broker.consume(
       RoutingSubscription(
@@ -103,7 +119,26 @@ Future<void> main() async {
       );
       final delivery = await deliveryFuture;
       await broker.ack(delivery);
-      expect(components, contains('broker.consumer'));
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker' &&
+                timing.operation == 'broker.publish',
+          ),
+        ),
+      );
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker.consumer' &&
+                timing.operation == 'broker.broadcast.ack',
+          ),
+        ),
+      );
     } finally {
       await broker.close();
     }

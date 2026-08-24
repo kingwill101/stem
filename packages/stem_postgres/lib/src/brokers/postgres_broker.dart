@@ -236,8 +236,8 @@ class PostgresBroker
         final message = error.toString();
         if (message.contains('already been closed') ||
             message.contains('not been initialized')) {
-          await connections.ensureReady(forceReopen: true);
           try {
+            await connections.ensureReady(forceReopen: true);
             final result = await action();
             _notifyTiming(
               component: component,
@@ -327,9 +327,12 @@ class PostgresBroker
         envelope: message.toJson(),
         delivery: resolvedRoute.delivery ?? 'at-least-once',
       ).toTracked();
-      await _context.repository<StemBroadcastMessage>().upsert(
-        model,
-        uniqueBy: ['id'],
+      await _withDb(
+        () => _context.repository<StemBroadcastMessage>().upsert(
+          model,
+          uniqueBy: ['id'],
+        ),
+        operation: 'broker.publish',
       );
       return;
     }
@@ -455,14 +458,19 @@ class PostgresBroker
         'queue': delivery.envelope.queue,
       }),
     );
-    await _withDb(() {
-      // Ack does not need the model-loading behavior of Query.delete().
-      // deleteWhere compiles directly to a DELETE and avoids an extra SELECT.
-      return _context.query<StemQueueJob>().deleteWhere({
-        'id': jobId,
-        'namespace': namespace,
-      });
-    }, operation: 'broker.ack');
+    final ackConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        // Ack does not need the model-loading behavior of Query.delete().
+        // deleteWhere compiles directly to a DELETE and avoids an extra SELECT.
+        return ackConnections.context.query<StemQueueJob>().deleteWhere({
+          'id': jobId,
+          'namespace': namespace,
+        });
+      },
+      operation: 'broker.ack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
