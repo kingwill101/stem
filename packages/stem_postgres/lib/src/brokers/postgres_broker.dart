@@ -492,20 +492,25 @@ class PostgresBroker
       }),
     );
     final now = stemNow().toUtc();
-    await _withDb(() {
-      return _context
-          .query<StemQueueJob>()
-          .whereEquals('id', jobId)
-          .whereEquals('namespace', namespace)
-          .update({
-            'lockedAt': null,
-            'lockedUntil': null,
-            'lockedBy': null,
-            'attempt': delivery.envelope.attempt + 1,
-            'notBefore': null,
-            'updatedAt': now,
-          });
-    });
+    final consumerConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return consumerConnections.context
+            .query<StemQueueJob>()
+            .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
+            .update({
+              'lockedAt': null,
+              'lockedUntil': null,
+              'lockedBy': null,
+              'attempt': delivery.envelope.attempt + 1,
+              'notBefore': null,
+              'updatedAt': now,
+            });
+      },
+      operation: 'broker.nack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -523,35 +528,40 @@ class PostgresBroker
         ? 'unknown'
         : reason.trim();
     final deadAt = stemNow().toUtc();
+    final consumerConnections = _consumerConnections ?? _connections;
 
-    await _withDb(() async {
-      await _connections.runInTransaction((txn) async {
-        final row = await txn
-            .query<StemQueueJob>()
-            .whereEquals('id', jobId)
-            .whereEquals('namespace', namespace)
-            .firstOrNull();
-        await txn
-            .query<StemQueueJob>()
-            .whereEquals('id', jobId)
-            .whereEquals('namespace', namespace)
-            .delete();
-        if (row != null) {
-          await txn.repository<StemDeadLetter>().upsert(
-            StemDeadLetter(
-              id: row.id,
-              namespace: namespace,
-              queue: row.queue,
-              envelope: row.envelope,
-              reason: entryReason,
-              meta: meta,
-              deadAt: deadAt,
-            ).toTracked(),
-            uniqueBy: ['id'],
-          );
-        }
-      });
-    });
+    await _withDb(
+      () async {
+        await consumerConnections.runInTransaction((txn) async {
+          final row = await txn
+              .query<StemQueueJob>()
+              .whereEquals('id', jobId)
+              .whereEquals('namespace', namespace)
+              .firstOrNull();
+          await txn
+              .query<StemQueueJob>()
+              .whereEquals('id', jobId)
+              .whereEquals('namespace', namespace)
+              .delete();
+          if (row != null) {
+            await txn.repository<StemDeadLetter>().upsert(
+              StemDeadLetter(
+                id: row.id,
+                namespace: namespace,
+                queue: row.queue,
+                envelope: row.envelope,
+                reason: entryReason,
+                meta: meta,
+                deadAt: deadAt,
+              ).toTracked(),
+              uniqueBy: ['id'],
+            );
+          }
+        });
+      },
+      operation: 'broker.dead_letter',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -570,12 +580,17 @@ class PostgresBroker
     if (by <= Duration.zero) return;
     final jobId = _parseReceipt(delivery.receipt);
     final leaseUntil = stemNow().toUtc().add(by);
-    await _withDb(() {
-      return _context.repository<StemQueueJob>().update(
-        StemQueueJobUpdateDto(lockedUntil: leaseUntil),
-        where: StemQueueJobPartial(id: jobId, namespace: namespace),
-      );
-    });
+    final consumerConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return consumerConnections.context.repository<StemQueueJob>().update(
+          StemQueueJobUpdateDto(lockedUntil: leaseUntil),
+          where: StemQueueJobPartial(id: jobId, namespace: namespace),
+        );
+      },
+      operation: 'broker.extend_lease',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override

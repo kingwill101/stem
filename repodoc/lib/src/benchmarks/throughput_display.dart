@@ -131,7 +131,7 @@ void displayThroughputResults(
       for (final result in timingResults)
         for (final query in _queryValues(result['postgres_queries']))
           if (query is Map) {'concurrency': result['concurrency'], ...query},
-    ];
+    ]..sort(_compareQueryRows);
     if (queryRows.isNotEmpty) {
       final title = queryRows.length > 20
           ? 'PostgreSQL query timings (slowest first; '
@@ -190,6 +190,15 @@ String _formatCv(Object? value) {
 
 Iterable<Object?> _queryValues(Object? value) =>
     value is List ? value : const <Object?>[];
+
+int _compareQueryRows(Map<dynamic, dynamic> left, Map<dynamic, dynamic> right) {
+  final leftMax = benchmarkNumber(left['max_ms']);
+  final rightMax = benchmarkNumber(right['max_ms']);
+  if (leftMax == null && rightMax == null) return 0;
+  if (leftMax == null) return 1;
+  if (rightMax == null) return -1;
+  return rightMax.compareTo(leftMax);
+}
 
 String _sqlPreview(Object? value) {
   if (value is! String || value.isEmpty) return 'n/a';

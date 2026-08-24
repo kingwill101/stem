@@ -141,6 +141,12 @@ jobs:
               local title="$1"
               local file="$2"
               if [[ ! -f "$file" ]]; then
+                echo "### $title"
+                echo
+                echo '| Status |'
+                echo '| --- |'
+                echo '| Benchmark failed or report was unavailable. |'
+                echo
                 return
               fi
               local runtime
