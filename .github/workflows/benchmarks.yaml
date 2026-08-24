@@ -65,6 +65,7 @@ jobs:
             --tasks 5000 \
             --warmup 250 \
             --concurrency 8 \
+            --samples 3 \
             --check-baseline \
             --output .tmp/ci-benchmarks/memory-aot.json
       - name: Run JIT memory throughput report
@@ -74,6 +75,7 @@ jobs:
             --tasks 5000 \
             --warmup 250 \
             --concurrency 8 \
+            --samples 3 \
             --output .tmp/ci-benchmarks/memory-jit.json
       - name: Run external-store throughput reports
         shell: bash
@@ -83,10 +85,12 @@ jobs:
             tasks=25
             warmup=5
             buckets=1,4
+            samples=1
           else
             tasks="$STORE_TASKS_INPUT"
             warmup="$STORE_WARMUP_INPUT"
             buckets="$STORE_BUCKETS_INPUT"
+            samples=3
           fi
 
           failed=()
@@ -108,6 +112,7 @@ jobs:
                   --tasks "$tasks" \
                   --warmup "$warmup" \
                   --buckets "$buckets" \
+                  --samples "$samples" \
                   --verbose \
                   "${timing_args[@]}" \
                   --output ".tmp/ci-benchmarks/$store-$runtime.json"; then
@@ -142,15 +147,27 @@ jobs:
               runtime="$(jq -r '.runtime // "unknown"' "$file" 2>/dev/null || echo unknown)"
               echo "### $title"
               echo
-              echo '| Runtime | Store | Concurrency | Tasks | Enqueue tasks/s | End-to-end tasks/s |'
-              echo '| --- | --- | ---: | ---: | ---: | ---: |'
+              echo '| Runtime | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | CV |'
+              echo '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |'
               if ! jq -r --arg runtime "$runtime" '
-                def metric:
-                  if type == "number" then (. * 100 | round / 100) else "n/a" end;
+                def metric($key):
+                  (if (.statistics?[$key]? | type) == "object"
+                   then .statistics[$key].median
+                   else .[$key]
+                   end) as $value |
+                  if ($value | type) == "number"
+                  then ($value * 100 | round / 100)
+                  else "n/a"
+                  end;
+                def cv:
+                  if (.statistics?.end_to_end_tasks_per_second?.cv | type) == "number"
+                  then ((.statistics.end_to_end_tasks_per_second.cv * 100 | round / 100) | tostring) + "%"
+                  else "n/a"
+                  end;
                 .buckets[]? |
-                  "| \($runtime) | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.enqueue_tasks_per_second | metric) | \(.end_to_end_tasks_per_second | metric) |"
+                  "| \($runtime) | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second")) | \(metric("end_to_end_tasks_per_second")) | \(cv) |"
               ' "$file"; then
-                echo '| (unreadable report) | | | | | |'
+                echo '| (unreadable report) | | | | | | | |'
               fi
               echo
             }
@@ -227,13 +244,20 @@ jobs:
                 }
                 for (const bucket of report.buckets) {
                   if (!bucket || typeof bucket !== 'object') continue;
+                  const endToEndStats = bucket.statistics?.end_to_end_tasks_per_second;
+                  const enqueueStats = bucket.statistics?.enqueue_tasks_per_second;
+                  const endToEnd = finiteNumber(endToEndStats?.median) ?? finiteNumber(bucket.end_to_end_tasks_per_second);
+                  const enqueue = finiteNumber(enqueueStats?.median) ?? finiteNumber(bucket.enqueue_tasks_per_second);
+                  const cv = finiteNumber(endToEndStats?.cv);
                   rows.push([
                     store,
                     report.runtime || runtime,
                     integer(bucket.concurrency),
                     integer(bucket.tasks),
-                    rounded(bucket.enqueue_tasks_per_second, 1),
-                    rounded(bucket.end_to_end_tasks_per_second, 1),
+                    integer(bucket.samples ?? report.samples ?? 1),
+                    rounded(enqueue, 1),
+                    rounded(endToEnd, 1),
+                    cv === null ? 'n/a' : `${(cv * 100).toFixed(2)}%`,
                   ]);
                 }
               } catch (error) {
@@ -258,8 +282,8 @@ jobs:
             ];
             if (rows.length > 0) {
               lines.push(
-                '| Store | Runtime | Concurrency | Tasks | Enqueue tasks/s | End-to-end tasks/s |',
-                '| --- | --- | ---: | ---: | ---: | ---: |',
+                '| Store | Runtime | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | CV |',
+                '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
                 ...rows.map((row) => `| ${row.join(' | ')} |`),
                 '',
               );

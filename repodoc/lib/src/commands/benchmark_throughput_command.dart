@@ -5,6 +5,8 @@ import 'package:artisanal/args.dart';
 import 'package:path/path.dart' as p;
 
 import '../benchmarks/throughput.dart';
+import '../benchmarks/throughput_mode.dart';
+import '../benchmarks/throughput_statistics.dart';
 import '../benchmarks/throughput_store.dart';
 import '../benchmarks/throughput_display.dart';
 import '../infrastructure/workspace.dart';
@@ -15,6 +17,22 @@ final class BenchmarkThroughputCommand extends Command<int> {
       ..addOption('tasks', defaultsTo: '5000')
       ..addOption('warmup', defaultsTo: '250')
       ..addOption('concurrency', defaultsTo: '8')
+      ..addOption(
+        'mode',
+        defaultsTo: 'steady-state',
+        help: 'Workload mode: steady-state, enqueue-only, or prefilled-drain.',
+      )
+      ..addOption(
+        'duration',
+        help:
+            'Measurement window for duration-based runs, for example 10s or '
+            '1m. Omit to use --tasks.',
+      )
+      ..addOption(
+        'samples',
+        defaultsTo: '1',
+        help: 'Number of repeated trials for each store and bucket.',
+      )
       ..addOption(
         'store',
         help: 'Store to benchmark: memory, sqlite, postgres, or redis.',
@@ -74,12 +92,21 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final catalog = WorkspaceCatalog.load();
     final tasks = _positiveInt('tasks');
     final warmup = _nonNegativeInt('warmup');
+    final mode = ThroughputMode.parse(_option('mode'));
+    final duration = _optionalDuration('duration');
+    final samples = _positiveInt('samples');
     final jsonOutput = argResults?['json'] == true;
     final verbose = argResults?['verbose'] == true;
     final timings = argResults?['timings'] == true;
     final stores = _stores();
     final checkBaseline = argResults?['check-baseline'] == true;
     final runtime = _runtime();
+    if (checkBaseline && mode != ThroughputMode.steadyState) {
+      throw ArgumentError(
+        '--check-baseline currently applies only to steady-state '
+        'end-to-end throughput.',
+      );
+    }
     if (checkBaseline &&
         stores.any((store) => store != ThroughputStore.memory)) {
       throw ArgumentError(
@@ -103,11 +130,16 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final results = <Map<String, Object?>>[];
     Map<String, Object?> buildReport({required String status, Object? error}) =>
         {
-          'schemaVersion': 1,
+          'schemaVersion': 2,
           'kind': 'stem.throughput.benchmark',
           'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
           'status': status,
           'runtime': runtime,
+          'mode': mode.name,
+          'duration_ms': duration?.inMicroseconds == null
+              ? null
+              : duration!.inMicroseconds / 1000,
+          'samples': samples,
           'stores': stores.map((store) => store.name).toList(growable: false),
           'buckets': results,
           if (error != null) 'error': error.toString(),
@@ -129,18 +161,37 @@ final class BenchmarkThroughputCommand extends Command<int> {
               'Running ${store.name} concurrency bucket $concurrency...',
             );
           }
-          final result = await ThroughputBenchmark(
-            tasks: tasks,
-            warmupTasks: warmup,
-            concurrency: concurrency,
-            store: store,
-            postgresUrl: postgresUrl,
-            redisUrl: redisUrl,
-            sqlitePath: sqlitePath,
-            collectPostgresTimings: timings,
-            onStage: verbose ? stderr.writeln : null,
-          ).run();
-          results.add({...result, 'runtime': runtime, 'warmup': warmup});
+          final trials = <Map<String, Object?>>[];
+          for (var sample = 1; sample <= samples; sample++) {
+            if (samples > 1 && !jsonOutput) {
+              stdout.writeln(
+                'Running ${store.name} concurrency bucket $concurrency '
+                'sample $sample/$samples...',
+              );
+            }
+            final result = await ThroughputBenchmark(
+              tasks: tasks,
+              warmupTasks: warmup,
+              concurrency: concurrency,
+              store: store,
+              mode: mode,
+              measurementDuration: duration,
+              postgresUrl: postgresUrl,
+              redisUrl: redisUrl,
+              sqlitePath: sqlitePath,
+              collectPostgresTimings: timings,
+              onStage: verbose ? stderr.writeln : null,
+            ).run();
+            trials.add(result);
+          }
+          results.add(
+            _aggregateTrials(
+              trials,
+              runtime: runtime,
+              warmup: warmup,
+              samples: samples,
+            ),
+          );
         }
       }
     } on Object catch (error, stackTrace) {
@@ -175,6 +226,20 @@ final class BenchmarkThroughputCommand extends Command<int> {
       throw ArgumentError('Expected a positive integer: --$name');
     }
     return value;
+  }
+
+  String _option(String name) {
+    final value = argResults?[name];
+    if (value is! String || value.trim().isEmpty) {
+      throw ArgumentError('Missing benchmark option: --$name');
+    }
+    return value;
+  }
+
+  Duration? _optionalDuration(String name) {
+    final value = argResults?[name] as String?;
+    if (value == null || value.trim().isEmpty) return null;
+    return parseThroughputDuration(value);
   }
 
   int _nonNegativeInt(String name) {
@@ -265,7 +330,11 @@ final class BenchmarkThroughputCommand extends Command<int> {
 
   void _checkBaseline(List<Map<String, Object?>> results, double minimum) {
     final failures = results.where((result) {
-      final measured = result['end_to_end_tasks_per_second'];
+      final statistics = result['statistics'];
+      final measured =
+          statistics is Map && statistics['end_to_end_tasks_per_second'] is Map
+          ? (statistics['end_to_end_tasks_per_second'] as Map)['median']
+          : result['end_to_end_tasks_per_second'];
       return measured is! num || measured < minimum;
     });
     if (failures.isNotEmpty) {
@@ -275,4 +344,43 @@ final class BenchmarkThroughputCommand extends Command<int> {
       );
     }
   }
+}
+
+Map<String, Object?> _aggregateTrials(
+  List<Map<String, Object?>> trials, {
+  required String runtime,
+  required int warmup,
+  required int samples,
+}) {
+  final first = trials.first;
+  final numericKeys = [
+    'enqueue_tasks_per_second',
+    'handler_end_to_end_tasks_per_second',
+    'end_to_end_tasks_per_second',
+    'enqueue_ms',
+    'handler_end_to_end_ms',
+    'end_to_end_ms',
+    'drain_ms',
+    'store_drain_ms',
+  ];
+  final statistics = <String, Object?>{};
+  final aggregate = <String, Object?>{...first};
+  for (final key in numericKeys) {
+    final values = [
+      for (final trial in trials)
+        if (trial[key] is num) trial[key]! as num,
+    ];
+    final summary = ThroughputStatistics.summarize(values);
+    statistics[key] = summary;
+    final median = summary['median'];
+    if (median != null) aggregate[key] = median;
+  }
+  return {
+    ...aggregate,
+    'runtime': runtime,
+    'warmup': warmup,
+    'samples': samples,
+    'statistics': statistics,
+    'trials': trials,
+  };
 }

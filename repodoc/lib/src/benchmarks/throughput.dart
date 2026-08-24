@@ -3,7 +3,33 @@ import 'dart:async';
 import 'package:stem/stem.dart';
 
 import 'postgres_timing.dart';
+import 'throughput_mode.dart';
 import 'throughput_store.dart';
+
+/// Parses benchmark durations such as `250ms`, `5s`, `2m`, or `1h`.
+Duration parseThroughputDuration(String value) {
+  final match = RegExp(
+    r'^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)$',
+  ).firstMatch(value.trim().toLowerCase());
+  if (match == null) {
+    throw ArgumentError(
+      'Invalid benchmark duration "$value". Use values such as 5s or 2m.',
+    );
+  }
+  final number = double.parse(match.group(1)!);
+  final multiplier = switch (match.group(2)) {
+    'ms' => Duration.microsecondsPerMillisecond,
+    's' => Duration.microsecondsPerSecond,
+    'm' => Duration.microsecondsPerMinute,
+    'h' => Duration.microsecondsPerHour,
+    _ => throw StateError('Unsupported duration unit.'),
+  };
+  final microseconds = (number * multiplier).round();
+  if (microseconds <= 0) {
+    throw ArgumentError('Benchmark duration must be positive.');
+  }
+  return Duration(microseconds: microseconds);
+}
 
 final class ThroughputBenchmark {
   const ThroughputBenchmark({
@@ -11,6 +37,8 @@ final class ThroughputBenchmark {
     required this.warmupTasks,
     required this.concurrency,
     required this.store,
+    this.mode = ThroughputMode.steadyState,
+    this.measurementDuration,
     this.postgresUrl,
     this.redisUrl,
     this.sqlitePath,
@@ -22,6 +50,8 @@ final class ThroughputBenchmark {
   final int warmupTasks;
   final int concurrency;
   final ThroughputStore store;
+  final ThroughputMode mode;
+  final Duration? measurementDuration;
   final String? postgresUrl;
   final String? redisUrl;
   final String? sqlitePath;
@@ -29,6 +59,9 @@ final class ThroughputBenchmark {
   final void Function(String message)? onStage;
 
   Future<Map<String, Object?>> run() async {
+    if (measurementDuration != null && measurementDuration! <= Duration.zero) {
+      throw ArgumentError('measurementDuration must be positive.');
+    }
     final elapsed = Stopwatch()..start();
     void stage(String message) {
       onStage?.call(
@@ -61,8 +94,18 @@ final class ThroughputBenchmark {
     final completed = Completer<void>();
     final warmupCompleted = Completer<void>();
     var measuring = false;
+    var measurementClosed = false;
     var warmupCompletedTasks = 0;
+    var measuredTasks = 0;
     var completedTasks = 0;
+    void completeMeasuredIfReady() {
+      if (measurementClosed &&
+          completedTasks >= measuredTasks &&
+          !completed.isCompleted) {
+        completed.complete();
+      }
+    }
+
     final registry = InMemoryTaskRegistry()
       ..register(
         _ThroughputTask(
@@ -76,14 +119,15 @@ final class ThroughputBenchmark {
               return;
             }
             completedTasks += 1;
-            if (completedTasks >= tasks && !completed.isCompleted) {
-              completed.complete();
-            }
+            completeMeasuredIfReady();
           },
         ),
       );
     final stem = Stem(broker: broker, registry: registry, backend: backend);
-    final worker = Worker(
+    Worker? worker;
+    var workerStarted = false;
+
+    Worker createWorker() => Worker(
       broker: executionBroker,
       registry: registry,
       backend: executionBackend,
@@ -94,31 +138,118 @@ final class ThroughputBenchmark {
       lifecycle: const WorkerLifecycleConfig(installSignalHandlers: false),
     );
 
-    try {
-      stage('starting worker');
-      await worker.start();
+    Future<void> startWorker() async {
+      worker = createWorker();
+      await worker!.start();
+      workerStarted = true;
       stage('worker started');
-      if (warmupTasks > 0) {
-        stage('enqueueing $warmupTasks warmup tasks');
+    }
+
+    Future<void> shutdownWorker() async {
+      if (!workerStarted) return;
+      stage('shutting down worker');
+      await worker!.shutdown();
+      workerStarted = false;
+    }
+
+    Future<void> runWarmup() async {
+      if (warmupTasks <= 0) return;
+      stage('enqueueing $warmupTasks warmup tasks');
+      await _enqueueTasks(
+        stem,
+        warmupTasks,
+        label: 'warmup enqueue',
+        stage: stage,
+      );
+      stage('waiting for warmup handlers');
+      await warmupCompleted.future.timeout(const Duration(minutes: 2));
+      stage('warmup handlers complete; waiting for broker drain');
+      await _waitForBrokerDrain(broker);
+      stage('warmup broker drain complete');
+    }
+
+    Future<void> enqueueMeasured() async {
+      if (measurementDuration == null) {
+        measuredTasks = tasks;
         await _enqueueTasks(
           stem,
-          warmupTasks,
-          label: 'warmup enqueue',
+          tasks,
+          label: 'measured enqueue',
           stage: stage,
         );
-        stage('waiting for warmup handlers');
-        await warmupCompleted.future.timeout(const Duration(minutes: 2));
-        stage('warmup handlers complete; waiting for broker drain');
-        await _waitForBrokerDrain(broker);
-        stage('warmup broker drain complete');
+        measurementClosed = true;
+        completeMeasuredIfReady();
+        return;
+      }
+
+      final duration = measurementDuration!;
+      final window = Stopwatch()..start();
+      var nextProgress = const Duration(seconds: 1);
+      while (window.elapsed < duration) {
+        final index = measuredTasks;
+        measuredTasks += 1;
+        await stem.enqueue('repodoc.benchmark.noop', args: {'index': index});
+        if (window.elapsed >= nextProgress) {
+          stage(
+            'measured enqueue progress: $measuredTasks tasks in '
+            '${window.elapsed.inMilliseconds}ms',
+          );
+          nextProgress += const Duration(seconds: 1);
+        }
+      }
+      window.stop();
+      measurementClosed = true;
+      completeMeasuredIfReady();
+    }
+
+    try {
+      if (mode == ThroughputMode.steadyState || warmupTasks > 0) {
+        stage('starting worker');
+        await startWorker();
+        await runWarmup();
+      }
+      if (mode != ThroughputMode.steadyState) {
+        await shutdownWorker();
       }
 
       measuring = true;
-      final total = Stopwatch()..start();
       final enqueue = Stopwatch()..start();
+      if (mode == ThroughputMode.prefilledDrain) {
+        stage('prefilling $tasks measured tasks');
+        await enqueueMeasured();
+        enqueue.stop();
+        stage('prefill complete; starting worker drain');
+        final total = Stopwatch()..start();
+        await startWorker();
+        await completed.future.timeout(const Duration(minutes: 2));
+        final handlerEndToEnd = total.elapsed;
+        stage('handlers complete; waiting for broker drain');
+        await _waitForBrokerDrain(broker);
+        total.stop();
+        stage('broker drain complete');
+        return _result(
+          measuredTasks: measuredTasks,
+          enqueue: enqueue.elapsed,
+          handlerEndToEnd: handlerEndToEnd,
+          total: total.elapsed,
+          postgresTimings: postgresTimings,
+        );
+      }
+
+      final total = Stopwatch()..start();
       stage('enqueueing $tasks measured tasks');
-      await _enqueueTasks(stem, tasks, label: 'measured enqueue', stage: stage);
+      await enqueueMeasured();
       enqueue.stop();
+      if (mode == ThroughputMode.enqueueOnly) {
+        stage('measured enqueue complete; purging unconsumed tasks');
+        await _purgeBenchmarkQueue(broker);
+        return _result(
+          measuredTasks: measuredTasks,
+          enqueue: enqueue.elapsed,
+          postgresTimings: postgresTimings,
+        );
+      }
+
       stage('measured enqueue complete; waiting for handlers');
       await completed.future.timeout(const Duration(minutes: 2));
       final handlerEndToEnd = total.elapsed;
@@ -127,29 +258,16 @@ final class ThroughputBenchmark {
       total.stop();
       stage('broker drain complete');
 
-      return {
-        'store': store.name,
-        'tasks': tasks,
-        'concurrency': concurrency,
-        'enqueue_ms': enqueue.elapsedMicroseconds / 1000,
-        'handler_end_to_end_ms': handlerEndToEnd.inMicroseconds / 1000,
-        'end_to_end_ms': total.elapsedMicroseconds / 1000,
-        'drain_ms':
-            (total.elapsedMicroseconds - enqueue.elapsedMicroseconds) / 1000,
-        'store_drain_ms':
-            (total.elapsedMicroseconds - handlerEndToEnd.inMicroseconds) / 1000,
-        'enqueue_tasks_per_second': _rate(tasks, enqueue.elapsed),
-        'handler_end_to_end_tasks_per_second': _rate(tasks, handlerEndToEnd),
-        'end_to_end_tasks_per_second': _rate(tasks, total.elapsed),
-        if (postgresTimings != null)
-          'postgres_timings': postgresTimings.toJson(),
-        if (postgresTimings != null)
-          'postgres_queries': postgresTimings.queryJson(),
-      };
+      return _result(
+        measuredTasks: measuredTasks,
+        enqueue: enqueue.elapsed,
+        handlerEndToEnd: handlerEndToEnd,
+        total: total.elapsed,
+        postgresTimings: postgresTimings,
+      );
     } finally {
-      stage('shutting down worker');
       try {
-        await worker.shutdown();
+        await shutdownWorker();
       } finally {
         stage('closing store resources');
         try {
@@ -159,6 +277,51 @@ final class ThroughputBenchmark {
         }
       }
     }
+  }
+
+  Map<String, Object?> _result({
+    required int measuredTasks,
+    required Duration enqueue,
+    Duration? handlerEndToEnd,
+    Duration? total,
+    PostgresTimingCollector? postgresTimings,
+  }) {
+    final result = <String, Object?>{
+      'store': store.name,
+      'mode': mode.name,
+      'tasks': measuredTasks,
+      'requested_tasks': tasks,
+      'concurrency': concurrency,
+      'measurement_duration_ms': measurementDuration?.inMicroseconds == null
+          ? null
+          : measurementDuration!.inMicroseconds / 1000,
+      'enqueue_ms': enqueue.inMicroseconds / 1000,
+      'handler_end_to_end_ms': handlerEndToEnd?.inMicroseconds == null
+          ? null
+          : handlerEndToEnd!.inMicroseconds / 1000,
+      'end_to_end_ms': total?.inMicroseconds == null
+          ? null
+          : total!.inMicroseconds / 1000,
+      'drain_ms': total == null
+          ? null
+          : mode == ThroughputMode.prefilledDrain
+          ? total.inMicroseconds / 1000
+          : (total.inMicroseconds - enqueue.inMicroseconds) / 1000,
+      'store_drain_ms': handlerEndToEnd == null || total == null
+          ? null
+          : (total.inMicroseconds - handlerEndToEnd.inMicroseconds) / 1000,
+      'enqueue_tasks_per_second': _rate(measuredTasks, enqueue),
+      'handler_end_to_end_tasks_per_second': handlerEndToEnd == null
+          ? null
+          : _rate(measuredTasks, handlerEndToEnd),
+      'end_to_end_tasks_per_second': total == null
+          ? null
+          : _rate(measuredTasks, total),
+      if (postgresTimings != null) 'postgres_timings': postgresTimings.toJson(),
+      if (postgresTimings != null)
+        'postgres_queries': postgresTimings.queryJson(),
+    };
+    return result;
   }
 }
 
@@ -192,6 +355,17 @@ Future<void> _waitForBrokerDrain(QueueBroker broker) async {
   throw TimeoutException(
     'Timed out waiting for the benchmark broker to drain.',
   );
+}
+
+Future<void> _purgeBenchmarkQueue(QueueBroker broker) async {
+  if (broker is Broker) {
+    try {
+      await broker.purge('default');
+    } on UnsupportedError {
+      // The benchmark namespace is unique, so adapters without purge support
+      // are still safe to close after an enqueue-only run.
+    }
+  }
 }
 
 double _rate(int count, Duration duration) {

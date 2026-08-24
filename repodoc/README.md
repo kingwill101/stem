@@ -35,6 +35,10 @@ dart run repodoc/bin/repodoc.dart demo:all
 dart run repodoc/bin/repodoc.dart benchmark:throughput --check-baseline
 dart run repodoc/bin/repodoc.dart benchmark:throughput \
   --stores memory,sqlite,postgres,redis --buckets 4,8,16
+dart run repodoc/bin/repodoc.dart benchmark:throughput \
+  --store memory --mode steady-state --duration 10s --samples 3
+dart run repodoc/bin/repodoc.dart benchmark:throughput \
+  --store memory --mode prefilled-drain --tasks 50000 --samples 3
 ```
 
 Throughput benchmarks run directly from repodoc. Use `--buckets` for a
@@ -44,6 +48,14 @@ single external store, with the connection URLs supplied by devenv or the
 corresponding command options. Add `--verbose` to trace store connection and
 worker lifecycle stages to stderr. Add `--timings` to a PostgreSQL run to
 report broker/backend operation latency and serialized connection-queue wait.
+
+The default `steady-state` mode enqueues while the worker consumes. Use
+`enqueue-only` to measure publication without worker execution, or
+`prefilled-drain` to enqueue first and measure worker draining separately.
+`--duration` creates a time-based measurement window; without it, `--tasks`
+controls the fixed task count. `--samples` repeats each store/concurrency
+combination and reports the median plus coefficient of variation while
+retaining every raw trial in the JSON artifact.
 
 Commands are grouped by subsystem in `lib/src/commands/`. Shared workspace and
 process utilities live in `lib/src/infrastructure/`.

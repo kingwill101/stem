@@ -11,42 +11,63 @@ void displayThroughputResults(
 }) {
   final console = Console(interactive: false);
   console.title('Stem throughput benchmark');
+  final repeated = results.any(
+    (result) => ((result['samples'] as num?)?.toInt() ?? 1) > 1,
+  );
   console.table(
-    headers: const ['Runtime', 'Store', 'Concurrency', 'Tasks', 'Warmup'],
+    headers: [
+      'Runtime',
+      'Mode',
+      'Store',
+      'Concurrency',
+      'Tasks',
+      'Warmup',
+      'Samples',
+    ],
     rows: [
       for (final result in results)
         [
           result['runtime'] ?? 'unknown',
+          result['mode'] ?? 'steady-state',
           result['store'] ?? 'n/a',
           result['concurrency'],
           result['tasks'],
           result['warmup'] ?? 'n/a',
+          result['samples'] ?? 1,
         ],
     ],
   );
-  console.section('Performance');
+  console.section(
+    repeated ? 'Performance (median across trials)' : 'Performance',
+  );
+  final performanceHeaders = [
+    'Runtime',
+    'Store',
+    'Concurrency',
+    'Enqueue/s',
+    'Handler/s',
+    'End-to-end/s',
+    'Enqueue ms',
+    'Store drain ms',
+    if (repeated) 'CV',
+  ];
   console.table(
-    headers: const [
-      'Runtime',
-      'Store',
-      'Concurrency',
-      'Enqueue/s',
-      'Handler/s',
-      'End-to-end/s',
-      'Enqueue ms',
-      'Store drain ms',
-    ],
+    headers: performanceHeaders,
     rows: [
       for (final result in results)
         [
           result['runtime'] ?? 'unknown',
           result['store'] ?? 'n/a',
           result['concurrency'],
-          benchmarkFixed(result['enqueue_tasks_per_second']),
-          benchmarkFixed(result['handler_end_to_end_tasks_per_second']),
-          benchmarkFixed(result['end_to_end_tasks_per_second']),
-          benchmarkFixed(result['enqueue_ms']),
-          benchmarkFixed(result['store_drain_ms']),
+          benchmarkFixed(_metric(result, 'enqueue_tasks_per_second')),
+          benchmarkFixed(
+            _metric(result, 'handler_end_to_end_tasks_per_second'),
+          ),
+          benchmarkFixed(_metric(result, 'end_to_end_tasks_per_second')),
+          benchmarkFixed(_metric(result, 'enqueue_ms')),
+          benchmarkFixed(_metric(result, 'store_drain_ms')),
+          if (repeated)
+            _formatCv(_metric(result, 'end_to_end_tasks_per_second', 'cv')),
         ],
     ],
   );
@@ -55,7 +76,8 @@ void displayThroughputResults(
     final failures = results
         .where((result) {
           final measured =
-              benchmarkNumber(result['end_to_end_tasks_per_second']) ?? 0;
+              benchmarkNumber(_metric(result, 'end_to_end_tasks_per_second')) ??
+              0;
           return measured < baseline;
         })
         .toList(growable: false);
@@ -144,6 +166,26 @@ void displayThroughputResults(
   if (artifactPath != null && artifactPath.isNotEmpty) {
     console.info('JSON artifact: ${File(artifactPath).absolute.path}');
   }
+}
+
+Object? _metric(
+  Map<String, Object?> result,
+  String key, [
+  String statistic = 'median',
+]) {
+  final statistics = result['statistics'];
+  if (statistics is Map) {
+    final metric = statistics[key];
+    if (metric is Map && metric.containsKey(statistic)) {
+      return metric[statistic];
+    }
+  }
+  return result[key];
+}
+
+String _formatCv(Object? value) {
+  final cv = benchmarkNumber(value);
+  return cv == null ? 'n/a' : '${benchmarkFixed(cv * 100)}%';
 }
 
 Iterable<Object?> _queryValues(Object? value) =>
