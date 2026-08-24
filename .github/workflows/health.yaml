@@ -9,8 +9,9 @@ jobs:
   health:
     uses: dart-lang/ecosystem/.github/workflows/health.yaml@main
     with:
-      # Stem contains Flutter packages alongside its Dart packages.
-      use-flutter: true
+      # PR Health uses this list to run Flutter tooling for the packages that
+      # depend on the Flutter SDK.
+      flutter_packages: packages/stem_flutter,packages/stem_flutter_sqlite
     permissions:
       contents: read
       pull-requests: write
