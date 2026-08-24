@@ -99,45 +99,61 @@ final class BenchmarkThroughputCommand extends Command<int> {
       'redis://127.0.0.1:6379/15',
     );
     final sqlitePath = argResults?['sqlite-path'] as String?;
-    final results = <Map<String, Object?>>[];
-    for (final store in stores) {
-      for (final concurrency in _buckets()) {
-        if (!jsonOutput) {
-          stdout.writeln(
-            'Running ${store.name} concurrency bucket $concurrency...',
-          );
-        }
-        final result = await ThroughputBenchmark(
-          tasks: tasks,
-          warmupTasks: warmup,
-          concurrency: concurrency,
-          store: store,
-          postgresUrl: postgresUrl,
-          redisUrl: redisUrl,
-          sqlitePath: sqlitePath,
-          collectPostgresTimings: timings,
-          onStage: verbose ? stderr.writeln : null,
-        ).run();
-        results.add({...result, 'runtime': runtime, 'warmup': warmup});
-      }
-    }
-
-    final report = <String, Object?>{
-      'schemaVersion': 1,
-      'kind': 'stem.throughput.benchmark',
-      'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
-      'runtime': runtime,
-      'stores': stores.map((store) => store.name).toList(growable: false),
-      'buckets': results,
-    };
     final output = argResults?['output'] as String?;
-    if (output != null && output.isNotEmpty) {
+    final results = <Map<String, Object?>>[];
+    Map<String, Object?> buildReport({required String status, Object? error}) =>
+        {
+          'schemaVersion': 1,
+          'kind': 'stem.throughput.benchmark',
+          'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
+          'status': status,
+          'runtime': runtime,
+          'stores': stores.map((store) => store.name).toList(growable: false),
+          'buckets': results,
+          if (error != null) 'error': error.toString(),
+        };
+    Future<void> writeReport(Map<String, Object?> report) async {
+      if (output == null || output.isEmpty) return;
       final file = File(output);
       await file.parent.create(recursive: true);
       await file.writeAsString(
         '${const JsonEncoder.withIndent('  ').convert(report)}\n',
       );
     }
+
+    try {
+      for (final store in stores) {
+        for (final concurrency in _buckets()) {
+          if (!jsonOutput) {
+            stdout.writeln(
+              'Running ${store.name} concurrency bucket $concurrency...',
+            );
+          }
+          final result = await ThroughputBenchmark(
+            tasks: tasks,
+            warmupTasks: warmup,
+            concurrency: concurrency,
+            store: store,
+            postgresUrl: postgresUrl,
+            redisUrl: redisUrl,
+            sqlitePath: sqlitePath,
+            collectPostgresTimings: timings,
+            onStage: verbose ? stderr.writeln : null,
+          ).run();
+          results.add({...result, 'runtime': runtime, 'warmup': warmup});
+        }
+      }
+    } on Object catch (error, stackTrace) {
+      try {
+        await writeReport(buildReport(status: 'partial', error: error));
+      } on Object catch (writeError) {
+        stderr.writeln('Unable to write partial benchmark report: $writeError');
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    final report = buildReport(status: 'complete');
+    await writeReport(report);
 
     final baseline = checkBaseline ? _baselineMinimum(catalog.root) : null;
     if (jsonOutput) {

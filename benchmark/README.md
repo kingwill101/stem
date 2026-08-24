@@ -4,11 +4,16 @@ Run the repeatable store-backed throughput workload from the repository root:
 
 ```bash
 # AOT: uses the cached native repodoc executable.
-devenv shell -- stem-benchmark --tasks 5000 --concurrency 8
-devenv shell -- stem-benchmark --check-baseline
+devenv shell -- stem-benchmark \
+  --tasks 5000 --concurrency 8 \
+  --output .tmp/stem-throughput-aot.json
+devenv shell -- stem-benchmark \
+  --check-baseline --output .tmp/stem-throughput-aot-baseline.json
 
 # JIT: runs the same repodoc command through `dart run`.
-devenv shell -- stem-benchmark-jit --tasks 5000 --concurrency 8
+devenv shell -- stem-benchmark-jit \
+  --tasks 5000 --concurrency 8 \
+  --output .tmp/stem-throughput-jit.json
 ```
 
 Both commands run the same workload and report the runtime in the terminal
