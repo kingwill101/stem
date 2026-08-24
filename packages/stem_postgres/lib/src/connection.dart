@@ -124,15 +124,27 @@ class PostgresConnections {
             (message.contains('already been closed') ||
                 message.contains('not been initialized'))) {
           await ensureReady(forceReopen: true);
-          final result = await connection.transaction(() => action(context));
-          _notifyTiming(
-            operation: operation,
-            queueWait: queueWait,
-            execution: execution?.elapsed ?? Duration.zero,
-            total: queued?.elapsed ?? Duration.zero,
-            succeeded: true,
-          );
-          return result;
+          try {
+            final result = await connection.transaction(() => action(context));
+            _notifyTiming(
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: true,
+            );
+            return result;
+          } on Object catch (retryError) {
+            _notifyTiming(
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: false,
+              error: retryError.toString(),
+            );
+            rethrow;
+          }
         }
         _notifyTiming(
           operation: operation,

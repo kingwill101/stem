@@ -26,14 +26,19 @@ Future<void> main() async {
   );
   tearDownAll(harness.dispose);
 
-  test('connect uses an independent consumer connection', () async {
+  Future<Set<String>> exerciseConnection({
+    required bool separateConsumerConnection,
+  }) async {
     final namespace = 'broker-connect-${DateTime.now().microsecondsSinceEpoch}';
     final queue = 'connect-queue-${DateTime.now().microsecondsSinceEpoch}';
+    final components = <String>{};
     final broker = await PostgresBroker.connect(
       connectionString,
       namespace: namespace,
       pollInterval: const Duration(milliseconds: 25),
       sweeperInterval: const Duration(hours: 1),
+      separateConsumerConnection: separateConsumerConnection,
+      timingListener: (timing) => components.add(timing.component),
     );
     try {
       await broker.publish(
@@ -48,6 +53,22 @@ Future<void> main() async {
     } finally {
       await broker.close();
     }
+    return components;
+  }
+
+  test('connect can use an independent consumer connection', () async {
+    final components = await exerciseConnection(
+      separateConsumerConnection: true,
+    );
+    expect(components, containsAll(['broker', 'broker.consumer']));
+  });
+
+  test('connect shares one connection by default', () async {
+    final components = await exerciseConnection(
+      separateConsumerConnection: false,
+    );
+    expect(components, contains('broker'));
+    expect(components, isNot(contains('broker.consumer')));
   });
 
   ormedGroup('postgres broker', (dataSource) {

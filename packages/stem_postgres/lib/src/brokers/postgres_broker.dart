@@ -71,6 +71,13 @@ class PostgresBroker
   }
 
   /// Connects to PostgreSQL and returns a broker instance.
+  ///
+  /// By default, publishing and consuming share one PostgreSQL connection,
+  /// preserving the connection behavior of earlier releases. Set
+  /// [separateConsumerConnection] to `true` when consuming must be isolated
+  /// from publisher work; this opens a second connection using the
+  /// `broker.consumer` timing component. [fromDataSource] never creates that
+  /// second connection because it does not own an independent data source.
   static Future<PostgresBroker> connect(
     String connectionString, {
     String namespace = 'stem',
@@ -82,7 +89,7 @@ class PostgresBroker
     TlsConfig? tls,
     PostgresTimingListener? timingListener,
     PostgresQueryTimingListener? queryTimingListener,
-    bool separateConsumerConnection = true,
+    bool separateConsumerConnection = false,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
@@ -207,6 +214,7 @@ class PostgresBroker
     final isolatedConsumer = consumer && consumerConnections != null;
     final connections = isolatedConsumer ? consumerConnections : _connections;
     final lock = isolatedConsumer ? _consumerDbLock : _dbLock;
+    final component = isolatedConsumer ? 'broker.consumer' : 'broker';
     final listener = _timingListener;
     final queued = listener == null ? null : (Stopwatch()..start());
     final run = lock.then((_) async {
@@ -216,6 +224,7 @@ class PostgresBroker
         await connections.ensureReady();
         final result = await action();
         _notifyTiming(
+          component: component,
           operation: operation,
           queueWait: queueWait,
           execution: execution?.elapsed ?? Duration.zero,
@@ -228,17 +237,32 @@ class PostgresBroker
         if (message.contains('already been closed') ||
             message.contains('not been initialized')) {
           await connections.ensureReady(forceReopen: true);
-          final result = await action();
-          _notifyTiming(
-            operation: operation,
-            queueWait: queueWait,
-            execution: execution?.elapsed ?? Duration.zero,
-            total: queued?.elapsed ?? Duration.zero,
-            succeeded: true,
-          );
-          return result;
+          try {
+            final result = await action();
+            _notifyTiming(
+              component: component,
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: true,
+            );
+            return result;
+          } on Object catch (retryError) {
+            _notifyTiming(
+              component: component,
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: false,
+              error: retryError.toString(),
+            );
+            rethrow;
+          }
         }
         _notifyTiming(
+          component: component,
           operation: operation,
           queueWait: queueWait,
           execution: execution?.elapsed ?? Duration.zero,
@@ -260,6 +284,7 @@ class PostgresBroker
   }
 
   void _notifyTiming({
+    required String component,
     required String operation,
     required Duration queueWait,
     required Duration execution,
@@ -272,7 +297,7 @@ class PostgresBroker
     try {
       listener(
         PostgresOperationTiming(
-          component: 'broker',
+          component: component,
           operation: operation,
           queueWait: queueWait,
           execution: execution,
