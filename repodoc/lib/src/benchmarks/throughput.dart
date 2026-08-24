@@ -100,7 +100,7 @@ final class ThroughputBenchmark {
     var warmupCompletedTasks = 0;
     var measuredTasks = 0;
     final taskLatencies = <double>[];
-    final measuredWaiters = <Future<TaskStatus>>[];
+    final measuredWaiters = <Future<_ObservedTerminal>>[];
 
     final registry = InMemoryTaskRegistry()
       ..register(
@@ -207,8 +207,8 @@ final class ThroughputBenchmark {
       final statuses = await Future.wait(
         measuredWaiters,
       ).timeout(const Duration(minutes: 2));
-      for (final status in statuses) {
-        final latency = _observedTaskLatencyMs(status);
+      for (final terminal in statuses) {
+        final latency = _observedTaskLatencyMs(terminal);
         if (latency != null) taskLatencies.add(latency);
       }
     }
@@ -350,7 +350,7 @@ Future<void> _enqueueTasks(
   int count, {
   required String label,
   required void Function(String message) stage,
-  List<Future<TaskStatus>>? terminalWaiters,
+  List<Future<_ObservedTerminal>>? terminalWaiters,
 }) async {
   final progressEvery = count < 20 ? 1 : (count / 20).ceil();
   for (var index = 0; index < count; index++) {
@@ -372,15 +372,24 @@ Future<void> _enqueueTasks(
   }
 }
 
-Future<TaskStatus> _watchTerminal(ResultBackend backend, String taskId) {
-  final completer = Completer<TaskStatus>();
+final class _ObservedTerminal {
+  const _ObservedTerminal(this.status, this.observedAtMicros);
+
+  final TaskStatus status;
+  final int observedAtMicros;
+}
+
+Future<_ObservedTerminal> _watchTerminal(ResultBackend backend, String taskId) {
+  final completer = Completer<_ObservedTerminal>();
   late StreamSubscription<TaskStatus> subscription;
   subscription = backend
       .watch(taskId)
       .listen(
         (status) {
           if (!status.state.isTerminal || completer.isCompleted) return;
-          completer.complete(status);
+          completer.complete(
+            _ObservedTerminal(status, DateTime.now().microsecondsSinceEpoch),
+          );
           unawaited(subscription.cancel());
         },
         onError: (Object error, StackTrace stackTrace) {
@@ -398,10 +407,11 @@ Future<TaskStatus> _watchTerminal(ResultBackend backend, String taskId) {
   return completer.future;
 }
 
-double? _observedTaskLatencyMs(TaskStatus status) {
-  final enqueuedAt = (status.meta['enqueuedAtMicros'] as num?)?.toInt();
+double? _observedTaskLatencyMs(_ObservedTerminal terminal) {
+  final enqueuedAt = (terminal.status.meta['enqueuedAtMicros'] as num?)
+      ?.toInt();
   if (enqueuedAt == null) return null;
-  return (DateTime.now().microsecondsSinceEpoch - enqueuedAt) /
+  return (terminal.observedAtMicros - enqueuedAt) /
       Duration.microsecondsPerMillisecond;
 }
 

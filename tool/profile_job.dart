@@ -129,9 +129,13 @@ List<String> _childArgs(List<String> args) {
       index += 1;
       continue;
     }
-    if (arg == '--json' ||
-        arg.startsWith('--repetitions=') ||
-        arg.startsWith('--output=')) {
+    if (arg == '--json') {
+      continue;
+    }
+    if (arg.startsWith('--repetitions=') || arg.startsWith('--output=')) {
+      if (arg.endsWith('=')) {
+        throw ArgumentError('Missing value for ${arg.split('=').first}.');
+      }
       continue;
     }
     if (arg.startsWith('--')) {
@@ -139,12 +143,18 @@ List<String> _childArgs(List<String> args) {
       if (!childOptions.contains(option)) {
         throw ArgumentError('Unknown profile option: $arg.');
       }
-      child.add(arg);
-      if (!arg.contains('=') &&
-          index + 1 < args.length &&
-          !args[index + 1].startsWith('--')) {
-        child.add(args[++index]);
+      if (arg.contains('=')) {
+        if (arg.endsWith('=')) {
+          throw ArgumentError('Missing value for $option.');
+        }
+        child.add(arg);
+        continue;
       }
+      if (index + 1 >= args.length || args[index + 1].startsWith('--')) {
+        throw ArgumentError('Missing value for $arg.');
+      }
+      child.add(arg);
+      child.add(args[++index]);
       continue;
     }
     throw ArgumentError('Unexpected profile argument: $arg.');
