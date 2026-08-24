@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:artisanal/args.dart';
 
 import '../infrastructure/process_runner.dart';
+import '../infrastructure/toolchain.dart';
 import '../infrastructure/workspace.dart';
 
 enum TestTarget {
@@ -170,13 +171,13 @@ final class TestOrchestrator {
   Future<Map<String, String>> resolveDependencies({
     Map<String, String>? environment,
   }) async {
-    final pubTool = await _pubTool();
+    final pubTool = await Toolchain.pubTool();
     final resolvedEnvironment = {
       ...catalog.processEnvironment,
       ...?environment,
     };
     if (pubTool == 'flutter') {
-      resolvedEnvironment['FLUTTER_ROOT'] = await _flutterRoot();
+      resolvedEnvironment['FLUTTER_ROOT'] = await Toolchain.flutterRoot();
     }
     await runner.run(
       pubTool,
@@ -186,14 +187,19 @@ final class TestOrchestrator {
       label: 'resolve root workspace',
     );
 
-    final dashboard = _package('packages/dashboard');
-    await runner.run(
-      pubTool,
-      ['pub', 'get'],
-      workingDirectory: dashboard.directory,
-      environment: resolvedEnvironment,
-      label: 'resolve packages/dashboard',
+    final dashboard = catalog.select(
+      requestedPaths: const ['packages/dashboard'],
+      includeFlutter: true,
     );
+    if (dashboard.isNotEmpty) {
+      await runner.run(
+        pubTool,
+        ['pub', 'get'],
+        workingDirectory: dashboard.single.directory,
+        environment: resolvedEnvironment,
+        label: 'resolve packages/dashboard',
+      );
+    }
     return resolvedEnvironment;
   }
 
@@ -253,11 +259,17 @@ final class TestOrchestrator {
   }) async {
     for (final path in paths) {
       final package = _package(path);
-      final packageEnvironment = environment == null
-          ? null
-          : Map<String, String>.from(environment);
-      if (stemCliMulti && package.name == 'stem_cli') {
-        packageEnvironment?['STEM_CLI_RUN_MULTI'] = 'true';
+      final applyMulti = stemCliMulti && package.name == 'stem_cli';
+      Map<String, String>? packageEnvironment;
+      if (environment != null) {
+        packageEnvironment = Map<String, String>.from(environment);
+      } else if (applyMulti) {
+        packageEnvironment = Map<String, String>.from(
+          catalog.processEnvironment,
+        );
+      }
+      if (applyMulti) {
+        packageEnvironment!['STEM_CLI_RUN_MULTI'] = 'true';
       }
       await runner.run(
         'dart',
@@ -285,7 +297,12 @@ final class TestOrchestrator {
   ) async {
     final environment = catalog.processEnvironment;
     final required = requiredVariables.toList(growable: false);
-    if (required.every(environment.containsKey)) return environment;
+    bool hasValue(String name) {
+      final value = environment[name];
+      return value != null && value.trim().isNotEmpty;
+    }
+
+    if (required.every(hasValue)) return environment;
     if (Platform.isWindows) {
       throw StateError(
         'Integration services are not bootstrapped automatically on Windows. '
@@ -319,7 +336,7 @@ final class TestOrchestrator {
       if (separator <= 0) continue;
       environment[line.substring(0, separator)] = line.substring(separator + 1);
     }
-    final missing = required.where((name) => !environment.containsKey(name));
+    final missing = required.where((name) => !hasValue(name));
     if (missing.isNotEmpty) {
       throw StateError(
         'Could not bootstrap required integration variables: '
@@ -327,27 +344,5 @@ final class TestOrchestrator {
       );
     }
     return environment;
-  }
-
-  Future<String> _pubTool() async {
-    return await _flutterExecutable() == null ? 'dart' : 'flutter';
-  }
-
-  Future<String> _flutterRoot() async {
-    final executable = await _flutterExecutable();
-    if (executable == null) {
-      throw StateError('Flutter executable was not found on PATH.');
-    }
-    final resolved = await File(executable).resolveSymbolicLinks();
-    return Directory(resolved).parent.parent.path;
-  }
-
-  Future<String?> _flutterExecutable() async {
-    final lookup = await Process.run(Platform.isWindows ? 'where' : 'which', [
-      'flutter',
-    ]);
-    if (lookup.exitCode != 0) return null;
-    final firstLine = lookup.stdout.toString().trim().split('\n').first;
-    return firstLine.isEmpty ? null : firstLine;
   }
 }

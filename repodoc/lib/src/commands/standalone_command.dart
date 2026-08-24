@@ -4,6 +4,7 @@ import 'package:artisanal/args.dart';
 import 'package:path/path.dart' as p;
 
 import '../infrastructure/process_runner.dart';
+import '../infrastructure/toolchain.dart';
 import '../infrastructure/workspace.dart';
 
 final class StandaloneDartCommand extends Command<int> {
@@ -50,7 +51,7 @@ final class StandaloneDartCommand extends Command<int> {
     }
     final root = catalog.root;
     final runner = ProcessRunner(environment: catalog.processEnvironment);
-    final pubTool = flutterOnly ? 'flutter' : await _pubTool();
+    final pubTool = flutterOnly ? 'flutter' : await Toolchain.pubTool();
     await runner.run(
       pubTool,
       ['pub', 'get'],
@@ -85,12 +86,5 @@ final class StandaloneDartCommand extends Command<int> {
       await staging.delete(recursive: true);
     }
     return 0;
-  }
-
-  Future<String> _pubTool() async {
-    final lookup = await Process.run(Platform.isWindows ? 'where' : 'which', [
-      'flutter',
-    ]);
-    return lookup.exitCode == 0 ? 'flutter' : 'dart';
   }
 }

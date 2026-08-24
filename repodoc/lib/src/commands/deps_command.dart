@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:artisanal/args.dart';
 
 import '../infrastructure/process_runner.dart';
+import '../infrastructure/toolchain.dart';
 import '../infrastructure/workspace.dart';
 
 final class DepsCommand extends Command<int> {
@@ -16,7 +15,7 @@ final class DepsCommand extends Command<int> {
   Future<int> run() async {
     final catalog = WorkspaceCatalog.load();
     final runner = ProcessRunner(environment: catalog.processEnvironment);
-    final pubTool = await _pubTool();
+    final pubTool = await Toolchain.pubTool();
     await runner.run(
       pubTool,
       ['pub', 'get'],
@@ -37,12 +36,5 @@ final class DepsCommand extends Command<int> {
       );
     }
     return 0;
-  }
-
-  Future<String> _pubTool() async {
-    final lookup = await Process.run(Platform.isWindows ? 'where' : 'which', [
-      'flutter',
-    ]);
-    return lookup.exitCode == 0 ? 'flutter' : 'dart';
   }
 }
