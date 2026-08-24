@@ -79,6 +79,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final timings = argResults?['timings'] == true;
     final stores = _stores();
     final checkBaseline = argResults?['check-baseline'] == true;
+    final runtime = _runtime();
     if (checkBaseline &&
         stores.any((store) => store != ThroughputStore.memory)) {
       throw ArgumentError(
@@ -117,7 +118,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
           collectPostgresTimings: timings,
           onStage: verbose ? stderr.writeln : null,
         ).run();
-        results.add({...result, 'warmup': warmup});
+        results.add({...result, 'runtime': runtime, 'warmup': warmup});
       }
     }
 
@@ -125,6 +126,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
       'schemaVersion': 1,
       'kind': 'stem.throughput.benchmark',
       'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
+      'runtime': runtime,
       'stores': stores.map((store) => store.name).toList(growable: false),
       'buckets': results,
     };
@@ -208,6 +210,11 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final configured = argResults?[option] as String?;
     if (configured != null && configured.isNotEmpty) return configured;
     return Platform.environment[environment] ?? fallback;
+  }
+
+  String _runtime() {
+    final runtime = Platform.environment['STEM_BENCHMARK_RUNTIME']?.trim();
+    return runtime == null || runtime.isEmpty ? 'unknown' : runtime;
   }
 
   String _required(String name) {

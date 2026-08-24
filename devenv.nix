@@ -98,7 +98,29 @@
 
   scripts.stem-benchmark = {
     description = "Run the Stem throughput benchmark against selected stores.";
-    exec = ''exec repodoc benchmark:throughput "$@"'';
+    exec = ''exec env STEM_BENCHMARK_RUNTIME=aot repodoc benchmark:throughput "$@"'';
+  };
+
+  scripts.stem-benchmark-jit = {
+    description = "Run the Stem throughput benchmark through the Dart JIT.";
+    exec = ''
+      set -eu
+      repo_root="$DEVENV_ROOT"
+      export TMP="$repo_root/.tmp"
+      export TMPDIR="$repo_root/.tmp"
+      export TEMP="$repo_root/.tmp"
+      mkdir -p "$repo_root/.tmp"
+      if [ ! -f "$repo_root/.dart_tool/package_config.json" ]; then
+        (cd "$repo_root" && if command -v flutter >/dev/null 2>&1; then
+          flutter pub get >/dev/null
+        else
+          dart pub get >/dev/null
+        fi)
+      fi
+      cd "$repo_root"
+      exec env STEM_BENCHMARK_RUNTIME=jit \
+        dart run repodoc/bin/repodoc.dart benchmark:throughput "$@"
+    '';
   };
 
   scripts.stem-standalone = {
@@ -140,6 +162,7 @@
     echo "  stem-quality     format and analyze packages"
     echo "  stem-coverage    run the core coverage gate"
     echo "  stem-benchmark   benchmark selected Stem backing stores"
+    echo "  stem-benchmark-jit  benchmark through the Dart JIT"
     echo "  stem-standalone  test published-package resolution"
     echo "  stem-standalone-flutter  test Flutter package resolution"
     echo "  stem-test        run Dart and Flutter tests"

@@ -3,9 +3,18 @@
 Run the repeatable store-backed throughput workload from the repository root:
 
 ```bash
-devenv shell -- repodoc benchmark:throughput --tasks 5000 --concurrency 8
-devenv shell -- repodoc benchmark:throughput --check-baseline
+# AOT: uses the cached native repodoc executable.
+devenv shell -- stem-benchmark --tasks 5000 --concurrency 8
+devenv shell -- stem-benchmark --check-baseline
+
+# JIT: runs the same repodoc command through `dart run`.
+devenv shell -- stem-benchmark-jit --tasks 5000 --concurrency 8
 ```
+
+Both commands run the same workload and report the runtime in the terminal
+table and JSON artifact as `aot` or `jit`. The AOT command is the CI regression
+gate; JIT results are useful for separating Dart VM warmup and execution costs
+from the compiled CLI path.
 
 Select a backing store with `--store`, or compare several stores with
 `--stores`:

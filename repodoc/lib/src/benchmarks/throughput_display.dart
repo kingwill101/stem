@@ -12,10 +12,11 @@ void displayThroughputResults(
   final console = Console(interactive: false);
   console.title('Stem throughput benchmark');
   console.table(
-    headers: const ['Store', 'Concurrency', 'Tasks', 'Warmup'],
+    headers: const ['Runtime', 'Store', 'Concurrency', 'Tasks', 'Warmup'],
     rows: [
       for (final result in results)
         [
+          result['runtime'] ?? 'unknown',
           result['store'] ?? 'n/a',
           result['concurrency'],
           result['tasks'],
@@ -26,6 +27,7 @@ void displayThroughputResults(
   console.section('Performance');
   console.table(
     headers: const [
+      'Runtime',
       'Store',
       'Concurrency',
       'Enqueue/s',
@@ -37,6 +39,7 @@ void displayThroughputResults(
     rows: [
       for (final result in results)
         [
+          result['runtime'] ?? 'unknown',
           result['store'] ?? 'n/a',
           result['concurrency'],
           benchmarkFixed(result['enqueue_tasks_per_second']),
