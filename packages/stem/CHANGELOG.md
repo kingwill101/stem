@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Raised the ecommerce example's minimum Dart SDK to 3.10.0.
+
 ## 0.3.0
 
 - Promoted the typed stable/advanced API boundary and removed implicit worker
