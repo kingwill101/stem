@@ -1,0 +1,16 @@
+name: Health
+
+on:
+  pull_request:
+    branches: [ master ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+
+jobs:
+  health:
+    uses: dart-lang/ecosystem/.github/workflows/health.yaml@main
+    with:
+      # Stem contains Flutter packages alongside its Dart packages.
+      use-flutter: true
+    permissions:
+      contents: read
+      pull-requests: write

@@ -26,6 +26,9 @@ jobs:
     uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main
     with:
       use-flutter: true
+      # Let post_summaries.yaml publish comments from the trusted workflow_run
+      # context, including for pull requests opened from forks.
+      write-comments: false
     permissions:
       contents: read
       id-token: write
