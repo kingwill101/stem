@@ -31,7 +31,11 @@ final class Toolchain {
       'flutter',
     ]);
     if (lookup.exitCode != 0) return null;
-    final firstLine = lookup.stdout.toString().trim().split('\n').first;
+    final firstLine = lookup.stdout
+        .toString()
+        .split('\n')
+        .map((line) => line.trim())
+        .firstWhere((line) => line.isNotEmpty, orElse: () => '');
     return firstLine.isEmpty ? null : firstLine;
   }
 }

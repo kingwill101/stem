@@ -14,8 +14,12 @@ final class DepsCommand extends Command<int> {
   @override
   Future<int> run() async {
     final catalog = WorkspaceCatalog.load();
-    final runner = ProcessRunner(environment: catalog.processEnvironment);
     final pubTool = await Toolchain.pubTool();
+    final environment = catalog.processEnvironment;
+    if (pubTool == 'flutter') {
+      environment['FLUTTER_ROOT'] = await Toolchain.flutterRoot();
+    }
+    final runner = ProcessRunner(environment: environment);
     await runner.run(
       pubTool,
       ['pub', 'get'],
