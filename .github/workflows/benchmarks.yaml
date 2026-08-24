@@ -87,11 +87,12 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            # Keep pull-request runs useful without spending the entire job
-            # timeout on 36 sequential external-store trials. Scheduled and
-            # manually dispatched runs retain the larger statistical sweep.
-            tasks=250
-            warmup=25
+            # External-store pull-request runs are functional smoke reports,
+            # not performance baselines. Keep them short enough to cover both
+            # runtimes, stores, and buckets; scheduled and manually dispatched
+            # runs retain the larger statistical sweep.
+            tasks=25
+            warmup=5
             buckets=1,4
             samples=1
           else

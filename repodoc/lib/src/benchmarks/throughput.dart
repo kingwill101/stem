@@ -172,6 +172,7 @@ final class ThroughputBenchmark {
           tasks,
           label: 'measured enqueue',
           stage: stage,
+          watchBackend: executionBackend,
           terminalWaiters: measuredWaiters,
         );
         return;
@@ -185,7 +186,7 @@ final class ThroughputBenchmark {
         measuredTasks += 1;
         final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
         final taskId = generateEnvelopeId();
-        measuredWaiters.add(_watchTerminal(backend, taskId));
+        measuredWaiters.add(_watchTerminal(executionBackend, taskId));
         await stem.enqueue(
           'repodoc.benchmark.noop',
           args: {'index': index},
@@ -350,6 +351,7 @@ Future<void> _enqueueTasks(
   int count, {
   required String label,
   required void Function(String message) stage,
+  ResultBackend? watchBackend,
   List<Future<_ObservedTerminal>>? terminalWaiters,
 }) async {
   final progressEvery = count < 20 ? 1 : (count / 20).ceil();
@@ -357,7 +359,7 @@ Future<void> _enqueueTasks(
     final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
     final taskId = generateEnvelopeId();
     if (terminalWaiters != null) {
-      terminalWaiters.add(_watchTerminal(backend, taskId));
+      terminalWaiters.add(_watchTerminal(watchBackend ?? backend, taskId));
     }
     await stem.enqueue(
       'repodoc.benchmark.noop',
