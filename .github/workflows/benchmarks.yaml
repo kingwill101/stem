@@ -12,11 +12,11 @@ on:
       store_tasks:
         description: Tasks per external-store benchmark
         required: false
-        default: '500'
+        default: '2000'
       store_warmup:
         description: Warmup tasks per external-store benchmark
         required: false
-        default: '50'
+        default: '200'
       store_buckets:
         description: Comma-separated external-store concurrency buckets
         required: false
@@ -39,8 +39,8 @@ jobs:
       # Required to update the sticky benchmark comment on same-repository PRs.
       pull-requests: write
     env:
-      STORE_TASKS_INPUT: ${{ inputs.store_tasks || '500' }}
-      STORE_WARMUP_INPUT: ${{ inputs.store_warmup || '50' }}
+      STORE_TASKS_INPUT: ${{ inputs.store_tasks || '2000' }}
+      STORE_WARMUP_INPUT: ${{ inputs.store_warmup || '200' }}
       STORE_BUCKETS_INPUT: ${{ inputs.store_buckets || '4,8,16' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -82,10 +82,10 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tasks=25
-            warmup=5
+            tasks=500
+            warmup=50
             buckets=1,4
-            samples=1
+            samples=3
           else
             tasks="$STORE_TASKS_INPUT"
             warmup="$STORE_WARMUP_INPUT"
@@ -113,6 +113,7 @@ jobs:
                   --warmup "$warmup" \
                   --buckets "$buckets" \
                   --samples "$samples" \
+                  --scenario success \
                   --verbose \
                   "${timing_args[@]}" \
                   --output ".tmp/ci-benchmarks/$store-$runtime.json"; then
@@ -153,8 +154,8 @@ jobs:
               runtime="$(jq -r '.runtime // "unknown"' "$file" 2>/dev/null || echo unknown)"
               echo "### $title"
               echo
-              echo '| Runtime | Mode | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p95 tasks/s | MAD tasks/s | CV |'
-              echo '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
+              echo '| Runtime | Mode | Scenario | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p5 tasks/s | Task p95 latency ms | MAD tasks/s | CV |'
+              echo '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
               if ! jq -r --arg runtime "$runtime" '
                 def value($key; $field):
                   if (.statistics?[$key]? | type) == "object"
@@ -176,7 +177,7 @@ jobs:
                   else "n/a"
                   end;
                 .buckets[]? |
-                  "| \($runtime) | \(.mode // "steady-state") | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "p95")) | \(metric("end_to_end_tasks_per_second"; "mad")) | \(percent("end_to_end_tasks_per_second"; "cv")) |"
+                  "| \($runtime) | \(.mode // "steady-state") | \(.scenario // "success") | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "p5")) | \(metric("task_latency_p95_ms"; "median")) | \(metric("end_to_end_tasks_per_second"; "mad")) | \(percent("end_to_end_tasks_per_second"; "cv")) |"
               ' "$file"; then
                 echo '| (unreadable report) | | | | | | | | | | |'
               fi
@@ -259,19 +260,24 @@ jobs:
                   const enqueueStats = bucket.statistics?.enqueue_tasks_per_second;
                   const endToEnd = finiteNumber(endToEndStats?.median) ?? finiteNumber(bucket.end_to_end_tasks_per_second);
                   const enqueue = finiteNumber(enqueueStats?.median) ?? finiteNumber(bucket.enqueue_tasks_per_second);
-                  const endToEndP95 = finiteNumber(endToEndStats?.p95);
+                  const endToEndP5 = finiteNumber(endToEndStats?.p5);
+                  const taskLatencyP95 =
+                    finiteNumber(bucket.task_latency_p95_ms) ??
+                    finiteNumber(bucket.statistics?.task_latency_p95_ms?.median);
                   const endToEndMad = finiteNumber(endToEndStats?.mad);
                   const cv = finiteNumber(endToEndStats?.cv);
                   rows.push([
                     store,
                     report.runtime || runtime,
                     bucket.mode || report.mode || 'steady-state',
+                    bucket.scenario || report.scenario || 'success',
                     integer(bucket.concurrency),
                     integer(bucket.tasks),
                     integer(bucket.samples ?? report.samples ?? 1),
                     rounded(enqueue, 1),
                     rounded(endToEnd, 1),
-                    rounded(endToEndP95, 1),
+                    rounded(endToEndP5, 1),
+                    rounded(taskLatencyP95, 1),
                     rounded(endToEndMad, 1),
                     cv === null ? 'n/a' : `${(cv * 100).toFixed(2)}%`,
                   ]);
@@ -298,8 +304,8 @@ jobs:
             ];
             if (rows.length > 0) {
               lines.push(
-                '| Store | Runtime | Mode | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p95 tasks/s | MAD tasks/s | CV |',
-                '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+                '| Store | Runtime | Mode | Scenario | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p5 tasks/s | Task p95 latency ms | MAD tasks/s | CV |',
+                '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
                 ...rows.map((row) => `| ${row.join(' | ')} |`),
                 '',
               );
