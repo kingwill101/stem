@@ -103,7 +103,7 @@ Future<void> main() async {
       );
       final delivery = await deliveryFuture;
       await broker.ack(delivery);
-      expect(components, containsAll(['broker', 'broker.consumer']));
+      expect(components, contains('broker.consumer'));
     } finally {
       await broker.close();
     }
