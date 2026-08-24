@@ -14,6 +14,7 @@ final class ThroughputStatistics {
       return {
         'sample_count': 0,
         'median': null,
+        'p5': null,
         'p95': null,
         'minimum': null,
         'maximum': null,
@@ -37,6 +38,7 @@ final class ThroughputStatistics {
     return {
       'sample_count': sorted.length,
       'median': median,
+      'p5': _percentile(sorted, 0.05),
       'p95': _percentile(sorted, 0.95),
       'minimum': sorted.first,
       'maximum': sorted.last,

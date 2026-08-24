@@ -8,6 +8,7 @@ void main() {
 
       expect(summary['sample_count'], 5);
       expect(summary['median'], 30.0);
+      expect(summary['p5'], 10.0);
       expect(summary['p95'], 50.0);
       expect(summary['minimum'], 10.0);
       expect(summary['maximum'], 50.0);
@@ -29,6 +30,7 @@ void main() {
       expect(summary['sample_count'], 0);
       expect(summary['median'], isNull);
       expect(summary['p95'], isNull);
+      expect(summary['p5'], isNull);
       expect(summary['mad'], isNull);
     });
   });

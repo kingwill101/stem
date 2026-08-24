@@ -18,6 +18,7 @@ void displayThroughputResults(
     headers: [
       'Runtime',
       'Mode',
+      'Scenario',
       'Store',
       'Concurrency',
       'Tasks',
@@ -29,6 +30,7 @@ void displayThroughputResults(
         [
           result['runtime'] ?? 'unknown',
           result['mode'] ?? 'steady-state',
+          result['scenario'] ?? 'success',
           result['store'] ?? 'n/a',
           result['concurrency'],
           result['tasks'],
@@ -42,11 +44,14 @@ void displayThroughputResults(
   );
   final performanceHeaders = [
     'Runtime',
+    'Scenario',
     'Store',
     'Concurrency',
     'Enqueue/s',
     'Handler/s',
     'End-to-end/s',
+    'E2E p5/s',
+    'Task p95 ms',
     'Enqueue ms',
     'Store drain ms',
     if (repeated) 'CV',
@@ -57,6 +62,7 @@ void displayThroughputResults(
       for (final result in results)
         [
           result['runtime'] ?? 'unknown',
+          result['scenario'] ?? 'success',
           result['store'] ?? 'n/a',
           result['concurrency'],
           benchmarkFixed(_metric(result, 'enqueue_tasks_per_second')),
@@ -64,6 +70,8 @@ void displayThroughputResults(
             _metric(result, 'handler_end_to_end_tasks_per_second'),
           ),
           benchmarkFixed(_metric(result, 'end_to_end_tasks_per_second')),
+          benchmarkFixed(_metric(result, 'end_to_end_tasks_per_second', 'p5')),
+          benchmarkFixed(_metric(result, 'task_latency_p95_ms')),
           benchmarkFixed(_metric(result, 'enqueue_ms')),
           benchmarkFixed(_metric(result, 'store_drain_ms')),
           if (repeated)

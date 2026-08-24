@@ -4,6 +4,8 @@ import 'package:stem/stem.dart';
 
 import 'postgres_timing.dart';
 import 'throughput_mode.dart';
+import 'throughput_scenario.dart';
+import 'throughput_statistics.dart';
 import 'throughput_store.dart';
 
 /// Parses benchmark durations such as `250ms`, `5s`, `2m`, or `1h`.
@@ -38,6 +40,7 @@ final class ThroughputBenchmark {
     required this.concurrency,
     required this.store,
     this.mode = ThroughputMode.steadyState,
+    this.scenario = ThroughputScenario.success,
     this.measurementDuration,
     this.postgresUrl,
     this.redisUrl,
@@ -51,6 +54,7 @@ final class ThroughputBenchmark {
   final int concurrency;
   final ThroughputStore store;
   final ThroughputMode mode;
+  final ThroughputScenario scenario;
   final Duration? measurementDuration;
   final String? postgresUrl;
   final String? redisUrl;
@@ -98,6 +102,7 @@ final class ThroughputBenchmark {
     var warmupCompletedTasks = 0;
     var measuredTasks = 0;
     var completedTasks = 0;
+    final taskLatencies = <double>[];
     void completeMeasuredIfReady() {
       if (measurementClosed &&
           completedTasks >= measuredTasks &&
@@ -109,7 +114,8 @@ final class ThroughputBenchmark {
     final registry = InMemoryTaskRegistry()
       ..register(
         _ThroughputTask(
-          onComplete: () {
+          scenario: scenario,
+          onTerminal: () {
             if (!measuring) {
               warmupCompletedTasks += 1;
               if (warmupCompletedTasks >= warmupTasks &&
@@ -120,6 +126,9 @@ final class ThroughputBenchmark {
             }
             completedTasks += 1;
             completeMeasuredIfReady();
+          },
+          recordLatency: (latency) {
+            if (measuring) taskLatencies.add(latency);
           },
         ),
       );
@@ -188,7 +197,13 @@ final class ThroughputBenchmark {
       while (window.elapsed < duration) {
         final index = measuredTasks;
         measuredTasks += 1;
-        await stem.enqueue('repodoc.benchmark.noop', args: {'index': index});
+        await stem.enqueue(
+          'repodoc.benchmark.noop',
+          args: {
+            'index': index,
+            'enqueuedAtMicros': DateTime.now().microsecondsSinceEpoch,
+          },
+        );
         if (window.elapsed >= nextProgress) {
           stage(
             'measured enqueue progress: $measuredTasks tasks in '
@@ -232,6 +247,7 @@ final class ThroughputBenchmark {
           enqueue: enqueue.elapsed,
           handlerEndToEnd: handlerEndToEnd,
           total: total.elapsed,
+          taskLatencies: taskLatencies,
           postgresTimings: postgresTimings,
         );
       }
@@ -246,6 +262,7 @@ final class ThroughputBenchmark {
         return _result(
           measuredTasks: measuredTasks,
           enqueue: enqueue.elapsed,
+          taskLatencies: taskLatencies,
           postgresTimings: postgresTimings,
         );
       }
@@ -263,6 +280,7 @@ final class ThroughputBenchmark {
         enqueue: enqueue.elapsed,
         handlerEndToEnd: handlerEndToEnd,
         total: total.elapsed,
+        taskLatencies: taskLatencies,
         postgresTimings: postgresTimings,
       );
     } finally {
@@ -284,11 +302,14 @@ final class ThroughputBenchmark {
     required Duration enqueue,
     Duration? handlerEndToEnd,
     Duration? total,
+    required List<double> taskLatencies,
     PostgresTimingCollector? postgresTimings,
   }) {
+    final latency = ThroughputStatistics.summarize(taskLatencies);
     final result = <String, Object?>{
       'store': store.name,
       'mode': mode.name,
+      'scenario': scenario.name,
       'tasks': measuredTasks,
       'requested_tasks': tasks,
       'concurrency': concurrency,
@@ -317,6 +338,8 @@ final class ThroughputBenchmark {
       'end_to_end_tasks_per_second': total == null
           ? null
           : _rate(measuredTasks, total),
+      'task_latency_p95_ms': latency['p95'],
+      'task_latency_ms': latency,
       if (postgresTimings != null) 'postgres_timings': postgresTimings.toJson(),
       if (postgresTimings != null)
         'postgres_queries': postgresTimings.queryJson(),
@@ -333,7 +356,13 @@ Future<void> _enqueueTasks(
 }) async {
   final progressEvery = count < 20 ? 1 : (count / 20).ceil();
   for (var index = 0; index < count; index++) {
-    await stem.enqueue('repodoc.benchmark.noop', args: {'index': index});
+    await stem.enqueue(
+      'repodoc.benchmark.noop',
+      args: {
+        'index': index,
+        'enqueuedAtMicros': DateTime.now().microsecondsSinceEpoch,
+      },
+    );
     final completed = index + 1;
     if (completed == count || completed % progressEvery == 0) {
       stage('$label progress: $completed/$count');
@@ -374,9 +403,15 @@ double _rate(int count, Duration duration) {
 }
 
 final class _ThroughputTask extends TaskHandler<void> {
-  _ThroughputTask({required this.onComplete});
+  _ThroughputTask({
+    required this.scenario,
+    required this.onTerminal,
+    required this.recordLatency,
+  });
 
-  final void Function() onComplete;
+  final ThroughputScenario scenario;
+  final void Function() onTerminal;
+  final void Function(double latencyMs) recordLatency;
 
   @override
   String get name => 'repodoc.benchmark.noop';
@@ -386,6 +421,39 @@ final class _ThroughputTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    onComplete();
+    void recordTerminal() {
+      final enqueuedAtMicros = (args['enqueuedAtMicros'] as num?)?.toInt();
+      if (enqueuedAtMicros != null) {
+        final elapsedMicros =
+            DateTime.now().microsecondsSinceEpoch - enqueuedAtMicros;
+        recordLatency(elapsedMicros / Duration.microsecondsPerMillisecond);
+      }
+      onTerminal();
+    }
+
+    switch (scenario) {
+      case ThroughputScenario.success:
+        recordTerminal();
+      case ThroughputScenario.retry:
+        if (context.attempt == 0) {
+          await context.retry(
+            countdown: Duration.zero,
+            maxRetries: 1,
+            retryPolicy: const TaskRetryPolicy(
+              defaultDelay: Duration.zero,
+              jitter: false,
+              maxRetries: 1,
+            ),
+          );
+          return;
+        }
+        recordTerminal();
+      case ThroughputScenario.deadLetter:
+        recordTerminal();
+        throw StateError('repodoc benchmark dead-letter scenario');
+      case ThroughputScenario.lease:
+        await context.extendLease(const Duration(seconds: 1));
+        recordTerminal();
+    }
   }
 }

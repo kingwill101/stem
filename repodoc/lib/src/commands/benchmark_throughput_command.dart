@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../benchmarks/throughput.dart';
 import '../benchmarks/throughput_mode.dart';
+import '../benchmarks/throughput_scenario.dart';
 import '../benchmarks/throughput_statistics.dart';
 import '../benchmarks/throughput_store.dart';
 import '../benchmarks/throughput_display.dart';
@@ -21,6 +22,11 @@ final class BenchmarkThroughputCommand extends Command<int> {
         'mode',
         defaultsTo: 'steady-state',
         help: 'Workload mode: steady-state, enqueue-only, or prefilled-drain.',
+      )
+      ..addOption(
+        'scenario',
+        defaultsTo: 'success',
+        help: 'Task lifecycle path: success, retry, dead-letter, or lease.',
       )
       ..addOption(
         'duration',
@@ -93,6 +99,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final tasks = _positiveInt('tasks');
     final warmup = _nonNegativeInt('warmup');
     final mode = ThroughputMode.parse(_option('mode'));
+    final scenario = ThroughputScenario.parse(_option('scenario'));
     final duration = _optionalDuration('duration');
     final samples = _positiveInt('samples');
     final jsonOutput = argResults?['json'] == true;
@@ -101,10 +108,12 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final stores = _stores();
     final checkBaseline = argResults?['check-baseline'] == true;
     final runtime = _runtime();
-    if (checkBaseline && mode != ThroughputMode.steadyState) {
+    if (checkBaseline &&
+        (mode != ThroughputMode.steadyState ||
+            scenario != ThroughputScenario.success)) {
       throw ArgumentError(
         '--check-baseline currently applies only to steady-state '
-        'end-to-end throughput.',
+        'success-scenario end-to-end throughput.',
       );
     }
     if (checkBaseline &&
@@ -130,12 +139,13 @@ final class BenchmarkThroughputCommand extends Command<int> {
     final results = <Map<String, Object?>>[];
     Map<String, Object?> buildReport({required String status, Object? error}) =>
         {
-          'schemaVersion': 2,
+          'schemaVersion': 3,
           'kind': 'stem.throughput.benchmark',
           'generatedAtUtc': DateTime.now().toUtc().toIso8601String(),
           'status': status,
           'runtime': runtime,
           'mode': mode.name,
+          'scenario': scenario.name,
           'duration_ms': duration?.inMicroseconds == null
               ? null
               : duration!.inMicroseconds / 1000,
@@ -176,6 +186,7 @@ final class BenchmarkThroughputCommand extends Command<int> {
                 concurrency: concurrency,
                 store: store,
                 mode: mode,
+                scenario: scenario,
                 measurementDuration: duration,
                 postgresUrl: postgresUrl,
                 redisUrl: redisUrl,
@@ -367,6 +378,7 @@ Map<String, Object?> _aggregateTrials(
     'end_to_end_ms',
     'drain_ms',
     'store_drain_ms',
+    'task_latency_p95_ms',
   ];
   final statistics = <String, Object?>{};
   final aggregate = <String, Object?>{...first};
@@ -379,6 +391,23 @@ Map<String, Object?> _aggregateTrials(
     statistics[key] = summary;
     final median = summary['median'];
     if (median != null) aggregate[key] = median;
+  }
+  // Per-task latency is summarized inside each trial. Keep the trial-level
+  // aggregation explicit: the scalar is the median of each trial's p95,
+  // rather than a misleading pooled percentile across unlike trial samples.
+  final latencyP95Values = [
+    for (final trial in trials)
+      if (trial['task_latency_p95_ms'] is num)
+        trial['task_latency_p95_ms']! as num,
+  ];
+  if (latencyP95Values.isNotEmpty) {
+    final latencySummary = ThroughputStatistics.summarize(latencyP95Values);
+    statistics['task_latency_p95_ms'] = latencySummary;
+    aggregate['task_latency_p95_ms'] = latencySummary['median'];
+    aggregate['task_latency_ms'] = {
+      'aggregation': 'trial_p95',
+      ...latencySummary,
+    };
   }
   return {
     ...aggregate,

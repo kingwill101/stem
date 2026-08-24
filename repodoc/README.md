@@ -39,6 +39,9 @@ dart run repodoc/bin/repodoc.dart benchmark:throughput \
   --store memory --mode steady-state --duration 10s --samples 3
 dart run repodoc/bin/repodoc.dart benchmark:throughput \
   --store memory --mode prefilled-drain --tasks 50000 --samples 3
+dart run repodoc/bin/repodoc.dart benchmark:throughput \
+  --store postgres --scenario retry --tasks 2000 --warmup 200 --samples 3 \
+  --buckets 1,4 --timings
 ```
 
 Throughput benchmarks run directly from repodoc. Use `--buckets` for a
@@ -55,7 +58,13 @@ The default `steady-state` mode enqueues while the worker consumes. Use
 `--duration` creates a time-based measurement window; without it, `--tasks`
 controls the fixed task count. `--samples` repeats each store/concurrency
 combination and reports the median plus coefficient of variation while
-retaining every raw trial in the JSON artifact.
+retaining every raw trial in the JSON artifact. `--scenario success` measures
+normal acknowledgement, `retry` requests one immediate retry, `dead-letter`
+forces terminal failure and DLQ settlement, and `lease` explicitly extends a
+delivery lease before completing. Throughput summaries include p5 throughput;
+each trial also reports per-task p95 enqueue-to-terminal latency. Compare
+external-store scenarios within the same adapter rather than ranking raw store
+throughput across different durability models.
 
 Commands are grouped by subsystem in `lib/src/commands/`. Shared workspace and
 process utilities live in `lib/src/infrastructure/`.
