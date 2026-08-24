@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
 
+import '../repodoc/lib/src/benchmarks/formatting.dart';
+
 void displayThroughputResult(
   Map<String, Object?> result, {
   double? baseline,
@@ -20,28 +22,31 @@ void displayThroughputResult(
   console.table(
     headers: const ['Metric', 'Value'],
     rows: [
-      ['Enqueue time', '${_fixed(result['enqueue_ms'])} ms'],
-      ['End-to-end time', '${_fixed(result['end_to_end_ms'])} ms'],
+      ['Enqueue time', '${benchmarkFixed(result['enqueue_ms'])} ms'],
+      ['End-to-end time', '${benchmarkFixed(result['end_to_end_ms'])} ms'],
       [
         'Enqueue throughput',
-        '${_fixed(result['enqueue_tasks_per_second'])} tasks/s',
+        '${benchmarkFixed(result['enqueue_tasks_per_second'])} tasks/s',
       ],
       [
         'End-to-end throughput',
-        '${_fixed(result['end_to_end_tasks_per_second'])} tasks/s',
+        '${benchmarkFixed(result['end_to_end_tasks_per_second'])} tasks/s',
       ],
     ],
   );
 
   if (baseline != null) {
-    final measured = _number(result['end_to_end_tasks_per_second']) ?? 0;
+    final measured =
+        benchmarkNumber(result['end_to_end_tasks_per_second']) ?? 0;
     if (measured >= baseline) {
       console.success(
-        'Baseline passed: ${_fixed(measured)} >= ${_fixed(baseline)} tasks/s',
+        'Baseline passed: ${benchmarkFixed(measured)} >= '
+        '${benchmarkFixed(baseline)} tasks/s',
       );
     } else {
       console.error(
-        'Baseline failed: ${_fixed(measured)} < ${_fixed(baseline)} tasks/s',
+        'Baseline failed: ${benchmarkFixed(measured)} < '
+        '${benchmarkFixed(baseline)} tasks/s',
       );
     }
   }
@@ -110,7 +115,12 @@ List<Object?> _summaryRow(
   String unit,
 ) {
   final metric = _map(summary[key]);
-  return [label, _fixed(metric['median']), _fixed(metric['p95']), unit];
+  return [
+    label,
+    benchmarkFixed(metric['median']),
+    benchmarkFixed(metric['p95']),
+    unit,
+  ];
 }
 
 void _printArtifact(Console console, String? artifactPath) {
@@ -121,15 +131,4 @@ void _printArtifact(Console console, String? artifactPath) {
 Map<String, Object?> _map(Object? value) {
   if (value is! Map) return const {};
   return {for (final entry in value.entries) entry.key.toString(): entry.value};
-}
-
-num? _number(Object? value) => value is num ? value : null;
-
-String _fixed(Object? value) {
-  final number = _number(value);
-  if (number == null) return 'n/a';
-  if (number.abs() >= 1000000) return number.toStringAsFixed(0);
-  if (number.abs() >= 1000) return number.toStringAsFixed(1);
-  if (number.abs() >= 1) return number.toStringAsFixed(2);
-  return number.toStringAsFixed(3);
 }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
+import 'package:path/path.dart' as p;
 
 import '../infrastructure/process_runner.dart';
 import '../infrastructure/workspace.dart';
@@ -93,5 +94,5 @@ final class DirectoryPackage {
   final Directory root;
   final String relativePath;
 
-  Directory get directory => Directory('${root.path}/$relativePath');
+  Directory get directory => Directory(p.join(root.path, relativePath));
 }

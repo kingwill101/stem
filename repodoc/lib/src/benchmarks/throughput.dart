@@ -69,14 +69,14 @@ final class ThroughputBenchmark {
           onComplete: () {
             if (!measuring) {
               warmupCompletedTasks += 1;
-              if (warmupCompletedTasks == warmupTasks &&
+              if (warmupCompletedTasks >= warmupTasks &&
                   !warmupCompleted.isCompleted) {
                 warmupCompleted.complete();
               }
               return;
             }
             completedTasks += 1;
-            if (completedTasks == tasks && !completed.isCompleted) {
+            if (completedTasks >= tasks && !completed.isCompleted) {
               completed.complete();
             }
           },
@@ -190,7 +190,7 @@ Future<void> _waitForBrokerDrain(QueueBroker broker) async {
 
 double _rate(int count, Duration duration) {
   final seconds = duration.inMicroseconds / Duration.microsecondsPerSecond;
-  return seconds == 0 ? double.infinity : count / seconds;
+  return seconds <= 0 ? 0 : count / seconds;
 }
 
 final class _ThroughputTask extends TaskHandler<void> {

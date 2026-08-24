@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
+import 'package:path/path.dart' as p;
 
 import '../benchmarks/throughput.dart';
 import '../benchmarks/throughput_store.dart';
@@ -219,7 +220,12 @@ final class BenchmarkThroughputCommand extends Command<int> {
 
   double _baselineMinimum(Directory root) {
     final file = File(
-      '${root.path}/repodoc/benchmarks/stem_throughput_baseline.json',
+      p.join(
+        root.path,
+        'repodoc',
+        'benchmarks',
+        'stem_throughput_baseline.json',
+      ),
     );
     if (!file.existsSync()) {
       throw StateError('Missing benchmark baseline: ${file.path}');

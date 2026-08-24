@@ -1,7 +1,6 @@
+import 'package:repodoc/src/benchmarks/postgres_timing.dart';
 import 'package:stem_postgres/stem_postgres.dart';
 import 'package:test/test.dart';
-
-import '../lib/src/benchmarks/postgres_timing.dart';
 
 void main() {
   group('PostgresTimingCollector', () {
@@ -115,6 +114,41 @@ void main() {
       expect(rows.first['max_ms'], equals(20.0));
       expect(rows.last['count'], equals(2));
       expect(rows.last['avg_ms'], equals(6.0));
+    });
+
+    test('bounds SQL groups while retaining aggregate counts', () {
+      final collector = PostgresTimingCollector(sampleSize: 2, maxQueryKeys: 1)
+        ..addQuery(
+          const PostgresQueryTiming(
+            component: 'broker',
+            sql: 'select old_statement',
+            duration: Duration(milliseconds: 1),
+            succeeded: true,
+          ),
+        )
+        ..addQuery(
+          const PostgresQueryTiming(
+            component: 'broker',
+            sql: 'select new_statement',
+            duration: Duration(milliseconds: 2),
+            succeeded: true,
+          ),
+        )
+        ..addQuery(
+          const PostgresQueryTiming(
+            component: 'broker',
+            sql: 'select new_statement',
+            duration: Duration(milliseconds: 4),
+            succeeded: false,
+          ),
+        );
+
+      final rows = collector.queryJson();
+      expect(rows, hasLength(1));
+      expect(rows.single['sql'], equals('select new_statement'));
+      expect(rows.single['count'], equals(2));
+      expect(rows.single['failures'], equals(1));
+      expect(rows.single['max_ms'], equals(4.0));
     });
   });
 }

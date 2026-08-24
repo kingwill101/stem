@@ -116,10 +116,23 @@ Future<ThroughputStoreResources> openThroughputStore({
           backend: backend,
           temporaryDatabase: sqlitePath == null ? database : null,
         );
-      } on Object {
+      } on Object catch (error, stackTrace) {
         log?.call('SQLite result backend failed; closing broker');
-        await broker.close();
-        rethrow;
+        try {
+          await broker.close();
+        } on Object catch (closeError) {
+          log?.call('failed to close SQLite broker: $closeError');
+        }
+        if (sqlitePath == null && database.existsSync()) {
+          try {
+            await database.delete();
+          } on Object catch (deleteError) {
+            log?.call(
+              'failed to delete temporary SQLite database: $deleteError',
+            );
+          }
+        }
+        Error.throwWithStackTrace(error, stackTrace);
       }
     case ThroughputStore.postgres:
       final url = postgresUrl;
@@ -155,6 +168,7 @@ Future<ThroughputStoreResources> openThroughputStore({
           namespace: namespace,
           pollInterval: const Duration(milliseconds: 100),
           sweeperInterval: const Duration(hours: 1),
+          separateConsumerConnection: true,
           timingListener: postgresTimings?.add,
           queryTimingListener: postgresTimings?.addQuery,
         );
@@ -175,10 +189,19 @@ Future<ThroughputStoreResources> openThroughputStore({
         );
       } on Object {
         log?.call('PostgreSQL worker resources failed; closing resources');
-        await workerBackend?.close();
-        await workerBroker?.close();
-        await backend?.close();
-        await broker.close();
+        for (final close in <Future<void> Function()?>[
+          workerBackend?.close,
+          workerBroker?.close,
+          backend?.close,
+          broker.close,
+        ]) {
+          if (close == null) continue;
+          try {
+            await close();
+          } on Object catch (closeError) {
+            log?.call('failed to close PostgreSQL resource: $closeError');
+          }
+        }
         rethrow;
       }
     case ThroughputStore.redis:

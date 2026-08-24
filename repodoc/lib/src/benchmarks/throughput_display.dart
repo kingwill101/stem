@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
 
+import 'formatting.dart';
+
 void displayThroughputResults(
   List<Map<String, Object?>> results, {
   double? baseline,
@@ -37,11 +39,11 @@ void displayThroughputResults(
         [
           result['store'] ?? 'n/a',
           result['concurrency'],
-          _fixed(result['enqueue_tasks_per_second']),
-          _fixed(result['handler_end_to_end_tasks_per_second']),
-          _fixed(result['end_to_end_tasks_per_second']),
-          _fixed(result['enqueue_ms']),
-          _fixed(result['store_drain_ms']),
+          benchmarkFixed(result['enqueue_tasks_per_second']),
+          benchmarkFixed(result['handler_end_to_end_tasks_per_second']),
+          benchmarkFixed(result['end_to_end_tasks_per_second']),
+          benchmarkFixed(result['enqueue_ms']),
+          benchmarkFixed(result['store_drain_ms']),
         ],
     ],
   );
@@ -49,19 +51,20 @@ void displayThroughputResults(
   if (baseline != null) {
     final failures = results
         .where((result) {
-          final measured = _number(result['end_to_end_tasks_per_second']) ?? 0;
+          final measured =
+              benchmarkNumber(result['end_to_end_tasks_per_second']) ?? 0;
           return measured < baseline;
         })
         .toList(growable: false);
     if (failures.isEmpty) {
       console.success(
         'Baseline passed for ${results.length} bucket(s): '
-        'minimum ${_fixed(baseline)} tasks/s',
+        'minimum ${benchmarkFixed(baseline)} tasks/s',
       );
     } else {
       console.error(
         'Baseline failed for ${failures.length} bucket(s): '
-        'minimum ${_fixed(baseline)} tasks/s',
+        'minimum ${benchmarkFixed(baseline)} tasks/s',
       );
     }
   }
@@ -90,22 +93,26 @@ void displayThroughputResults(
                 result['concurrency'],
                 timing['operation'] ?? 'n/a',
                 timing['count'] ?? 'n/a',
-                _fixed(timing['avg_ms']),
-                _fixed(timing['p95_ms']),
-                _fixed(timing['max_ms']),
-                _fixed(timing['avg_execution_ms']),
-                _fixed(timing['avg_queue_wait_ms']),
+                benchmarkFixed(timing['avg_ms']),
+                benchmarkFixed(timing['p95_ms']),
+                benchmarkFixed(timing['max_ms']),
+                benchmarkFixed(timing['avg_execution_ms']),
+                benchmarkFixed(timing['avg_queue_wait_ms']),
               ],
       ],
     );
 
     final queryRows = [
       for (final result in timingResults)
-        for (final query in (result['postgres_queries']! as List))
+        for (final query in _queryValues(result['postgres_queries']))
           if (query is Map) {'concurrency': result['concurrency'], ...query},
     ];
     if (queryRows.isNotEmpty) {
-      console.section('PostgreSQL query timings (slowest first)');
+      final title = queryRows.length > 20
+          ? 'PostgreSQL query timings (slowest first; '
+                'showing 20 of ${queryRows.length})'
+          : 'PostgreSQL query timings (slowest first)';
+      console.section(title);
       console.table(
         headers: const [
           'Concurrency',
@@ -122,9 +129,9 @@ void displayThroughputResults(
               query['concurrency'],
               query['component'] ?? 'n/a',
               query['count'] ?? 'n/a',
-              _fixed(query['avg_ms']),
-              _fixed(query['p95_ms']),
-              _fixed(query['max_ms']),
+              benchmarkFixed(query['avg_ms']),
+              benchmarkFixed(query['p95_ms']),
+              benchmarkFixed(query['max_ms']),
               _sqlPreview(query['sql']),
             ],
         ],
@@ -136,16 +143,8 @@ void displayThroughputResults(
   }
 }
 
-num? _number(Object? value) => value is num ? value : null;
-
-String _fixed(Object? value) {
-  final number = _number(value);
-  if (number == null) return 'n/a';
-  if (number.abs() >= 1000000) return number.toStringAsFixed(0);
-  if (number.abs() >= 1000) return number.toStringAsFixed(1);
-  if (number.abs() >= 1) return number.toStringAsFixed(2);
-  return number.toStringAsFixed(3);
-}
+Iterable<Object?> _queryValues(Object? value) =>
+    value is List ? value : const <Object?>[];
 
 String _sqlPreview(Object? value) {
   if (value is! String || value.isEmpty) return 'n/a';

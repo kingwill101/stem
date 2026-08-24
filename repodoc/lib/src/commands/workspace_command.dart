@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:artisanal/args.dart';
@@ -25,7 +26,7 @@ final class WorkspaceCheckCommand extends Command<int> {
     final catalog = WorkspaceCatalog.load();
     final packages = catalog.packages;
     if (argResults?['json'] == true) {
-      stdout.write('[${packages.map(_jsonPackage).join(',')}]\n');
+      stdout.writeln(jsonEncode(packages.map(_jsonPackage).toList()));
       return 0;
     }
     stdout.writeln('Stem workspace packages (${packages.length}):');
@@ -39,13 +40,10 @@ final class WorkspaceCheckCommand extends Command<int> {
     return 0;
   }
 
-  String _jsonPackage(WorkspacePackage package) {
-    return '{"name":"${_escape(package.name)}",'
-        '"path":"${_escape(package.relativePath)}",'
-        '"flutter":${package.isFlutter},'
-        '"workspaceMember":${package.workspaceMember}}';
-  }
-
-  String _escape(String value) =>
-      value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+  Map<String, Object> _jsonPackage(WorkspacePackage package) => {
+    'name': package.name,
+    'path': package.relativePath,
+    'flutter': package.isFlutter,
+    'workspaceMember': package.workspaceMember,
+  };
 }

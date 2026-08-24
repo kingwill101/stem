@@ -103,6 +103,7 @@ final class CoverageRunner {
       'packages/stem_postgres',
       'packages/stem_redis',
       'packages/stem_sqlite',
+      'packages/stem_memory',
     ];
     for (final path in packagePaths) {
       await runPackage(
@@ -123,6 +124,13 @@ final class CoverageRunner {
     final coverageDirectory = Directory(
       p.join(package.directory.path, 'coverage'),
     );
+    final packageEnvironment = package.name == 'stem_cli'
+        ? {
+            ...catalog.processEnvironment,
+            ...?environment,
+            'STEM_CLI_RUN_MULTI': 'true',
+          }
+        : environment;
     await runner.run(
       'dart',
       [
@@ -133,9 +141,14 @@ final class CoverageRunner {
         '--coverage=coverage',
       ],
       workingDirectory: package.directory,
-      environment: environment,
+      environment: packageEnvironment,
       label: 'coverage ${package.relativePath}',
     );
+    if (!coverageDirectory.existsSync()) {
+      throw StateError(
+        'Coverage directory was not created for ${package.relativePath}.',
+      );
+    }
     await runner.run(
       'dart',
       [
@@ -147,7 +160,7 @@ final class CoverageRunner {
         '--report-on=lib',
       ],
       workingDirectory: package.directory,
-      environment: environment,
+      environment: packageEnvironment,
       label: 'format coverage ${package.relativePath}',
     );
     final badgeScript = p.relative(
@@ -167,14 +180,9 @@ final class CoverageRunner {
         minimumCoverage.toString(),
       ],
       workingDirectory: package.directory,
-      environment: environment,
+      environment: packageEnvironment,
       label: 'check coverage ${package.relativePath}',
     );
-    if (!coverageDirectory.existsSync()) {
-      throw StateError(
-        'Coverage directory was not created for ${package.relativePath}.',
-      );
-    }
   }
 
   WorkspacePackage _package(String path) {
