@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:artisanal/artisanal.dart';
 
-import '../repodoc/lib/src/benchmarks/formatting.dart';
+import 'benchmark_formatting.dart';
 
 void displayThroughputResult(
   Map<String, Object?> result, {

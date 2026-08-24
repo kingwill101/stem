@@ -1,9 +1,9 @@
-export 'orm_registry.g.dart';
 export 'src/backend/sqlite_result_backend.dart' show SqliteResultBackend;
 export 'src/broker/sqlite_broker.dart' show SqliteBroker;
 export 'src/connection.dart' show SqliteConnections;
 export 'src/control/sqlite_revoke_store.dart' show SqliteRevokeStore;
 export 'src/database/datasource.dart' show createDataSource;
+export 'src/database/orm_registry.g.dart';
 export 'src/models/models.dart';
 export 'src/stack/sqlite_adapter.dart' show StemSqliteAdapter;
 export 'src/workflow/sqlite_factories.dart'

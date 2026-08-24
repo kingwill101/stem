@@ -224,10 +224,14 @@ Future<ThroughputStoreResources> openThroughputStore({
         );
         log?.call('Redis result backend ready');
         return ThroughputStoreResources(broker: broker, backend: backend);
-      } on Object {
+      } on Object catch (error, stackTrace) {
         log?.call('Redis result backend failed; closing broker');
-        await broker.close();
-        rethrow;
+        try {
+          await broker.close();
+        } on Object catch (closeError) {
+          log?.call('failed to close Redis broker: $closeError');
+        }
+        Error.throwWithStackTrace(error, stackTrace);
       }
   }
 }

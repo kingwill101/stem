@@ -67,14 +67,26 @@ final class StandaloneDartCommand extends Command<int> {
         final output = Directory(
           p.join(staging.path, p.basename(package.relativePath)),
         )..createSync(recursive: true);
-        final stagedPath = (await runner.capture('dart', [
+        final stagedOutput = await runner.capture('dart', [
           'run',
           'tool/stage_workspace.dart',
           '--package',
           package.relativePath,
           '--output',
           output.path,
-        ], workingDirectory: root)).trim().split('\n').last;
+        ], workingDirectory: root);
+        final stagedLines = stagedOutput
+            .split('\n')
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .toList(growable: false);
+        final stagedPath = stagedLines.isEmpty ? null : stagedLines.last;
+        if (stagedPath == null || !Directory(stagedPath).existsSync()) {
+          throw StateError(
+            'Workspace staging did not return a valid directory for '
+            '${package.relativePath}.',
+          );
+        }
         await runner.run(
           pubTool,
           ['pub', 'get'],

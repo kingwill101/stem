@@ -279,12 +279,16 @@ Future<void> _validatePackage(
   _Package package, {
   required bool checkGenerated,
 }) async {
-  await _run('dart', [
-    'format',
-    'lib',
-    'test',
-    '--set-exit-if-changed',
-  ], package);
+  if (checkGenerated && package.hasBuildRunner) {
+    await _run('dart', [
+      'run',
+      'build_runner',
+      'build',
+      '--delete-conflicting-outputs',
+    ], package);
+  }
+
+  await _run('dart', ['format', 'lib', 'test'], package);
   final executable = package.isFlutter ? 'flutter' : 'dart';
   await _run(executable, ['analyze', '--fatal-infos'], package);
   final testArguments = <String>['test', '--fail-fast'];
@@ -294,15 +298,10 @@ Future<void> _validatePackage(
   }
   await _run(executable, testArguments, package);
 
-  if (checkGenerated && package.hasBuildRunner) {
-    await _run('dart', [
-      'run',
-      'build_runner',
-      'build',
-      '--delete-conflicting-outputs',
-    ], package);
-    await _runGitDiffCheck(package.path);
-  }
+  // The formatter may normalize output emitted by a generator. Verify the
+  // final package tree instead of failing on the generator's intermediate
+  // formatting, while still refusing to release uncommitted source changes.
+  await _runGitDiffCheck(package.path);
 
   final changelog = File('${package.path}/CHANGELOG.md');
   if (!changelog.existsSync()) {

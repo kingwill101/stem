@@ -118,6 +118,9 @@ services:
   # Redis with TLS enabled (server-auth only)
   redis_tls:
     image: redis:7-alpine
+    # Disposable test keys remain owner-only on the host; Redis runs as root
+    # in this test container so it can read the bind-mounted key files.
+    user: "0"
     restart: unless-stopped
     container_name: stem-redis-tls-test
     command:
@@ -169,6 +172,9 @@ services:
   # Redis with TLS enabled (client-auth required)
   redis_mtls:
     image: redis:7-alpine
+    # Disposable test keys remain owner-only on the host; Redis runs as root
+    # in this test container so it can read the bind-mounted key files.
+    user: "0"
     restart: unless-stopped
     container_name: stem-redis-mtls-test
     command:

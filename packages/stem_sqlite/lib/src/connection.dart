@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 
-import 'package:stem_sqlite/orm_registry.g.dart';
 import 'package:stem_sqlite/src/database/migrations.dart';
+import 'package:stem_sqlite/src/database/orm_registry.g.dart';
 
 const int _sqliteBusyTimeoutMs = 5000;
 

@@ -175,8 +175,6 @@ class SqliteResultBackend
     Map<String, Object?> meta = const {},
     Duration? ttl,
   }) async {
-    final now = stemNow();
-    final expiresAt = now.add(ttl ?? defaultTtl);
     final status = TaskStatus(
       id: taskId,
       state: state,
@@ -187,6 +185,7 @@ class SqliteResultBackend
     );
 
     await _connections.runInTransaction((txn) async {
+      final expiresAt = stemNow().add(ttl ?? defaultTtl);
       final model = $StemTaskResult(
         id: taskId,
         namespace: namespace,
@@ -208,9 +207,9 @@ class SqliteResultBackend
     TaskStatus status, {
     Duration? ttl,
   }) async {
-    final now = stemNow();
-    final expiresAt = now.add(ttl ?? defaultTtl);
     final updated = await _connections.runInTransaction((txn) {
+      final now = stemNow();
+      final expiresAt = now.add(ttl ?? defaultTtl);
       final query = txn
           .query<StemTaskResult>()
           .whereEquals('id', status.id)
@@ -335,9 +334,8 @@ class SqliteResultBackend
 
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
-    final now = stemNow();
-    final expiresAt = now.add(heartbeatTtl);
     await _connections.runInTransaction((txn) async {
+      final expiresAt = stemNow().add(heartbeatTtl);
       final model = StemWorkerHeartbeat(
         workerId: heartbeat.workerId,
         namespace: namespace,
@@ -385,9 +383,8 @@ class SqliteResultBackend
 
   @override
   Future<void> initGroup(GroupDescriptor descriptor) async {
-    final now = stemNow();
-    final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
     await _connections.runInTransaction((txn) async {
+      final expiresAt = stemNow().add(descriptor.ttl ?? groupDefaultTtl);
       await txn.repository<StemGroup>().upsert(
         StemGroupInsertDto(
           id: descriptor.id,

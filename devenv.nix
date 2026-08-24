@@ -49,7 +49,9 @@
 
       if [ ! -x "$binary" ]; then
         rebuild=true
-      elif [ -n "$(find "$repo_root/repodoc/bin" "$repo_root/repodoc/lib" "$repo_root/packages" -type f -newer "$binary" -print -quit)" ]; then
+      elif [ -n "$(find "$repo_root/repodoc/bin" "$repo_root/repodoc/lib" "$repo_root/packages" \
+        -type f \( -name '*.dart' -o -name 'pubspec.yaml' \) \
+        -newer "$binary" -print -quit)" ]; then
         rebuild=true
       else
         for dependency_file in \

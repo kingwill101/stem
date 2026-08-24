@@ -1,16 +1,16 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
 import 'package:ormed/ormed.dart';
-import 'src/models/stem_dead_letter.dart';
-import 'src/models/stem_group.dart';
-import 'src/models/stem_group_result.dart';
-import 'src/models/stem_queue_job.dart';
-import 'src/models/stem_revoke_entry.dart';
-import 'src/models/stem_task_result.dart';
-import 'src/models/stem_worker_heartbeat.dart';
-import 'src/models/stem_workflow_run.dart';
-import 'src/models/stem_workflow_step.dart';
-import 'src/models/stem_workflow_watcher.dart';
+import 'package:stem_sqlite/src/models/stem_dead_letter.dart';
+import 'package:stem_sqlite/src/models/stem_group.dart';
+import 'package:stem_sqlite/src/models/stem_group_result.dart';
+import 'package:stem_sqlite/src/models/stem_queue_job.dart';
+import 'package:stem_sqlite/src/models/stem_revoke_entry.dart';
+import 'package:stem_sqlite/src/models/stem_task_result.dart';
+import 'package:stem_sqlite/src/models/stem_worker_heartbeat.dart';
+import 'package:stem_sqlite/src/models/stem_workflow_run.dart';
+import 'package:stem_sqlite/src/models/stem_workflow_step.dart';
+import 'package:stem_sqlite/src/models/stem_workflow_watcher.dart';
 
 final List<ModelDefinition<OrmEntity>> _$ormModelDefinitions = [
   StemDeadLetterOrmDefinition.definition,

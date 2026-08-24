@@ -1,7 +1,7 @@
 import 'package:ormed/ormed.dart';
 import 'package:ormed_sqlite/ormed_sqlite.dart';
 import 'package:stem/observability.dart' show StemLogger, stemLogger;
-import 'package:stem_sqlite/orm_registry.g.dart';
+import 'package:stem_sqlite/src/database/orm_registry.g.dart';
 import 'package:stem_sqlite/src/database/stem_orm_logger.dart';
 
 /// Creates a new DataSource instance using the project configuration.

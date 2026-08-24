@@ -11,6 +11,7 @@ POSTGRES_CERT_DIR="$SCRIPT_DIR/postgres/certs"
 
 redis_assets=(
   "$REDIS_CERT_DIR/ca.crt"
+  "$REDIS_CERT_DIR/ca.key"
   "$REDIS_CERT_DIR/server.crt"
   "$REDIS_CERT_DIR/server.key"
   "$REDIS_CERT_DIR/client.crt"
@@ -63,8 +64,10 @@ chmod 755 "$REDIS_CERT_DIR" "$POSTGRES_CERT_DIR"
 chmod 644 \
   "$REDIS_CERT_DIR/ca.crt" \
   "$REDIS_CERT_DIR/server.crt" \
+  "$REDIS_CERT_DIR/client.crt"
+chmod 600 \
+  "$REDIS_CERT_DIR/ca.key" \
   "$REDIS_CERT_DIR/server.key" \
-  "$REDIS_CERT_DIR/client.crt" \
   "$REDIS_CERT_DIR/client.key"
 
 echo "Disposable Redis and PostgreSQL TLS assets are ready."

@@ -1,6 +1,7 @@
 import 'package:artisanal/args.dart';
 
 import '../infrastructure/process_runner.dart';
+import '../infrastructure/toolchain.dart';
 import '../infrastructure/workspace.dart';
 
 final class QualityDartCommand extends Command<int> {
@@ -41,8 +42,21 @@ final class QualityDartCommand extends Command<int> {
       throw StateError('No packages matched the requested quality scope.');
     }
 
-    final runner = ProcessRunner(environment: catalog.processEnvironment);
+    final pubTool = await Toolchain.pubTool();
+    final environment = catalog.processEnvironment;
+    if (pubTool == 'flutter') {
+      environment['FLUTTER_ROOT'] = await Toolchain.flutterRoot();
+    }
+    final runner = ProcessRunner(environment: environment);
     for (final package in packages) {
+      if (!package.workspaceMember) {
+        await runner.run(
+          pubTool,
+          ['pub', 'get'],
+          workingDirectory: package.directory,
+          label: 'resolve ${package.relativePath}',
+        );
+      }
       final formatTargets = <String>[
         if (package.hasLib) 'lib',
         if (package.hasTest) 'test',

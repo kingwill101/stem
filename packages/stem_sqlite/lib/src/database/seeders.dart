@@ -1,5 +1,5 @@
 import 'package:ormed/ormed.dart';
-import 'package:stem_sqlite/orm_registry.g.dart';
+import 'package:stem_sqlite/src/database/orm_registry.g.dart';
 import 'package:stem_sqlite/src/database/seed_runtime.dart';
 import 'package:stem_sqlite/src/database/seeders/database_seeder.dart';
 

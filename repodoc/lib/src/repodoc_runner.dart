@@ -47,9 +47,11 @@ CommandRunner<int> createRepodocRunner() {
 Future<int> runRepodoc(List<String> arguments) async {
   final runner = createRepodocRunner();
   try {
-    return await runner.run(arguments) ?? 0;
-  } catch (error) {
+    final result = await runner.run(arguments);
+    return result ?? exitCode;
+  } catch (error, stackTrace) {
     stderr.writeln(error);
+    stderr.writeln(stackTrace);
     return 1;
   }
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../benchmark/benchmark_display.dart';
+import '../benchmark/profile_support.dart';
 
 /// Compiles and repeats the deterministic job profile as an AOT executable.
 ///
@@ -9,13 +10,13 @@ import '../benchmark/benchmark_display.dart';
 /// allocator state, and worker shutdown cannot leak from one trial into the
 /// next trial, making the summary more useful than a single long-lived run.
 Future<void> main(List<String> args) async {
-  final repetitions = _intOption(args, '--repetitions', 5);
+  final repetitions = profileIntOption(args, '--repetitions', 5);
   if (repetitions <= 0) {
     throw ArgumentError.value(repetitions, '--repetitions');
   }
 
   final outputPath =
-      _stringOption(args, '--output') ??
+      profileStringOption(args, '--output') ??
       'build/stem-profile/aot-${_timestamp()}.json';
   final jsonOutput = args.contains('--json');
   final childArgs = _childArgs(args);
@@ -46,7 +47,7 @@ Future<void> main(List<String> args) async {
       'operatingSystem': Platform.operatingSystem,
       'processorCount': Platform.numberOfProcessors,
       'repetitions': repetitions,
-      'scenario': _scenario(childArgs),
+      'scenario': _scenarioFromSample(samples.first),
       'samples': samples,
       'summary': _summaries(samples),
     };
@@ -109,10 +110,22 @@ Future<Map<String, Object?>> _runSample(
 }
 
 List<String> _childArgs(List<String> args) {
+  const childOptions = {
+    '--tasks',
+    '--warmup',
+    '--concurrency',
+    '--mode',
+    '--workload',
+    '--work-units',
+    '--hold-seconds',
+  };
   final child = <String>[];
   for (var index = 0; index < args.length; index++) {
     final arg = args[index];
     if (arg == '--repetitions' || arg == '--output') {
+      if (index + 1 >= args.length || args[index + 1].startsWith('--')) {
+        throw ArgumentError('Missing value for $arg.');
+      }
       index += 1;
       continue;
     }
@@ -121,19 +134,32 @@ List<String> _childArgs(List<String> args) {
         arg.startsWith('--output=')) {
       continue;
     }
-    child.add(arg);
+    if (arg.startsWith('--')) {
+      final option = arg.split('=').first;
+      if (!childOptions.contains(option)) {
+        throw ArgumentError('Unknown profile option: $arg.');
+      }
+      child.add(arg);
+      if (!arg.contains('=') &&
+          index + 1 < args.length &&
+          !args[index + 1].startsWith('--')) {
+        child.add(args[++index]);
+      }
+      continue;
+    }
+    throw ArgumentError('Unexpected profile argument: $arg.');
   }
   return child;
 }
 
-Map<String, Object?> _scenario(List<String> args) {
+Map<String, Object?> _scenarioFromSample(Map<String, Object?> sample) {
   return {
-    'tasks': _intOption(args, '--tasks', 5000),
-    'warmup': _intOption(args, '--warmup', 500),
-    'concurrency': _intOption(args, '--concurrency', 4),
-    'mode': _stringOption(args, '--mode') ?? 'isolate',
-    'workload': _stringOption(args, '--workload') ?? 'noop',
-    'workUnits': _intOption(args, '--work-units', 100),
+    'tasks': sample['tasks'],
+    'warmup': sample['warmupTasks'],
+    'concurrency': sample['concurrency'],
+    'mode': sample['executionMode'],
+    'workload': sample['workload'],
+    'workUnits': sample['workUnits'],
   };
 }
 
@@ -176,16 +202,11 @@ Map<String, Object?> _statistics(List<double> values) {
   return {
     'count': sorted.length,
     'min': sorted.first,
-    'median': _percentile(sorted, 0.5),
-    'p95': _percentile(sorted, 0.95),
+    'median': profilePercentile(sorted, 0.5),
+    'p95': profilePercentile(sorted, 0.95),
     'max': sorted.last,
     'mean': sum / sorted.length,
   };
-}
-
-double _percentile(List<double> sorted, double percentile) {
-  final index = ((sorted.length - 1) * percentile).round();
-  return sorted[index.clamp(0, sorted.length - 1).toInt()];
 }
 
 Future<String?> _gitSha() async {
@@ -196,18 +217,4 @@ Future<String?> _gitSha() async {
 
 String _timestamp() {
   return DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
-}
-
-String? _stringOption(List<String> args, String name) {
-  final prefix = '$name=';
-  for (final arg in args) {
-    if (arg.startsWith(prefix)) return arg.substring(prefix.length);
-  }
-  final index = args.indexOf(name);
-  if (index == -1 || index + 1 >= args.length) return null;
-  return args[index + 1];
-}
-
-int _intOption(List<String> args, String name, int fallback) {
-  return int.tryParse(_stringOption(args, name) ?? '') ?? fallback;
 }
