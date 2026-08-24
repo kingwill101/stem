@@ -5,6 +5,9 @@ workspace discovery, dependency resolution, quality checks, tests, coverage,
 examples, standalone dependency resolution, repeatable job profiling, and
 store-backed throughput benchmarking.
 
+Repodoc requires Dart 3.10.0 or newer. The repository's recommended devenv
+environment remains the easiest way to provision the supported toolchain.
+
 Use it through devenv when possible:
 
 ```bash

@@ -238,7 +238,7 @@ FutureOr<Object?> _cpuProfileEntrypoint(
 
 double _rate(int count, Duration duration) {
   final seconds = duration.inMicroseconds / Duration.microsecondsPerSecond;
-  return seconds == 0 ? double.infinity : count / seconds;
+  return seconds <= 0 ? 0 : count / seconds;
 }
 
 double? _queueLatencyMs(TaskStatus status) {
@@ -283,7 +283,7 @@ Map<String, Object?> _timingStats(Iterable<double?> values) {
 
 double _percentile(List<double> sorted, double percentile) {
   final index = ((sorted.length - 1) * percentile).round();
-  return sorted[index.clamp(0, sorted.length - 1)];
+  return sorted[index.clamp(0, sorted.length - 1).toInt()];
 }
 
 String? _stringOption(List<String> args, String name) {

@@ -185,7 +185,7 @@ Map<String, Object?> _statistics(List<double> values) {
 
 double _percentile(List<double> sorted, double percentile) {
   final index = ((sorted.length - 1) * percentile).round();
-  return sorted[index.clamp(0, sorted.length - 1)];
+  return sorted[index.clamp(0, sorted.length - 1).toInt()];
 }
 
 Future<String?> _gitSha() async {
