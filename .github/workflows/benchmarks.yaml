@@ -1,41 +1,119 @@
 name: benchmarks
 
 on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:
+    inputs:
+      store_tasks:
+        description: Tasks per external-store benchmark
+        required: false
+        default: '500'
+      store_warmup:
+        description: Warmup tasks per external-store benchmark
+        required: false
+        default: '50'
+      store_buckets:
+        description: Comma-separated external-store concurrency buckets
+        required: false
+        default: '4,8,16'
 
 permissions:
   contents: read
 
 jobs:
-  core-throughput:
+  throughput:
+    name: benchmark / throughput report
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      STORE_TASKS_INPUT: ${{ inputs.store_tasks || '500' }}
+      STORE_WARMUP_INPUT: ${{ inputs.store_warmup || '50' }}
+      STORE_BUCKETS_INPUT: ${{ inputs.store_buckets || '4,8,16' }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: cachix/install-nix-action@v31
+      - uses: cachix/cachix-action@v16
         with:
-          sdk: 3.10.0
-      - name: Resolve dependencies
-        run: dart pub get
-      - name: Check benchmark formatting
-        run: dart format repodoc/lib repodoc/bin --set-exit-if-changed
-      - name: Run throughput regression gate
-        run: dart run repodoc/bin/repodoc.dart benchmark:throughput --check-baseline
+          name: devenv
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+      - name: Start benchmark services
+        run: devenv up -d
+      - name: Create benchmark artifact directory
+        run: mkdir -p .tmp/ci-benchmarks
+      - name: Run memory throughput regression gate
+        run: |
+          devenv shell -- stem-benchmark \
+            --store memory \
+            --tasks 5000 \
+            --warmup 250 \
+            --concurrency 8 \
+            --check-baseline \
+            --output .tmp/ci-benchmarks/memory.json
+      - name: Run external-store throughput reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tasks=25
+            warmup=5
+            buckets=1,4
+          else
+            tasks="$STORE_TASKS_INPUT"
+            warmup="$STORE_WARMUP_INPUT"
+            buckets="$STORE_BUCKETS_INPUT"
+          fi
 
-  sqlite-throughput:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+          for store in sqlite postgres redis; do
+            echo "Running $store benchmark sequentially (tasks=$tasks warmup=$warmup buckets=$buckets)"
+            devenv shell -- stem-benchmark \
+              --store "$store" \
+              --tasks "$tasks" \
+              --warmup "$warmup" \
+              --buckets "$buckets" \
+              --verbose \
+              --output ".tmp/ci-benchmarks/$store.json"
+          done
+      - name: Write benchmark report to job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Stem throughput benchmarks'
+            echo
+            echo 'The memory run is a hard regression gate. External-store runs are serialized smoke/report benchmarks.'
+            echo
+
+            write_report() {
+              local title="$1"
+              local file="$2"
+              if [[ ! -f "$file" ]]; then
+                return
+              fi
+              echo "### $title"
+              echo
+              echo '| Store | Concurrency | Tasks | Enqueue tasks/s | End-to-end tasks/s |'
+              echo '| --- | ---: | ---: | ---: | ---: |'
+              jq -r '.buckets[] | "| \(.store) | \(.concurrency) | \(.tasks) | \((.enqueue_tasks_per_second * 100 | round / 100)) | \((.end_to_end_tasks_per_second * 100 | round / 100)) |"' "$file"
+              echo
+            }
+
+            write_report 'Memory baseline' .tmp/ci-benchmarks/memory.json
+            write_report 'SQLite' .tmp/ci-benchmarks/sqlite.json
+            write_report 'PostgreSQL' .tmp/ci-benchmarks/postgres.json
+            write_report 'Redis' .tmp/ci-benchmarks/redis.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload benchmark JSON artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          sdk: 3.10.0
-      - name: Resolve SQLite package dependencies
-        working-directory: packages/stem_sqlite
-        run: dart pub get
-      - name: Check SQLite benchmark formatting
-        working-directory: packages/stem_sqlite
-        run: dart format benchmark --set-exit-if-changed
-      - name: Run SQLite throughput regression gate
-        working-directory: packages/stem_sqlite
-        run: dart run benchmark/sqlite_throughput.dart --check-baseline
+          name: stem-throughput-benchmarks-${{ github.run_id }}
+          path: .tmp/ci-benchmarks
+          if-no-files-found: warn
+          retention-days: 30
