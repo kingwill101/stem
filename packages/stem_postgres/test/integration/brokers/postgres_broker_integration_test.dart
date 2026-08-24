@@ -26,6 +26,30 @@ Future<void> main() async {
   );
   tearDownAll(harness.dispose);
 
+  test('connect uses an independent consumer connection', () async {
+    final namespace = 'broker-connect-${DateTime.now().microsecondsSinceEpoch}';
+    final queue = 'connect-queue-${DateTime.now().microsecondsSinceEpoch}';
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespace,
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(hours: 1),
+    );
+    try {
+      await broker.publish(
+        Envelope(name: 'integration.connect', args: const {}, queue: queue),
+      );
+      final delivery = await broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first
+          .timeout(const Duration(seconds: 10));
+      expect(delivery.envelope.name, 'integration.connect');
+      await broker.ack(delivery);
+    } finally {
+      await broker.close();
+    }
+  });
+
   ormedGroup('postgres broker', (dataSource) {
     runBrokerContractTests(
       adapterName: 'Postgres',
