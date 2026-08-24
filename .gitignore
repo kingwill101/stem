@@ -1,8 +1,10 @@
 # Dart & Flutter
 .dart_tool/
+.devenv/
 .packages
 pubspec.lock
 build/
+.tmp/
 **/.flutter-plugins-dependencies
 textwrap/
 packages/stem/example/microservice/certs/

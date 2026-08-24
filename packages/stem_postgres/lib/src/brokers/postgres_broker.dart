@@ -6,6 +6,7 @@ import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
+import 'package:stem_postgres/src/observability/postgres_timing.dart';
 import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed implementation of [Broker].
@@ -23,7 +24,10 @@ class PostgresBroker
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
     this.deadLetterRetention = const Duration(days: 7),
-  }) {
+    PostgresConnections? consumerConnections,
+    PostgresTimingListener? timingListener,
+  }) : _consumerConnections = consumerConnections,
+       _timingListener = timingListener {
     stemLogger.info(
       'PostgresBroker created (namespace=$namespace)',
       fields: _logContext(),
@@ -42,6 +46,8 @@ class PostgresBroker
     Duration sweeperInterval = const Duration(seconds: 10),
     Duration deadLetterRetention = const Duration(days: 7),
     bool runMigrations = true,
+    PostgresTimingListener? timingListener,
+    PostgresQueryTimingListener? queryTimingListener,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
@@ -49,6 +55,9 @@ class PostgresBroker
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
       runMigrations: runMigrations,
+      component: 'broker',
+      timingListener: timingListener,
+      queryTimingListener: queryTimingListener,
     );
     return PostgresBroker._(
       connections,
@@ -57,10 +66,18 @@ class PostgresBroker
       pollInterval: pollInterval,
       sweeperInterval: sweeperInterval,
       deadLetterRetention: deadLetterRetention,
+      timingListener: timingListener,
     );
   }
 
   /// Connects to PostgreSQL and returns a broker instance.
+  ///
+  /// By default, publishing and consuming share one PostgreSQL connection,
+  /// preserving the connection behavior of earlier releases. Set
+  /// [separateConsumerConnection] to `true` when consuming must be isolated
+  /// from publisher work; this opens a second connection using the
+  /// `broker.consumer` timing component. [fromDataSource] never creates that
+  /// second connection because it does not own an independent data source.
   static Future<PostgresBroker> connect(
     String connectionString, {
     String namespace = 'stem',
@@ -70,24 +87,48 @@ class PostgresBroker
     Duration deadLetterRetention = const Duration(days: 7),
     String? applicationName,
     TlsConfig? tls,
+    PostgresTimingListener? timingListener,
+    PostgresQueryTimingListener? queryTimingListener,
+    bool separateConsumerConnection = false,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
+      component: 'broker',
+      timingListener: timingListener,
+      queryTimingListener: queryTimingListener,
     );
-    return PostgresBroker._(
-      connections,
-      namespace: resolvedNamespace,
-      defaultVisibilityTimeout: defaultVisibilityTimeout,
-      pollInterval: pollInterval,
-      sweeperInterval: sweeperInterval,
-      deadLetterRetention: deadLetterRetention,
-    );
+    PostgresConnections? consumerConnections;
+    try {
+      if (separateConsumerConnection) {
+        consumerConnections = await PostgresConnections.open(
+          connectionString: connectionString,
+          component: 'broker.consumer',
+          timingListener: timingListener,
+          queryTimingListener: queryTimingListener,
+        );
+      }
+      return PostgresBroker._(
+        connections,
+        namespace: resolvedNamespace,
+        defaultVisibilityTimeout: defaultVisibilityTimeout,
+        pollInterval: pollInterval,
+        sweeperInterval: sweeperInterval,
+        deadLetterRetention: deadLetterRetention,
+        consumerConnections: consumerConnections,
+        timingListener: timingListener,
+      );
+    } on Object {
+      await consumerConnections?.close();
+      await connections.close();
+      rethrow;
+    }
   }
 
   final PostgresConnections _connections;
+  final PostgresConnections? _consumerConnections;
   QueryContext get _context => _connections.context;
 
   /// Namespace used to scope broker data.
@@ -105,10 +146,13 @@ class PostgresBroker
   /// Retention window for dead letter records.
   final Duration deadLetterRetention;
 
+  final PostgresTimingListener? _timingListener;
+
   /// Simple async mutex to serialize DB access because the Postgres driver
   /// rejects concurrent work on the same connection while a transaction is
   /// open.
   Future<void> _dbLock = Future.value();
+  Future<void> _consumerDbLock = Future.value();
 
   final Set<_ConsumerRunner> _consumers = {};
 
@@ -139,6 +183,8 @@ class PostgresBroker
     }
     _consumers.clear();
     await _dbLock.catchError((_, _) {});
+    await _consumerDbLock.catchError((_, _) {});
+    await _consumerConnections?.close();
     await _connections.close();
   }
 
@@ -159,24 +205,110 @@ class PostgresBroker
     supportsDeadLetterReplay: true,
   );
 
-  Future<T> _withDb<T>(Future<T> Function() action) {
-    final run = _dbLock.then((_) async {
-      await _connections.ensureReady();
+  Future<T> _withDb<T>(
+    Future<T> Function() action, {
+    String operation = 'broker.operation',
+    bool consumer = false,
+  }) {
+    final consumerConnections = _consumerConnections;
+    final isolatedConsumer = consumer && consumerConnections != null;
+    final connections = isolatedConsumer ? consumerConnections : _connections;
+    final lock = isolatedConsumer ? _consumerDbLock : _dbLock;
+    final component = isolatedConsumer ? 'broker.consumer' : 'broker';
+    final listener = _timingListener;
+    final queued = listener == null ? null : (Stopwatch()..start());
+    final run = lock.then((_) async {
+      final queueWait = queued?.elapsed ?? Duration.zero;
+      final execution = listener == null ? null : (Stopwatch()..start());
       try {
-        return await action();
-      } on Exception catch (error) {
+        await connections.ensureReady();
+        final result = await action();
+        _notifyTiming(
+          component: component,
+          operation: operation,
+          queueWait: queueWait,
+          execution: execution?.elapsed ?? Duration.zero,
+          total: queued?.elapsed ?? Duration.zero,
+          succeeded: true,
+        );
+        return result;
+      } on Object catch (error) {
         final message = error.toString();
         if (message.contains('already been closed') ||
             message.contains('not been initialized')) {
-          await _connections.ensureReady(forceReopen: true);
-          return action();
+          try {
+            await connections.ensureReady(forceReopen: true);
+            final result = await action();
+            _notifyTiming(
+              component: component,
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: true,
+            );
+            return result;
+          } on Object catch (retryError) {
+            _notifyTiming(
+              component: component,
+              operation: operation,
+              queueWait: queueWait,
+              execution: execution?.elapsed ?? Duration.zero,
+              total: queued?.elapsed ?? Duration.zero,
+              succeeded: false,
+              error: retryError.toString(),
+            );
+            rethrow;
+          }
         }
+        _notifyTiming(
+          component: component,
+          operation: operation,
+          queueWait: queueWait,
+          execution: execution?.elapsed ?? Duration.zero,
+          total: queued?.elapsed ?? Duration.zero,
+          succeeded: false,
+          error: error.toString(),
+        );
         rethrow;
       }
     });
     // Swallow errors on the lock chain so it continues for later callers.
-    _dbLock = run.then<void>((_) {}).catchError((_, _) {});
+    final nextLock = run.then<void>((_) {}).catchError((_, _) {});
+    if (isolatedConsumer) {
+      _consumerDbLock = nextLock;
+    } else {
+      _dbLock = nextLock;
+    }
     return run;
+  }
+
+  void _notifyTiming({
+    required String component,
+    required String operation,
+    required Duration queueWait,
+    required Duration execution,
+    required Duration total,
+    required bool succeeded,
+    String? error,
+  }) {
+    final listener = _timingListener;
+    if (listener == null) return;
+    try {
+      listener(
+        PostgresOperationTiming(
+          component: component,
+          operation: operation,
+          queueWait: queueWait,
+          execution: execution,
+          total: total,
+          succeeded: succeeded,
+          error: error,
+        ),
+      );
+    } on Object {
+      // Instrumentation must never change database behavior.
+    }
   }
 
   @override
@@ -195,9 +327,12 @@ class PostgresBroker
         envelope: message.toJson(),
         delivery: resolvedRoute.delivery ?? 'at-least-once',
       ).toTracked();
-      await _context.repository<StemBroadcastMessage>().upsert(
-        model,
-        uniqueBy: ['id'],
+      await _withDb(
+        () => _context.repository<StemBroadcastMessage>().upsert(
+          model,
+          uniqueBy: ['id'],
+        ),
+        operation: 'broker.publish',
       );
       return;
     }
@@ -212,18 +347,24 @@ class PostgresBroker
       priority: resolvedRoute.priority ?? envelope.priority,
     );
 
-    await _withDb(() async {
-      await _connections.runInTransaction((txn) async {
-        await _insertJob(
-          txn,
-          envelope: stored,
-          queue: targetQueue,
-          priority: stored.priority,
-          attempt: stored.attempt,
-          notBefore: stored.notBefore,
+    await _withDb(
+      () async {
+        await _connections.runInTransaction(
+          (txn) async {
+            await _insertJob(
+              txn,
+              envelope: stored,
+              queue: targetQueue,
+              priority: stored.priority,
+              attempt: stored.attempt,
+              notBefore: stored.notBefore,
+            );
+          },
+          operation: 'broker.publish.transaction',
         );
-      });
-    });
+      },
+      operation: 'broker.publish',
+    );
   }
 
   @override
@@ -317,13 +458,19 @@ class PostgresBroker
         'queue': delivery.envelope.queue,
       }),
     );
-    await _withDb(() {
-      return _context
-          .query<StemQueueJob>()
-          .whereEquals('id', jobId)
-          .whereEquals('namespace', namespace)
-          .delete();
-    });
+    final ackConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        // Ack does not need the model-loading behavior of Query.delete().
+        // deleteWhere compiles directly to a DELETE and avoids an extra SELECT.
+        return ackConnections.context.query<StemQueueJob>().deleteWhere({
+          'id': jobId,
+          'namespace': namespace,
+        });
+      },
+      operation: 'broker.ack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -345,20 +492,25 @@ class PostgresBroker
       }),
     );
     final now = stemNow().toUtc();
-    await _withDb(() {
-      return _context
-          .query<StemQueueJob>()
-          .whereEquals('id', jobId)
-          .whereEquals('namespace', namespace)
-          .update({
-            'lockedAt': null,
-            'lockedUntil': null,
-            'lockedBy': null,
-            'attempt': delivery.envelope.attempt + 1,
-            'notBefore': null,
-            'updatedAt': now,
-          });
-    });
+    final consumerConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return consumerConnections.context
+            .query<StemQueueJob>()
+            .whereEquals('id', jobId)
+            .whereEquals('namespace', namespace)
+            .update({
+              'lockedAt': null,
+              'lockedUntil': null,
+              'lockedBy': null,
+              'attempt': delivery.envelope.attempt + 1,
+              'notBefore': null,
+              'updatedAt': now,
+            });
+      },
+      operation: 'broker.nack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -376,35 +528,40 @@ class PostgresBroker
         ? 'unknown'
         : reason.trim();
     final deadAt = stemNow().toUtc();
+    final consumerConnections = _consumerConnections ?? _connections;
 
-    await _withDb(() async {
-      await _connections.runInTransaction((txn) async {
-        final row = await txn
-            .query<StemQueueJob>()
-            .whereEquals('id', jobId)
-            .whereEquals('namespace', namespace)
-            .firstOrNull();
-        await txn
-            .query<StemQueueJob>()
-            .whereEquals('id', jobId)
-            .whereEquals('namespace', namespace)
-            .delete();
-        if (row != null) {
-          await txn.repository<StemDeadLetter>().upsert(
-            StemDeadLetter(
-              id: row.id,
-              namespace: namespace,
-              queue: row.queue,
-              envelope: row.envelope,
-              reason: entryReason,
-              meta: meta,
-              deadAt: deadAt,
-            ).toTracked(),
-            uniqueBy: ['id'],
-          );
-        }
-      });
-    });
+    await _withDb(
+      () async {
+        await consumerConnections.runInTransaction((txn) async {
+          final row = await txn
+              .query<StemQueueJob>()
+              .whereEquals('id', jobId)
+              .whereEquals('namespace', namespace)
+              .firstOrNull();
+          await txn
+              .query<StemQueueJob>()
+              .whereEquals('id', jobId)
+              .whereEquals('namespace', namespace)
+              .delete();
+          if (row != null) {
+            await txn.repository<StemDeadLetter>().upsert(
+              StemDeadLetter(
+                id: row.id,
+                namespace: namespace,
+                queue: row.queue,
+                envelope: row.envelope,
+                reason: entryReason,
+                meta: meta,
+                deadAt: deadAt,
+              ).toTracked(),
+              uniqueBy: ['id'],
+            );
+          }
+        });
+      },
+      operation: 'broker.dead_letter',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -423,12 +580,17 @@ class PostgresBroker
     if (by <= Duration.zero) return;
     final jobId = _parseReceipt(delivery.receipt);
     final leaseUntil = stemNow().toUtc().add(by);
-    await _withDb(() {
-      return _context.repository<StemQueueJob>().update(
-        StemQueueJobUpdateDto(lockedUntil: leaseUntil),
-        where: StemQueueJobPartial(id: jobId, namespace: namespace),
-      );
-    });
+    final consumerConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return consumerConnections.context.repository<StemQueueJob>().update(
+          StemQueueJobUpdateDto(lockedUntil: leaseUntil),
+          where: StemQueueJobPartial(id: jobId, namespace: namespace),
+        );
+      },
+      operation: 'broker.extend_lease',
+      consumer: _consumerConnections != null,
+    );
   }
 
   @override
@@ -608,69 +770,85 @@ class PostgresBroker
   Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
     final now = stemNow().toUtc();
     final visibilityUntil = now.add(defaultVisibilityTimeout);
+    final claimConnections = _consumerConnections ?? _connections;
 
-    return _withDb(() {
-      return _connections.runInTransaction((txn) async {
-        final candidate = await txn
-            .query<StemQueueJob>()
-            .whereEquals('queue', queue)
-            .whereEquals('namespace', namespace)
-            .where((PredicateBuilder<StemQueueJob> q) {
-              q
-                ..whereNull('notBefore')
-                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
-            })
-            .where((PredicateBuilder<StemQueueJob> q) {
-              q
-                ..whereNull('lockedUntil')
-                ..orWhere(
-                  'lockedUntil',
-                  now,
-                  PredicateOperator.lessThanOrEqual,
-                );
-            })
-            .orderBy('priority', descending: true)
-            .orderBy('createdAt')
-            .limit(1)
-            .firstOrNull();
-        if (candidate == null) return null;
+    return _withDb(
+      () {
+        return claimConnections.runInTransaction(
+          (txn) async {
+            final candidate = await txn
+                .query<StemQueueJob>()
+                .whereEquals('queue', queue)
+                .whereEquals('namespace', namespace)
+                .where((PredicateBuilder<StemQueueJob> q) {
+                  q
+                    ..whereNull('notBefore')
+                    ..orWhere(
+                      'notBefore',
+                      now,
+                      PredicateOperator.lessThanOrEqual,
+                    );
+                })
+                .where((PredicateBuilder<StemQueueJob> q) {
+                  q
+                    ..whereNull('lockedUntil')
+                    ..orWhere(
+                      'lockedUntil',
+                      now,
+                      PredicateOperator.lessThanOrEqual,
+                    );
+                })
+                .orderBy('priority', descending: true)
+                .orderBy('createdAt')
+                .limit(1)
+                .firstOrNull();
+            if (candidate == null) return null;
 
-        final updated = await txn
-            .query<StemQueueJob>()
-            .whereEquals('id', candidate.id)
-            .whereEquals('namespace', namespace)
-            .where((PredicateBuilder<StemQueueJob> q) {
-              q
-                ..whereNull('lockedUntil')
-                ..orWhere(
-                  'lockedUntil',
-                  now,
-                  PredicateOperator.lessThanOrEqual,
-                );
-            })
-            .where((PredicateBuilder<StemQueueJob> q) {
-              q
-                ..whereNull('notBefore')
-                ..orWhere('notBefore', now, PredicateOperator.lessThanOrEqual);
-            })
-            .update({
-              'lockedAt': now,
-              'lockedUntil': visibilityUntil,
-              'lockedBy': consumerId,
-              'updatedAt': now,
-            });
-        if (updated == 0) return null;
-        stemLogger.debug(
-          'Claimed queue job ${candidate.id} ($queue) by $consumerId',
-          fields: _logContext({
-            'jobId': candidate.id,
-            'queue': queue,
-            'worker': consumerId,
-          }),
+            final updated = await txn
+                .query<StemQueueJob>()
+                .whereEquals('id', candidate.id)
+                .whereEquals('namespace', namespace)
+                .where((PredicateBuilder<StemQueueJob> q) {
+                  q
+                    ..whereNull('lockedUntil')
+                    ..orWhere(
+                      'lockedUntil',
+                      now,
+                      PredicateOperator.lessThanOrEqual,
+                    );
+                })
+                .where((PredicateBuilder<StemQueueJob> q) {
+                  q
+                    ..whereNull('notBefore')
+                    ..orWhere(
+                      'notBefore',
+                      now,
+                      PredicateOperator.lessThanOrEqual,
+                    );
+                })
+                .update({
+                  'lockedAt': now,
+                  'lockedUntil': visibilityUntil,
+                  'lockedBy': consumerId,
+                  'updatedAt': now,
+                });
+            if (updated == 0) return null;
+            stemLogger.debug(
+              'Claimed queue job ${candidate.id} ($queue) by $consumerId',
+              fields: _logContext({
+                'jobId': candidate.id,
+                'queue': queue,
+                'worker': consumerId,
+              }),
+            );
+            return _QueuedJob.fromModel(candidate);
+          },
+          operation: 'broker.claim.transaction',
         );
-        return _QueuedJob.fromModel(candidate);
-      });
-    });
+      },
+      operation: 'broker.claim',
+      consumer: _consumerConnections != null,
+    );
   }
 
   Future<List<Delivery>> _reserveBroadcast(
@@ -679,26 +857,36 @@ class PostgresBroker
     int limit,
   ) async {
     if (channels.isEmpty) return const <Delivery>[];
-    final messages = await _withDb(() {
-      return _context
-          .query<StemBroadcastMessage>()
-          .whereEquals('namespace', namespace)
-          .whereIn('channel', channels)
-          .orderBy('createdAt')
-          .limit(limit < 1 ? 1 : limit)
-          .get();
-    });
+    final broadcastConnections = _consumerConnections ?? _connections;
+    final isolatedConsumer = _consumerConnections != null;
+    final messages = await _withDb(
+      () {
+        return broadcastConnections.context
+            .query<StemBroadcastMessage>()
+            .whereEquals('namespace', namespace)
+            .whereIn('channel', channels)
+            .orderBy('createdAt')
+            .limit(limit < 1 ? 1 : limit)
+            .get();
+      },
+      operation: 'broker.broadcast.reserve',
+      consumer: isolatedConsumer,
+    );
 
     final deliveries = <Delivery>[];
     for (final message in messages) {
-      final alreadyAcked = await _withDb(() {
-        return _context
-            .query<StemBroadcastAck>()
-            .whereEquals('messageId', message.id)
-            .whereEquals('workerId', workerId)
-            .whereEquals('namespace', namespace)
-            .exists();
-      });
+      final alreadyAcked = await _withDb(
+        () {
+          return broadcastConnections.context
+              .query<StemBroadcastAck>()
+              .whereEquals('messageId', message.id)
+              .whereEquals('workerId', workerId)
+              .whereEquals('namespace', namespace)
+              .exists();
+        },
+        operation: 'broker.broadcast.check_ack',
+        consumer: isolatedConsumer,
+      );
       if (alreadyAcked) continue;
       deliveries.add(
         Delivery(
@@ -728,12 +916,19 @@ class PostgresBroker
       namespace: namespace,
       acknowledgedAt: stemNow().toUtc(),
     ).toTracked();
-    await _withDb(() {
-      return _context.repository<StemBroadcastAck>().upsert(
-        ack,
-        uniqueBy: ['messageId', 'workerId'],
-      );
-    });
+    final broadcastConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return broadcastConnections.context
+            .repository<StemBroadcastAck>()
+            .upsert(
+              ack,
+              uniqueBy: ['messageId', 'workerId'],
+            );
+      },
+      operation: 'broker.broadcast.ack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   void _startSweeper() {

@@ -4,6 +4,7 @@ import 'package:ormed/ormed.dart';
 import 'package:stem/stem.dart';
 import 'package:stem_postgres/src/connection.dart';
 import 'package:stem_postgres/src/database/models/models.dart';
+import 'package:stem_postgres/src/observability/postgres_timing.dart';
 
 /// PostgreSQL-backed implementation of [ResultBackend].
 class PostgresResultBackend
@@ -26,6 +27,8 @@ class PostgresResultBackend
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
     bool runMigrations = true,
+    PostgresTimingListener? timingListener,
+    PostgresQueryTimingListener? queryTimingListener,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
@@ -33,6 +36,9 @@ class PostgresResultBackend
     final connections = await PostgresConnections.openWithDataSource(
       dataSource,
       runMigrations: runMigrations,
+      component: 'backend',
+      timingListener: timingListener,
+      queryTimingListener: queryTimingListener,
     );
     final backend = PostgresResultBackend._(
       connections,
@@ -86,12 +92,17 @@ class PostgresResultBackend
     Duration defaultTtl = const Duration(days: 1),
     Duration groupDefaultTtl = const Duration(days: 1),
     Duration heartbeatTtl = const Duration(seconds: 60),
+    PostgresTimingListener? timingListener,
+    PostgresQueryTimingListener? queryTimingListener,
   }) async {
     final resolvedNamespace = namespace.trim().isEmpty
         ? 'stem'
         : namespace.trim();
     final connections = await PostgresConnections.open(
       connectionString: connectionString,
+      component: 'backend',
+      timingListener: timingListener,
+      queryTimingListener: queryTimingListener,
     );
     final backend = PostgresResultBackend._(
       connections,
@@ -173,19 +184,22 @@ class PostgresResultBackend
     );
 
     final expiresAt = stemNow().add(ttl ?? defaultTtl);
-    await _connections.runInTransaction((txn) async {
-      final model = $StemTaskResult(
-        id: taskId,
-        namespace: namespace,
-        state: state.name,
-        payload: payload,
-        error: error?.toJson(),
-        attempt: attempt,
-        meta: meta,
-        expiresAt: expiresAt,
-      ).toTracked();
-      await txn.repository<StemTaskResult>().upsert(model, uniqueBy: ['id']);
-    });
+    await _connections.runInTransaction(
+      (txn) async {
+        final model = $StemTaskResult(
+          id: taskId,
+          namespace: namespace,
+          state: state.name,
+          payload: payload,
+          error: error?.toJson(),
+          attempt: attempt,
+          meta: meta,
+          expiresAt: expiresAt,
+        ).toTracked();
+        await txn.repository<StemTaskResult>().upsert(model, uniqueBy: ['id']);
+      },
+      operation: 'backend.set',
+    );
 
     _watchers[taskId]?.add(status);
   }
@@ -197,27 +211,30 @@ class PostgresResultBackend
   }) async {
     final now = stemNow().toUtc();
     final expiresAt = now.add(ttl ?? defaultTtl);
-    final updated = await _connections.runInTransaction((txn) {
-      final query = txn
-          .query<StemTaskResult>()
-          .whereEquals('id', status.id)
-          .whereEquals('namespace', namespace)
-          .where('expiresAt', now, PredicateOperator.greaterThan)
-          .where(
-            'state',
-            const ['succeeded', 'failed', 'cancelled'],
-            PredicateOperator.notInValues,
-          );
-      return query.update({
-        'state': status.state.name,
-        'payload': status.payload,
-        'error': status.error?.toJson(),
-        'attempt': status.attempt,
-        'meta': status.meta,
-        'expiresAt': expiresAt,
-        'updatedAt': now,
-      });
-    });
+    final updated = await _connections.runInTransaction(
+      (txn) {
+        final query = txn
+            .query<StemTaskResult>()
+            .whereEquals('id', status.id)
+            .whereEquals('namespace', namespace)
+            .where('expiresAt', now, PredicateOperator.greaterThan)
+            .where(
+              'state',
+              const ['succeeded', 'failed', 'cancelled'],
+              PredicateOperator.notInValues,
+            );
+        return query.update({
+          'state': status.state.name,
+          'payload': status.payload,
+          'error': status.error?.toJson(),
+          'attempt': status.attempt,
+          'meta': status.meta,
+          'expiresAt': expiresAt,
+          'updatedAt': now,
+        });
+      },
+      operation: 'backend.set_terminal_if_absent',
+    );
     final applied = updated > 0;
     if (applied) {
       _watchers[status.id]?.add(status);
@@ -237,6 +254,7 @@ class PostgresResultBackend
             .where('expiresAt', now, PredicateOperator.greaterThan)
             .firstOrNull();
       },
+      operation: 'backend.get',
     );
     if (row == null) return null;
     final error = row.error is Map<Object?, Object?>
@@ -340,57 +358,63 @@ class PostgresResultBackend
   Future<void> initGroup(GroupDescriptor descriptor) async {
     final now = stemNow();
     final expiresAt = now.add(descriptor.ttl ?? groupDefaultTtl);
-    await _connections.runInTransaction((txn) async {
-      final repository = txn.repository<StemGroup>();
-      final inserted = await repository.insertOrIgnore(
-        StemGroupInsertDto(
-          id: descriptor.id,
-          namespace: namespace,
-          expected: descriptor.expected,
-          meta: descriptor.meta,
-          expiresAt: expiresAt,
-        ),
-      );
-
-      if (inserted == 0) {
-        // Update existing group - only update business fields.
-        await repository.update(
-          StemGroupUpdateDto(
+    await _connections.runInTransaction(
+      (txn) async {
+        final repository = txn.repository<StemGroup>();
+        final inserted = await repository.insertOrIgnore(
+          StemGroupInsertDto(
+            id: descriptor.id,
+            namespace: namespace,
             expected: descriptor.expected,
             meta: descriptor.meta,
             expiresAt: expiresAt,
           ),
-          where: StemGroupPartial(id: descriptor.id, namespace: namespace),
         );
-      }
 
-      await txn
-          .query<StemGroupResult>()
-          .whereEquals('groupId', descriptor.id)
-          .whereEquals('namespace', namespace)
-          .delete();
-    });
+        if (inserted == 0) {
+          // Update existing group - only update business fields.
+          await repository.update(
+            StemGroupUpdateDto(
+              expected: descriptor.expected,
+              meta: descriptor.meta,
+              expiresAt: expiresAt,
+            ),
+            where: StemGroupPartial(id: descriptor.id, namespace: namespace),
+          );
+        }
+
+        await txn
+            .query<StemGroupResult>()
+            .whereEquals('groupId', descriptor.id)
+            .whereEquals('namespace', namespace)
+            .delete();
+      },
+      operation: 'backend.init_group',
+    );
   }
 
   @override
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status) async {
     final exists = await _groupExists(groupId);
     if (!exists) return null;
-    await _connections.runInTransaction((txn) async {
-      await txn.repository<StemGroupResult>().upsert(
-        StemGroupResultInsertDto(
-          groupId: groupId,
-          taskId: status.id,
-          namespace: namespace,
-          state: status.state.name,
-          payload: status.payload,
-          error: status.error?.toJson(),
-          attempt: status.attempt,
-          meta: status.meta,
-        ),
-        uniqueBy: ['groupId', 'taskId'],
-      );
-    });
+    await _connections.runInTransaction(
+      (txn) async {
+        await txn.repository<StemGroupResult>().upsert(
+          StemGroupResultInsertDto(
+            groupId: groupId,
+            taskId: status.id,
+            namespace: namespace,
+            state: status.state.name,
+            payload: status.payload,
+            error: status.error?.toJson(),
+            attempt: status.attempt,
+            meta: status.meta,
+          ),
+          uniqueBy: ['groupId', 'taskId'],
+        );
+      },
+      operation: 'backend.add_group_result',
+    );
     return getGroup(groupId);
   }
 
@@ -412,30 +436,33 @@ class PostgresResultBackend
   @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat) async {
     final expiresAt = stemNow().add(heartbeatTtl);
-    await _connections.runInTransaction((txn) async {
-      final model = StemWorkerHeartbeat(
-        workerId: heartbeat.workerId,
-        namespace: namespace,
-        timestamp: heartbeat.timestamp,
-        isolateCount: heartbeat.isolateCount,
-        inflight: heartbeat.inflight,
-        queues: {'items': heartbeat.queues.map((q) => q.toJson()).toList()},
-        lastLeaseRenewal: heartbeat.lastLeaseRenewal,
-        version: heartbeat.version,
-        extras: heartbeat.extras,
-        expiresAt: expiresAt,
-      ).toTracked();
-      await txn.repository<StemWorkerHeartbeat>().upsert(
-        model,
-        uniqueBy: ['workerId'],
-      );
-      await txn.repository<StemWorkerHeartbeat>().restore(
-        StemWorkerHeartbeatPartial(
+    await _connections.runInTransaction(
+      (txn) async {
+        final model = StemWorkerHeartbeat(
           workerId: heartbeat.workerId,
           namespace: namespace,
-        ),
-      );
-    });
+          timestamp: heartbeat.timestamp,
+          isolateCount: heartbeat.isolateCount,
+          inflight: heartbeat.inflight,
+          queues: {'items': heartbeat.queues.map((q) => q.toJson()).toList()},
+          lastLeaseRenewal: heartbeat.lastLeaseRenewal,
+          version: heartbeat.version,
+          extras: heartbeat.extras,
+          expiresAt: expiresAt,
+        ).toTracked();
+        await txn.repository<StemWorkerHeartbeat>().upsert(
+          model,
+          uniqueBy: ['workerId'],
+        );
+        await txn.repository<StemWorkerHeartbeat>().restore(
+          StemWorkerHeartbeatPartial(
+            workerId: heartbeat.workerId,
+            namespace: namespace,
+          ),
+        );
+      },
+      operation: 'backend.set_worker_heartbeat',
+    );
   }
 
   @override
@@ -469,28 +496,31 @@ class PostgresResultBackend
     String? callbackTaskId,
     DateTime? dispatchedAt,
   }) async {
-    return _connections.runInTransaction((txn) async {
-      final row = await txn
-          .query<StemGroup>()
-          .whereEquals('id', groupId)
-          .whereEquals('namespace', namespace)
-          .firstOrNull();
-      if (row == null) return false;
-      final meta = Map<String, Object?>.from(row.meta);
-      if (meta['stem.chord.claimed'] == true) return false;
-      meta['stem.chord.claimed'] = true;
-      if (callbackTaskId != null) {
-        meta[ChordMetadata.callbackTaskId] = callbackTaskId;
-      }
-      if (dispatchedAt != null) {
-        meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
-      }
-      await txn.repository<StemGroup>().update(
-        StemGroupUpdateDto(meta: meta),
-        where: StemGroupPartial(id: groupId, namespace: namespace),
-      );
-      return true;
-    });
+    return _connections.runInTransaction(
+      (txn) async {
+        final row = await txn
+            .query<StemGroup>()
+            .whereEquals('id', groupId)
+            .whereEquals('namespace', namespace)
+            .firstOrNull();
+        if (row == null) return false;
+        final meta = Map<String, Object?>.from(row.meta);
+        if (meta['stem.chord.claimed'] == true) return false;
+        meta['stem.chord.claimed'] = true;
+        if (callbackTaskId != null) {
+          meta[ChordMetadata.callbackTaskId] = callbackTaskId;
+        }
+        if (dispatchedAt != null) {
+          meta[ChordMetadata.dispatchedAt] = dispatchedAt.toIso8601String();
+        }
+        await txn.repository<StemGroup>().update(
+          StemGroupUpdateDto(meta: meta),
+          where: StemGroupPartial(id: groupId, namespace: namespace),
+        );
+        return true;
+      },
+      operation: 'backend.claim_chord',
+    );
   }
 
   // Removed legacy JSON decoder (not needed with Ormed models)

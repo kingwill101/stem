@@ -3,6 +3,7 @@ publish_to: none
 environment:
   sdk: ">=3.10.0 <4.0.0"
 workspace:
+  - repodoc
   - packages/stem
   - packages/stem_builder
   - packages/stem_sqlite
@@ -14,6 +15,7 @@ workspace:
   - packages/stem_postgres
   - packages/stem_cli
 dev_dependencies:
+  artisanal: ^0.5.0
   coverage: ^1.15.0
   yaml: ^3.1.3
   very_good_analysis: ^10.0.0

@@ -26,6 +26,199 @@ Future<void> main() async {
   );
   tearDownAll(harness.dispose);
 
+  Future<List<PostgresOperationTiming>> exerciseConnection({
+    required bool separateConsumerConnection,
+  }) async {
+    final namespace = 'broker-connect-${DateTime.now().microsecondsSinceEpoch}';
+    final queue = 'connect-queue-${DateTime.now().microsecondsSinceEpoch}';
+    final timings = <PostgresOperationTiming>[];
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespace,
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(hours: 1),
+      separateConsumerConnection: separateConsumerConnection,
+      timingListener: timings.add,
+    );
+    try {
+      await broker.publish(
+        Envelope(name: 'integration.connect', args: const {}, queue: queue),
+      );
+      final delivery = await broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first
+          .timeout(const Duration(seconds: 10));
+      expect(delivery.envelope.name, 'integration.connect');
+      await broker.ack(delivery);
+    } finally {
+      await broker.close();
+    }
+    return timings;
+  }
+
+  test('connect can use an independent consumer connection', () async {
+    final timings = await exerciseConnection(
+      separateConsumerConnection: true,
+    );
+    expect(
+      timings.map((timing) => timing.component),
+      containsAll(['broker', 'broker.consumer']),
+    );
+    expect(
+      timings,
+      anyElement(
+        predicate<PostgresOperationTiming>(
+          (timing) =>
+              timing.component == 'broker.consumer' &&
+              timing.operation == 'broker.ack',
+        ),
+      ),
+    );
+  });
+
+  test('connect isolates consumer settlement operations', () async {
+    final namespace =
+        'broker-settlement-${DateTime.now().microsecondsSinceEpoch}';
+    final queue = 'settlement-${DateTime.now().microsecondsSinceEpoch}';
+    final timings = <PostgresOperationTiming>[];
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespace,
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(hours: 1),
+      separateConsumerConnection: true,
+      timingListener: timings.add,
+    );
+
+    Future<Delivery> publishAndConsume(String name) async {
+      await broker.publish(
+        Envelope(name: name, args: const {}, queue: queue),
+      );
+      return broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first
+          .timeout(const Duration(seconds: 10));
+    }
+
+    try {
+      var delivery = await publishAndConsume('integration.nack');
+      await broker.nack(delivery);
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker.consumer' &&
+                timing.operation == 'broker.nack',
+          ),
+        ),
+      );
+
+      delivery = await broker
+          .consume(RoutingSubscription.singleQueue(queue))
+          .first
+          .timeout(const Duration(seconds: 10));
+      await broker.ack(delivery);
+
+      delivery = await publishAndConsume('integration.dead-letter');
+      await broker.deadLetter(delivery, reason: 'integration');
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker.consumer' &&
+                timing.operation == 'broker.dead_letter',
+          ),
+        ),
+      );
+
+      delivery = await publishAndConsume('integration.extend-lease');
+      await broker.extendLease(delivery, const Duration(seconds: 1));
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker.consumer' &&
+                timing.operation == 'broker.extend_lease',
+          ),
+        ),
+      );
+      await broker.ack(delivery);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  test('connect shares one connection by default', () async {
+    final timings = await exerciseConnection(
+      separateConsumerConnection: false,
+    );
+    expect(timings.map((timing) => timing.component), contains('broker'));
+    expect(
+      timings.map((timing) => timing.component),
+      isNot(contains('broker.consumer')),
+    );
+  });
+
+  test('connect isolates broadcast consumer operations', () async {
+    final namespace =
+        'broker-broadcast-${DateTime.now().microsecondsSinceEpoch}';
+    final channel = 'broadcast-${DateTime.now().microsecondsSinceEpoch}';
+    final timings = <PostgresOperationTiming>[];
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespace,
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(hours: 1),
+      separateConsumerConnection: true,
+      timingListener: timings.add,
+    );
+    final stream = broker.consume(
+      RoutingSubscription(
+        queues: const [],
+        broadcastChannels: [channel],
+      ),
+      consumerName: 'broadcast-consumer',
+    );
+    try {
+      final deliveryFuture = stream.first.timeout(const Duration(seconds: 10));
+      await broker.publish(
+        Envelope(
+          name: 'integration.broadcast',
+          args: const {},
+          queue: channel,
+        ),
+        routing: RoutingInfo.broadcast(channel: channel),
+      );
+      final delivery = await deliveryFuture;
+      await broker.ack(delivery);
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker' &&
+                timing.operation == 'broker.publish',
+          ),
+        ),
+      );
+      expect(
+        timings,
+        anyElement(
+          predicate<PostgresOperationTiming>(
+            (timing) =>
+                timing.component == 'broker.consumer' &&
+                timing.operation == 'broker.broadcast.ack',
+          ),
+        ),
+      );
+    } finally {
+      await broker.close();
+    }
+  });
+
   ormedGroup('postgres broker', (dataSource) {
     runBrokerContractTests(
       adapterName: 'Postgres',

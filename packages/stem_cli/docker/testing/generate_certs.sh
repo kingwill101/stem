@@ -51,6 +51,12 @@ else
   echo "Reusing existing disposable TLS assets."
 fi
 
+# The certificate files are mounted into containers whose runtime user is not
+# the host user that generated them. The generator's restrictive umask also
+# creates the directories with mode 700, which prevents Redis from traversing
+# the bind mount even when the files themselves are readable.
+chmod 755 "$REDIS_CERT_DIR" "$POSTGRES_CERT_DIR"
+
 # Redis runs as the unprivileged `redis` user inside the test container. These
 # assets are disposable, ignored fixtures, so make the mounted Redis files
 # readable by that user while leaving the general TLS generator restrictive.

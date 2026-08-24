@@ -275,10 +275,10 @@ stem health
 
 ### Prerequisites
 
-- Dart 3.9.2+
+- Dart 3.10.0+
 - Flutter 3.47.0+ (for the local Flutter package gate)
 - Docker (for adapter integration tests)
-- Dagger CLI v0.21.7 (for the reproducible Dagger gate)
+- Nix and devenv 2.2+ (recommended workspace environment)
 
 ### Setup
 
@@ -287,14 +287,22 @@ stem health
 git clone https://github.com/kingwill101/stem.git
 cd stem
 
-# Install dependencies
-dart pub get
+# Enter the pinned workspace environment
+devenv shell
 
-# Run quality gates
-dart format --output=none --set-exit-if-changed .
-dart analyze
-task test:all
+# Discover the workspace and run the centralized quality/test gate
+stem-workspace
+stem-quality
+stem-standalone
+stem-test
 ```
+
+The root [`repodoc`](./repodoc/README.md) package owns workspace discovery,
+dependency resolution, tests, coverage, examples, standalone package
+resolution, and job profiling. The `devenv.nix` scripts expose those commands
+with a cached compiled binary so the same entrypoints are available locally
+and in CI. The Taskfile is only a compatibility wrapper; repodoc does not
+invoke it.
 
 ### Adapter Tests
 
@@ -302,36 +310,34 @@ Integration tests require the Docker test stack:
 
 ```bash
 # Run all package tests with Docker-backed integration env
-task test
+devenv shell -- stem-test
 
 # Run coverage workflow for core adapters/runtime packages
-task coverage
+devenv shell -- stem-coverage
 
 # Run targeted adapter suites (auto-bootstraps integration env)
-task test:contract
-task test:redis
-task test:postgres
+devenv shell -- repodoc test:contract
+devenv shell -- repodoc test:redis
+devenv shell -- repodoc test:postgres
 ```
 
-### Reproducible Dagger Gate
+### Profile worker jobs
 
-The root Taskfile is also executable inside a pinned Dagger environment. This
-is the recommended path when the local toolchain or Docker Compose state is
-not trustworthy:
+Use the profiling tasks when investigating runtime performance rather than
+relying on a single test-suite timing:
 
 ```bash
-# Runs every Dart and Flutter package test with disposable PostgreSQL/Redis
-# services and a pinned Flutter SDK.
-task test:dagger
+# Five fresh AOT trials with medians and p95 summaries.
+stem-profile --mode isolate --workload cpu --work-units 250
 
-# If Dagger is not on PATH:
-DAGGER_BIN=/path/to/dagger task test:dagger
+# Pause before execution and attach Dart DevTools through the VM service.
+devenv shell -- repodoc profile:job:vm --mode isolate --workload cpu --work-units 250
 ```
 
-The Dagger module uses the Go SDK, pins the Dagger engine, Task release and
-Flutter SDK, and generates disposable TLS assets during the run. The aggregate
-GitHub Actions test gate calls this same Dagger module; package-specific test
-workflows are intentionally not maintained separately.
+The AOT profile writes a machine- and commit-stamped JSON artifact under
+`build/stem-profile/`. The VM-service profile is intended for CPU, timeline,
+isolate, and allocation inspection; see [`benchmark/README.md`](./benchmark/README.md)
+for the full workflow and scenario options.
 
 Targeted adapter tasks now bootstrap integration environment automatically.
 If bootstrap still fails (for example Docker unavailable), run:

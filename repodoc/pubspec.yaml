@@ -1,0 +1,22 @@
+name: repodoc
+description: Central repository maintenance and diagnostics for Stem.
+publish_to: none
+version: 0.1.0
+resolution: workspace
+
+environment:
+  sdk: ">=3.10.0 <4.0.0"
+
+dependencies:
+  artisanal: ^0.5.0
+  path: ^1.9.1
+  stem: ^0.3.0
+  stem_memory: ^0.2.0
+  stem_postgres: ^0.2.0
+  stem_redis: ^0.2.0
+  stem_sqlite: ^0.2.0
+  yaml: ^3.1.3
+
+dev_dependencies:
+  test: ^1.31.0
+  very_good_analysis: ^10.0.0

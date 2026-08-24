@@ -1,285 +1,209 @@
 version: "3"
 
-includes:
-  dashboard:
-    taskfile: ./packages/dashboard/Taskfile.yml
-    dir: ./packages/dashboard
-  stem:
-    taskfile: ./packages/stem/Taskfile.yml
-    dir: ./packages/stem
-  stem_adapter_tests:
-    taskfile: ./packages/stem_adapter_tests/Taskfile.yml
-    dir: ./packages/stem_adapter_tests
-  stem_builder:
-    taskfile: ./packages/stem_builder/Taskfile.yml
-    dir: ./packages/stem_builder
-  stem_cli:
-    taskfile: ./packages/stem_cli/Taskfile.yml
-    dir: ./packages/stem_cli
-  stem_memory:
-    taskfile: ./packages/stem_memory/Taskfile.yml
-    dir: ./packages/stem_memory
-  stem_postgres:
-    taskfile: ./packages/stem_postgres/Taskfile.yml
-    dir: ./packages/stem_postgres
-  stem_redis:
-    taskfile: ./packages/stem_redis/Taskfile.yml
-    dir: ./packages/stem_redis
-  stem_sqlite:
-    taskfile: ./packages/stem_sqlite/Taskfile.yml
-    dir: ./packages/stem_sqlite
-
+# Compatibility aliases for contributors who still use go-task. The repository
+# command implementation lives in repodoc; repodoc never invokes Task.
 tasks:
   deps:
-    desc: Resolve workspace and dashboard package dependencies.
+    desc: Resolve workspace and dashboard dependencies.
     cmds:
-      - |
-        if command -v flutter >/dev/null 2>&1; then
-          flutter pub get
-        else
-          dart pub get
-        fi
-      - task dashboard:deps
+      - dart run repodoc/bin/repodoc.dart deps
 
-  test:with-env:
-    internal: true
-    requires:
-      vars: [TASK_NAME, REQUIRED_VARS, RUN]
+  workspace:check:
+    desc: Validate the discovered workspace package catalog.
     cmds:
-      - |
-        bash -lc '
-          set -euo pipefail
-
-          missing=()
-          for key in {{.REQUIRED_VARS}}; do
-            [[ -z "${!key:-}" ]] && missing+=("$key")
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            source ./packages/stem_cli/_init_test_env
-            missing=()
-            for key in {{.REQUIRED_VARS}}; do
-              [[ -z "${!key:-}" ]] && missing+=("$key")
-            done
-          fi
-
-          if (( ${#missing[@]} > 0 )); then
-            echo "DX ERROR: could not bootstrap required integration environment."
-            echo "Missing vars: ${missing[*]}"
-            echo "Run manually:"
-            echo "  source ./packages/stem_cli/_init_test_env"
-            echo "Then rerun: task {{.TASK_NAME}}"
-            exit 1
-          fi
-
-          task deps
-          {{.RUN}}
-        '
-
-  test:
-    desc: Run all workspace package tests with integration test env bootstrapped.
-    cmds:
-      - task: test:with-env
-        vars:
-          TASK_NAME: test
-          REQUIRED_VARS: "STEM_TEST_REDIS_URL STEM_TEST_POSTGRES_URL"
-          RUN: task test:no-env
-
-  test:dagger:
-    desc: Run every package test in Dagger-managed services and tooling.
-    cmds:
-      - bash ./tool/dagger_test.sh all
+      - dart run repodoc/bin/repodoc.dart workspace:check
 
   quality:dart:
     desc: Format and analyze every Dart package.
     cmds:
-      - |
-        set -euo pipefail
-        for package in \
-          packages/stem \
-          packages/stem_builder \
-          packages/stem_sqlite \
-          packages/stem_memory \
-          packages/stem_adapter_tests \
-          packages/stem_redis \
-          packages/stem_postgres \
-          packages/stem_cli \
-          packages/dashboard; do
-          echo "Checking $package"
-          (
-            cd "$package"
-            dart format lib test --set-exit-if-changed
-            dart analyze --fatal-infos
-          )
-        done
+      - dart run repodoc/bin/repodoc.dart quality:dart
 
   standalone:dart:
-    desc: Resolve Dart packages outside the workspace dependency graph.
+    desc: Resolve Dart packages outside workspace overrides.
     cmds:
-      - |
-        set -euo pipefail
-        dart pub get
-        staged_root="$(mktemp -d)"
-        trap 'rm -rf "$staged_root"' EXIT
-        for package in \
-          packages/stem \
-          packages/stem_builder \
-          packages/stem_sqlite \
-          packages/stem_memory \
-          packages/stem_adapter_tests \
-          packages/stem_redis \
-          packages/stem_postgres \
-          packages/stem_cli; do
-          package_root="$staged_root/$(basename "$package")"
-          mkdir -p "$package_root"
-          staged_package="$(dart run tool/stage_workspace.dart \
-            --package "$package" --output "$package_root")"
-          (
-            cd "$staged_package"
-            dart pub get
-          )
-        done
+      - dart run repodoc/bin/repodoc.dart standalone:dart
 
   standalone:flutter:
-    desc: Resolve Flutter packages outside the workspace dependency graph.
+    desc: Resolve Flutter packages outside workspace overrides.
     cmds:
-      - |
-        set -euo pipefail
-        dart pub get
-        staged_root="$(mktemp -d)"
-        trap 'rm -rf "$staged_root"' EXIT
-        for package in \
-          packages/stem_flutter \
-          packages/stem_flutter_sqlite; do
-          package_root="$staged_root/$(basename "$package")"
-          mkdir -p "$package_root"
-          staged_package="$(dart run tool/stage_workspace.dart \
-            --package "$package" --output "$package_root")"
-          (
-            cd "$staged_package"
-            flutter pub get
-          )
-        done
+      - dart run repodoc/bin/repodoc.dart standalone:flutter
 
-  test:flutter:
-    desc: Run the Flutter package analysis and tests.
+  test:
+    desc: Run all Dart package tests with integration services.
     cmds:
-      - |
-        if ! command -v flutter >/dev/null 2>&1; then
-          echo "Flutter SDK is required for task test:flutter." >&2
-          exit 1
-        fi
-        (
-          cd packages/stem_flutter
-          flutter pub get
-          dart format lib test --set-exit-if-changed
-          flutter analyze --fatal-infos
-          flutter test
-        )
-        (
-          cd packages/stem_flutter_sqlite
-          flutter pub get
-          dart format lib test --set-exit-if-changed
-          flutter analyze --fatal-infos
-          flutter test
-        )
-
-  test:all:
-    desc: Run all Dart and Flutter package tests from the repository root.
-    cmds:
-      - task test
-      - task test:flutter
+      - dart run repodoc/bin/repodoc.dart test
 
   test:no-env:
-    desc: Run all workspace package tests without bootstrapping integration env.
+    desc: Run all non-Flutter package tests without service bootstrap.
     cmds:
-      - task: dashboard:test
-      - task: stem:test
-      - task: stem_adapter_tests:test
-      - task: stem_builder:test
-      - task: stem_cli:test-multi
-      - task: stem_memory:test
-      - task: stem_postgres:test
-      - task: stem_redis:test
-      - task: stem_sqlite:test
+      - dart run repodoc/bin/repodoc.dart test:no-env
+
+  test:flutter:
+    desc: Analyze and test Flutter packages.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:flutter
+
+  test:all:
+    desc: Run the complete Dart and Flutter test gate.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:all
 
   test:contract:
-    desc: Run adapter contract-heavy suites with shared integration env bootstrap.
+    desc: Run adapter contract-heavy test suites.
     cmds:
-      - task: test:with-env
-        vars:
-          TASK_NAME: test:contract
-          REQUIRED_VARS: "STEM_TEST_REDIS_URL STEM_TEST_POSTGRES_URL"
-          RUN: |
-            task stem_adapter_tests:test
-            task stem_memory:test
-            task stem_sqlite:test
-            task stem_redis:test
-            task stem_postgres:test
+      - dart run repodoc/bin/repodoc.dart test:contract
 
   test:redis:
-    desc: Run Redis package tests with shared integration env bootstrap.
+    desc: Run Redis adapter tests.
     cmds:
-      - task: test:with-env
-        vars:
-          TASK_NAME: test:redis
-          REQUIRED_VARS: STEM_TEST_REDIS_URL
-          RUN: task stem_redis:test
+      - dart run repodoc/bin/repodoc.dart test:redis
 
   test:postgres:
-    desc: Run Postgres package tests with shared integration env bootstrap.
+    desc: Run PostgreSQL adapter tests.
     cmds:
-      - task: test:with-env
-        vars:
-          TASK_NAME: test:postgres
-          REQUIRED_VARS: STEM_TEST_POSTGRES_URL
-          RUN: task stem_postgres:test
+      - dart run repodoc/bin/repodoc.dart test:postgres
+
+  test:package:
+    desc: Run one Dart package's tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package "{{.PACKAGE}}" {{.PACKAGE_ARGS | default ""}}
 
   coverage:
-    desc: Run coverage workflow with integration test env bootstrapped.
+    desc: Run coverage for the core packages with services.
     cmds:
-      - task: test:with-env
-        vars:
-          TASK_NAME: coverage
-          REQUIRED_VARS: "STEM_TEST_REDIS_URL STEM_TEST_POSTGRES_URL"
-          RUN: task coverage:no-env
+      - dart run repodoc/bin/repodoc.dart coverage
 
   coverage:no-env:
-    desc: Run coverage workflow for core packages (no env bootstrap).
+    desc: Run coverage for the core packages without service bootstrap.
     cmds:
-      - task: stem:coverage
-      - task: stem_cli:coverage
-      - task: stem_postgres:coverage
-      - task: stem_redis:coverage
-      - task: stem_sqlite:coverage
+      - dart run repodoc/bin/repodoc.dart coverage:no-env
+
+  coverage:package:
+    desc: Run coverage for one Dart package.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package "{{.PACKAGE}}" --min "{{.MIN | default "80"}}" {{.PACKAGE_ARGS | default ""}}
+
+  benchmark:throughput:
+    desc: Run the in-memory throughput benchmark.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart benchmark:throughput {{.BENCHMARK_ARGS | default ""}}
+
+  profile:job:
+    desc: Run the repeatable AOT Stem job profile.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart profile:job --repetitions "{{.REPETITIONS | default "5"}}" {{.PROFILE_ARGS | default ""}}
+
+  profile:job:aot:
+    desc: Run the fresh-process AOT Stem job profile.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart profile:job:aot --repetitions "{{.REPETITIONS | default "5"}}" {{.PROFILE_ARGS | default ""}}
+
+  profile:job:vm:
+    desc: Pause a job profile under the Dart VM service for DevTools.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart profile:job:vm {{.PROFILE_ARGS | default ""}}
 
   demo:annotated:
     desc: Run the annotated workflows example.
-    dir: ./packages/stem/example/annotated_workflows
     cmds:
-      - dart pub get
-      - dart run build_runner build --delete-conflicting-outputs
-      - dart run bin/main.dart
+      - dart run repodoc/bin/repodoc.dart demo:annotated
 
   demo:builder:
     desc: Run the stem_builder example.
-    dir: ./packages/stem_builder/example
     cmds:
-      - dart pub get
-      - dart run build_runner build --delete-conflicting-outputs
-      - dart run bin/main.dart
+      - dart run repodoc/bin/repodoc.dart demo:builder
 
   demo:ecommerce:test:
     desc: Run the ecommerce example test suite.
-    dir: ./packages/stem/example/ecommerce
     cmds:
-      - dart pub get
-      - dart run build_runner build --delete-conflicting-outputs
-      - dart test
+      - dart run repodoc/bin/repodoc.dart demo:ecommerce:test
 
   demo:all:
-    desc: Run the healthy example demos from the repo root.
+    desc: Run the healthy example demos.
     cmds:
-      - task: demo:annotated
-      - task: demo:builder
-      - task: demo:ecommerce:test
+      - dart run repodoc/bin/repodoc.dart demo:all
+
+  dashboard:deps:
+    desc: Resolve dashboard dependencies.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart deps
+
+  dashboard:test:
+    desc: Run dashboard package tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/dashboard
+
+  stem:test:
+    desc: Run stem package tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem
+
+  stem:coverage:
+    desc: Run stem package coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem --min 80 --exclude-soak
+
+  stem_adapter_tests:test:
+    desc: Run adapter contract package tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_adapter_tests
+
+  stem_builder:test:
+    desc: Run builder package tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_builder
+
+  stem_cli:test:
+    desc: Run CLI package tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_cli
+
+  stem_cli:test-multi:
+    desc: Run CLI tests with multi-worker coverage enabled.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_cli --multi
+
+  stem_cli:coverage:
+    desc: Run CLI package coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem_cli --min 80
+
+  stem_memory:test:
+    desc: Run memory adapter tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_memory
+
+  stem_memory:coverage:
+    desc: Run memory adapter coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem_memory --min 0
+
+  stem_postgres:test:
+    desc: Run PostgreSQL adapter tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_postgres
+
+  stem_postgres:coverage:
+    desc: Run PostgreSQL adapter coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem_postgres --min 80
+
+  stem_redis:test:
+    desc: Run Redis adapter tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_redis
+
+  stem_redis:coverage:
+    desc: Run Redis adapter coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem_redis --min 80
+
+  stem_sqlite:test:
+    desc: Run SQLite adapter tests.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart test:package --package packages/stem_sqlite
+
+  stem_sqlite:coverage:
+    desc: Run SQLite adapter coverage.
+    cmds:
+      - dart run repodoc/bin/repodoc.dart coverage:package --package packages/stem_sqlite --min 80

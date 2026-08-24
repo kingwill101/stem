@@ -1,41 +1,342 @@
 name: benchmarks
 
 on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
   schedule:
     - cron: '17 3 * * 1'
   workflow_dispatch:
+    inputs:
+      store_tasks:
+        description: Tasks per external-store benchmark
+        required: false
+        default: '2000'
+      store_warmup:
+        description: Warmup tasks per external-store benchmark
+        required: false
+        default: '200'
+      store_buckets:
+        description: Comma-separated external-store concurrency buckets
+        required: false
+        default: '4,8,16'
 
 permissions:
   contents: read
 
-jobs:
-  core-throughput:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 3.10.0
-      - name: Resolve dependencies
-        run: dart pub get
-      - name: Check benchmark formatting
-        run: dart format benchmark --set-exit-if-changed
-      - name: Run throughput regression gate
-        run: dart run benchmark/stem_throughput.dart --check-baseline
+concurrency:
+  group: stem-benchmarks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
-  sqlite-throughput:
+jobs:
+  throughput:
+    name: benchmark / throughput report
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Required to update the sticky benchmark comment on same-repository PRs.
+      pull-requests: write
+    env:
+      STORE_TASKS_INPUT: ${{ inputs.store_tasks || '2000' }}
+      STORE_WARMUP_INPUT: ${{ inputs.store_warmup || '200' }}
+      STORE_BUCKETS_INPUT: ${{ inputs.store_buckets || '4,8,16' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          sdk: 3.10.0
-      - name: Resolve SQLite package dependencies
-        working-directory: packages/stem_sqlite
-        run: dart pub get
-      - name: Check SQLite benchmark formatting
-        working-directory: packages/stem_sqlite
-        run: dart format benchmark --set-exit-if-changed
-      - name: Run SQLite throughput regression gate
-        working-directory: packages/stem_sqlite
-        run: dart run benchmark/sqlite_throughput.dart --check-baseline
+          persist-credentials: false
+      - uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+      - uses: cachix/cachix-action@97e5ff84d02b3b4f9936339f767e17f03c9252ed # v16
+        with:
+          name: devenv
+      - name: Install devenv
+        run: nix profile install nixpkgs#devenv
+      - name: Start benchmark services
+        run: devenv up -d
+      - name: Wait for benchmark services
+        run: devenv processes wait --timeout 120
+      - name: Create benchmark artifact directory
+        run: mkdir -p .tmp/ci-benchmarks
+      - name: Run AOT memory throughput regression gate
+        run: |
+          devenv shell -- stem-benchmark \
+            --store memory \
+            --tasks 5000 \
+            --warmup 250 \
+            --concurrency 8 \
+            --samples 3 \
+            --check-baseline \
+            --output .tmp/ci-benchmarks/memory-aot.json
+      - name: Run JIT memory throughput report
+        run: |
+          devenv shell -- stem-benchmark-jit \
+            --store memory \
+            --tasks 5000 \
+            --warmup 250 \
+            --concurrency 8 \
+            --samples 3 \
+            --output .tmp/ci-benchmarks/memory-jit.json
+      - name: Run external-store throughput reports
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            tasks=500
+            warmup=50
+            buckets=1,4
+            samples=3
+          else
+            tasks="$STORE_TASKS_INPUT"
+            warmup="$STORE_WARMUP_INPUT"
+            buckets="$STORE_BUCKETS_INPUT"
+            samples=3
+          fi
+
+          failed=()
+          timing_args=()
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            timing_args+=(--timings)
+          fi
+
+          for runtime in aot jit; do
+            if [[ "$runtime" == aot ]]; then
+              command=stem-benchmark
+            else
+              command=stem-benchmark-jit
+            fi
+            for store in sqlite postgres redis; do
+              echo "Running $runtime $store benchmark sequentially (tasks=$tasks warmup=$warmup buckets=$buckets)"
+              if ! devenv shell -- "$command" \
+                  --store "$store" \
+                  --tasks "$tasks" \
+                  --warmup "$warmup" \
+                  --buckets "$buckets" \
+                  --samples "$samples" \
+                  --scenario success \
+                  --verbose \
+                  "${timing_args[@]}" \
+                  --output ".tmp/ci-benchmarks/$store-$runtime.json"; then
+                echo "::warning::$runtime/$store benchmark failed"
+                failed+=("$runtime/$store")
+              fi
+            done
+          done
+
+          if [[ ${#failed[@]} -gt 0 ]]; then
+            echo "Failed store benchmarks: ${failed[*]}"
+            exit 1
+          fi
+      - name: Write benchmark report to job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Stem throughput benchmarks'
+            echo
+            echo 'AOT memory is the hard regression gate. JIT memory and external-store runs are diagnostic reports; external-store failures remain functional smoke-gate failures.'
+            echo
+
+            write_report() {
+              local title="$1"
+              local file="$2"
+              if [[ ! -f "$file" ]]; then
+                echo "### $title"
+                echo
+                echo '| Status |'
+                echo '| --- |'
+                echo '| Benchmark failed or report was unavailable. |'
+                echo
+                return
+              fi
+              local runtime
+              runtime="$(jq -r '.runtime // "unknown"' "$file" 2>/dev/null || echo unknown)"
+              echo "### $title"
+              echo
+              echo '| Runtime | Mode | Scenario | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p5 tasks/s | Task p95 latency ms | MAD tasks/s | CV |'
+              echo '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
+              if ! jq -r --arg runtime "$runtime" '
+                def value($key; $field):
+                  if (.statistics?[$key]? | type) == "object"
+                  then .statistics[$key][$field]
+                  elif $field == "median"
+                  then .[$key]
+                  else null
+                  end;
+                def metric($key; $field):
+                  value($key; $field) as $value |
+                  if ($value | type) == "number"
+                  then ($value * 100 | round / 100)
+                  else "n/a"
+                  end;
+                def percent($key; $field):
+                  value($key; $field) as $value |
+                  if ($value | type) == "number"
+                  then (($value * 100 | round / 100) | tostring) + "%"
+                  else "n/a"
+                  end;
+                .buckets[]? |
+                  "| \($runtime) | \(.mode // "steady-state") | \(.scenario // "success") | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "p5")) | \(metric("task_latency_p95_ms"; "median")) | \(metric("end_to_end_tasks_per_second"; "mad")) | \(percent("end_to_end_tasks_per_second"; "cv")) |"
+              ' "$file"; then
+                echo '| (unreadable report) | | | | | | | | | | |'
+              fi
+              echo
+            }
+
+            write_report 'Memory AOT baseline' .tmp/ci-benchmarks/memory-aot.json
+            write_report 'Memory JIT' .tmp/ci-benchmarks/memory-jit.json
+            write_report 'SQLite AOT' .tmp/ci-benchmarks/sqlite-aot.json
+            write_report 'SQLite JIT' .tmp/ci-benchmarks/sqlite-jit.json
+            write_report 'PostgreSQL AOT' .tmp/ci-benchmarks/postgres-aot.json
+            write_report 'PostgreSQL JIT' .tmp/ci-benchmarks/postgres-jit.json
+            write_report 'Redis AOT' .tmp/ci-benchmarks/redis-aot.json
+            write_report 'Redis JIT' .tmp/ci-benchmarks/redis-jit.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload benchmark JSON artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: stem-throughput-benchmarks-${{ github.run_id }}
+          path: .tmp/ci-benchmarks
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish benchmark report to pull request
+        if: >-
+          always() && github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          BENCHMARK_DIR: .tmp/ci-benchmarks
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const marker = '<!-- stem-throughput-benchmark-report -->';
+            const root = process.env.GITHUB_WORKSPACE || process.cwd();
+            const benchmarkDir = path.join(root, process.env.BENCHMARK_DIR);
+            const files = [
+              ['Memory', 'AOT', 'memory-aot.json'],
+              ['Memory', 'JIT', 'memory-jit.json'],
+              ['SQLite', 'AOT', 'sqlite-aot.json'],
+              ['SQLite', 'JIT', 'sqlite-jit.json'],
+              ['PostgreSQL', 'AOT', 'postgres-aot.json'],
+              ['PostgreSQL', 'JIT', 'postgres-jit.json'],
+              ['Redis', 'AOT', 'redis-aot.json'],
+              ['Redis', 'JIT', 'redis-jit.json'],
+            ];
+
+            const finiteNumber = (value) =>
+              typeof value === 'number' && Number.isFinite(value) ? value : null;
+            const rounded = (value, digits = 2) => {
+              const number = finiteNumber(value);
+              return number === null ? 'n/a' : number.toFixed(digits);
+            };
+            const integer = (value) => {
+              const number = finiteNumber(value);
+              return number === null ? 'n/a' : String(Math.round(number));
+            };
+
+            const rows = [];
+            const missing = [];
+            for (const [store, runtime, filename] of files) {
+              const filenamePath = path.join(benchmarkDir, filename);
+              if (!fs.existsSync(filenamePath)) {
+                missing.push(`${store} ${runtime}`);
+                continue;
+              }
+              try {
+                const report = JSON.parse(fs.readFileSync(filenamePath, 'utf8'));
+                if (!Array.isArray(report.buckets)) {
+                  missing.push(`${store} ${runtime} (invalid report)`);
+                  continue;
+                }
+                for (const bucket of report.buckets) {
+                  if (!bucket || typeof bucket !== 'object') continue;
+                  const endToEndStats = bucket.statistics?.end_to_end_tasks_per_second;
+                  const enqueueStats = bucket.statistics?.enqueue_tasks_per_second;
+                  const endToEnd = finiteNumber(endToEndStats?.median) ?? finiteNumber(bucket.end_to_end_tasks_per_second);
+                  const enqueue = finiteNumber(enqueueStats?.median) ?? finiteNumber(bucket.enqueue_tasks_per_second);
+                  const endToEndP5 = finiteNumber(endToEndStats?.p5);
+                  const taskLatencyP95 =
+                    finiteNumber(bucket.task_latency_p95_ms) ??
+                    finiteNumber(bucket.statistics?.task_latency_p95_ms?.median);
+                  const endToEndMad = finiteNumber(endToEndStats?.mad);
+                  const cv = finiteNumber(endToEndStats?.cv);
+                  rows.push([
+                    store,
+                    report.runtime || runtime,
+                    bucket.mode || report.mode || 'steady-state',
+                    bucket.scenario || report.scenario || 'success',
+                    integer(bucket.concurrency),
+                    integer(bucket.tasks),
+                    integer(bucket.samples ?? report.samples ?? 1),
+                    rounded(enqueue, 1),
+                    rounded(endToEnd, 1),
+                    rounded(endToEndP5, 1),
+                    rounded(taskLatencyP95, 1),
+                    rounded(endToEndMad, 1),
+                    cv === null ? 'n/a' : `${(cv * 100).toFixed(2)}%`,
+                  ]);
+                }
+              } catch (error) {
+                missing.push(`${store} ${runtime} (unreadable report)`);
+              }
+            }
+
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            const short = (value) => value ? value.slice(0, 12) : 'unknown';
+            const testedMerge = short(process.env.GITHUB_SHA);
+            const prHead = short(process.env.PR_HEAD_SHA);
+            const base = short(process.env.PR_BASE_SHA);
+            const lines = [
+              marker,
+              '## Stem throughput benchmarks',
+              '',
+              `Updated by [workflow run #${process.env.GITHUB_RUN_ID}](${runUrl}).`,
+              `Tested merge: \`${testedMerge}\``,
+              `PR head: \`${prHead}\``,
+              `Base: \`${base}\``,
+              '',
+            ];
+            if (rows.length > 0) {
+              lines.push(
+                '| Store | Runtime | Mode | Scenario | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p5 tasks/s | Task p95 latency ms | MAD tasks/s | CV |',
+                '| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+                ...rows.map((row) => `| ${row.join(' | ')} |`),
+                '',
+              );
+            } else {
+              lines.push('No benchmark result JSON was produced. See the workflow check for details.', '');
+            }
+            if (missing.length > 0) {
+              lines.push(`Partial report; unavailable results: ${missing.join(', ')}.`, '');
+            }
+            lines.push('_AOT uses the cached `dart build cli` repodoc executable; JIT uses `dart run`. AOT memory is the regression gate. JIT memory and external-store runs are diagnostic reports, while external-store failures remain functional smoke-gate failures. Raw trials and the complete statistic set are retained in the uploaded JSON artifact._');
+
+            const body = lines.join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
