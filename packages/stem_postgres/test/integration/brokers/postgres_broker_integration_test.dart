@@ -71,6 +71,44 @@ Future<void> main() async {
     expect(components, isNot(contains('broker.consumer')));
   });
 
+  test('connect isolates broadcast consumer operations', () async {
+    final namespace =
+        'broker-broadcast-${DateTime.now().microsecondsSinceEpoch}';
+    final channel = 'broadcast-${DateTime.now().microsecondsSinceEpoch}';
+    final components = <String>{};
+    final broker = await PostgresBroker.connect(
+      connectionString,
+      namespace: namespace,
+      pollInterval: const Duration(milliseconds: 25),
+      sweeperInterval: const Duration(hours: 1),
+      separateConsumerConnection: true,
+      timingListener: (timing) => components.add(timing.component),
+    );
+    final stream = broker.consume(
+      RoutingSubscription(
+        queues: const [],
+        broadcastChannels: [channel],
+      ),
+      consumerName: 'broadcast-consumer',
+    );
+    try {
+      final deliveryFuture = stream.first.timeout(const Duration(seconds: 10));
+      await broker.publish(
+        Envelope(
+          name: 'integration.broadcast',
+          args: const {},
+          queue: channel,
+        ),
+        routing: RoutingInfo.broadcast(channel: channel),
+      );
+      final delivery = await deliveryFuture;
+      await broker.ack(delivery);
+      expect(components, containsAll(['broker', 'broker.consumer']));
+    } finally {
+      await broker.close();
+    }
+  });
+
   ormedGroup('postgres broker', (dataSource) {
     runBrokerContractTests(
       adapterName: 'Postgres',

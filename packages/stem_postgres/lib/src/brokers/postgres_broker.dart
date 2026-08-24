@@ -834,26 +834,36 @@ class PostgresBroker
     int limit,
   ) async {
     if (channels.isEmpty) return const <Delivery>[];
-    final messages = await _withDb(() {
-      return _context
-          .query<StemBroadcastMessage>()
-          .whereEquals('namespace', namespace)
-          .whereIn('channel', channels)
-          .orderBy('createdAt')
-          .limit(limit < 1 ? 1 : limit)
-          .get();
-    });
+    final broadcastConnections = _consumerConnections ?? _connections;
+    final isolatedConsumer = _consumerConnections != null;
+    final messages = await _withDb(
+      () {
+        return broadcastConnections.context
+            .query<StemBroadcastMessage>()
+            .whereEquals('namespace', namespace)
+            .whereIn('channel', channels)
+            .orderBy('createdAt')
+            .limit(limit < 1 ? 1 : limit)
+            .get();
+      },
+      operation: 'broker.broadcast.reserve',
+      consumer: isolatedConsumer,
+    );
 
     final deliveries = <Delivery>[];
     for (final message in messages) {
-      final alreadyAcked = await _withDb(() {
-        return _context
-            .query<StemBroadcastAck>()
-            .whereEquals('messageId', message.id)
-            .whereEquals('workerId', workerId)
-            .whereEquals('namespace', namespace)
-            .exists();
-      });
+      final alreadyAcked = await _withDb(
+        () {
+          return broadcastConnections.context
+              .query<StemBroadcastAck>()
+              .whereEquals('messageId', message.id)
+              .whereEquals('workerId', workerId)
+              .whereEquals('namespace', namespace)
+              .exists();
+        },
+        operation: 'broker.broadcast.check_ack',
+        consumer: isolatedConsumer,
+      );
       if (alreadyAcked) continue;
       deliveries.add(
         Delivery(
@@ -883,12 +893,19 @@ class PostgresBroker
       namespace: namespace,
       acknowledgedAt: stemNow().toUtc(),
     ).toTracked();
-    await _withDb(() {
-      return _context.repository<StemBroadcastAck>().upsert(
-        ack,
-        uniqueBy: ['messageId', 'workerId'],
-      );
-    });
+    final broadcastConnections = _consumerConnections ?? _connections;
+    await _withDb(
+      () {
+        return broadcastConnections.context
+            .repository<StemBroadcastAck>()
+            .upsert(
+              ack,
+              uniqueBy: ['messageId', 'workerId'],
+            );
+      },
+      operation: 'broker.broadcast.ack',
+      consumer: _consumerConnections != null,
+    );
   }
 
   void _startSweeper() {
