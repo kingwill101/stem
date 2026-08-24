@@ -54,7 +54,10 @@ final class ThroughputStatistics {
   }
 
   static double _percentile(List<double> sorted, double percentile) {
-    final rank = (percentile * sorted.length).ceil().clamp(1, sorted.length);
+    final rank = (percentile * sorted.length)
+        .ceil()
+        .clamp(1, sorted.length)
+        .toInt();
     return sorted[rank - 1];
   }
 }

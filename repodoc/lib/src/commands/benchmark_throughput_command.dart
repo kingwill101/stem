@@ -162,36 +162,41 @@ final class BenchmarkThroughputCommand extends Command<int> {
             );
           }
           final trials = <Map<String, Object?>>[];
-          for (var sample = 1; sample <= samples; sample++) {
-            if (samples > 1 && !jsonOutput) {
-              stdout.writeln(
-                'Running ${store.name} concurrency bucket $concurrency '
-                'sample $sample/$samples...',
+          try {
+            for (var sample = 1; sample <= samples; sample++) {
+              if (samples > 1 && !jsonOutput) {
+                stdout.writeln(
+                  'Running ${store.name} concurrency bucket $concurrency '
+                  'sample $sample/$samples...',
+                );
+              }
+              final result = await ThroughputBenchmark(
+                tasks: tasks,
+                warmupTasks: warmup,
+                concurrency: concurrency,
+                store: store,
+                mode: mode,
+                measurementDuration: duration,
+                postgresUrl: postgresUrl,
+                redisUrl: redisUrl,
+                sqlitePath: sqlitePath,
+                collectPostgresTimings: timings,
+                onStage: verbose ? stderr.writeln : null,
+              ).run();
+              trials.add(result);
+            }
+          } finally {
+            if (trials.isNotEmpty) {
+              results.add(
+                _aggregateTrials(
+                  trials,
+                  runtime: runtime,
+                  warmup: warmup,
+                  samples: trials.length,
+                ),
               );
             }
-            final result = await ThroughputBenchmark(
-              tasks: tasks,
-              warmupTasks: warmup,
-              concurrency: concurrency,
-              store: store,
-              mode: mode,
-              measurementDuration: duration,
-              postgresUrl: postgresUrl,
-              redisUrl: redisUrl,
-              sqlitePath: sqlitePath,
-              collectPostgresTimings: timings,
-              onStage: verbose ? stderr.writeln : null,
-            ).run();
-            trials.add(result);
           }
-          results.add(
-            _aggregateTrials(
-              trials,
-              runtime: runtime,
-              warmup: warmup,
-              samples: samples,
-            ),
-          );
         }
       }
     } on Object catch (error, stackTrace) {

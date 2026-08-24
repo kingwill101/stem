@@ -147,27 +147,32 @@ jobs:
               runtime="$(jq -r '.runtime // "unknown"' "$file" 2>/dev/null || echo unknown)"
               echo "### $title"
               echo
-              echo '| Runtime | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | CV |'
-              echo '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |'
+              echo '| Runtime | Mode | Store | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p95 tasks/s | MAD tasks/s | CV |'
+              echo '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |'
               if ! jq -r --arg runtime "$runtime" '
-                def metric($key):
-                  (if (.statistics?[$key]? | type) == "object"
-                   then .statistics[$key].median
-                   else .[$key]
-                   end) as $value |
+                def value($key; $field):
+                  if (.statistics?[$key]? | type) == "object"
+                  then .statistics[$key][$field]
+                  elif $field == "median"
+                  then .[$key]
+                  else null
+                  end;
+                def metric($key; $field):
+                  value($key; $field) as $value |
                   if ($value | type) == "number"
                   then ($value * 100 | round / 100)
                   else "n/a"
                   end;
-                def cv:
-                  if (.statistics?.end_to_end_tasks_per_second?.cv | type) == "number"
-                  then ((.statistics.end_to_end_tasks_per_second.cv * 100 | round / 100) | tostring) + "%"
+                def percent($key; $field):
+                  value($key; $field) as $value |
+                  if ($value | type) == "number"
+                  then (($value * 100 | round / 100) | tostring) + "%"
                   else "n/a"
                   end;
                 .buckets[]? |
-                  "| \($runtime) | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second")) | \(metric("end_to_end_tasks_per_second")) | \(cv) |"
+                  "| \($runtime) | \(.mode // "steady-state") | \(.store // "n/a") | \(.concurrency // "n/a") | \(.tasks // "n/a") | \(.samples // 1) | \(metric("enqueue_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "median")) | \(metric("end_to_end_tasks_per_second"; "p95")) | \(metric("end_to_end_tasks_per_second"; "mad")) | \(percent("end_to_end_tasks_per_second"; "cv")) |"
               ' "$file"; then
-                echo '| (unreadable report) | | | | | | | |'
+                echo '| (unreadable report) | | | | | | | | | | |'
               fi
               echo
             }
@@ -248,15 +253,20 @@ jobs:
                   const enqueueStats = bucket.statistics?.enqueue_tasks_per_second;
                   const endToEnd = finiteNumber(endToEndStats?.median) ?? finiteNumber(bucket.end_to_end_tasks_per_second);
                   const enqueue = finiteNumber(enqueueStats?.median) ?? finiteNumber(bucket.enqueue_tasks_per_second);
+                  const endToEndP95 = finiteNumber(endToEndStats?.p95);
+                  const endToEndMad = finiteNumber(endToEndStats?.mad);
                   const cv = finiteNumber(endToEndStats?.cv);
                   rows.push([
                     store,
                     report.runtime || runtime,
+                    bucket.mode || report.mode || 'steady-state',
                     integer(bucket.concurrency),
                     integer(bucket.tasks),
                     integer(bucket.samples ?? report.samples ?? 1),
                     rounded(enqueue, 1),
                     rounded(endToEnd, 1),
+                    rounded(endToEndP95, 1),
+                    rounded(endToEndMad, 1),
                     cv === null ? 'n/a' : `${(cv * 100).toFixed(2)}%`,
                   ]);
                 }
@@ -282,8 +292,8 @@ jobs:
             ];
             if (rows.length > 0) {
               lines.push(
-                '| Store | Runtime | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | CV |',
-                '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+                '| Store | Runtime | Mode | Concurrency | Tasks | Samples | Enqueue median tasks/s | End-to-end median tasks/s | End-to-end p95 tasks/s | MAD tasks/s | CV |',
+                '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
                 ...rows.map((row) => `| ${row.join(' | ')} |`),
                 '',
               );
@@ -293,7 +303,7 @@ jobs:
             if (missing.length > 0) {
               lines.push(`Partial report; unavailable results: ${missing.join(', ')}.`, '');
             }
-            lines.push('_AOT uses the cached `dart build cli` repodoc executable; JIT uses `dart run`. AOT memory is the regression gate. JIT memory and external-store runs are diagnostic reports, while external-store failures remain functional smoke-gate failures._');
+            lines.push('_AOT uses the cached `dart build cli` repodoc executable; JIT uses `dart run`. AOT memory is the regression gate. JIT memory and external-store runs are diagnostic reports, while external-store failures remain functional smoke-gate failures. Raw trials and the complete statistic set are retained in the uploaded JSON artifact._');
 
             const body = lines.join('\n');
             const comments = await github.paginate(github.rest.issues.listComments, {
