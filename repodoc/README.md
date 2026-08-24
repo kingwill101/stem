@@ -2,7 +2,8 @@
 
 The private repository-maintenance CLI for Stem. It is the central source for
 workspace discovery, dependency resolution, quality checks, tests, coverage,
-examples, standalone dependency resolution, and repeatable job profiling.
+examples, standalone dependency resolution, repeatable job profiling, and
+store-backed throughput benchmarking.
 
 Use it through devenv when possible:
 
@@ -29,11 +30,17 @@ dart run repodoc/bin/repodoc.dart test:all
 dart run repodoc/bin/repodoc.dart coverage
 dart run repodoc/bin/repodoc.dart demo:all
 dart run repodoc/bin/repodoc.dart benchmark:throughput --check-baseline
+dart run repodoc/bin/repodoc.dart benchmark:throughput \
+  --stores memory,sqlite,postgres,redis --buckets 4,8,16
 ```
 
 Throughput benchmarks run directly from repodoc. Use `--buckets` for a
 concurrency sweep, for example `--buckets 4,8,16`; use `--json` for a
-machine-readable report.
+machine-readable report. Use `--store postgres` or `--store redis` for a
+single external store, with the connection URLs supplied by devenv or the
+corresponding command options. Add `--verbose` to trace store connection and
+worker lifecycle stages to stderr. Add `--timings` to a PostgreSQL run to
+report broker/backend operation latency and serialized connection-queue wait.
 
 Commands are grouped by subsystem in `lib/src/commands/`. Shared workspace and
 process utilities live in `lib/src/infrastructure/`.

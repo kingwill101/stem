@@ -1,11 +1,69 @@
 # Stem benchmarks
 
-Run the repeatable in-memory throughput workload from the repository root:
+Run the repeatable store-backed throughput workload from the repository root:
 
 ```bash
 devenv shell -- repodoc benchmark:throughput --tasks 5000 --concurrency 8
 devenv shell -- repodoc benchmark:throughput --check-baseline
 ```
+
+Select a backing store with `--store`, or compare several stores with
+`--stores`:
+
+```bash
+# SQLite uses a repository-local temporary database by default.
+devenv shell -- repodoc benchmark:throughput --store sqlite
+
+# Start Postgres and Redis first; devenv supplies their benchmark URLs.
+devenv up -d
+devenv shell -- repodoc benchmark:throughput \
+  --stores memory,sqlite,postgres,redis \
+  --tasks 5000 --warmup 250 --buckets 4,8,16
+devenv down
+```
+
+Override external store connections with `--postgres-url` or `--redis-url`.
+Use `--sqlite-path` when a persistent SQLite database is desired. The
+end-to-end metric waits for the worker's handler completion and then for the
+store's broker queue to drain, so the report exposes both handler throughput
+and store acknowledgement/persistence drain time. Add `--verbose` to log
+connection, worker, enqueue, drain, and cleanup stages to stderr while
+diagnosing a slow or unavailable store.
+
+The PostgreSQL sweep uses separate producer and worker connections, so polling
+does not serialize behind publication and acknowledgement operations. Its
+worker poll interval is intentionally 100 ms for repeatable small workloads.
+
+For PostgreSQL adapter timings, add `--timings`. The report includes operation
+counts, average/P95/max latency, database execution time, and time waiting on
+the adapter's serialized connection queue. It also shows the slowest
+parameterized SQL statements in the terminal; the JSON artifact retains the
+full SQL text without bound values:
+
+```bash
+devenv shell -- repodoc benchmark:throughput \
+  --store postgres --tasks 20 --warmup 2 --concurrency 1 \
+  --verbose --timings --output .tmp/postgres-throughput.json
+```
+
+The default `devenv` PostgreSQL service keeps `synchronous_commit=on`, so these
+measurements include durable commit latency. That is the correct comparison
+for a durable queue, but a development filesystem can make each write much
+slower than the SQL plan itself. For an explicitly non-durable diagnostic
+comparison only, temporarily run:
+
+```bash
+devenv shell -- psql \
+  'postgresql://stem:stem@127.0.0.1:5432/stem_benchmark' \
+  -c "alter database stem_benchmark set synchronous_commit = off"
+devenv shell -- stem-benchmark --store postgres --tasks 1000 --concurrency 1
+devenv shell -- psql \
+  'postgresql://stem:stem@127.0.0.1:5432/stem_benchmark' \
+  -c "alter database stem_benchmark reset synchronous_commit"
+```
+
+Reset the setting immediately after the comparison. Do not use this mode to
+claim durable production throughput.
 
 Run a concurrency sweep with `--buckets`. Bucket values are concurrency
 levels, so `--buckets 4,8,16` runs the same workload at all three levels:
@@ -30,6 +88,12 @@ Use `--json` when a command or script needs the raw result on stdout. Repodoc
 owns the benchmark implementation and is the only supported throughput entry
 point. Adapter benchmarks should live beside the adapter because Redis,
 Postgres and SQLite contention have different costs.
+
+GitHub CI runs the memory benchmark as a hard regression gate and runs SQLite,
+PostgreSQL, and Redis sequentially as external-store smoke/report benchmarks.
+Each run is written to the GitHub job summary and uploaded as JSON artifacts.
+Pull requests use a smaller workload; scheduled and manually dispatched runs
+use larger workloads and configurable concurrency buckets.
 
 ## Job profiling
 
