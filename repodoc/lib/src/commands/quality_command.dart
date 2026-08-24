@@ -15,6 +15,11 @@ final class QualityDartCommand extends Command<int> {
         'include-flutter',
         help: 'Include Flutter packages in the local quality pass.',
         negatable: false,
+      )
+      ..addFlag(
+        'workspace-only',
+        help: 'Exclude auxiliary packages from the quality pass.',
+        negatable: false,
       );
   }
 
@@ -30,7 +35,7 @@ final class QualityDartCommand extends Command<int> {
     final packages = catalog.select(
       requestedPaths: (argResults?['package'] as List<String>?) ?? const [],
       includeFlutter: argResults?['include-flutter'] == true,
-      workspaceOnly: false,
+      workspaceOnly: argResults?['workspace-only'] == true,
     );
     if (packages.isEmpty) {
       throw StateError('No packages matched the requested quality scope.');

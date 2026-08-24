@@ -126,7 +126,7 @@
     exec = ''
       set -eu
       repodoc workspace:check
-      repodoc quality:dart --include-flutter
+      repodoc quality:dart --include-flutter --workspace-only
       repodoc standalone:dart
       repodoc standalone:flutter
       repodoc test:all "$@"
