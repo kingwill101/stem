@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Raised the minimum Dart SDK to 3.12.0 and the Ormed dependency to 0.3.0.
+
 ## 0.1.0
 
 - Updated the dashboard data layer to use Ormed 0.2.0.

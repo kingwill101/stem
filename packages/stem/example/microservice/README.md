@@ -5,7 +5,7 @@ This example splits the enqueue API, worker fleet, and beat scheduler into separ
 ## Prerequisites
 
 - Docker and Docker Compose
-- Dart 3.3+ (optional, only needed for running directly on your machine)
+- Dart 3.12+ (optional, only needed for running directly on your machine)
 
 ## Configuration
 

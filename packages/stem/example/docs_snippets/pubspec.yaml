@@ -2,7 +2,7 @@ name: stem_examples
 description: Runnable code examples for Stem documentation
 publish_to: none
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   stem:

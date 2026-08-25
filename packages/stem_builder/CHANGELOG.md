@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Updated the builder for the Stem 0.4.0 release train and Dart 3.12 minimum.
+
 ## 0.3.0
 
 - Updated generated task adapters and workflow definitions for Stem 0.3.0.

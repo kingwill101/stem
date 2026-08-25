@@ -3,7 +3,7 @@ publish_to: 'none'
 description: Worker that consumes from Postgres broker and stores results in Postgres.
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   stem:

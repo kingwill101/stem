@@ -3,7 +3,7 @@ publish_to: 'none'
 description: Enqueues encrypted payloads before handing them to Stem.
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   cryptography: ^2.5.0

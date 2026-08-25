@@ -5,7 +5,7 @@ This example demonstrates a real-world email notification service using Stem. It
 ## Prerequisites
 
 - Docker and Docker Compose
-- Dart 3.3+ (optional, only required for local execution)
+- Dart 3.12+ (optional, only required for local execution)
 
 ## Configuration
 

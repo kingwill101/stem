@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- Raised the ecommerce example's minimum Dart SDK to 3.10.0.
+## 0.4.0
+
+- Raised the minimum Dart SDK to 3.12.0 for the coordinated Ormed 0.3
+  release train.
+- Raised the ecommerce example's minimum Dart SDK to 3.12.0.
+- Upgraded Dartastic OpenTelemetry to 0.10.0 and its API to 0.10.0. Stem now
+  benefits from zone-safe context propagation, sampler-correct spans, global
+  propagator configuration, and the SDK's no-processor fast path.
+- This release intentionally contains breaking dependency and SDK changes
+  from the 0.3 line.
 
 ## 0.3.0
 

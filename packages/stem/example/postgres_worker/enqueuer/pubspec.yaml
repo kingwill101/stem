@@ -3,7 +3,7 @@ publish_to: 'none'
 description: Example enqueuer that uses Postgres for broker and result backend.
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   stem:

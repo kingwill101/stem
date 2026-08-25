@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Updated the shared contract package for the Stem 0.4.0 release train and
+  Dart 3.12 minimum.
+
 ## 0.2.0
 
 - Updated shared adapter contracts for the Stem 0.3.0 capability and lifecycle

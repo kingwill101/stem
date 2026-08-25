@@ -13,7 +13,7 @@ This example demonstrates image thumbnail generation using Stem. It enqueues ima
 ## Prerequisites
 
 - Docker and Docker Compose
-- Dart 3.3+ (optional, only required for manual runs)
+- Dart 3.12+ (optional, only required for manual runs)
 
 ## Configuration
 

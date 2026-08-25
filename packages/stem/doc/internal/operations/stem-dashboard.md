@@ -20,7 +20,7 @@ the routed ecosystem overrides, and validate the control-plane features.
   - Redis: `redis://127.0.0.1:6379/0`
   - Postgres: `postgres://user:pass@localhost:5432/stem`
   - In-memory: `memory://` (good for unit/integration tests)
-- Dart SDK ≥ 3.9.2.
+- Dart SDK ≥ 3.12.0.
 
 ## Environment
 

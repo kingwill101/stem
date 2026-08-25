@@ -3,7 +3,7 @@ description: Minimal example streaming Stem metrics to an OpenTelemetry collecto
 publish_to: 'none'
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.12.0 <4.0.0'
 
 dependencies:
   stem:

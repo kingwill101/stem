@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Raised the minimum Dart SDK to 3.12.0 and the Ormed dependencies to 0.3.0
+  and `ormed_sqlite` 0.4.0.
+- Retained generated model definitions for Stem's internal typed repositories;
+  Ormed's codegen-free database facade remains available for application-side
+  ad-hoc access.
+
 ## 0.2.0
 
-- Widened the `ormed_sqlite` dependency across its compatible pre-1.0
-  release line.
 - Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
   facade; the Ormed contextual logger remains an adapter implementation detail.
 - Serialized SQLite transactions and broker mutations across shared file

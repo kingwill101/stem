@@ -275,7 +275,7 @@ stem health
 
 ### Prerequisites
 
-- Dart 3.10.0+
+- Dart 3.12.0+
 - Flutter 3.47.0+ (for the local Flutter package gate)
 - Docker (for adapter integration tests)
 - Nix and devenv 2.2+ (recommended workspace environment)
