@@ -53,8 +53,8 @@ class RedisStreamsBroker
     this.delayedDrainBatch = 128,
     this.defaultVisibilityTimeout = const Duration(seconds: 30),
     this.claimInterval = const Duration(seconds: 30),
-    bool useSharedConnectionForConsumers = false,
-  }) : _useSharedConnectionForConsumers = useSharedConnectionForConsumers;
+    this._useSharedConnectionForConsumers = false,
+  });
 
   /// Namespace used to scope Redis keys.
   final String namespace;

@@ -15,20 +15,16 @@ class PostgresConnections {
 
   /// Creates a connection wrapper for an initialized data source.
   PostgresConnections._(
-    DataSource dataSource, {
-    required bool ownsDataSource,
-    String? connectionString,
-    String component = 'postgres',
-    PostgresTimingListener? timingListener,
-    PostgresQueryTimingListener? queryTimingListener,
-  }) : _dataSource = dataSource,
-       _ownsDataSource = ownsDataSource,
-       _connectionString = connectionString,
-       _component = component,
-       _timingListener = timingListener,
-       _queryTimingListener = queryTimingListener,
-       _transactionQueueRef = _queuesByDataSource[dataSource] ??=
-           _TransactionQueue();
+    this._dataSource, {
+    required this._ownsDataSource,
+    this._connectionString,
+    this._component = 'postgres',
+    this._timingListener,
+    this._queryTimingListener,
+  }) {
+    _transactionQueueRef = _queuesByDataSource[_dataSource] ??=
+        _TransactionQueue();
+  }
 
   static final Expando<_TransactionQueue> _queuesByDataSource =
       Expando<_TransactionQueue>();
@@ -65,7 +61,7 @@ class PostgresConnections {
   final PostgresTimingListener? _timingListener;
   final PostgresQueryTimingListener? _queryTimingListener;
   void Function()? _removeQueryListener;
-  _TransactionQueue _transactionQueueRef;
+  late final _TransactionQueue _transactionQueueRef;
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => _dataSource.connection;

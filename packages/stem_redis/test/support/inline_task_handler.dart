@@ -8,10 +8,9 @@ typedef InlineTaskCallback<R> =
 class InlineTaskHandler<R> extends TaskHandler<R> {
   InlineTaskHandler({
     required this.name,
-    required InlineTaskCallback<R> onCall,
-    TaskOptions options = const TaskOptions(),
-  }) : _onCall = onCall,
-       _options = options;
+    required this._onCall,
+    this._options = const TaskOptions(),
+  });
 
   @override
   final String name;

@@ -10,8 +10,8 @@ class RedisWorkflowStore implements WorkflowStore {
     this._connection,
     this._command, {
     required this.namespace,
-    required WorkflowClock clock,
-  }) : _clock = clock;
+    required this._clock,
+  });
 
   final RedisConnection _connection;
   final Command _command;

@@ -11,10 +11,9 @@ class PostgresWorkflowStore implements WorkflowStore {
   PostgresWorkflowStore._(
     this._connections, {
     required this.namespace,
-    required WorkflowClock clock,
+    required this._clock,
     Uuid? uuid,
-  }) : _uuid = uuid ?? const Uuid(),
-       _clock = clock;
+  }) : _uuid = uuid ?? const Uuid();
 
   final PostgresConnections _connections;
 

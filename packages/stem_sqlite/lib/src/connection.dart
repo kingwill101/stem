@@ -24,10 +24,9 @@ class SqliteConnections {
   /// Creates a connection wrapper for an initialized data source.
   SqliteConnections._(
     this.dataSource, {
-    required bool ownsDataSource,
-    String? coordinationKey,
-  }) : _ownsDataSource = ownsDataSource,
-       _coordinationKey = coordinationKey;
+    required this._ownsDataSource,
+    this._coordinationKey,
+  });
 
   /// Underlying data source instance.
   final DataSource dataSource;

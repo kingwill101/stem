@@ -8,21 +8,15 @@ import 'package:stem_flutter/src/runtime/stem_flutter_worker_signal.dart';
 class StemFlutterQueueMonitor {
   /// Creates a queue monitor for a single Stem queue.
   StemFlutterQueueMonitor({
-    required ResultBackend backend,
-    required Broker broker,
-    required String queueName,
-    required String workerId,
-    Duration pollInterval = const Duration(seconds: 1),
+    required this._backend,
+    required this._broker,
+    required this._queueName,
+    required this._workerId,
+    this._pollInterval = const Duration(seconds: 1),
     Duration heartbeatInterval = const Duration(seconds: 2),
-    int limit = 40,
+    this._limit = 40,
     String Function(TaskStatus status)? labelResolver,
-  }) : _backend = backend,
-       _broker = broker,
-       _queueName = queueName,
-       _workerId = workerId,
-       _pollInterval = pollInterval,
-       _heartbeatFreshness = heartbeatInterval * 3,
-       _limit = limit,
+  }) : _heartbeatFreshness = heartbeatInterval * 3,
        _labelResolver =
            labelResolver ??
            ((status) => status.meta['label']?.toString() ?? status.id);

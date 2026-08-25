@@ -9,16 +9,12 @@ import 'package:stem_flutter/src/runtime/stem_flutter_worker_signal.dart';
 /// provides a small control channel for graceful shutdown.
 class StemFlutterWorkerHost {
   StemFlutterWorkerHost._({
-    required Isolate isolate,
-    required ReceivePort messages,
-    required ReceivePort errors,
-    required ReceivePort exit,
-    required StreamController<StemFlutterWorkerSignal> controller,
-  }) : _isolate = isolate,
-       _messages = messages,
-       _errors = errors,
-       _exit = exit,
-       _controller = controller;
+    required this._isolate,
+    required this._messages,
+    required this._errors,
+    required this._exit,
+    required this._controller,
+  });
 
   final Isolate _isolate;
   final ReceivePort _messages;
