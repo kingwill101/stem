@@ -591,7 +591,10 @@ class ScriptWorkflow {
             allOf([
               contains('class _StemScriptProxy0 extends ScriptWorkflow'),
               contains(
-                'run: (script) => _StemScriptProxy0(',
+                '_StemScriptProxy0(script)',
+              ),
+              contains(
+                '.run((_stemRequireArg(script.params, "email") as String))',
               ),
               contains('_stemRequireArg(script.params, "email") as String'),
             ]),
