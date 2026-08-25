@@ -87,6 +87,9 @@ final class StandaloneDartCommand extends Command<int> {
             '${package.relativePath}.',
           );
         }
+        if (flutterOnly) {
+          _addFlutterToolchainOverride(Directory(stagedPath));
+        }
         await runner.run(
           pubTool,
           ['pub', 'get'],
@@ -98,5 +101,23 @@ final class StandaloneDartCommand extends Command<int> {
       await staging.delete(recursive: true);
     }
     return 0;
+  }
+
+  void _addFlutterToolchainOverride(Directory stagedPackage) {
+    // Flutter 3.47.1 pins test_api 0.7.12, while Ormed 0.3.0's analyzer
+    // toolchain resolves test 1.31.2, which requires test_api 0.7.13. The
+    // workspace root carries this development-only override; preserve it in
+    // the isolated Flutter resolution without publishing it in the package.
+    final overridesFile = File(
+      p.join(stagedPackage.path, 'pubspec_overrides.yaml'),
+    );
+    final existing = overridesFile.existsSync()
+        ? overridesFile.readAsStringSync()
+        : 'dependency_overrides:\n';
+    if (RegExp(r'^\s+test_api:', multiLine: true).hasMatch(existing)) {
+      return;
+    }
+    final separator = existing.endsWith('\n') ? '' : '\n';
+    overridesFile.writeAsStringSync('$existing$separator  test_api: 0.7.13\n');
   }
 }
