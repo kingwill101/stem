@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:stem/stem.dart';
@@ -8,15 +12,21 @@ import 'package:stem_flutter/src/runtime/stem_flutter_worker_signal.dart';
 class StemFlutterQueueMonitor {
   /// Creates a queue monitor for a single Stem queue.
   StemFlutterQueueMonitor({
-    required this._backend,
-    required this._broker,
-    required this._queueName,
-    required this._workerId,
-    this._pollInterval = const Duration(seconds: 1),
+    required ResultBackend backend,
+    required Broker broker,
+    required String queueName,
+    required String workerId,
+    Duration pollInterval = const Duration(seconds: 1),
     Duration heartbeatInterval = const Duration(seconds: 2),
-    this._limit = 40,
+    int limit = 40,
     String Function(TaskStatus status)? labelResolver,
-  }) : _heartbeatFreshness = heartbeatInterval * 3,
+  }) : _backend = backend,
+       _broker = broker,
+       _queueName = queueName,
+       _workerId = workerId,
+       _pollInterval = pollInterval,
+       _limit = limit,
+       _heartbeatFreshness = heartbeatInterval * 3,
        _labelResolver =
            labelResolver ??
            ((status) => status.meta['label']?.toString() ?? status.id);

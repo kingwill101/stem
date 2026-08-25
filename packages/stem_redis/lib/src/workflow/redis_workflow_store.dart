@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -10,8 +14,8 @@ class RedisWorkflowStore implements WorkflowStore {
     this._connection,
     this._command, {
     required this.namespace,
-    required this._clock,
-  });
+    required WorkflowClock clock,
+  }) : _clock = clock;
 
   final RedisConnection _connection;
   final Command _command;

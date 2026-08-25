@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:io';
 
@@ -24,9 +28,10 @@ class SqliteConnections {
   /// Creates a connection wrapper for an initialized data source.
   SqliteConnections._(
     this.dataSource, {
-    required this._ownsDataSource,
-    this._coordinationKey,
-  });
+    required bool ownsDataSource,
+    String? coordinationKey,
+  }) : _ownsDataSource = ownsDataSource,
+       _coordinationKey = coordinationKey;
 
   /// Underlying data source instance.
   final DataSource dataSource;

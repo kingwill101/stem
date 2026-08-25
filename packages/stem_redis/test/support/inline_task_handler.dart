@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:stem/stem.dart';
@@ -8,9 +12,10 @@ typedef InlineTaskCallback<R> =
 class InlineTaskHandler<R> extends TaskHandler<R> {
   InlineTaskHandler({
     required this.name,
-    required this._onCall,
-    this._options = const TaskOptions(),
-  });
+    required InlineTaskCallback<R> onCall,
+    TaskOptions options = const TaskOptions(),
+  }) : _onCall = onCall,
+       _options = options;
 
   @override
   final String name;

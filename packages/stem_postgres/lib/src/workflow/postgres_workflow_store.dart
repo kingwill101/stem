@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:convert';
 
 import 'package:ormed/ormed.dart';
@@ -11,9 +15,10 @@ class PostgresWorkflowStore implements WorkflowStore {
   PostgresWorkflowStore._(
     this._connections, {
     required this.namespace,
-    required this._clock,
+    required WorkflowClock clock,
     Uuid? uuid,
-  }) : _uuid = uuid ?? const Uuid();
+  }) : _clock = clock,
+       _uuid = uuid ?? const Uuid();
 
   final PostgresConnections _connections;
 

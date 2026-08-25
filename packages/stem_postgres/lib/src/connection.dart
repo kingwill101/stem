@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:ormed/ormed.dart';
 
 import 'package:stem_postgres/src/database/datasource.dart';
@@ -16,12 +20,12 @@ class PostgresConnections {
   /// Creates a connection wrapper for an initialized data source.
   PostgresConnections._(
     this._dataSource, {
-    required this._ownsDataSource,
+    required bool ownsDataSource,
     this._connectionString,
     this._component = 'postgres',
     this._timingListener,
     this._queryTimingListener,
-  }) {
+  }) : _ownsDataSource = ownsDataSource {
     _transactionQueueRef = _queuesByDataSource[_dataSource] ??=
         _TransactionQueue();
   }
@@ -61,7 +65,7 @@ class PostgresConnections {
   final PostgresTimingListener? _timingListener;
   final PostgresQueryTimingListener? _queryTimingListener;
   void Function()? _removeQueryListener;
-  late final _TransactionQueue _transactionQueueRef;
+  late _TransactionQueue _transactionQueueRef;
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => _dataSource.connection;

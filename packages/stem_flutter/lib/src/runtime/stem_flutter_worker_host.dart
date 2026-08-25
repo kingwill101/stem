@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:isolate';
 
@@ -9,12 +13,16 @@ import 'package:stem_flutter/src/runtime/stem_flutter_worker_signal.dart';
 /// provides a small control channel for graceful shutdown.
 class StemFlutterWorkerHost {
   StemFlutterWorkerHost._({
-    required this._isolate,
-    required this._messages,
-    required this._errors,
-    required this._exit,
-    required this._controller,
-  });
+    required Isolate isolate,
+    required ReceivePort messages,
+    required ReceivePort errors,
+    required ReceivePort exit,
+    required StreamController<StemFlutterWorkerSignal> controller,
+  }) : _isolate = isolate,
+       _messages = messages,
+       _errors = errors,
+       _exit = exit,
+       _controller = controller;
 
   final Isolate _isolate;
   final ReceivePort _messages;

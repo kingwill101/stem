@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -53,8 +57,8 @@ class RedisStreamsBroker
     this.delayedDrainBatch = 128,
     this.defaultVisibilityTimeout = const Duration(seconds: 30),
     this.claimInterval = const Duration(seconds: 30),
-    this._useSharedConnectionForConsumers = false,
-  });
+    bool useSharedConnectionForConsumers = false,
+  }) : _useSharedConnectionForConsumers = useSharedConnectionForConsumers;
 
   /// Namespace used to scope Redis keys.
   final String namespace;
