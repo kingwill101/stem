@@ -2,8 +2,8 @@
 
 ## 0.2.0
 
-- Widened the `ormed_sqlite` dependency to support its compatible stable 0.2
-  and 0.3 release lines.
+- Widened the `ormed_sqlite` dependency across its compatible pre-1.0
+  release line.
 - Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
   facade; the Ormed contextual logger remains an adapter implementation detail.
 - Serialized SQLite transactions and broker mutations across shared file
