@@ -100,7 +100,7 @@ final class ThroughputBenchmark {
     var warmupCompletedTasks = 0;
     var measuredTasks = 0;
     final taskLatencies = <double>[];
-    final measuredWaiters = <Future<_ObservedTerminal>>[];
+    final measuredWatchers = <_TerminalWatcher>[];
 
     final registry = InMemoryTaskRegistry()
       ..register(
@@ -173,7 +173,7 @@ final class ThroughputBenchmark {
           label: 'measured enqueue',
           stage: stage,
           watchBackend: executionBackend,
-          terminalWaiters: measuredWaiters,
+          terminalWatchers: measuredWatchers,
         );
         return;
       }
@@ -186,7 +186,7 @@ final class ThroughputBenchmark {
         measuredTasks += 1;
         final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
         final taskId = generateEnvelopeId();
-        measuredWaiters.add(_watchTerminal(executionBackend, taskId));
+        measuredWatchers.add(_watchTerminal(executionBackend, taskId));
         await stem.enqueue(
           'repodoc.benchmark.noop',
           args: {'index': index},
@@ -206,7 +206,7 @@ final class ThroughputBenchmark {
 
     Future<void> awaitMeasuredStatuses() async {
       final statuses = await Future.wait(
-        measuredWaiters,
+        measuredWatchers.map((watcher) => watcher.future),
       ).timeout(const Duration(minutes: 2));
       for (final terminal in statuses) {
         final latency = _observedTaskLatencyMs(terminal);
@@ -284,11 +284,17 @@ final class ThroughputBenchmark {
       try {
         await shutdownWorker();
       } finally {
-        stage('closing store resources');
         try {
-          await resources.close();
+          await Future.wait(
+            measuredWatchers.map((watcher) => watcher.cancel()),
+          );
         } finally {
-          stage('benchmark complete');
+          stage('closing store resources');
+          try {
+            await resources.close();
+          } finally {
+            stage('benchmark complete');
+          }
         }
       }
     }
@@ -352,14 +358,14 @@ Future<void> _enqueueTasks(
   required String label,
   required void Function(String message) stage,
   ResultBackend? watchBackend,
-  List<Future<_ObservedTerminal>>? terminalWaiters,
+  List<_TerminalWatcher>? terminalWatchers,
 }) async {
   final progressEvery = count < 20 ? 1 : (count / 20).ceil();
   for (var index = 0; index < count; index++) {
     final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
     final taskId = generateEnvelopeId();
-    if (terminalWaiters != null) {
-      terminalWaiters.add(_watchTerminal(watchBackend ?? backend, taskId));
+    if (terminalWatchers != null) {
+      terminalWatchers.add(_watchTerminal(watchBackend ?? backend, taskId));
     }
     await stem.enqueue(
       'repodoc.benchmark.noop',
@@ -381,7 +387,7 @@ final class _ObservedTerminal {
   final int observedAtMicros;
 }
 
-Future<_ObservedTerminal> _watchTerminal(ResultBackend backend, String taskId) {
+_TerminalWatcher _watchTerminal(ResultBackend backend, String taskId) {
   final completer = Completer<_ObservedTerminal>();
   late StreamSubscription<TaskStatus> subscription;
   subscription = backend
@@ -395,10 +401,13 @@ Future<_ObservedTerminal> _watchTerminal(ResultBackend backend, String taskId) {
           unawaited(subscription.cancel());
         },
         onError: (Object error, StackTrace stackTrace) {
-          if (!completer.isCompleted)
+          unawaited(subscription.cancel());
+          if (!completer.isCompleted) {
             completer.completeError(error, stackTrace);
+          }
         },
         onDone: () {
+          unawaited(subscription.cancel());
           if (!completer.isCompleted) {
             completer.completeError(
               StateError('Benchmark status stream closed before completion.'),
@@ -406,7 +415,16 @@ Future<_ObservedTerminal> _watchTerminal(ResultBackend backend, String taskId) {
           }
         },
       );
-  return completer.future;
+  return _TerminalWatcher(completer.future, subscription.cancel);
+}
+
+final class _TerminalWatcher {
+  const _TerminalWatcher(this.future, this._cancel);
+
+  final Future<_ObservedTerminal> future;
+  final Future<void> Function() _cancel;
+
+  Future<void> cancel() => _cancel();
 }
 
 double? _observedTaskLatencyMs(_ObservedTerminal terminal) {

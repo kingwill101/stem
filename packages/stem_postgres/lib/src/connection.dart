@@ -123,8 +123,8 @@ class PostgresConnections {
         if (_ownsDataSource &&
             (message.contains('already been closed') ||
                 message.contains('not been initialized'))) {
-          await ensureReady(forceReopen: true);
           try {
+            await ensureReady(forceReopen: true);
             final result = await connection.transaction(() => action(context));
             _notifyTiming(
               operation: operation,
