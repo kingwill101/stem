@@ -358,4 +358,23 @@ void main() {
       );
     },
   );
+
+  test('preserves existing trace propagation headers during injection', () {
+    final tracer = dotel.OTel.tracerProvider().getTracer('stem-test-header');
+    final span = tracer.startSpan('existing-parent');
+    final context = dotel.Context.current.withSpan(span);
+    const existingTraceparent =
+        '00-11111111111111111111111111111111-2222222222222222-01';
+    const existingTracestate = 'vendor=value';
+    final headers = <String, String>{
+      'traceparent': existingTraceparent,
+      'tracestate': existingTracestate,
+    };
+
+    StemTracer.instance.injectTraceContext(headers, context: context);
+    span.end();
+
+    expect(headers['traceparent'], existingTraceparent);
+    expect(headers['tracestate'], existingTracestate);
+  });
 }

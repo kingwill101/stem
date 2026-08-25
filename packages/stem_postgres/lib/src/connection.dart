@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'package:ormed/ormed.dart';
 
 import 'package:stem_postgres/src/database/datasource.dart';
@@ -15,20 +19,16 @@ class PostgresConnections {
 
   /// Creates a connection wrapper for an initialized data source.
   PostgresConnections._(
-    DataSource dataSource, {
+    this._dataSource, {
     required bool ownsDataSource,
-    String? connectionString,
-    String component = 'postgres',
-    PostgresTimingListener? timingListener,
-    PostgresQueryTimingListener? queryTimingListener,
-  }) : _dataSource = dataSource,
-       _ownsDataSource = ownsDataSource,
-       _connectionString = connectionString,
-       _component = component,
-       _timingListener = timingListener,
-       _queryTimingListener = queryTimingListener,
-       _transactionQueueRef = _queuesByDataSource[dataSource] ??=
-           _TransactionQueue();
+    this._connectionString,
+    this._component = 'postgres',
+    this._timingListener,
+    this._queryTimingListener,
+  }) : _ownsDataSource = ownsDataSource {
+    _transactionQueueRef = _queuesByDataSource[_dataSource] ??=
+        _TransactionQueue();
+  }
 
   static final Expando<_TransactionQueue> _queuesByDataSource =
       Expando<_TransactionQueue>();
@@ -65,7 +65,7 @@ class PostgresConnections {
   final PostgresTimingListener? _timingListener;
   final PostgresQueryTimingListener? _queryTimingListener;
   void Function()? _removeQueryListener;
-  _TransactionQueue _transactionQueueRef;
+  late _TransactionQueue _transactionQueueRef;
 
   /// Convenience accessor for the raw ORM connection.
   OrmConnection get connection => _dataSource.connection;
@@ -123,8 +123,8 @@ class PostgresConnections {
         if (_ownsDataSource &&
             (message.contains('already been closed') ||
                 message.contains('not been initialized'))) {
-          await ensureReady(forceReopen: true);
           try {
+            await ensureReady(forceReopen: true);
             final result = await connection.transaction(() => action(context));
             _notifyTiming(
               operation: operation,

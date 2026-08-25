@@ -88,7 +88,16 @@ final class WorkspaceCatalog {
   }) {
     final requested = requestedPaths == null || requestedPaths.isEmpty
         ? null
-        : requestedPaths.toSet();
+        : requestedPaths.map(_normalizeRequestedPath).toSet();
+    if (requested != null) {
+      final known = packages.map((package) => package.relativePath).toSet();
+      final unknown = requested.difference(known);
+      if (unknown.isNotEmpty) {
+        throw ArgumentError(
+          'Unknown workspace package path(s): ${unknown.join(', ')}',
+        );
+      }
+    }
     return packages
         .where((package) => !workspaceOnly || package.workspaceMember)
         .where((package) => includeFlutter || !package.isFlutter)
@@ -98,6 +107,8 @@ final class WorkspaceCatalog {
         )
         .toList(growable: false);
   }
+
+  String _normalizeRequestedPath(String value) => p.normalize(value.trim());
 }
 
 final class WorkspacePackage {

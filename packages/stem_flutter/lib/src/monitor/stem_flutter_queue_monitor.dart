@@ -1,3 +1,7 @@
+// Public constructor names intentionally initialize private implementation
+// fields to preserve the package API.
+// ignore_for_file: prefer_initializing_formals
+
 import 'dart:async';
 
 import 'package:stem/stem.dart';
@@ -21,8 +25,8 @@ class StemFlutterQueueMonitor {
        _queueName = queueName,
        _workerId = workerId,
        _pollInterval = pollInterval,
-       _heartbeatFreshness = heartbeatInterval * 3,
        _limit = limit,
+       _heartbeatFreshness = heartbeatInterval * 3,
        _labelResolver =
            labelResolver ??
            ((status) => status.meta['label']?.toString() ?? status.id);

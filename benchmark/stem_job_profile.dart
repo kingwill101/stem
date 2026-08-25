@@ -6,6 +6,8 @@ import 'package:crypto/crypto.dart';
 import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 
+import 'profile_support.dart';
+
 /// Runs one deterministic worker-job profile.
 ///
 /// This workload is deliberately separate from the throughput regression
@@ -91,7 +93,7 @@ Future<void> main(List<String> args) async {
     };
 
     final encoded = jsonEncode(result);
-    final output = _stringOption(args, '--output');
+    final output = profileStringOption(args, '--output');
     if (output != null) {
       final file = File(output);
       await file.parent.create(recursive: true);
@@ -274,30 +276,11 @@ Map<String, Object?> _timingStats(Iterable<double?> values) {
   return {
     'count': sorted.length,
     'min': sorted.first,
-    'median': _percentile(sorted, 0.5),
-    'p95': _percentile(sorted, 0.95),
+    'median': profilePercentile(sorted, 0.5),
+    'p95': profilePercentile(sorted, 0.95),
     'max': sorted.last,
     'mean': sum / sorted.length,
   };
-}
-
-double _percentile(List<double> sorted, double percentile) {
-  final index = ((sorted.length - 1) * percentile).round();
-  return sorted[index.clamp(0, sorted.length - 1).toInt()];
-}
-
-String? _stringOption(List<String> args, String name) {
-  final prefix = '$name=';
-  for (final arg in args) {
-    if (arg.startsWith(prefix)) return arg.substring(prefix.length);
-  }
-  final index = args.indexOf(name);
-  if (index == -1 || index + 1 >= args.length) return null;
-  return args[index + 1];
-}
-
-int _intOption(List<String> args, String name, int fallback) {
-  return int.tryParse(_stringOption(args, name) ?? '') ?? fallback;
 }
 
 void _printUsage() {
@@ -309,11 +292,11 @@ Runs a deterministic in-memory worker workload and emits one JSON sample.
 Options:
   --tasks <n>              Measured task count (default: 5000)
   --warmup <n>             Warmup task count (default: 500)
-  --concurrency <n>       Worker concurrency (default: 4)
-  --mode inline|isolate   Handler execution mode (default: isolate)
-  --workload noop|cpu     Handler workload (default: noop)
-  --work-units <n>        CPU hash rounds per task (default: 100)
-  --hold-seconds <n>      Keep the VM alive after output (default: 0)
+  --concurrency <n>        Worker concurrency (default: 4)
+  --mode inline|isolate    Handler execution mode (default: isolate)
+  --workload noop|cpu      Handler workload (default: noop)
+  --work-units <n>         CPU hash rounds per task (default: 100)
+  --hold-seconds <n>       Keep the VM alive after output (default: 0)
   --output <path>          Also write JSON to this file
 ''');
 }
@@ -339,13 +322,13 @@ final class _ProfileConfig {
   });
 
   factory _ProfileConfig.fromArgs(List<String> args) {
-    final tasks = _intOption(args, '--tasks', 5000);
-    final warmup = _intOption(args, '--warmup', 500);
-    final concurrency = _intOption(args, '--concurrency', 4);
-    final workUnits = _intOption(args, '--work-units', 100);
-    final holdSeconds = _intOption(args, '--hold-seconds', 0);
-    final mode = _stringOption(args, '--mode') ?? 'isolate';
-    final workload = _stringOption(args, '--workload') ?? 'noop';
+    final tasks = profileIntOption(args, '--tasks', 5000);
+    final warmup = profileIntOption(args, '--warmup', 500);
+    final concurrency = profileIntOption(args, '--concurrency', 4);
+    final workUnits = profileIntOption(args, '--work-units', 100);
+    final holdSeconds = profileIntOption(args, '--hold-seconds', 0);
+    final mode = profileStringOption(args, '--mode') ?? 'isolate';
+    final workload = profileStringOption(args, '--workload') ?? 'noop';
 
     if (tasks <= 0 || warmup < 0 || concurrency <= 0 || workUnits < 0) {
       throw ArgumentError(
@@ -357,12 +340,14 @@ final class _ProfileConfig {
       throw ArgumentError.value(holdSeconds, '--hold-seconds');
     }
 
+    final resolvedMode = _parseExecutionMode(mode);
+    final resolvedWorkload = _parseWorkload(workload);
     return _ProfileConfig(
       tasks: tasks,
       warmup: warmup,
       concurrency: concurrency,
-      mode: TaskExecutionMode.values.byName(mode),
-      workload: _ProfileWorkload.values.byName(workload),
+      mode: resolvedMode,
+      workload: resolvedWorkload,
       workUnits: workUnits,
       holdSeconds: holdSeconds,
     );
@@ -375,4 +360,24 @@ final class _ProfileConfig {
   final _ProfileWorkload workload;
   final int workUnits;
   final int holdSeconds;
+
+  static TaskExecutionMode _parseExecutionMode(String value) {
+    for (final mode in TaskExecutionMode.values) {
+      if (mode.name == value) return mode;
+    }
+    throw ArgumentError(
+      'Invalid --mode "$value". Expected one of: '
+      '${TaskExecutionMode.values.map((mode) => mode.name).join(', ')}.',
+    );
+  }
+
+  static _ProfileWorkload _parseWorkload(String value) {
+    for (final workload in _ProfileWorkload.values) {
+      if (workload.name == value) return workload;
+    }
+    throw ArgumentError(
+      'Invalid --workload "$value". Expected one of: '
+      '${_ProfileWorkload.values.map((workload) => workload.name).join(', ')}.',
+    );
+  }
 }

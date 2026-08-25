@@ -67,14 +67,29 @@ final class StandaloneDartCommand extends Command<int> {
         final output = Directory(
           p.join(staging.path, p.basename(package.relativePath)),
         )..createSync(recursive: true);
-        final stagedPath = (await runner.capture('dart', [
+        final stagedOutput = await runner.capture('dart', [
           'run',
           'tool/stage_workspace.dart',
           '--package',
           package.relativePath,
           '--output',
           output.path,
-        ], workingDirectory: root)).trim().split('\n').last;
+        ], workingDirectory: root);
+        final stagedLines = stagedOutput
+            .split('\n')
+            .map((line) => line.trim())
+            .where((line) => line.isNotEmpty)
+            .toList(growable: false);
+        final stagedPath = stagedLines.isEmpty ? null : stagedLines.last;
+        if (stagedPath == null || !Directory(stagedPath).existsSync()) {
+          throw StateError(
+            'Workspace staging did not return a valid directory for '
+            '${package.relativePath}.',
+          );
+        }
+        if (flutterOnly) {
+          _addFlutterToolchainOverride(Directory(stagedPath));
+        }
         await runner.run(
           pubTool,
           ['pub', 'get'],
@@ -86,5 +101,23 @@ final class StandaloneDartCommand extends Command<int> {
       await staging.delete(recursive: true);
     }
     return 0;
+  }
+
+  void _addFlutterToolchainOverride(Directory stagedPackage) {
+    // Flutter 3.47.1 pins test_api 0.7.12, while Ormed 0.3.0's analyzer
+    // toolchain resolves test 1.31.2, which requires test_api 0.7.13. The
+    // workspace root carries this development-only override; preserve it in
+    // the isolated Flutter resolution without publishing it in the package.
+    final overridesFile = File(
+      p.join(stagedPackage.path, 'pubspec_overrides.yaml'),
+    );
+    final existing = overridesFile.existsSync()
+        ? overridesFile.readAsStringSync()
+        : 'dependency_overrides:\n';
+    if (RegExp(r'^\s+test_api:', multiLine: true).hasMatch(existing)) {
+      return;
+    }
+    final separator = existing.endsWith('\n') ? '' : '\n';
+    overridesFile.writeAsStringSync('$existing$separator  test_api: 0.7.13\n');
   }
 }

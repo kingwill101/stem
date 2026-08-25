@@ -24,10 +24,9 @@ class PostgresBroker
     required this.pollInterval,
     this.sweeperInterval = const Duration(seconds: 10),
     this.deadLetterRetention = const Duration(days: 7),
-    PostgresConnections? consumerConnections,
-    PostgresTimingListener? timingListener,
-  }) : _consumerConnections = consumerConnections,
-       _timingListener = timingListener {
+    this._consumerConnections,
+    this._timingListener,
+  }) {
     stemLogger.info(
       'PostgresBroker created (namespace=$namespace)',
       fields: _logContext(),

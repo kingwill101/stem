@@ -118,6 +118,10 @@ services:
   # Redis with TLS enabled (server-auth only)
   redis_tls:
     image: redis:7-alpine
+    # Start as root only long enough for the entrypoint to copy owner-only
+    # fixture keys into the container, then drop to the redis user.
+    user: "0"
+    entrypoint: ["/usr/local/bin/stem-redis-entrypoint.sh"]
     restart: unless-stopped
     container_name: stem-redis-tls-test
     command:
@@ -127,11 +131,11 @@ services:
       - "--tls-port"
       - "6379"
       - "--tls-cert-file"
-      - "/etc/redis/certs/server.crt"
+      - "/tmp/stem-redis-certs/server.crt"
       - "--tls-key-file"
-      - "/etc/redis/certs/server.key"
+      - "/tmp/stem-redis-certs/server.key"
       - "--tls-ca-cert-file"
-      - "/etc/redis/certs/ca.crt"
+      - "/tmp/stem-redis-certs/ca.crt"
       - "--tls-auth-clients"
       - "no"
       - "--loglevel"
@@ -144,6 +148,7 @@ services:
       - "${STEM_TEST_REDIS_TLS_PORT:-56380}:6379"
     volumes:
       - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
+      - ./redis/entrypoint.sh:/usr/local/bin/stem-redis-entrypoint.sh:ro
       - redis-tls-data:/data
     healthcheck:
       test:
@@ -152,7 +157,7 @@ services:
           "redis-cli",
           "--tls",
           "--cacert",
-          "/etc/redis/certs/ca.crt",
+          "/tmp/stem-redis-certs/ca.crt",
           "-p",
           "6379",
           "ping"
@@ -169,6 +174,10 @@ services:
   # Redis with TLS enabled (client-auth required)
   redis_mtls:
     image: redis:7-alpine
+    # Start as root only long enough for the entrypoint to copy owner-only
+    # fixture keys into the container, then drop to the redis user.
+    user: "0"
+    entrypoint: ["/usr/local/bin/stem-redis-entrypoint.sh"]
     restart: unless-stopped
     container_name: stem-redis-mtls-test
     command:
@@ -178,11 +187,11 @@ services:
       - "--tls-port"
       - "6379"
       - "--tls-cert-file"
-      - "/etc/redis/certs/server.crt"
+      - "/tmp/stem-redis-certs/server.crt"
       - "--tls-key-file"
-      - "/etc/redis/certs/server.key"
+      - "/tmp/stem-redis-certs/server.key"
       - "--tls-ca-cert-file"
-      - "/etc/redis/certs/ca.crt"
+      - "/tmp/stem-redis-certs/ca.crt"
       - "--tls-auth-clients"
       - "yes"
       - "--loglevel"
@@ -195,6 +204,7 @@ services:
       - "${STEM_TEST_REDIS_MTLS_PORT:-56381}:6379"
     volumes:
       - ../../../stem/example/microservice/certs:/etc/redis/certs:ro
+      - ./redis/entrypoint.sh:/usr/local/bin/stem-redis-entrypoint.sh:ro
       - redis-mtls-data:/data
     healthcheck:
       test:
@@ -203,11 +213,11 @@ services:
           "redis-cli",
           "--tls",
           "--cacert",
-          "/etc/redis/certs/ca.crt",
+          "/tmp/stem-redis-certs/ca.crt",
           "--cert",
-          "/etc/redis/certs/client.crt",
+          "/tmp/stem-redis-certs/client.crt",
           "--key",
-          "/etc/redis/certs/client.key",
+          "/tmp/stem-redis-certs/client.key",
           "-p",
           "6379",
           "ping"

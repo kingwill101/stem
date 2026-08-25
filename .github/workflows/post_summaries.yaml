@@ -1,0 +1,17 @@
+name: Comment on the pull request
+
+on:
+  # workflow_run executes in the base repository context, which gives this
+  # small trusted workflow permission to update PRs from forks safely.
+  workflow_run:
+    workflows:
+      - Health
+      - Publish
+    types:
+      - completed
+
+jobs:
+  upload:
+    uses: dart-lang/ecosystem/.github/workflows/post_summaries.yaml@b79f68c55d4a611e7ebf63091036f3f18b5d94b3 # v2026-08-25
+    permissions:
+      pull-requests: write

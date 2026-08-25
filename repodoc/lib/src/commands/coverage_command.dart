@@ -131,6 +131,9 @@ final class CoverageRunner {
             'STEM_CLI_RUN_MULTI': 'true',
           }
         : environment;
+    if (coverageDirectory.existsSync()) {
+      await coverageDirectory.delete(recursive: true);
+    }
     await runner.run(
       'dart',
       [

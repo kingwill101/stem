@@ -16,7 +16,7 @@ class StemTracer {
 
   bool get _isTelemetryReady => dotel_api.OTelFactory.otelFactory != null;
 
-  dotel_api.Context _fallbackContext() => dotel_api.ContextCreate.create();
+  dotel_api.Context _fallbackContext() => dotel_api.OTelAPI.context();
 
   static dotel_api.APITracer _obtainTracer() {
     try {
@@ -44,11 +44,15 @@ class StemTracer {
     if (!_isTelemetryReady) {
       return fn();
     }
+    final tracer = _tracer;
+    // Dartastic 0.10 exposes the SDK's no-processor fast path through the
+    // tracer. Avoid allocating spans and attribute sets when the application
+    // has intentionally disabled trace processors.
+    if (!tracer.enabled) return fn();
     final attributeSet = attributes.isEmpty
         ? null
         : dotel.Attributes.of(Map<String, Object>.from(attributes));
     final baseContext = context ?? dotel.Context.current;
-    final tracer = _tracer;
     final span = tracer.startSpan(
       name,
       context: baseContext,
@@ -75,11 +79,12 @@ class StemTracer {
     if (!_isTelemetryReady) {
       return fn();
     }
+    final tracer = _tracer;
+    if (!tracer.enabled) return fn();
     final attributeSet = attributes.isEmpty
         ? null
         : dotel.Attributes.of(Map<String, Object>.from(attributes));
     final baseContext = context ?? dotel.Context.current;
-    final tracer = _tracer;
     final span = tracer.startSpan(
       name,
       context: baseContext,
@@ -100,11 +105,18 @@ class StemTracer {
     dotel.Context? context,
   }) {
     if (!_isTelemetryReady) return;
-    final spanContext = _spanContextFrom(context ?? dotel.Context.current);
+    final baseContext = context ?? dotel.Context.current;
+    _globalPropagator?.inject(
+      baseContext,
+      headers,
+      _StringMapSetter(headers),
+    );
+    if (!_traceContextPropagationEnabled) return;
+    final spanContext = _spanContextFrom(baseContext);
     if (spanContext == null) return;
 
     final traceParent = _formatTraceparent(spanContext);
-    if (traceParent == null) return;
+    if (traceParent == null || headers['traceparent'] != null) return;
 
     headers['traceparent'] = traceParent;
 
@@ -164,6 +176,15 @@ class StemTracer {
     // Using ambient context here can accidentally chain unrelated async
     // deliveries into one long trace when headers are missing traceparent.
     final baseContext = context ?? _fallbackContext();
+    final propagated = _globalPropagator?.extract(
+      baseContext,
+      headers,
+      _StringMapGetter(headers),
+    );
+    if (!_traceContextPropagationEnabled) return baseContext;
+    if (propagated != null && _spanContextFrom(propagated) != null) {
+      return propagated;
+    }
     final spanContext = _parseTraceContext(headers);
     if (spanContext == null) return baseContext;
     return baseContext.withSpanContext(spanContext);
@@ -203,6 +224,35 @@ class StemTracer {
       return spanContext;
     }
     return null;
+  }
+
+  dotel_api.TextMapPropagator<dynamic, String>? get _globalPropagator {
+    try {
+      final propagator = dotel_api.OTelAPI.textMapPropagator;
+      if (propagator.fields().isEmpty) return null;
+      return propagator as dotel_api.TextMapPropagator<dynamic, String>;
+    } on Object {
+      return null;
+    }
+  }
+
+  bool get _propagationDisabled {
+    try {
+      return dotel.OTelEnv.getPropagators().contains('none');
+    } on Object {
+      return false;
+    }
+  }
+
+  bool get _traceContextPropagationEnabled {
+    try {
+      final propagators = dotel.OTelEnv.getPropagators();
+      return !_propagationDisabled && propagators.contains('tracecontext');
+    } on Object {
+      // Preserve the legacy fallback if the optional environment integration
+      // is unavailable in a platform implementation.
+      return true;
+    }
   }
 
   String? _formatTraceparent(dotel.SpanContext spanContext) {
@@ -250,5 +300,32 @@ class StemTracer {
     } on Object {
       return null;
     }
+  }
+}
+
+final class _StringMapGetter implements dotel_api.TextMapGetter<String> {
+  const _StringMapGetter(this._headers);
+
+  final Map<String, String> _headers;
+
+  @override
+  String? get(String key) => _headers[key];
+
+  @override
+  Iterable<String> keys() => _headers.keys;
+}
+
+final class _StringMapSetter extends dotel_api.TextMapSetter<String> {
+  _StringMapSetter(this._headers);
+
+  final Map<String, String> _headers;
+
+  @override
+  void set(String key, String value) {
+    if ((key == 'traceparent' || key == 'tracestate') &&
+        _headers.containsKey(key)) {
+      return;
+    }
+    _headers[key] = value;
   }
 }

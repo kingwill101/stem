@@ -27,7 +27,9 @@ final class ProfileJobCommand extends Command<int> {
   String get name => commandName;
 
   @override
-  String get description => 'Run repeated AOT profiling trials for Stem jobs.';
+  String get description => commandName == 'profile:job:aot'
+      ? 'Alias for profile:job; run repeated AOT profiling trials.'
+      : 'Run repeated AOT profiling trials for Stem jobs.';
 
   @override
   Future<int> run() async {

@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-- Added an atomic Redis Lua terminal-result write that preserves the first
-  terminal task state across concurrent workers.
+- Updated the Redis adapter for the Stem 0.4.0 release train and Dart 3.12
+  minimum.
 
 ## 0.2.0
 
+- Added an atomic Redis Lua terminal-result write that preserves the first
+  terminal task state across concurrent workers.
 - Updated the Redis adapter for Stem 0.3.0 and the capability-aware broker
   contract.
 - Retained the production distributed Redis rate limiter and added its focused

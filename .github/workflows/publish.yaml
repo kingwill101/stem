@@ -1,7 +1,11 @@
 name: Publish
 
-# Pull requests and release tags run Stem's repository-owned release gate.
-# Tags then continue through Dart's trusted publishing workflow.
+permissions:
+  contents: read
+
+# Firehose validates package publication metadata on pull requests and
+# publishes the selected package for versioned tags. The workspace test suite
+# belongs to aggregate CI, not this publication/comment workflow.
 on:
   pull_request:
     branches: [ master ]
@@ -10,37 +14,22 @@ on:
     # For mono repos the tag must be prefixed with the package name,
     # e.g. "stem-v0.3.0". Every published package uses this form.
     tags:
-      - '[A-Za-z0-9_]+-v[0-9]+.[0-9]+.[0-9]+'
+      # GitHub tag filters are globs, not regular expressions. Firehose
+      # validates the package prefix and complete semantic version.
+      - '*-v*.*.*'
   workflow_dispatch:
 
 jobs:
-  release-gate:
-    name: release gate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 3.10.0
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
-      - name: Resolve workspace dependencies
-        run: dart pub get
-      - name: Validate the complete release train
-        run: dart run tool/publish.dart --skip-published --include-unchanged
-
   publish:
-    needs: release-gate
-    if: startsWith(github.ref, 'refs/tags/') && needs.release-gate.result == 'success'
     # This job uses the common publish workflow provided by the ecosystem.
     # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
-    uses: dart-lang/ecosystem/.github/workflows/publish.yaml@main
+    uses: dart-lang/ecosystem/.github/workflows/publish.yaml@b79f68c55d4a611e7ebf63091036f3f18b5d94b3 # v2026-08-25
     with:
       use-flutter: true
+      # Let post_summaries.yaml publish comments from the trusted workflow_run
+      # context, including for pull requests opened from forks.
+      write-comments: false
     permissions:
+      contents: read
       id-token: write
       pull-requests: write

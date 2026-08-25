@@ -187,26 +187,15 @@ final class TestOrchestrator {
       label: 'resolve root workspace',
     );
 
-    final dashboard = catalog.select(
-      requestedPaths: const ['packages/dashboard'],
-      includeFlutter: true,
-    );
-    if (dashboard.isNotEmpty) {
-      await runner.run(
-        pubTool,
-        ['pub', 'get'],
-        workingDirectory: dashboard.single.directory,
-        environment: resolvedEnvironment,
-        label: 'resolve packages/dashboard',
-      );
-    }
+    // The dashboard is an experimental companion outside the workspace. Its
+    // Routed dependency graph is validated by the explicit dashboard tasks,
+    // not by the core Stem gate.
     return resolvedEnvironment;
   }
 
   Future<void> runNoEnvironment([Map<String, String>? environment]) async {
     await _runDartPackages(
       const [
-        'packages/dashboard',
         'packages/stem',
         'packages/stem_adapter_tests',
         'packages/stem_builder',

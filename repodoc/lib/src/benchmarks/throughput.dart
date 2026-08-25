@@ -95,21 +95,12 @@ final class ThroughputBenchmark {
     final backend = resources.backend;
     final executionBroker = resources.executionBroker;
     final executionBackend = resources.executionBackend;
-    final completed = Completer<void>();
     final warmupCompleted = Completer<void>();
     var measuring = false;
-    var measurementClosed = false;
     var warmupCompletedTasks = 0;
     var measuredTasks = 0;
-    var completedTasks = 0;
     final taskLatencies = <double>[];
-    void completeMeasuredIfReady() {
-      if (measurementClosed &&
-          completedTasks >= measuredTasks &&
-          !completed.isCompleted) {
-        completed.complete();
-      }
-    }
+    final measuredWatchers = <_TerminalWatcher>[];
 
     final registry = InMemoryTaskRegistry()
       ..register(
@@ -122,13 +113,7 @@ final class ThroughputBenchmark {
                   !warmupCompleted.isCompleted) {
                 warmupCompleted.complete();
               }
-              return;
             }
-            completedTasks += 1;
-            completeMeasuredIfReady();
-          },
-          recordLatency: (latency) {
-            if (measuring) taskLatencies.add(latency);
           },
         ),
       );
@@ -166,6 +151,7 @@ final class ThroughputBenchmark {
       stage('enqueueing $warmupTasks warmup tasks');
       await _enqueueTasks(
         stem,
+        backend,
         warmupTasks,
         label: 'warmup enqueue',
         stage: stage,
@@ -182,12 +168,13 @@ final class ThroughputBenchmark {
         measuredTasks = tasks;
         await _enqueueTasks(
           stem,
+          backend,
           tasks,
           label: 'measured enqueue',
           stage: stage,
+          watchBackend: executionBackend,
+          terminalWatchers: measuredWatchers,
         );
-        measurementClosed = true;
-        completeMeasuredIfReady();
         return;
       }
 
@@ -197,12 +184,14 @@ final class ThroughputBenchmark {
       while (window.elapsed < duration) {
         final index = measuredTasks;
         measuredTasks += 1;
+        final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
+        final taskId = generateEnvelopeId();
+        measuredWatchers.add(_watchTerminal(executionBackend, taskId));
         await stem.enqueue(
           'repodoc.benchmark.noop',
-          args: {
-            'index': index,
-            'enqueuedAtMicros': DateTime.now().microsecondsSinceEpoch,
-          },
+          args: {'index': index},
+          meta: {'enqueuedAtMicros': enqueuedAtMicros},
+          enqueueOptions: TaskEnqueueOptions(taskId: taskId),
         );
         if (window.elapsed >= nextProgress) {
           stage(
@@ -213,8 +202,16 @@ final class ThroughputBenchmark {
         }
       }
       window.stop();
-      measurementClosed = true;
-      completeMeasuredIfReady();
+    }
+
+    Future<void> awaitMeasuredStatuses() async {
+      final statuses = await Future.wait(
+        measuredWatchers.map((watcher) => watcher.future),
+      ).timeout(const Duration(minutes: 2));
+      for (final terminal in statuses) {
+        final latency = _observedTaskLatencyMs(terminal);
+        if (latency != null) taskLatencies.add(latency);
+      }
     }
 
     try {
@@ -236,7 +233,7 @@ final class ThroughputBenchmark {
         stage('prefill complete; starting worker drain');
         final total = Stopwatch()..start();
         await startWorker();
-        await completed.future.timeout(const Duration(minutes: 2));
+        await awaitMeasuredStatuses();
         final handlerEndToEnd = total.elapsed;
         stage('handlers complete; waiting for broker drain');
         await _waitForBrokerDrain(broker);
@@ -268,7 +265,7 @@ final class ThroughputBenchmark {
       }
 
       stage('measured enqueue complete; waiting for handlers');
-      await completed.future.timeout(const Duration(minutes: 2));
+      await awaitMeasuredStatuses();
       final handlerEndToEnd = total.elapsed;
       stage('handlers complete; waiting for broker drain');
       await _waitForBrokerDrain(broker);
@@ -287,11 +284,17 @@ final class ThroughputBenchmark {
       try {
         await shutdownWorker();
       } finally {
-        stage('closing store resources');
         try {
-          await resources.close();
+          await Future.wait(
+            measuredWatchers.map((watcher) => watcher.cancel()),
+          );
         } finally {
-          stage('benchmark complete');
+          stage('closing store resources');
+          try {
+            await resources.close();
+          } finally {
+            stage('benchmark complete');
+          }
         }
       }
     }
@@ -350,24 +353,86 @@ final class ThroughputBenchmark {
 
 Future<void> _enqueueTasks(
   Stem stem,
+  ResultBackend backend,
   int count, {
   required String label,
   required void Function(String message) stage,
+  ResultBackend? watchBackend,
+  List<_TerminalWatcher>? terminalWatchers,
 }) async {
   final progressEvery = count < 20 ? 1 : (count / 20).ceil();
   for (var index = 0; index < count; index++) {
+    final enqueuedAtMicros = DateTime.now().microsecondsSinceEpoch;
+    final taskId = generateEnvelopeId();
+    if (terminalWatchers != null) {
+      terminalWatchers.add(_watchTerminal(watchBackend ?? backend, taskId));
+    }
     await stem.enqueue(
       'repodoc.benchmark.noop',
-      args: {
-        'index': index,
-        'enqueuedAtMicros': DateTime.now().microsecondsSinceEpoch,
-      },
+      args: {'index': index},
+      meta: {'enqueuedAtMicros': enqueuedAtMicros},
+      enqueueOptions: TaskEnqueueOptions(taskId: taskId),
     );
     final completed = index + 1;
     if (completed == count || completed % progressEvery == 0) {
       stage('$label progress: $completed/$count');
     }
   }
+}
+
+final class _ObservedTerminal {
+  const _ObservedTerminal(this.status, this.observedAtMicros);
+
+  final TaskStatus status;
+  final int observedAtMicros;
+}
+
+_TerminalWatcher _watchTerminal(ResultBackend backend, String taskId) {
+  final completer = Completer<_ObservedTerminal>();
+  late StreamSubscription<TaskStatus> subscription;
+  subscription = backend
+      .watch(taskId)
+      .listen(
+        (status) {
+          if (!status.state.isTerminal || completer.isCompleted) return;
+          completer.complete(
+            _ObservedTerminal(status, DateTime.now().microsecondsSinceEpoch),
+          );
+          unawaited(subscription.cancel());
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          unawaited(subscription.cancel());
+          if (!completer.isCompleted) {
+            completer.completeError(error, stackTrace);
+          }
+        },
+        onDone: () {
+          unawaited(subscription.cancel());
+          if (!completer.isCompleted) {
+            completer.completeError(
+              StateError('Benchmark status stream closed before completion.'),
+            );
+          }
+        },
+      );
+  return _TerminalWatcher(completer.future, subscription.cancel);
+}
+
+final class _TerminalWatcher {
+  const _TerminalWatcher(this.future, this._cancel);
+
+  final Future<_ObservedTerminal> future;
+  final Future<void> Function() _cancel;
+
+  Future<void> cancel() => _cancel();
+}
+
+double? _observedTaskLatencyMs(_ObservedTerminal terminal) {
+  final enqueuedAt = (terminal.status.meta['enqueuedAtMicros'] as num?)
+      ?.toInt();
+  if (enqueuedAt == null) return null;
+  return (terminal.observedAtMicros - enqueuedAt) /
+      Duration.microsecondsPerMillisecond;
 }
 
 Future<void> _waitForBrokerDrain(QueueBroker broker) async {
@@ -403,15 +468,10 @@ double _rate(int count, Duration duration) {
 }
 
 final class _ThroughputTask extends TaskHandler<void> {
-  _ThroughputTask({
-    required this.scenario,
-    required this.onTerminal,
-    required this.recordLatency,
-  });
+  _ThroughputTask({required this.scenario, required this.onTerminal});
 
   final ThroughputScenario scenario;
   final void Function() onTerminal;
-  final void Function(double latencyMs) recordLatency;
 
   @override
   String get name => 'repodoc.benchmark.noop';
@@ -421,15 +481,7 @@ final class _ThroughputTask extends TaskHandler<void> {
 
   @override
   Future<void> call(TaskContext context, Map<String, Object?> args) async {
-    void recordTerminal() {
-      final enqueuedAtMicros = (args['enqueuedAtMicros'] as num?)?.toInt();
-      if (enqueuedAtMicros != null) {
-        final elapsedMicros =
-            DateTime.now().microsecondsSinceEpoch - enqueuedAtMicros;
-        recordLatency(elapsedMicros / Duration.microsecondsPerMillisecond);
-      }
-      onTerminal();
-    }
+    void recordTerminal() => onTerminal();
 
     switch (scenario) {
       case ThroughputScenario.success:

@@ -1,20 +1,20 @@
 name: stem_flutter_sqlite
 description: SQLite adapter helpers for Flutter-hosted Stem runtimes.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/kingwill101/stem/tree/master/packages/stem_flutter_sqlite
 issue_tracker: https://github.com/kingwill101/stem/issues
 resolution: workspace
 
 environment:
-  sdk: ^3.9.2
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
   path_provider: ^2.1.5
-  stem: ">=0.3.0 <0.4.0"
-  stem_flutter: ">=0.2.0 <0.3.0"
-  stem_sqlite: ">=0.2.0 <0.3.0"
+  stem: ">=0.4.0 <0.5.0"
+  stem_flutter: ">=0.3.0 <0.4.0"
+  stem_sqlite: ">=0.3.0 <0.4.0"
 
 dev_dependencies:
   flutter_test:

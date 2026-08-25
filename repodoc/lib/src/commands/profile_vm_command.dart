@@ -33,7 +33,7 @@ final class ProfileVmCommand extends Command<int> {
   Future<int> run() async {
     final catalog = WorkspaceCatalog.load();
     final root = catalog.root;
-    final serviceInfo = _string('service-info');
+    final serviceInfo = _required('service-info');
     await File(p.join(root.path, serviceInfo)).parent.create(recursive: true);
     stdout.writeln('VM service details will be written to $serviceInfo');
     stdout.writeln(
@@ -50,19 +50,19 @@ final class ProfileVmCommand extends Command<int> {
         '--write-service-info=$serviceInfo',
         'benchmark/stem_job_profile.dart',
         '--tasks',
-        _string('tasks'),
+        _required('tasks'),
         '--warmup',
-        _string('warmup'),
+        _required('warmup'),
         '--concurrency',
-        _string('concurrency'),
+        _required('concurrency'),
         '--mode',
-        _string('mode'),
+        _required('mode'),
         '--workload',
-        _string('workload'),
+        _required('workload'),
         '--work-units',
-        _string('work-units'),
+        _required('work-units'),
         '--hold-seconds',
-        _string('hold-seconds'),
+        _required('hold-seconds'),
       ],
       workingDirectory: root,
       label: 'VM job profile',
@@ -70,5 +70,11 @@ final class ProfileVmCommand extends Command<int> {
     return 0;
   }
 
-  String _string(String name) => argResults?[name] as String? ?? '';
+  String _required(String name) {
+    final value = argResults?[name];
+    if (value is! String || value.trim().isEmpty) {
+      throw ArgumentError('Missing profile option: --$name');
+    }
+    return value;
+  }
 }

@@ -8,6 +8,8 @@ import 'package:stem_sqlite/src/database/migrations.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 import 'package:test/test.dart';
 
+const _migrationTestTimeout = Timeout(Duration(minutes: 5));
+
 void main() {
   test(
     'upgrades every historical schema prefix to the current registry',
@@ -69,56 +71,61 @@ void main() {
         }
       }
     },
+    timeout: _migrationTestTimeout,
   );
 
-  test('current additive schema accepts legacy-shaped queue writes', () async {
-    final directory = await Directory.systemTemp.createTemp(
-      'stem-sqlite-mixed-version-',
-    );
-    final file = File('${directory.path}/stem.db');
-    try {
-      final adapter = SqliteDriverAdapter.file(file.path);
-      final runner = MigrationRunner(
-        schemaDriver: adapter,
-        ledger: SqlMigrationLedger(adapter, tableName: 'orm_migrations'),
-        migrations: buildMigrations(),
-        emitEvents: false,
+  test(
+    'current additive schema accepts legacy-shaped queue writes',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'stem-sqlite-mixed-version-',
       );
-      await runner.applyAll();
+      final file = File('${directory.path}/stem.db');
+      try {
+        final adapter = SqliteDriverAdapter.file(file.path);
+        final runner = MigrationRunner(
+          schemaDriver: adapter,
+          ledger: SqlMigrationLedger(adapter, tableName: 'orm_migrations'),
+          migrations: buildMigrations(),
+          emitEvents: false,
+        );
+        await runner.applyAll();
 
-      final now = DateTime.now().toUtc();
-      await adapter.executeRaw(
-        '''
+        final now = DateTime.now().toUtc();
+        await adapter.executeRaw(
+          '''
 INSERT INTO stem_queue_jobs
   (id, queue, envelope, attempt, max_retries, priority, not_before,
    locked_at, locked_until, locked_by, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ''',
-        [
-          'legacy-queue-job',
-          'default',
-          jsonEncode({'name': 'legacy.task', 'args': <String, Object?>{}}),
-          0,
-          0,
-          0,
-          null,
-          null,
-          null,
-          null,
-          now,
-          now,
-        ],
-      );
-      final rows = await adapter.queryRaw(
-        'SELECT namespace FROM stem_queue_jobs WHERE id = ?',
-        ['legacy-queue-job'],
-      );
-      expect(rows.single['namespace'], equals('stem'));
-      await adapter.close();
-    } finally {
-      await directory.delete(recursive: true);
-    }
-  });
+          [
+            'legacy-queue-job',
+            'default',
+            jsonEncode({'name': 'legacy.task', 'args': <String, Object?>{}}),
+            0,
+            0,
+            0,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now,
+          ],
+        );
+        final rows = await adapter.queryRaw(
+          'SELECT namespace FROM stem_queue_jobs WHERE id = ?',
+          ['legacy-queue-job'],
+        );
+        expect(rows.single['namespace'], equals('stem'));
+        await adapter.close();
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+    timeout: _migrationTestTimeout,
+  );
 
   test(
     'current broker consumes a queue row written before namespace migration',
@@ -183,5 +190,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         await directory.delete(recursive: true);
       }
     },
+    timeout: _migrationTestTimeout,
   );
 }

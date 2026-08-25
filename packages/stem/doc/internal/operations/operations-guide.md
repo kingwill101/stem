@@ -24,6 +24,7 @@ Stem reads configuration from environment variables. The most common settings ar
 | `STEM_REVOKE_STORE_URL` | Override the persistent revoke store (defaults to backend/broker) |
 | `STEM_METRIC_EXPORTERS` | Comma separated exporters (`console`, `otlp:http://host:4318/v1/metrics`, `prometheus`) |
 | `STEM_OTLP_ENDPOINT` | Default OTLP HTTP endpoint used when exporters omit a target |
+| `OTEL_PROPAGATORS` | OpenTelemetry context propagators (`tracecontext,baggage` by default, or `none`) |
 | `STEM_SIGNING_KEYS` / `STEM_SIGNING_ACTIVE_KEY` | HMAC signing secrets and active key identifier |
 | `STEM_SIGNING_PUBLIC_KEYS` / `STEM_SIGNING_PRIVATE_KEYS` | Ed25519 verification & signing material |
 | `STEM_SIGNING_ALGORITHM` | `hmac-sha256` (default) or `ed25519` |
@@ -88,7 +89,10 @@ Stem emits metrics and heartbeats via the observability module:
 - **Histograms**: task execution latency.
 - **Gauges**: active isolates, in-flight deliveries, per-queue depth.
 
-Plumb OpenTelemetry exporters into your APM of choice. The CLI command `stem worker status --follow` subscribes to heartbeat streams for live debugging.
+Plumb OpenTelemetry exporters into your APM of choice. Stem uses the OpenTelemetry
+global text-map propagator for task headers, so `OTEL_PROPAGATORS` can select the
+propagation set without a Stem-specific configuration layer. The CLI command
+`stem worker status --follow` subscribes to heartbeat streams for live debugging.
 
 Use `stem worker status --once` to dump the latest snapshot from the result backend, or `stem worker status --follow --timeout 60s` to stream updates with a timeout guard. Override connection targets with `--backend` / `--broker`, and adjust expectations with `--heartbeat-interval`.
 

@@ -1,17 +1,17 @@
 name: stem_cli
 description: Command-line tooling for Stem that orchestrates Redis and Postgres adapters.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  sdk: ">=3.12.0 <4.0.0"
 
 dependencies:
   artisanal: ^0.5.0
-  stem: ">=0.3.0 <0.4.0"
-  stem_redis: ^0.2.0
-  stem_postgres: ^0.2.0
-  stem_sqlite: ^0.2.0
+  stem: ">=0.4.0 <0.5.0"
+  stem_redis: ^0.3.0
+  stem_postgres: ^0.3.0
+  stem_sqlite: ^0.3.0
   redis: ^4.0.0
   postgres: ^3.5.9
   async: ^2.13.0
@@ -22,5 +22,5 @@ dependencies:
 dev_dependencies:
   coverage: ^1.15.0
   lints: ^6.0.0
-  test: ^1.29.0
+  test: ^1.31.2
   very_good_analysis: ^10.0.0

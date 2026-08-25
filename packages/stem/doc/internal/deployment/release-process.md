@@ -43,7 +43,7 @@ This guide covers preparation, versioning, and post-release steps for Stem.
    runs in dependency order.
 3. Commit exactly the metadata used for the release.
 4. Tag each package independently using `<package>-v<version>`, for example
-   `stem-v0.3.0` or `stem_flutter-v0.2.0`, then push the tags. The trusted
+   `stem-v0.4.0` or `stem_flutter-v0.3.0`, then push the tags. The trusted
    publishing workflow consumes these tags and publishes the matching package.
 5. Verify the package pages and dependency resolution after publication.
 

@@ -1,0 +1,17 @@
+name: Health
+
+on:
+  pull_request:
+    branches: [ master ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+
+jobs:
+  health:
+    uses: dart-lang/ecosystem/.github/workflows/health.yaml@b79f68c55d4a611e7ebf63091036f3f18b5d94b3 # v2026-08-25
+    with:
+      # PR Health uses this list to run Flutter tooling for the packages that
+      # depend on the Flutter SDK.
+      flutter_packages: packages/stem_flutter,packages/stem_flutter_sqlite
+    permissions:
+      contents: read
+      pull-requests: write

@@ -99,9 +99,10 @@ devenv shell -- repodoc benchmark:throughput \
 ```
 
 Use `--json` when a command or script needs the raw result on stdout. Repodoc
-owns the benchmark implementation and is the only supported throughput entry
-point. Adapter benchmarks should live beside the adapter because Redis,
-Postgres and SQLite contention have different costs.
+owns the repository-wide throughput benchmark entry point. Adapter packages
+may also provide separate adapter-specific throughput benchmarks beside their
+implementation because Redis, Postgres and SQLite contention have different
+costs.
 
 GitHub CI runs the memory benchmark as a hard regression gate and runs SQLite,
 PostgreSQL, and Redis sequentially as external-store smoke/report benchmarks.
