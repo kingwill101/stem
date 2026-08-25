@@ -12,7 +12,8 @@ dependencies:
   contextual: ^2.2.0
   meta: ^1.18.0
   ormed: ^0.2.0
-  ormed_sqlite: ^0.3.0
+  # Keep compatibility with the 0.2 and 0.3 SQLite adapter lines.
+  ormed_sqlite: ">=0.2.0 <0.4.0"
   path: ^1.9.1
   stem: ">=0.3.0 <0.4.0"
   uuid: ^4.5.2
