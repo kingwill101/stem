@@ -111,7 +111,7 @@ class StemTracer {
       headers,
       _StringMapSetter(headers),
     );
-    if (_propagationDisabled) return;
+    if (!_traceContextPropagationEnabled) return;
     final spanContext = _spanContextFrom(baseContext);
     if (spanContext == null) return;
 
@@ -181,7 +181,7 @@ class StemTracer {
       headers,
       _StringMapGetter(headers),
     );
-    if (_propagationDisabled) return baseContext;
+    if (!_traceContextPropagationEnabled) return baseContext;
     if (propagated != null && _spanContextFrom(propagated) != null) {
       return propagated;
     }
@@ -241,6 +241,17 @@ class StemTracer {
       return dotel.OTelEnv.getPropagators().contains('none');
     } on Object {
       return false;
+    }
+  }
+
+  bool get _traceContextPropagationEnabled {
+    try {
+      final propagators = dotel.OTelEnv.getPropagators();
+      return !_propagationDisabled && propagators.contains('tracecontext');
+    } on Object {
+      // Preserve the legacy fallback if the optional environment integration
+      // is unavailable in a platform implementation.
+      return true;
     }
   }
 
@@ -310,5 +321,11 @@ final class _StringMapSetter extends dotel_api.TextMapSetter<String> {
   final Map<String, String> _headers;
 
   @override
-  void set(String key, String value) => _headers[key] = value;
+  void set(String key, String value) {
+    if ((key == 'traceparent' || key == 'tracestate') &&
+        _headers.containsKey(key)) {
+      return;
+    }
+    _headers[key] = value;
+  }
 }
