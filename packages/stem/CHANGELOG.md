@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## 0.4.0
 
 - Raised the minimum Dart SDK to 3.12.0 for the coordinated Ormed 0.3

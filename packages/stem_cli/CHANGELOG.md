@@ -1,7 +1,5 @@
 # Changelog
 
-## Unreleased
-
 ## 0.3.0
 
 - Updated the CLI and adapter dependencies for the Stem 0.4.0 release train
