@@ -850,7 +850,7 @@ class SignupWorkflow {
             allOf([
               contains('_StemScriptProxy0(script)'),
               contains(
-                ').run((_stemRequireArg(script.params, "email") as String))',
+                '.run((_stemRequireArg(script.params, "email") as String))',
               ),
               contains('_stemRequireArg(script.params, "email") as String'),
               contains('abstract final class StemWorkflowDefinitions'),
@@ -900,7 +900,7 @@ class SignupWorkflow {
             allOf([
               contains('_StemScriptProxy0(script)'),
               contains(
-                ').run(script, (_stemRequireArg(script.params, "email") as '
+                '.run(script, (_stemRequireArg(script.params, "email") as '
                 'String))',
               ),
             ]),
@@ -942,7 +942,7 @@ class SignupWorkflow {
           'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
               contains(
-                ').run(('
+                '.run(('
                 '_stemRequireArg(script.params, "email") as String), '
                 'context: script)',
               ),
