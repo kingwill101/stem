@@ -550,9 +550,7 @@ class ScriptWithStepsWorkflow {
               ),
               contains('return _script.step<String>('),
               contains('(context) => super.sendEmail(email)'),
-              contains(
-                'run: (script) => _StemScriptProxy0(script).run(script)',
-              ),
+              contains('_StemScriptProxy0(script)'),
             ]),
           ),
         },
@@ -850,9 +848,7 @@ class SignupWorkflow {
         outputs: {
           'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
-              contains(
-                'run: (script) => _StemScriptProxy0(',
-              ),
+              contains('_StemScriptProxy0(script)'),
               contains(
                 ').run((_stemRequireArg(script.params, "email") as String))',
               ),
@@ -902,7 +898,7 @@ class SignupWorkflow {
         outputs: {
           'stem_builder|lib/workflows.stem.g.dart': decodedMatches(
             allOf([
-              contains('run: (script) => _StemScriptProxy0('),
+              contains('_StemScriptProxy0(script)'),
               contains(
                 ').run(script, (_stemRequireArg(script.params, "email") as '
                 'String))',
