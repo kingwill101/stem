@@ -28,6 +28,9 @@ jobs:
       write-comments: false
     permissions:
       contents: read
+      # The reusable workflow declares a publish job, so its caller must grant
+      # this permission even though this invocation is gated to pull requests.
+      id-token: write
       pull-requests: write
 
   publish:
