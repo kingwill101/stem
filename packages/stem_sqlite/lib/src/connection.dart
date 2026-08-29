@@ -12,6 +12,7 @@ import 'package:stem_sqlite/src/database/migrations.dart';
 import 'package:stem_sqlite/src/database/orm_registry.g.dart';
 
 const int _sqliteBusyTimeoutMs = 5000;
+int _connectionSequence = 0;
 
 /// Holds an active SQLite data source and query helpers.
 class SqliteConnections {
@@ -155,7 +156,10 @@ Future<DataSource> _openDataSource(File file, {required bool readOnly}) async {
     file.parent.createSync(recursive: true);
   }
 
-  final dataSource = buildOrmRegistry().sqliteFileDataSource(path: file.path);
+  final dataSource = buildOrmRegistry().sqliteFileDataSource(
+    path: file.path,
+    name: 'stem_sqlite_${_connectionSequence++}',
+  );
   await dataSource.init();
   final driver = dataSource.connection.driver;
   await driver.executeRaw('PRAGMA busy_timeout = $_sqliteBusyTimeoutMs;');

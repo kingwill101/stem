@@ -14,6 +14,10 @@ void main() {
       final connections = await SqliteConnections.open(file);
       final secondConnections = await SqliteConnections.open(file);
       try {
+        expect(
+          connections.dataSource.options.name,
+          isNot(secondConnections.dataSource.options.name),
+        );
         await Future.wait(
           List.generate(
             32,
