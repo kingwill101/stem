@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0
+## 0.2.0
 
 - Assigned unique Ormed connection names to file-backed stores so concurrently
   opened brokers and result backends close every native SQLite handle.
@@ -9,9 +9,6 @@
 - Retained generated model definitions for Stem's internal typed repositories;
   Ormed's codegen-free database facade remains available for application-side
   ad-hoc access.
-
-## 0.2.0
-
 - Datasource logger injection now uses Stem's dependency-neutral `StemLogger`
   facade; the Ormed contextual logger remains an adapter implementation detail.
 - Serialized SQLite transactions and broker mutations across shared file

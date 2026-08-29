@@ -1,14 +1,11 @@
 # Changelog
 
-## 0.3.0
+## 0.2.0
 
-- Updated the CLI and adapter dependencies for the Stem 0.4.0 release train
+- Updated the CLI and adapter dependencies for the Stem 0.3.0 release train
   and Dart 3.12 minimum.
 - Hardened Redis TLS integration fixtures so private keys remain owner-only
   while test containers run as the non-root Redis user.
-
-## 0.2.0
-
 - Updated CLI adapter dependencies for the Stem 0.3.0 release train.
 - Kept worker startup explicit and retained `schedule trigger` support.
 - Made Docker-backed integration setup reuse disposable TLS assets and wait for

@@ -20,16 +20,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish:
-    # This job uses the common publish workflow provided by the ecosystem.
-    # See https://github.com/dart-lang/ecosystem/wiki/Publishing-automation
+  validate:
+    if: ${{ github.event_name == 'pull_request' }}
     uses: dart-lang/ecosystem/.github/workflows/publish.yaml@b79f68c55d4a611e7ebf63091036f3f18b5d94b3 # v2026-08-25
     with:
       use-flutter: true
-      # Let post_summaries.yaml publish comments from the trusted workflow_run
-      # context, including for pull requests opened from forks.
       write-comments: false
     permissions:
       contents: read
-      id-token: write
       pull-requests: write
+
+  publish:
+    if: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-cache-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-cache-
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      # This step also provisions PUB_TOKEN from GitHub OIDC. Flutter's pub
+      # process inherits the token, avoiding interactive browser authorization.
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
+        with:
+          sdk: stable
+      - name: Install firehose
+        run: dart pub global activate --source git https://github.com/dart-lang/ecosystem --git-path pkgs/firehose/
+      - name: Publish package
+        run: dart pub global run firehose --publish --use-flutter --tag-prefix v

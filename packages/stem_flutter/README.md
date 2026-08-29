@@ -36,7 +36,7 @@ Those decisions are intentionally left to the app and the adapter package.
 
 ```yaml
 dependencies:
-  stem_flutter: ^0.3.0
+  stem_flutter: ^0.2.0
 ```
 
 ## Minimal Usage
