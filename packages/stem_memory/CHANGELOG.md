@@ -1,12 +1,9 @@
 # Changelog
 
-## 0.3.0
-
-- Updated the in-memory adapter for the Stem 0.4.0 release train and Dart 3.12
-  minimum.
-
 ## 0.2.0
 
+- Updated the in-memory adapter for the Stem 0.3.0 release train and Dart 3.12
+  minimum.
 - Updated the compatibility package for Stem 0.3.0 and the core-owned memory
   entrypoint.
 

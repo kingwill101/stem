@@ -18,7 +18,7 @@ with Stem and SQLite.
 
 ```yaml
 dependencies:
-  stem_flutter_sqlite: ^0.3.0
+  stem_flutter_sqlite: ^0.2.0
 ```
 
 `stem_flutter_sqlite` depends on `stem_flutter`, `stem_sqlite`, and

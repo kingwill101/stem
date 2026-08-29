@@ -13,10 +13,10 @@ dependencies:
   routed_hotwire: ^0.1.5
   stem:
     path: ../stem
-  stem_cli: ^0.3.0
-  stem_postgres: ^0.3.0
-  stem_redis: ^0.3.0
-  stem_sqlite: ^0.3.0
+  stem_cli: ^0.2.0
+  stem_postgres: ^0.2.0
+  stem_redis: ^0.2.0
+  stem_sqlite: ^0.2.0
 
 dev_dependencies:
   lints: ^6.0.0

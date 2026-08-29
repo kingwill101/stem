@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.0
+## 0.3.0
 
 - Raised the minimum Dart SDK to 3.12.0 for the coordinated Ormed 0.3
   release train.
@@ -9,10 +9,7 @@
   benefits from zone-safe context propagation, sampler-correct spans, global
   propagator configuration, and the SDK's no-processor fast path.
 - This release intentionally contains breaking dependency and SDK changes
-  from the 0.3 line.
-
-## 0.3.0
-
+  from the 0.2 line.
 - Promoted the typed stable/advanced API boundary and removed implicit worker
   startup from producer, inspection, Canvas, and workflow operations.
 - Added capability-aware queue transports, public cooperative cancellation,
