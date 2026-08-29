@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Assigned unique Ormed connection names to file-backed stores so concurrently
+  opened brokers and result backends close every native SQLite handle.
 - Raised the minimum Dart SDK to 3.12.0 and the Ormed dependencies to 0.3.0
   and `ormed_sqlite` 0.4.0.
 - Retained generated model definitions for Stem's internal typed repositories;
