@@ -24,7 +24,9 @@ void main() {
     );
 
     context.heartbeat();
+    expect(heartbeatCount, 1);
     await context.extendLease(const Duration(seconds: 5));
+    expect(extension, const Duration(seconds: 5));
     await context.progress(0.5, data: const {'step': 'half'});
 
     expect(context.id, 'portable-context');
@@ -33,8 +35,6 @@ void main() {
     expect(context.meta, const {'tenant': 'test'});
     expect(context.attempt, 2);
     expect(context.cancellation, isA<TaskCancellationToken>());
-    expect(heartbeatCount, 1);
-    expect(extension, const Duration(seconds: 5));
     expect(progress, 0.5);
     expect(progressData, const {'step': 'half'});
   });
