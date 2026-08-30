@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.2.0
+## 0.2.1
 
+- Widened Stem compatibility to include the 0.4 portable runtime line.
 - Assigned unique Ormed connection names to file-backed stores so concurrently
   opened brokers and result backends close every native SQLite handle.
 - Raised the minimum Dart SDK to 3.12.0 and the Ormed dependencies to 0.3.0

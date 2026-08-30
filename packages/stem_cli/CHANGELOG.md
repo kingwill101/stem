@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.2.0
+## 0.2.1
 
+- Widened Stem compatibility to include the 0.4 portable runtime line.
 - Updated the CLI and adapter dependencies for the Stem 0.3.0 release train
   and Dart 3.12 minimum.
 - Hardened Redis TLS integration fixtures so private keys remain owner-only

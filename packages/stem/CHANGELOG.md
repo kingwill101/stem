@@ -1,7 +1,10 @@
 # Changelog
 
-## 0.3.0
+## 0.4.0
 
+- Added the first portable runtime surface: publisher-only producer APIs,
+  conditional VM task invocation, narrow persistence capabilities, typed
+  task-processing outcomes, and a JavaScript compile guard for `portable.dart`.
 - Raised the minimum Dart SDK to 3.12.0 for the coordinated Ormed 0.3
   release train.
 - Raised the ecommerce example's minimum Dart SDK to 3.12.0.

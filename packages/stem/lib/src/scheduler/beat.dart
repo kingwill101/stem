@@ -40,20 +40,49 @@ class Beat {
   /// - [lockTtl]: Duration for which a dispatch lock is held.
   /// - [signer]: (Optional) Signer to secure dispatched task envelopes.
   Beat({
+    required ScheduleStore store,
+    required QueueBroker broker,
+    LockStore? lockStore,
+    Duration tickInterval = const Duration(seconds: 1),
+    Duration lockTtl = const Duration(seconds: 5),
+    PayloadSigner? signer,
+    Random? random,
+  }) : this.withPublisher(
+         store: store,
+         publisher: broker,
+         lockStore: lockStore,
+         tickInterval: tickInterval,
+         lockTtl: lockTtl,
+         signer: signer,
+         random: random,
+       );
+
+  /// Creates a scheduler that only requires task publishing capability.
+  Beat.withPublisher({
     required this.store,
-    required this.broker,
+    required this.publisher,
     this.lockStore,
     this.tickInterval = const Duration(seconds: 1),
     this.lockTtl = const Duration(seconds: 5),
     this.signer,
     Random? random,
-  }) : _random = random ?? Random();
+  }) : _broker = publisher is QueueBroker ? publisher : null,
+       _random = random ?? Random();
 
   /// Schedule store used to fetch due entries.
   final ScheduleStore store;
 
-  /// Broker used to publish scheduled tasks.
-  final QueueBroker broker;
+  /// Transport used to publish scheduled tasks.
+  final TaskPublisher publisher;
+
+  /// Full broker supplied through the compatibility constructor.
+  QueueBroker get broker =>
+      _broker ??
+      (throw StateError(
+        'This Beat instance was created with a publish-only transport.',
+      ));
+
+  final QueueBroker? _broker;
 
   /// Optional lock store for distributed scheduling.
   final LockStore? lockStore;
@@ -268,7 +297,7 @@ class Beat {
       if (signer != null) {
         envelope = await signer!.sign(envelope);
       }
-      await broker.publish(envelope);
+      await publisher.publish(envelope);
 
       final executedAt = stemNow();
       final duration = executedAt.difference(startedAt);

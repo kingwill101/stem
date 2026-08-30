@@ -1,7 +1,6 @@
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart' show Stem;
-import 'package:stem/stem.dart' show Stem;
 
 /// Typed view over a [TaskStatus] returned by helpers such as
 /// [Stem.waitForTask] or canvas typed operations.

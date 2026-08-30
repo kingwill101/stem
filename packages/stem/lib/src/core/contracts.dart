@@ -148,18 +148,36 @@ class BrokerCapabilities {
   final bool supportsDeadLetterReplay;
 }
 
-/// Core queue operations required to publish and consume task deliveries.
+/// Minimal transport contract used by producers and one-shot schedulers.
 ///
-/// This is the narrow transport surface for new adapter integrations. [Broker]
-/// remains the compatibility facade while optional operational capabilities are
-/// migrated to the interfaces below.
-abstract interface class QueueBroker {
+/// Event-driven runtimes can implement this contract without pretending to
+/// own a consumer stream or acknowledgement lifecycle.
+/// This interface intentionally models one minimal transport operation.
+// ignore: one_member_abstracts
+abstract interface class TaskPublisher {
   /// Publishes the given [envelope] using [routing] metadata when provided.
   ///
   /// When [routing] is omitted, brokers MUST fall back to [Envelope.queue] and
   /// existing semantics.
   Future<void> publish(Envelope envelope, {RoutingInfo? routing});
+}
 
+/// Optional lifecycle capability for publishers that own disposable
+/// resources such as sockets or connection pools.
+// ignore: one_member_abstracts
+abstract interface class TaskPublisherLifecycle {
+  /// Releases resources held by the publisher.
+  Future<void> close();
+}
+
+/// Core queue operations required to publish and consume task deliveries.
+///
+/// Producer-only and event-driven integrations should implement
+/// [TaskPublisher]. Long-lived workers use this broader delivery contract.
+/// [Broker] remains the compatibility facade while optional operational
+/// capabilities are migrated to the interfaces below.
+abstract interface class QueueBroker
+    implements TaskPublisher, TaskPublisherLifecycle {
   /// Returns a stream of deliveries based on the supplied [subscription].
   ///
   /// The [prefetch] parameter specifies the number of messages to prefetch.
@@ -181,6 +199,7 @@ abstract interface class QueueBroker {
   Future<void> nack(Delivery delivery, {bool requeue = true});
 
   /// Releases resources held by the transport.
+  @override
   Future<void> close();
 }
 
@@ -1151,13 +1170,72 @@ class DeadLetterReplayResult {
   int get count => entries.length;
 }
 
-/// Result backend describes how task states are persisted and retrieved.
+/// Portable task-status persistence capability.
+abstract interface class TaskStatusStore {
+  /// Persists the latest task state.
+  Future<void> set(
+    String taskId,
+    TaskState state, {
+    Object? payload,
+    TaskError? error,
+    int attempt,
+    Map<String, Object?> meta,
+    Duration? ttl,
+  });
+
+  /// Retrieves the latest status for [taskId].
+  Future<TaskStatus?> get(String taskId);
+
+  /// Watches status changes for [taskId].
+  Stream<TaskStatus> watch(String taskId);
+
+  /// Lists task status records matching [request].
+  Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request);
+
+  /// Updates the expiration for [taskId].
+  Future<void> expire(String taskId, Duration ttl);
+}
+
+/// Persistence capability for worker heartbeat state.
+abstract interface class WorkerHeartbeatStore {
+  /// Persists a worker heartbeat snapshot.
+  Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
+
+  /// Retrieves a heartbeat by worker id.
+  Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId);
+
+  /// Lists the latest worker heartbeat snapshots.
+  Future<List<WorkerHeartbeat>> listWorkerHeartbeats();
+}
+
+/// Persistence capability for task groups and chord arbitration.
+abstract interface class GroupResultStore {
+  /// Initializes a task group.
+  Future<void> initGroup(GroupDescriptor descriptor);
+
+  /// Adds a task result to a group.
+  Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status);
+
+  /// Retrieves a task group.
+  Future<GroupStatus?> getGroup(String groupId);
+
+  /// Atomically claims responsibility for dispatching a chord callback.
+  Future<bool> claimChord(
+    String groupId, {
+    String? callbackTaskId,
+    DateTime? dispatchedAt,
+  });
+}
+
+/// Result backend compatibility facade combining optional store capabilities.
 /// Since: 0.1.0
-abstract class ResultBackend {
+abstract class ResultBackend
+    implements TaskStatusStore, WorkerHeartbeatStore, GroupResultStore {
   /// Sets the status for the task with the given [taskId].
   ///
   /// Updates the [state], [payload], [error], [attempt], and [meta], and sets a
   /// [ttl] if provided.
+  @override
   Future<void> set(
     String taskId,
     TaskState state, {
@@ -1170,41 +1248,51 @@ abstract class ResultBackend {
 
   /// Retrieves the [TaskStatus] for the task with the given [taskId], or null
   /// if not found.
+  @override
   Future<TaskStatus?> get(String taskId);
 
   /// Returns a stream of [TaskStatus] updates for the task with the given
   /// [taskId].
+  @override
   Stream<TaskStatus> watch(String taskId);
 
   /// Lists task status records using the provided [request] filters.
   ///
   /// Implementations SHOULD order results from newest to oldest.
+  @override
   Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request) async {
     return const TaskStatusPage(items: []);
   }
 
   /// Persist the latest [heartbeat] snapshot for a worker.
+  @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
 
   /// Retrieves the last persisted heartbeat snapshot for [workerId], or null if
   /// no heartbeat has been recorded within the retention window.
+  @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId);
 
   /// Lists all worker heartbeat snapshots.
+  @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats();
 
   /// Initializes a group with the given [descriptor].
+  @override
   Future<void> initGroup(GroupDescriptor descriptor);
 
   /// Adds the [status] to the group with the given [groupId] and returns the
   /// updated [GroupStatus].
+  @override
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status);
 
   /// Retrieves the [GroupStatus] for the group with the given [groupId], or
   /// null if not found.
+  @override
   Future<GroupStatus?> getGroup(String groupId);
 
   /// Updates the expiration for the given [taskId].
+  @override
   Future<void> expire(String taskId, Duration ttl);
 
   /// Attempts to claim responsibility for dispatching the chord callback for
@@ -1212,6 +1300,7 @@ abstract class ResultBackend {
   /// receive `false` once the chord has been claimed. When [callbackTaskId] or
   /// [dispatchedAt] are provided, implementations SHOULD persist them with the
   /// group metadata so other components can observe dispatch progress.
+  @override
   Future<bool> claimChord(
     String groupId, {
     String? callbackTaskId,
@@ -1239,7 +1328,7 @@ abstract class ResultBackend {
 /// backends remain source compatible. Workers fall back to [ResultBackend.set]
 /// for backends that do not advertise this capability; that fallback is not a
 /// cross-process first-writer-wins guarantee.
-abstract interface class AtomicTerminalResultBackend {
+abstract interface class AtomicTerminalResultStore {
   /// Whether this backend provides a cross-process atomic terminal write.
   bool get supportsAtomicTerminalWrites;
 
@@ -1249,6 +1338,10 @@ abstract interface class AtomicTerminalResultBackend {
     Duration? ttl,
   });
 }
+
+/// Compatibility name for existing result backend implementations.
+abstract interface class AtomicTerminalResultBackend
+    implements AtomicTerminalResultStore {}
 
 /// Schedule entry persisted by a Beat-like scheduler.
 class ScheduleEntry {
