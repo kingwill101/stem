@@ -165,13 +165,14 @@ void main() {
         }),
       );
       final processor = TaskProcessor(
-        registry: InMemoryTaskRegistry()
-          ..register(
-            _definition('portable.signed').handler(
-              entrypoint: (context, args) async => null,
-              executionMode: TaskExecutionMode.inline,
-            ),
-          ),
+        registry:
+            InMemoryTaskRegistry()
+              ..register(
+                _definition('portable.signed').handler(
+                  entrypoint: (context, args) async => null,
+                  executionMode: TaskExecutionMode.inline,
+                ),
+              ),
         signer: signer,
       );
 
