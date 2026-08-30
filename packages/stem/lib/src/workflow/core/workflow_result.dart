@@ -1,10 +1,8 @@
-import 'package:stem/src/bootstrap/workflow_app.dart' show StemWorkflowApp;
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
-import 'package:stem/stem.dart' show StemWorkflowApp;
 
-/// Typed result returned by [StemWorkflowApp.waitForCompletion].
+/// Typed result returned when waiting for workflow completion.
 ///
 /// Provides the decoded workflow result (when available) along with the raw
 /// [RunState] so callers can continue inspecting suspension metadata,
