@@ -4,6 +4,8 @@ library;
 import 'dart:async';
 
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Signature for task entrypoints.
 typedef TaskEntrypoint =

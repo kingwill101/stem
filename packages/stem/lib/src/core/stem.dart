@@ -239,7 +239,7 @@ class Stem implements TaskResultCaller {
   Future<void> close() async {
     final resolvedPublisher = publisher;
     if (resolvedPublisher is TaskPublisherLifecycle) {
-      await resolvedPublisher.close();
+      await (resolvedPublisher as TaskPublisherLifecycle).close();
     }
     final resolved = backend;
     if (resolved != null) {

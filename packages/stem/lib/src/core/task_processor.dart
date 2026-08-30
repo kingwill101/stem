@@ -11,6 +11,8 @@ import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/retry.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/security/signing.dart';
+import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 /// Runtime callbacks and optional services exposed to an executing task.
 class TaskExecutionControl {
