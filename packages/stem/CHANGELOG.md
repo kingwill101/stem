@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0
+## 0.4.0
 
 - Added the first portable runtime surface: publisher-only producer APIs,
   conditional VM task invocation, narrow persistence capabilities, typed

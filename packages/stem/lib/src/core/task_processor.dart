@@ -528,13 +528,14 @@ class TaskProcessor {
     if (decoded is Map) {
       final result = <String, Object?>{};
       for (final entry in decoded.entries) {
-        if (entry.key is! String) {
+        final key = entry.key;
+        if (key is! String) {
           throw StateError(
             'Task args encoder ${encoder.id} must use string keys, found '
-            '${entry.key}',
+            '$key',
           );
         }
-        result[entry.key! as String] = entry.value;
+        result[key] = entry.value;
       }
       return result;
     }

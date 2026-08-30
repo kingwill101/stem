@@ -30,6 +30,7 @@ export 'src/observability/tracing.dart';
 export 'src/routing/routing_registry.dart';
 export 'src/scheduler/beat.dart';
 export 'src/scheduler/schedule_calculator.dart';
+export 'src/scheduler/solar_calculator.dart';
 export 'src/security/tls.dart';
 export 'src/signals/emitter.dart';
 export 'src/signals/middleware.dart';

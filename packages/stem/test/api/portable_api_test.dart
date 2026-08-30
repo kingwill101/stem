@@ -2,6 +2,10 @@ import 'package:stem/portable.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('portable scheduler dependencies are publicly exported', () {
+    expect(const SolarCalculator(), isA<SolarCalculator>());
+  });
+
   test(
     'portable entrypoint supports publish-only enqueue and processing',
     () async {
