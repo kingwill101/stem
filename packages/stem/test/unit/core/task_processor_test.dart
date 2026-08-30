@@ -155,8 +155,6 @@ TaskDefinition<Map<String, Object?>, Object?> _definition(String name) {
 
 TaskProcessor _processor(Iterable<TaskHandler<Object?>> tasks) {
   final registry = InMemoryTaskRegistry();
-  for (final task in tasks) {
-    registry.register(task);
-  }
+  tasks.forEach(registry.register);
   return TaskProcessor(registry: registry, randomSeed: 1);
 }

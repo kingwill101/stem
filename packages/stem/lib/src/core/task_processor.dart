@@ -99,6 +99,7 @@ sealed class TaskProcessOutcome {
 
 /// Successful handler execution.
 final class TaskProcessSuccess extends TaskProcessOutcome {
+  /// Creates a successful processing outcome.
   const TaskProcessSuccess({required super.envelope, this.value});
 
   /// Raw value returned by the handler.
@@ -107,6 +108,7 @@ final class TaskProcessSuccess extends TaskProcessOutcome {
 
 /// Handler execution that should be attempted again later.
 final class TaskProcessRetry extends TaskProcessOutcome {
+  /// Creates an outcome requesting a later delivery attempt.
   const TaskProcessRetry({
     required super.envelope,
     required this.nextEnvelope,
@@ -137,6 +139,7 @@ final class TaskProcessRetry extends TaskProcessOutcome {
 
 /// Terminal handler failure after retry policy evaluation.
 final class TaskProcessFailure extends TaskProcessOutcome {
+  /// Creates a terminal failure outcome.
   const TaskProcessFailure({
     required super.envelope,
     required this.error,
@@ -156,6 +159,7 @@ final class TaskProcessFailure extends TaskProcessOutcome {
 
 /// Envelope rejected before handler execution.
 final class TaskProcessRejected extends TaskProcessOutcome {
+  /// Creates an outcome for an envelope rejected before execution.
   const TaskProcessRejected({
     required super.envelope,
     required this.reason,
@@ -175,6 +179,7 @@ final class TaskProcessRejected extends TaskProcessOutcome {
 
 /// Task cancelled or expired.
 final class TaskProcessCancelled extends TaskProcessOutcome {
+  /// Creates an outcome for a cancelled or expired task.
   const TaskProcessCancelled({
     required super.envelope,
     required this.reason,
@@ -190,6 +195,7 @@ final class TaskProcessCancelled extends TaskProcessOutcome {
 
 /// Duplicate delivery skipped because a terminal status already exists.
 final class TaskProcessSkipped extends TaskProcessOutcome {
+  /// Creates an outcome for a duplicate terminal delivery.
   const TaskProcessSkipped({
     required super.envelope,
     required this.existingStatus,

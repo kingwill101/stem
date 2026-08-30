@@ -4,5 +4,5 @@
 /// the portable implementation, whose local context has no isolate imports.
 library;
 
-export 'task_invocation_portable.dart'
-    if (dart.library.io) 'task_invocation_vm.dart';
+export 'task_invocation_vm.dart'
+    if (dart.library.js_interop) 'task_invocation_portable.dart';

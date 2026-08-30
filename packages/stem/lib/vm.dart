@@ -4,5 +4,5 @@
 /// entrypoint makes the VM dependency explicit for new worker applications.
 library;
 
-export 'stable.dart';
 export 'src/core/task_invocation_vm.dart';
+export 'stable.dart';

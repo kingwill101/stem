@@ -152,6 +152,8 @@ class BrokerCapabilities {
 ///
 /// Event-driven runtimes can implement this contract without pretending to
 /// own a consumer stream or acknowledgement lifecycle.
+/// This interface intentionally models one minimal transport operation.
+// ignore: one_member_abstracts
 abstract interface class TaskPublisher {
   /// Publishes the given [envelope] using [routing] metadata when provided.
   ///
@@ -197,6 +199,7 @@ abstract interface class QueueBroker
   Future<void> nack(Delivery delivery, {bool requeue = true});
 
   /// Releases resources held by the transport.
+  @override
   Future<void> close();
 }
 
@@ -1232,6 +1235,7 @@ abstract class ResultBackend
   ///
   /// Updates the [state], [payload], [error], [attempt], and [meta], and sets a
   /// [ttl] if provided.
+  @override
   Future<void> set(
     String taskId,
     TaskState state, {
@@ -1244,41 +1248,51 @@ abstract class ResultBackend
 
   /// Retrieves the [TaskStatus] for the task with the given [taskId], or null
   /// if not found.
+  @override
   Future<TaskStatus?> get(String taskId);
 
   /// Returns a stream of [TaskStatus] updates for the task with the given
   /// [taskId].
+  @override
   Stream<TaskStatus> watch(String taskId);
 
   /// Lists task status records using the provided [request] filters.
   ///
   /// Implementations SHOULD order results from newest to oldest.
+  @override
   Future<TaskStatusPage> listTaskStatuses(TaskStatusListRequest request) async {
     return const TaskStatusPage(items: []);
   }
 
   /// Persist the latest [heartbeat] snapshot for a worker.
+  @override
   Future<void> setWorkerHeartbeat(WorkerHeartbeat heartbeat);
 
   /// Retrieves the last persisted heartbeat snapshot for [workerId], or null if
   /// no heartbeat has been recorded within the retention window.
+  @override
   Future<WorkerHeartbeat?> getWorkerHeartbeat(String workerId);
 
   /// Lists all worker heartbeat snapshots.
+  @override
   Future<List<WorkerHeartbeat>> listWorkerHeartbeats();
 
   /// Initializes a group with the given [descriptor].
+  @override
   Future<void> initGroup(GroupDescriptor descriptor);
 
   /// Adds the [status] to the group with the given [groupId] and returns the
   /// updated [GroupStatus].
+  @override
   Future<GroupStatus?> addGroupResult(String groupId, TaskStatus status);
 
   /// Retrieves the [GroupStatus] for the group with the given [groupId], or
   /// null if not found.
+  @override
   Future<GroupStatus?> getGroup(String groupId);
 
   /// Updates the expiration for the given [taskId].
+  @override
   Future<void> expire(String taskId, Duration ttl);
 
   /// Attempts to claim responsibility for dispatching the chord callback for
@@ -1286,6 +1300,7 @@ abstract class ResultBackend
   /// receive `false` once the chord has been claimed. When [callbackTaskId] or
   /// [dispatchedAt] are provided, implementations SHOULD persist them with the
   /// group metadata so other components can observe dispatch progress.
+  @override
   Future<bool> claimChord(
     String groupId, {
     String? callbackTaskId,
