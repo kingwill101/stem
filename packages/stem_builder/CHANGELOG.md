@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Widened Stem compatibility to include the 0.4 portable runtime line.
 - Updated the builder for the Stem 0.3.0 release train and Dart 3.12 minimum.
 - Updated generated task adapters and workflow definitions for Stem 0.3.0.
 - Generated tasks now preserve typed handler boundaries and isolate entrypoints

@@ -2,6 +2,7 @@
 
 ## 0.2.0
 
+- Widened Stem compatibility to include the 0.4 portable runtime line.
 - Updated the shared contract package for the Stem 0.3.0 release train and
   Dart 3.12 minimum.
 - Updated shared adapter contracts for the Stem 0.3.0 capability and lifecycle
