@@ -1,0 +1,25 @@
+name: Portable API
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  compile-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
+        with:
+          sdk: stable
+      - name: Resolve workspace dependencies
+        run: dart pub get
+      - name: Compile portable surface to JavaScript
+        run: >-
+          dart compile js packages/stem/tool/portable_compile.dart
+          --output=/tmp/stem-portable.js
