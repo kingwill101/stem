@@ -23,6 +23,8 @@ void main() {
       },
     );
 
+    // Capability calls are checked individually between assertions below.
+    // ignore: cascade_invocations
     context.heartbeat();
     expect(heartbeatCount, 1);
     await context.extendLease(const Duration(seconds: 5));
