@@ -165,14 +165,13 @@ void main() {
         }),
       );
       final processor = TaskProcessor(
-        registry:
-            InMemoryTaskRegistry()
-              ..register(
-                _definition('portable.signed').handler(
-                  entrypoint: (context, args) async => null,
-                  executionMode: TaskExecutionMode.inline,
-                ),
-              ),
+        registry: InMemoryTaskRegistry()
+          ..register(
+            _definition('portable.signed').handler(
+              entrypoint: (context, args) async => null,
+              executionMode: TaskExecutionMode.inline,
+            ),
+          ),
         signer: signer,
       );
 
@@ -260,18 +259,19 @@ void main() {
     });
 
     test('classifies hard timeouts as terminal failures', () async {
-      final handler = _definition(
-        'portable.timeout',
-        options: const TaskOptions(
-          hardTimeLimit: Duration(milliseconds: 1),
-        ),
-      ).handler(
-        entrypoint: (context, args) async {
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-          return null;
-        },
-        executionMode: TaskExecutionMode.inline,
-      );
+      final handler =
+          _definition(
+            'portable.timeout',
+            options: const TaskOptions(
+              hardTimeLimit: Duration(milliseconds: 1),
+            ),
+          ).handler(
+            entrypoint: (context, args) async {
+              await Future<void>.delayed(const Duration(milliseconds: 20));
+              return null;
+            },
+            executionMode: TaskExecutionMode.inline,
+          );
 
       final outcome = await _processor([handler]).process(
         Envelope(name: handler.name, args: const {}),
@@ -282,22 +282,23 @@ void main() {
     });
 
     test('applies automatic retry policy and backoff', () async {
-      final handler = _definition(
-        'portable.auto-retry',
-        options: const TaskOptions(
-          maxRetries: 3,
-          retryPolicy: TaskRetryPolicy(
-            backoff: true,
-            jitter: false,
-            defaultDelay: Duration(seconds: 2),
-            maxRetries: 3,
-            autoRetryFor: ['StateError'],
-          ),
-        ),
-      ).handler(
-        entrypoint: (context, args) async => throw StateError('retry'),
-        executionMode: TaskExecutionMode.inline,
-      );
+      final handler =
+          _definition(
+            'portable.auto-retry',
+            options: const TaskOptions(
+              maxRetries: 3,
+              retryPolicy: TaskRetryPolicy(
+                backoff: true,
+                jitter: false,
+                defaultDelay: Duration(seconds: 2),
+                maxRetries: 3,
+                autoRetryFor: ['StateError'],
+              ),
+            ),
+          ).handler(
+            entrypoint: (context, args) async => throw StateError('retry'),
+            executionMode: TaskExecutionMode.inline,
+          );
 
       final outcome = await _processor([handler]).process(
         Envelope(name: handler.name, args: const {}, attempt: 1),

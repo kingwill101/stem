@@ -20,11 +20,6 @@ jobs:
           cache: true
       - name: Resolve workspace dependencies
         run: flutter pub get
-      - name: Show processor test formatter diff
-        run: |
-          cp packages/stem/test/unit/core/task_processor_test.dart /tmp/task_processor_test.dart
-          dart format packages/stem/test/unit/core/task_processor_test.dart
-          diff -u /tmp/task_processor_test.dart packages/stem/test/unit/core/task_processor_test.dart || true
       - name: Compile portable surface to JavaScript
         run: >-
           dart compile js packages/stem/tool/portable_compile.dart
