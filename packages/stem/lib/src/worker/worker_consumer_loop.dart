@@ -11,11 +11,24 @@ import 'package:stem/src/core/envelope.dart';
 /// callbacks.
 class WorkerConsumerLoop {
   /// Creates a consumer loop for [broker].
-  WorkerConsumerLoop({required QueueBroker broker}) : _broker = broker;
+  WorkerConsumerLoop({required QueueBroker broker, this.onCancelError})
+    : _broker = broker;
 
   final QueueBroker _broker;
+
+  /// Reports cancellation failures while continuing to cancel other streams.
+  final void Function(Object error, StackTrace stack)? onCancelError;
   final Map<String, StreamSubscription<Delivery>> _subscriptions = {};
   final Set<String> _queueSubscriptionNames = <String>{};
+  int _pending = 0;
+  Completer<void>? _drained;
+
+  /// Waits for complete callbacks, including pre-execution work and postrun
+  /// hooks. Call after cancelling subscriptions to establish quiescence.
+  Future<void> drain() async {
+    if (_pending == 0) return;
+    await (_drained ??= Completer<void>()).future;
+  }
 
   /// Names of task-queue subscriptions currently owned by this loop.
   Iterable<String> get queueSubscriptionNames =>
@@ -35,12 +48,14 @@ class WorkerConsumerLoop {
     onDeliveryError,
     required void Function(Object error, StackTrace stack) onStreamError,
     String? consumerName,
+    bool Function()? canSubscribe,
   }) async {
     await cancel(_queueSubscriptionNames);
 
     final resolvedQueues = queues.toList(growable: false);
     final resolvedBroadcasts = broadcastChannels.toList(growable: false);
     for (var index = 0; index < resolvedQueues.length; index += 1) {
+      if (!(canSubscribe?.call() ?? true)) break;
       final queueName = resolvedQueues[index];
       subscribe(
         name: queueName,
@@ -82,11 +97,20 @@ class WorkerConsumerLoop {
     // ignore: cancel_subscriptions
     final subscription = stream.listen(
       (delivery) {
-        final task = onDelivery(delivery);
+        _pending += 1;
+        final task = Future<void>.sync(() => onDelivery(delivery));
         unawaited(
-          task.catchError((Object error, StackTrace stack) {
-            onDeliveryError(delivery, error, stack);
-          }),
+          task
+              .catchError((Object error, StackTrace stack) {
+                onDeliveryError(delivery, error, stack);
+              })
+              .whenComplete(() {
+                _pending -= 1;
+                if (_pending == 0) {
+                  _drained?.complete();
+                  _drained = null;
+                }
+              }),
         );
       },
       onError: onStreamError,
@@ -105,9 +129,10 @@ class WorkerConsumerLoop {
       if (subscription == null) continue;
       try {
         await subscription.cancel();
-      } on Object {
+      } on Object catch (error, stack) {
         // A broker may already have closed its stream during shutdown. The
         // worker owns the lifecycle, so cancellation remains best effort.
+        onCancelError?.call(error, stack);
       }
     }
   }

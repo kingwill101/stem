@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Added scheduler-neutral `Worker.runUntilIdle` and `StemApp.runUntilIdle`,
+  with structured outcomes, observed idle detection, admission budgets,
+  cancellation, and final owned-resource cleanup.
+- Bounded shutdown joins complete delivery callbacks, timed-out inline Futures,
+  child-isolate lifecycle hooks, and in-flight lease renewal before closing
+  stores. Budgets and cancellation stop admission; they are not hard deadlines.
+- Prevented recursive worker startup and rejected shutdown self-joins from
+  active worker hooks/tasks instead of deadlocking.
+- Exported bounded-run outcomes through both stable and historical core APIs.
+- Made `StemApp.create` roll back acquired resources when bootstrap fails.
+- Made `StemApp` startup/shutdown concurrency-safe and shutdown idempotent, with
+  all configured disposers attempted. Shutdown is final; starting a closed app
+  is rejected instead of attempting to reuse disposed resources.
+- Exposed `Worker.workerId` so integrations use the same identity as heartbeats
+  and control messages.
+
 ## 0.4.0
 
 - Added portable `ScheduleRunner.runOnce`, with `Beat` retaining the periodic

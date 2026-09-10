@@ -150,6 +150,11 @@ void main() {
           concurrency: 2,
           prefetchMultiplier: 1,
         );
+        final interruptions = <TaskInterruptedPayload>[];
+        final subscription = StemSignals.onTaskInterrupted((payload, _) {
+          interruptions.add(payload);
+        }, workerId: 'duplicate-suppression-worker');
+        addTearDown(subscription.cancel);
 
         await worker.start();
         try {
@@ -164,6 +169,7 @@ void main() {
           await task.started.future.timeout(const Duration(seconds: 2));
           await Future<void>.delayed(const Duration(milliseconds: 40));
           expect(task.calls, equals(1));
+          expect(interruptions, isEmpty);
 
           task.release();
           await _waitForTaskState(
@@ -2268,6 +2274,67 @@ void main() {
         broker.dispose();
       },
     );
+
+    test('paused in-flight recovery honors retry exhaustion', () async {
+      final broker = InMemoryBroker();
+      final backend = InMemoryResultBackend();
+      final middleware = _BlockingConsumeMiddleware();
+      var executions = 0;
+      final task = FunctionTaskHandler<String>.inline(
+        name: 'paused.recovery',
+        options: const TaskOptions(recoveryPolicy: TaskRecoveryPolicy.retry),
+        entrypoint: (context, args) async {
+          executions++;
+          return 'unexpected';
+        },
+      );
+      final worker = Worker(
+        broker: broker,
+        backend: backend,
+        tasks: [task],
+        middleware: [middleware],
+        consumerName: 'paused-recovery',
+        revokeStore: InMemoryRevokeStore(),
+      );
+      final interruptions = <TaskInterruptedPayload>[];
+      final signal = StemSignals.onTaskInterrupted((payload, _) {
+        interruptions.add(payload);
+      }, taskName: task.name);
+      addTearDown(signal.cancel);
+      await worker.start();
+      try {
+        await backend.set('paused-task', TaskState.running);
+        await broker.publish(
+          Envelope(id: 'paused-task', name: task.name, args: const {}),
+        );
+        await middleware.started.future.timeout(const Duration(seconds: 2));
+        final reply = await _sendControlCommand(
+          broker: broker,
+          namespace: worker.namespace,
+          queue: ControlQueueNames.worker(
+            worker.namespace,
+            worker.consumerName!,
+          ),
+          type: 'queue_pause',
+          payload: const {
+            'queues': ['default'],
+          },
+        );
+        expect(reply.status, 'ok');
+        middleware.release();
+        await _waitForTaskState(backend, 'paused-task', TaskState.failed);
+        expect(executions, 0);
+        expect(interruptions, hasLength(1));
+        expect(
+          (await backend.get('paused-task'))?.error?.type,
+          'TaskInterruptedException',
+        );
+      } finally {
+        middleware.release();
+        await worker.shutdown();
+        broker.dispose();
+      }
+    });
 
     test('queue pause persists across restarts until resumed', () async {
       final broker = InMemoryBroker(

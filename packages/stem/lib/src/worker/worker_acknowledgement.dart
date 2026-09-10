@@ -13,10 +13,13 @@ import 'package:stem/src/observability/metrics.dart';
 /// explicit and gives all terminal ACK failures consistent telemetry.
 class WorkerAcknowledgementCoordinator {
   /// Creates an acknowledgement coordinator for [broker].
-  const WorkerAcknowledgementCoordinator(this.broker);
+  const WorkerAcknowledgementCoordinator(this.broker, {this.onFailure});
 
   /// Broker used to acknowledge deliveries.
   final QueueBroker broker;
+
+  /// Reports an infrastructure failure without replacing durable task results.
+  final void Function(Object error, StackTrace stack)? onFailure;
 
   /// Attempts to acknowledge a delivery without masking already durable task
   /// state when the broker is unavailable.
@@ -29,6 +32,7 @@ class WorkerAcknowledgementCoordinator {
       await broker.ack(delivery);
       return true;
     } on Object catch (error, stack) {
+      onFailure?.call(error, stack);
       StemMetrics.instance.increment(
         'stem.acks.failed',
         tags: {'task': envelope.name, 'queue': envelope.queue},

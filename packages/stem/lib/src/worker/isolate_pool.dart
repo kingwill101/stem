@@ -643,6 +643,7 @@ class _IsolateWorker {
   final Isolate _isolate;
   final SendPort _sendPort;
   bool _disposed = false;
+  ReceivePort? _replyPort;
 
   static Future<_IsolateWorker> spawn() async {
     final handshake = ReceivePort();
@@ -656,8 +657,12 @@ class _IsolateWorker {
   int get isolateId => _isolate.hashCode;
 
   Future<TaskRunResponse> run(_TaskJob job) async {
+    if (_disposed) {
+      throw StateError('Worker isolate disposed');
+    }
     final replyPort = ReceivePort();
     final controlPort = ReceivePort();
+    _replyPort = replyPort;
 
     final controlSub = controlPort.listen((message) async {
       if (message is TaskInvocationSignal) {
@@ -676,18 +681,19 @@ class _IsolateWorker {
       replyPort: replyPort.sendPort,
     );
 
-    _sendPort.send(request);
-
-    final response = await replyPort.first;
-    await controlSub.cancel();
-    controlPort.close();
-    replyPort.close();
-
-    if (response is TaskRunResponse) {
-      return response;
+    try {
+      _sendPort.send(request);
+      final response = await replyPort.first;
+      if (response is TaskRunResponse) {
+        return response;
+      }
+      throw StateError('Unexpected response from worker isolate: $response');
+    } finally {
+      _replyPort = null;
+      replyPort.close();
+      controlPort.close();
+      await controlSub.cancel();
     }
-
-    throw StateError('Unexpected response from worker isolate: $response');
   }
 
   Future<void> dispose() async {
@@ -695,6 +701,10 @@ class _IsolateWorker {
       return;
     }
     _disposed = true;
+    // Killing the isolate cannot complete its reply. Closing the stream
+    // unblocks run's first future with a caught StateError and runs cleanup.
+    // The pool keeps an already-completed hard timeout as the task's outcome.
+    _replyPort?.close();
     try {
       _sendPort.send(const TaskWorkerShutdown());
     } on Object {

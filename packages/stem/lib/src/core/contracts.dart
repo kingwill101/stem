@@ -1729,6 +1729,36 @@ class ScheduleConflictException implements Exception {
       'actual: $actualVersion)';
 }
 
+/// Recovery action when a delivery still has a running status for its attempt.
+enum TaskRecoveryPolicy {
+  /// Execute the same attempt again (the historical behavior).
+  replay,
+
+  /// Classify [TaskInterruptedException] using the task's normal retry policy.
+  retry,
+}
+
+/// Evidence that earlier execution may have been interrupted or lost its lease.
+///
+/// This does not establish process death, an OS kill reason, or whether side
+/// effects completed. Retrying still requires idempotent task design.
+class TaskInterruptedException implements Exception {
+  /// Creates an interruption classification for a redelivered attempt.
+  const TaskInterruptedException({required this.taskId, required this.attempt});
+
+  /// Identifier of the redelivered task.
+  final String taskId;
+
+  /// Attempt that still had a persisted running status.
+  final int attempt;
+
+  @override
+  String toString() =>
+      'TaskInterruptedException: task $taskId attempt $attempt was redelivered '
+      'with a running status; execution may have been interrupted '
+      'or lease-lost';
+}
+
 /// Configuration options attached to task handlers.
 class TaskOptions {
   /// Creates task options used during enqueue and execution.
@@ -1748,6 +1778,7 @@ class TaskOptions {
     this.acksLate = true,
     this.visibilityTimeout,
     this.retryPolicy,
+    this.recoveryPolicy = TaskRecoveryPolicy.replay,
   });
 
   /// Builds options from JSON-friendly data.
@@ -1782,6 +1813,10 @@ class TaskOptions {
       acksLate: json['acksLate'] as bool? ?? true,
       visibilityTimeout: _durationFromJson(json['visibilityTimeoutMs']),
       retryPolicy: retryPolicy,
+      recoveryPolicy: TaskRecoveryPolicy.values.firstWhere(
+        (policy) => policy.name == json['recoveryPolicy']?.toString(),
+        orElse: () => TaskRecoveryPolicy.replay,
+      ),
     );
   }
 
@@ -1831,6 +1866,12 @@ class TaskOptions {
   /// Optional per-task retry policy overrides.
   final TaskRetryPolicy? retryPolicy;
 
+  /// Action for redelivery with a running status for the same attempt.
+  ///
+  /// Detection requires retained backend status and cannot identify an OS kill
+  /// reason. Neither policy guarantees exactly-once side effects.
+  final TaskRecoveryPolicy recoveryPolicy;
+
   /// Creates a modified copy of these options.
   TaskOptions copyWith({
     String? queue,
@@ -1848,6 +1889,7 @@ class TaskOptions {
     bool? acksLate,
     Duration? visibilityTimeout,
     TaskRetryPolicy? retryPolicy,
+    TaskRecoveryPolicy? recoveryPolicy,
   }) {
     return TaskOptions(
       queue: queue ?? this.queue,
@@ -1866,6 +1908,7 @@ class TaskOptions {
       acksLate: acksLate ?? this.acksLate,
       visibilityTimeout: visibilityTimeout ?? this.visibilityTimeout,
       retryPolicy: retryPolicy ?? this.retryPolicy,
+      recoveryPolicy: recoveryPolicy ?? this.recoveryPolicy,
     );
   }
 
@@ -1886,6 +1929,7 @@ class TaskOptions {
     'acksLate': acksLate,
     'visibilityTimeoutMs': visibilityTimeout?.inMilliseconds,
     'retryPolicy': retryPolicy?.toJson(),
+    'recoveryPolicy': recoveryPolicy.name,
   };
 
   /// Parses a duration from JSON-friendly representations.

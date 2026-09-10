@@ -4,6 +4,7 @@ import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/worker/isolate_pool.dart';
 import 'package:stem/src/worker/worker_config.dart';
+import 'package:stem/src/worker/worker_operation_scope.dart';
 
 /// Owns isolate-backed task execution and its pool lifecycle for a worker.
 ///
@@ -36,6 +37,50 @@ class WorkerExecutionSupervisor {
   TaskIsolatePool? _pool;
   Future<TaskIsolatePool>? _poolFuture;
   bool _disposed = false;
+  int _inlinePending = 0;
+  Completer<void>? _inlineDrained;
+  int _lifecyclePending = 0;
+  Completer<void>? _lifecycleDrained;
+  Object? _lifecycleError;
+  StackTrace? _lifecycleStack;
+
+  /// Waits for underlying inline Futures, including ones whose timeout was
+  /// already reported. A timeout never terminates the underlying Dart code.
+  Future<void> drainInline() async {
+    if (_inlinePending == 0) return;
+    await (_inlineDrained ??= Completer<void>()).future;
+  }
+
+  /// Joins child lifecycle callbacks even though the pool dispatches them
+  /// without awaiting. Call after pool disposal so no new hooks can begin.
+  Future<void> drainLifecycle() async {
+    if (_lifecyclePending != 0) {
+      await (_lifecycleDrained ??= Completer<void>()).future;
+    }
+    final error = _lifecycleError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, _lifecycleStack!);
+    }
+  }
+
+  Future<void> _trackLifecycle(FutureOr<void> Function() callback) {
+    _lifecyclePending++;
+    return Future<void>.sync(callback)
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            _lifecycleError ??= error;
+            _lifecycleStack ??= stack;
+          },
+        )
+        .whenComplete(() {
+          _lifecyclePending--;
+          if (_lifecyclePending == 0) {
+            _lifecycleDrained?.complete();
+            _lifecycleDrained = null;
+          }
+        });
+  }
 
   /// Number of active isolates, or zero before the pool is created.
   int get activeIsolates => _pool?.activeCount ?? 0;
@@ -50,7 +95,17 @@ class WorkerExecutionSupervisor {
     Duration? hardTimeout,
   }) async {
     if (handler.executionMode == TaskExecutionMode.inline) {
-      final future = handler.call(context, args);
+      _inlinePending += 1;
+      final future =
+          WorkerOperationScope.runInherited<Object?>(
+            () => handler.call(context, args),
+          ).whenComplete(() {
+            _inlinePending -= 1;
+            if (_inlinePending == 0) {
+              _inlineDrained?.complete();
+              _inlineDrained = null;
+            }
+          });
       if (hardTimeout == null) return future;
       return future.timeout(
         hardTimeout,
@@ -138,8 +193,8 @@ class WorkerExecutionSupervisor {
         TaskIsolatePool(
           size: _concurrency,
           onRecycle: _onRecycle,
-          onSpawned: _onSpawned,
-          onDisposed: _onDisposed,
+          onSpawned: (id) => _trackLifecycle(() => _onSpawned(id)),
+          onDisposed: (id) => _trackLifecycle(() => _onDisposed(id)),
         )..updateRecyclePolicy(
           maxTasksPerIsolate: _lifecycle.maxTasksPerIsolate,
           maxMemoryBytes: _lifecycle.maxMemoryPerIsolateBytes,

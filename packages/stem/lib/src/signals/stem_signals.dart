@@ -90,6 +90,9 @@ class StemSignals {
   /// Signal name constant for task retry event.
   static const String taskRetryName = 'task-retry';
 
+  /// Signal name for evidence of interrupted execution on redelivery.
+  static const String taskInterruptedName = 'task-interrupted';
+
   /// Signal name constant for task succeeded event.
   static const String taskSucceededName = 'task-succeeded';
 
@@ -192,6 +195,13 @@ class StemSignals {
       Signal<TaskPostrunPayload>(
         name: taskPostrunName,
         config: _dispatchConfigFor(taskPostrunName),
+      );
+
+  /// Signal emitted before recovering a potentially interrupted execution.
+  static final Signal<TaskInterruptedPayload> taskInterrupted =
+      Signal<TaskInterruptedPayload>(
+        name: taskInterruptedName,
+        config: _dispatchConfigFor(taskInterruptedName),
       );
 
   /// Signal emitted when a task is scheduled for retry.
@@ -354,6 +364,7 @@ class StemSignals {
     taskPrerun,
     taskPostrun,
     taskRetry,
+    taskInterrupted,
     taskSucceeded,
     taskFailed,
     taskRevoked,
@@ -467,6 +478,21 @@ class StemSignals {
     String? workerId,
   }) {
     return taskFailed.connect(
+      handler,
+      filter: _mergeFilters([
+        _taskNameFilter(taskName),
+        _workerIdFilter(workerId),
+      ]),
+    );
+  }
+
+  /// Subscribes to interruption evidence with optional task/worker filtering.
+  static SignalSubscription onTaskInterrupted(
+    SignalHandler<TaskInterruptedPayload> handler, {
+    String? taskName,
+    String? workerId,
+  }) {
+    return taskInterrupted.connect(
       handler,
       filter: _mergeFilters([
         _taskNameFilter(taskName),
@@ -660,6 +686,7 @@ class StemSignals {
     if (payload is TaskPrerunPayload) return payload.envelope.name;
     if (payload is TaskPostrunPayload) return payload.envelope.name;
     if (payload is TaskRetryPayload) return payload.envelope.name;
+    if (payload is TaskInterruptedPayload) return payload.envelope.name;
     if (payload is TaskSuccessPayload) return payload.envelope.name;
     if (payload is TaskFailurePayload) return payload.envelope.name;
     if (payload is TaskRevokedPayload) return payload.envelope.name;
@@ -680,6 +707,7 @@ class StemSignals {
     if (payload is TaskPrerunPayload) return payload.worker.id;
     if (payload is TaskPostrunPayload) return payload.worker.id;
     if (payload is TaskRetryPayload) return payload.worker.id;
+    if (payload is TaskInterruptedPayload) return payload.worker.id;
     if (payload is TaskSuccessPayload) return payload.worker.id;
     if (payload is TaskFailurePayload) return payload.worker.id;
     if (payload is TaskRevokedPayload) return payload.worker.id;

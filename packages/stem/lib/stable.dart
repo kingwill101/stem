@@ -35,4 +35,5 @@ export 'src/scheduler/schedule_spec.dart';
 export 'src/security/signing.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';
+export 'src/worker/worker_run.dart' show WorkerRunOutcome, WorkerRunStopReason;
 export 'src/workflow/workflow.dart';

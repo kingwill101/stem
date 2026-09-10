@@ -18,6 +18,8 @@ import 'package:stem/src/routing/routing_config.dart';
 import 'package:stem/src/routing/routing_registry.dart';
 import 'package:stem/src/security/signing.dart';
 import 'package:stem/src/worker/worker.dart';
+import 'package:stem/src/worker/worker_operation_scope.dart';
+import 'package:stem/src/worker/worker_run.dart';
 
 /// Worker lifecycle surface for a managed application runtime.
 abstract interface class StemWorkerHost {
@@ -83,6 +85,9 @@ class StemApp implements StemTaskApp {
 
   bool _started = false;
   Future<void>? _startFuture;
+  Future<void>? _shutdownFuture;
+  Future<WorkerRunOutcome>? _runWorkerFuture;
+  final Completer<void> _runCancellation = Completer<void>();
 
   /// Whether the managed worker has been started.
   @override
@@ -204,37 +209,140 @@ class StemApp implements StemTaskApp {
   }
 
   /// Starts the managed worker if it is not already running.
+  ///
+  /// A redundant call from that worker's active callback is a no-op; readiness
+  /// must be awaited by an external owner rather than by a startup hook itself.
   @override
-  Future<void> start() async {
-    if (_started) return;
-    final existing = _startFuture;
-    if (existing != null) {
-      await existing;
-      return;
+  Future<void> start() {
+    if (_runWorkerFuture != null) {
+      return Future.error(StateError('StemApp is owned by runUntilIdle.'));
     }
+    if (_shutdownFuture != null) {
+      return Future.error(StateError('Cannot start a shut down StemApp.'));
+    }
+    if (WorkerOperationScope.isActiveFor(worker)) return Future<void>.value();
+    return _startFuture ??= _start();
+  }
 
-    final completer = Completer<void>();
-    _startFuture = completer.future;
+  Future<void> _start() async {
     try {
       await worker.start();
-      _started = true;
-      completer.complete();
-    } catch (error, stackTrace) {
-      _startFuture = null;
+      _started = _shutdownFuture == null;
+    } on Object {
+      // A partially started worker cannot safely be restarted. Retain the
+      // failed future for subsequent callers until the app is shut down.
       _started = false;
-      completer.completeError(error, stackTrace);
       rethrow;
     }
   }
 
-  /// Shuts down the worker and disposes any managed resources.
-  @override
-  Future<void> shutdown() async {
-    for (final disposer in _disposers) {
-      await disposer();
+  /// Runs a fresh callback-owned application once and disposes owned resources.
+  ///
+  /// Uses [Worker.runUntilIdle] with this app's configured subscription. Stops
+  /// admission at [budget] minus [shutdownReserve], on [cancellation], or after
+  /// [idleTimeout] of observed quiescence. Cancellation does not interrupt
+  /// handlers. All delivery work and underlying inline Futures are awaited
+  /// before factory-owned stores are closed; there is no hard deadline.
+  ///
+  /// The returned outcome describes the invocation, not individual task
+  /// success. Cleanup failures throw after all disposers have been attempted.
+  /// Caller-owned resources (factories without disposers, or a shared client)
+  /// remain open. Concurrent [shutdown] requests cancellation and joins
+  /// cleanup.
+  ///
+  /// Requires a fresh app; do not call [start] first or invoke this twice.
+  Future<WorkerRunOutcome> runUntilIdle({
+    required Duration budget,
+    Duration shutdownReserve = const Duration(seconds: 5),
+    Duration idleTimeout = const Duration(seconds: 1),
+    Future<void>? cancellation,
+  }) async {
+    WorkerRunState.validate(budget, shutdownReserve, idleTimeout);
+    if (_startFuture != null ||
+        _shutdownFuture != null ||
+        _runWorkerFuture != null) {
+      throw StateError('runUntilIdle requires a fresh StemApp.');
     }
+    // Worker validation is synchronous, before ownership is acquired. This
+    // also rejects an app whose exposed worker was started directly.
+    final execution = _runWorkerFuture = worker.runUntilIdle(
+      budget: budget,
+      shutdownReserve: shutdownReserve,
+      idleTimeout: idleTimeout,
+      cancellation: _runCancellation.future,
+    );
+    _started = true;
+    if (cancellation != null) {
+      // A host may retain its stop Future indefinitely. Capture only the
+      // completion signal, not this app and its task registry/store handles.
+      final runCancellation = _runCancellation;
+      unawaited(
+        cancellation.then(
+          (_) {
+            if (!runCancellation.isCompleted) runCancellation.complete();
+          },
+          onError: (Object error, StackTrace stack) {
+            if (!runCancellation.isCompleted) {
+              runCancellation.completeError(error, stack);
+            }
+          },
+        ),
+      );
+    }
+    try {
+      return await execution;
+    } finally {
+      await shutdown();
+    }
+  }
+
+  /// Permanently shuts down the worker and disposes managed resources once.
+  ///
+  /// Waits for an in-flight start before disposing resources. All disposers are
+  /// attempted; concurrent and subsequent callers receive the same result.
+  /// Self-joins from the managed worker's active callbacks are rejected.
+  /// Request cancellation and let the external owner await shutdown instead.
+  @override
+  Future<void> shutdown() {
+    if (WorkerOperationScope.isActiveFor(worker)) {
+      return Future.error(
+        StateError(
+          'Cannot await StemApp.shutdown from its worker operation. '
+          'Request cancellation or shut down from the external runtime owner.',
+        ),
+      );
+    }
+    if (!_runCancellation.isCompleted) _runCancellation.complete();
+    return _shutdownFuture ??= _shutdown();
+  }
+
+  Future<void> _shutdown() async {
     _started = false;
-    _startFuture = null;
+    try {
+      await _startFuture;
+      await _runWorkerFuture;
+    } on Object {
+      // Startup errors belong to start callers, not resource cleanup.
+    }
+    await _disposeAll(_disposers);
+  }
+
+  static Future<void> _disposeAll(
+    Iterable<Future<void> Function()> disposers,
+  ) async {
+    Object? firstError;
+    StackTrace? firstStackTrace;
+    for (final disposer in disposers) {
+      try {
+        await disposer();
+      } on Object catch (error, stackTrace) {
+        firstError ??= error;
+        firstStackTrace ??= stackTrace;
+      }
+    }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStackTrace!);
+    }
   }
 
   /// Alias for [shutdown].
@@ -272,101 +380,103 @@ class StemApp implements StemTaskApp {
 
     final brokerFactory = broker ?? StemBrokerFactory.inMemory();
     final backendFactory = backend ?? StemBackendFactory.inMemory();
-    final brokerInstance = await brokerFactory.create();
-    final backendInstance = await backendFactory.create();
+    final disposers = <Future<void> Function()>[];
+    try {
+      final brokerInstance = await brokerFactory.create();
+      disposers.insert(0, () => brokerFactory.dispose(brokerInstance));
+      final backendInstance = await backendFactory.create();
+      disposers.insert(0, () => backendFactory.dispose(backendInstance));
 
-    final payloadEncoders = ensureTaskPayloadEncoderRegistry(
-      encoderRegistry,
-      resultEncoder: resultEncoder,
-      argsEncoder: argsEncoder,
-      additionalEncoders: additionalEncoders,
-    );
+      final payloadEncoders = ensureTaskPayloadEncoderRegistry(
+        encoderRegistry,
+        resultEncoder: resultEncoder,
+        argsEncoder: argsEncoder,
+        additionalEncoders: additionalEncoders,
+      );
 
-    final encodedBackend = withTaskPayloadEncoder(
-      backendInstance,
-      payloadEncoders,
-    );
+      final encodedBackend = withTaskPayloadEncoder(
+        backendInstance,
+        payloadEncoders,
+      );
 
-    final resolvedMiddleware = middleware.toList(growable: false);
-    final stem = Stem(
-      broker: brokerInstance,
-      registry: taskRegistry,
-      backend: encodedBackend,
-      uniqueTaskCoordinator: uniqueTaskCoordinator,
-      retryStrategy: retryStrategy,
-      middleware: resolvedMiddleware,
-      routing: routing ?? RoutingRegistry(RoutingConfig.legacy()),
-      signer: signer,
-      encoderRegistry: payloadEncoders,
-    );
+      final resolvedMiddleware = middleware.toList(growable: false);
+      final stem = Stem(
+        broker: brokerInstance,
+        registry: taskRegistry,
+        backend: encodedBackend,
+        uniqueTaskCoordinator: uniqueTaskCoordinator,
+        retryStrategy: retryStrategy,
+        middleware: resolvedMiddleware,
+        routing: routing ?? RoutingRegistry(RoutingConfig.legacy()),
+        signer: signer,
+        encoderRegistry: payloadEncoders,
+      );
 
-    final revoke =
-        workerConfig.revokeStore ?? revokeStore ?? InMemoryRevokeStore();
-    final workerMiddleware = workerConfig.middleware ?? resolvedMiddleware;
-    final workerRetryStrategy = workerConfig.retryStrategy ?? retryStrategy;
-    final workerUniqueTaskCoordinator =
-        workerConfig.uniqueTaskCoordinator ?? uniqueTaskCoordinator;
-    final workerSigner = workerConfig.signer ?? signer;
-    final inferredSubscription =
-        workerConfig.subscription ??
-        effectiveModule?.inferTaskWorkerSubscription(
-          defaultQueue: workerConfig.queue,
-          additionalTasks: tasks,
-        ) ??
-        (() {
-          final tempModule = StemModule(tasks: tasks);
-          return tempModule.inferTaskWorkerSubscription(
+      final revoke =
+          workerConfig.revokeStore ?? revokeStore ?? InMemoryRevokeStore();
+      final workerMiddleware = workerConfig.middleware ?? resolvedMiddleware;
+      final workerRetryStrategy = workerConfig.retryStrategy ?? retryStrategy;
+      final workerUniqueTaskCoordinator =
+          workerConfig.uniqueTaskCoordinator ?? uniqueTaskCoordinator;
+      final workerSigner = workerConfig.signer ?? signer;
+      final inferredSubscription =
+          workerConfig.subscription ??
+          effectiveModule?.inferTaskWorkerSubscription(
             defaultQueue: workerConfig.queue,
-          );
-        })();
+            additionalTasks: tasks,
+          ) ??
+          (() {
+            final tempModule = StemModule(tasks: tasks);
+            return tempModule.inferTaskWorkerSubscription(
+              defaultQueue: workerConfig.queue,
+            );
+          })();
 
-    final worker = Worker(
-      broker: brokerInstance,
-      registry: taskRegistry,
-      backend: encodedBackend,
-      rateLimiter: workerConfig.rateLimiter,
-      middleware: workerMiddleware,
-      revokeStore: revoke,
-      uniqueTaskCoordinator: workerUniqueTaskCoordinator,
-      retryStrategy: workerRetryStrategy,
-      queue: workerConfig.queue,
-      subscription: inferredSubscription,
-      consumerName: workerConfig.consumerName,
-      concurrency: workerConfig.concurrency,
-      prefetchMultiplier: workerConfig.prefetchMultiplier,
-      prefetch: workerConfig.prefetch,
-      heartbeatInterval: workerConfig.heartbeatInterval,
-      workerHeartbeatInterval: workerConfig.workerHeartbeatInterval,
-      heartbeatTransport: workerConfig.heartbeatTransport,
-      heartbeatNamespace: workerConfig.heartbeatNamespace,
-      autoscale: workerConfig.autoscale,
-      lifecycle: workerConfig.lifecycle,
-      observability: workerConfig.observability,
-      signer: workerSigner,
-      encoderRegistry: payloadEncoders,
-    );
+      final worker = Worker(
+        broker: brokerInstance,
+        registry: taskRegistry,
+        backend: encodedBackend,
+        rateLimiter: workerConfig.rateLimiter,
+        middleware: workerMiddleware,
+        revokeStore: revoke,
+        uniqueTaskCoordinator: workerUniqueTaskCoordinator,
+        retryStrategy: workerRetryStrategy,
+        queue: workerConfig.queue,
+        subscription: inferredSubscription,
+        consumerName: workerConfig.consumerName,
+        concurrency: workerConfig.concurrency,
+        prefetchMultiplier: workerConfig.prefetchMultiplier,
+        prefetch: workerConfig.prefetch,
+        heartbeatInterval: workerConfig.heartbeatInterval,
+        workerHeartbeatInterval: workerConfig.workerHeartbeatInterval,
+        heartbeatTransport: workerConfig.heartbeatTransport,
+        heartbeatNamespace: workerConfig.heartbeatNamespace,
+        autoscale: workerConfig.autoscale,
+        lifecycle: workerConfig.lifecycle,
+        observability: workerConfig.observability,
+        signer: workerSigner,
+        encoderRegistry: payloadEncoders,
+      );
 
-    final disposers = <Future<void> Function()>[
-      () async {
-        await worker.shutdown();
-      },
-      () async {
-        await backendFactory.dispose(backendInstance);
-      },
-      () async {
-        await brokerFactory.dispose(brokerInstance);
-      },
-    ];
+      disposers.insert(0, worker.shutdown);
 
-    return StemApp._(
-      module: effectiveModule,
-      registry: taskRegistry,
-      broker: brokerInstance,
-      backend: encodedBackend,
-      stem: stem,
-      worker: worker,
-      disposers: disposers,
-    );
+      return StemApp._(
+        module: effectiveModule,
+        registry: taskRegistry,
+        broker: brokerInstance,
+        backend: encodedBackend,
+        stem: stem,
+        worker: worker,
+        disposers: disposers,
+      );
+    } on Object catch (error, stackTrace) {
+      try {
+        await _disposeAll(disposers);
+      } on Object {
+        // Rollback must not hide the original startup failure.
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    }
   }
 
   /// Creates an in-memory Stem application (broker + result backend).
