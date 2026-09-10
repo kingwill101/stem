@@ -1,324 +1,395 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:stem/observability.dart' show stemLogger;
 import 'package:stem/stem.dart';
-import 'package:stem_flutter/stem_flutter.dart';
-import 'package:stem_flutter_sqlite/stem_flutter_sqlite.dart';
 
-import 'demo_config.dart';
-import 'demo_tasks.dart';
-import 'utils/time_format.dart';
+import 'photo_batch.dart';
+import 'queue_debug_controller.dart';
 import 'widgets/job_card.dart';
 import 'widgets/metric_tile.dart';
-import 'widgets/worker_state_chip.dart';
-import 'worker/worker_isolate.dart';
 
 class QueueMonitorPage extends StatefulWidget {
-  const QueueMonitorPage({super.key});
+  const QueueMonitorPage({
+    super.key,
+    required this.app,
+    required this.monitor,
+    required this.isBooting,
+    this.producer,
+    this.workload,
+    this.bootError,
+    this.startupWakeup,
+    this.requestWakeup,
+    this.cancelWakeups,
+    this.requestNotificationPermission,
+  });
+  final StemApp? app;
+  final QueueDebugController? monitor;
+  final PhotoBatchProducer? producer;
+  final PhotoWorkload? workload;
+  final bool isBooting;
+  final String? bootError;
+  final Future<void> Function()? startupWakeup;
+  final Future<void> Function()? requestWakeup;
+  final Future<void> Function()? cancelWakeups;
+  final Future<bool> Function()? requestNotificationPermission;
 
   @override
   State<QueueMonitorPage> createState() => _QueueMonitorPageState();
 }
 
 class _QueueMonitorPageState extends State<QueueMonitorPage> {
-  StemFlutterSqliteRuntime? _runtime;
-  StemFlutterWorkerHost? _workerHost;
-  StemFlutterQueueMonitor? _monitor;
-  StreamSubscription<StemFlutterQueueSnapshot>? _monitorSub;
-
-  bool _isBooting = true;
-  String? _bootError;
-  int _jobCounter = 0;
-  StemFlutterQueueSnapshot _snapshot = const StemFlutterQueueSnapshot();
+  StreamSubscription<void>? _monitorSub;
+  PhotoWorkload _selection = PhotoWorkload.standard;
+  bool _publishing = false;
+  bool _waking = false;
+  String? _actionMessage;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_bootstrap());
+    _subscribe();
+    if (widget.startupWakeup != null) {
+      unawaited(_requestWakeup(startup: true));
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant QueueMonitorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.monitor != widget.monitor) {
+      unawaited(_monitorSub?.cancel());
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    _monitorSub = widget.monitor?.changes.listen((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
-    unawaited(_shutdownResources());
+    widget.producer?.stopPublishing();
+    widget.monitor?.setVisible(false);
+    unawaited(_monitorSub?.cancel());
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
+  Future<void> _requestWakeup({bool startup = false}) async {
+    if (_waking) return;
+    setState(() => _waking = true);
     try {
-      stemLogger.info('Resolving mobile storage layout');
-      final layout = await StemFlutterStorageLayout.applicationSupport(
-        directoryName: 'stem_flutter_example',
-      );
-      stemLogger.info(
-        'Opening producer/runtime stores',
-        fields: <String, Object?>{
-          'component': 'flutter_example',
-          'subsystem': 'bootstrap',
-          'brokerPath': layout.brokerFile.path,
-          'backendPath': layout.backendFile.path,
-        },
-      );
-
-      final runtime = await StemFlutterSqliteRuntime.open(
-        layout: layout,
-        tasks: createTaskHandlers(),
-        brokerVisibilityTimeout: brokerVisibilityTimeout,
-        brokerPollInterval: brokerPollInterval,
-        producerSweeperInterval: producerMaintenanceInterval,
-        backendCleanupInterval: monitorCleanupInterval,
-      );
-      stemLogger.info('Producer runtime ready');
-
-      final rootToken = RootIsolateToken.instance;
-      if (rootToken == null) {
-        throw StateError('RootIsolateToken.instance was null.');
+      await (startup ? widget.startupWakeup : widget.requestWakeup)?.call();
+      if (mounted) {
+        setState(
+          () => _actionMessage = startup
+              ? 'Wakeups reconciled; an explicit pause is retained.'
+              : 'Wakeup requested. Android decides when work runs.',
+        );
       }
-
-      final workerHost = await StemFlutterSqliteWorkerLauncher.spawn(
-        entrypoint: workerIsolateMain,
-        layout: layout,
-        rootIsolateToken: rootToken,
-        brokerPollInterval: brokerPollInterval,
-        brokerSweeperInterval: brokerSweepInterval,
-        brokerVisibilityTimeout: brokerVisibilityTimeout,
-      );
-      stemLogger.info('Worker isolate spawned');
-
-      final monitor = StemFlutterQueueMonitor(
-        backend: runtime.backend,
-        broker: runtime.broker,
-        queueName: queueName,
-        workerId: workerId,
-        pollInterval: monitorPollInterval,
-        heartbeatInterval: workerHeartbeatInterval,
-      );
-      await monitor.bindWorkerSignals(workerHost.signals);
-
-      final monitorSub = monitor.snapshots.listen((snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _snapshot = snapshot;
-        });
-      });
-
-      if (!mounted) {
-        await monitorSub.cancel();
-        await monitor.dispose();
-        await workerHost.dispose();
-        await runtime.close();
-        return;
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _actionMessage =
+              'Wakeup failed: $error. Retry wakeup does not publish more photos.',
+        );
       }
-
-      await monitor.start();
-
-      if (!mounted) {
-        await monitorSub.cancel();
-        await monitor.dispose();
-        await workerHost.dispose();
-        await runtime.close();
-        return;
-      }
-
-      setState(() {
-        _runtime = runtime;
-        _workerHost = workerHost;
-        _monitor = monitor;
-        _monitorSub = monitorSub;
-        _isBooting = false;
-      });
-    } catch (error, stackTrace) {
-      stemLogger.error(
-        'Flutter example bootstrap failed: $error',
-        stackTrace: stackTrace,
-      );
-      if (!mounted) return;
-      setState(() {
-        _bootError = '$error\n$stackTrace';
-        _isBooting = false;
-      });
+    } finally {
+      if (mounted) setState(() => _waking = false);
     }
   }
 
-  Future<void> _shutdownResources() async {
-    await _monitorSub?.cancel();
-    await _monitor?.dispose();
-    await _workerHost?.dispose();
-    await _runtime?.close();
-
-    _workerHost = null;
-    _monitor = null;
-    _runtime = null;
-    _monitorSub = null;
+  Future<void> _cancelWakeups() async {
+    setState(() => _waking = true);
+    try {
+      await widget.cancelWakeups?.call();
+      if (mounted) {
+        setState(
+          () => _actionMessage =
+              'Native wakeups cancelled; queued photos retained. '
+              'An active callback may finish. Retry wakeup enables scheduling.',
+        );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _actionMessage = 'Cancel failed: $error');
+    } finally {
+      if (mounted) setState(() => _waking = false);
+    }
   }
 
-  Future<void> _enqueueJob() async {
-    final producer = _runtime?.stem;
-    if (producer == null) return;
+  Future<void> _enqueueBatch() async {
+    final producer = widget.producer;
+    if (producer == null || _publishing) return;
+    setState(() => _publishing = true);
+    try {
+      final message = await producer.publish(widget.workload ?? _selection);
+      if (!mounted) return;
+      setState(() => _actionMessage = message);
+      await widget.monitor?.refresh();
+    } finally {
+      if (mounted) setState(() => _publishing = false);
+    }
+  }
 
-    final nextJobNumber = _jobCounter + 1;
-    final label = 'Job $nextJobNumber';
-
-    setState(() {
-      _jobCounter = nextJobNumber;
-    });
-
-    final taskId = await producer.enqueue(
-      taskName,
-      args: <String, Object?>{
-        'label': label,
-        'delayMs': 1200 + (nextJobNumber % 3) * 600,
-      },
-      meta: <String, Object?>{'label': label},
-      options: const TaskOptions(queue: queueName),
+  Future<void> _enableNotifications() async {
+    final granted = await widget.requestNotificationPermission?.call() ?? false;
+    if (!mounted) return;
+    setState(
+      () => _actionMessage = granted
+          ? 'Status notifications enabled for future updates.'
+          : 'Notifications unavailable or denied. Photo work still runs.',
     );
-    stemLogger.info(
-      'Queued demo task',
-      fields: <String, Object?>{
-        'component': 'flutter_example',
-        'subsystem': 'producer',
-        'taskId': taskId,
-        'label': label,
-      },
-    );
-
-    await _monitor?.refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final workerDetail = _snapshot.workerDetailPreview;
-
+    final theme = Theme.of(context);
+    final monitor = widget.monitor;
+    final jobs = monitor?.jobs ?? const <TaskStatusRecord>[];
+    final photos = jobs
+        .where((job) => job.status.meta['batchId'] is String)
+        .toList(growable: false);
+    final batches = PhotoBatchSummary.fromJobs(photos);
+    final workload = widget.workload ?? _selection;
+    final busy = _publishing || (monitor?.hasUnfinishedWork ?? false);
+    final enabled =
+        widget.producer != null &&
+        !widget.isBooting &&
+        !busy &&
+        !_waking &&
+        monitor?.observationError == null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Stem Queue Monitor')),
+      appBar: AppBar(
+        title: const Text('Photo Lab'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: monitor?.refresh,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFECFDF5),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFF99F6E4)),
-                ),
-                child: Column(
-                  children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Worker',
-                                style: textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 960),
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your offline photo workbench',
+                          style: theme.textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Generate landscapes, encode JPEGs, apply a '
+                          'color grade, resize previews and verify files with '
+                          'SHA-256. Real CPU work in background isolates. '
+                          'No personal photos, permissions or network needed.',
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          widget.requestWakeup != null
+                              ? 'Android Workmanager · producer / observer only'
+                              : monitor?.isRunning == true
+                              ? 'Local worker · isolated photo processing'
+                              : 'Worker is not started',
+                          style: theme.textTheme.labelLarge,
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final preset
+                                in widget.workload == null
+                                    ? PhotoWorkload.presets
+                                    : [widget.workload!])
+                              ChoiceChip(
+                                label: Text(
+                                  '${preset.label} · ${preset.count}',
                                 ),
+                                selected: preset == workload,
+                                onSelected: busy
+                                    ? null
+                                    : (_) {
+                                        setState(() => _selection = preset);
+                                      },
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                workerDetail == null || workerDetail.isEmpty
-                                    ? 'Waiting for worker updates'
-                                    : workerDetail,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: const Color(0xFF475569),
-                                ),
-                              ),
-                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${workload.count} photos · ${workload.width} × '
+                          '${workload.height} pixels each',
+                        ),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          key: const ValueKey('push-job'),
+                          onPressed: enabled ? _enqueueBatch : null,
+                          icon: const Icon(Icons.auto_fix_high),
+                          label: Text(
+                            _publishing
+                                ? 'Committing photos…'
+                                : 'Prepare ${workload.count} photos',
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        WorkerStateChip(state: _snapshot.workerStatus),
+                        if (busy)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Finish the current work before '
+                              'starting another batch.',
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            MetricTile(
+                              label: 'queued',
+                              value: '${monitor?.pendingCount ?? 0}',
+                            ),
+                            MetricTile(
+                              label: 'in flight',
+                              value: '${monitor?.inflightCount ?? 0}',
+                            ),
+                            MetricTile(
+                              label: 'photos tracked',
+                              value: '${photos.length}',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Progress counts finished photos, not '
+                          'estimated time. Counts survive reopening the app.',
+                        ),
+                        if (photos.length < jobs.length)
+                          const Text(
+                            'Earlier demo results are retained in storage; '
+                            'this gallery shows photo batches only.',
+                          ),
+                        if (_actionMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              _actionMessage!,
+                              key: const ValueKey('action-message'),
+                            ),
+                          ),
+                        if (widget.requestWakeup != null)
+                          TextButton.icon(
+                            onPressed: _waking || _publishing
+                                ? null
+                                : _requestWakeup,
+                            icon: const Icon(Icons.schedule),
+                            label: const Text('Retry wakeup'),
+                          ),
+                        if (widget.cancelWakeups != null)
+                          TextButton(
+                            onPressed: _waking || _publishing
+                                ? null
+                                : _cancelWakeups,
+                            child: const Text('Cancel native wakeups'),
+                          ),
+                        if (widget.requestNotificationPermission != null)
+                          TextButton.icon(
+                            onPressed: _enableNotifications,
+                            icon: const Icon(Icons.notifications_outlined),
+                            label: const Text('Enable status notifications'),
+                          ),
+                        if (monitor?.observationError case final error?)
+                          Text(
+                            'Could not refresh: $error',
+                            style: TextStyle(color: theme.colorScheme.error),
+                          ),
+                        if (widget.bootError case final error?)
+                          SelectableText(error),
+                        if (widget.isBooting)
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: CircularProgressIndicator(),
+                          ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: <Widget>[
-                        MetricTile(
-                          label: 'pending',
-                          value: '${_snapshot.pendingCount ?? 0}',
-                        ),
-                        MetricTile(
-                          label: 'inflight',
-                          value: '${_snapshot.inflightCount ?? 0}',
-                        ),
-                        MetricTile(
-                          label: 'tracked',
-                          value: '${_snapshot.jobs.length}',
-                        ),
-                        MetricTile(
-                          label: 'heartbeat',
-                          value: formatTimestamp(_snapshot.lastHeartbeatAt),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _runtime == null || _isBooting
-                      ? null
-                      : _enqueueJob,
-                  icon: const Icon(Icons.playlist_add),
-                  label: const Text('Push Job'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Recent jobs',
-                style: textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (_isBooting)
-                const Expanded(
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_bootError != null)
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: SelectableText(_bootError!),
                   ),
-                )
-              else if (_snapshot.jobs.isEmpty)
-                Expanded(
-                  child: Center(
+                ),
+                SliverList.builder(
+                  itemCount: batches.length,
+                  itemBuilder: (context, index) {
+                    final batch = batches[index];
+                    return Card(
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${batch.label} · ${batch.completed} / '
+                              '${batch.planned} finished',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            LinearProgressIndicator(value: batch.fraction),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${batch.succeeded} succeeded · '
+                              '${batch.failed} failed / cancelled · '
+                              '${batch.running} running · '
+                              '${batch.queued} queued',
+                            ),
+                            if (batch.jobs.length < batch.planned)
+                              Text(
+                                '${batch.jobs.length} of ${batch.planned} '
+                                'planned photos recorded. Publication may '
+                                'be incomplete.',
+                              ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${(batch.metric('elapsedMs') / 1000).toStringAsFixed(1)} s '
+                              'total processing · '
+                              '${formatPhotoBytes(batch.metric('sourceBytes'))} source → '
+                              '${formatPhotoBytes(batch.metric('outputBytes'))} output',
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  sliver: SliverToBoxAdapter(
                     child: Text(
-                      (_snapshot.pendingCount ?? 0) > 0 ||
-                              (_snapshot.inflightCount ?? 0) > 0
-                          ? 'Waiting for the worker to publish job status...'
-                          : 'No jobs queued yet.',
-                      style: textTheme.titleMedium,
+                      photos.isEmpty
+                          ? 'No photos yet. Choose a batch '
+                                'to build your local gallery.'
+                          : 'Photo artifacts',
+                      style: theme.textTheme.titleMedium,
                     ),
                   ),
-                )
-              else
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    itemCount: _snapshot.jobs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (BuildContext context, int index) {
-                      final job = _snapshot.jobs[index];
-                      return JobCard(job: job);
-                    },
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  sliver: SliverList.builder(
+                    itemCount: photos.length,
+                    itemBuilder: (context, index) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: JobCard(job: photos[index]),
+                    ),
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

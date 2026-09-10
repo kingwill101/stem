@@ -29,6 +29,7 @@ class StemFlutterStorageLayout {
     String brokerFileName = 'broker.sqlite',
     String backendFileName = 'backend.sqlite',
   }) async {
+    _validateName(directoryName, 'directoryName');
     final baseDirectory = await getApplicationSupportDirectory();
     final root = Directory(
       '${baseDirectory.path}${Platform.pathSeparator}$directoryName',
@@ -46,6 +47,8 @@ class StemFlutterStorageLayout {
     String brokerFileName = 'broker.sqlite',
     String backendFileName = 'backend.sqlite',
   }) async {
+    _validateName(brokerFileName, 'brokerFileName');
+    _validateName(backendFileName, 'backendFileName');
     final brokerFile = File(
       '${root.path}${Platform.pathSeparator}$brokerFileName',
     );
@@ -65,5 +68,19 @@ class StemFlutterStorageLayout {
       brokerFile: brokerFile,
       backendFile: backendFile,
     );
+  }
+
+  static void _validateName(String value, String parameter) {
+    if (value.trim().isEmpty ||
+        value == '.' ||
+        value == '..' ||
+        value.contains(RegExp(r'[/\\:\x00]'))) {
+      throw ArgumentError.value(
+        value,
+        parameter,
+        'must be a single directory or file name, not a path; '
+        'use the explicit StemFlutterStorageLayout constructor for paths',
+      );
+    }
   }
 }
