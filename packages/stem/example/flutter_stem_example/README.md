@@ -1,14 +1,110 @@
-# Stem Photo Lab
+# Stem Workbench
 
-An offline photo-processing demo using the ordinary core `StemApp`, initialized
-for Flutter by `stem_flutter_sqlite`. Each photo is a real CPU task: generate a
+An offline task and durable-workflow workbench using the ordinary core `StemApp`,
+initialized for Flutter by `stem_flutter_sqlite`. The Tasks tab retains Photo
+Lab: each photo is a real CPU task that generates a
 sample landscape, encode/decode JPEG, enhance and resize it, then write a preview,
 thumbnail, and checksum manifest.
 
-The UI shows a bounded batch, durable per-photo results, elapsed processing time,
+The Tasks view shows bounded batches, durable per-photo results, elapsed processing time,
 output sizes, and thumbnails you can inspect. Processing uses core task isolates,
-not the UI isolate. There are no artificial sleeps, personal-photo permissions,
+not the UI isolate. Photo processing has no artificial sleeps or personal-photo permissions,
 custom worker messages, or manually coordinated worker database handles.
+
+## Tasks and workflows
+
+The bottom navigation switches between Tasks, Workflows, and Workers. Switching
+tabs does not stop publication or close app-owned stores.
+
+- **Tasks:** submit a single photo or Quick/Standard/Heavy batches even when
+  earlier requests are queued. Each request is bounded to at most 12 photos;
+  publication is single-flight, but outstanding work does not block another
+  explicit request. Results retain their own batch IDs.
+- **Workflows:** select a checkpointed report, a durable sleep/resume flow, or a
+  run-specific approval flow. Launch 1–5 independent runs per request, inspect
+  persisted checkpoints and results, approve only the selected waiting run, or
+  cancel a run. Progress reflects core workflow state, not a simulated timer.
+
+Workflows use `StemWorkflowApp` layered onto the same task app, with a separate
+`workflows.sqlite` file under the same application-support root. Definitions are
+registered again in every foreground runtime and every headless callback. The
+UI is producer/observer-only in Workmanager mode; it does not start a hidden
+worker or workflow poller to make background work appear successful.
+
+The sleep scenario defaults to a ten-second durable suspension. This is a
+workflow scheduling example, not artificial CPU load. A bounded callback can
+return idle while a run sleeps. It schedules a separate timed **wakeup**, which
+only appends to the existing serial drain chain when Android permits it to run.
+The periodic reconciler remains a fallback. Waiting for approval requires an
+explicit event, not repeated scheduled execution. Native scheduling failure is
+reported separately from persisted workflow launch; do not launch duplicate
+runs to retry a wakeup.
+
+Background startup scans overdue runs and stops/joins polling before the worker
+starts. Sleeps created during that callback remain suspended for the host's next
+wakeup; a late poll cannot enqueue behind a worker that has stopped admitting.
+Foreground mode keeps periodic polling. Shutdown stops/joins polling, drains
+the worker, then closes the borrowed
+workflow layer and owned task stores. `StemApp.runUntilIdle` alone would close
+its stores too early for an external workflow layer; the example uses the core
+worker's one-shot runner and explicit owner cleanup.
+
+### Worker topology
+
+The default entrypoints demonstrate **both shared and dedicated queues**:
+
+| Worker identity | Subscriptions | Task-isolate slots |
+| --- | --- | --- |
+| `general-a` | `mobile-demo` (photos, workflows, routing probes) | 1 |
+| `general-b` | `mobile-demo` (the same queue) | 1 |
+| `routing-worker` | `mobile-routing` | 1 |
+
+These are ordinary `StemApp` workers configured with `StemWorkerConfig`,
+`consumerName`, and explicit `RoutingSubscription`s. They open the same durable
+SQLite files; Stem handles claiming, leases, ACKs, retries and execution.
+Each general worker reconstructs its own workflow runtime and definitions.
+There is no custom dispatcher, consume loop, IPC protocol or replacement lock
+manager for worker execution.
+
+Use the **Workers** tab to submit lightweight routing probes to either queue.
+Persisted results show the queue and the worker that actually handled each task,
+using normal task-status metadata. Competing consumers are not round-robin:
+one worker may receive more tasks than another. Queue isolation and correct
+settlement matter, not perfectly equal distribution.
+
+Foreground mode starts all three workers with normal `start()` calls. One
+Android WorkManager callback hosts the three Stem workers concurrently using
+their normal bounded runners; this does not create three native Android jobs or
+promise three parallel Flutter engines. The callback joins all runner futures
+and observer reads before closing their owned resources.
+
+Each bounded worker observes its own subscriptions becoming idle. After a
+productive multi-worker callback, the host requests one fresh serial
+reconciliation callback to catch cross-queue work published after another worker
+became idle. An empty reconciliation does not request another, so it is not an
+idle spin loop. Normal task retries remain Stem's responsibility.
+
+Worker count and per-worker isolate concurrency are different. Here up to two
+workers can process photo tasks concurrently, increasing aggregate memory use;
+start with routing probes or single photos before Heavy batches. Background
+UI labels show configuration and persisted observations, not a fabricated
+headless-worker liveness status.
+
+Stem supports competing workers on shared queues. Stale-owner workflow writes
+after lease expiry remain a specific recovery/fencing test concern, not a
+restriction on demonstrating normal multi-worker operation.
+
+See [multi-worker validation](doc/multiworker-validation.md) for the real SQLite
+tests, current native-install status, and the routing-probe acceptance procedure.
+
+Workflow checkpoints do not make external side effects exactly-once. There is
+also no atomic transaction spanning due-run extraction and broker enqueue in
+the generic runtime; process termination or a transport failure between those
+operations remains a recovery limitation. The new normal shutdown and
+reopen/resume tests do not prove that every abrupt-termination window is safe.
+
+See [workflow validation](doc/workflow-validation.md) for the SQLite/widget test
+coverage, observed Android report/sleep/approval outcomes, and remaining limits.
 
 ## Workloads and outputs
 

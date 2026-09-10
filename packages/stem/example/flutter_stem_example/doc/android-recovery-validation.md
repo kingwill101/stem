@@ -73,6 +73,9 @@ inspection, but Android remains responsible for execution opportunities.
 
 ## Memory observations
 
+These measurements predate the multi-worker default. Two workers can now process
+photos concurrently; their aggregate memory use can exceed these observations.
+
 | Process | Sampled RSS range | Lifetime high-water mark |
 | --- | --- | --- |
 | Original callback process | 187.3–245.7 MiB | 323.2 MiB |

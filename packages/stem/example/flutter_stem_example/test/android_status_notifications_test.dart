@@ -5,6 +5,68 @@ import 'package:stem/stem.dart';
 
 void main() {
   test(
+    'notification observation includes and disconnects additional workers',
+    () async {
+      final primary = await StemApp.inMemory(
+        workerConfig: const StemWorkerConfig(
+          queue: queueName,
+          consumerName: 'observe-a',
+        ),
+      );
+      final secondary = await StemApp.inMemory(
+        workerConfig: const StemWorkerConfig(
+          queue: queueName,
+          consumerName: 'observe-b',
+        ),
+      );
+      addTearDown(primary.close);
+      addTearDown(secondary.close);
+      await primary.backend.set(
+        'photo',
+        TaskState.running,
+        meta: const {'queue': queueName, 'batchId': 'batch'},
+      );
+      final shown = <PhotoQueueStatus>[];
+      final observer = PhotoQueueNotificationObserver(
+        primary,
+        AndroidStatusNotifications(show: (status) async => shown.add(status)),
+        workers: [primary.worker, secondary.worker],
+      );
+      await observer.start();
+      Future<void> interrupt(StemApp owner) => StemSignals.taskInterrupted.emit(
+        TaskInterruptedPayload(
+          envelope: Envelope(id: 'photo', name: 'photo', args: const {}),
+          worker: WorkerInfo(
+            id: owner.worker.workerId,
+            queues: const [queueName],
+            broadcasts: const [],
+          ),
+          priorStatus: TaskStatus(
+            id: 'photo',
+            state: TaskState.running,
+            attempt: 0,
+          ),
+          policy: TaskRecoveryPolicy.retry,
+        ),
+      );
+      await interrupt(secondary);
+      expect(shown.last.phase, PhotoQueuePhase.interrupted);
+      expect(shown, hasLength(2));
+      await observer.finish(
+        const WorkerRunOutcome(
+          reason: WorkerRunStopReason.idle,
+          deliveriesProcessed: 0,
+          elapsed: Duration.zero,
+        ),
+      );
+      final count = shown.length;
+      await interrupt(primary);
+      await interrupt(secondary);
+      expect(shown, hasLength(count));
+    },
+  );
+
+  test(
     'interruption signal is worker-scoped and disconnected at finish',
     () async {
       final app = await StemApp.create(

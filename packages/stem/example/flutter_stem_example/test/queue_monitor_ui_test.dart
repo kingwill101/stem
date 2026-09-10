@@ -31,6 +31,59 @@ TaskStatusRecord photo(String id, DateTime createdAt, Object? payload) =>
     );
 
 void main() {
+  testWidgets('additional batches and single photos remain available', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1000, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final app = await StemApp.inMemory(module: demoModule);
+    final monitor = RecordingMonitor(app);
+    final wakeup = Completer<void>();
+    final producer = PhotoBatchProducer(
+      app,
+      outputDirectory: '/unused',
+      requestWakeup: () => wakeup.future,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: QueueMonitorPage(
+          app: app,
+          monitor: monitor,
+          producer: producer,
+          isBooting: false,
+        ),
+      ),
+    );
+    final batch = find.byKey(const ValueKey('push-job'));
+    final single = find.byKey(const ValueKey('push-single-photo'));
+    await tester.tap(batch);
+    await tester.pump();
+    expect(tester.widget<FilledButton>(batch).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(single).onPressed, isNull);
+    wakeup.complete();
+    await tester.pumpAndSettle();
+    expect(monitor.pendingCount, 6);
+    expect(tester.widget<FilledButton>(batch).onPressed, isNotNull);
+    expect(tester.widget<OutlinedButton>(single).onPressed, isNotNull);
+    await tester.tap(single);
+    await tester.pumpAndSettle();
+    expect(monitor.pendingCount, 7);
+    expect(find.text('Single photo · 0 / 1 finished'), findsOneWidget);
+    expect(find.text('Standard · 0 / 6 finished'), findsOneWidget);
+    await tester.tap(batch);
+    await tester.pumpAndSettle();
+    expect(monitor.pendingCount, 13);
+    expect(PhotoBatchSummary.fromJobs(monitor.jobs), hasLength(3));
+    expect(find.textContaining('Workers sharing a queue'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await producer.dispose();
+    await monitor.dispose();
+    await app.shutdown();
+  });
+
   testWidgets('mount, remount and replacement respect current lifecycle', (
     tester,
   ) async {

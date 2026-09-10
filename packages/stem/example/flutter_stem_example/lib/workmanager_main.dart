@@ -7,6 +7,8 @@ import 'package:workmanager/workmanager.dart';
 import 'src/android_background.dart';
 import 'src/app.dart';
 import 'src/android_status_notifications.dart';
+import 'src/demo_workflows.dart';
+import 'src/demo_workers.dart';
 
 void _configureLogging() {
   configureStemLogging(
@@ -58,6 +60,8 @@ Future<void> main() async {
 
   runApp(
     StemFlutterExampleApp(
+      attachWorkflows: attachDemoWorkflows,
+      createAdditionalWorkers: createAdditionalDemoWorkers,
       runLocalWorker: false,
       startupWakeup: initializeAndReconcile,
       requestWakeup: initializeAndResume,

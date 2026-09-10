@@ -10,8 +10,13 @@ import 'package:stem/stem.dart';
 class ControlledBroker extends InMemoryBroker {
   int publishes = 0;
   int? failAt;
+  int? reportedInflight;
   Completer<void>? gate;
   final entered = Completer<void>();
+
+  @override
+  Future<int?> inflightCount(String queue) async =>
+      reportedInflight ?? await super.inflightCount(queue);
 
   @override
   Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
@@ -63,13 +68,88 @@ void main() {
       expect(wakeups, 1);
       expect(await broker.pendingCount(queueName), 1);
       await producer.publish(PhotoWorkload.standard);
-      expect(
-        broker.publishes,
-        2,
-        reason: 'Unfinished work blocks another batch.',
+      expect(broker.publishes, 8);
+      expect(await broker.pendingCount(queueName), 7);
+      expect(wakeups, 2);
+      final records = await app.backend.listTaskStatuses(
+        const TaskStatusListRequest(queue: queueName),
       );
+      final summaries = PhotoBatchSummary.fromJobs(records.items);
+      expect(summaries, hasLength(2));
+      expect(summaries.map((batch) => batch.planned), everyElement(6));
+      expect(summaries.map((batch) => batch.jobs.length), containsAll([1, 6]));
     },
   );
+
+  test(
+    'explicit batches and single photos accumulate with unique IDs',
+    () async {
+      for (final workload in [
+        PhotoWorkload.quick,
+        PhotoWorkload.standard,
+        PhotoWorkload.single,
+        PhotoWorkload.single,
+      ]) {
+        expect(
+          await producer.publish(workload),
+          contains('${workload.count} of ${workload.count} photos committed'),
+        );
+      }
+      expect(await broker.pendingCount(queueName), 11);
+      expect(wakeups, 4);
+      final records = await app.backend.listTaskStatuses(
+        const TaskStatusListRequest(queue: queueName),
+      );
+      expect(records.items.map((job) => job.status.id).toSet(), hasLength(11));
+      final summaries = PhotoBatchSummary.fromJobs(records.items);
+      expect(summaries, hasLength(4));
+      expect(
+        summaries.map((batch) => batch.planned),
+        containsAll([3, 6, 1, 1]),
+      );
+      for (final batch in summaries) {
+        expect(batch.queued, batch.planned);
+        expect(batch.completed, 0);
+      }
+    },
+  );
+
+  test('existing in-flight work does not block a new single photo', () async {
+    broker.reportedInflight = 1;
+    expect(
+      await producer.publish(PhotoWorkload.single),
+      contains('1 of 1 photos committed'),
+    );
+    expect(broker.publishes, 1);
+    expect(wakeups, 1);
+  });
+
+  test('overlapping requests join one publication', () async {
+    broker.gate = Completer<void>();
+    final first = producer.publish(PhotoWorkload.quick);
+    await broker.entered.future;
+    final second = producer.publish(PhotoWorkload.single);
+    expect(identical(first, second), isTrue);
+    broker.gate!.complete();
+    await first;
+    expect(broker.publishes, 3);
+    expect(wakeups, 1);
+    await producer.publish(PhotoWorkload.single);
+    expect(broker.publishes, 4);
+  });
+
+  test('wakeup failure retains work without republishing', () async {
+    producer = PhotoBatchProducer(
+      app,
+      outputDirectory: '/unused/no-worker',
+      requestWakeup: () async => throw StateError('scheduler unavailable'),
+    );
+    final message = await producer.publish(PhotoWorkload.single);
+    expect(message, contains('1 of 1 photos committed'));
+    expect(message, contains('Use Retry wakeup; do not publish again'));
+    expect(broker.publishes, 1);
+    expect(await broker.pendingCount(queueName), 1);
+  });
 
   test(
     'dispose joins current commit and prevents subsequent publishes',

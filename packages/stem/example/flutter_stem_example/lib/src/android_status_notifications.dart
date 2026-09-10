@@ -206,32 +206,40 @@ class AndroidStatusNotifications {
 }
 
 /// Event-triggered reads, serialized and joined before the owning app closes.
-/// This observes the existing worker; it neither polls nor consumes anything.
+/// This observes the existing workers; it neither polls nor consumes anything.
 class PhotoQueueNotificationObserver {
-  PhotoQueueNotificationObserver(this.app, this.notifications);
+  PhotoQueueNotificationObserver(
+    this.app,
+    this.notifications, {
+    Iterable<Worker>? workers,
+  }) : _workers = List.unmodifiable((workers ?? [app.worker]).toSet());
   final StemApp app;
   final AndroidStatusNotifications notifications;
-  StreamSubscription<WorkerEvent>? _subscription;
-  SignalSubscription? _interruption;
+  final List<Worker> _workers;
+  final List<StreamSubscription<WorkerEvent>> _subscriptions = [];
+  final List<SignalSubscription> _interruptions = [];
   Future<void> _pending = Future.value();
   bool _interrupted = false;
 
   Future<void> start() async {
-    _interruption = StemSignals.onTaskInterrupted((payload, _) {
-      // Evidence of a redelivered running attempt, not evidence of why the
-      // previous process stopped. Recovery may schedule a delayed retry.
-      _interrupted = true;
-      return _refresh();
-    }, workerId: app.worker.workerId);
-    _subscription = app.worker.events.listen((event) {
-      // Whole-photo counts change at durable lifecycle boundaries, not at each
-      // intra-photo progress heartbeat.
-      if (event.type != WorkerEventType.progress &&
-          event.type != WorkerEventType.heartbeat) {
-        if (event.type == WorkerEventType.completed) _interrupted = false;
-        unawaited(_refresh());
-      }
-    });
+    for (final worker in _workers) {
+      _interruptions.add(
+        StemSignals.onTaskInterrupted((payload, _) {
+          // Recovery evidence, not proof of why the previous process stopped.
+          _interrupted = true;
+          return _refresh();
+        }, workerId: worker.workerId),
+      );
+      _subscriptions.add(
+        worker.events.listen((event) {
+          if (event.type != WorkerEventType.progress &&
+              event.type != WorkerEventType.heartbeat) {
+            if (event.type == WorkerEventType.completed) _interrupted = false;
+            unawaited(_refresh());
+          }
+        }),
+      );
+    }
     await _refresh();
   }
 
@@ -246,8 +254,12 @@ class PhotoQueueNotificationObserver {
   });
 
   Future<void> finish(WorkerRunOutcome? outcome) async {
-    _interruption?.cancel();
-    await _subscription?.cancel();
+    for (final subscription in _interruptions) {
+      subscription.cancel();
+    }
+    await Future.wait(
+      _subscriptions.map((subscription) => subscription.cancel()),
+    );
     await _pending;
     final status = await notifications.read(app, PhotoQueuePhase.completed);
     if (status == null ||

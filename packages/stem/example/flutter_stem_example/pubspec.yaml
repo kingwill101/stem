@@ -1,5 +1,5 @@
 name: flutter_stem_example
-description: "Offline photo processing with Stem task isolates, SQLite, and app-owned Workmanager."
+description: "Flutter workbench for durable Stem tasks, workflows, and multi-worker queue routing."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -42,6 +42,8 @@ dependencies:
     path: ../../../stem_flutter
   stem_flutter_sqlite:
     path: ../../../stem_flutter_sqlite
+  stem_sqlite:
+    path: ../../../stem_sqlite
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

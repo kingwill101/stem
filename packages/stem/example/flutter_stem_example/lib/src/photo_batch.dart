@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:stem/stem.dart';
 
-import 'demo_config.dart';
 import 'demo_tasks.dart';
 
 /// Bounded, reproducible workloads; tests can inject a much smaller preset.
@@ -16,6 +15,12 @@ class PhotoWorkload {
        assert(width >= 64 && width <= 2048),
        assert(height >= 64 && height <= 1536);
 
+  static const single = PhotoWorkload(
+    label: 'Single photo',
+    count: 1,
+    width: 960,
+    height: 640,
+  );
   static const quick = PhotoWorkload(
     label: 'Quick',
     count: 3,
@@ -73,15 +78,21 @@ class PhotoBatchProducer {
   }
 
   Future<String> _publish(PhotoWorkload workload) async {
+    // Enforce the per-request bounds in release builds too.
+    if (workload.count < 1 ||
+        workload.count > 12 ||
+        workload.width < 64 ||
+        workload.width > 2048 ||
+        workload.height < 64 ||
+        workload.height > 1536) {
+      return 'Choose 1–12 photos, 64–2048 pixels wide and '
+          '64–1536 pixels high.';
+    }
     final batchId = '${DateTime.now().microsecondsSinceEpoch}-${_sequence++}';
     var committed = 0;
     Object? failure;
     try {
-      // Recheck durable queue state, not only a possibly stale dashboard.
-      if ((await app.broker.pendingCount(queueName) ?? 0) > 0 ||
-          (await app.broker.inflightCount(queueName) ?? 0) > 0) {
-        return 'Finish the pending batch before preparing more photos.';
-      }
+      // Each explicit request adds independent work to the existing runner.
       for (var index = 0; index < workload.count && !_stopped; index++) {
         await app.enqueueCall(
           preparePhoto.buildCall(

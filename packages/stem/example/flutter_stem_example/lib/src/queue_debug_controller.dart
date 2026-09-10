@@ -24,7 +24,10 @@ class QueueDebugController with WidgetsBindingObserver {
   bool _disposed = false;
   bool _started = false;
   bool _visible = true;
+  bool _pageVisible = true;
   Timer? _timer;
+
+  bool get _canObserve => _visible && _pageVisible;
 
   bool get hasUnfinishedWork =>
       (pendingCount ?? 0) > 0 ||
@@ -34,9 +37,20 @@ class QueueDebugController with WidgetsBindingObserver {
   void setVisible(bool visible) {
     if (_disposed) return;
     _visible = visible;
+    _updateVisibility();
+  }
+
+  /// Page selection is independent of the application's foreground lifecycle.
+  void setPageVisible(bool visible) {
+    if (_disposed) return;
+    _pageVisible = visible;
+    _updateVisibility();
+  }
+
+  void _updateVisibility() {
     _timer?.cancel();
     _timer = null;
-    if (visible) unawaited(refresh());
+    if (_canObserve) unawaited(refresh());
   }
 
   void _scheduleReconciliation() {
@@ -44,7 +58,7 @@ class QueueDebugController with WidgetsBindingObserver {
     _timer = null;
     if (!_disposed &&
         _started &&
-        _visible &&
+        _canObserve &&
         (hasUnfinishedWork || observationError != null)) {
       _timer = Timer(reconciliationInterval, () {
         _timer = null;
@@ -69,7 +83,7 @@ class QueueDebugController with WidgetsBindingObserver {
         WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _events = app.worker.events.listen((_) {
-      if (_visible) unawaited(refresh());
+      if (_canObserve) unawaited(refresh());
     });
     await refresh();
   }

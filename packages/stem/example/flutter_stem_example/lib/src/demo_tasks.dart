@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import 'package:stem/stem.dart';
 
 import 'demo_config.dart';
+import 'routing_tasks.dart';
 
 // Opt-in diagnostics only: RSS is process-wide (including every Flutter engine
 // and task isolate), and maxRss is the lifetime high-water mark, not this photo's
@@ -105,6 +106,7 @@ final preparePhoto = TaskDefinition<PhotoTaskArgs, Map<String, Object?>>(
 
 final demoModule = StemModule(
   tasks: <TaskHandler<Object?>>[
+    routingProbeHandler,
     FunctionTaskHandler<Map<String, Object?>>(
       name: preparePhoto.name,
       entrypoint: _preparePhotoTask,

@@ -76,7 +76,7 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
 
   @override
   void dispose() {
-    widget.producer?.stopPublishing();
+    // The root owns publication; switching workbench tabs must not retire it.
     widget.monitor?.setVisible(false);
     unawaited(_monitorSub?.cancel());
     super.dispose();
@@ -124,12 +124,14 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
     }
   }
 
-  Future<void> _enqueueBatch() async {
+  Future<void> _enqueueBatch([PhotoWorkload? workload]) async {
     final producer = widget.producer;
     if (producer == null || _publishing) return;
     setState(() => _publishing = true);
     try {
-      final message = await producer.publish(widget.workload ?? _selection);
+      final message = await producer.publish(
+        workload ?? widget.workload ?? _selection,
+      );
       if (!mounted) return;
       setState(() => _actionMessage = message);
       await widget.monitor?.refresh();
@@ -176,7 +178,7 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
         return byCreation != 0 ? byCreation : b.id.compareTo(a.id);
       });
     final workload = widget.workload ?? _selection;
-    final busy = _publishing || (monitor?.hasUnfinishedWork ?? false);
+    final busy = _publishing;
     final enabled =
         widget.producer != null &&
         !widget.isBooting &&
@@ -254,6 +256,15 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
                           '${workload.height} pixels each',
                         ),
                         const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          key: const ValueKey('push-single-photo'),
+                          onPressed: enabled
+                              ? () => _enqueueBatch(PhotoWorkload.single)
+                              : null,
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: const Text('Prepare 1 photo'),
+                        ),
+                        const SizedBox(height: 8),
                         FilledButton.icon(
                           key: const ValueKey('push-job'),
                           onPressed: enabled ? _enqueueBatch : null,
@@ -264,14 +275,15 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
                                 : 'Prepare ${workload.count} photos',
                           ),
                         ),
-                        if (busy)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: Text(
-                              'Finish the current work before '
-                              'starting another batch.',
-                            ),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Add a single photo or another bounded batch '
+                            'at any time. Requests follow normal queue routing. '
+                            'Workers sharing a queue can process separate deliveries '
+                            'concurrently; see the Workers tab.',
                           ),
+                        ),
                         const SizedBox(height: 16),
                         Wrap(
                           spacing: 8,
