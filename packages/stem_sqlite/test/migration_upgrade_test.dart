@@ -8,9 +8,45 @@ import 'package:stem_sqlite/src/database/migrations.dart';
 import 'package:stem_sqlite/stem_sqlite.dart';
 import 'package:test/test.dart';
 
-const _migrationTestTimeout = Timeout(Duration(minutes: 5));
+const _migrationTestTimeout = Timeout(Duration(minutes: 1));
 
 void main() {
+  test('migration adapters use production pragmas on every open', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'stem-sqlite-migration-settings-',
+    );
+    final file = File('${directory.path}/stem.db');
+    try {
+      // synchronous is connection-local, so configuring only the first
+      // adapter is not enough for the historical-prefix upgrade tests.
+      for (var open = 0; open < 2; open += 1) {
+        final adapter = await _openMigrationAdapter(file);
+        try {
+          expect(
+            (await adapter.queryRaw(
+              'PRAGMA journal_mode',
+            )).single.values.single,
+            'wal',
+          );
+          expect(
+            (await adapter.queryRaw('PRAGMA synchronous')).single.values.single,
+            1,
+          );
+          expect(
+            (await adapter.queryRaw(
+              'PRAGMA busy_timeout',
+            )).single.values.single,
+            5000,
+          );
+        } finally {
+          await adapter.close();
+        }
+      }
+    } finally {
+      await directory.delete(recursive: true);
+    }
+  });
+
   test(
     'upgrades every historical schema prefix to the current registry',
     () async {
@@ -26,7 +62,7 @@ void main() {
         );
         final file = File('${directory.path}/stem.db');
         try {
-          final oldAdapter = SqliteDriverAdapter.file(file.path);
+          final oldAdapter = await _openMigrationAdapter(file);
           final oldLedger = SqlMigrationLedger(
             oldAdapter,
             tableName: 'orm_migrations',
@@ -41,7 +77,7 @@ void main() {
           expect(oldReport.actions, hasLength(prefixLength));
           await oldAdapter.close();
 
-          final currentAdapter = SqliteDriverAdapter.file(file.path);
+          final currentAdapter = await _openMigrationAdapter(file);
           final currentLedger = SqlMigrationLedger(
             currentAdapter,
             tableName: 'orm_migrations',
@@ -82,7 +118,7 @@ void main() {
       );
       final file = File('${directory.path}/stem.db');
       try {
-        final adapter = SqliteDriverAdapter.file(file.path);
+        final adapter = await _openMigrationAdapter(file);
         final runner = MigrationRunner(
           schemaDriver: adapter,
           ledger: SqlMigrationLedger(adapter, tableName: 'orm_migrations'),
@@ -136,7 +172,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       final file = File('${directory.path}/stem.db');
       try {
         final migrations = buildMigrations();
-        final oldAdapter = SqliteDriverAdapter.file(file.path);
+        final oldAdapter = await _openMigrationAdapter(file);
         final oldRunner = MigrationRunner(
           schemaDriver: oldAdapter,
           ledger: SqlMigrationLedger(oldAdapter, tableName: 'orm_migrations'),
@@ -192,4 +228,20 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     },
     timeout: _migrationTestTimeout,
   );
+}
+
+Future<SqliteDriverAdapter> _openMigrationAdapter(File file) async {
+  final adapter = SqliteDriverAdapter.file(file.path);
+  try {
+    // Match SqliteConnections migration setup. SQLite's default rollback
+    // journal with FULL synchronization otherwise fsyncs every schema and
+    // ledger write, making these file-backed tests disk-speed dependent.
+    await adapter.executeRaw('PRAGMA busy_timeout = 5000;');
+    await adapter.executeRaw('PRAGMA journal_mode=WAL;');
+    await adapter.executeRaw('PRAGMA synchronous=NORMAL;');
+    return adapter;
+  } catch (_) {
+    await adapter.close();
+    rethrow;
+  }
 }

@@ -23,6 +23,236 @@ void main() {
     await tempDir.delete(recursive: true);
   });
 
+  group('consumer drain', () {
+    for (final operation in ['cancel', 'close', 'cancel then close']) {
+      test(
+        '$operation joins a blocked claim and '
+        'releases only un-emitted work',
+        () async {
+          final broker = await SqliteBroker.open(
+            dbFile,
+            pollInterval: const Duration(hours: 1),
+            sweeperInterval: Duration.zero,
+          );
+          final blocker = await SqliteConnections.open(dbFile);
+          addTearDown(broker.close);
+          addTearDown(blocker.close);
+          await broker.publish(
+            Envelope(name: 'drain', args: const {}, queue: 'drain'),
+          );
+          final entered = Completer<void>();
+          final release = Completer<void>();
+          final transaction = blocker.runInTransaction((_) async {
+            entered.complete();
+            await release.future;
+          });
+          await entered.future;
+          final deliveries = <Delivery>[];
+          final subscription = broker
+              .consume(RoutingSubscription.singleQueue('drain'), prefetch: 3)
+              .listen(deliveries.add);
+          final cancellation = operation == 'close'
+              ? Future<void>.value()
+              : subscription.cancel();
+          final drain = operation == 'cancel' ? cancellation : broker.close();
+          var drained = false;
+          unawaited(drain.then((_) => drained = true));
+          try {
+            await Future<void>.delayed(const Duration(milliseconds: 25));
+            expect(drained, isFalse);
+            if (operation != 'cancel') {
+              expect(identical(broker.close(), drain), isTrue);
+            }
+          } finally {
+            release.complete();
+            await transaction;
+          }
+          await drain.timeout(const Duration(seconds: 3));
+          await cancellation;
+          expect(deliveries, isEmpty);
+          final observer = await SqliteBroker.open(dbFile);
+          addTearDown(observer.close);
+          expect(await observer.inflightCount('drain'), 0);
+          expect(await observer.pendingCount('drain'), 1);
+        },
+      );
+    }
+
+    test('close interrupts polling and joins repeated close calls', () async {
+      final broker = await SqliteBroker.open(
+        dbFile,
+        pollInterval: const Duration(hours: 1),
+        sweeperInterval: Duration.zero,
+      );
+      addTearDown(broker.close);
+      final done = Completer<void>();
+      broker
+          .consume(RoutingSubscription.singleQueue('empty'))
+          .listen((_) => fail('Unexpected delivery'), onDone: done.complete);
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+      final closing = broker.close();
+      expect(identical(broker.close(), closing), isTrue);
+      await closing.timeout(const Duration(seconds: 3));
+      await done.future.timeout(const Duration(seconds: 3));
+      expect(
+        () => broker.consume(RoutingSubscription.singleQueue('empty')),
+        throwsStateError,
+      );
+    });
+
+    test('one listener cancelling does not stop other listeners', () async {
+      final broker = await SqliteBroker.open(
+        dbFile,
+        pollInterval: const Duration(milliseconds: 5),
+        sweeperInterval: Duration.zero,
+      );
+      addTearDown(broker.close);
+      final stream = broker.consume(RoutingSubscription.singleQueue('shared'));
+      expect(stream.isBroadcast, isTrue);
+      final first = stream.listen((_) {});
+      final received = Completer<Delivery>();
+      final second = stream.listen(received.complete);
+      addTearDown(second.cancel);
+      await first.cancel();
+      await broker.publish(
+        Envelope(name: 'shared', args: const {}, queue: 'shared'),
+      );
+      final delivery = await received.future.timeout(
+        const Duration(seconds: 3),
+      );
+      await second.cancel();
+      expect(await broker.inflightCount('shared'), 1);
+      await broker.ack(delivery);
+      expect(await broker.inflightCount('shared'), 0);
+    });
+  });
+
+  group('queue prefetch', () {
+    late SqliteBroker broker;
+    late SqliteBroker other;
+    final deliveries = <Delivery>[];
+
+    setUp(() async {
+      deliveries.clear();
+      broker = await SqliteBroker.open(
+        dbFile,
+        defaultVisibilityTimeout: const Duration(seconds: 5),
+        pollInterval: const Duration(milliseconds: 10),
+        sweeperInterval: Duration.zero,
+      );
+      other = await SqliteBroker.open(dbFile);
+      for (var i = 0; i < 4; i++) {
+        await broker.publish(
+          Envelope(name: 'prefetch', args: const {}, queue: 'prefetch'),
+        );
+      }
+    });
+
+    tearDown(() async {
+      await other.close();
+      await broker.close();
+    });
+
+    Future<void> waitForCount(int count) async {
+      await (() async {
+        while (deliveries.length < count) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      })().timeout(const Duration(seconds: 3));
+    }
+
+    Future<void> expectCount(int count) async {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(deliveries, hasLength(count));
+    }
+
+    for (final settlement in ['ack', 'requeue', 'deadLetter', 'nack']) {
+      test(
+        '$settlement frees exactly one slot across broker handles',
+        () async {
+          final subscription = broker
+              .consume(
+                RoutingSubscription.singleQueue('prefetch'),
+                prefetch: 2,
+              )
+              .listen(deliveries.add);
+          addTearDown(subscription.cancel);
+          await waitForCount(2);
+          await expectCount(2);
+          expect(await broker.inflightCount('prefetch'), 2);
+          final first = deliveries.first;
+          switch (settlement) {
+            case 'ack':
+              await other.ack(first);
+            case 'requeue':
+              await other.nack(first);
+            case 'deadLetter':
+              await other.deadLetter(first);
+            case 'nack':
+              await other.nack(first, requeue: false);
+          }
+          await waitForCount(3);
+          await expectCount(3);
+          expect(await broker.inflightCount('prefetch'), 2);
+        },
+      );
+    }
+
+    test('lease extension retains a slot and expiry releases it', () async {
+      final subscription = broker
+          .consume(RoutingSubscription.singleQueue('prefetch'))
+          .listen(deliveries.add);
+      addTearDown(subscription.cancel);
+      await waitForCount(1);
+      await other.extendLease(
+        deliveries.first,
+        const Duration(milliseconds: 400),
+      );
+      await other.extendLease(
+        deliveries.first,
+        const Duration(seconds: 1),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await expectCount(1);
+      await waitForCount(2);
+      await expectCount(2);
+    });
+
+    test('consumer names do not share prefetch capacity', () async {
+      final streams = [
+        for (var i = 0; i < 2; i++)
+          broker
+              .consume(
+                RoutingSubscription.singleQueue('prefetch'),
+                consumerName: 'same-name',
+              )
+              .listen(deliveries.add),
+      ];
+      addTearDown(() async {
+        for (final stream in streams) {
+          await stream.cancel();
+        }
+      });
+      await waitForCount(2);
+      await expectCount(2);
+      expect(
+        deliveries.map((delivery) => delivery.envelope.id).toSet(),
+        hasLength(2),
+      );
+    });
+
+    test('cancellation leaves unclaimed work available', () async {
+      final subscription = broker
+          .consume(RoutingSubscription.singleQueue('prefetch'))
+          .listen(deliveries.add);
+      await waitForCount(1);
+      await subscription.cancel();
+      await expectCount(1);
+      expect(await broker.inflightCount('prefetch'), 1);
+      expect(await broker.pendingCount('prefetch'), 3);
+    });
+  });
+
   runBrokerContractTests(
     adapterName: 'SQLite',
     factory: BrokerContractFactory(
