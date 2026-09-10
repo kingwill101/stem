@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'package:stem/portable.dart';
 import 'package:test/test.dart';
 

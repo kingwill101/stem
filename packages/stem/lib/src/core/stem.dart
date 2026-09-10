@@ -153,10 +153,16 @@ class Stem implements TaskResultCaller {
        );
 
   /// Creates a producer facade that only requires publishing capability.
+  ///
+  /// Explicit stores take precedence over [backend] for their capability.
+  /// The caller owns their lifecycle; [close] only closes the compatibility
+  /// backend and publishers advertising a lifecycle.
   Stem.withPublisher({
     required this.publisher,
     TaskRegistry? registry,
     this.backend,
+    TaskStatusStore? taskStatusStore,
+    GroupResultStore? groupResultStore,
     Iterable<TaskHandler<Object?>> tasks = const [],
     this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
@@ -168,6 +174,8 @@ class Stem implements TaskResultCaller {
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
   }) : _broker = publisher is QueueBroker ? publisher : null,
+       taskStatusStore = taskStatusStore ?? backend,
+       groupResultStore = groupResultStore ?? backend,
        registry = _resolveTaskRegistry(registry, tasks),
        payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
@@ -209,6 +217,12 @@ class Stem implements TaskResultCaller {
   /// Optional backend used for result tracking.
   final ResultBackend? backend;
 
+  /// Task status persistence, independent of groups and worker heartbeats.
+  final TaskStatusStore? taskStatusStore;
+
+  /// Optional group observation capability.
+  final GroupResultStore? groupResultStore;
+
   /// Coordinator used for unique task enforcement.
   final UniqueTaskCoordinator? uniqueTaskCoordinator;
 
@@ -249,14 +263,14 @@ class Stem implements TaskResultCaller {
 
   @override
   Future<TaskStatus?> getTaskStatus(String taskId) async {
-    final resolved = backend;
+    final resolved = taskStatusStore;
     if (resolved == null) return null;
     return resolved.get(taskId);
   }
 
   @override
   Future<GroupStatus?> getGroupStatus(String groupId) async {
-    final resolved = backend;
+    final resolved = groupResultStore;
     if (resolved == null) return null;
     return resolved.getGroup(groupId);
   }
@@ -534,13 +548,13 @@ class Stem implements TaskResultCaller {
             routing: routingInfo,
             enqueueOptions: enqueueOptions,
           );
-          if (backend != null) {
+          if (taskStatusStore != null) {
             final queuedMeta = _withResultEncoderMeta({
               ...envelope.meta,
               'queue': targetName,
               'maxRetries': envelope.maxRetries,
             }, resultEncoder);
-            await backend!.set(
+            await taskStatusStore!.set(
               envelope.id,
               TaskState.queued,
               attempt: envelope.attempt,
@@ -602,7 +616,7 @@ class Stem implements TaskResultCaller {
   }
 
   /// Waits for [taskId] to reach a terminal state and returns a typed view of
-  /// the final [TaskStatus]. Requires [backend] to be configured; otherwise a
+  /// the final [TaskStatus]. Requires [taskStatusStore]; otherwise a
   /// [StateError] is thrown.
   @override
   Future<TaskResult<T>?> waitForTask<T extends Object?>(
@@ -616,7 +630,7 @@ class Stem implements TaskResultCaller {
       [decode, decodeJson, decodeVersionedJson].whereType<Object>().length <= 1,
       'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
-    final resultBackend = backend;
+    final resultBackend = taskStatusStore;
     if (resultBackend == null) {
       throw StateError(
         'Stem.waitForTask requires a configured result backend.',
@@ -1010,9 +1024,9 @@ class Stem implements TaskResultCaller {
     String taskId,
     Envelope duplicate,
   ) async {
-    if (backend == null) return;
+    if (taskStatusStore == null) return;
     try {
-      final status = await backend!.get(taskId);
+      final status = await taskStatusStore!.get(taskId);
       if (status == null) return;
       final existingDuplicates = status.meta[UniqueTaskMetadata.duplicates];
       final duplicates = <Map<String, Object?>>[];
@@ -1033,7 +1047,7 @@ class Stem implements TaskResultCaller {
         ...status.meta,
         UniqueTaskMetadata.duplicates: duplicates,
       };
-      await backend!.set(
+      await taskStatusStore!.set(
         status.id,
         status.state,
         payload: status.payload,

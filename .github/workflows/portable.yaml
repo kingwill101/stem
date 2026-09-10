@@ -24,3 +24,11 @@ jobs:
         run: >-
           dart compile js packages/stem/tool/portable_compile.dart
           --output=/tmp/stem-portable.js
+      - name: Run portable behavior on JavaScript
+        run: |
+          export NODE_OPTIONS="--require=$PWD/packages/stem/tool/node_test_bootstrap.cjs"
+          dart test --platform node \
+            packages/stem/test/api/portable_api_test.dart \
+            packages/stem/test/api/portable_runtime_test.dart \
+            packages/stem/test/unit/core/task_processor_test.dart \
+            packages/stem/test/unit/core/task_invocation_portable_test.dart

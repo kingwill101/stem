@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Runtime-neutral task processing and semantic outcomes.
 library;
 
@@ -119,6 +122,7 @@ final class TaskProcessRetry extends TaskProcessOutcome {
   });
 
   /// Envelope metadata for runtimes that retry by republishing.
+  /// Signed transports must re-sign this changed envelope before publication.
   final Envelope nextEnvelope;
 
   /// Requested delay before the next delivery.
@@ -288,7 +292,9 @@ class TaskProcessor {
     final resolvedSigner = signer;
     if (resolvedSigner != null) {
       try {
-        await resolvedSigner.verify(effectiveEnvelope);
+        // Verify the wire body, not host-supplied delivery metadata. Native
+        // retries retain the original signed body while advancing the counter.
+        await resolvedSigner.verify(envelope);
       } on Object catch (error, stackTrace) {
         return TaskProcessRejected(
           envelope: effectiveEnvelope,
@@ -335,7 +341,7 @@ class TaskProcessor {
 
     try {
       control.cancellation.throwIfCancelled();
-      final value = await _invoke(
+      final value = await invoke(
         context,
         () => _invokeHandler(
           handler,
@@ -355,7 +361,7 @@ class TaskProcessor {
         error: error,
       );
     } on TaskRetryRequest catch (request, stackTrace) {
-      return _explicitRetry(
+      return classifyRetry(
         effectiveEnvelope,
         handler,
         request,
@@ -363,7 +369,7 @@ class TaskProcessor {
       );
     } on Object catch (error, stackTrace) {
       await _notifyError(context, error, stackTrace);
-      return _failureOutcome(
+      return classifyFailure(
         effectiveEnvelope,
         handler,
         error,
@@ -372,7 +378,12 @@ class TaskProcessor {
     }
   }
 
-  Future<Object?> _invoke(
+  /// Runs execution middleware around a runtime-provided invocation.
+  ///
+  /// VM workers supply their supervised isolate/inline executor here.
+  /// Portable processing supplies a local invocation. The caller owns timeout
+  /// enforcement and error disposition.
+  Future<Object?> invoke(
     TaskContext context,
     Future<Object?> Function() handler,
   ) async {
@@ -417,7 +428,8 @@ class TaskProcessor {
     }
   }
 
-  TaskProcessOutcome _explicitRetry(
+  /// Classifies an explicit retry without publishing or persisting it.
+  TaskProcessOutcome classifyRetry(
     Envelope envelope,
     TaskHandler<Object?> handler,
     TaskRetryRequest request,
@@ -472,7 +484,8 @@ class TaskProcessor {
     );
   }
 
-  TaskProcessOutcome _failureOutcome(
+  /// Classifies a handler failure using the shared retry policy.
+  TaskProcessOutcome classifyFailure(
     Envelope envelope,
     TaskHandler<Object?> handler,
     Object error,

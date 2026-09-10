@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// VM task invocation abstraction and execution context.
 ///
 /// This library defines the [TaskInvocationContext], which is the primary

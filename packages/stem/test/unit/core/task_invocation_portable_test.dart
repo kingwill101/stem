@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/task_invocation_portable.dart' as portable;
 import 'package:test/test.dart';

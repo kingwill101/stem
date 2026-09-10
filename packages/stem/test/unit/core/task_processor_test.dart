@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,6 +9,45 @@ import 'package:test/test.dart';
 
 void main() {
   group('TaskProcessor', () {
+    test(
+      'verifies signed wire bodies before applying native attempts',
+      () async {
+        final secret = base64.encode(utf8.encode('portable-secret'));
+        final signer = PayloadSigner(
+          SigningConfig.fromEnvironment({
+            'STEM_SIGNING_KEYS': 'primary:$secret',
+            'STEM_SIGNING_ACTIVE_KEY': 'primary',
+          }),
+        );
+        final processor = TaskProcessor(
+          registry: InMemoryTaskRegistry()
+            ..register(
+              _definition('signed').handler(
+                entrypoint: (context, args) async => context.attempt,
+              ),
+            ),
+          signer: signer,
+        );
+        final wire = await signer.sign(
+          Envelope(id: 'signed-id', name: 'signed', args: const {}),
+        );
+        final result = await processor.process(wire, deliveryAttempt: 2);
+        expect(result, isA<TaskProcessSuccess>());
+        expect((result as TaskProcessSuccess).value, 2);
+        expect(result.taskId, wire.id);
+        expect(wire.attempt, 0);
+        final tampered = await processor.process(
+          wire.copyWith(args: const {'tampered': true}),
+          deliveryAttempt: 2,
+        );
+        expect(tampered, isA<TaskProcessRejected>());
+        expect(
+          (tampered as TaskProcessRejected).reason,
+          TaskRejectionReason.invalidSignature,
+        );
+      },
+    );
+
     test('executes a handler with a platform attempt override', () async {
       final processor = _processor([
         _definition('portable.success').handler(

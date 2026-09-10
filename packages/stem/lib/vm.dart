@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Stem APIs for Dart VM worker and daemon runtimes.
 ///
 /// Existing `stable.dart` and `stem.dart` imports remain supported. This

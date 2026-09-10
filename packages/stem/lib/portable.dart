@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Runtime-neutral Stem API for producers and event-driven task execution.
 ///
 /// This entrypoint excludes VM worker lifecycle, process signals, isolate
@@ -19,6 +22,7 @@ export 'src/core/task_result.dart';
 export 'src/routing/routing_config.dart';
 export 'src/routing/routing_registry.dart';
 export 'src/scheduler/schedule_calculator.dart';
+export 'src/scheduler/schedule_runner.dart';
 export 'src/scheduler/schedule_spec.dart';
 export 'src/scheduler/solar_calculator.dart';
 export 'src/security/signing.dart';

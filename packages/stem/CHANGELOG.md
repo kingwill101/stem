@@ -2,6 +2,15 @@
 
 ## 0.4.0
 
+- Added portable `ScheduleRunner.runOnce`, with `Beat` retaining the periodic
+  compatibility lifecycle over the same dispatch implementation.
+- Allowed publish-only producers to use task-status and group-result stores
+  without implementing worker-heartbeat storage.
+- Shared VM and portable execution middleware and retry classification while
+  retaining VM-supervised execution and transport lifecycle handling.
+- Fixed signature verification for native delivery-attempt overrides.
+- Added JS runtime tests for narrow persistence, one-shot scheduling, mixed
+  batches, and sequential/concurrent duplicate-delivery semantics.
 - Added the first portable runtime surface: publisher-only producer APIs,
   conditional VM task invocation, narrow persistence capabilities, typed
   task-processing outcomes, and a JavaScript compile guard for `portable.dart`.

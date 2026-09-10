@@ -119,6 +119,7 @@ export 'src/routing/routing_config.dart';
 export 'src/routing/routing_registry.dart';
 export 'src/scheduler/beat.dart';
 export 'src/scheduler/schedule_calculator.dart';
+export 'src/scheduler/schedule_runner.dart';
 export 'src/scheduler/schedule_spec.dart';
 export 'src/scheduler/solar_calculator.dart';
 export 'src/security/signing.dart';
