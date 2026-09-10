@@ -55,6 +55,39 @@ final NoArgsWorkflowRef<String> _waitingWorkflowRef = _waitingWorkflow.ref0();
 
 void main() {
   group('TaskInvocationContext enqueue', () {
+    test('remote typed enqueue preserves notBefore', () async {
+      final broker = _CapturingChildBroker();
+      final backend = InMemoryResultBackend();
+      final registry = InMemoryTaskRegistry()
+        ..register(_IsolateEnqueueTask())
+        ..register(
+          FunctionTaskHandler<void>.inline(
+            name: _childDefinition.name,
+            entrypoint: (context, args) async => null,
+          ),
+        );
+      final worker = Worker(
+        broker: broker,
+        backend: backend,
+        registry: registry,
+        consumerName: 'scheduled-child-test',
+      );
+      addTearDown(() async {
+        await worker.shutdown();
+        broker.dispose();
+      });
+      await worker.start();
+      final scheduledAt = DateTime.now().toUtc().add(const Duration(hours: 1));
+      await Stem(broker: broker, backend: backend, registry: registry).enqueue(
+        'tasks.isolate.enqueue',
+        args: {'notBefore': scheduledAt.toIso8601String()},
+      );
+      final child = await broker.child.future.timeout(
+        const Duration(seconds: 3),
+      );
+      expect(child.notBefore, scheduledAt);
+    });
+
     test('enqueues from isolate entrypoint using builder', () async {
       final broker = InMemoryBroker(
         delayedInterval: const Duration(milliseconds: 10),
@@ -544,9 +577,24 @@ FutureOr<Object?> _isolateEnqueueEntrypoint(
 ) async {
   final call = _childDefinition.buildCall(
     const _ChildArgs('from-isolate'),
+    notBefore: args['notBefore'] == null
+        ? null
+        : DateTime.parse(args['notBefore']! as String),
   );
   await context.enqueueCall(call);
   return null;
+}
+
+class _CapturingChildBroker extends InMemoryBroker {
+  final child = Completer<Envelope>();
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    await super.publish(envelope, routing: routing);
+    if (envelope.name == _childDefinition.name && !child.isCompleted) {
+      child.complete(envelope);
+    }
+  }
 }
 
 class _IsolateStartWorkflowTask implements TaskHandler<String> {

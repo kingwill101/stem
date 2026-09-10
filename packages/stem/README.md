@@ -16,6 +16,9 @@ contracts and adapter guarantees continue to harden.
 For full docs, API references, and in-depth guides, visit
 https://kingwill101.github.io/stem.
 
+For JS/event-driven producers, task batches, and one-shot scheduling, see the
+[portable runtime integration guide](doc/portable-runtime.md).
+
 For production-shaped task definitions, prefer `stem_builder` generated typed
 definitions. Manual `TaskDefinition<TArgs, TResult>` is the supported typed
 fallback. Low-level map handlers live under `package:stem/advanced.dart` for

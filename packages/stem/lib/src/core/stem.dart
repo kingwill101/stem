@@ -53,7 +53,6 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:contextual/contextual.dart';
@@ -64,6 +63,8 @@ import 'package:stem/src/core/encoder_keys.dart';
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/retry.dart';
+import 'package:stem/src/core/runtime_info_stub.dart'
+    if (dart.library.io) 'package:stem/src/core/runtime_info_io.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
@@ -117,11 +118,51 @@ abstract interface class TaskResultCaller
 
 /// Facade used by producer applications to enqueue tasks.
 class Stem implements TaskResultCaller {
-  /// Creates a Stem producer facade with the provided dependencies.
+  /// Creates a Stem producer facade backed by a full queue [broker].
+  ///
+  /// This constructor remains the compatibility entrypoint for existing
+  /// applications. Producer-only runtimes should use [Stem.withPublisher].
   Stem({
-    required this.broker,
+    required QueueBroker broker,
+    TaskRegistry? registry,
+    ResultBackend? backend,
+    Iterable<TaskHandler<Object?>> tasks = const [],
+    UniqueTaskCoordinator? uniqueTaskCoordinator,
+    RetryStrategy? retryStrategy,
+    List<Middleware> middleware = const [],
+    PayloadSigner? signer,
+    RoutingRegistry? routing,
+    TaskPayloadEncoderRegistry? encoderRegistry,
+    TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
+    TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
+    Iterable<TaskPayloadEncoder> additionalEncoders = const [],
+  }) : this.withPublisher(
+         publisher: broker,
+         registry: registry,
+         backend: backend,
+         tasks: tasks,
+         uniqueTaskCoordinator: uniqueTaskCoordinator,
+         retryStrategy: retryStrategy,
+         middleware: middleware,
+         signer: signer,
+         routing: routing,
+         encoderRegistry: encoderRegistry,
+         resultEncoder: resultEncoder,
+         argsEncoder: argsEncoder,
+         additionalEncoders: additionalEncoders,
+       );
+
+  /// Creates a producer facade that only requires publishing capability.
+  ///
+  /// Explicit stores take precedence over [backend] for their capability.
+  /// The caller owns their lifecycle; [close] only closes the compatibility
+  /// backend and publishers advertising a lifecycle.
+  Stem.withPublisher({
+    required this.publisher,
     TaskRegistry? registry,
     this.backend,
+    TaskStatusStore? taskStatusStore,
+    GroupResultStore? groupResultStore,
     Iterable<TaskHandler<Object?>> tasks = const [],
     this.uniqueTaskCoordinator,
     RetryStrategy? retryStrategy,
@@ -132,7 +173,10 @@ class Stem implements TaskResultCaller {
     TaskPayloadEncoder resultEncoder = const JsonTaskPayloadEncoder(),
     TaskPayloadEncoder argsEncoder = const JsonTaskPayloadEncoder(),
     Iterable<TaskPayloadEncoder> additionalEncoders = const [],
-  }) : registry = _resolveTaskRegistry(registry, tasks),
+  }) : _broker = publisher is QueueBroker ? publisher : null,
+       taskStatusStore = taskStatusStore ?? backend,
+       groupResultStore = groupResultStore ?? backend,
+       registry = _resolveTaskRegistry(registry, tasks),
        payloadEncoders = ensureTaskPayloadEncoderRegistry(
          encoderRegistry,
          resultEncoder: resultEncoder,
@@ -152,14 +196,32 @@ class Stem implements TaskResultCaller {
     return resolved;
   }
 
-  /// Broker used to publish task envelopes.
-  final QueueBroker broker;
+  /// Transport used to publish task envelopes.
+  final TaskPublisher publisher;
+
+  /// Full queue broker supplied through the compatibility constructor.
+  ///
+  /// Producer-only instances do not expose consumption operations and throw
+  /// when this compatibility getter is accessed.
+  QueueBroker get broker =>
+      _broker ??
+      (throw StateError(
+        'This Stem instance was created with a publish-only transport.',
+      ));
+
+  final QueueBroker? _broker;
 
   /// Task registry used to resolve handlers and metadata.
   final TaskRegistry registry;
 
   /// Optional backend used for result tracking.
   final ResultBackend? backend;
+
+  /// Task status persistence, independent of groups and worker heartbeats.
+  final TaskStatusStore? taskStatusStore;
+
+  /// Optional group observation capability.
+  final GroupResultStore? groupResultStore;
 
   /// Coordinator used for unique task enforcement.
   final UniqueTaskCoordinator? uniqueTaskCoordinator;
@@ -187,9 +249,12 @@ class Stem implements TaskResultCaller {
   /// Random source used for retry jitter.
   static final math.Random _random = math.Random();
 
-  /// Releases broker/backend resources used by this producer.
+  /// Releases publisher/backend resources used by this producer.
   Future<void> close() async {
-    await broker.close();
+    final resolvedPublisher = publisher;
+    if (resolvedPublisher is TaskPublisherLifecycle) {
+      await (resolvedPublisher as TaskPublisherLifecycle).close();
+    }
     final resolved = backend;
     if (resolved != null) {
       await resolved.close();
@@ -198,14 +263,14 @@ class Stem implements TaskResultCaller {
 
   @override
   Future<TaskStatus?> getTaskStatus(String taskId) async {
-    final resolved = backend;
+    final resolved = taskStatusStore;
     if (resolved == null) return null;
     return resolved.get(taskId);
   }
 
   @override
   Future<GroupStatus?> getGroupStatus(String groupId) async {
-    final resolved = backend;
+    final resolved = groupResultStore;
     if (resolved == null) return null;
     return resolved.getGroup(groupId);
   }
@@ -483,13 +548,13 @@ class Stem implements TaskResultCaller {
             routing: routingInfo,
             enqueueOptions: enqueueOptions,
           );
-          if (backend != null) {
+          if (taskStatusStore != null) {
             final queuedMeta = _withResultEncoderMeta({
               ...envelope.meta,
               'queue': targetName,
               'maxRetries': envelope.maxRetries,
             }, resultEncoder);
-            await backend!.set(
+            await taskStatusStore!.set(
               envelope.id,
               TaskState.queued,
               attempt: envelope.attempt,
@@ -551,7 +616,7 @@ class Stem implements TaskResultCaller {
   }
 
   /// Waits for [taskId] to reach a terminal state and returns a typed view of
-  /// the final [TaskStatus]. Requires [backend] to be configured; otherwise a
+  /// the final [TaskStatus]. Requires [taskStatusStore]; otherwise a
   /// [StateError] is thrown.
   @override
   Future<TaskResult<T>?> waitForTask<T extends Object?>(
@@ -565,7 +630,7 @@ class Stem implements TaskResultCaller {
       [decode, decodeJson, decodeVersionedJson].whereType<Object>().length <= 1,
       'Specify at most one of decode, decodeJson, or decodeVersionedJson.',
     );
-    final resultBackend = backend;
+    final resultBackend = taskStatusStore;
     if (resultBackend == null) {
       throw StateError(
         'Stem.waitForTask requires a configured result backend.',
@@ -899,7 +964,7 @@ class Stem implements TaskResultCaller {
 
   static String? _safeLocalHostname() {
     try {
-      final hostname = Platform.localHostname.trim();
+      final hostname = stemLocalHostname()?.trim() ?? '';
       return hostname.isEmpty ? null : hostname;
     } on Object {
       return null;
@@ -913,7 +978,7 @@ class Stem implements TaskResultCaller {
     TaskEnqueueOptions? enqueueOptions,
   }) async {
     if (enqueueOptions?.retry != true) {
-      await broker.publish(envelope, routing: routing);
+      await publisher.publish(envelope, routing: routing);
       return;
     }
 
@@ -922,7 +987,7 @@ class Stem implements TaskResultCaller {
     var attempt = 0;
     while (true) {
       try {
-        await broker.publish(envelope, routing: routing);
+        await publisher.publish(envelope, routing: routing);
         return;
       } catch (error) {
         if (attempt >= maxRetries) rethrow;
@@ -959,9 +1024,9 @@ class Stem implements TaskResultCaller {
     String taskId,
     Envelope duplicate,
   ) async {
-    if (backend == null) return;
+    if (taskStatusStore == null) return;
     try {
-      final status = await backend!.get(taskId);
+      final status = await taskStatusStore!.get(taskId);
       if (status == null) return;
       final existingDuplicates = status.meta[UniqueTaskMetadata.duplicates];
       final duplicates = <Map<String, Object?>>[];
@@ -982,7 +1047,7 @@ class Stem implements TaskResultCaller {
         ...status.meta,
         UniqueTaskMetadata.duplicates: duplicates,
       };
-      await backend!.set(
+      await taskStatusStore!.set(
         status.id,
         status.state,
         payload: status.payload,

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
 import 'package:dartastic_opentelemetry/dartastic_opentelemetry.dart' as dotel;
@@ -8,6 +7,8 @@ import 'package:dartastic_opentelemetry_api/dartastic_opentelemetry_api.dart'
     as dotel_api;
 import 'package:meta/meta.dart';
 import 'package:stem/src/core/clock.dart';
+import 'package:stem/src/observability/console_output_stub.dart'
+    if (dart.library.io) 'package:stem/src/observability/console_output_io.dart';
 
 /// Known metric aggregation types supported by the exporters.
 enum MetricType {
@@ -345,7 +346,7 @@ class ConsoleMetricsExporter extends MetricsExporter {
     if (target != null) {
       target.writeln(line);
     } else {
-      stdout.writeln(line);
+      stemConsoleWriteln(line);
     }
   }
 }

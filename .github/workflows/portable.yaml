@@ -1,0 +1,34 @@
+name: Portable API
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  compile-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve workspace dependencies
+        run: flutter pub get
+      - name: Compile portable surface to JavaScript
+        run: >-
+          dart compile js packages/stem/tool/portable_compile.dart
+          --output=/tmp/stem-portable.js
+      - name: Run portable behavior on JavaScript
+        run: |
+          export NODE_OPTIONS="--require=$PWD/packages/stem/tool/node_test_bootstrap.cjs"
+          dart test --platform node \
+            packages/stem/test/api/portable_api_test.dart \
+            packages/stem/test/api/portable_runtime_test.dart \
+            packages/stem/test/unit/core/task_processor_test.dart \
+            packages/stem/test/unit/core/task_invocation_portable_test.dart

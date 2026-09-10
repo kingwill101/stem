@@ -4,6 +4,8 @@ import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+import '../support/portable_atomic_backend.dart';
+
 void main() {
   group('EncodingResultBackend', () {
     test('encodes and decodes task payloads', () async {
@@ -75,7 +77,8 @@ void main() {
     });
 
     test('encodes atomic terminal writes before delegation', () async {
-      final inner = InMemoryResultBackend();
+      final inner = PortableAtomicBackend();
+      expect(inner, isNot(isA<AtomicTerminalResultBackend>()));
       const encoder = _PrefixTaskPayloadEncoder();
       final registry = TaskPayloadEncoderRegistry(
         defaultResultEncoder: encoder,
@@ -83,6 +86,10 @@ void main() {
       );
       final backend = withTaskPayloadEncoder(inner, registry);
       final meta = {stemResultEncoderMetaKey: encoder.id};
+      expect(
+        (backend as AtomicTerminalResultStore).supportsAtomicTerminalWrites,
+        isTrue,
+      );
 
       await backend.set('atomic-task', TaskState.running, meta: meta);
       final applied = await (backend as AtomicTerminalResultBackend)

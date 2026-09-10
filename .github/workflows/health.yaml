@@ -12,6 +12,10 @@ jobs:
       # PR Health uses this list to run Flutter tooling for the packages that
       # depend on the Flutter SDK.
       flutter_packages: packages/stem_flutter,packages/stem_flutter_sqlite
+      license: |
+        // Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+        // SPDX-License-Identifier: MIT
+      license_test_string: "SPDX-License-Identifier: MIT"
     permissions:
       contents: read
       pull-requests: write

@@ -99,6 +99,21 @@ void main() {
   });
 
   group('Stem.enqueue', () {
+    test('supports a publish-only transport', () async {
+      final publisher = _RecordingPublisher();
+      final stem = Stem.withPublisher(
+        publisher: publisher,
+        tasks: [const _StubTaskHandler()],
+      );
+
+      final id = await stem.enqueue('sample.task', args: {'value': 'ok'});
+
+      expect(publisher.published.single.id, id);
+      expect(publisher.published.single.name, 'sample.task');
+      expect(() => stem.broker, throwsStateError);
+      await stem.close();
+    });
+
     test('publishes to broker and writes queued state', () async {
       final broker = _RecordingBroker();
       final backend = _RecordingBackend();
@@ -1221,6 +1236,15 @@ class _RecordingBroker implements Broker {
 
   @override
   Future<void> close() async {}
+}
+
+class _RecordingPublisher implements TaskPublisher {
+  final List<Envelope> published = [];
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    published.add(envelope);
+  }
 }
 
 class _MapPassthroughEncoder implements TaskPayloadEncoder {

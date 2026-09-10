@@ -121,6 +121,7 @@ import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/stem_event.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
+import 'package:stem/src/core/task_processor.dart';
 import 'package:stem/src/core/unique_task_coordinator.dart';
 import 'package:stem/src/observability/config.dart';
 import 'package:stem/src/observability/heartbeat.dart';
@@ -628,7 +629,14 @@ class Worker {
   /// Workflow event emitter used by task contexts for workflow resumes.
   WorkflowEventEmitter? workflowEvents;
 
-  static final math.Random _random = math.Random();
+  // The worker verifies signatures before using these execution primitives.
+  // Do not call process() here without configuring its signer as well.
+  late final TaskProcessor _processor = TaskProcessor(
+    registry: registry,
+    retryStrategy: retryStrategy,
+    middleware: middleware,
+    encoderRegistry: payloadEncoders,
+  );
 
   /// Resolved routing subscription for this worker.
   late final RoutingSubscription subscription;
@@ -1136,7 +1144,7 @@ class Worker {
 
             result = await tracer.trace(
               'stem.execute.${envelope.name}',
-              () => _invokeWithMiddleware(
+              () => _processor.invoke(
                 context,
                 () => _executeWithHardLimit(
                   handler,
@@ -1344,7 +1352,7 @@ class Worker {
   /// 3. Middleware can short-circuit by not calling `next()`
   ///
   /// See also:
-  /// - `_invokeWithMiddleware` for handler execution middleware
+  /// - [TaskProcessor.invoke] for handler execution middleware
   /// - `_notifyErrorMiddleware` for error notification
   Future<void> _runConsumeMiddleware(Delivery delivery) async {
     Future<void> run(int index) async {
@@ -1385,54 +1393,6 @@ class Worker {
     for (final m in middleware) {
       await m.onError(context, error, stack);
     }
-  }
-
-  /// Invokes a task handler through the middleware execution chain.
-  ///
-  /// ## Implementation Details
-  ///
-  /// Uses a recursive chain pattern similar to `_runConsumeMiddleware` but
-  /// for the `onExecute` hook. The actual handler is invoked only after
-  /// all middleware have had a chance to wrap the execution.
-  ///
-  /// The result of the handler is captured in a closure variable and
-  /// returned after the chain completes. This allows middleware to:
-  /// - Execute code before the handler runs
-  /// - Execute code after the handler completes
-  /// - Transform or intercept the result
-  /// - Skip handler execution entirely (by not calling `next()`)
-  ///
-  /// ## Example Middleware Flow
-  ///
-  /// ```dart
-  /// // TimingMiddleware.onExecute:
-  /// final start = stemNow();
-  /// await next();  // Inner middleware and handler run here
-  /// final duration = stemNow().difference(start);
-  /// log('Task took $duration');
-  /// ```
-  ///
-  /// ## Error Handling
-  ///
-  /// Errors thrown by the handler or any middleware propagate up through
-  /// the chain. Middleware can catch errors from inner layers and handle
-  /// or rethrow them.
-  Future<dynamic> _invokeWithMiddleware(
-    TaskContext context,
-    Future<dynamic> Function() handler,
-  ) async {
-    dynamic result;
-
-    Future<void> run(int index) async {
-      if (index >= middleware.length) {
-        result = await handler();
-        return;
-      }
-      await middleware[index].onExecute(context, () => run(index + 1));
-    }
-
-    await run(0);
-    return result;
   }
 
   /// Runs the handler with a hard time limit if configured.
@@ -2217,23 +2177,11 @@ class Worker {
     String? groupId,
     String? startedAtIso,
   ) async {
-    final retryPolicy = _resolveRetryPolicy(envelope, handler.options);
-    final maxRetries = retryPolicy?.maxRetries ?? envelope.maxRetries;
-    final canRetry = envelope.attempt < maxRetries;
-    final shouldRetry = canRetry && _shouldAutoRetry(retryPolicy, error);
-    if (shouldRetry) {
-      final delay = _computeRetryDelay(
-        envelope.attempt,
-        error,
-        stack,
-        retryPolicy,
-      );
-      final nextRunAt = stemNow().add(delay);
-      final retryEnvelope = envelope.copyWith(
-        attempt: envelope.attempt + 1,
-        maxRetries: maxRetries,
-        notBefore: nextRunAt,
-      );
+    final outcome = _processor.classifyFailure(envelope, handler, error, stack);
+    if (outcome is TaskProcessRetry) {
+      final delay = outcome.delay;
+      final retryEnvelope = outcome.nextEnvelope;
+      final nextRunAt = retryEnvelope.notBefore!;
       await broker.nack(delivery, requeue: false);
       await _publishWithOptionalSigning(retryEnvelope);
       final retriedMeta = _statusMeta(
@@ -2383,12 +2331,13 @@ class Worker {
     TaskRetryRequest request,
     String? groupId,
   ) async {
-    final policy =
-        request.retryPolicy ?? _resolveRetryPolicy(envelope, handler.options);
-    final maxRetries =
-        request.maxRetries ?? policy?.maxRetries ?? envelope.maxRetries;
-    final canRetry = envelope.attempt < maxRetries;
-    if (!canRetry) {
+    final outcome = _processor.classifyRetry(
+      envelope,
+      handler,
+      request,
+      StackTrace.current,
+    );
+    if (outcome is TaskProcessFailure) {
       final failureMeta = _statusMeta(
         envelope,
         resultEncoder,
@@ -2452,37 +2401,10 @@ class Worker {
       );
     }
 
-    final scheduledAt =
-        request.eta ??
-        (request.countdown != null ? stemNow().add(request.countdown!) : null);
-    final delay = scheduledAt != null
-        ? scheduledAt.difference(stemNow())
-        : _computeRetryDelay(
-            envelope.attempt,
-            request,
-            StackTrace.current,
-            policy,
-          );
-    final notBefore = scheduledAt ?? stemNow().add(delay);
-
-    final updatedMeta = Map<String, Object?>.from(envelope.meta);
-    if (request.timeLimit != null) {
-      updatedMeta['stem.timeLimitMs'] = request.timeLimit!.inMilliseconds;
-    }
-    if (request.softTimeLimit != null) {
-      updatedMeta['stem.softTimeLimitMs'] =
-          request.softTimeLimit!.inMilliseconds;
-    }
-    if (request.retryPolicy != null) {
-      updatedMeta['stem.retryPolicy'] = request.retryPolicy!.toJson();
-    }
-
-    final retryEnvelope = envelope.copyWith(
-      attempt: envelope.attempt + 1,
-      maxRetries: maxRetries,
-      notBefore: notBefore,
-      meta: updatedMeta,
-    );
+    final retry = outcome as TaskProcessRetry;
+    final delay = retry.delay;
+    final retryEnvelope = retry.nextEnvelope;
+    final notBefore = retryEnvelope.notBefore!;
     await broker.nack(delivery, requeue: false);
     await _publishWithOptionalSigning(retryEnvelope);
 
@@ -3890,65 +3812,6 @@ class Worker {
     return false;
   }
 
-  /// Resolves retry policy overrides from the envelope metadata.
-  TaskRetryPolicy? _resolveRetryPolicy(
-    Envelope envelope,
-    TaskOptions handlerOptions,
-  ) {
-    final override = envelope.meta['stem.retryPolicy'];
-    if (override is TaskRetryPolicy) {
-      return override;
-    }
-    if (override is Map) {
-      return TaskRetryPolicy.fromJson(override.cast<String, Object?>());
-    }
-    return handlerOptions.retryPolicy;
-  }
-
-  /// Returns true when a failure should be retried automatically.
-  bool _shouldAutoRetry(TaskRetryPolicy? policy, Object error) {
-    if (policy == null) return true;
-    final errorType = error.runtimeType.toString();
-    bool matches(List<Object> filters) {
-      return filters.any((value) => value.toString() == errorType);
-    }
-
-    if (policy.dontAutoRetryFor.isNotEmpty &&
-        matches(policy.dontAutoRetryFor)) {
-      return false;
-    }
-    if (policy.autoRetryFor.isEmpty) {
-      return true;
-    }
-    return matches(policy.autoRetryFor);
-  }
-
-  Duration _computeRetryDelay(
-    int attempt,
-    Object error,
-    StackTrace stackTrace,
-    TaskRetryPolicy? policy,
-  ) {
-    if (policy == null) {
-      return retryStrategy.nextDelay(attempt, error, stackTrace);
-    }
-    final base = policy.defaultDelay ?? Duration.zero;
-    if (!policy.backoff) {
-      return base;
-    }
-    final rawMs = base.inMilliseconds == 0
-        ? 0
-        : base.inMilliseconds * (1 << attempt);
-    final capMs = policy.backoffMax?.inMilliseconds ?? rawMs;
-    final capped = rawMs == 0 ? capMs : rawMs.clamp(0, capMs);
-    if (!policy.jitter || capped == 0) {
-      return Duration(milliseconds: capped);
-    }
-    final jitter = _random.nextInt((capped ~/ 4) + 1);
-    final jittered = (capped - jitter).clamp(0, capMs);
-    return Duration(milliseconds: jittered);
-  }
-
   /// Persists a terminal status with backend arbitration when available.
   ///
   /// Terminal writes use the optional backend arbitration capability so a
@@ -3957,10 +3820,9 @@ class Worker {
   /// unconditional write behavior.
   Future<_TerminalWriteResult> _writeTerminalStatus(TaskStatus status) async {
     final candidate = backend;
-    if (candidate is AtomicTerminalResultBackend &&
-        (candidate as AtomicTerminalResultBackend)
-            .supportsAtomicTerminalWrites) {
-      final atomic = candidate as AtomicTerminalResultBackend;
+    if (candidate is AtomicTerminalResultStore &&
+        (candidate as AtomicTerminalResultStore).supportsAtomicTerminalWrites) {
+      final atomic = candidate as AtomicTerminalResultStore;
       final applied = await atomic.setTerminalIfAbsent(status);
       if (!applied) {
         final existing = await backend.get(status.id);

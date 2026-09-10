@@ -1,6 +1,6 @@
 name: stem_redis
 description: Redis broker, result backend, and scheduler utilities for Stem.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
@@ -10,7 +10,7 @@ dependencies:
   async: ^2.13.0
   collection: ^1.19.1
   redis: ^4.0.0
-  stem: ">=0.3.0 <0.4.0"
+  stem: ">=0.3.0 <0.5.0"
   uuid: ^4.5.2
 
 dev_dependencies:
