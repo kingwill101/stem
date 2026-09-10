@@ -17,6 +17,9 @@
   is rejected instead of attempting to reuse disposed resources.
 - Exposed `Worker.workerId` so integrations use the same identity as heartbeats
   and control messages.
+- Workflow runtime startup now scans overdue runs before returning. Polls do
+  not overlap, and runtime disposal joins active polling/enqueue work before
+  workflow stores are closed.
 - Added opt-in interrupted-delivery recovery with `TaskRecoveryPolicy.retry`,
   `TaskInterruptedException`, and a `taskInterrupted` signal carrying the prior
   running status. The default remains same-attempt replay; retry recovery uses
