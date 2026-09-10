@@ -1,14 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 - Documented core `StemApp.runUntilIdle` for app-owned background callbacks,
   including admission deadlines, safe draining, outcome mapping, and OS limits.
 - Added `StemFlutter.createApp`, returning the ordinary core `StemApp` with
   Flutter initialization and local-worker defaults; re-exported the stable API.
-- Required the Stem 0.4 API line for the shared application surface.
-- Removed the Flutter queue monitor, snapshot/tracked-job models, custom worker
-  host, and worker signal/status protocol. Use existing core Stem APIs instead.
+- Required Stem `>=0.4.1 <0.5.0` for bounded runs and lifecycle fixes.
+- **Breaking:** Removed the Flutter queue monitor, snapshot/tracked-job models,
+  custom worker host, and worker signal/status protocol. Use existing core Stem
+  APIs instead.
 - Removed TimeMachine initialization and its dependency from the adapter-neutral
   package. Required Ormed dependency setup now lives in `stem_flutter_sqlite`.
 - Removed binary asset payload helpers for the custom worker-isolate protocol.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1
 
 - Added scheduler-neutral `Worker.runUntilIdle` and `StemApp.runUntilIdle`,
   with structured outcomes, observed idle detection, admission budgets,
@@ -17,6 +17,21 @@
   is rejected instead of attempting to reuse disposed resources.
 - Exposed `Worker.workerId` so integrations use the same identity as heartbeats
   and control messages.
+- Added opt-in interrupted-delivery recovery with `TaskRecoveryPolicy.retry`,
+  `TaskInterruptedException`, and a `taskInterrupted` signal carrying the prior
+  running status. The default remains same-attempt replay; retry recovery uses
+  normal retry filters, backoff, and limits. Detection requires retained status
+  and is evidence of interruption or lease loss, not proof of process death or
+  exactly-once execution.
+- Classified retry recovery before scheduling deferrals can erase interruption
+  evidence, without invoking the handler or recording a second running attempt.
+- Closed pending isolate reply/control ports and subscriptions on timeout,
+  cancellation, and disposal so killed isolates do not leave shutdown waiting
+  for a reply that cannot arrive.
+- Reworked the Flutter example into a durable Photo Lab using core runtimes,
+  Android Workmanager wakeups, batch status notifications, cancellation, queue
+  diagnostics, and restart/recovery validation. Background scheduling and debug
+  UI remain application-owned rather than new integration-package APIs.
 
 ## 0.4.0
 

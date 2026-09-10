@@ -735,10 +735,13 @@ class Worker {
   /// active callbacks is a no-op, not a readiness wait. A shut down worker
   /// cannot be restarted.
   Future<void> start() {
-    if (_boundedRun != null || _shutdownCompleter != null) {
-      return Future.error(StateError('Worker is owned by a run or shut down.'));
+    if (_shutdownCompleter != null) {
+      return Future.error(StateError('Cannot start a shut down Worker.'));
     }
     if (WorkerOperationScope.isActiveFor(this)) return Future<void>.value();
+    if (_boundedRun != null) {
+      return Future.error(StateError('Worker is owned by runUntilIdle.'));
+    }
     // Publish startup ownership before any synchronous lifecycle hook can
     // reenter start/run/shutdown.
     return _startFuture ??= Future<void>.microtask(_start);

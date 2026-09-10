@@ -30,6 +30,14 @@ reopening the demo. Retrying the same task checks completed artifacts and can
 reuse them instead of generating another copy. Incomplete artifacts must not be
 treated as a completed photo.
 
+New results use immutable `generation-*` artifact directories. A complete
+manifest is atomically published only after all files are written, so concurrent
+attempts cannot mix files or invalidate paths already returned to another caller.
+Verified legacy manifests remain reusable. Obsolete completed generations are
+retained because persisted task results may reference them; abrupt termination
+can also leave an unpublished generation. Reclaiming these needs an explicit
+album/result retention policy rather than deleting files during a retry.
+
 The demo only touches its own generated sample files. It does not access your
 camera roll, upload photos, or delete personal files. Batches consume disk space;
 avoid repeatedly generating Heavy batches when only testing scheduling.

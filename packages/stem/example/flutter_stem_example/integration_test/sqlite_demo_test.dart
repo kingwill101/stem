@@ -92,6 +92,7 @@ void main() {
       await _waitUntil(
         tester,
         () =>
+            find.byKey(_pushKey).evaluate().isNotEmpty &&
             tester.widget<FilledButton>(find.byKey(_pushKey)).onPressed != null,
         reason: 'Scheduling failure must not prevent durable publication.',
       );

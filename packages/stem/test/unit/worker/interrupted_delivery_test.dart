@@ -15,6 +15,20 @@ void main() {
       TaskRecoveryPolicy.retry,
     );
     expect(TaskOptions.fromJson({}).recoveryPolicy, TaskRecoveryPolicy.replay);
+    for (final policy in TaskRecoveryPolicy.values) {
+      expect(
+        TaskOptions.fromJson({'recoveryPolicy': policy}).recoveryPolicy,
+        policy,
+      );
+      expect(
+        TaskOptions.fromJson({'recoveryPolicy': policy.name}).recoveryPolicy,
+        policy,
+      );
+    }
+    expect(
+      TaskOptions.fromJson({'recoveryPolicy': 'unknown'}).recoveryPolicy,
+      TaskRecoveryPolicy.replay,
+    );
     expect(
       options
           .copyWith(recoveryPolicy: TaskRecoveryPolicy.replay)

@@ -167,21 +167,30 @@ void main() {
           return 'done';
         }),
       );
+      addTearDown(() {
+        if (!cancellation.isCompleted) cancellation.complete();
+        if (!release.isCompleted) release.complete();
+      });
       await fixture.app.enqueue('work');
       await fixture.app.enqueue('work');
       var completed = false;
       final running = fixture
           .run(
-            budget: stop == 'budget'
-                ? const Duration(milliseconds: 150)
-                : _budget,
+            budget: stop == 'budget' ? const Duration(seconds: 1) : _budget,
             cancellation: cancellation.future,
           )
           .then((result) {
             completed = true;
             return result;
           });
-      await entered.future;
+      await Future.any<void>([
+        entered.future,
+        running.then((outcome) {
+          throw StateError(
+            'Run stopped before handler admission: ${outcome.reason}',
+          );
+        }),
+      ]).timeout(_budget);
       Future<void>? shutdown;
       if (stop == 'cancel') cancellation.complete();
       if (stop == 'app shutdown') shutdown = fixture.app.shutdown();

@@ -42,6 +42,7 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
   PhotoWorkload _selection = PhotoWorkload.standard;
   bool _publishing = false;
   bool _waking = false;
+  bool _requestingNotifications = false;
   String? _actionMessage;
 
   @override
@@ -58,6 +59,7 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.monitor != widget.monitor) {
       unawaited(_monitorSub?.cancel());
+      oldWidget.monitor?.setVisible(false);
       _subscribe();
     }
   }
@@ -66,6 +68,10 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
     _monitorSub = widget.monitor?.changes.listen((_) {
       if (mounted) setState(() {});
     });
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    widget.monitor?.setVisible(
+      lifecycle == null || lifecycle == AppLifecycleState.resumed,
+    );
   }
 
   @override
@@ -133,13 +139,27 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
   }
 
   Future<void> _enableNotifications() async {
-    final granted = await widget.requestNotificationPermission?.call() ?? false;
-    if (!mounted) return;
-    setState(
-      () => _actionMessage = granted
-          ? 'Status notifications enabled for future updates.'
-          : 'Notifications unavailable or denied. Photo work still runs.',
-    );
+    if (_requestingNotifications) return;
+    setState(() => _requestingNotifications = true);
+    try {
+      final granted =
+          await widget.requestNotificationPermission?.call() ?? false;
+      if (!mounted) return;
+      setState(
+        () => _actionMessage = granted
+            ? 'Status notifications enabled for future updates.'
+            : 'Notifications unavailable or denied. Photo work still runs.',
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _actionMessage =
+              'Notification permission failed: $error. Photo work still runs.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _requestingNotifications = false);
+    }
   }
 
   @override
@@ -150,7 +170,11 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
     final photos = jobs
         .where((job) => job.status.meta['batchId'] is String)
         .toList(growable: false);
-    final batches = PhotoBatchSummary.fromJobs(photos);
+    final batches = PhotoBatchSummary.fromJobs(photos)
+      ..sort((a, b) {
+        final byCreation = b.createdAt.compareTo(a.createdAt);
+        return byCreation != 0 ? byCreation : b.id.compareTo(a.id);
+      });
     final workload = widget.workload ?? _selection;
     final busy = _publishing || (monitor?.hasUnfinishedWork ?? false);
     final enabled =
@@ -302,7 +326,9 @@ class _QueueMonitorPageState extends State<QueueMonitorPage> {
                           ),
                         if (widget.requestNotificationPermission != null)
                           TextButton.icon(
-                            onPressed: _enableNotifications,
+                            onPressed: _requestingNotifications
+                                ? null
+                                : _enableNotifications,
                             icon: const Icon(Icons.notifications_outlined),
                             label: const Text('Enable status notifications'),
                           ),

@@ -1792,6 +1792,7 @@ class TaskOptions {
         retryValue.cast<String, Object?>(),
       );
     }
+    final recoveryValue = json['recoveryPolicy'];
     final failureMode =
         _parseFailureMode(
           json['groupRateLimiterFailureMode'],
@@ -1813,10 +1814,12 @@ class TaskOptions {
       acksLate: json['acksLate'] as bool? ?? true,
       visibilityTimeout: _durationFromJson(json['visibilityTimeoutMs']),
       retryPolicy: retryPolicy,
-      recoveryPolicy: TaskRecoveryPolicy.values.firstWhere(
-        (policy) => policy.name == json['recoveryPolicy']?.toString(),
-        orElse: () => TaskRecoveryPolicy.replay,
-      ),
+      recoveryPolicy: recoveryValue is TaskRecoveryPolicy
+          ? recoveryValue
+          : TaskRecoveryPolicy.values.firstWhere(
+              (policy) => policy.name == recoveryValue?.toString(),
+              orElse: () => TaskRecoveryPolicy.replay,
+            ),
     );
   }
 

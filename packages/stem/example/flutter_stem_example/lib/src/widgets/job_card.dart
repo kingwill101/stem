@@ -43,6 +43,14 @@ class JobCard extends StatelessWidget {
     final status = job.status;
     final payload = status.payload;
     final result = payload is Map ? payload : const <String, Object?>{};
+    final width = result['width'];
+    final height = result['height'];
+    final elapsed = result['elapsedMs'];
+    final details = [
+      if (width is int && width > 0 && height is int && height > 0)
+        '$width × $height',
+      if (elapsed is num && elapsed.isFinite && elapsed >= 0) '$elapsed ms',
+    ].join(' · ');
     final index = status.meta['index'];
     final title =
         '${status.meta['label'] ?? 'Photo'}'
@@ -114,11 +122,7 @@ class JobCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     StatusChip(state: status.state),
                     const SizedBox(height: 6),
-                    if (result.isNotEmpty)
-                      Text(
-                        '${result['width']} × ${result['height']} · '
-                        '${result['elapsedMs']} ms',
-                      ),
+                    if (details.isNotEmpty) Text(details),
                     if (status.error != null)
                       Text(
                         status.error!.message,

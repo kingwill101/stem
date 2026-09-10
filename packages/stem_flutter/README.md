@@ -10,6 +10,9 @@ execution all remain core Stem features.
 
 For durable local storage, use `stem_flutter_sqlite`.
 
+Version 0.3.0 requires Stem `>=0.4.1 <0.5.0` for bounded execution and safe
+lifecycle cleanup. It replaces the removed Flutter-specific runtime APIs.
+
 ## Getting started
 
 ```dart

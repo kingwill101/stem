@@ -214,13 +214,13 @@ class StemApp implements StemTaskApp {
   /// must be awaited by an external owner rather than by a startup hook itself.
   @override
   Future<void> start() {
-    if (_runWorkerFuture != null) {
-      return Future.error(StateError('StemApp is owned by runUntilIdle.'));
-    }
     if (_shutdownFuture != null) {
       return Future.error(StateError('Cannot start a shut down StemApp.'));
     }
     if (WorkerOperationScope.isActiveFor(worker)) return Future<void>.value();
+    if (_runWorkerFuture != null) {
+      return Future.error(StateError('StemApp is owned by runUntilIdle.'));
+    }
     return _startFuture ??= _start();
   }
 

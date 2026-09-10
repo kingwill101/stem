@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.2
+
+- Enforced queue prefetch as a per-subscription cap on unexpired outstanding
+  leases, including settlement and lease extension through other broker handles.
+  Reused consumer names no longer share prefetch slots; ephemeral broadcasts
+  remain outside the queue prefetch cap.
+- Made broker close idempotent and await consumer database loops before closing
+  connections. Last-listener cancellation now joins the consumer drain and wakes
+  polling promptly instead of leaving database work running after teardown.
+- Released claims cancelled before delivery only while still owned by that
+  subscription, preserved already-delivered leases, and rejected consumption
+  after broker close.
+- Added regression coverage for prefetch, lease expiry/extension, cross-handle
+  settlement, cancellation, and concurrent close.
+
 ## 0.2.1
 
 - Widened Stem compatibility to include the 0.4 portable runtime line.

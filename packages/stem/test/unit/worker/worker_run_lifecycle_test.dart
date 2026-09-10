@@ -69,6 +69,54 @@ void main() {
     await expectLater(_run(app), throwsStateError);
   });
 
+  test('bounded startup callbacks may redundantly start their owner', () async {
+    final closed = <String>[];
+    final app = await _createApp(closed: closed);
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final errors = <Object>[];
+    var initializations = 0;
+    var readyCalls = 0;
+    addTearDown(() {
+      if (!release.isCompleted) release.complete();
+    });
+    Future<void> redundantStarts() async {
+      for (final start in [app.worker.start, app.start]) {
+        try {
+          await start();
+        } on Object catch (error) {
+          errors.add(error);
+        }
+      }
+    }
+
+    final init = StemSignals.workerInit.connect((_, _) async {
+      initializations++;
+      await redundantStarts();
+    });
+    final ready = StemSignals.workerReady.connect((_, _) async {
+      readyCalls++;
+      await redundantStarts();
+      entered.complete();
+      await release.future;
+    });
+    addTearDown(init.cancel);
+    addTearDown(ready.cancel);
+    final running = _run(app);
+    await entered.future.timeout(const Duration(seconds: 2));
+    // Only callbacks belonging to this runtime get the no-op, not outsiders.
+    await expectLater(app.worker.start(), throwsStateError);
+    await expectLater(app.start(), throwsStateError);
+    release.complete();
+    expect((await running).reason, WorkerRunStopReason.idle);
+    expect(errors, isEmpty);
+    expect(initializations, 1);
+    expect(readyCalls, 1);
+    expect(closed, ['backend', 'broker']);
+    await expectLater(app.worker.start(), throwsStateError);
+    await expectLater(app.start(), throwsStateError);
+  });
+
   for (final bounded in [false, true]) {
     for (final stopApp in [false, true]) {
       test(

@@ -149,23 +149,16 @@ Future<Map<String, Object?>> processPhoto(
     }
     await child.create(recursive: true);
   }
-  final paths = <String, String>{
-    'sourcePath': '${directory.path}/original.jpg',
-    'previewPath': '${directory.path}/preview.jpg',
-    'thumbnailPath': '${directory.path}/thumbnail.jpg',
-  };
   final manifest = File('${directory.path}/manifest.json');
   await progress(0, 'Checking saved artifacts');
   _sampleMemory(args, 'before-cache-check');
-  final cached = await _readVerifiedManifest(manifest, args, paths);
+  final cached = await _readVerifiedManifest(manifest, args);
   if (cached != null) {
     _sampleMemory(args, 'reused-artifacts');
     await progress(100, 'Reused verified photo');
     return {...cached, 'reused': true};
   }
 
-  // Remove the previous commit marker before replacing any artifact.
-  if (await manifest.exists()) await manifest.delete();
   await progress(10, 'Generating original');
   _sampleMemory(args, 'before-source');
   final source = img.encodeJpg(_landscape(args), quality: 92);
@@ -188,57 +181,117 @@ Future<Map<String, Object?>> processPhoto(
     'previewPath': preview,
     'thumbnailPath': thumbnail,
   };
-  final checksums = <String, String>{};
-  for (final entry in artifacts.entries) {
-    checksums[entry.key] = crypto.sha256.convert(entry.value).toString();
-    await _atomicWrite(File(paths[entry.key]!), entry.value);
+  // Each attempt owns an immutable generation. Only the manifest is replaced,
+  // so overlapping isolates/processes cannot mix artifacts or invalidate a
+  // result already returned to a caller (including legacy fixed-path results).
+  final generation = await directory.createTemp('generation-');
+  var published = false;
+  try {
+    final paths = _artifactPaths(generation);
+    final checksums = <String, String>{};
+    for (final entry in artifacts.entries) {
+      checksums[entry.key] = crypto.sha256.convert(entry.value).toString();
+      await File(paths[entry.key]!).writeAsBytes(entry.value, flush: true);
+    }
+    final result = <String, Object?>{
+      'version': 2,
+      'generation': generation.uri.pathSegments
+          .where((segment) => segment.isNotEmpty)
+          .last,
+      'batchId': args.batchId,
+      'index': args.index,
+      ...paths,
+      'width': args.width,
+      'height': args.height,
+      'previewWidth': previewImage.width,
+      'previewHeight': previewImage.height,
+      'thumbnailWidth': thumbnailImage.width,
+      'thumbnailHeight': thumbnailImage.height,
+      'sourceBytes': source.length,
+      'outputBytes': preview.length + thumbnail.length,
+      'elapsedMs': watch.elapsedMilliseconds,
+      'sha256': checksums['previewPath'],
+      'checksums': checksums,
+      'reused': false,
+    };
+    final pendingManifest = File('${generation.path}/manifest.pending');
+    await pendingManifest.writeAsBytes(
+      utf8.encode(jsonEncode(result)),
+      flush: true,
+    );
+    await pendingManifest.rename(manifest.path);
+    published = true;
+    _sampleMemory(args, 'artifacts-committed');
+    await progress(100, 'Photo ready');
+    return result;
+  } finally {
+    // Completed generations may still be referenced by previous task results.
+    // Retain them; cleanup requires an explicit album/result retention policy.
+    if (!published) await generation.delete(recursive: true);
   }
-  final result = <String, Object?>{
-    'version': 1,
-    'batchId': args.batchId,
-    'index': args.index,
-    ...paths,
-    'width': args.width,
-    'height': args.height,
-    'previewWidth': previewImage.width,
-    'previewHeight': previewImage.height,
-    'thumbnailWidth': thumbnailImage.width,
-    'thumbnailHeight': thumbnailImage.height,
-    'sourceBytes': source.length,
-    'outputBytes': preview.length + thumbnail.length,
-    'elapsedMs': watch.elapsedMilliseconds,
-    'sha256': checksums['previewPath'],
-    'checksums': checksums,
-    'reused': false,
-  };
-  await _atomicWrite(manifest, utf8.encode(jsonEncode(result)));
-  _sampleMemory(args, 'artifacts-committed');
-  await progress(100, 'Photo ready');
-  return result;
 }
+
+Map<String, String> _artifactPaths(Directory directory) => {
+  'sourcePath': '${directory.path}/original.jpg',
+  'previewPath': '${directory.path}/preview.jpg',
+  'thumbnailPath': '${directory.path}/thumbnail.jpg',
+};
 
 Future<Map<String, Object?>?> _readVerifiedManifest(
   File manifest,
   PhotoTaskArgs args,
-  Map<String, String> paths,
 ) async {
   try {
-    if (!await manifest.exists() || await manifest.length() > 16384) {
+    if (await FileSystemEntity.type(manifest.path, followLinks: false) !=
+            FileSystemEntityType.file ||
+        await manifest.length() > 16384) {
       return null;
     }
     final data = Map<String, Object?>.from(
       jsonDecode(await manifest.readAsString()) as Map,
     );
-    if (data['version'] != 1 ||
+    final previewSize = _fitSize(args.width, args.height, 960);
+    final thumbnailSize = _fitSize(previewSize.$1, previewSize.$2, 256);
+    final dimensions = {
+      'width': args.width,
+      'height': args.height,
+      'previewWidth': previewSize.$1,
+      'previewHeight': previewSize.$2,
+      'thumbnailWidth': thumbnailSize.$1,
+      'thumbnailHeight': thumbnailSize.$2,
+    };
+    if ((data['version'] != 1 && data['version'] != 2) ||
         data['batchId'] != args.batchId ||
         data['index'] != args.index ||
-        data['width'] != args.width ||
-        data['height'] != args.height ||
+        dimensions.entries.any(
+          (entry) => data[entry.key] is! int || data[entry.key] != entry.value,
+        ) ||
         data['elapsedMs'] is! int ||
+        (data['elapsedMs']! as int) < 0 ||
         data['sourceBytes'] is! int ||
-        data['outputBytes'] is! int) {
+        (data['sourceBytes']! as int) <= 0 ||
+        data['outputBytes'] is! int ||
+        (data['outputBytes']! as int) <= 0 ||
+        data['reused'] is! bool) {
       return null;
     }
+    var artifactDirectory = manifest.parent;
+    if (data['version'] == 2) {
+      final generation = data['generation'];
+      if (generation is! String ||
+          !RegExp(r'^generation-[a-zA-Z0-9_-]+$').hasMatch(generation)) {
+        return null;
+      }
+      artifactDirectory = Directory('${manifest.parent.path}/$generation');
+      if (await FileSystemEntity.type(
+            artifactDirectory.path,
+            followLinks: false,
+          ) !=
+          FileSystemEntityType.directory) {
+        return null;
+      }
+    }
+    final paths = _artifactPaths(artifactDirectory);
     final hashes = data['checksums'] as Map;
     var outputBytes = 0;
     for (final entry in paths.entries) {
@@ -273,27 +326,20 @@ Future<Map<String, Object?>?> _readVerifiedManifest(
   }
 }
 
-Future<void> _atomicWrite(File target, List<int> bytes) async {
-  // Unique sibling temporaries also isolate overlapping duplicate attempts.
-  final temporary = await Directory(target.parent.path).createTemp('.photo-');
-  try {
-    final file = File('${temporary.path}/pending');
-    await file.writeAsBytes(bytes, flush: true);
-    await file.rename(target.path);
-  } finally {
-    await temporary.delete(recursive: true);
-  }
+(int, int) _fitSize(int width, int height, int longestSide) {
+  final scale = math.min(1.0, longestSide / math.max(width, height));
+  return (
+    math.max(1, (width * scale).round()),
+    math.max(1, (height * scale).round()),
+  );
 }
 
 img.Image _fit(img.Image source, int longestSide) {
-  final scale = math.min(
-    1.0,
-    longestSide / math.max(source.width, source.height),
-  );
+  final size = _fitSize(source.width, source.height, longestSide);
   return img.copyResize(
     source,
-    width: math.max(1, (source.width * scale).round()),
-    height: math.max(1, (source.height * scale).round()),
+    width: size.$1,
+    height: size.$2,
     interpolation: img.Interpolation.average,
   );
 }
