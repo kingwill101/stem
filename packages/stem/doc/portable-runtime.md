@@ -51,6 +51,13 @@ Native retry APIs cannot change the message body: adapters needing to preserve
 explicit retry policy/time-limit overrides must republish the new envelope or
 durably store those overrides rather than silently discard them.
 
+For automatic retries with an explicit retry policy, a zero `defaultDelay`
+means immediate retry even when `backoffMax` is set. Exponential scaling uses
+an attempt exponent bounded to 0–30 and saturates at a duration whose
+microseconds are exactly representable on JavaScript before applying
+`backoffMax` and jitter.
+This keeps large retry counters consistent across VM and JavaScript.
+
 ## Idempotency is not exactly-once execution
 
 A terminal status suppresses a **sequential** duplicate. Two concurrent
@@ -62,6 +69,10 @@ arbitration can choose one result writer, but does not prevent duplicate handler
 side effects. Cross-instance execution suppression requires an adapter-specific
 atomic claim with ownership/expiry semantics, or application-level idempotency.
 This release does not provide a `TaskClaimStore` or claim exactly-once execution.
+
+Backends can advertise `AtomicTerminalResultStore` directly. Both the VM worker
+and payload-encoding wrapper recognize this capability, as well as its legacy
+`AtomicTerminalResultBackend` subtype.
 
 ## One-shot scheduling
 
@@ -75,9 +86,16 @@ await ScheduleRunner(
 
 The runner does not start a daemon timer. If a lock store is supplied, temporary
 renewal timers protect dispatch and are cancelled when dispatch finishes.
+Lock TTLs must be positive; sub-millisecond TTLs are accepted, though actual
+timer resolution depends on the host. Renewal failures mark the lease lost.
 `Beat` retains its compatibility constructors and start/stop lifecycle while
-using the same runner. Schedule publication and `markExecuted` are not atomic;
+using the same runner. Its periodic passes do not overlap, and failed passes
+are logged without stopping future ticks. Separate callers of `runOnce()` must
+still coordinate concurrent passes. Schedule publication and `markExecuted` are not atomic;
 a crash between them can cause a later duplicate publication.
+
+`portable.dart` exports `StemMetrics` and the metrics exporter API so portable
+applications can configure and inspect scheduler and task metrics.
 
 ## VM worker integration
 

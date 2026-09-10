@@ -5,6 +5,25 @@ import 'package:stem/memory.dart';
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+class _BlockingScheduleStore extends InMemoryScheduleStore {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  final recovered = Completer<void>();
+  int calls = 0;
+
+  @override
+  Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async {
+    calls++;
+    if (calls == 1) {
+      entered.complete();
+      await release.future;
+      throw StateError('store unavailable');
+    }
+    if (!recovered.isCompleted) recovered.complete();
+    return [];
+  }
+}
+
 void main() {
   Future<void> waitForEvents(
     List<WorkerEvent> events, {
@@ -22,6 +41,27 @@ void main() {
   }
 
   group('Beat', () {
+    test('periodic passes do not overlap and recover after errors', () async {
+      final store = _BlockingScheduleStore();
+      final broker = InMemoryBroker();
+      final beat = Beat(
+        store: store,
+        broker: broker,
+        tickInterval: const Duration(milliseconds: 1),
+      );
+      addTearDown(() async {
+        await beat.stop();
+        broker.dispose();
+      });
+      await beat.start();
+      await store.entered.future;
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(store.calls, 1);
+      store.release.complete();
+      await store.recovered.future.timeout(const Duration(seconds: 2));
+      expect(store.calls, greaterThanOrEqualTo(2));
+    });
+
     test('fires schedule once per interval', () async {
       final broker = InMemoryBroker();
       final backend = InMemoryResultBackend();

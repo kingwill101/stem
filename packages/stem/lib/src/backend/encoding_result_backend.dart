@@ -32,8 +32,8 @@ class EncodingResultBackend
 
   @override
   bool get supportsAtomicTerminalWrites =>
-      _inner is AtomicTerminalResultBackend &&
-      (_inner as AtomicTerminalResultBackend).supportsAtomicTerminalWrites;
+      _inner is AtomicTerminalResultStore &&
+      (_inner as AtomicTerminalResultStore).supportsAtomicTerminalWrites;
 
   @override
   Future<void> set(
@@ -65,9 +65,9 @@ class EncodingResultBackend
     Duration? ttl,
   }) async {
     final encoded = _encodeStatus(status);
-    if (_inner is AtomicTerminalResultBackend &&
-        (_inner as AtomicTerminalResultBackend).supportsAtomicTerminalWrites) {
-      final atomic = _inner as AtomicTerminalResultBackend;
+    if (_inner is AtomicTerminalResultStore &&
+        (_inner as AtomicTerminalResultStore).supportsAtomicTerminalWrites) {
+      final atomic = _inner as AtomicTerminalResultStore;
       return atomic.setTerminalIfAbsent(encoded, ttl: ttl);
     }
 

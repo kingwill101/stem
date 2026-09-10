@@ -8,6 +8,8 @@ import 'package:stem/src/observability/logging.dart' show stemLogger;
 import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
+import '../support/portable_atomic_backend.dart';
+
 void main() {
   group('Worker', () {
     test(
@@ -2662,7 +2664,7 @@ class _BlockingConsumeMiddleware implements Middleware {
   }
 }
 
-class _DelayedTerminalBackend extends InMemoryResultBackend {
+class _DelayedTerminalBackend extends PortableAtomicBackend {
   final Completer<void> firstTerminalEntered = Completer<void>();
   final Completer<void> _firstTerminalRelease = Completer<void>();
   int terminalCalls = 0;

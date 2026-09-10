@@ -7,7 +7,9 @@ library;
 import 'dart:async';
 import 'dart:math';
 
+import 'package:contextual/contextual.dart';
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/observability/logging.dart';
 import 'package:stem/src/scheduler/schedule_runner.dart';
 import 'package:stem/src/security/signing.dart';
 
@@ -56,10 +58,26 @@ class Beat extends ScheduleRunner {
   }
 
   Timer? _timer;
+  bool _running = false;
 
   /// Starts the periodic scheduling loop.
   Future<void> start() async {
-    _timer ??= Timer.periodic(tickInterval, (_) => runOnce());
+    _timer ??= Timer.periodic(tickInterval, (_) => unawaited(_runPeriodic()));
+  }
+
+  Future<void> _runPeriodic() async {
+    if (_running) return;
+    _running = true;
+    try {
+      await runOnce();
+    } on Object catch (error, stack) {
+      stemLogger.warning(
+        'Periodic scheduling pass failed',
+        Context({'error': error.toString(), 'stack': stack.toString()}),
+      );
+    } finally {
+      _running = false;
+    }
   }
 
   /// Stops future ticks. Already running passes finish independently.

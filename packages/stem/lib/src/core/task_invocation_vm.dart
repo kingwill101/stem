@@ -984,6 +984,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
       args: call.encodeArgs(),
       headers: call.headers,
       options: call.resolveOptions(),
+      notBefore: call.notBefore,
       meta: call.meta,
       enqueueOptions: enqueueOptions ?? call.enqueueOptions,
     );

@@ -79,6 +79,76 @@ void main() {
     );
   }
 
+  test('short positive lock TTLs are supported and released', () async {
+    final locks = _LockStore();
+    await ScheduleRunner(
+      store: _ScheduleStore(),
+      publisher: _Publisher(),
+      lockStore: locks,
+      lockTtl: const Duration(microseconds: 1),
+    ).runOnce();
+    expect(locks.lock.released, isTrue);
+  });
+
+  test('nonpositive lock TTLs fail before acquiring a lock', () {
+    for (final ttl in [Duration.zero, const Duration(seconds: -1)]) {
+      expect(
+        () => ScheduleRunner(
+          store: _ScheduleStore(),
+          publisher: _Publisher(),
+          lockTtl: ttl,
+        ),
+        throwsArgumentError,
+      );
+    }
+  });
+
+  test('renewal errors are handled and timers are cancelled', () async {
+    final locks = _LockStore()..lock.failFirstRenew = true;
+    final publisher = _Publisher();
+    final timers = <Timer>[];
+    await runZoned(
+      () => ScheduleRunner(
+        store: _ScheduleStore(),
+        publisher: publisher,
+        lockStore: locks,
+      ).runOnce(),
+      zoneSpecification: ZoneSpecification(
+        createPeriodicTimer: (self, parent, zone, duration, callback) {
+          final timer = parent.createPeriodicTimer(zone, duration, callback);
+          timers.add(timer);
+          // Exercise the asynchronous timer failure before pre-publish renewal.
+          callback(timer);
+          return timer;
+        },
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(publisher.envelopes, isEmpty);
+    expect(locks.lock.released, isTrue);
+    expect(locks.lock.renewals, 1);
+    expect(timers.single.isActive, isFalse);
+  });
+
+  test('metadata errors do not abort the remaining schedules', () async {
+    StemMetrics.instance.reset();
+    final publisher = _Publisher()..failPublish = true;
+    final store = _ScheduleStore()
+      ..failMetadata = true
+      ..repeatEntry = true;
+    await ScheduleRunner(store: store, publisher: publisher).runOnce();
+    expect(store.executed, hasLength(2));
+    expect(
+      StemMetrics.instance.snapshot()['counters'],
+      contains(
+        allOf(
+          containsPair('name', 'stem.scheduler.dispatch.failed'),
+          containsPair('value', 2.0),
+        ),
+      ),
+    );
+  });
+
   test('mixed batches settle each message independently', () async {
     final registry = InMemoryTaskRegistry()
       ..register(
@@ -197,6 +267,7 @@ class _Publisher implements TaskPublisher {
 
 class _Lock extends Lock {
   bool released = false;
+  bool failFirstRenew = false;
   int renewals = 0;
 
   @override
@@ -208,6 +279,7 @@ class _Lock extends Lock {
   @override
   Future<bool> renew(Duration ttl) async {
     renewals++;
+    if (failFirstRenew && renewals == 1) throw StateError('renew failed');
     return true;
   }
 
@@ -280,6 +352,8 @@ class _StatusStore implements TaskStatusStore {
 
 class _ScheduleStore implements ScheduleStore {
   final executed = <String>[];
+  bool failMetadata = false;
+  bool repeatEntry = false;
   final entry = ScheduleEntry(
     id: 'schedule',
     taskName: 'scheduled',
@@ -289,7 +363,7 @@ class _ScheduleStore implements ScheduleStore {
 
   @override
   Future<List<ScheduleEntry>> due(DateTime now, {int limit = 100}) async =>
-      executed.isEmpty ? [entry] : [];
+      executed.isEmpty ? [entry, if (repeatEntry) entry] : [];
 
   @override
   Future<void> markExecuted(
@@ -304,6 +378,7 @@ class _ScheduleStore implements ScheduleStore {
     Duration? drift,
   }) async {
     executed.add(id);
+    if (failMetadata) throw StateError('metadata failed');
   }
 
   @override

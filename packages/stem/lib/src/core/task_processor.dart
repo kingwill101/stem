@@ -616,18 +616,23 @@ class TaskProcessor {
     }
     final base = policy.defaultDelay ?? Duration.zero;
     if (!policy.backoff) return base;
-    final rawMilliseconds = base.inMilliseconds == 0
-        ? 0
-        : base.inMilliseconds * (1 << attempt);
+    // Zero is an immediate retry, not a request to use the maximum delay.
+    if (base <= Duration.zero) return Duration.zero;
+    // Bound the exponent and keep Duration's microseconds within the common
+    // VM/JavaScript exact integer range.
+    final scaled = base.inMilliseconds.toDouble() * (1 << attempt.clamp(0, 30));
+    final rawMilliseconds = scaled.clamp(0, 9007199254740).toInt();
     final capMilliseconds =
         policy.backoffMax?.inMilliseconds ?? rawMilliseconds;
-    final capped = rawMilliseconds == 0
-        ? capMilliseconds
-        : rawMilliseconds.clamp(0, capMilliseconds);
+    final capped = rawMilliseconds.clamp(0, capMilliseconds);
     if (!policy.jitter || capped == 0) {
       return Duration(milliseconds: capped);
     }
-    final jitter = _random.nextInt((capped ~/ 4) + 1);
+    final jitterRange = (capped ~/ 4) + 1;
+    // Random.nextInt only accepts bounds up to 2^32 on the VM.
+    final jitter = jitterRange <= 0x100000000
+        ? _random.nextInt(jitterRange)
+        : (_random.nextDouble() * jitterRange).floor();
     return Duration(
       milliseconds: (capped - jitter).clamp(0, capMilliseconds),
     );

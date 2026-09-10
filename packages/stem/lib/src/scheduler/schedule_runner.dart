@@ -46,7 +46,11 @@ class ScheduleRunner {
     this.lockTtl = const Duration(seconds: 5),
     this.signer,
     Random? random,
-  }) : _random = random ?? Random();
+  }) : _random = random ?? Random() {
+    if (lockTtl <= Duration.zero) {
+      throw ArgumentError.value(lockTtl, 'lockTtl', 'Must be positive');
+    }
+  }
 
   /// Schedule store used to fetch due entries.
   final ScheduleStore store;
@@ -151,53 +155,65 @@ class ScheduleRunner {
 
     Lock? lock;
     Timer? renewalTimer;
-    Duration? jitterDelay;
+    Future<void>? renewalInFlight;
     var leaseLost = false;
-    if (lockStore != null) {
-      lock = await lockStore!.acquire(
-        'stem:schedule:${entry.id}',
-        ttl: lockTtl,
-      );
-      if (lock == null) {
-        StemMetrics.instance.increment(
-          'stem.scheduler.lock.contended',
-          tags: {'schedule': entry.id},
-        );
-        return;
+
+    Future<void> renewLease() async {
+      try {
+        if (await lock!.renew(lockTtl)) return;
+        leaseLost = true;
+      } on Object {
+        leaseLost = true;
       }
       StemMetrics.instance.increment(
-        'stem.scheduler.lock.acquired',
+        'stem.scheduler.lock.renew_failed',
         tags: {'schedule': entry.id},
       );
-      final renewMs = (lockTtl.inMilliseconds ~/ 2).clamp(
-        100,
-        lockTtl.inMilliseconds,
-      );
-      renewalTimer = Timer.periodic(Duration(milliseconds: renewMs), (_) async {
-        final renewed = await lock!.renew(lockTtl);
-        if (!renewed) {
-          leaseLost = true;
-          StemMetrics.instance.increment(
-            'stem.scheduler.lock.renew_failed',
-            tags: {'schedule': entry.id},
-          );
-        }
+    }
+
+    Future<void> renew() {
+      if (leaseLost) return Future<void>.value();
+      return renewalInFlight ??= renewLease().whenComplete(() {
+        renewalInFlight = null;
       });
     }
 
     final baseScheduled = entry.nextRunAt ?? now;
     final jitter = entry.jitter;
-    jitterDelay = (jitter != null && jitter > Duration.zero)
+    final jitterDelay = (jitter != null && jitter > Duration.zero)
         ? Duration(milliseconds: _random.nextInt(jitter.inMilliseconds + 1))
         : Duration.zero;
     final scheduledFor = baseScheduled.add(jitterDelay);
     final startedAt = stemNow();
-
-    StemMetrics.instance.increment(
-      'stem.scheduler.dispatch.attempts',
-      tags: {'schedule': entry.id},
-    );
     try {
+      if (lockStore != null) {
+        lock = await lockStore!.acquire(
+          'stem:schedule:${entry.id}',
+          ttl: lockTtl,
+        );
+        if (lock == null) {
+          StemMetrics.instance.increment(
+            'stem.scheduler.lock.contended',
+            tags: {'schedule': entry.id},
+          );
+          return;
+        }
+        StemMetrics.instance.increment(
+          'stem.scheduler.lock.acquired',
+          tags: {'schedule': entry.id},
+        );
+        final renewMicros = max(1, lockTtl.inMicroseconds ~/ 2);
+        renewalTimer = Timer.periodic(Duration(microseconds: renewMicros), (
+          _,
+        ) {
+          unawaited(renew());
+        });
+      }
+
+      StemMetrics.instance.increment(
+        'stem.scheduler.dispatch.attempts',
+        tags: {'schedule': entry.id},
+      );
       if (jitterDelay > Duration.zero) {
         await Future<void>.delayed(jitterDelay);
       }
@@ -206,15 +222,8 @@ class ScheduleRunner {
       // renewal timer protects long jitter/dispatch windows, but a scheduler
       // must not publish after it has already lost the distributed lock.
       if (lock != null) {
-        final alreadyLost = leaseLost;
-        if (alreadyLost || !await lock.renew(lockTtl)) {
-          leaseLost = true;
-          if (!alreadyLost) {
-            StemMetrics.instance.increment(
-              'stem.scheduler.lock.renew_failed',
-              tags: {'schedule': entry.id},
-            );
-          }
+        await renew();
+        if (leaseLost) {
           throw StateError(
             'Scheduler lock was lost before publishing schedule '
             '"${entry.id}".',
@@ -309,11 +318,7 @@ class ScheduleRunner {
           success: false,
           drift: executedAt.difference(scheduledFor),
         );
-        StemMetrics.instance.increment(
-          'stem.scheduler.dispatch.failed',
-          tags: {'schedule': entry.id},
-        );
-      } on Exception catch (storeError, storeStack) {
+      } on Object catch (storeError, storeStack) {
         stemLogger.warning(
           'Failed to update schedule metadata for {schedule}',
           Context(
@@ -325,6 +330,10 @@ class ScheduleRunner {
           ),
         );
       }
+      StemMetrics.instance.increment(
+        'stem.scheduler.dispatch.failed',
+        tags: {'schedule': entry.id},
+      );
       await _signals.scheduleEntryFailed(
         entry,
         scheduledFor: scheduledFor,
@@ -333,6 +342,7 @@ class ScheduleRunner {
       );
     } finally {
       renewalTimer?.cancel();
+      await renewalInFlight;
       await lock?.release();
     }
   }

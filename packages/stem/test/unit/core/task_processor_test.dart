@@ -323,6 +323,65 @@ void main() {
       expect((outcome as TaskProcessFailure).error, isA<TimeoutException>());
     });
 
+    for (final attempt in [1, 31, 32, 64, 1000]) {
+      for (final base in [Duration.zero, const Duration(seconds: 2)]) {
+        test('caps backoff at attempt $attempt with base $base', () async {
+          final handler =
+              _definition(
+                'portable.capped',
+                options: TaskOptions(
+                  maxRetries: 1002,
+                  retryPolicy: TaskRetryPolicy(
+                    backoff: true,
+                    jitter: false,
+                    defaultDelay: base,
+                    backoffMax: const Duration(seconds: 3),
+                    maxRetries: 1002,
+                  ),
+                ),
+              ).handler(
+                entrypoint: (context, args) async => throw StateError('retry'),
+                executionMode: TaskExecutionMode.inline,
+              );
+          final outcome = await _processor([handler]).process(
+            Envelope(name: handler.name, args: const {}, attempt: attempt),
+          );
+          expect(
+            (outcome as TaskProcessRetry).delay,
+            base == Duration.zero ? Duration.zero : const Duration(seconds: 3),
+          );
+        });
+      }
+    }
+
+    for (final jitter in [false, true]) {
+      test('large uncapped backoff is portable (jitter=$jitter)', () async {
+        final handler =
+            _definition(
+              'portable.large-backoff',
+              options: TaskOptions(
+                maxRetries: 1002,
+                retryPolicy: TaskRetryPolicy(
+                  backoff: true,
+                  jitter: jitter,
+                  defaultDelay: const Duration(days: 365),
+                  maxRetries: 1002,
+                ),
+              ),
+            ).handler(
+              entrypoint: (context, args) async => throw StateError('retry'),
+              executionMode: TaskExecutionMode.inline,
+            );
+        final outcome = await _processor([handler]).process(
+          Envelope(name: handler.name, args: const {}, attempt: 1000),
+        );
+        final delay = (outcome as TaskProcessRetry).delay.inMilliseconds;
+        const maximum = 9007199254740;
+        expect(delay, inInclusiveRange(maximum * 3 ~/ 4, maximum));
+        if (!jitter) expect(delay, maximum);
+      });
+    }
+
     test('applies automatic retry policy and backoff', () async {
       final handler =
           _definition(

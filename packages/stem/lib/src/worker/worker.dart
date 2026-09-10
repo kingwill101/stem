@@ -629,6 +629,8 @@ class Worker {
   /// Workflow event emitter used by task contexts for workflow resumes.
   WorkflowEventEmitter? workflowEvents;
 
+  // The worker verifies signatures before using these execution primitives.
+  // Do not call process() here without configuring its signer as well.
   late final TaskProcessor _processor = TaskProcessor(
     registry: registry,
     retryStrategy: retryStrategy,
@@ -3818,10 +3820,9 @@ class Worker {
   /// unconditional write behavior.
   Future<_TerminalWriteResult> _writeTerminalStatus(TaskStatus status) async {
     final candidate = backend;
-    if (candidate is AtomicTerminalResultBackend &&
-        (candidate as AtomicTerminalResultBackend)
-            .supportsAtomicTerminalWrites) {
-      final atomic = candidate as AtomicTerminalResultBackend;
+    if (candidate is AtomicTerminalResultStore &&
+        (candidate as AtomicTerminalResultStore).supportsAtomicTerminalWrites) {
+      final atomic = candidate as AtomicTerminalResultStore;
       final applied = await atomic.setTerminalIfAbsent(status);
       if (!applied) {
         final existing = await backend.get(status.id);

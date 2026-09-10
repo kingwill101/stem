@@ -19,6 +19,7 @@ export 'src/core/task_invocation.dart';
 export 'src/core/task_payload_encoder.dart';
 export 'src/core/task_processor.dart';
 export 'src/core/task_result.dart';
+export 'src/observability/metrics.dart';
 export 'src/routing/routing_config.dart';
 export 'src/routing/routing_registry.dart';
 export 'src/scheduler/schedule_calculator.dart';
