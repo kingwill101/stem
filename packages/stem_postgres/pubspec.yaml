@@ -10,8 +10,8 @@ dependencies:
   artisanal: ^0.5.0
   collection: ^1.19.1
   contextual: ^2.2.0
-  ormed: ">=0.3.0 <1.0.0"
-  ormed_postgres: ">=0.3.0 <1.0.0"
+  ormed: ">=0.4.0 <1.0.0"
+  ormed_postgres: ">=0.3.1 <1.0.0"
   path: ^1.9.1
   postgres: ^3.5.9
   stem: ">=0.3.0 <0.5.0"
