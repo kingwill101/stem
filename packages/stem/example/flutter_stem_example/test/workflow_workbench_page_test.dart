@@ -41,7 +41,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('No workflow runs yet'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('No runs on this history page'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('No runs on this history page'), findsOneWidget);
     final launch = find.byKey(const Key('launch-workflows'));
     await tester.ensureVisible(launch);
     await tester.tap(launch);
@@ -197,9 +202,42 @@ void main() {
     await tester.tap(approve);
     await tester.pumpAndSettle();
     expect(controller.approved, 'approval-1');
+    expect(controller.detailLoads, 0);
     await tester.tap(find.text('Saved checkpoints'));
     await tester.pumpAndSettle();
+    expect(controller.detailLoads, 1);
     expect(find.textContaining('"prepared": true'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('history controls explicitly navigate pages and status', (
+    tester,
+  ) async {
+    final controller = _TestController()..hasNextPage = true;
+    addTearDown(controller.dispose);
+    await _show(tester, controller);
+    await tester.scrollUntilVisible(
+      find.text('Next page'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Next page'));
+    await tester.pumpAndSettle();
+    expect(controller.historyPage, 1);
+    expect(find.text('History page 2'), findsOneWidget);
+    await tester.tap(find.text('Previous page'));
+    await tester.pumpAndSettle();
+    expect(controller.historyPage, 0);
+    await tester.ensureVisible(find.text('All statuses'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All statuses'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('suspended').last);
+    await tester.pumpAndSettle();
+    expect(controller.historyStatus, WorkflowStatus.suspended);
+    expect(controller.historyPage, 0);
+    expect(find.textContaining('not all active runs'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }
@@ -231,6 +269,32 @@ class _TestController implements WorkflowWorkbenchController {
   int? lastCount;
   bool disposed = false;
   String? approved;
+  @override
+  WorkbenchWorkflowKind historyWorkflow = WorkbenchWorkflowKind.report;
+  @override
+  WorkflowStatus? historyStatus;
+  @override
+  int historyPage = 0;
+  @override
+  bool hasNextPage = false;
+  int detailLoads = 0;
+
+  @override
+  Future<void> selectHistory({
+    required WorkbenchWorkflowKind workflow,
+    WorkflowStatus? status,
+  }) async {
+    historyWorkflow = workflow;
+    historyStatus = status;
+    historyPage = 0;
+  }
+
+  @override
+  Future<void> nextPage() async => historyPage++;
+  @override
+  Future<void> previousPage() async => historyPage--;
+  @override
+  Future<void> loadDetail(String runId) async => detailLoads++;
 
   @override
   Stream<void> get changes => events.stream;

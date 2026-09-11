@@ -25,6 +25,12 @@ tabs does not stop publication or close app-owned stores.
   persisted checkpoints and results, approve only the selected waiting run, or
   cancel a run. Progress reflects core workflow state, not a simulated timer.
 
+Workflow history shows 20 runs per selected workflow/status page, with explicit
+Previous/Next controls. Other pages or workflow types may contain active runs.
+Checkpoint details load when **Saved checkpoints** is expanded or reloaded;
+unchanged summaries retain cached details rather than rereading every checkpoint
+each second. Changed runs offer an explicit reload of their details.
+
 Workflows use `StemWorkflowApp` layered onto the same task app, with a separate
 `workflows.sqlite` file under the same application-support root. Definitions are
 registered again in every foreground runtime and every headless callback. The
@@ -392,6 +398,10 @@ It reports persisted recovery evidence, not proof of an OS kill or its cause.
 Recovery can defer work through the configured retry policy; this status does
 not claim the photo is already executing again. The signal subscription and
 its reads are disconnected/joined at the callback boundary.
+
+Recovery tracking uses task IDs and the latest interrupted attempt. Only a
+matching terminal event at that attempt or a later retry clears it; an unrelated
+worker's completion cannot hide another task's recovery state.
 
 Only active processing is ongoing. Completion, errors and waiting replace it
 with a dismissible notification; cancellation and empty queues cancel it.

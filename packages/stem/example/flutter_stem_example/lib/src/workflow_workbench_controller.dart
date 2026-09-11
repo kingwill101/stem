@@ -25,6 +25,54 @@ class WorkflowWorkbenchController {
   Map<String, WorkflowRunDetailView> details = const {};
   Object? observationError;
   DateTime? updatedAt;
+  static const historyPageSize = 20;
+  WorkbenchWorkflowKind historyWorkflow = WorkbenchWorkflowKind.report;
+  WorkflowStatus? historyStatus;
+  int historyPage = 0;
+  bool hasNextPage = false;
+
+  Future<void> selectHistory({
+    required WorkbenchWorkflowKind workflow,
+    WorkflowStatus? status,
+  }) => _enqueue(() async {
+    historyWorkflow = workflow;
+    historyStatus = status;
+    historyPage = 0;
+    runs = const [];
+    details = const {};
+    hasNextPage = false;
+    await _read();
+  });
+
+  Future<void> nextPage() => _enqueue(() async {
+    if (!hasNextPage) return;
+    historyPage++;
+    runs = const [];
+    details = const {};
+    hasNextPage = false;
+    await _read();
+  });
+
+  Future<void> previousPage() => _enqueue(() async {
+    if (historyPage == 0) return;
+    historyPage--;
+    runs = const [];
+    details = const {};
+    hasNextPage = false;
+    await _read();
+  });
+
+  /// Checkpoints are read only on demand, never by the polling loop.
+  Future<void> loadDetail(String runId) => _enqueue(() async {
+    if (!runs.any((run) => run.runId == runId)) return;
+    final detail = await workflows.viewRunDetail(runId);
+    details = Map.unmodifiable({
+      for (final entry in details.entries)
+        if (entry.key != runId) entry.key: entry.value,
+      runId: ?detail,
+    });
+    if (!_disposed) _changes.add(null);
+  });
 
   // A single queue makes disposal join both reads and mutations and prevents
   // older reads from overwriting observations made after a durable command.
@@ -53,6 +101,12 @@ class WorkflowWorkbenchController {
       try {
         if (ids.isNotEmpty) await requestWakeup?.call();
       } finally {
+        historyWorkflow = kind;
+        historyStatus = null;
+        historyPage = 0;
+        runs = const [];
+        details = const {};
+        hasNextPage = false;
         await _read();
       }
     }
@@ -101,28 +155,26 @@ class WorkflowWorkbenchController {
 
   Future<void> _read() async {
     try {
-      final next = <WorkflowRunView>[];
-      for (final descriptor in demoWorkflowDescriptors) {
-        var offset = 0;
-        while (true) {
-          final page = await workflows.listRunViews(
-            workflow: descriptor.name,
-            limit: 100,
-            offset: offset,
-          );
-          next.addAll(page);
-          if (page.length < 100) break;
-          offset += page.length;
-        }
-      }
-      next.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      final nextDetails = <String, WorkflowRunDetailView>{};
-      for (final run in next) {
-        final detail = await workflows.viewRunDetail(run.runId);
-        if (detail != null) nextDetails[run.runId] = detail;
-      }
+      final page = await workflows.listRunViews(
+        workflow: historyWorkflow.descriptor.name,
+        status: historyStatus,
+        limit: historyPageSize + 1,
+        offset: historyPage * historyPageSize,
+      );
+      final next = page.take(historyPageSize).toList();
+      // Retain only unchanged details on this page. A changed run must be
+      // explicitly expanded/reloaded; polling never reads checkpoints.
+      final previous = {for (final run in runs) run.runId: run};
+      details = Map.unmodifiable({
+        for (final run in next)
+          if (details.containsKey(run.runId) &&
+              previous[run.runId]?.updatedAt == run.updatedAt &&
+              previous[run.runId]?.status == run.status &&
+              previous[run.runId]?.cursor == run.cursor)
+            run.runId: details[run.runId]!,
+      });
       runs = List.unmodifiable(next);
-      details = Map.unmodifiable(nextDetails);
+      hasNextPage = page.length > historyPageSize;
       updatedAt = DateTime.now();
       observationError = null;
     } catch (error) {

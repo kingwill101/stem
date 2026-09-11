@@ -219,14 +219,20 @@ class PhotoQueueNotificationObserver {
   final List<StreamSubscription<WorkerEvent>> _subscriptions = [];
   final List<SignalSubscription> _interruptions = [];
   Future<void> _pending = Future.value();
-  bool _interrupted = false;
+  // Retries retain the task ID and may run on another worker. Retain the newest
+  // interrupted attempt so unrelated or older terminal events cannot clear it.
+  final Map<String, int> _interruptedAttempts = {};
 
   Future<void> start() async {
     for (final worker in _workers) {
       _interruptions.add(
         StemSignals.onTaskInterrupted((payload, _) {
           // Recovery evidence, not proof of why the previous process stopped.
-          _interrupted = true;
+          final envelope = payload.envelope;
+          final previous = _interruptedAttempts[envelope.id];
+          if (previous == null || envelope.attempt > previous) {
+            _interruptedAttempts[envelope.id] = envelope.attempt;
+          }
           return _refresh();
         }, workerId: worker.workerId),
       );
@@ -234,7 +240,18 @@ class PhotoQueueNotificationObserver {
         worker.events.listen((event) {
           if (event.type != WorkerEventType.progress &&
               event.type != WorkerEventType.heartbeat) {
-            if (event.type == WorkerEventType.completed) _interrupted = false;
+            final envelope = event.envelope;
+            final terminal =
+                event.type == WorkerEventType.completed ||
+                event.type == WorkerEventType.failed ||
+                event.type == WorkerEventType.revoked;
+            if (terminal && envelope != null) {
+              final interruptedAttempt = _interruptedAttempts[envelope.id];
+              if (interruptedAttempt != null &&
+                  envelope.attempt >= interruptedAttempt) {
+                _interruptedAttempts.remove(envelope.id);
+              }
+            }
             unawaited(_refresh());
           }
         }),
@@ -246,7 +263,9 @@ class PhotoQueueNotificationObserver {
   Future<void> _refresh() => _pending = _pending.then((_) async {
     final status = await notifications.read(
       app,
-      _interrupted ? PhotoQueuePhase.interrupted : PhotoQueuePhase.processing,
+      _interruptedAttempts.isNotEmpty
+          ? PhotoQueuePhase.interrupted
+          : PhotoQueuePhase.processing,
     );
     if (status != null && status.total > status.completed) {
       await notifications.show(status);

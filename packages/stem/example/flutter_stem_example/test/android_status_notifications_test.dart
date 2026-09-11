@@ -1,9 +1,143 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_stem_example/src/android_status_notifications.dart';
 import 'package:flutter_stem_example/src/demo_config.dart';
 import 'package:stem/stem.dart';
 
 void main() {
+  for (final terminal in [
+    WorkerEventType.completed,
+    WorkerEventType.failed,
+    WorkerEventType.revoked,
+  ]) {
+    test('only matching $terminal events settle interrupted tasks', () async {
+      final app = await StemApp.inMemory();
+      final first = _EventWorker('first');
+      final second = _EventWorker('second');
+      addTearDown(app.close);
+      for (final id in ['a', 'b', 'ongoing']) {
+        await app.backend.set(
+          id,
+          TaskState.running,
+          meta: const {'queue': queueName, 'batchId': 'batch'},
+        );
+      }
+      final shown = <PhotoQueueStatus>[];
+      Completer<PhotoQueueStatus>? next;
+      final observer = PhotoQueueNotificationObserver(
+        app,
+        AndroidStatusNotifications(
+          show: (status) async {
+            shown.add(status);
+            if (next != null && !next!.isCompleted) next!.complete(status);
+          },
+        ),
+        workers: [first, second],
+      );
+      await observer.start();
+      Future<void> interrupt(_EventWorker worker, String id, int attempt) =>
+          StemSignals.taskInterrupted.emit(
+            TaskInterruptedPayload(
+              envelope: Envelope(
+                id: id,
+                name: 'photo',
+                args: const {},
+                attempt: attempt,
+              ),
+              worker: WorkerInfo(
+                id: worker.workerId,
+                queues: const [queueName],
+                broadcasts: const [],
+              ),
+              priorStatus: TaskStatus(
+                id: id,
+                state: TaskState.running,
+                attempt: attempt,
+              ),
+              policy: TaskRecoveryPolicy.retry,
+            ),
+          );
+      Future<PhotoQueuePhase> emit(
+        _EventWorker worker,
+        WorkerEventType type, {
+        String? id,
+        int attempt = 0,
+      }) async {
+        final received = next = Completer<PhotoQueueStatus>();
+        worker.controller.add(
+          WorkerEvent(
+            type: type,
+            envelope: id == null
+                ? null
+                : Envelope(
+                    id: id,
+                    name: 'photo',
+                    args: const {},
+                    attempt: attempt,
+                  ),
+          ),
+        );
+        return (await received.future.timeout(
+          const Duration(seconds: 2),
+        )).phase;
+      }
+
+      try {
+        await interrupt(first, 'a', 0);
+        await interrupt(first, 'a', 0); // Duplicate evidence is idempotent.
+        await interrupt(second, 'b', 1);
+        await interrupt(first, 'b', 0); // Older evidence cannot downgrade it.
+        expect(shown.last.phase, PhotoQueuePhase.interrupted);
+        expect(
+          await emit(first, WorkerEventType.completed, id: 'unrelated'),
+          PhotoQueuePhase.interrupted,
+        );
+        expect(
+          await emit(first, WorkerEventType.completed),
+          PhotoQueuePhase.interrupted,
+        );
+        // A retry may finish on a different worker, but b is still recovering.
+        expect(
+          await emit(second, WorkerEventType.completed, id: 'a', attempt: 1),
+          PhotoQueuePhase.interrupted,
+        );
+        expect(
+          await emit(first, WorkerEventType.retried, id: 'b', attempt: 1),
+          PhotoQueuePhase.interrupted,
+        );
+        expect(
+          await emit(first, terminal, id: 'b', attempt: 0),
+          PhotoQueuePhase.interrupted,
+        );
+        await app.backend.set(
+          'b',
+          terminal == WorkerEventType.failed
+              ? TaskState.failed
+              : terminal == WorkerEventType.revoked
+              ? TaskState.cancelled
+              : TaskState.succeeded,
+          attempt: 2,
+          meta: const {'queue': queueName, 'batchId': 'batch'},
+        );
+        expect(
+          await emit(first, terminal, id: 'b', attempt: 2),
+          PhotoQueuePhase.processing,
+        );
+      } finally {
+        await observer.finish(
+          const WorkerRunOutcome(
+            reason: WorkerRunStopReason.idle,
+            deliveriesProcessed: 0,
+            elapsed: Duration.zero,
+          ),
+        );
+        await first.controller.close();
+        await second.controller.close();
+      }
+    });
+  }
+
   test(
     'notification observation includes and disconnects additional workers',
     () async {
@@ -350,4 +484,18 @@ void main() {
       },
     );
   }
+}
+
+class _EventWorker implements Worker {
+  _EventWorker(this.workerId);
+
+  @override
+  final String workerId;
+  final controller = StreamController<WorkerEvent>.broadcast();
+
+  @override
+  Stream<WorkerEvent> get events => controller.stream;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

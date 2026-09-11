@@ -32,6 +32,36 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
   String? _error;
   String? _notice;
   final Set<String> _pendingRuns = {};
+  final Set<String> _loadingDetails = {};
+
+  Future<void> _loadDetail(String runId) async {
+    if (!_loadingDetails.add(runId)) return;
+    final controller = widget.controller;
+    setState(() {});
+    try {
+      await controller.loadDetail(runId);
+    } catch (error) {
+      if (mounted && controller == widget.controller) {
+        setState(() => _error = 'Could not load checkpoints: $error');
+      }
+    } finally {
+      if (mounted && controller == widget.controller) {
+        setState(() => _loadingDetails.remove(runId));
+      }
+    }
+  }
+
+  Future<void> _browse(Future<void> Function() operation) async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await operation();
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Could not load history: $error');
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
 
   @override
   void initState() {
@@ -56,6 +86,7 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
       unawaited(_subscription?.cancel());
+      _loadingDetails.clear();
       _loaded = false;
       _refreshing = false;
       _listen();
@@ -281,6 +312,108 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
                         child: Text('Loading workflow runs…'),
                       ),
                     const SizedBox(height: 24),
+                    DropdownButtonFormField<WorkbenchWorkflowKind>(
+                      key: ValueKey(widget.controller.historyWorkflow),
+                      isExpanded: true,
+                      initialValue: widget.controller.historyWorkflow,
+                      decoration: const InputDecoration(
+                        labelText: 'History workflow',
+                      ),
+                      items: [
+                        for (final kind in WorkbenchWorkflowKind.values)
+                          DropdownMenuItem(
+                            value: kind,
+                            child: Text(
+                              kind.descriptor.title,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: _refreshing
+                          ? null
+                          : (kind) {
+                              if (kind != null) {
+                                unawaited(
+                                  _browse(
+                                    () => widget.controller.selectHistory(
+                                      workflow: kind,
+                                      status: widget.controller.historyStatus,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                    ),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      key: ValueKey(
+                        'history-${widget.controller.historyStatus}',
+                      ),
+                      initialValue:
+                          widget.controller.historyStatus?.name ?? 'all',
+                      decoration: const InputDecoration(
+                        labelText: 'History status',
+                      ),
+                      items: [
+                        const DropdownMenuItem(
+                          value: 'all',
+                          child: Text(
+                            'All statuses',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        for (final status in WorkflowStatus.values)
+                          DropdownMenuItem(
+                            value: status.name,
+                            child: Text(
+                              status.name,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: _refreshing
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              unawaited(
+                                _browse(
+                                  () => widget.controller.selectHistory(
+                                    workflow: widget.controller.historyWorkflow,
+                                    status: value == 'all'
+                                        ? null
+                                        : WorkflowStatus.values.byName(value),
+                                  ),
+                                ),
+                              );
+                            },
+                    ),
+                    const Text(
+                      'Only this history page is shown, not all active runs. '
+                      'Older queued, running, or suspended runs may be on other pages. '
+                      'Select their status to find them. Checkpoints load on demand.',
+                    ),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'History page ${widget.controller.historyPage + 1}',
+                        ),
+                        TextButton(
+                          onPressed:
+                              _refreshing || widget.controller.historyPage == 0
+                              ? null
+                              : () => _browse(widget.controller.previousPage),
+                          child: const Text('Previous page'),
+                        ),
+                        TextButton(
+                          onPressed:
+                              _refreshing || !widget.controller.hasNextPage
+                              ? null
+                              : () => _browse(widget.controller.nextPage),
+                          child: const Text('Next page'),
+                        ),
+                      ],
+                    ),
                     Text(
                       'Runs (${runs.length})',
                       style: Theme.of(context).textTheme.titleLarge,
@@ -289,8 +422,8 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 16),
                         child: Text(
-                          'No workflow runs yet. Choose a scenario and launch '
-                          'one or more runs to inspect saved checkpoints.',
+                          'No runs on this history page. Change the filters, '
+                          'return to the previous page, or launch a workflow.',
                         ),
                       ),
                   ],
@@ -330,7 +463,7 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
             Text('Cursor: ${run.cursor}'),
             Text(
               checkpoints == null
-                  ? 'Checkpoints unavailable. Refresh to retry.'
+                  ? 'Expand Saved checkpoints to load the current details.'
                   : 'Persisted checkpoints: ${checkpoints.length}',
             ),
             if (run.suspensionData?.isNotEmpty ?? false)
@@ -341,24 +474,41 @@ class _WorkflowWorkbenchPageState extends State<WorkflowWorkbenchPage> {
               Text('Run error: ${_payload(run.lastError)}'),
             if (run.result != null)
               SelectableText('Result: ${_payload(run.result)}'),
-            if (checkpoints != null && checkpoints.isNotEmpty)
-              ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: const Text('Saved checkpoints'),
-                children: [
-                  for (final checkpoint in checkpoints)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SelectableText(
-                          '${checkpoint.position}: ${checkpoint.checkpointName}\n'
-                          '${_payload(checkpoint.value)}',
-                        ),
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('Saved checkpoints'),
+              onExpansionChanged: (expanded) {
+                if (expanded) unawaited(_loadDetail(run.runId));
+              },
+              children: [
+                if (_loadingDetails.contains(run.runId))
+                  const Text('Loading checkpoints…'),
+                TextButton(
+                  onPressed: _loadingDetails.contains(run.runId)
+                      ? null
+                      : () => _loadDetail(run.runId),
+                  child: const Text('Reload checkpoints'),
+                ),
+                if (checkpoints == null)
+                  const Text(
+                    'Details not loaded or changed. Reload checkpoints.',
+                  ),
+                if (checkpoints != null && checkpoints.isEmpty)
+                  const Text('No persisted checkpoints.'),
+                for (final checkpoint
+                    in checkpoints ?? <WorkflowCheckpointView>[])
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SelectableText(
+                        '${checkpoint.position}: ${checkpoint.checkpointName}\n'
+                        '${_payload(checkpoint.value)}',
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
+            ),
             Wrap(
               spacing: 8,
               children: [
