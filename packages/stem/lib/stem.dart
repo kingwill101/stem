@@ -131,4 +131,5 @@ export 'src/signals/signal.dart';
 export 'src/signals/stem_signals.dart';
 export 'src/worker/worker.dart';
 export 'src/worker/worker_config.dart';
+export 'src/worker/worker_run.dart' show WorkerRunOutcome, WorkerRunStopReason;
 export 'src/workflow/workflow.dart';

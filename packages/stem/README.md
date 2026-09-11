@@ -24,6 +24,39 @@ definitions. Manual `TaskDefinition<TArgs, TResult>` is the supported typed
 fallback. Low-level map handlers live under `package:stem/advanced.dart` for
 transport integrations and migrations.
 
+## Interrupted deliveries
+
+Workers recognize a redelivered task whose retained backend status is `running`
+for the **same attempt**, after suppressing duplicates already active in that
+worker. `StemSignals.onTaskInterrupted` (from `stem.dart` or `advanced.dart`)
+receives a typed payload containing the previous status, current envelope,
+recovering worker, and selected recovery policy before recovery.
+
+The default `TaskOptions(recoveryPolicy: TaskRecoveryPolicy.replay)` preserves
+historical behavior: execute the same attempt again. Opt into
+`TaskRecoveryPolicy.retry` to classify a `TaskInterruptedException` through the
+normal retry policy: `maxRetries`, backoff, and `autoRetryFor`/
+`dontAutoRetryFor` all apply. With no retries available, recovery fails the task
+without invoking its handler. The option survives JSON serialization and
+`copyWith`.
+
+Interruption is reported before pause or rate-limit deferrals can replace the
+running status. Retry recovery classifies the interrupted attempt even if its
+queue is paused or rate-limited; it does not execute task code. Any resulting
+next attempt still respects those scheduling controls. Default replay continues
+to respect them too, and the notification describes detection, not successful
+completion of recovery.
+
+This is evidence of potentially interrupted or lease-lost execution, **not**
+proof of process death, out-of-memory termination, or any OS kill reason.
+Notifications occur on redelivery, not while the application is dead; they are
+in-process signals, not a durable notification outbox. They require retained
+running status and a broker that redelivers unacknowledged work. An in-memory
+backend cannot retain this evidence across process death. A previous worker may
+still be executing after lease loss. Neither replay nor retry provides
+exactly-once execution or makes non-idempotent side effects safe; use idempotency
+keys and transactional application-level safeguards.
+
 ## Packages
 
 | Package | Description | pub.dev |
@@ -34,8 +67,8 @@ transport integrations and migrations.
 | [`stem_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_redis`](https://github.com/kingwill101/stem/tree/master/packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
 | [`stem_postgres`](https://github.com/kingwill101/stem/tree/master/packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
-| [`stem_flutter`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter) | Adapter-neutral Flutter helpers for mobile worker isolates and queue monitoring | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
-| [`stem_flutter_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter_sqlite) | Flutter SQLite runtime/storage helpers for mobile Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
+| [`stem_flutter`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter) | Flutter bootstrap for standard Stem applications | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
+| [`stem_flutter_sqlite`](https://github.com/kingwill101/stem/tree/master/packages/stem_flutter_sqlite) | Managed SQLite storage and Ormed setup for Flutter Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
 | [`stem_builder`](https://github.com/kingwill101/stem/tree/master/packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
 | [`stem_adapter_tests`](https://github.com/kingwill101/stem/tree/master/packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
 | [`stem_dashboard`](https://github.com/kingwill101/stem/tree/master/packages/dashboard) | Hotwire-based operations dashboard (experimental) | — |

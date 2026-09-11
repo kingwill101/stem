@@ -281,6 +281,49 @@ class TaskPostrunPayload implements StemEvent {
   };
 }
 
+/// Evidence of a potentially interrupted execution, emitted before recovery.
+///
+/// A running status does not prove the previous process died. Lease loss can
+/// leave another worker executing concurrently.
+class TaskInterruptedPayload implements StemEvent {
+  /// Creates an interruption notification.
+  TaskInterruptedPayload({
+    required this.envelope,
+    required this.worker,
+    required this.priorStatus,
+    required this.policy,
+  }) : occurredAt = stemNow().toUtc();
+
+  /// Current redelivered envelope.
+  final Envelope envelope;
+
+  /// Worker performing recovery.
+  final WorkerInfo worker;
+
+  /// Persisted running status observed before recovery.
+  final TaskStatus priorStatus;
+
+  /// Selected action; retry remains subject to normal retry filters and limits.
+  final TaskRecoveryPolicy policy;
+
+  @override
+  final DateTime occurredAt;
+
+  @override
+  String get eventName => 'task-interrupted';
+
+  @override
+  Map<String, Object?> get attributes => {
+    'taskId': envelope.id,
+    'taskName': envelope.name,
+    'queue': envelope.queue,
+    'attempt': envelope.attempt,
+    'workerId': worker.id,
+    'priorState': priorStatus.state.name,
+    'recoveryPolicy': policy.name,
+  };
+}
+
 /// Payload emitted when a task is scheduled for retry.
 class TaskRetryPayload implements StemEvent {
   /// Creates a new [TaskRetryPayload] instance.

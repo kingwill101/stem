@@ -170,8 +170,8 @@ Future<void> main() async {
 | [`stem_sqlite`](./packages/stem_sqlite) | SQLite broker and result backend for local dev/testing | [![pub](https://img.shields.io/pub/v/stem_sqlite.svg)](https://pub.dev/packages/stem_sqlite) |
 | [`stem_redis`](./packages/stem_redis) | Redis Streams broker, result backend, and watchdog helpers | [![pub](https://img.shields.io/pub/v/stem_redis.svg)](https://pub.dev/packages/stem_redis) |
 | [`stem_postgres`](./packages/stem_postgres) | Postgres broker, result backend, and scheduler stores | [![pub](https://img.shields.io/pub/v/stem_postgres.svg)](https://pub.dev/packages/stem_postgres) |
-| [`stem_flutter`](./packages/stem_flutter) | Adapter-neutral Flutter helpers for mobile worker isolates and queue monitoring | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
-| [`stem_flutter_sqlite`](./packages/stem_flutter_sqlite) | Flutter SQLite runtime/storage helpers for mobile Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
+| [`stem_flutter`](./packages/stem_flutter) | Flutter bootstrap for standard Stem applications | [![pub](https://img.shields.io/pub/v/stem_flutter.svg)](https://pub.dev/packages/stem_flutter) |
+| [`stem_flutter_sqlite`](./packages/stem_flutter_sqlite) | Managed SQLite storage and Ormed setup for Flutter Stem apps | [![pub](https://img.shields.io/pub/v/stem_flutter_sqlite.svg)](https://pub.dev/packages/stem_flutter_sqlite) |
 | [`stem_builder`](./packages/stem_builder) | Build-time code generator for annotated tasks and workflows | [![pub](https://img.shields.io/pub/v/stem_builder.svg)](https://pub.dev/packages/stem_builder) |
 | [`stem_adapter_tests`](./packages/stem_adapter_tests) | Shared contract test suites for adapter implementations | [![pub](https://img.shields.io/pub/v/stem_adapter_tests.svg)](https://pub.dev/packages/stem_adapter_tests) |
 | [`stem_dashboard`](./packages/dashboard) | Hotwire-based operations dashboard (experimental) | — |

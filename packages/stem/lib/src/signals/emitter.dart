@@ -94,6 +94,25 @@ class StemSignalEmitter {
     );
   }
 
+  /// Emits evidence of interrupted execution before applying recovery.
+  Future<void> taskInterrupted(
+    Envelope envelope,
+    WorkerInfo worker, {
+    required TaskStatus priorStatus,
+    required TaskRecoveryPolicy policy,
+    String? sender,
+  }) {
+    return StemSignals.taskInterrupted.emit(
+      TaskInterruptedPayload(
+        envelope: envelope,
+        worker: worker,
+        priorStatus: priorStatus,
+        policy: policy,
+      ),
+      sender: _senderOverride(sender),
+    );
+  }
+
   /// Emits the task-retry signal.
   Future<void> taskRetry(
     Envelope envelope,

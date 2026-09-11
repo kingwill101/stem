@@ -223,7 +223,11 @@ class WorkerLifecycleConfig {
   /// Max tasks per isolate before recycling; `null` disables the limit.
   final int? maxTasksPerIsolate;
 
-  /// Memory threshold in bytes before recycling an isolate; `null` disables.
+  /// Post-task process RSS threshold for recycling the task isolate.
+  ///
+  /// `null` disables this check. The sample includes the entire process, not
+  /// just this isolate, and is collected after execution. This is not a hard
+  /// allocation limit and cannot prevent an OS kill during a task.
   final int? maxMemoryPerIsolateBytes;
 
   /// Returns a copy of this config with the provided overrides.

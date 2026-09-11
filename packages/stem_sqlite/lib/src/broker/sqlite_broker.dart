@@ -102,6 +102,7 @@ class SqliteBroker
   static final Map<String, Set<_Consumer>> _broadcastConsumersByChannel = {};
   Timer? _sweeperTimer;
   bool _closed = false;
+  Future<void>? _closeFuture;
 
   @override
   bool get supportsDelayed => true;
@@ -123,15 +124,15 @@ class SqliteBroker
 
   /// Closes the broker and releases any database resources.
   @override
-  Future<void> close() async {
-    if (_closed) return;
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
     _closed = true;
     _sweeperTimer?.cancel();
     _sweeperTimer = null;
-    for (final consumer in _consumers.toList()) {
-      consumer.dispose();
-      _consumers.remove(consumer);
-    }
+    await Future.wait(
+      _consumers.toList().map((consumer) => consumer.dispose()),
+    );
     _cleanupBroadcastRegistry();
     await _connections.close();
   }
@@ -184,12 +185,17 @@ class SqliteBroker
   }
 
   @override
+  /// Consumes queue jobs with at most [prefetch] unexpired outstanding leases
+  /// per subscription (clamped to 1–50). Settlement or lease expiry frees a
+  /// slot; lease extension keeps it occupied. Broadcasts are ephemeral and
+  /// are not subject to queue prefetch.
   Stream<Delivery> consume(
     RoutingSubscription subscription, {
     int prefetch = 1,
     String? consumerGroup,
     String? consumerName,
   }) {
+    if (_closed) throw StateError('SqliteBroker is closed.');
     if (subscription.queues.length > 1) {
       throw UnsupportedError(
         'SqliteBroker currently supports one queue per subscription.',
@@ -218,10 +224,21 @@ class SqliteBroker
     controller
       ..onListen = consumer.start
       ..onCancel = () {
-        consumer.dispose();
-        _consumers.remove(consumer);
+        unawaited(consumer.dispose());
       };
-    return controller.stream;
+    // Broadcast controllers have a void onCancel callback. Bridge cancellation
+    // to the drain future so the last listener can join the database loop.
+    return Stream<Delivery>.multi((listener) {
+      final subscription = controller.stream.listen(
+        listener.addSync,
+        onError: listener.addErrorSync,
+        onDone: listener.closeSync,
+      );
+      listener.onCancel = () async {
+        await subscription.cancel();
+        if (!controller.hasListener) await consumer.dispose();
+      };
+    }, isBroadcast: true);
   }
 
   @override
@@ -489,11 +506,25 @@ class SqliteBroker
     });
   }
 
-  Future<_QueuedJob?> _claimNextJob(String queue, String consumerId) async {
+  Future<_QueuedJob?> _claimNextJob(
+    String queue,
+    String consumerId,
+    int prefetch,
+  ) async {
     final now = stemNow();
     final visibilityUntil = now.add(defaultVisibilityTimeout);
 
     return _connections.runInTransaction((txn) async {
+      // SQLite is the source of truth for outstanding deliveries, including
+      // settlements and lease extensions performed by another broker handle.
+      final outstanding = await txn
+          .query<StemQueueJob>()
+          .whereEquals('namespace', namespace)
+          .whereEquals('lockedBy', consumerId)
+          .where('lockedUntil', now, PredicateOperator.greaterThan)
+          .count();
+      if (outstanding >= prefetch) return null;
+
       final candidate = await txn
           .query<StemQueueJob>()
           .whereEquals('queue', queue)
@@ -735,38 +766,58 @@ class _Consumer {
   final String consumerId;
   final StreamController<Delivery> controller;
   final int prefetch;
+  // Consumer names may be reused; prefetch belongs to a subscription, not a
+  // caller-provided name.
+  final String _lockOwner = const Uuid().v7();
   final Queue<Delivery> _pendingBroadcast = Queue<Delivery>();
   static const int _maxPendingBroadcast = 1000;
 
   bool _running = false;
-  bool _loopActive = false;
+  Future<void>? _loopFuture;
+  Future<void>? _disposeFuture;
+  Timer? _pollTimer;
+  Completer<void>? _pollWait;
   bool _broadcastRegistered = false;
 
   bool get isActive => _running && !controller.isClosed;
 
   void start() {
-    if (_running) return;
+    if (_running || _disposeFuture != null || broker._closed) return;
     _running = true;
     if (!_broadcastRegistered && broadcastChannels.isNotEmpty) {
       broker._registerBroadcastConsumer(this);
       _broadcastRegistered = true;
     }
-    if (!_loopActive) {
-      _loopActive = true;
-      unawaited(_loop());
-    }
+    _loopFuture = _loop();
   }
 
-  void dispose() {
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
     _running = false;
+    _pollTimer?.cancel();
+    final pollWait = _pollWait;
+    if (pollWait != null && !pollWait.isCompleted) pollWait.complete();
     if (_broadcastRegistered) {
       broker._unregisterBroadcastConsumer(this);
       _broadcastRegistered = false;
     }
     _pendingBroadcast.clear();
-    if (!controller.isClosed) {
-      unawaited(controller.close());
+    try {
+      await _loopFuture;
+      await controller.close();
+    } finally {
+      broker._consumers.remove(this);
     }
+  }
+
+  Future<void> _waitForPoll() async {
+    if (!_running || broker._closed) return;
+    final wait = _pollWait = Completer<void>();
+    _pollTimer = Timer(broker.pollInterval, wait.complete);
+    await wait.future;
+    _pollWait = null;
+    _pollTimer = null;
   }
 
   void enqueueBroadcast(Delivery delivery) {
@@ -792,33 +843,47 @@ class _Consumer {
         var emitted = _drainBroadcast();
         final boundQueue = queue;
         if (boundQueue != null) {
-          final jobs = <_QueuedJob>[];
           for (var i = 0; i < prefetch; i++) {
-            final job = await broker._claimNextJob(boundQueue, consumerId);
+            if (!_running || controller.isClosed || broker._closed) break;
+            final job = await broker._claimNextJob(
+              boundQueue,
+              _lockOwner,
+              prefetch,
+            );
             if (job == null) break;
-            jobs.add(job);
-          }
-          if (jobs.isNotEmpty) {
+            if (!_running || controller.isClosed || broker._closed) {
+              // Only release an un-emitted claim still owned by this
+              // subscription. Delivered leases remain valid after cancellation.
+              await broker._connections.runInTransaction(
+                (txn) => txn
+                    .query<StemQueueJob>()
+                    .whereEquals('id', job.id)
+                    .whereEquals('namespace', broker.namespace)
+                    .whereEquals('lockedBy', _lockOwner)
+                    .update({
+                      'lockedAt': null,
+                      'lockedUntil': null,
+                      'lockedBy': null,
+                    }),
+              );
+              break;
+            }
             emitted = true;
             final leaseExpiresAt = stemNow().add(
               broker.defaultVisibilityTimeout,
             );
-            for (final job in jobs) {
-              if (!_running || controller.isClosed) break;
-              controller.add(job.toDelivery(leaseExpiresAt: leaseExpiresAt));
-            }
+            controller.add(job.toDelivery(leaseExpiresAt: leaseExpiresAt));
           }
         }
         if (!emitted) {
-          await Future<void>.delayed(broker.pollInterval);
+          await _waitForPoll();
           continue;
         }
       } on Object {
         if (!_running || controller.isClosed) break;
-        await Future<void>.delayed(broker.pollInterval);
+        await _waitForPoll();
       }
     }
-    _loopActive = false;
   }
 }
 

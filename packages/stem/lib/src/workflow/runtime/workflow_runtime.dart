@@ -132,6 +132,9 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   );
 
   Timer? _timer;
+  Future<void>? _activePoll;
+  late Future<void> _startFuture;
+  int _pollGeneration = 0;
   bool _started = false;
 
   /// Registry of workflow definitions.
@@ -517,11 +520,43 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     return emitValue(event.topic, value, codec: event.codec);
   }
 
-  /// Starts periodic polling that resumes runs whose wake-up time has elapsed.
-  Future<void> start() async {
-    if (_started) return;
+  /// Resumes currently due runs, then starts periodic polling.
+  ///
+  /// Waits for the initial scan and its enqueue operations so bounded workers
+  /// can see overdue work without waiting for the first polling interval.
+  /// Polls never overlap. If [dispose] is draining a poll, waits for that poll
+  /// before restarting. Poll failures are logged without stopping later ticks.
+  /// This does not guarantee redelivery after a store consumes a due run and
+  /// resuming or enqueueing that run fails.
+  Future<void> start() {
+    if (_started) return _startFuture;
     _started = true;
-    _timer = Timer.periodic(_pollInterval, (_) async {
+    final generation = ++_pollGeneration;
+    return _startFuture = _startPolling(generation);
+  }
+
+  Future<void> _startPolling(int generation) async {
+    // Yield before invoking store callbacks so start ownership is published.
+    // A restart also waits for the previous generation's poll to drain.
+    await _activePoll;
+    if (generation != _pollGeneration) return;
+    await _runPoll();
+    if (generation != _pollGeneration) return;
+    _timer = Timer.periodic(_pollInterval, (_) {
+      if (generation != _pollGeneration || _activePoll != null) return;
+      unawaited(_runPoll());
+    });
+  }
+
+  Future<void> _runPoll() {
+    // Publish the joinable future before calling into user-provided stores.
+    return _activePoll = Future<void>.microtask(_pollDueRuns).whenComplete(() {
+      _activePoll = null;
+    });
+  }
+
+  Future<void> _pollDueRuns() async {
+    try {
       final now = _clock.now();
       final due = await _store.dueRuns(now);
       for (final runId in due) {
@@ -541,14 +576,33 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
           runtimeMetadata: state.runtimeMetadata,
         );
       }
-    });
+    } on Object catch (error, stack) {
+      stemLogger.warning(
+        'Workflow polling failed',
+        stemLogContext(
+          component: 'workflow',
+          subsystem: 'runtime',
+          fields: {
+            'error': error.toString(),
+            'stack': stack.toString(),
+            'runtimeId': _runtimeId,
+          },
+        ),
+      );
+    }
   }
 
-  /// Stops polling timers and prevents further automatic resumes.
+  /// Stops new polling ticks and waits for the active poll to finish.
+  ///
+  /// An active poll completes its resumes, including enqueue operations, before
+  /// this future completes. Does not stop workers or close the store/event bus.
+  /// Polling can be restarted by calling [start] again.
   Future<void> dispose() async {
+    _started = false;
+    _pollGeneration++;
     _timer?.cancel();
     _timer = null;
-    _started = false;
+    await _activePoll;
   }
 
   /// Transitions a running workflow to [WorkflowStatus.cancelled].

@@ -47,4 +47,44 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('file names cannot escape the application directory', () async {
+    final sandbox = await Directory.systemTemp.createTemp(
+      'stem_flutter_storage_layout_test_',
+    );
+    addTearDown(() => sandbox.delete(recursive: true));
+
+    for (final name in [
+      '',
+      '.',
+      '..',
+      '../outside.db',
+      r'..\outside.db',
+      '/outside.db',
+      r'C:\outside.db',
+      'nested/file.db',
+    ]) {
+      await expectLater(
+        StemFlutterStorageLayout.forRoot(sandbox, brokerFileName: name),
+        throwsArgumentError,
+      );
+      await expectLater(
+        StemFlutterStorageLayout.forRoot(sandbox, backendFileName: name),
+        throwsArgumentError,
+      );
+    }
+    expect(sandbox.listSync(), isEmpty);
+  });
+
+  test(
+    'application directory name is validated before calling plugins',
+    () async {
+      await expectLater(
+        StemFlutterStorageLayout.applicationSupport(
+          directoryName: '../outside',
+        ),
+        throwsArgumentError,
+      );
+    },
+  );
 }

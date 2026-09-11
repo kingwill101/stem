@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.1
+
+- Added scheduler-neutral `Worker.runUntilIdle` and `StemApp.runUntilIdle`,
+  with structured outcomes, observed idle detection, admission budgets,
+  cancellation, and final owned-resource cleanup.
+- Bounded shutdown joins complete delivery callbacks, timed-out inline Futures,
+  child-isolate lifecycle hooks, and in-flight lease renewal before closing
+  stores. Budgets and cancellation stop admission; they are not hard deadlines.
+- Prevented recursive worker startup and rejected shutdown self-joins from
+  active worker hooks/tasks instead of deadlocking.
+- Exported bounded-run outcomes through both stable and historical core APIs.
+- Made `StemApp.create` roll back acquired resources when bootstrap fails.
+- Made `StemApp` startup/shutdown concurrency-safe and shutdown idempotent, with
+  all configured disposers attempted. Shutdown is final; starting a closed app
+  is rejected instead of attempting to reuse disposed resources.
+- Exposed `Worker.workerId` so integrations use the same identity as heartbeats
+  and control messages.
+- Workflow runtime startup now scans overdue runs before returning. Polls do
+  not overlap, and runtime disposal joins active polling/enqueue work before
+  workflow stores are closed.
+- Added opt-in interrupted-delivery recovery with `TaskRecoveryPolicy.retry`,
+  `TaskInterruptedException`, and a `taskInterrupted` signal carrying the prior
+  running status. The default remains same-attempt replay; retry recovery uses
+  normal retry filters, backoff, and limits. Detection requires retained status
+  and is evidence of interruption or lease loss, not proof of process death or
+  exactly-once execution.
+- Classified retry recovery before scheduling deferrals can erase interruption
+  evidence, without invoking the handler or recording a second running attempt.
+- Closed pending isolate reply/control ports and subscriptions on timeout,
+  cancellation, and disposal so killed isolates do not leave shutdown waiting
+  for a reply that cannot arrive.
+- Reworked the Flutter example into a durable Photo Lab using core runtimes,
+  Android Workmanager wakeups, batch status notifications, cancellation, queue
+  diagnostics, and restart/recovery validation. Background scheduling and debug
+  UI remain application-owned rather than new integration-package APIs.
+
 ## 0.4.0
 
 - Added portable `ScheduleRunner.runOnce`, with `Beat` retaining the periodic

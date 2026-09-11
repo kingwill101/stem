@@ -70,6 +70,14 @@ class WorkerLeaseCoordinator {
   final Set<Delivery> _renewalsInFlight = {};
   final Map<Delivery, int> _generations = {};
   int _generationSeed = 0;
+  Completer<void>? _drained;
+
+  /// Waits for renewals already in flight. Cancel timers before calling this
+  /// during shutdown; cancelling a timer does not cancel its broker Future.
+  Future<void> drain() async {
+    if (_renewalsInFlight.isEmpty) return;
+    await (_drained ??= Completer<void>()).future;
+  }
 
   /// Schedules renewal based on the delivery's current lease expiry.
   void schedule(Delivery delivery) {
@@ -161,6 +169,10 @@ class WorkerLeaseCoordinator {
       _start(delivery, _retryInterval(interval), leaseDuration);
     } finally {
       _renewalsInFlight.remove(delivery);
+      if (_renewalsInFlight.isEmpty) {
+        _drained?.complete();
+        _drained = null;
+      }
     }
   }
 

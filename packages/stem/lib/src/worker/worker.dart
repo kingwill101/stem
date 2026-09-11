@@ -139,6 +139,8 @@ import 'package:stem/src/worker/worker_consumer_loop.dart';
 import 'package:stem/src/worker/worker_delivery_tracker.dart';
 import 'package:stem/src/worker/worker_execution_supervisor.dart';
 import 'package:stem/src/worker/worker_lease_coordinator.dart';
+import 'package:stem/src/worker/worker_operation_scope.dart';
+import 'package:stem/src/worker/worker_run.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
@@ -502,14 +504,18 @@ class Worker {
     subscriptionQueues = List.unmodifiable(normalizedQueues);
     subscriptionBroadcasts = List.unmodifiable(normalizedBroadcasts);
     _signals = StemSignalEmitter(defaultSender: _workerIdentifier);
-    _consumer = WorkerConsumerLoop(broker: broker);
+    _consumer = WorkerConsumerLoop(
+      broker: broker,
+      onCancelError: (error, stack) => _boundedRun?.fail(error, stack),
+    );
     _execution = WorkerExecutionSupervisor(
       concurrency: _currentConcurrency,
       lifecycle: lifecycleConfig,
       onRecycle: _handleIsolateRecycle,
       onSpawned: (isolateId) {
-        unawaited(
-          _signals.workerChildLifecycle(
+        return WorkerOperationScope.run(
+          this,
+          () => _signals.workerChildLifecycle(
             _workerInfoSnapshot,
             isolateId,
             initializing: true,
@@ -517,8 +523,9 @@ class Worker {
         );
       },
       onDisposed: (isolateId) {
-        unawaited(
-          _signals.workerChildLifecycle(
+        return WorkerOperationScope.run(
+          this,
+          () => _signals.workerChildLifecycle(
             _workerInfoSnapshot,
             isolateId,
             initializing: false,
@@ -526,7 +533,10 @@ class Worker {
         );
       },
     );
-    _acknowledgements = WorkerAcknowledgementCoordinator(broker);
+    _acknowledgements = WorkerAcknowledgementCoordinator(
+      broker,
+      onFailure: (error, stack) => _boundedRun?.fail(error, stack),
+    );
     _leases = WorkerLeaseCoordinator(
       broker: broker,
       onLeaseUpdated: _noteLeaseRenewal,
@@ -579,6 +589,9 @@ class Worker {
 
   /// Optional consumer name used by the broker.
   final String? consumerName;
+
+  /// Identifier used in worker heartbeats, signals, and control queues.
+  String get workerId => _workerIdentifier;
 
   /// Coordinator used to enforce task uniqueness.
   final UniqueTaskCoordinator? uniqueTaskCoordinator;
@@ -676,6 +689,9 @@ class Worker {
   StreamSubscription<ProcessSignal>? _sigquitSub;
 
   bool _running = false;
+  Future<void>? _startFuture;
+  WorkerRunState? _boundedRun;
+  Future<void>? _boundedStopSubscriptions;
   final WorkerDeliveryTracker _deliveryTracker = WorkerDeliveryTracker();
   Map<int, WorkerActiveDelivery> get _activeDeliveries =>
       _deliveryTracker.active;
@@ -714,13 +730,104 @@ class Worker {
 
   /// Starts the worker, beginning task consumption and processing.
   ///
-  /// Initializes heartbeat loops and subscribes to the queue. Throws if already
-  /// running.
-  Future<void> start() async {
-    if (_running) return;
+  /// Initializes heartbeat loops and subscribes to the queue. Concurrent calls
+  /// from external owners share startup. A redundant start from this worker's
+  /// active callbacks is a no-op, not a readiness wait. A shut down worker
+  /// cannot be restarted.
+  Future<void> start() {
+    if (_shutdownCompleter != null) {
+      return Future.error(StateError('Cannot start a shut down Worker.'));
+    }
+    if (WorkerOperationScope.isActiveFor(this)) return Future<void>.value();
+    if (_boundedRun != null) {
+      return Future.error(StateError('Worker is owned by runUntilIdle.'));
+    }
+    // Publish startup ownership before any synchronous lifecycle hook can
+    // reenter start/run/shutdown.
+    return _startFuture ??= Future<void>.microtask(_start);
+  }
+
+  /// Processes eligible deliveries using the normal worker execution lifecycle,
+  /// then permanently shuts down this worker (not its caller-owned stores).
+  ///
+  /// Requires a fresh worker. Admission stops after [budget] minus
+  /// [shutdownReserve], when [cancellation] completes, or after [idleTimeout]
+  /// without an active delivery lifecycle. Choose an idle interval longer than
+  /// the transport's polling interval and expected latency. Idle does not prove
+  /// a queue is globally empty; delayed work requires another invocation.
+  ///
+  /// Cancellation stops admission, not the handler. Already-admitted work
+  /// settles using normal acknowledgement/retry semantics. Shutdown waits for
+  /// acknowledgements, postrun hooks, and underlying inline Futures even when a
+  /// task timeout has already fired. Neither the budget nor reserve is a hard
+  /// deadline: a hung handler or store can prevent completion indefinitely.
+  ///
+  /// Bounded runs use prefetch one per selected queue and do not start the
+  /// long-lived control plane, autoscaler, process signal watchers, or worker
+  /// heartbeat publisher. Task leases and task heartbeat behavior are retained.
+  /// Deliveries racing with stop are rejected with requeue, never acknowledged
+  /// as completed. Transport claims already in flight recover via broker
+  /// leases. Broadcast subscriptions are not supported by bounded runs.
+  ///
+  /// Infrastructure failures are returned as a failed outcome. Invalid
+  /// arguments and reuse throw before taking ownership. A concurrent [shutdown]
+  /// requests cancellation and joins the same safe drain, even in hard mode.
+  Future<WorkerRunOutcome> runUntilIdle({
+    required Duration budget,
+    Duration shutdownReserve = const Duration(seconds: 5),
+    Duration idleTimeout = const Duration(seconds: 1),
+    Future<void>? cancellation,
+  }) {
+    WorkerRunState.validate(budget, shutdownReserve, idleTimeout);
+    if (_startFuture != null ||
+        _shutdownCompleter != null ||
+        _boundedRun != null) {
+      throw StateError('runUntilIdle requires a fresh Worker.');
+    }
+    if (_broadcastSubscriptions.isNotEmpty) {
+      throw ArgumentError('runUntilIdle requires task queues, not broadcasts.');
+    }
+    final run = _boundedRun = WorkerRunState(
+      budget: budget,
+      shutdownReserve: shutdownReserve,
+      idleTimeout: idleTimeout,
+      cancellation: cancellation,
+    );
+    return _runUntilIdle(run);
+  }
+
+  Future<WorkerRunOutcome> _runUntilIdle(WorkerRunState run) async {
+    // Stop consumption even if an asynchronous worker-ready hook is still
+    // running. Subscription installation rechecks admission after its awaits.
+    _boundedStopSubscriptions = run.stopped.then((_) async {
+      try {
+        await _cancelAllSubscriptions();
+      } on Object catch (error, stack) {
+        run.fail(error, stack);
+      }
+    });
+    try {
+      // Observe an already-completed cancellation before opening subscriptions.
+      await Future<void>.delayed(Duration.zero);
+      if (run.accepting) {
+        await (_startFuture = _start());
+        run.ready();
+      }
+      await run.stopped;
+    } on Object catch (error, stack) {
+      run.fail(error, stack);
+    }
+    try {
+      await shutdown(mode: WorkerShutdownMode.warm);
+    } on Object catch (error, stack) {
+      run.fail(error, stack);
+    }
+    return run.finish();
+  }
+
+  Future<void> _start() async {
     _running = true;
     _shutdownMode = null;
-    _shutdownCompleter = null;
     _idleSince = null;
     _lastScaleUp = null;
     _lastScaleDown = null;
@@ -729,20 +836,30 @@ class Worker {
     _startedCount = 0;
     _completedCount = 0;
     _failedCount = 0;
-    await _signals.workerInit(_workerInfoSnapshot);
-    await _initializeRevocations();
-    _startWorkerHeartbeatLoop();
+    // Scope awaited startup work, not the subscription registrations below.
+    // External events must not inherit an active startup ownership marker.
+    await WorkerOperationScope.run(
+      this,
+      () => _signals.workerInit(_workerInfoSnapshot),
+    );
+    await WorkerOperationScope.run(this, _initializeRevocations);
+    if (_boundedRun == null) _startWorkerHeartbeatLoop();
     _recordInflightGauge();
     _recordConcurrencyGauge();
-    unawaited(_publishWorkerHeartbeat());
+    if (_boundedRun == null) unawaited(_publishWorkerHeartbeat());
     if (_effectiveQueues.isEmpty) {
       throw StateError('Worker subscription resolved no queues.');
     }
     await _refreshQueueSubscriptions();
-    _startControlPlane();
-    _startAutoscaler();
-    _installSignalHandlers();
-    await _signals.workerReady(_workerInfoSnapshot);
+    if (_boundedRun == null) {
+      _startControlPlane();
+      _startAutoscaler();
+      _installSignalHandlers();
+    }
+    await WorkerOperationScope.run(
+      this,
+      () => _signals.workerReady(_workerInfoSnapshot),
+    );
   }
 
   /// Stops the worker according to [mode], cancelling subscriptions and
@@ -752,23 +869,62 @@ class Worker {
   /// requests cooperative termination and escalates to hard shutdown if
   /// tasks ignore the grace period. Hard shutdown immediately requeues
   /// in-flight deliveries.
+  ///
+  /// Calling this from the worker's own active task or lifecycle hook returns
+  /// a failed Future: joining that operation would deadlock. Signal the bounded
+  /// run's caller-owned cancellation Future, or ask an external owner to shut
+  /// down after the hook/task returns.
   Future<void> shutdown({
     WorkerShutdownMode mode = WorkerShutdownMode.hard,
-  }) async {
+  }) {
+    if (WorkerOperationScope.isActiveFor(this)) {
+      return Future.error(
+        StateError(
+          'Cannot await Worker.shutdown from its own active operation. '
+          'Request cancellation or shut down from the external runtime owner.',
+        ),
+      );
+    }
+    final effectiveMode = _boundedRun == null ? mode : WorkerShutdownMode.warm;
+    if (_boundedRun != null) {
+      _boundedRun!.stop(WorkerRunStopReason.cancelled);
+    }
     if (_shutdownCompleter != null) {
-      if (mode == WorkerShutdownMode.hard &&
+      if (effectiveMode == WorkerShutdownMode.hard &&
           (_shutdownMode ?? WorkerShutdownMode.warm) !=
               WorkerShutdownMode.hard) {
         _shutdownMode = WorkerShutdownMode.hard;
-        await _forceStopActiveTasks();
+        return _forceStopActiveTasks().then(
+          (_) => _shutdownCompleter!.future,
+        );
       }
       return _shutdownCompleter!.future;
     }
 
-    _shutdownMode = mode;
+    _shutdownMode = effectiveMode;
     final completer = Completer<void>();
     _shutdownCompleter = completer;
+    unawaited(
+      WorkerOperationScope.run(this, () => _shutdown(effectiveMode)).then(
+        completer.complete,
+        onError: completer.completeError,
+      ),
+    );
+    return completer.future;
+  }
+
+  Future<void> _shutdown(WorkerShutdownMode mode) async {
+    try {
+      await _startFuture;
+    } on Object {
+      // Startup failure belongs to the start/run caller. Still release state.
+    }
     _running = false;
+
+    if (_boundedRun != null) {
+      await _shutdownBounded();
+      return;
+    }
 
     await _signals.workerStopping(_workerInfoSnapshot, reason: mode.name);
 
@@ -812,9 +968,42 @@ class Worker {
     }
 
     await _signals.workerShutdown(_workerInfoSnapshot, reason: mode.name);
+  }
 
-    completer.complete();
-    return completer.future;
+  Future<void> _shutdownBounded() async {
+    final run = _boundedRun!;
+    Future<void> attempt(Future<void> Function() operation) async {
+      try {
+        await operation();
+      } on Object catch (error, stack) {
+        run.fail(error, stack);
+      }
+    }
+
+    await attempt(
+      () => _signals.workerStopping(_workerInfoSnapshot, reason: 'bounded'),
+    );
+    await _boundedStopSubscriptions;
+    await attempt(_cancelAllSubscriptions);
+    // Active handler tracking excludes validation and some postrun work.
+    // Only the complete callback Future establishes delivery quiescence.
+    await _consumer.drain();
+    await _execution.drainInline();
+    await attempt(_disposePool);
+    await attempt(_execution.drainLifecycle);
+    _cancelTimers();
+    await _leases.drain();
+    await attempt(heartbeatTransport.close);
+    _revocations.clear();
+    _queuePauses.clear();
+    _latestRevocationVersion = 0;
+    _deliveryTracker.clear();
+    _idleSince = null;
+    _recordConcurrencyGauge();
+    if (!_events.isClosed) await attempt(_events.close);
+    await attempt(
+      () => _signals.workerShutdown(_workerInfoSnapshot, reason: 'bounded'),
+    );
   }
 
   /// Handles a single broker delivery end-to-end.
@@ -922,14 +1111,35 @@ class Worker {
             return;
           }
 
-          if (_isQueuePaused(envelope.queue)) {
+          final interrupted =
+              priorStatus?.state == TaskState.running &&
+              priorStatus?.attempt == envelope.attempt;
+          final retryInterrupted =
+              interrupted &&
+              handler.options.recoveryPolicy == TaskRecoveryPolicy.retry;
+          if (interrupted) {
+            await _signals.taskInterrupted(
+              envelope,
+              _workerInfoSnapshot,
+              priorStatus: priorStatus!,
+              policy: handler.options.recoveryPolicy,
+            );
+          }
+
+          // Recovery classification must precede scheduling deferrals: those
+          // write `retried` and would erase the retained interruption evidence.
+          // Retry recovery never invokes user code, so pause/rate limits do not
+          // apply until its next attempt. Replay still respects those controls.
+          if (!retryInterrupted && _isQueuePaused(envelope.queue)) {
             await _handlePausedQueueDelivery(delivery, envelope, resultEncoder);
             return;
           }
 
           Map<String, Object?> decodedArgs;
           try {
-            decodedArgs = _decodeArgs(envelope, argsEncoder);
+            decodedArgs = retryInterrupted
+                ? const <String, Object?>{}
+                : _decodeArgs(envelope, argsEncoder);
           } on Object catch (error, stack) {
             await _handlePayloadDecodeFailure(
               delivery,
@@ -944,7 +1154,9 @@ class Worker {
           }
 
           final groupRateSpec = handler.options.groupRateLimit;
-          if (rateLimiter != null && groupRateSpec != null) {
+          if (!retryInterrupted &&
+              rateLimiter != null &&
+              groupRateSpec != null) {
             final groupKey = _groupRateLimitKey(handler.options, envelope);
             try {
               final decision = await rateLimiter!.acquire(
@@ -1026,7 +1238,7 @@ class Worker {
           }
 
           final rateSpec = handler.options.rateLimit;
-          if (rateLimiter != null && rateSpec != null) {
+          if (!retryInterrupted && rateLimiter != null && rateSpec != null) {
             final decision = await rateLimiter!.acquire(
               _rateLimitKey(handler.options, envelope),
               tokens: rateSpec.tokens,
@@ -1139,6 +1351,12 @@ class Worker {
 
           try {
             checkTermination();
+            if (retryInterrupted) {
+              throw TaskInterruptedException(
+                taskId: envelope.id,
+                attempt: envelope.attempt,
+              );
+            }
             heartbeatTimer = _startHeartbeat(delivery);
             softTimer = _scheduleSoftLimit(envelope, handler.options);
 
@@ -1550,6 +1768,7 @@ class Worker {
     Object error,
     StackTrace stackTrace,
   ) {
+    _boundedRun?.fail(error, stackTrace);
     StemMetrics.instance.increment(
       'stem.lease.renewal_failed',
       tags: {'task': delivery.envelope.name, 'queue': delivery.envelope.queue},
@@ -2640,6 +2859,7 @@ class Worker {
 
   /// Refreshes queue subscriptions after pause/resume changes.
   Future<void> _refreshQueueSubscriptions() async {
+    if (_boundedRun != null && !_boundedRun!.accepting) return;
     final activeQueues = _effectiveQueues
         .where((queueName) => !_isQueuePaused(queueName))
         .toList(growable: false);
@@ -2658,10 +2878,24 @@ class Worker {
     await _consumer.replaceQueueSubscriptions(
       queues: activeQueues,
       broadcastChannels: _broadcastSubscriptions,
-      prefetch: prefetch,
+      canSubscribe: () => _boundedRun?.accepting ?? true,
+      prefetch: _boundedRun == null ? prefetch : 1,
       consumerName: consumerName,
-      onDelivery: _handle,
+      onDelivery: (delivery) => WorkerOperationScope.run(this, () async {
+        final run = _boundedRun;
+        if (run == null) return _handle(delivery);
+        if (!run.admit()) {
+          await broker.nack(delivery);
+          return;
+        }
+        try {
+          await _handle(delivery);
+        } finally {
+          run.finished();
+        }
+      }),
       onDeliveryError: (delivery, error, stack) {
+        _boundedRun?.fail(error, stack);
         _emitEvent(
           WorkerEvent(
             type: WorkerEventType.error,
@@ -2672,6 +2906,7 @@ class Worker {
         );
       },
       onStreamError: (error, stack) {
+        _boundedRun?.fail(error, stack);
         _emitEvent(
           WorkerEvent(
             type: WorkerEventType.error,
