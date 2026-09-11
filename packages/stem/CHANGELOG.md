@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+- Recover the unpublished 0.4.1 release using a fresh tag and an isolated
+  Firehose installation step. Includes the bounded-worker, workflow lifecycle,
+  and interrupted-delivery recovery changes listed below.
+
 ## 0.4.1
 
 - Added scheduler-neutral `Worker.runUntilIdle` and `StemApp.runUntilIdle`,
