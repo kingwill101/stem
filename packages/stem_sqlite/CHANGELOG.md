@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3
+
+- Recover the unpublished 0.2.2 release using the corrected publishing workflow.
+  Includes the prefetch and consumer-draining fixes listed below; no additional
+  storage schema changes.
+
 ## 0.2.2
 
 - Enforced queue prefetch as a per-subscription cap on unexpired outstanding

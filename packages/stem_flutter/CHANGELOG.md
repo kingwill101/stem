@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Recover the unpublished 0.3.0 release using the corrected publishing workflow.
+  Includes the breaking integration changes listed below.
+- Require Stem `>=0.4.2 <0.5.0`, the fresh recovery release.
+
 ## 0.3.0
 
 - Documented core `StemApp.runUntilIdle` for app-owned background callbacks,

@@ -7,8 +7,8 @@ worker, and result observer sharing managed SQLite stores. There is no required
 custom worker isolate, port protocol, second task registry, or manual database
 handle lifecycle.
 
-Version 0.3.0 requires Stem `>=0.4.1 <0.5.0`,
-`stem_flutter >=0.3.0 <0.4.0`, and `stem_sqlite >=0.2.2 <0.3.0` for bounded
+Version 0.3.1 requires Stem `>=0.4.2 <0.5.0`,
+`stem_flutter >=0.3.1 <0.4.0`, and `stem_sqlite >=0.2.3 <0.3.0` for bounded
 execution and safe consumer teardown. It replaces the legacy runtime helpers.
 
 ## Getting started

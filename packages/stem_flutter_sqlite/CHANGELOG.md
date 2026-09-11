@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Recover the unpublished 0.3.0 release using the corrected publishing workflow.
+  Includes the breaking integration changes listed below.
+- Require Stem `>=0.4.2 <0.5.0`, `stem_flutter >=0.3.1 <0.4.0`, and
+  `stem_sqlite >=0.2.3 <0.3.0` from the recovery release.
+
 ## 0.3.0
 
 - Added real SQLite coverage for core bounded callbacks: persisted batch
