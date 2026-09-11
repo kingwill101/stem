@@ -57,6 +57,11 @@ jobs:
         with:
           sdk: stable
       - name: Install firehose
+        env:
+          # setup-dart registers the publishing credential in the normal pub
+          # config. Resolve Firehose's public dependencies without that credential;
+          # the following publish step still uses the original authenticated config.
+          XDG_CONFIG_HOME: ${{ runner.temp }}/firehose-pub-config
         run: dart pub global activate --source git https://github.com/dart-lang/ecosystem --git-path pkgs/firehose/
       - name: Publish package
         run: dart pub global run firehose --publish --use-flutter --tag-prefix v
