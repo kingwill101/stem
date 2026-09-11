@@ -705,6 +705,7 @@ class Worker {
   int? _lastQueueDepth;
   final Map<String, RevokeEntry> _revocations = {};
   final Map<String, RevokeEntry> _queuePauses = {};
+  final Map<Delivery, dotel.Context> _deliveryTraceContexts = Map.identity();
   int _latestRevocationVersion = 0;
   DateTime? _startedAt;
   int _startedCount = 0;
@@ -1028,13 +1029,17 @@ class Worker {
     await tracer.trace(
       'stem.consume',
       () async {
+        final consumeContext = tracer.ambientContextOrNull();
+        if (consumeContext != null) {
+          _deliveryTraceContexts[delivery] = consumeContext;
+        }
         // Start lease protection as soon as the delivery enters the worker.
         // Consume middleware, signature verification, status lookups, and
         // rate-limit calls all happen before handler execution and can be
         // slower than a short broker visibility timeout.
-        _scheduleLeaseRenewal(delivery);
         var deliveryTracked = false;
         try {
+          _scheduleLeaseRenewal(delivery);
           final handler = registry.resolve(envelope.name);
           if (handler == null) {
             await _deadLetterOrDiscard(delivery, reason: 'unregistered-task');
@@ -1288,6 +1293,16 @@ class Worker {
             'stem.tasks.started',
             tags: {'task': envelope.name, 'queue': envelope.queue},
           );
+          final queueWait = stemNow().toUtc().difference(envelope.enqueuedAt);
+          if (!queueWait.isNegative) {
+            StemMetrics.instance.recordDuration(
+              // The envelope timestamp predates scheduled/retry deliveries,
+              // so this is task age rather than broker-only queue wait.
+              'stem.task.age',
+              queueWait,
+              tags: {'task': envelope.name, 'queue': envelope.queue},
+            );
+          }
           _startedCount += 1;
 
           String? startedAtIso;
@@ -1543,6 +1558,7 @@ class Worker {
           // normal terminal handling. The inner lifecycle finally also
           // cancels this timer after acknowledgement and task postrun hooks.
           _cancelLeaseTimer(delivery);
+          _deliveryTraceContexts.remove(delivery);
         }
       },
       context: parentContext,
@@ -1776,6 +1792,19 @@ class Worker {
     Object error,
     StackTrace stackTrace,
   ) {
+    final consumeContext = _deliveryTraceContexts[delivery];
+    if (consumeContext != null) {
+      StemTracer.instance.addEvent(
+        'stem.lease.renewal_failed',
+        context: consumeContext,
+        attributes: {
+          'stem.task': delivery.envelope.name,
+          'stem.queue': delivery.envelope.queue,
+          'stem.task.attempt': delivery.envelope.attempt,
+          'stem.error.type': error.runtimeType.toString(),
+        },
+      );
+    }
     _boundedRun?.fail(error, stackTrace);
     StemMetrics.instance.increment(
       'stem.lease.renewal_failed',
@@ -2657,6 +2686,15 @@ class Worker {
     final notBefore = retryEnvelope.notBefore!;
     await broker.nack(delivery, requeue: false);
     await _publishWithOptionalSigning(retryEnvelope);
+    StemTracer.instance.addEvent(
+      'stem.task.retry_scheduled',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+        'stem.retry.delay_ms': delay.inMilliseconds,
+      },
+    );
 
     final retriedMeta = _statusMeta(
       envelope,
@@ -2737,6 +2775,15 @@ class Worker {
     final retryEnvelope = envelope.copyWith(notBefore: stemNow().add(backoff));
     await broker.nack(delivery, requeue: false);
     await _publishWithOptionalSigning(retryEnvelope);
+    StemTracer.instance.addEvent(
+      'stem.task.retry_scheduled',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+        'stem.retry.delay_ms': backoff.inMilliseconds,
+      },
+    );
     final data = <String, Object?>{
       ...extra,
       if (!extra.containsKey('retryAfterMs'))
@@ -4181,6 +4228,14 @@ class Worker {
       );
     }
     await broker.ack(delivery);
+    StemTracer.instance.addEvent(
+      revokeEntry == null ? 'stem.task.cancelled' : 'stem.task.revoked',
+      attributes: {
+        'stem.task': envelope.name,
+        'stem.queue': envelope.queue,
+        'stem.task.attempt': envelope.attempt,
+      },
+    );
     if (groupId != null) {
       await backend.addGroupResult(groupId, status);
     }

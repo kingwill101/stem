@@ -69,6 +69,7 @@ void main() {
         .map((event) => event.name)
         .toList();
     expect(histograms, contains('stem.task.duration'));
+    expect(histograms, contains('stem.task.age'));
 
     final gauges = exporter.events
         .where((event) => event.type == MetricType.gauge)

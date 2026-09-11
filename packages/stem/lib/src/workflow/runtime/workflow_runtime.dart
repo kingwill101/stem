@@ -36,6 +36,7 @@ import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
 import 'package:stem/src/observability/logging.dart';
+import 'package:stem/src/observability/metrics.dart';
 import 'package:stem/src/signals/emitter.dart';
 import 'package:stem/src/signals/payloads.dart';
 import 'package:stem/src/workflow/core/event_bus.dart';
@@ -135,6 +136,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
   Timer? _timer;
   Future<void>? _activePoll;
+  final Map<String, DateTime> _stepMetricStarts = {};
   late Future<void> _startFuture;
   int _pollGeneration = 0;
   bool _started = false;
@@ -206,6 +208,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         workflow: name,
         status: WorkflowRunStatus.running,
       ),
+    );
+    StemMetrics.instance.increment(
+      'stem.workflows.started',
+      tags: {'workflow': name},
     );
     await _enqueueRun(
       runId,
@@ -605,12 +611,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     _timer?.cancel();
     _timer = null;
     await _activePoll;
+    _stepMetricStarts.clear();
   }
 
   /// Transitions a running workflow to [WorkflowStatus.cancelled].
   Future<void> cancelWorkflow(String runId) async {
     final state = await _store.get(runId);
     await _store.cancel(runId);
+    _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
     if (state != null) {
       await _signals.workflowRunCancelled(
         WorkflowRunPayload(
@@ -716,6 +724,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         StateError('Unknown workflow ${runState.workflow}'),
         StackTrace.current,
         terminal: true,
+      );
+      StemMetrics.instance.increment(
+        'stem.workflows.failed',
+        tags: {'workflow': runState.workflow},
       );
       await _signals.workflowRunFailed(
         WorkflowRunPayload(
@@ -910,6 +922,11 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         }
         final control = context.takeControl();
         if (control != null && control.type != FlowControlType.continueRun) {
+          // Suspension is not a step failure or completion. Drop the
+          // in-memory timer; a resumed execution gets a fresh start event.
+          _stepMetricStarts.remove(
+            '${runState.id}:${step.name}:$iteration',
+          );
           final metadata = <String, Object?>{
             'step': step.name,
             'iteration': iteration,
@@ -1053,6 +1070,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
       final storedWorkflowResult = definition.encodeResult(previousResult);
       await _store.markCompleted(runId, storedWorkflowResult);
+      StemMetrics.instance.increment(
+        'stem.workflows.succeeded',
+        tags: {'workflow': runState.workflow},
+      );
+      StemMetrics.instance.recordDuration(
+        'stem.workflow.duration',
+        _clock.now().difference(runState.createdAt),
+        tags: {'workflow': runState.workflow},
+      );
       stemLogger.debug(
         'Workflow {workflow} completed',
         _runtimeLogContext(
@@ -1135,6 +1161,15 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
       final storedWorkflowResult = definition.encodeResult(result);
       await _store.markCompleted(runId, storedWorkflowResult);
+      StemMetrics.instance.increment(
+        'stem.workflows.succeeded',
+        tags: {'workflow': runState.workflow},
+      );
+      StemMetrics.instance.recordDuration(
+        'stem.workflow.duration',
+        _clock.now().difference(runState.createdAt),
+        tags: {'workflow': runState.workflow},
+      );
       stemLogger.debug(
         'Workflow {workflow} completed',
         _runtimeLogContext(
@@ -1180,6 +1215,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         ),
       );
       rethrow;
+    } finally {
+      // Suspension exits the script before a completed/failed step can
+      // consume its start timestamp. Do not retain timers across executions.
+      _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
     }
   }
 
@@ -1193,6 +1232,43 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     String? error,
     Map<String, Object?>? metadata,
   }) async {
+    final tags = {'workflow': runState.workflow, 'step': stepName};
+    final metricKey = '${runState.id}:$stepName:${iteration ?? 0}';
+    switch (type) {
+      case WorkflowStepEventType.started:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.started',
+          tags: tags,
+        );
+        _stepMetricStarts[metricKey] = _clock.now();
+      case WorkflowStepEventType.completed:
+        final replayed = metadata?['replayed'] == true;
+        StemMetrics.instance.increment(
+          replayed
+              ? 'stem.workflow.steps.replayed'
+              : 'stem.workflow.steps.succeeded',
+          tags: tags,
+        );
+        final started = _stepMetricStarts.remove(metricKey);
+        if (!replayed && started != null) {
+          StemMetrics.instance.recordDuration(
+            'stem.workflow.step.duration',
+            _clock.now().difference(started),
+            tags: tags,
+          );
+        }
+      case WorkflowStepEventType.failed:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.failed',
+          tags: tags,
+        );
+        _stepMetricStarts.remove(metricKey);
+      case WorkflowStepEventType.retrying:
+        StemMetrics.instance.increment(
+          'stem.workflow.steps.retried',
+          tags: tags,
+        );
+    }
     try {
       await _introspection.recordStepEvent(
         WorkflowStepEvent(
@@ -1628,6 +1704,10 @@ class _WorkflowRunTaskHandler
       error?.message ?? 'Workflow runner failed',
       StackTrace.fromString(error?.stack ?? ''),
       terminal: true,
+    );
+    StemMetrics.instance.increment(
+      'stem.workflows.failed',
+      tags: {'workflow': state.workflow},
     );
     await runtime._signals.workflowRunFailed(
       WorkflowRunPayload(

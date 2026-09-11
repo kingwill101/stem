@@ -86,6 +86,10 @@ abstract class MetricsExporter {
 }
 
 /// Central registry that aggregates metrics before exporting them.
+///
+/// Built-in lifecycle counters are process-local observations. They are not a
+/// durable exactly-once aggregate and may be repeated after recovery or lost
+/// when a process exits before export.
 class StemMetrics {
   StemMetrics._();
 
@@ -378,6 +382,30 @@ class DartasticMetricsExporter extends MetricsExporter {
   Future<void> shutdown() => _runtime.flush();
 }
 
+/// Metrics exporter that uses an already configured Dartastic SDK provider.
+///
+/// This adapter never initializes, configures, flushes, or shuts down the
+/// process-wide SDK. Configure the SDK (including its OTLP HTTP/protobuf
+/// exporter) before constructing this exporter.
+class DartasticSdkMetricsExporter extends MetricsExporter {
+  /// Creates an adapter to the existing Dartastic meter provider.
+  DartasticSdkMetricsExporter({String meterName = 'stem'})
+    : _runtime = _DartasticSdkMetricsRuntime(meterName: meterName);
+
+  final _DartasticSdkMetricsRuntime _runtime;
+
+  @override
+  void record(MetricEvent event) => _runtime.record(event);
+
+  @override
+  Future<void> flush() => _runtime.flush();
+
+  // The caller owns the SDK provider; there is deliberately nothing to shut
+  // down here.
+  @override
+  Future<void> shutdown() async {}
+}
+
 /// Exporter that accumulates metrics into Prometheus exposition format.
 class PrometheusMetricsExporter extends MetricsExporter {
   /// Cached samples keyed by metric identity and tag string.
@@ -475,6 +503,89 @@ class _PrometheusSample {
             '${name}_max{$tagString} ${count == 0 ? 0 : max}\n'
             '${name}_avg{$tagString} $avg';
     }
+  }
+}
+
+class _DartasticSdkMetricsRuntime {
+  _DartasticSdkMetricsRuntime({required this.meterName})
+    : _provider = _requireProvider() {
+    try {
+      _meter = _provider.getMeter(name: meterName);
+    } on Object catch (_, stack) {
+      Error.throwWithStackTrace(
+        StateError(
+          'Unable to create Dartastic meter "$meterName". '
+          'Initialize the Dartastic SDK before constructing '
+          'DartasticSdkMetricsExporter.',
+        ),
+        stack,
+      );
+    }
+  }
+
+  final String meterName;
+  final dotel.MeterProvider _provider;
+  late final dotel_api.APIMeter _meter;
+  final Map<String, dotel_api.APICounter<double>> _counters = {};
+  final Map<String, dotel_api.APIHistogram<double>> _histograms = {};
+  final Map<String, dotel_api.APIGauge<double>> _gauges = {};
+
+  static dotel.MeterProvider _requireProvider() {
+    try {
+      return dotel.OTel.meterProvider();
+    } on Object catch (_, stack) {
+      Error.throwWithStackTrace(
+        StateError(
+          'DartasticSdkMetricsExporter requires an initialized Dartastic '
+          'SDK meter provider. Initialize the SDK before constructing the '
+          'exporter (the API-only/no-op factory is not supported).',
+        ),
+        stack,
+      );
+    }
+  }
+
+  void record(MetricEvent event) => _record(event);
+
+  void _record(MetricEvent event) {
+    final name = _instrumentNameFor(event.name);
+    final attributes = Map<String, Object>.from(event.tags);
+    switch (event.type) {
+      case MetricType.counter:
+        _counters
+            .putIfAbsent(
+              name,
+              () => _meter.createCounter<double>(
+                name: name,
+                unit: event.unit == 'count' ? null : event.unit,
+              ),
+            )
+            .addWithMap(event.value, attributes);
+      case MetricType.histogram:
+        _histograms
+            .putIfAbsent(
+              name,
+              () => _meter.createHistogram<double>(
+                name: name,
+                unit: _normalizedHistogramUnit(event.unit),
+              ),
+            )
+            .recordWithMap(
+              _normalizedHistogramValue(event.value, event.unit),
+              attributes,
+            );
+      case MetricType.gauge:
+        _gauges
+            .putIfAbsent(
+              name,
+              () => _meter.createGauge<double>(name: name, unit: event.unit),
+            )
+            .recordWithMap(event.value, attributes);
+    }
+  }
+
+  Future<void> flush() async {
+    await _provider.forceFlush();
   }
 }
 
