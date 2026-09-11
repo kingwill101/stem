@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
@@ -19,7 +21,7 @@ class Flow<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
-    PayloadCodec<T>? resultCodec,
+    Codec<T, Object?>? resultCodec,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) : definition = WorkflowDefinition<T>.flow(
@@ -37,7 +39,7 @@ class Flow<T extends Object?> {
   factory Flow.codec({
     required String name,
     required void Function(FlowBuilder builder) build,
-    required PayloadCodec<T> resultCodec,
+    required Codec<T, Object?> resultCodec,
     String? version,
     String? description,
     Map<String, Object?>? metadata,
@@ -202,7 +204,7 @@ class Flow<T extends Object?> {
 
   /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
   WorkflowRef<TParams, T> refCodec<TParams>({
-    required PayloadCodec<TParams> paramsCodec,
+    required Codec<TParams, Object?> paramsCodec,
   }) {
     return definition.refCodec<TParams>(paramsCodec: paramsCodec);
   }

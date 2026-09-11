@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
@@ -79,7 +81,7 @@ class FlowContext implements WorkflowExecutionContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -370,7 +372,7 @@ class FlowContext implements WorkflowExecutionContext {
 Map<String, Object?> _encodeFlowContextValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {

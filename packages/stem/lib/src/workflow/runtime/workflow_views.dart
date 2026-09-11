@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
@@ -59,7 +61,7 @@ class WorkflowRunView {
   final Object? result;
 
   /// Decodes the final result payload with [codec].
-  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? resultAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = result;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -99,7 +101,7 @@ class WorkflowRunView {
   final Map<String, Object?>? lastError;
 
   /// Decodes the last error payload with [codec], when present.
-  TError? lastErrorAs<TError>({required PayloadCodec<TError> codec}) {
+  TError? lastErrorAs<TError>({required Codec<TError, Object?> codec}) {
     final payload = lastError;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -140,7 +142,7 @@ class WorkflowRunView {
   final Map<String, Object?> params;
 
   /// Decodes the workflow params payload with [codec].
-  TParams paramsAs<TParams>({required PayloadCodec<TParams> codec}) {
+  TParams paramsAs<TParams>({required Codec<TParams, Object?> codec}) {
     return codec.decode(params);
   }
 
@@ -174,7 +176,7 @@ class WorkflowRunView {
   final Map<String, Object?> runtime;
 
   /// Decodes the runtime metadata payload with [codec].
-  TRuntime runtimeAs<TRuntime>({required PayloadCodec<TRuntime> codec}) {
+  TRuntime runtimeAs<TRuntime>({required Codec<TRuntime, Object?> codec}) {
     return codec.decode(runtime);
   }
 
@@ -216,7 +218,7 @@ class WorkflowRunView {
 
   /// Decodes the suspension payload with [codec], when present.
   TPayload? suspensionPayloadAs<TPayload>({
-    required PayloadCodec<TPayload> codec,
+    required Codec<TPayload, Object?> codec,
   }) {
     final stored = suspensionPayload;
     if (stored == null) return null;
@@ -333,7 +335,7 @@ class WorkflowCheckpointView {
   final Object? value;
 
   /// Decodes the persisted checkpoint value with [codec].
-  TValue? valueAs<TValue>({required PayloadCodec<TValue> codec}) {
+  TValue? valueAs<TValue>({required Codec<TValue, Object?> codec}) {
     final stored = value;
     if (stored == null) return null;
     return codec.decode(stored);

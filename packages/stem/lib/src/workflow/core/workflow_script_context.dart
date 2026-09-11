@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/core/contracts.dart';
 import 'package:stem/src/core/payload_codec.dart';
@@ -104,7 +105,7 @@ extension WorkflowScriptStepSuspensionJson on WorkflowScriptStepContext {
 /// Typed read helpers for workflow start parameters in script run methods.
 extension WorkflowScriptContextParams on WorkflowScriptContext {
   /// Decodes the full workflow start-parameter payload through [codec].
-  T paramsAs<T>({required PayloadCodec<T> codec}) {
+  T paramsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(params);
   }
 
@@ -136,17 +137,17 @@ extension WorkflowScriptContextParams on WorkflowScriptContext {
   }
 
   /// Returns the decoded workflow parameter for [key], or `null`.
-  T? param<T>(String key, {PayloadCodec<T>? codec}) {
+  T? param<T>(String key, {Codec<T, Object?>? codec}) {
     return params.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded workflow parameter for [key], or [fallback].
-  T paramOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T paramOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return params.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded workflow parameter for [key], throwing when absent.
-  T requiredParam<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredParam<T>(String key, {Codec<T, Object?>? codec}) {
     return params.requiredValue<T>(key, codec: codec);
   }
 

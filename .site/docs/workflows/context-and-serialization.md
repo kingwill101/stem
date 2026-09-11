@@ -140,14 +140,90 @@ your workflow/task code keeps working with the typed object. The restriction
 still applies to the annotated business method signatures that `stem_builder`
 lowers into workflow/task definitions.
 
-The same rule applies to workflow resume events: `emitValue(...)` can take a
-typed DTO plus a `PayloadCodec<T>`, but the codec must still encode to a
-string-keyed map because watcher persistence and event delivery are map-based
-today.
+## Authoring codecs
 
-For normal DTOs that expose `toJson()` and `Type.fromJson(...)`, prefer
-`PayloadCodec<T>.json(...)`. Drop down to `PayloadCodec<T>.map(...)` when you
-need a custom map encoder or a nonstandard decode function.
+Task, workflow, event, and typed payload APIs accept Dart's standard
+`Codec<T, Object?>` from `dart:convert`. Its encoder converts a domain value
+to a persistable payload; its decoder reconstructs the domain value. For
+example, using `OrderRequest` above:
+
+```dart
+import 'dart:convert';
+
+class OrderRequestCodec extends Codec<OrderRequest, Object?> {
+  const OrderRequestCodec();
+
+  @override
+  Converter<OrderRequest, Object?> get encoder => const _OrderRequestEncoder();
+
+  @override
+  Converter<Object?, OrderRequest> get decoder => const _OrderRequestDecoder();
+}
+
+class _OrderRequestEncoder extends Converter<OrderRequest, Object?> {
+  const _OrderRequestEncoder();
+
+  @override
+  Object? convert(OrderRequest value) => value.toJson();
+}
+
+class _OrderRequestDecoder extends Converter<Object?, OrderRequest> {
+  const _OrderRequestDecoder();
+
+  @override
+  OrderRequest convert(Object? value) =>
+      OrderRequest.fromJson(Map<String, dynamic>.from(value as Map));
+}
+
+const orderRequestCodec = OrderRequestCodec();
+```
+
+Pass `orderRequestCodec` to an `argsCodec:`, `paramsCodec:`, or `codec:`
+parameter for an `OrderRequest` payload. Standard codecs do not have to use
+`toJson()` / `fromJson()`; those are the DTO conventions used by Stem's JSON
+conveniences and generated helpers, not requirements of `Codec` itself.
+
+The encoded value must still satisfy its destination's payload shape. Full
+task args and workflow params must encode to string-keyed maps, not JSON text.
+Result and nested-value codecs may encode other serializable shapes where
+the destination permits them.
+
+The same rule applies to workflow resume events: `emitValue(...)` can take a
+typed DTO plus a `Codec<T, Object?>`, but the codec must still encode to a
+string-keyed map because watcher persistence and event delivery are map-based
+today. Queue-event payloads also remain string-keyed maps.
+
+`PayloadCodec<T>` remains a compatible convenience subclass of
+`Codec<T, Object?>`. Its existing constructors, including `.json(...)`,
+`.map(...)`, and the versioned variants below, remain supported; generated
+helpers still produce valid `PayloadCodec` instances. Constructor-based codecs
+and ordinary subclasses do not need to be rewritten.
+
+Custom interface implementations do require source migration:
+
+- Implementations of `TaskEnqueuer.enqueueValue` or
+  `WorkflowEventEmitter.emitValue` must import `dart:convert` and widen their
+  `codec` parameter from `PayloadCodec<T>?` to `Codec<T, Object?>?`. Keeping the
+  narrower parameter is not a valid override. This also applies to mocks and
+  custom workflow context implementations.
+- Classes using `implements PayloadCodec<T>` must now implement the inherited
+  `Codec` members, including `encoder`, `decoder`, `fuse`, and `inverted`.
+  Prefer extending `Codec<T, Object?>` and providing converters for new custom
+  codecs, or extending `PayloadCodec<T>` when retaining its convenience behavior.
+
+For normal DTOs that expose `toJson()` and `Type.fromJson(...)`,
+`PayloadCodec<T>.json(...)` avoids writing converter classes: it uses the
+object's `toJson()` and the supplied `decode: Type.fromJson` callback.
+Use `PayloadCodec<T>.map(...)` when you need a custom map encoder or a
+nonstandard decode function.
+
+These authoring codecs are separate from
+[`TaskPayloadEncoder`](../core-concepts/tasks.md#task-payload-encoders), the
+wire-level transform for task arguments and results. That encoder registry
+still resolves encoder IDs across producers and workers for encryption,
+compression, and other transport transforms.
+
+### Versioned payloads
 
 If the DTO payload shape is expected to evolve, use
 `PayloadCodec<T>.versionedJson(...)`. That persists a reserved
@@ -175,6 +251,8 @@ factories too:
 - `Flow.versionedJsonRegistry(...)` / `Flow.versionedMapRegistry(...)`
 - `WorkflowScript.versionedJsonRegistry(...)` /
   `WorkflowScript.versionedMapRegistry(...)`
+
+### Manual payload readers
 
 For manual flows and scripts, prefer the typed workflow param helpers before
 dropping to raw map casts:

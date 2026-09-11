@@ -235,5 +235,8 @@ app is creating the worker itself.
 - Typed task results can use the same DTO convention.
 - Workflow inputs, checkpoint values, and final workflow results can use the
   same DTO convention. The generated `PayloadCodec` persists the JSON form
-  while workflow code continues to work with typed objects.
+  while workflow code continues to work with typed objects. It remains a
+  compatible subclass of the standard `Codec<T, Object?>` accepted by manual
+  APIs; generated helpers do not need to change. See
+  [authoring codecs](../workflows/context-and-serialization.md#authoring-codecs).
 - Runtime detail surfaces flow `steps` and script `checkpoints` separately.

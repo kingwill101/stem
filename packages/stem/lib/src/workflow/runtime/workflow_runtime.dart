@@ -27,9 +27,11 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:contextual/contextual.dart' show Context;
 import 'package:stem/src/core/contracts.dart';
+import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_invocation.dart';
@@ -245,7 +247,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   Future<String> startWorkflowValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     String? parentRunId,
     Duration? ttl,
     WorkflowCancellationPolicy? cancellationPolicy,
@@ -508,7 +510,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     final encoded = codec != null ? codec.encodeDynamic(value) : value;
     return emit(topic, _coerceEventPayload(topic, encoded));
@@ -1581,7 +1583,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 Map<String, Object?> _encodeWorkflowStartValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -1608,10 +1610,34 @@ Map<String, Object?> _encodeWorkflowStartValue<T>(
 }
 
 /// Task handler that dispatches workflow run execution for a run id.
-class _WorkflowRunTaskHandler implements TaskHandler<void> {
+class _WorkflowRunTaskHandler
+    implements TaskHandler<void>, TaskTerminalFailureHandler {
   _WorkflowRunTaskHandler({required this.runtime});
 
   final WorkflowRuntime runtime;
+
+  @override
+  Future<void> onTerminalFailure(Envelope envelope, TaskStatus status) async {
+    final runId = envelope.args['runId'] as String?;
+    if (runId == null) return;
+    final state = await runtime._store.get(runId);
+    if (state == null || state.isTerminal) return;
+    final error = status.error;
+    await runtime._store.markFailed(
+      runId,
+      error?.message ?? 'Workflow runner failed',
+      StackTrace.fromString(error?.stack ?? ''),
+      terminal: true,
+    );
+    await runtime._signals.workflowRunFailed(
+      WorkflowRunPayload(
+        runId: runId,
+        workflow: state.workflow,
+        status: WorkflowRunStatus.failed,
+        metadata: {'error': error?.message},
+      ),
+    );
+  }
 
   @override
   String get name => workflowRunTaskName;
@@ -2023,7 +2049,7 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -2308,7 +2334,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -2330,7 +2356,7 @@ class _WorkflowStepEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeWorkflowStepValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {

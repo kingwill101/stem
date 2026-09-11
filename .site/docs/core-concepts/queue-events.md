@@ -50,8 +50,9 @@ Multiple listeners on the same queue receive each emitted event.
 - Events are queue-scoped: listeners receive only events for their configured
   queue.
 - `emitValue(...)` is the codec-backed path when the payload should be
-  authored as a typed object but still use a custom map encoder or explicit
-  `PayloadCodec<T>`.
+  authored as a typed object. It accepts any `Codec<T, Object?>`, including
+  `PayloadCodec<T>`; the encoded payload must still be a string-keyed map.
+  See [authoring codecs](../workflows/context-and-serialization.md#authoring-codecs).
 - `emitJson(...)` is the DTO convenience path when the payload already exposes
   `toJson()`.
 - `emitVersionedJson(...)` is the same convenience path when the payload

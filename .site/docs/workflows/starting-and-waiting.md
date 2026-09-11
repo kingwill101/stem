@@ -63,7 +63,9 @@ final runId = await approvalsRef.start(
 `toJson()`, or when the final result also needs a `Type.fromJson(...)`
 decoder. Use `refVersionedJson(...)` when the persisted start payload should
 carry an explicit `__stemPayloadVersion`. Use `refCodec(...)` when you need a
-custom `PayloadCodec<T>`. Workflow params still need to encode to a
+standard `Codec<T, Object?>` or an existing `PayloadCodec<T>`. See
+[authoring codecs](./context-and-serialization.md#authoring-codecs) for the
+contract and a converter example. Workflow params still need to encode to a
 string-keyed map (typically `Map<String, dynamic>`) because they are stored as
 JSON-shaped data.
 If the params need a custom map encoder and still need an explicit stored

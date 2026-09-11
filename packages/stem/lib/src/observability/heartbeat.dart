@@ -72,7 +72,7 @@ class WorkerHeartbeat {
   final Map<String, Object?> extras;
 
   /// Decodes the full extras payload as a typed DTO with [codec].
-  T extrasAs<T>({required PayloadCodec<T> codec}) {
+  T extrasAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(extras);
   }
 
@@ -104,17 +104,17 @@ class WorkerHeartbeat {
   }
 
   /// Returns the decoded extras value for [key], or `null` when absent.
-  T? extraValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? extraValue<T>(String key, {Codec<T, Object?>? codec}) {
     return extras.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded extras value for [key], or [fallback] when absent.
-  T extraValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T extraValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return extras.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded extras value for [key], throwing when absent.
-  T requiredExtraValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredExtraValue<T>(String key, {Codec<T, Object?>? codec}) {
     return extras.requiredValue<T>(key, codec: codec);
   }
 

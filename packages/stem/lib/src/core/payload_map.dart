@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 
 /// Typed read helpers for durable task-argument and workflow-parameter maps.
@@ -6,7 +8,7 @@ extension PayloadMapX on Map<String, Object?> {
   ///
   /// When [codec] is supplied, the stored durable payload is decoded through
   /// that codec before being returned.
-  T? value<T>(String key, {PayloadCodec<T>? codec}) {
+  T? value<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = this[key];
     if (payload == null) return null;
     if (codec != null) {
@@ -16,12 +18,12 @@ extension PayloadMapX on Map<String, Object?> {
   }
 
   /// Returns the decoded value for [key], or [fallback] when it is absent.
-  T valueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T valueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return value<T>(key, codec: codec) ?? fallback;
   }
 
   /// Returns the decoded value for [key], throwing when it is missing.
-  T requiredValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredValue<T>(String key, {Codec<T, Object?>? codec}) {
     if (!containsKey(key) || this[key] == null) {
       throw StateError("Missing required payload key '$key'.");
     }
@@ -139,7 +141,7 @@ extension PayloadMapX on Map<String, Object?> {
   ///
   /// When [codec] is supplied, each stored durable payload is decoded through
   /// that codec before being returned.
-  List<T>? valueList<T>(String key, {PayloadCodec<T>? codec}) {
+  List<T>? valueList<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = this[key];
     if (payload == null) return null;
     final values = payload as List;
@@ -154,13 +156,13 @@ extension PayloadMapX on Map<String, Object?> {
   List<T> valueListOr<T>(
     String key,
     List<T> fallback, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     return valueList<T>(key, codec: codec) ?? fallback;
   }
 
   /// Returns the decoded list value for [key], throwing when it is missing.
-  List<T> requiredValueList<T>(String key, {PayloadCodec<T>? codec}) {
+  List<T> requiredValueList<T>(String key, {Codec<T, Object?>? codec}) {
     if (!containsKey(key) || this[key] == null) {
       throw StateError("Missing required payload key '$key'.");
     }

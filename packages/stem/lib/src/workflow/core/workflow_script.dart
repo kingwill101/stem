@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
@@ -20,7 +22,7 @@ class WorkflowScript<T extends Object?> {
     String? version,
     String? description,
     Map<String, Object?>? metadata,
-    PayloadCodec<T>? resultCodec,
+    Codec<T, Object?>? resultCodec,
     T Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) : definition = WorkflowDefinition<T>.script(
@@ -40,7 +42,7 @@ class WorkflowScript<T extends Object?> {
   factory WorkflowScript.codec({
     required String name,
     required WorkflowScriptBody<T> run,
-    required PayloadCodec<T> resultCodec,
+    required Codec<T, Object?> resultCodec,
     Iterable<WorkflowCheckpoint> checkpoints = const [],
     String? version,
     String? description,
@@ -218,7 +220,7 @@ class WorkflowScript<T extends Object?> {
 
   /// Builds a typed [WorkflowRef] backed by a DTO [paramsCodec].
   WorkflowRef<TParams, T> refCodec<TParams>({
-    required PayloadCodec<TParams> paramsCodec,
+    required Codec<TParams, Object?> paramsCodec,
   }) {
     return definition.refCodec<TParams>(paramsCodec: paramsCodec);
   }

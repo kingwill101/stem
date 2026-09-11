@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/control/control_messages.dart';
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/contracts.dart';
@@ -214,7 +216,7 @@ class TaskPostrunPayload implements StemEvent {
   final Object? result;
 
   /// Decodes the task result with [codec].
-  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? resultAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = result;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -398,7 +400,7 @@ class TaskSuccessPayload implements StemEvent {
   final Object? result;
 
   /// Decodes the task result with [codec].
-  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? resultAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = result;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -678,17 +680,17 @@ class WorkflowRunPayload implements StemEvent {
   ///
   /// When [codec] is supplied, the stored durable payload is decoded through
   /// that codec before being returned.
-  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? metadataValue<T>(String key, {Codec<T, Object?>? codec}) {
     return metadata.value<T>(key, codec: codec);
   }
 
   /// Decodes the metadata value for [key] as a typed DTO with [codec].
-  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+  T? metadataAs<T>(String key, {required Codec<T, Object?> codec}) {
     return metadata.value<T>(key, codec: codec);
   }
 
   /// Decodes the full metadata payload as a typed DTO with [codec].
-  T metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+  T metadataPayloadAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(metadata);
   }
 
@@ -754,12 +756,12 @@ class WorkflowRunPayload implements StemEvent {
   }
 
   /// Returns the decoded metadata value for [key], or [fallback] when absent.
-  T metadataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T metadataValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return metadata.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded metadata value for [key], throwing when absent.
-  T requiredMetadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredMetadataValue<T>(String key, {Codec<T, Object?>? codec}) {
     return metadata.requiredValue<T>(key, codec: codec);
   }
 
@@ -952,21 +954,21 @@ class ControlCommandCompletedPayload implements StemEvent {
   final Map<String, Object?>? response;
 
   /// Returns the decoded response value for [key], or `null` when absent.
-  T? responseValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? responseValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = response;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded response value for [key], or [fallback] when absent.
-  T responseValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T responseValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = response;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded response value for [key], throwing when absent.
-  T requiredResponseValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredResponseValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = response;
     if (payload == null) {
       throw StateError(
@@ -977,7 +979,7 @@ class ControlCommandCompletedPayload implements StemEvent {
   }
 
   /// Decodes the full response payload as a typed DTO with [codec].
-  T? responseAs<T>({required PayloadCodec<T> codec}) {
+  T? responseAs<T>({required Codec<T, Object?> codec}) {
     final payload = response;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -1018,21 +1020,21 @@ class ControlCommandCompletedPayload implements StemEvent {
   final Map<String, Object?>? error;
 
   /// Returns the decoded error value for [key], or `null` when absent.
-  T? errorValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? errorValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded error value for [key], or [fallback] when absent.
-  T errorValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T errorValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded error value for [key], throwing when absent.
-  T requiredErrorValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredErrorValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) {
       throw StateError(
@@ -1043,7 +1045,7 @@ class ControlCommandCompletedPayload implements StemEvent {
   }
 
   /// Decodes the full error payload as a typed DTO with [codec].
-  T? errorAs<T>({required PayloadCodec<T> codec}) {
+  T? errorAs<T>({required Codec<T, Object?> codec}) {
     final payload = error;
     if (payload == null) return null;
     return codec.decode(payload);

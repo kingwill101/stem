@@ -37,6 +37,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:isolate';
 
 import 'package:stem/src/core/contracts.dart';
@@ -86,21 +87,21 @@ class ProgressSignal extends TaskInvocationSignal {
   final Map<String, Object?>? data;
 
   /// Returns the decoded progress metadata value for [key], or `null`.
-  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? dataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded progress metadata value for [key], or [fallback].
-  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T dataValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded progress metadata value for [key], throwing if absent.
-  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredDataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) {
       throw StateError('Progress signal does not include metadata.');
@@ -109,14 +110,14 @@ class ProgressSignal extends TaskInvocationSignal {
   }
 
   /// Decodes the progress metadata value for [key] as a typed DTO with [codec].
-  T? dataAs<T>(String key, {required PayloadCodec<T> codec}) {
+  T? dataAs<T>(String key, {required Codec<T, Object?> codec}) {
     final payload = data;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Decodes the full progress payload as a typed DTO with [codec].
-  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+  T? payloadAs<T>({required Codec<T, Object?> codec}) {
     final payload = data;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -259,7 +260,7 @@ class TaskEnqueueRequest {
   final Map<String, Object?> args;
 
   /// Decodes the full task args payload as a typed DTO with [codec].
-  T argsAs<T>({required PayloadCodec<T> codec}) {
+  T argsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(args);
   }
 
@@ -300,7 +301,7 @@ class TaskEnqueueRequest {
   final Map<String, Object?> meta;
 
   /// Decodes the full task metadata payload as a typed DTO with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -368,7 +369,7 @@ class StartWorkflowRequest {
   final Map<String, Object?> params;
 
   /// Decodes the full workflow params payload as a typed DTO with [codec].
-  T paramsAs<T>({required PayloadCodec<T> codec}) {
+  T paramsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(params);
   }
 
@@ -453,7 +454,7 @@ class WaitForWorkflowResponse {
   final Map<String, Object?>? result;
 
   /// Decodes the workflow result payload as a typed DTO with [codec].
-  T? resultAs<T>({required PayloadCodec<T> codec}) {
+  T? resultAs<T>({required Codec<T, Object?> codec}) {
     final payload = result;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -509,7 +510,7 @@ class EmitWorkflowEventRequest {
   final Map<String, Object?> payload;
 
   /// Decodes the full workflow event payload as a typed DTO with [codec].
-  T payloadAs<T>({required PayloadCodec<T> codec}) {
+  T payloadAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(payload);
   }
 
@@ -737,7 +738,7 @@ class TaskInvocationContext implements TaskExecutionContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -860,7 +861,7 @@ class TaskInvocationContext implements TaskExecutionContext {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     final delegate = _workflowEvents;
     if (delegate == null) {
@@ -994,7 +995,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -1016,7 +1017,7 @@ class _RemoteTaskEnqueuer implements TaskEnqueuer {
 Map<String, Object?> _encodeInvocationEnqueuedValue<T>(
   String name,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -1145,7 +1146,7 @@ class _RemoteWorkflowEventEmitter implements WorkflowEventEmitter {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) async {
     final encoded = codec != null ? codec.encodeDynamic(value) : value;
     if (encoded is! Map) {

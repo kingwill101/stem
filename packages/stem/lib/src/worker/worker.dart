@@ -101,6 +101,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -144,6 +145,8 @@ import 'package:stem/src/worker/worker_run.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
+
+const _terminalFailureEnvelopeKey = 'stem.terminalFailureEnvelope';
 
 /// Shutdown modes for workers.
 ///
@@ -1046,17 +1049,6 @@ class Worker {
 
           final groupId = envelope.headers['stem-group-id'];
 
-          if (_isTaskRevoked(envelope.id)) {
-            await _handleRevokedDelivery(
-              delivery,
-              envelope,
-              resultEncoder,
-              groupId: groupId,
-            );
-            await _releaseUniqueLock(envelope);
-            return;
-          }
-
           if (signer != null) {
             try {
               await signer!.verify(envelope);
@@ -1074,13 +1066,29 @@ class Worker {
             }
           }
 
+          final priorStatus = await backend.get(envelope.id);
+          // Finalization belongs to the persisted failure, not to this
+          // redelivery's expiry, revocation, or potentially changed arguments.
+          // Signature validation still precedes all recovery callbacks.
+          await _finalizeTaskFailure(priorStatus);
+
+          if (_isTaskRevoked(envelope.id)) {
+            await _handleRevokedDelivery(
+              delivery,
+              envelope,
+              resultEncoder,
+              groupId: groupId,
+            );
+            await _releaseUniqueLock(envelope);
+            return;
+          }
+
           if (_isExpired(envelope)) {
             await _handleExpiredDelivery(delivery, envelope, resultEncoder);
             await _releaseUniqueLock(envelope);
             return;
           }
 
-          final priorStatus = await backend.get(envelope.id);
           if (priorStatus?.state.isTerminal ?? false) {
             // An acknowledgement can be lost after the result is durable. Do
             // not execute a redelivered terminal task a second time.
@@ -2466,6 +2474,8 @@ class Worker {
           'worker': consumerName,
           'failedAt': stemNow().toIso8601String(),
           'startedAt': startedAtIso,
+          if (handler is TaskTerminalFailureHandler)
+            _terminalFailureEnvelopeKey: envelope.toJson(),
         },
       );
       final failureStatus = TaskStatus(
@@ -2480,6 +2490,7 @@ class Worker {
         meta: failureMeta,
       );
       final terminal = await _writeTerminalStatus(failureStatus);
+      await _finalizeTaskFailure(terminal.status);
       if (!terminal.applied) {
         await _acknowledgements.tryAcknowledge(
           delivery,
@@ -2541,6 +2552,23 @@ class Worker {
     }
   }
 
+  Future<void> _finalizeTaskFailure(TaskStatus? status) async {
+    if (status == null || status.state != TaskState.failed) return;
+    final storedEnvelope = status.meta[_terminalFailureEnvelopeKey];
+    if (storedEnvelope is! Map) return;
+    final envelope = Envelope.fromJson(storedEnvelope.cast<String, Object?>());
+    final handler = registry.resolve(envelope.name);
+    if (envelope.id != status.id ||
+        envelope.attempt != status.attempt ||
+        handler is! TaskTerminalFailureHandler) {
+      throw StateError('Cannot finalize persisted failure for ${status.id}');
+    }
+    await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
+      envelope,
+      status,
+    );
+  }
+
   /// Handles explicit retry requests surfaced from task handlers.
   Future<_TaskCompletion> _handleRetryRequest(
     TaskHandler<Object?> handler,
@@ -2565,6 +2593,8 @@ class Worker {
           'worker': consumerName,
           'failedAt': stemNow().toIso8601String(),
           'retryExhausted': true,
+          if (handler is TaskTerminalFailureHandler)
+            _terminalFailureEnvelopeKey: envelope.toJson(),
         },
       );
       const failureError = TaskError(
@@ -2579,6 +2609,7 @@ class Worker {
         meta: failureMeta,
       );
       final terminal = await _writeTerminalStatus(failureStatus);
+      await _finalizeTaskFailure(terminal.status);
       if (!terminal.applied) {
         await _acknowledgements.tryAcknowledge(
           delivery,
@@ -4090,7 +4121,8 @@ class Worker {
     Map<String, Object?> extra = const {},
   }) {
     final merged = <String, Object?>{
-      ...envelope.meta,
+      for (final entry in envelope.meta.entries)
+        if (entry.key != _terminalFailureEnvelopeKey) entry.key: entry.value,
       'task': envelope.name,
       'stem.task': envelope.name,
       'queue': envelope.queue,
@@ -5097,21 +5129,21 @@ class WorkerEvent implements StemEvent {
   final Map<String, Object?>? data;
 
   /// Returns the decoded data value for [key], or `null` when absent.
-  T? dataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? dataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded data value for [key], or [fallback] when absent.
-  T dataValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T dataValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded data value for [key], throwing when absent.
-  T requiredDataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredDataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = data;
     if (payload == null) {
       throw StateError('WorkerEvent.data does not contain "$key".');
@@ -5120,7 +5152,7 @@ class WorkerEvent implements StemEvent {
   }
 
   /// Decodes the full data payload as a typed DTO with [codec].
-  T? dataAs<T>({required PayloadCodec<T> codec}) {
+  T? dataAs<T>({required Codec<T, Object?> codec}) {
     final payload = data;
     if (payload == null) return null;
     return codec.decode(payload);

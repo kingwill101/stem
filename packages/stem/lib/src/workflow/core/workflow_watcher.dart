@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/clock.dart';
 import 'package:stem/src/core/payload_codec.dart';
 
@@ -44,7 +46,7 @@ class WorkflowWatcher {
   final Map<String, Object?> data;
 
   /// Decodes the full watcher metadata with [codec].
-  TData dataAs<TData>({required PayloadCodec<TData> codec}) {
+  TData dataAs<TData>({required Codec<TData, Object?> codec}) {
     return codec.decode(data);
   }
 
@@ -87,7 +89,7 @@ class WorkflowWatcher {
   Object? get payload => data['payload'];
 
   /// Decodes the captured watcher payload with [codec], when present.
-  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+  TPayload? payloadAs<TPayload>({required Codec<TPayload, Object?> codec}) {
     final stored = payload;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -184,7 +186,7 @@ class WorkflowWatcherResolution {
   final Map<String, Object?> resumeData;
 
   /// Decodes the full resume data payload with [codec].
-  TData resumeDataAs<TData>({required PayloadCodec<TData> codec}) {
+  TData resumeDataAs<TData>({required Codec<TData, Object?> codec}) {
     return codec.decode(resumeData);
   }
 
@@ -227,7 +229,7 @@ class WorkflowWatcherResolution {
   Object? get payload => resumeData['payload'];
 
   /// Decodes the resume payload with [codec], when present.
-  TPayload? payloadAs<TPayload>({required PayloadCodec<TPayload> codec}) {
+  TPayload? payloadAs<TPayload>({required Codec<TPayload, Object?> codec}) {
     final stored = payload;
     if (stored == null) return null;
     return codec.decode(stored);

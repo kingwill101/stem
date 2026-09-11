@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/flow.dart' show Flow;
@@ -67,7 +68,7 @@ class FlowStep {
   static FlowStep typed<T>({
     required String name,
     required FutureOr<dynamic> Function(FlowContext context) handler,
-    required PayloadCodec<T> valueCodec,
+    required Codec<T, Object?> valueCodec,
     bool autoVersion = false,
     String? title,
     WorkflowStepKind kind = WorkflowStepKind.task,
@@ -261,7 +262,7 @@ class FlowStepControl {
   final Map<String, Object?>? data;
 
   /// Decodes the suspension metadata with [codec], when present.
-  TData? dataAs<TData>({required PayloadCodec<TData> codec}) {
+  TData? dataAs<TData>({required Codec<TData, Object?> codec}) {
     final stored = data;
     if (stored == null) return null;
     return codec.decode(stored);

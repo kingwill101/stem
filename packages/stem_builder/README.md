@@ -11,6 +11,12 @@
 
 Build-time code generator for annotated Stem workflows and tasks.
 
+Generated `StemPayloadCodecs` fields remain `PayloadCodec<T>.json` conveniences.
+`PayloadCodec<T>` implements the standard `dart:convert` contract
+`Codec<T, Object?>`, including `encoder` and `decoder` converters. Handwritten
+task/workflow codec arguments also accept any `Codec<T, Object?>`; generated
+JSON DTO adapters and stored schema-version formats remain unchanged.
+
 ## Install
 
 ```bash

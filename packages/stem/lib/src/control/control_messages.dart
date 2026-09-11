@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/envelope.dart';
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/payload_map.dart';
@@ -37,22 +39,22 @@ class ControlCommandMessage {
   final Map<String, Object?> payload;
 
   /// Returns the decoded payload value for [key], or `null` when absent.
-  T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? payloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded payload value for [key], or [fallback] when absent.
-  T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T payloadValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded payload value for [key], throwing when absent.
-  T requiredPayloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredPayloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.requiredValue<T>(key, codec: codec);
   }
 
   /// Decodes the full payload as a typed DTO with [codec].
-  T payloadAs<T>({required PayloadCodec<T> codec}) {
+  T payloadAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(payload);
   }
 
@@ -131,22 +133,22 @@ class ControlReplyMessage {
   final Map<String, Object?> payload;
 
   /// Returns the decoded payload value for [key], or `null` when absent.
-  T? payloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? payloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded payload value for [key], or [fallback] when absent.
-  T payloadValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T payloadValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded payload value for [key], throwing when absent.
-  T requiredPayloadValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredPayloadValue<T>(String key, {Codec<T, Object?>? codec}) {
     return payload.requiredValue<T>(key, codec: codec);
   }
 
   /// Decodes the full payload as a typed DTO with [codec].
-  T payloadAs<T>({required PayloadCodec<T> codec}) {
+  T payloadAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(payload);
   }
 
@@ -181,21 +183,21 @@ class ControlReplyMessage {
   final Map<String, Object?>? error;
 
   /// Returns the decoded error value for [key], or `null` when absent.
-  T? errorValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? errorValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded error value for [key], or [fallback] when absent.
-  T errorValueOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T errorValueOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) return fallback;
     return payload.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded error value for [key], throwing when absent.
-  T requiredErrorValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredErrorValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = error;
     if (payload == null) {
       throw StateError('ControlReplyMessage.error does not contain "$key".');
@@ -204,7 +206,7 @@ class ControlReplyMessage {
   }
 
   /// Decodes the full error payload as a typed DTO with [codec].
-  T? errorAs<T>({required PayloadCodec<T> codec}) {
+  T? errorAs<T>({required Codec<T, Object?> codec}) {
     final payload = error;
     if (payload == null) return null;
     return codec.decode(payload);

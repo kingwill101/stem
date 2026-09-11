@@ -32,6 +32,7 @@ library;
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:meta/meta.dart';
 import 'package:stem/src/core/envelope.dart';
@@ -597,7 +598,7 @@ class TaskStatus {
   ///
   /// When [codec] is supplied, the stored durable payload is decoded through
   /// that codec before being returned.
-  T? payloadValue<T>({PayloadCodec<T>? codec}) {
+  T? payloadValue<T>({Codec<T, Object?>? codec}) {
     final stored = payload;
     if (stored == null) return null;
     if (codec != null) {
@@ -607,7 +608,7 @@ class TaskStatus {
   }
 
   /// Decodes the entire payload as a typed DTO with [codec].
-  T? payloadAs<T>({required PayloadCodec<T> codec}) {
+  T? payloadAs<T>({required Codec<T, Object?> codec}) {
     final stored = payload;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -645,12 +646,12 @@ class TaskStatus {
   }
 
   /// Returns the decoded payload value, or [fallback] when it is absent.
-  T payloadValueOr<T>(T fallback, {PayloadCodec<T>? codec}) {
+  T payloadValueOr<T>(T fallback, {Codec<T, Object?>? codec}) {
     return payloadValue<T>(codec: codec) ?? fallback;
   }
 
   /// Returns the decoded payload value, throwing when it is absent.
-  T requiredPayloadValue<T>({PayloadCodec<T>? codec}) {
+  T requiredPayloadValue<T>({Codec<T, Object?>? codec}) {
     if (payload == null) {
       throw StateError("Task '$id' does not have a payload.");
     }
@@ -664,7 +665,7 @@ class TaskStatus {
   final Map<String, Object?> meta;
 
   /// Decodes the full task metadata payload with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -992,7 +993,7 @@ class TaskError {
   final Map<String, Object?> meta;
 
   /// Decodes the full error metadata payload as a typed DTO with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -1097,7 +1098,7 @@ class DeadLetterEntry {
   final Map<String, Object?> meta;
 
   /// Decodes the full metadata payload as a typed DTO with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -1424,7 +1425,7 @@ class ScheduleEntry {
   final Map<String, Object?> args;
 
   /// Decodes the full args payload as a typed DTO with [codec].
-  T argsAs<T>({required PayloadCodec<T> codec}) {
+  T argsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(args);
   }
 
@@ -1459,7 +1460,7 @@ class ScheduleEntry {
   final Map<String, Object?> kwargs;
 
   /// Decodes the full kwargs payload as a typed DTO with [codec].
-  T kwargsAs<T>({required PayloadCodec<T> codec}) {
+  T kwargsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(kwargs);
   }
 
@@ -1536,7 +1537,7 @@ class ScheduleEntry {
   final Map<String, Object?> meta;
 
   /// Decodes the full metadata payload as a typed DTO with [codec].
-  T metaAs<T>({required PayloadCodec<T> codec}) {
+  T metaAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(meta);
   }
 
@@ -2403,7 +2404,7 @@ abstract class TaskEnqueuer {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers,
     TaskOptions options,
     DateTime? notBefore,
@@ -2421,7 +2422,7 @@ abstract class TaskEnqueuer {
 Map<String, Object?> _encodeEnqueuedValue<T>(
   String taskName,
   T value, {
-  PayloadCodec<T>? codec,
+  Codec<T, Object?>? codec,
 }) {
   final payload = codec == null ? value : codec.encode(value);
   if (payload is Map<String, Object?>) {
@@ -2482,7 +2483,7 @@ abstract interface class TaskInputContext {
 /// Typed read helpers for task invocation args.
 extension TaskInputContextArgs on TaskInputContext {
   /// Decodes the full task-argument payload through [codec].
-  T argsAs<T>({required PayloadCodec<T> codec}) {
+  T argsAs<T>({required Codec<T, Object?> codec}) {
     return codec.decode(args);
   }
 
@@ -2513,17 +2514,17 @@ extension TaskInputContextArgs on TaskInputContext {
   }
 
   /// Returns the decoded task arg for [key], or `null`.
-  T? arg<T>(String key, {PayloadCodec<T>? codec}) {
+  T? arg<T>(String key, {Codec<T, Object?>? codec}) {
     return args.value<T>(key, codec: codec);
   }
 
   /// Returns the decoded task arg for [key], or [fallback].
-  T argOr<T>(String key, T fallback, {PayloadCodec<T>? codec}) {
+  T argOr<T>(String key, T fallback, {Codec<T, Object?>? codec}) {
     return args.valueOr<T>(key, fallback, codec: codec);
   }
 
   /// Returns the decoded task arg for [key], throwing when absent.
-  T requiredArg<T>(String key, {PayloadCodec<T>? codec}) {
+  T requiredArg<T>(String key, {Codec<T, Object?>? codec}) {
     return args.requiredValue<T>(key, codec: codec);
   }
 
@@ -2978,7 +2979,7 @@ class TaskContext implements TaskExecutionContext {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,
@@ -3097,7 +3098,7 @@ class TaskContext implements TaskExecutionContext {
   Future<void> emitValue<T>(
     String topic,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
   }) {
     final delegate = workflowEvents;
     if (delegate == null) {
@@ -3206,6 +3207,27 @@ abstract class TaskHandler<R> {
   /// worker. When `null`, the default execution mode is
   /// [TaskExecutionMode.inline].
   TaskEntrypoint? get isolateEntrypoint => null;
+}
+
+/// Optional durable failure finalization for a [TaskHandler].
+///
+/// The worker awaits this after persisting a terminal failed [TaskStatus] and
+/// before acknowledging or dead-lettering the delivery. It is not called for
+/// retryable attempts or failures that reject a task before execution. The
+/// status contains the persisted error; [Envelope] is the original failed
+/// attempt, not a possibly modified redelivery. It can run again on terminal
+/// redelivery, so implementations must be idempotent. Throwing leaves the
+/// delivery unacknowledged. Authenticated redelivery retries finalization
+/// without executing the handler again, even after expiration or revocation.
+///
+/// Task status persistence and this callback are not one transaction. The
+/// worker retains finalization metadata in the status, so successful callbacks
+/// can also be repeated on subsequent redelivery.
+// This opt-in capability belongs to individual handler instances.
+// ignore: one_member_abstracts
+abstract interface class TaskTerminalFailureHandler {
+  /// Finalizes the persisted failure for [envelope].
+  Future<void> onTerminalFailure(Envelope envelope, TaskStatus status);
 }
 
 /// Resolves the execution mode for a legacy or explicitly-declared handler.
@@ -3425,11 +3447,11 @@ class TaskDefinition<TArgs, TResult> {
   /// Creates a typed task definition backed by payload codecs.
   factory TaskDefinition.codec({
     required String name,
-    required PayloadCodec<TArgs> argsCodec,
+    required Codec<TArgs, Object?> argsCodec,
     TaskMetaBuilder<TArgs>? encodeMeta,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
-    PayloadCodec<TResult>? resultCodec,
+    Codec<TResult, Object?>? resultCodec,
   }) {
     return TaskDefinition<TArgs, TResult>(
       name: name,
@@ -3708,7 +3730,7 @@ class TaskDefinition<TArgs, TResult> {
   /// Creates a typed task definition for handlers with no producer args.
   static NoArgsTaskDefinition<TResult> noArgsCodec<TResult>({
     required String name,
-    required PayloadCodec<TResult> resultCodec,
+    required Codec<TResult, Object?> resultCodec,
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
   }) {
@@ -3792,7 +3814,7 @@ class TaskDefinition<TArgs, TResult> {
     TaskOptions defaultOptions = const TaskOptions(),
     TaskMetadata metadata = const TaskMetadata(),
     TaskResultDecoder<TResult>? decodeResult,
-    PayloadCodec<TResult>? resultCodec,
+    Codec<TResult, Object?>? resultCodec,
     TResult Function(Map<String, dynamic> payload)? decodeResultJson,
     String? resultTypeName,
   }) {
@@ -3840,7 +3862,7 @@ class TaskDefinition<TArgs, TResult> {
 
   static Map<String, Object?> _encodeCodecArgs<T>(
     String taskName,
-    PayloadCodec<T> codec,
+    Codec<T, Object?> codec,
     T args,
   ) {
     return _encodeEnqueuedValue(taskName, args, codec: codec);
@@ -3870,7 +3892,7 @@ class TaskDefinition<TArgs, TResult> {
   static TaskMetadata _metadataWithResultCodec<TResult>(
     String taskName,
     TaskMetadata metadata,
-    PayloadCodec<TResult>? resultCodec,
+    Codec<TResult, Object?>? resultCodec,
   ) {
     if (resultCodec == null) {
       return metadata;
@@ -4365,7 +4387,7 @@ class GroupStatus {
   ///
   /// When [codec] is supplied, each stored durable payload is decoded through
   /// that codec before being returned.
-  Map<String, T?> resultValues<T>({PayloadCodec<T>? codec}) {
+  Map<String, T?> resultValues<T>({Codec<T, Object?>? codec}) {
     return Map.unmodifiable({
       for (final entry in results.entries)
         entry.key: entry.value.payloadValue<T>(codec: codec),
@@ -4373,7 +4395,7 @@ class GroupStatus {
   }
 
   /// Decodes each collected child result as a typed DTO with [codec].
-  Map<String, T?> resultAs<T>({required PayloadCodec<T> codec}) {
+  Map<String, T?> resultAs<T>({required Codec<T, Object?> codec}) {
     return Map.unmodifiable({
       for (final entry in results.entries)
         entry.key: entry.value.payloadAs(codec: codec),

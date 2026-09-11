@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
@@ -18,8 +20,8 @@ class WorkflowRef<TParams, TResult extends Object?> {
   /// Creates a typed workflow reference backed by payload codecs.
   factory WorkflowRef.codec({
     required String name,
-    required PayloadCodec<TParams> paramsCodec,
-    PayloadCodec<TResult>? resultCodec,
+    required Codec<TParams, Object?> paramsCodec,
+    Codec<TResult, Object?>? resultCodec,
     TResult Function(Object? payload)? decodeResult,
   }) {
     return WorkflowRef<TParams, TResult>(
@@ -232,7 +234,7 @@ class WorkflowRef<TParams, TResult extends Object?> {
 
   static Map<String, Object?> _encodeCodecParams<T>(
     String workflowName,
-    PayloadCodec<T> codec,
+    Codec<T, Object?> codec,
     T params,
   ) {
     final payload = codec.encode(params);

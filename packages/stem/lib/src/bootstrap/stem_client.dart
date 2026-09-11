@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/bootstrap/factories.dart';
 import 'package:stem/src/bootstrap/stem_app.dart';
 import 'package:stem/src/bootstrap/stem_module.dart';
@@ -5,7 +7,6 @@ import 'package:stem/src/bootstrap/stem_stack.dart';
 import 'package:stem/src/bootstrap/workflow_app.dart';
 import 'package:stem/src/canvas/canvas.dart';
 import 'package:stem/src/core/contracts.dart';
-import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/stem.dart';
 import 'package:stem/src/core/task_payload_encoder.dart';
 import 'package:stem/src/core/task_result.dart';
@@ -223,7 +224,7 @@ abstract class StemClient implements TaskResultCaller {
   Future<String> enqueueValue<T>(
     String name,
     T value, {
-    PayloadCodec<T>? codec,
+    Codec<T, Object?>? codec,
     Map<String, String> headers = const {},
     TaskOptions options = const TaskOptions(),
     DateTime? notBefore,

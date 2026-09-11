@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:stem/src/core/payload_codec.dart';
 import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/core/stem_event.dart';
@@ -60,7 +62,7 @@ class WorkflowStepEvent implements StemEvent {
   final Object? result;
 
   /// Decodes the step result payload with [codec], when present.
-  TResult? resultAs<TResult>({required PayloadCodec<TResult> codec}) {
+  TResult? resultAs<TResult>({required Codec<TResult, Object?> codec}) {
     final stored = result;
     if (stored == null) return null;
     return codec.decode(stored);
@@ -104,14 +106,14 @@ class WorkflowStepEvent implements StemEvent {
   final Map<String, Object?>? metadata;
 
   /// Returns the decoded metadata value for [key], or `null` when absent.
-  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? metadataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Decodes the metadata value for [key] as a typed DTO with [codec].
-  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+  T? metadataAs<T>(String key, {required Codec<T, Object?> codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
@@ -153,7 +155,7 @@ class WorkflowStepEvent implements StemEvent {
   }
 
   /// Decodes the full metadata payload as a typed DTO with [codec].
-  T? metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+  T? metadataPayloadAs<T>({required Codec<T, Object?> codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return codec.decode(payload);
@@ -235,14 +237,14 @@ class WorkflowRuntimeEvent implements StemEvent {
   final Map<String, Object?>? metadata;
 
   /// Returns the decoded metadata value for [key], or `null` when absent.
-  T? metadataValue<T>(String key, {PayloadCodec<T>? codec}) {
+  T? metadataValue<T>(String key, {Codec<T, Object?>? codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
   }
 
   /// Decodes the metadata value for [key] as a typed DTO with [codec].
-  T? metadataAs<T>(String key, {required PayloadCodec<T> codec}) {
+  T? metadataAs<T>(String key, {required Codec<T, Object?> codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return payload.value<T>(key, codec: codec);
@@ -284,7 +286,7 @@ class WorkflowRuntimeEvent implements StemEvent {
   }
 
   /// Decodes the full metadata payload as a typed DTO with [codec].
-  T? metadataPayloadAs<T>({required PayloadCodec<T> codec}) {
+  T? metadataPayloadAs<T>({required Codec<T, Object?> codec}) {
     final payload = metadata;
     if (payload == null) return null;
     return codec.decode(payload);
