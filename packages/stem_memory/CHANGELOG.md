@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- The re-exported in-memory workflow store supports atomic first-terminal-wins
+  completion/cancellation and preserves terminal outcomes.
 - Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
 
 ## 0.2.1

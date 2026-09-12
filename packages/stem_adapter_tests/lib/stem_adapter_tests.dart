@@ -7,3 +7,4 @@ export 'src/revoke_store_contract_suite.dart';
 export 'src/workflow_execution_fence_contract_suite.dart';
 export 'src/workflow_script_facade_suite.dart';
 export 'src/workflow_store_contract_suite.dart';
+export 'src/workflow_terminal_contract_suite.dart';

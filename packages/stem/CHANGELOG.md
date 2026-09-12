@@ -2,6 +2,9 @@
 
 ## 0.5.0
 
+- Preserve nullable hosted results through the configured codec using a
+  versioned final-result envelope. Add atomic `WorkflowTerminalStore`
+  completion/cancellation transitions and suppress rejected terminal signals.
 - Add typed `WorkflowHost` definitions and handles over the existing runtime,
   with owned/borrowed app lifecycle, persisted-run reattachment, shared snapshot
   observation, registry-backed codecs, durable sleep and typed event waits.

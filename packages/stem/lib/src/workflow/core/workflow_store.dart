@@ -161,6 +161,23 @@ abstract class WorkflowStore {
   Future<List<WorkflowStepEntry>> listSteps(String runId);
 }
 
+/// Optional atomic completion/cancellation capability.
+///
+/// The first terminal transition wins. Implementations must atomically check
+/// that a run is running or suspended before changing its terminal status.
+/// Their ordinary running, suspension, resume, and failure mutations must not
+/// resurrect terminal runs. Explicit administrative rewind is separate.
+///
+/// A `false` result means missing or already terminal; callers must not emit
+/// success/cancellation notifications for a rejected transition.
+abstract interface class WorkflowTerminalStore {
+  /// Completes an active run without replacing a prior terminal outcome.
+  Future<bool> completeIfActive(String runId, Object? result);
+
+  /// Cancels an active run without replacing a prior terminal outcome.
+  Future<bool> cancelIfActive(String runId, {String? reason});
+}
+
 /// Optional capability for stores that can fence workflow execution attempts.
 ///
 /// A store implementing this interface must generate a fresh

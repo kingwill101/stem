@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Add Lua-atomic first-terminal-wins completion/cancellation and prevent ordinary
+  workflow mutations from resurrecting terminal runs.
 - Add Redis workflow execution fencing with a fresh `executionId` per claim,
   conditional lease renewal/release, and managed terminal-failure recording.
   Non-terminal error recording preserves the run status and lease for retry;

@@ -2,6 +2,9 @@
 
 ## 0.3.0
 
+- Guard completion, cancellation, and ordinary workflow state mutations against
+  terminal-state replacement; add atomic terminal transition support and
+  nullable hosted-result reopen coverage.
 - Verify typed workflow host reattachment across database reopen, including
   event suspension and replay without re-executing completed checkpoints.
 - Add the workflow execution-fencing migration and fenced lease/failure

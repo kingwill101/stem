@@ -55,6 +55,14 @@ cancellation of the underlying database operation.
 - `watch()`: streams snapshots from shared, bounded-frequency store polling.
 - `cancel()`: requests durable cancellation through the existing runtime.
 
+Hosted cancellation requires `WorkflowTerminalStore`. Bundled stores implement
+its atomic first-terminal-transition-wins rule: cancellation cannot replace a
+completed/failed run, and late completion cannot replace cancellation. A
+rejected transition emits no completion/cancellation notification. Ordinary
+resume and suspension writes cannot resurrect a terminal run; explicit
+administrative rewind remains a separate operation. This does not forcibly
+stop an executing Dart body or roll back its external side effects.
+
 `execute(definition, input)` is shorthand for submission followed by result
 observation. Use a new handle from `observe` to observe again after a timeout.
 
@@ -82,8 +90,16 @@ input/result types must match and the host's registered codecs/body remain
 authoritative. No reflection or automatic `fromJson` discovery is performed.
 
 Inputs are stored in an `input` envelope; checkpoint values use a `value`
-envelope, including null. Custom binary codecs must still produce a
-representation supported by the selected backend.
+envelope, including null. Final results use a tagged, versioned host envelope,
+so the configured result codec encodes every result, including null values
+represented by a non-null sentinel. `HostedRun.result` unwraps and decodes;
+raw store/status results expose the wire envelope. The low-level `bind` method
+therefore produces a map-result definition, not the domain result type.
+
+This unreleased host format does not decode unwrapped results from earlier
+development drafts. Use fresh test runs or explicitly migrate those draft
+records; the host does not guess a format from arbitrary user payload maps.
+Custom binary codecs must still produce a backend-compatible representation.
 
 ## Durable waits
 

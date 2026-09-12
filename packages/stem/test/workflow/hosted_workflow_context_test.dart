@@ -49,7 +49,12 @@ void main() {
         await app.executeRun(id);
         final completed = (await app.getRun(id))!;
         expect(completed.status, WorkflowStatus.completed);
-        expect(completed.result, eventDeadline ? 'deadline' : 'awake');
+        final host = await WorkflowHost.attach(app: app, workflows: [workflow]);
+        addTearDown(host.close);
+        expect(
+          await (await host.observe(workflow, id)).result,
+          eventDeadline ? 'deadline' : 'awake',
+        );
       },
     );
   }

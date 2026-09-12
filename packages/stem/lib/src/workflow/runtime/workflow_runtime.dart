@@ -620,17 +620,16 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   /// Transitions a running workflow to [WorkflowStatus.cancelled].
   Future<void> cancelWorkflow(String runId) async {
     final state = await _store.get(runId);
-    await _store.cancel(runId);
+    if (state == null || state.isTerminal) return;
+    if (!await _cancelRun(runId)) return;
     _stepMetricStarts.removeWhere((key, _) => key.startsWith('$runId:'));
-    if (state != null) {
-      await _signals.workflowRunCancelled(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: state.workflow,
-          status: WorkflowRunStatus.cancelled,
-        ),
-      );
-    }
+    await _signals.workflowRunCancelled(
+      WorkflowRunPayload(
+        runId: runId,
+        workflow: state.workflow,
+        status: WorkflowRunStatus.cancelled,
+      ),
+    );
   }
 
   /// Exposes the task handler that executes workflow steps.
@@ -1143,7 +1142,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
 
       final storedWorkflowResult = definition.encodeResult(previousResult);
-      await _store.markCompleted(runId, storedWorkflowResult);
+      if (!await _completeRun(runId, storedWorkflowResult)) return;
       StemMetrics.instance.increment(
         'stem.workflows.succeeded',
         tags: {'workflow': runState.workflow},
@@ -1243,7 +1242,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         return;
       }
       final storedWorkflowResult = definition.encodeResult(result);
-      await _store.markCompleted(runId, storedWorkflowResult);
+      if (!await _completeRun(runId, storedWorkflowResult)) return;
       StemMetrics.instance.increment(
         'stem.workflows.succeeded',
         tags: {'workflow': runState.workflow},
@@ -1512,6 +1511,27 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     await _extendLease(context);
   }
 
+  Future<bool> _completeRun(String runId, Object? result) async {
+    final store = _store;
+    if (store is WorkflowTerminalStore) {
+      return (store as WorkflowTerminalStore).completeIfActive(runId, result);
+    }
+    await store.markCompleted(runId, result);
+    return true;
+  }
+
+  Future<bool> _cancelRun(String runId, {String? reason}) async {
+    final store = _store;
+    if (store is WorkflowTerminalStore) {
+      return (store as WorkflowTerminalStore).cancelIfActive(
+        runId,
+        reason: reason,
+      );
+    }
+    await store.cancel(runId, reason: reason);
+    return true;
+  }
+
   Future<TerminalFailureResult> _markFailed(
     String runId,
     Object error,
@@ -1759,7 +1779,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     required String reason,
     required Map<String, Object?> metadata,
   }) async {
-    await _store.cancel(state.id, reason: reason);
+    if (!await _cancelRun(state.id, reason: reason)) return;
     final payloadMetadata = <String, Object?>{
       'policy': reason,
       'cancelledAt': _clock.now().toIso8601String(),

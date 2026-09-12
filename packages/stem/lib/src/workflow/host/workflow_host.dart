@@ -8,6 +8,8 @@ import 'package:stem/src/core/payload_codec_registry.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_store.dart';
+import 'package:stem/src/workflow/host/hosted_result.dart';
 import 'package:stem/src/workflow/host/hosted_workflow.dart';
 import 'package:stem/src/workflow/runtime/workflow_views.dart';
 
@@ -216,6 +218,11 @@ final class WorkflowHost {
       _operation(() => _read(id, workflow));
 
   Future<void> _cancel(String id, String workflow) => _operation(() async {
+    if (_app.store is! WorkflowTerminalStore) {
+      throw UnsupportedError(
+        'Hosted cancellation requires a WorkflowTerminalStore.',
+      );
+    }
     await _read(id, workflow);
     await _app.runtime.cancelWorkflow(id);
   });
@@ -285,7 +292,7 @@ final class WorkflowHost {
       if (view.status != WorkflowStatus.completed) {
         throw HostedWorkflowFailure(id, view.status, view.lastError);
       }
-      return codec.decode(view.result);
+      return codec.decode(decodeHostedResult(view.result, id));
     } finally {
       timer?.cancel();
       await subscription.cancel();

@@ -5,6 +5,7 @@ import 'package:stem/src/core/payload_codec_registry.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
+import 'package:stem/src/workflow/host/hosted_result.dart';
 
 /// Registration boundary for heterogeneous typed hosted workflows.
 abstract interface class HostedDefinition {
@@ -41,17 +42,32 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
   final FutureOr<R> Function(HostedWorkflowContext context, I input) run;
 
   @override
-  WorkflowDefinition<R> bind(PayloadCodecRegistry codecs) {
+  WorkflowDefinition<Map<String, Object?>> bind(PayloadCodecRegistry codecs) {
     final registry = codecs.snapshot();
     final input = inputCodec ?? registry.codecFor<I>();
     final result = resultCodec ?? registry.codecFor<R>();
-    return WorkflowDefinition<R>.script(
+    // WorkflowDefinition.encodeResult intentionally preserves a raw null for
+    // legacy definitions. Return a non-null host envelope so the selected
+    // codec is still called for nullable terminal values.
+    //
+    // This is a new hosted-run format; there are no released hosted runs that
+    // need decoding without this envelope.
+    Future<Map<String, Object?>> hostedBody(
+      WorkflowScriptContext context,
+    ) async {
+      return encodeHostedResult(
+        result.encode(
+          await run(
+            HostedWorkflowContext._(context, registry),
+            input.decode(context.params['input']),
+          ),
+        ),
+      );
+    }
+
+    return WorkflowDefinition<Map<String, Object?>>.script(
       name: name,
-      resultCodec: result,
-      run: (context) async => run(
-        HostedWorkflowContext._(context, registry),
-        input.decode(context.params['input']),
-      ),
+      run: hostedBody,
     );
   }
 }

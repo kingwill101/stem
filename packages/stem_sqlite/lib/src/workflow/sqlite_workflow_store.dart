@@ -8,7 +8,8 @@ import 'package:stem_sqlite/src/models/models.dart';
 import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
-class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
+class SqliteWorkflowStore
+    implements WorkflowStore, WorkflowTerminalStore, FencedWorkflowStore {
   SqliteWorkflowStore._(
     this._connections,
     this._clock, {
@@ -247,10 +248,7 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           updatedAt: now,
         ).toMap();
         updates['wait_topic'] = null;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        await _updateActiveRun(ctx, runId, updates);
       }
     });
   }
@@ -286,10 +284,7 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           suspensionData: jsonEncode(metadata),
           updatedAt: now,
         ).toMap();
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        await _updateActiveRun(ctx, runId, updates);
       }
     });
   }
@@ -312,6 +307,15 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     final payload = jsonEncode(metadata);
 
     await _connections.runInTransaction((ctx) async {
+      final changed = await _updateActiveRun(ctx, runId, {
+        'status': WorkflowStatus.suspended.name,
+        'wait_topic': topic,
+        'resume_at': deadline,
+        'suspension_data': payload,
+        'updated_at': now,
+      });
+      if (changed == 0) return;
+
       final existing = await ctx
           .query<StemWorkflowWatcher>()
           .whereEquals('runId', runId)
@@ -345,26 +349,6 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           ),
         );
       }
-
-      final run = await ctx
-          .query<StemWorkflowRun>()
-          .whereEquals('id', runId)
-          .whereEquals('namespace', namespace)
-          .first();
-
-      if (run != null) {
-        final updates = StemWorkflowRunUpdateDto(
-          status: WorkflowStatus.suspended.name,
-          waitTopic: topic,
-          resumeAt: deadline,
-          suspensionData: payload,
-          updatedAt: now,
-        ).toMap();
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
-      }
     });
   }
 
@@ -373,8 +357,6 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
-      await _deleteWatcher(ctx, runId);
-
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -388,21 +370,30 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
         ).toMap();
         updates['resume_at'] = null;
         updates['wait_topic'] = null;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        final changed = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', runId)
+            .whereEquals('namespace', namespace)
+            .whereIn('status', [
+              WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
+            ])
+            .update(updates);
+        if (changed > 0) await _deleteWatcher(ctx, runId);
       }
     });
   }
 
   @override
   Future<void> markCompleted(String runId, Object? result) async {
+    await completeIfActive(runId, result);
+  }
+
+  @override
+  Future<bool> completeIfActive(String runId, Object? result) async {
     final now = _clock.now().toUtc();
 
-    await _connections.runInTransaction((ctx) async {
-      await _deleteWatcher(ctx, runId);
-
+    return _connections.runInTransaction((ctx) async {
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -419,13 +410,23 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           updates['result'] = null;
         }
         updates['suspension_data'] = null;
+        updates['wait_topic'] = null;
+        updates['resume_at'] = null;
         updates['owner_id'] = null;
         updates['lease_expires_at'] = null;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        final changed = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', runId)
+            .whereEquals('namespace', namespace)
+            .whereIn('status', [
+              WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
+            ])
+            .update(updates);
+        if (changed > 0) await _deleteWatcher(ctx, runId);
+        return changed > 0;
       }
+      return false;
     });
   }
 
@@ -439,10 +440,6 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
-      if (terminal) {
-        await _deleteWatcher(ctx, runId);
-      }
-
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -461,11 +458,20 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
         if (terminal) {
           updates['owner_id'] = null;
           updates['lease_expires_at'] = null;
+          updates['wait_topic'] = null;
+          updates['resume_at'] = null;
+          updates['suspension_data'] = null;
         }
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        final changed = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', runId)
+            .whereEquals('namespace', namespace)
+            .whereIn('status', [
+              WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
+            ])
+            .update(updates);
+        if (terminal && changed > 0) await _deleteWatcher(ctx, runId);
       }
     });
   }
@@ -475,8 +481,6 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
-      await _deleteWatcher(ctx, runId);
-
       final run = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -497,10 +501,16 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
         if (data == null) {
           updates['suspension_data'] = null;
         }
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
+        final changed = await ctx
+            .query<StemWorkflowRun>()
+            .whereEquals('id', runId)
+            .whereEquals('namespace', namespace)
+            .whereIn('status', [
+              WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
+            ])
+            .update(updates);
+        if (changed > 0) await _deleteWatcher(ctx, runId);
       }
     });
   }
@@ -812,6 +822,10 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
             .query<StemWorkflowRun>()
             .whereEquals('id', watcher.runId)
             .whereEquals('namespace', namespace)
+            .whereIn('status', [
+              WorkflowStatus.running.name,
+              WorkflowStatus.suspended.name,
+            ])
             .first();
 
         if (run != null) {
@@ -822,25 +836,27 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
           ).toMap();
           updates['wait_topic'] = null;
           updates['resume_at'] = null;
-          await ctx.repository<StemWorkflowRun>().update(
-            updates,
-            where: StemWorkflowRunPartial(
-              id: watcher.runId,
-              namespace: namespace,
-            ),
-          );
+          final changed = await ctx
+              .query<StemWorkflowRun>()
+              .whereEquals('id', watcher.runId)
+              .whereEquals('namespace', namespace)
+              .whereIn('status', [
+                WorkflowStatus.running.name,
+                WorkflowStatus.suspended.name,
+              ])
+              .update(updates);
+          if (changed > 0) {
+            await ctx.repository<StemWorkflowWatcher>().delete(watcher);
+            resolutions.add(
+              WorkflowWatcherResolution(
+                runId: watcher.runId,
+                stepName: watcher.stepName,
+                topic: topic,
+                resumeData: metadata,
+              ),
+            );
+          }
         }
-
-        await ctx.repository<StemWorkflowWatcher>().delete(watcher);
-
-        resolutions.add(
-          WorkflowWatcherResolution(
-            runId: watcher.runId,
-            stepName: watcher.stepName,
-            topic: topic,
-            resumeData: metadata,
-          ),
-        );
       }
 
       return resolutions;
@@ -880,6 +896,11 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
 
   @override
   Future<void> cancel(String runId, {String? reason}) async {
+    await cancelIfActive(runId, reason: reason);
+  }
+
+  @override
+  Future<bool> cancelIfActive(String runId, {String? reason}) async {
     final now = _clock.now();
     final nowUtc = now.toUtc();
     final cancellation = jsonEncode({
@@ -887,31 +908,32 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       'cancelledAt': now.toIso8601String(),
     });
 
-    await _connections.runInTransaction((ctx) async {
-      await _deleteWatcher(ctx, runId);
-
-      final run = await ctx
+    return _connections.runInTransaction((ctx) async {
+      final changed = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
           .whereEquals('namespace', namespace)
-          .first();
-
-      if (run != null) {
-        final updates = StemWorkflowRunUpdateDto(
-          status: WorkflowStatus.cancelled.name,
-          cancellationData: cancellation,
-          updatedAt: nowUtc,
-        ).toMap();
-        updates['suspension_data'] = null;
-        updates['wait_topic'] = null;
-        updates['resume_at'] = null;
-        updates['owner_id'] = null;
-        updates['lease_expires_at'] = null;
-        await ctx.repository<StemWorkflowRun>().update(
-          updates,
-          where: StemWorkflowRunPartial(id: runId, namespace: namespace),
-        );
-      }
+          .whereIn('status', [
+            WorkflowStatus.running.name,
+            WorkflowStatus.suspended.name,
+          ])
+          .update(
+            (() {
+              final updates = StemWorkflowRunUpdateDto(
+                status: WorkflowStatus.cancelled.name,
+                cancellationData: cancellation,
+                updatedAt: nowUtc,
+              ).toMap();
+              updates['suspension_data'] = null;
+              updates['wait_topic'] = null;
+              updates['resume_at'] = null;
+              updates['owner_id'] = null;
+              updates['lease_expires_at'] = null;
+              return updates;
+            })(),
+          );
+      if (changed > 0) await _deleteWatcher(ctx, runId);
+      return changed > 0;
     });
   }
 
@@ -1083,6 +1105,20 @@ class SqliteWorkflowStore implements WorkflowStore, FencedWorkflowStore {
 
   /// Closes the workflow store and releases database resources.
   Future<void> close() => _connections.close();
+
+  Future<int> _updateActiveRun(
+    QueryContext ctx,
+    String runId,
+    Map<String, Object?> updates,
+  ) => ctx
+      .query<StemWorkflowRun>()
+      .whereEquals('id', runId)
+      .whereEquals('namespace', namespace)
+      .whereIn('status', [
+        WorkflowStatus.running.name,
+        WorkflowStatus.suspended.name,
+      ])
+      .update(updates);
 
   Future<void> _deleteWatcher(QueryContext ctx, String runId) async {
     final watcher = await ctx

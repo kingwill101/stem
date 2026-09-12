@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Add shared terminal transition contracts covering cancellation/completion
+  races, immutable terminal outcomes, and suspension/watcher cleanup.
 - Add shared workflow execution-fencing contract coverage for fresh
   `executionId` claims, stale-claim rejection, conditional renewal/release and
   terminal-failure recording, including the distinction between `terminal:

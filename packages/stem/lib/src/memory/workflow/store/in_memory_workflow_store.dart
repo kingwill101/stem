@@ -13,7 +13,8 @@ import 'package:stem/src/workflow/core/workflow_watcher.dart';
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
 /// Not safe for production as state is lost on process exit.
-class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
+class InMemoryWorkflowStore
+    implements WorkflowStore, FencedWorkflowStore, WorkflowTerminalStore {
   /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
@@ -75,13 +76,22 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Removes watcher bookkeeping for a run across run/topic maps.
   void _removeWatcherForRun(String runId) {
     final record = _watchersByRun.remove(runId);
-    if (record == null) return;
-    final topicMap = _watchersByTopic[record.topic];
-    topicMap?.remove(runId);
-    if (topicMap != null && topicMap.isEmpty) {
-      _watchersByTopic.remove(record.topic);
+    final topics = <String>{
+      if (record != null) record.topic,
+      if (_runs[runId]?.waitTopic case final String topic) topic,
+    };
+    for (final topic in topics) {
+      final topicMap = _watchersByTopic[topic];
+      topicMap?.remove(runId);
+      if (topicMap != null && topicMap.isEmpty) {
+        _watchersByTopic.remove(topic);
+      }
+      final suspended = _suspendedTopics[topic];
+      suspended?.remove(runId);
+      if (suspended != null && suspended.isEmpty) {
+        _suspendedTopics.remove(topic);
+      }
     }
-    _suspendedTopics[record.topic]?.remove(runId);
   }
 
   @override
@@ -159,7 +169,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     Map<String, Object?>? data,
   }) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: state.cursor,
@@ -179,8 +189,24 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     DateTime? deadline,
     Map<String, Object?>? data,
   }) async {
+    _suspendOnTopic(
+      runId,
+      stepName,
+      topic,
+      deadline: deadline,
+      data: data,
+    );
+  }
+
+  bool _suspendOnTopic(
+    String runId,
+    String stepName,
+    String topic, {
+    DateTime? deadline,
+    Map<String, Object?>? data,
+  }) {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     final metadata = _prepareSuspensionData(
       data,
       resumeAt: deadline,
@@ -198,6 +224,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     if (deadline != null) {
       _due.putIfAbsent(deadline, () => <String>{}).add(runId);
     }
+    return true;
   }
 
   @override
@@ -214,13 +241,15 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       deadline: deadline,
       topic: topic,
     );
-    await suspendOnTopic(
+    if (!_suspendOnTopic(
       runId,
       stepName,
       topic,
       deadline: deadline,
       data: metadata,
-    );
+    )) {
+      return;
+    }
     final record = _WatcherRecord(
       runId: runId,
       stepName: stepName,
@@ -238,7 +267,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Marks a run as actively executing at [stepName].
   Future<void> markRunning(String runId, {String? stepName}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
@@ -249,8 +278,13 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   @override
   /// Marks a run as completed and stores the final result.
   Future<void> markCompleted(String runId, Object? result) async {
+    await completeIfActive(runId, result);
+  }
+
+  @override
+  Future<bool> completeIfActive(String runId, Object? result) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.completed,
@@ -262,6 +296,10 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       leaseExpiresAt: null,
       updatedAt: _clock.now(),
     );
+    for (final entry in _due.values) {
+      entry.remove(runId);
+    }
+    return true;
   }
 
   @override
@@ -272,13 +310,21 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     bool terminal = false,
   }) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     if (terminal) {
       _removeWatcherForRun(runId);
+      for (final entry in _due.values) {
+        entry.remove(runId);
+      }
     }
     _runs[runId] = state.copyWith(
       status: terminal ? WorkflowStatus.failed : WorkflowStatus.running,
       lastError: {'error': error.toString(), 'stack': stack.toString()},
+      resumeAt: terminal ? null : state.resumeAt,
+      waitTopic: terminal ? null : state.waitTopic,
+      suspensionData: terminal
+          ? const <String, Object?>{}
+          : state.suspensionData,
       ownerId: terminal ? null : state.ownerId,
       leaseExpiresAt: terminal ? null : state.leaseExpiresAt,
       updatedAt: _clock.now(),
@@ -289,7 +335,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Marks a run as resumed, optionally merging resume data.
   Future<void> markResumed(String runId, {Map<String, Object?>? data}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return;
     _removeWatcherForRun(runId);
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.running,
@@ -528,7 +574,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       if (record == null) continue;
       _watchersByRun.remove(runId);
       final state = _runs[runId];
-      if (state == null) {
+      if (state == null || state.isTerminal) {
         final topicSet = _suspendedTopics[topic];
         topicSet?.remove(runId);
         if (topicSet != null && topicSet.isEmpty) {
@@ -594,8 +640,13 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   @override
   /// Cancels a run and records an optional cancellation [reason].
   Future<void> cancel(String runId, {String? reason}) async {
+    await cancelIfActive(runId, reason: reason);
+  }
+
+  @override
+  Future<bool> cancelIfActive(String runId, {String? reason}) async {
     final state = _runs[runId];
-    if (state == null) return;
+    if (state == null || state.isTerminal) return false;
     _removeWatcherForRun(runId);
     final now = _clock.now();
     final cancellationData = <String, Object?>{
@@ -623,6 +674,7 @@ class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
       }
     });
     emptyTopics.forEach(_suspendedTopics.remove);
+    return true;
   }
 
   @override

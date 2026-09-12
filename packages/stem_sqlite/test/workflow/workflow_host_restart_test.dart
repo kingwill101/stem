@@ -5,6 +5,68 @@ import 'package:stem_sqlite/stem_sqlite.dart';
 import 'package:test/test.dart';
 
 void main() {
+  test('nullable sentinel results survive completed-run reopen', () async {
+    final directory = await Directory.systemTemp.createTemp('host-results-');
+    final file = File('${directory.path}/workflows.sqlite');
+    final hosts = <WorkflowHost>[];
+    addTearDown(() async {
+      for (final host in hosts.reversed) {
+        await host.close();
+      }
+      await directory.delete(recursive: true);
+    });
+    var executed = 0;
+    var encoded = 0;
+    HostedWorkflow<String, String?> definition() =>
+        HostedWorkflow<String, String?>(
+          name: 'sentinel.restart',
+          resultCodec: PayloadCodec<String?>(
+            encode: (value) {
+              encoded++;
+              return {'present': value != null, 'value': value};
+            },
+            decode: (payload) {
+              if (payload is! Map) {
+                throw StateError('Expected a sentinel map, not raw null.');
+              }
+              return payload['present'] == true
+                  ? payload['value']! as String
+                  : null;
+            },
+          ),
+          run: (_, input) {
+            executed++;
+            return input == 'null' ? null : input;
+          },
+        );
+    Future<WorkflowHost> open(HostedWorkflow<String, String?> workflow) async {
+      final host = await WorkflowHost.create(
+        workflows: [workflow],
+        createApp: (definitions) => StemWorkflowApp.fromUrl(
+          'sqlite://${file.path}',
+          adapters: const [StemSqliteAdapter()],
+          workflows: definitions,
+        ),
+      );
+      hosts.add(host);
+      return host;
+    }
+
+    final original = definition();
+    final first = await open(original);
+    final nullRun = await first.submit(original, 'null');
+    final valueRun = await first.submit(original, 'value');
+    expect(await nullRun.result, isNull);
+    expect(await valueRun.result, 'value');
+    await first.close();
+    final fresh = definition();
+    final reopened = await open(fresh);
+    expect(await (await reopened.observe(fresh, nullRun.id)).result, isNull);
+    expect(await (await reopened.observe(fresh, valueRun.id)).result, 'value');
+    expect(executed, 2);
+    expect(encoded, 2);
+  });
+
   test(
     'host reattaches after reopen without repeating completed checkpoints',
     () async {
