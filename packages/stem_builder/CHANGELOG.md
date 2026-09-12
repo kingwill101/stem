@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.2
+
+- Preserve synchronous collection result types by unwrapping only `Future` and
+  `FutureOr`. Normalize task entrypoints without erasing their typed results.
+- Validate flow step inputs against the starter contract and reject duplicate
+  logical task/workflow names during generation.
+- Escape Dart interpolation in generated names, metadata, and part directives.
+- Preserve null when encoding and decoding nullable generated DTO payloads.
+- Add a real consumer fixture that runs build_runner, analyzes generated code,
+  checks stable regeneration, and executes inline/isolate tasks and workflows
+  against the actual Stem runtime.
+- Document standard `dart:convert` codec support in Stem's typed authoring APIs.
+  Generated `PayloadCodec.json` helpers remain unchanged and are compatible with
+  the standard `Codec` interface in Stem versions that support it.
+- Require Stem `>=0.5.0 <0.6.0` for the coordinated core release.
+
 ## 0.3.1
 
 - Widened Stem compatibility to include the 0.4 portable runtime line.

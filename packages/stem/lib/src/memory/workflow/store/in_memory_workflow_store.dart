@@ -13,7 +13,7 @@ import 'package:stem/src/workflow/core/workflow_watcher.dart';
 /// Simple in-memory [WorkflowStore] used for tests and examples.
 ///
 /// Not safe for production as state is lost on process exit.
-class InMemoryWorkflowStore implements WorkflowStore {
+class InMemoryWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
@@ -26,6 +26,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   final _watchersByTopic = <String, LinkedHashMap<String, _WatcherRecord>>{};
   final _watchersByRun = <String, _WatcherRecord>{};
   int _counter = 0;
+  int _executionCounter = 0;
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -295,6 +296,9 @@ class InMemoryWorkflowStore implements WorkflowStore {
       resumeAt: null,
       waitTopic: null,
       suspensionData: _freezeNullable(data) ?? const <String, Object?>{},
+      executionId: null,
+      ownerId: null,
+      leaseExpiresAt: null,
       updatedAt: _clock.now(),
     );
     for (final entry in _due.values) {
@@ -342,6 +346,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     if (state.status != WorkflowStatus.running) return false;
     if (state.waitTopic != null) return false;
     final now = _clock.now();
+    if (state.executionId != null && !_leaseExpired(state, now)) return false;
     final currentOwner = state.ownerId;
     if (currentOwner != null &&
         currentOwner.isNotEmpty &&
@@ -351,10 +356,115 @@ class InMemoryWorkflowStore implements WorkflowStore {
     }
     _runs[runId] = state.copyWith(
       ownerId: ownerId,
+      executionId: null,
       leaseExpiresAt: now.add(leaseDuration),
       updatedAt: now,
     );
     return true;
+  }
+
+  @override
+  Future<WorkflowExecutionClaim?> claimRunExecution(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null || state.status != WorkflowStatus.running) return null;
+    if (state.waitTopic != null) return null;
+    final now = _clock.now();
+    if (!_leaseExpired(state, now)) return null;
+    final executionId = 'exec-${_executionCounter++}';
+    final expiresAt = now.add(leaseDuration);
+    _runs[runId] = state.copyWith(
+      ownerId: ownerId,
+      executionId: executionId,
+      leaseExpiresAt: expiresAt,
+      updatedAt: now,
+    );
+    return WorkflowExecutionClaim(
+      runId: runId,
+      executionId: executionId,
+      ownerId: ownerId,
+      leaseExpiresAt: expiresAt,
+    );
+  }
+
+  @override
+  Future<bool> renewRunExecution(
+    String runId, {
+    required String executionId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final state = _runs[runId];
+    if (state == null ||
+        state.status != WorkflowStatus.running ||
+        state.executionId != executionId) {
+      return false;
+    }
+    final now = _clock.now();
+    if (state.ownerId == null || _leaseExpired(state, now)) return false;
+    _runs[runId] = state.copyWith(
+      leaseExpiresAt: now.add(leaseDuration),
+      updatedAt: now,
+    );
+    return true;
+  }
+
+  @override
+  Future<void> releaseRunExecution(
+    String runId, {
+    required String executionId,
+  }) async {
+    final state = _runs[runId];
+    if (state == null || state.executionId != executionId) return;
+    _runs[runId] = state.copyWith(
+      ownerId: null,
+      leaseExpiresAt: null,
+      updatedAt: _clock.now(),
+    );
+  }
+
+  @override
+  Future<TerminalFailureResult> markFailedForExecution(
+    String runId, {
+    required String executionId,
+    required Object error,
+    required StackTrace stack,
+    bool terminal = true,
+  }) async {
+    final state = _runs[runId];
+    if (state == null || state.executionId != executionId) {
+      return TerminalFailureResult.superseded;
+    }
+    if (state.status == WorkflowStatus.failed) {
+      return TerminalFailureResult.alreadyFailedForExecution;
+    }
+    if (state.status == WorkflowStatus.completed ||
+        state.status == WorkflowStatus.cancelled) {
+      return TerminalFailureResult.superseded;
+    }
+    if (!terminal) {
+      _runs[runId] = state.copyWith(
+        lastError: {'error': error.toString(), 'stack': stack.toString()},
+        updatedAt: _clock.now(),
+      );
+      return TerminalFailureResult.applied;
+    }
+    _removeWatcherForRun(runId);
+    for (final due in _due.values) {
+      due.remove(runId);
+    }
+    _runs[runId] = state.copyWith(
+      status: WorkflowStatus.failed,
+      lastError: {'error': error.toString(), 'stack': stack.toString()},
+      ownerId: null,
+      leaseExpiresAt: null,
+      resumeAt: null,
+      waitTopic: null,
+      updatedAt: _clock.now(),
+    );
+    return TerminalFailureResult.applied;
   }
 
   @override
@@ -366,6 +476,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
     final state = _runs[runId];
     if (state == null) return false;
     if (state.status != WorkflowStatus.running) return false;
+    if (state.executionId != null) return false;
     if (state.ownerId != ownerId) return false;
     final now = _clock.now();
     _runs[runId] = state.copyWith(
@@ -380,6 +491,7 @@ class InMemoryWorkflowStore implements WorkflowStore {
   Future<void> releaseRun(String runId, {required String ownerId}) async {
     final state = _runs[runId];
     if (state == null) return;
+    if (state.executionId != null) return;
     if (state.ownerId != ownerId) return;
     _runs[runId] = state.copyWith(
       ownerId: null,
@@ -551,6 +663,9 @@ class InMemoryWorkflowStore implements WorkflowStore {
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: targetIndex,
+      executionId: null,
+      ownerId: null,
+      leaseExpiresAt: null,
       suspensionData: _freeze(<String, Object?>{
         'step': stepName,
         'iteration': 0,

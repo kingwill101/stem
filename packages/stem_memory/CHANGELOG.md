@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+
 ## 0.2.1
 
 - Widened Stem compatibility to include the 0.4 portable runtime line.

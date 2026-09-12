@@ -254,6 +254,7 @@ class StemQueueJobs {
       Model.findOrFail<$StemQueueJob>(id, connection: connection);
 
   static Future<List<$StemQueueJob>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemQueueJob>(connection: connection);
 
   static Future<int> count({String? connection}) =>

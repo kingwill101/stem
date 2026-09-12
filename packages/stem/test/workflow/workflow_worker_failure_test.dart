@@ -238,13 +238,13 @@ class _ConflictingStore extends InMemoryWorkflowStore {
   int claims = 0;
 
   @override
-  Future<bool> claimRun(
+  Future<WorkflowExecutionClaim?> claimRunExecution(
     String runId, {
     required String ownerId,
     Duration leaseDuration = const Duration(seconds: 30),
   }) async {
-    if (++claims == 1) return false;
-    return super.claimRun(
+    if (++claims == 1) return null;
+    return super.claimRunExecution(
       runId,
       ownerId: ownerId,
       leaseDuration: leaseDuration,
@@ -288,6 +288,16 @@ class _FinalizingTask implements TaskHandler<void>, TaskTerminalFailureHandler {
 
 class _RecordingBroker extends InMemoryBroker {
   int settled = 0;
+
+  @override
+  Future<void> deadLetter(
+    Delivery delivery, {
+    String? reason,
+    Map<String, Object?>? meta,
+  }) async {
+    settled++;
+    await super.deadLetter(delivery, reason: reason, meta: meta);
+  }
 
   @override
   Future<void> ack(Delivery delivery) async {

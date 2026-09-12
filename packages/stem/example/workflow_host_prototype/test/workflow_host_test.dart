@@ -143,6 +143,26 @@ void main() {
     timeout: const Timeout(Duration(minutes: 3)),
   );
 
+  test(
+    'short observation deadline rejects a terminal result observed late',
+    () async {
+      final workflow = HostedWorkflow<int, int>(
+        name: 'delayed-terminal',
+        run: (_, value) async {
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+          return value;
+        },
+      );
+      final host = await WorkflowHost.inMemory(
+        workflows: [workflow],
+        resultTimeout: const Duration(milliseconds: 10),
+      );
+      final run = await host.submit(workflow, 7);
+      await expectLater(run.result, throwsA(isA<TimeoutException>()));
+      await host.close();
+    },
+  );
+
   test('close stops observations and is idempotent', () async {
     final entered = Completer<void>();
     final release = Completer<void>();

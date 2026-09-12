@@ -237,14 +237,35 @@ final class WorkflowHost {
   Future<R> _result<I, R>(HostedWorkflow<I, R> workflow, String id) async {
     final elapsed = Stopwatch()..start();
     while (!isClosed) {
+      final timeout = resultTimeout;
+      final remaining = timeout == null ? null : timeout - elapsed.elapsed;
+      if (remaining != null && remaining <= Duration.zero) {
+        throw TimeoutException(
+          'Workflow $id observation timed out; the run was not cancelled.',
+          timeout,
+        );
+      }
       // Short, existing runtime observation windows let close stop observing
       // without leaving an uncancellable waitForCompletion polling forever.
       final result = await _app.waitForCompletion<Object?>(
         id,
-        timeout: const Duration(milliseconds: 100),
+        timeout: remaining == null
+            ? const Duration(milliseconds: 100)
+            : remaining < const Duration(milliseconds: 100)
+                ? remaining
+                : const Duration(milliseconds: 100),
       );
       // Close wins over any outcome returned by an in-flight observation.
       if (isClosed) break;
+      // An observation can return a successful terminal state after its
+      // bounded wait crossed our deadline. The deadline wins over that stale
+      // success, while the workflow itself remains uncancelled.
+      if (timeout != null && elapsed.elapsed >= timeout) {
+        throw TimeoutException(
+          'Workflow $id observation timed out; the run was not cancelled.',
+          timeout,
+        );
+      }
       if (result == null) {
         throw StateError('Workflow $id disappeared from the store.');
       }
@@ -256,7 +277,6 @@ final class WorkflowHost {
       if (result.state.isTerminal) {
         throw HostedWorkflowFailure(id, result.status, result.state.lastError);
       }
-      final timeout = resultTimeout;
       if (timeout != null && elapsed.elapsed >= timeout) {
         throw TimeoutException(
           'Workflow $id observation timed out; status=${result.status.name}, '

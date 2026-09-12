@@ -1,7 +1,19 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
+- Add optional `FencedWorkflowStore` execution fencing for workflow leases and
+  managed terminal-failure finalization. Each successful claim receives a fresh
+  `executionId`; lease renew/release and failure recording require that captured
+  identity, so stale workflow deliveries cannot mutate a newer execution.
+  `terminal: false` records error metadata while leaving status and lease
+  available to retry policy; terminal failure uses `terminal: true`.
+- Workflow runner recovery carries the trusted execution token captured with the
+  delivery. Stores that do not implement `FencedWorkflowStore` cannot provide
+  safe managed terminal failure; the runtime logs that limitation rather than
+  falling back to an unsafe owner-only mutation. Fencing is not exactly-once
+  execution, does not fence every workflow write, and does not make external
+  side effects transactional.
 - Accept standard `dart:convert` `Codec<T, Object?>` implementations across typed
   task, workflow, event, checkpoint, and payload-reading APIs. `PayloadCodec<T>`
   now extends `Codec` while retaining its existing constructors, versioned

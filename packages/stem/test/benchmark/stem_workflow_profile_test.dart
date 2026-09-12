@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
 
 import '../../../../benchmark/stem_workflow_profile.dart';
@@ -102,4 +104,39 @@ void main() {
     expect(measured['completedRuns'], 1);
     expect(measured['executedCheckpoints'], 1);
   });
+
+  test(
+    'submission deadline joins a gated start before cleanup',
+    () async {
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      var starts = 0;
+      final subscription = StemSignals.workflowRunStarted.connect((_, _) async {
+        starts++;
+        if (!entered.isCompleted) {
+          entered.complete();
+          await release.future;
+        }
+      });
+      addTearDown(subscription.cancel);
+
+      final profiling = runWorkflowProfile(
+        WorkflowProfileConfig.fromArgs([
+          '--runs=2',
+          '--warmup=0',
+          '--steps=1',
+          '--timeout-seconds=1',
+        ]),
+      );
+      await entered.future;
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      // The phase deadline is an observation/admission deadline. Cleanup is
+      // deliberately still waiting for the original start future.
+      expect(starts, 1);
+      release.complete();
+      await expectLater(profiling, throwsA(isA<TimeoutException>()));
+      expect(starts, 1);
+    },
+    timeout: const Timeout(Duration(seconds: 10)),
+  );
 }

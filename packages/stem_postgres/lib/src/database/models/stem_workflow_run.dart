@@ -20,6 +20,7 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
     this.lastError,
     this.suspensionData,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -68,6 +69,10 @@ class StemWorkflowRun extends Model<StemWorkflowRun> {
   /// Identifier of the worker/runtime holding the lease, if any.
   @OrmField(columnName: 'owner_id')
   final String? ownerId;
+
+  /// Unique identity of the currently executing attempt, if any.
+  @OrmField(columnName: 'execution_id')
+  final String? executionId;
 
   /// Timestamp when the current lease expires.
   @OrmField(columnName: 'lease_expires_at')

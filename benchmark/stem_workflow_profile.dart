@@ -246,9 +246,30 @@ Future<Map<String, Object?>> _runPhase(
   var succeeded = false;
   try {
     final ids = <String>[];
+    Future<String> startWithinDeadline() async {
+      final budget = remaining();
+      final submission = script.start(app);
+      var deadlineObserved = false;
+      try {
+        return await submission.timeout(
+          budget,
+          onTimeout: () {
+            deadlineObserved = true;
+            throw TimeoutException('$phase submission deadline exceeded', timeout);
+          },
+        );
+      } finally {
+        if (deadlineObserved) {
+          // Future.timeout only stops waiting; it does not cancel the
+          // submission. Join it before this phase can fail and app.close can
+          // begin, so an outstanding write never uses a closed store.
+          await submission;
+        }
+      }
+    }
+
     for (var index = 0; index < runs; index++) {
-      remaining();
-      ids.add(await script.start(app));
+      ids.add(await startWithinDeadline());
     }
     final enqueueMicros = timer.elapsedMicroseconds;
     // Compute once before creating any waiters so a deadline exception cannot

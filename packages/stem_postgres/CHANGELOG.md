@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Add the additive workflow execution-fencing migration (`execution_id`) and
+  fenced lease/failure operations. Apply the migration before using mixed
+  workers or relying on stale-execution protection; `terminal: false` records
+  error metadata without ending the run, while terminal failure is conditional
+  on the captured execution identity.
+- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+
 ## 0.2.1
 
 - Widened Stem compatibility to include the 0.4 portable runtime line.

@@ -8,6 +8,7 @@ import 'package:stem_sqlite/src/database/migrations/m_20251231120000_create_work
 import 'package:stem_sqlite/src/database/migrations/m_20251231161000_add_namespace_scoping.dart';
 import 'package:stem_sqlite/src/database/migrations/m_20260116120000_add_workflow_run_leases.dart';
 import 'package:stem_sqlite/src/database/migrations/m_20260224103000_add_revoke_store.dart';
+import 'package:stem_sqlite/src/database/migrations/m_20260301000000_add_workflow_execution_fencing.dart';
 
 final List<MigrationEntry> _entries = [
   MigrationEntry(
@@ -44,6 +45,13 @@ final List<MigrationEntry> _entries = [
       'm_20260224103000_add_revoke_store',
     ),
     migration: const AddRevokeStore(),
+  ),
+  MigrationEntry(
+    id: MigrationId(
+      DateTime.utc(2026, 3),
+      'm_20260301000000_add_workflow_execution_fencing',
+    ),
+    migration: const AddWorkflowExecutionFencing(),
   ),
 ];
 

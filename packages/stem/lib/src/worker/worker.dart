@@ -147,6 +147,12 @@ import 'package:stem/src/workflow/core/workflow_event_ref.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 
 const _terminalFailureEnvelopeKey = 'stem.terminalFailureEnvelope';
+const _terminalFailureLifecycleKey = 'state';
+const _terminalFailureActionKey = 'action';
+const _terminalFailurePending = 'pending';
+const _terminalFailureDone = 'done';
+const _terminalFailureDeadLetterAction = 'dead-letter';
+const _terminalFailureNackAction = 'nack';
 
 /// Shutdown modes for workers.
 ///
@@ -1075,7 +1081,15 @@ class Worker {
           // Finalization belongs to the persisted failure, not to this
           // redelivery's expiry, revocation, or potentially changed arguments.
           // Signature validation still precedes all recovery callbacks.
-          await _finalizeTaskFailure(priorStatus);
+          if (priorStatus?.state == TaskState.failed &&
+              _hasTerminalFailureRecord(priorStatus!)) {
+            await _finalizeTaskFailure(
+              priorStatus,
+              delivery: delivery,
+              resultEncoder: resultEncoder,
+            );
+            return;
+          }
 
           if (_isTaskRevoked(envelope.id)) {
             await _handleRevokedDelivery(
@@ -1371,6 +1385,7 @@ class Worker {
           dynamic result;
           var completionState = TaskState.running;
           var terminalWriteOwned = false;
+          var failureLinksFinalized = false;
 
           try {
             checkTermination();
@@ -1491,9 +1506,12 @@ class Worker {
               resultEncoder,
               request,
               groupId,
+              context,
             );
             completionState = completion.state;
             terminalWriteOwned = completion.terminalWriteOwned;
+            failureLinksFinalized =
+                terminalWriteOwned && completionState == TaskState.failed;
           } on Object catch (error, stack) {
             await _notifyErrorMiddleware(context, error, stack);
             _heartbeatTimers.remove(delivery)?.cancel();
@@ -1506,14 +1524,18 @@ class Worker {
               stack,
               groupId,
               startedAtIso,
+              context,
             );
             completionState = completion.state;
             terminalWriteOwned = completion.terminalWriteOwned;
+            failureLinksFinalized =
+                terminalWriteOwned && completionState == TaskState.failed;
           } finally {
             if (terminalWriteOwned && completionState == TaskState.succeeded) {
               await _dispatchLinkedTasks(envelope, onSuccess: true);
             } else if (terminalWriteOwned &&
-                completionState == TaskState.failed) {
+                completionState == TaskState.failed &&
+                !failureLinksFinalized) {
               await _dispatchLinkedTasks(envelope, onSuccess: false);
             }
             heartbeatTimer?.cancel();
@@ -2087,6 +2109,7 @@ class Worker {
   Future<void> _dispatchLinkedTasks(
     Envelope envelope, {
     required bool onSuccess,
+    bool propagateErrors = false,
   }) async {
     final key = onSuccess ? 'stem.link' : 'stem.linkError';
     final raw = envelope.meta[key];
@@ -2124,6 +2147,11 @@ class Worker {
       try {
         final enqueuer = _enqueuer;
         if (enqueuer == null) {
+          if (propagateErrors) {
+            throw StateError(
+              'Cannot finalize linked tasks without an enqueuer.',
+            );
+          }
           stemLogger.warning(
             'Skipping linked task enqueue; no enqueuer configured.',
             Context(_logContext({'task': name})),
@@ -2152,6 +2180,7 @@ class Worker {
             }),
           ),
         );
+        if (propagateErrors) rethrow;
       }
     }
   }
@@ -2432,6 +2461,7 @@ class Worker {
     StackTrace stack,
     String? groupId,
     String? startedAtIso,
+    TaskContext context,
   ) async {
     final outcome = _processor.classifyFailure(envelope, handler, error, stack);
     if (outcome is TaskProcessRetry) {
@@ -2504,7 +2534,13 @@ class Worker {
           'failedAt': stemNow().toIso8601String(),
           'startedAt': startedAtIso,
           if (handler is TaskTerminalFailureHandler)
-            _terminalFailureEnvelopeKey: envelope.toJson(),
+            _terminalFailureEnvelopeKey: {
+              'version': 1,
+              _terminalFailureLifecycleKey: _terminalFailurePending,
+              _terminalFailureActionKey: _terminalFailureDeadLetterAction,
+              'envelope': envelope.toJson(),
+              'context': context.terminalFailureContext,
+            },
         },
       );
       final failureStatus = TaskStatus(
@@ -2519,7 +2555,6 @@ class Worker {
         meta: failureMeta,
       );
       final terminal = await _writeTerminalStatus(failureStatus);
-      await _finalizeTaskFailure(terminal.status);
       if (!terminal.applied) {
         await _acknowledgements.tryAcknowledge(
           delivery,
@@ -2531,48 +2566,16 @@ class Worker {
           terminalWriteOwned: false,
         );
       }
-      await _deadLetterOrDiscard(
-        delivery,
+      await _completeTerminalFailure(
+        delivery: delivery,
+        envelope: envelope,
+        status: failureStatus,
+        groupId: groupId,
+        resultEncoder: resultEncoder,
         reason: 'max-retries-exhausted',
-        meta: {'error': error.toString()},
-      );
-      GroupStatus? groupStatus;
-      if (groupId != null) {
-        groupStatus = await backend.addGroupResult(groupId, failureStatus);
-      }
-      if (groupStatus != null) {
-        await _maybeDispatchChord(groupStatus);
-      }
-      StemMetrics.instance.increment(
-        'stem.tasks.failed',
-        tags: {'task': envelope.name, 'queue': envelope.queue},
-      );
-      _failedCount += 1;
-      stemLogger.warning(
-        'Task {task} failed: {error}',
-        Context(
-          _deliveryLogContext(
-            envelope,
-            extra: {
-              'error': error.toString(),
-              'stack': stack.toString(),
-            },
-          ),
-        ),
-      );
-      _emitEvent(
-        WorkerEvent(
-          type: WorkerEventType.failed,
-          envelope: envelope,
-          error: error,
-          stackTrace: stack,
-        ),
-      );
-      await _signals.taskFailed(
-        envelope,
-        _workerInfoSnapshot,
         error: error,
-        stackTrace: stack,
+        stack: stack,
+        action: _terminalFailureDeadLetterAction,
       );
       return const _TaskCompletion(
         state: TaskState.failed,
@@ -2581,10 +2584,23 @@ class Worker {
     }
   }
 
-  Future<void> _finalizeTaskFailure(TaskStatus? status) async {
-    if (status == null || status.state != TaskState.failed) return;
-    final storedEnvelope = status.meta[_terminalFailureEnvelopeKey];
-    if (storedEnvelope is! Map) return;
+  bool _hasTerminalFailureRecord(TaskStatus status) =>
+      status.meta[_terminalFailureEnvelopeKey] is Map;
+
+  Future<Envelope?> _finalizeTaskFailure(
+    TaskStatus status, {
+    required Delivery delivery,
+    required TaskPayloadEncoder resultEncoder,
+  }) async {
+    final marker = status.meta[_terminalFailureEnvelopeKey];
+    if (marker is! Map) {
+      throw StateError('Cannot finalize persisted failure for ${status.id}');
+    }
+    final markerMap = marker.cast<String, Object?>();
+    final storedEnvelope = markerMap['envelope'] ?? marker;
+    if (storedEnvelope is! Map) {
+      throw StateError('Cannot finalize persisted failure for ${status.id}');
+    }
     final envelope = Envelope.fromJson(storedEnvelope.cast<String, Object?>());
     final handler = registry.resolve(envelope.name);
     if (envelope.id != status.id ||
@@ -2592,10 +2608,120 @@ class Worker {
         handler is! TaskTerminalFailureHandler) {
       throw StateError('Cannot finalize persisted failure for ${status.id}');
     }
-    await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
-      envelope,
-      status,
+    if (markerMap[_terminalFailureLifecycleKey] == _terminalFailureDone) {
+      await _releaseUniqueLock(envelope);
+      await _acknowledgements.tryAcknowledge(
+        delivery,
+        envelope: envelope,
+        phase: 'completed terminal failure recovery',
+      );
+      return null;
+    }
+    await _completeTerminalFailure(
+      delivery: delivery,
+      envelope: envelope,
+      status: status,
+      groupId: envelope.headers['stem-group-id'],
+      resultEncoder: resultEncoder,
+      reason: 'max-retries-exhausted',
+      error: status.error ?? StateError('task failed'),
+      stack: StackTrace.empty,
+      action: markerMap[_terminalFailureActionKey] == _terminalFailureNackAction
+          ? _terminalFailureNackAction
+          : _terminalFailureDeadLetterAction,
     );
+    return envelope;
+  }
+
+  Future<void> _completeTerminalFailure({
+    required Delivery delivery,
+    required Envelope envelope,
+    required TaskStatus status,
+    required String? groupId,
+    required TaskPayloadEncoder resultEncoder,
+    required String reason,
+    required Object error,
+    required StackTrace stack,
+    required String action,
+  }) async {
+    final marker = status.meta[_terminalFailureEnvelopeKey];
+    final handler = registry.resolve(envelope.name);
+    if (marker is Map &&
+        marker[_terminalFailureLifecycleKey] == _terminalFailureDone) {
+      return;
+    }
+    if (handler is TaskTerminalFailureHandler) {
+      await (handler! as TaskTerminalFailureHandler).onTerminalFailure(
+        envelope,
+        status,
+      );
+    }
+    GroupStatus? groupStatus;
+    if (groupId != null) {
+      groupStatus = await backend.addGroupResult(groupId, status);
+    }
+    if (groupStatus != null) await _maybeDispatchChord(groupStatus);
+    StemMetrics.instance.increment(
+      'stem.tasks.failed',
+      tags: {'task': envelope.name, 'queue': envelope.queue},
+    );
+    _failedCount += 1;
+    _emitEvent(
+      WorkerEvent(
+        type: WorkerEventType.failed,
+        envelope: envelope,
+        error: error,
+        stackTrace: stack,
+      ),
+    );
+    await _signals.taskFailed(
+      envelope,
+      _workerInfoSnapshot,
+      error: error,
+      stackTrace: stack,
+    );
+    // Keep the lease outstanding until all recoverable bookkeeping and
+    // linked dispatch have succeeded.
+    await _dispatchLinkedTasks(
+      envelope,
+      onSuccess: false,
+      propagateErrors: marker is Map,
+    );
+    await _releaseUniqueLock(envelope);
+    // Keep the lease outstanding until all recoverable bookkeeping and
+    // callbacks have completed. If any of those operations fail, redelivery
+    // can still observe the pending marker and finish the lifecycle.
+    if (action == _terminalFailureDeadLetterAction) {
+      await _deadLetterOrDiscard(
+        delivery,
+        reason: reason,
+        meta: {'error': error.toString()},
+      );
+    } else {
+      await broker.nack(delivery, requeue: false);
+    }
+    if (marker is Map) {
+      final doneMeta = <String, Object?>{
+        ...status.meta,
+        _terminalFailureEnvelopeKey: {
+          'version': 1,
+          _terminalFailureLifecycleKey: _terminalFailureDone,
+          _terminalFailureActionKey:
+              marker[_terminalFailureActionKey] ??
+              _terminalFailureDeadLetterAction,
+          'envelope': envelope.toJson(),
+          if (marker['context'] is Map) 'context': marker['context'],
+        },
+      };
+      await backend.set(
+        status.id,
+        status.state,
+        payload: status.payload,
+        error: status.error,
+        attempt: status.attempt,
+        meta: doneMeta,
+      );
+    }
   }
 
   /// Handles explicit retry requests surfaced from task handlers.
@@ -2606,6 +2732,7 @@ class Worker {
     TaskPayloadEncoder resultEncoder,
     TaskRetryRequest request,
     String? groupId,
+    TaskContext context,
   ) async {
     final outcome = _processor.classifyRetry(
       envelope,
@@ -2623,7 +2750,13 @@ class Worker {
           'failedAt': stemNow().toIso8601String(),
           'retryExhausted': true,
           if (handler is TaskTerminalFailureHandler)
-            _terminalFailureEnvelopeKey: envelope.toJson(),
+            _terminalFailureEnvelopeKey: {
+              'version': 1,
+              _terminalFailureLifecycleKey: _terminalFailurePending,
+              _terminalFailureActionKey: _terminalFailureNackAction,
+              'envelope': envelope.toJson(),
+              'context': context.terminalFailureContext,
+            },
         },
       );
       const failureError = TaskError(
@@ -2638,7 +2771,6 @@ class Worker {
         meta: failureMeta,
       );
       final terminal = await _writeTerminalStatus(failureStatus);
-      await _finalizeTaskFailure(terminal.status);
       if (!terminal.applied) {
         await _acknowledgements.tryAcknowledge(
           delivery,
@@ -2650,30 +2782,17 @@ class Worker {
           terminalWriteOwned: false,
         );
       }
-      await broker.nack(delivery, requeue: false);
-      GroupStatus? groupStatus;
-      if (groupId != null) {
-        groupStatus = await backend.addGroupResult(groupId, failureStatus);
-      }
-      if (groupStatus != null) {
-        await _maybeDispatchChord(groupStatus);
-      }
-      _emitEvent(
-        WorkerEvent(
-          type: WorkerEventType.failed,
-          envelope: envelope,
-          error: StateError('retry exhausted'),
-        ),
-      );
-      await _signals.taskFailed(
-        envelope,
-        _workerInfoSnapshot,
+      await _completeTerminalFailure(
+        delivery: delivery,
+        envelope: envelope,
+        status: failureStatus,
+        groupId: groupId,
+        resultEncoder: resultEncoder,
+        reason: 'retry-exhausted',
         error: StateError('retry exhausted'),
-        stackTrace: StackTrace.current,
+        stack: StackTrace.current,
+        action: _terminalFailureNackAction,
       );
-      if (_isTerminalState(TaskState.failed)) {
-        await _releaseUniqueLock(envelope);
-      }
       return const _TaskCompletion(
         state: TaskState.failed,
         terminalWriteOwned: true,

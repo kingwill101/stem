@@ -7,9 +7,10 @@ import 'dart:io';
 
 import 'package:redis/redis.dart';
 import 'package:stem/stem.dart';
+import 'package:uuid/uuid.dart';
 
 /// Redis-backed implementation of [WorkflowStore].
-class RedisWorkflowStore implements WorkflowStore {
+class RedisWorkflowStore implements WorkflowStore, FencedWorkflowStore {
   RedisWorkflowStore._(
     this._connection,
     this._command, {
@@ -258,7 +259,8 @@ redis.call('HSET', runKey,
   'created_at', ARGV[4],
   'updated_at', ARGV[5],
   'owner_id', ARGV[6],
-  'lease_expires_at', ARGV[7])
+  'lease_expires_at', ARGV[7],
+  'execution_id', '')
 
 if ARGV[8] ~= '' then
   redis.call('HSET', runKey, 'cancellation_policy', ARGV[8])
@@ -288,6 +290,10 @@ end
 
 local currentOwner = redis.call('HGET', runKey, 'owner_id')
 local lease = redis.call('HGET', runKey, 'lease_expires_at')
+local executionId = redis.call('HGET', runKey, 'execution_id')
+if executionId and executionId ~= '' and lease and lease ~= '' and tonumber(lease) > nowMs then
+  return 0
+end
 if currentOwner and currentOwner ~= '' and currentOwner ~= ownerId then
   if lease and lease ~= '' and tonumber(lease) > nowMs then
     return 0
@@ -297,7 +303,44 @@ end
 redis.call('HSET', runKey,
   'owner_id', ownerId,
   'lease_expires_at', tostring(nowMs + leaseMs),
+  'execution_id', '',
   'updated_at', nowIso)
+return 1
+''';
+
+  static const _luaClaimRunExecution = '''
+local runKey = KEYS[1]
+local nowMs = tonumber(ARGV[1])
+local ownerId = ARGV[2]
+local leaseMs = tonumber(ARGV[3])
+local runningStatus = ARGV[4]
+local nowIso = ARGV[5]
+local executionId = ARGV[6]
+local status = redis.call('HGET', runKey, 'status')
+if not status or status ~= runningStatus then return 0 end
+local waitTopic = redis.call('HGET', runKey, 'wait_topic')
+if waitTopic and waitTopic ~= '' then return 0 end
+local owner = redis.call('HGET', runKey, 'owner_id')
+local lease = redis.call('HGET', runKey, 'lease_expires_at')
+if owner and owner ~= '' and lease and lease ~= '' and tonumber(lease) > nowMs then return 0 end
+local expires = nowMs + leaseMs
+redis.call('HSET', runKey, 'owner_id', ownerId, 'lease_expires_at', tostring(expires),
+  'execution_id', executionId, 'updated_at', nowIso)
+return {executionId, tostring(expires)}
+''';
+
+  static const _luaRenewRunExecution = '''
+local runKey = KEYS[1]
+local nowMs = tonumber(ARGV[1])
+local leaseMs = tonumber(ARGV[2])
+local runningStatus = ARGV[3]
+local nowIso = ARGV[4]
+local executionId = ARGV[5]
+if redis.call('HGET', runKey, 'status') ~= runningStatus then return 0 end
+if redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
+local lease = redis.call('HGET', runKey, 'lease_expires_at')
+if not lease or lease == '' or tonumber(lease) <= nowMs then return 0 end
+redis.call('HSET', runKey, 'lease_expires_at', tostring(nowMs + leaseMs), 'updated_at', nowIso)
 return 1
 ''';
 
@@ -316,6 +359,10 @@ if not status or status ~= runningStatus then
 end
 
 local currentOwner = redis.call('HGET', runKey, 'owner_id')
+local executionId = redis.call('HGET', runKey, 'execution_id')
+if executionId and executionId ~= '' then
+  return 0
+end
 if not currentOwner or currentOwner ~= ownerId then
   return 0
 end
@@ -333,6 +380,10 @@ local ownerId = ARGV[1]
 local nowIso = ARGV[2]
 
 local currentOwner = redis.call('HGET', runKey, 'owner_id')
+local executionId = redis.call('HGET', runKey, 'execution_id')
+if executionId and executionId ~= '' then
+  return 0
+end
 if not currentOwner or currentOwner ~= ownerId then
   return 0
 end
@@ -342,6 +393,42 @@ redis.call('HSET', runKey,
   'lease_expires_at', '',
   'updated_at', nowIso)
 return 1
+''';
+
+  static const _luaReleaseRunExecution = '''
+local runKey = KEYS[1]
+if redis.call('HGET', runKey, 'execution_id') ~= ARGV[1] then return 0 end
+redis.call('HSET', runKey, 'owner_id', '', 'lease_expires_at', '', 'updated_at', ARGV[2])
+return 1
+''';
+
+  static const _luaMarkFailedForExecution = '''
+local runKey = KEYS[1]
+local watchersHash = KEYS[2]
+local dueKey = KEYS[3]
+local executionId = ARGV[1]
+local failedStatus = ARGV[2]
+local status = redis.call('HGET', runKey, 'status')
+if redis.call('HGET', runKey, 'execution_id') ~= executionId then return 2 end
+if status == failedStatus then return 1 end
+if status == ARGV[3] or status == ARGV[4] then return 2 end
+if ARGV[8] == '0' then
+  redis.call('HSET', runKey, 'last_error', ARGV[6], 'updated_at', ARGV[7])
+  return 0
+end
+local runId = ARGV[5]
+local watcher = redis.call('HGET', watchersHash, runId)
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', watchersHash, runId)
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], runId) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], runId) end
+end
+redis.call('ZREM', dueKey, runId)
+redis.call('HSET', runKey, 'status', failedStatus, 'last_error', ARGV[6],
+  'owner_id', '', 'lease_expires_at', '', 'resume_at', '', 'wait_topic', '',
+  'updated_at', ARGV[7])
+return 0
 ''';
 
   String _baseStepName(String name) {
@@ -439,6 +526,7 @@ return 1
           : updatedAt,
       ownerId: _normalizeString(map['owner_id']),
       leaseExpiresAt: _decodeMillis(map['lease_expires_at']),
+      executionId: _normalizeString(map['execution_id']),
       cancellationPolicy: policy,
       cancellationData: cancellationData,
     );
@@ -683,8 +771,14 @@ return 1
       '',
       'wait_topic',
       '',
+      'execution_id',
+      '',
       'suspension_data',
       jsonEncode(data),
+      'owner_id',
+      '',
+      'lease_expires_at',
+      '',
       'updated_at',
       now,
     ]);
@@ -751,6 +845,112 @@ return 1
       ownerId,
       nowIso,
     ]);
+  }
+
+  /// Claims a runnable run with a unique execution token.
+  @override
+  Future<WorkflowExecutionClaim?> claimRunExecution(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now();
+    final executionId = const Uuid().v7();
+    final raw = await _send([
+      'EVAL',
+      _luaClaimRunExecution,
+      '1',
+      _runKey(runId),
+      now.millisecondsSinceEpoch.toString(),
+      ownerId,
+      leaseDuration.inMilliseconds.toString(),
+      WorkflowStatus.running.name,
+      now.toIso8601String(),
+      executionId,
+    ]);
+    if (raw is! List || raw.length < 2) return null;
+    final expiresMs = int.tryParse(raw[1].toString());
+    if (expiresMs == null) return null;
+    return WorkflowExecutionClaim(
+      runId: runId,
+      executionId: executionId,
+      ownerId: ownerId,
+      leaseExpiresAt: DateTime.fromMillisecondsSinceEpoch(
+        expiresMs,
+        isUtc: true,
+      ),
+    );
+  }
+
+  /// Renews the lease for the execution identified by [executionId].
+  @override
+  Future<bool> renewRunExecution(
+    String runId, {
+    required String executionId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  }) async {
+    final now = _clock.now();
+    final result = await _send([
+      'EVAL',
+      _luaRenewRunExecution,
+      '1',
+      _runKey(runId),
+      now.millisecondsSinceEpoch.toString(),
+      leaseDuration.inMilliseconds.toString(),
+      WorkflowStatus.running.name,
+      now.toIso8601String(),
+      executionId,
+    ]);
+    return result == 1 || result == '1';
+  }
+
+  /// Releases the lease for [executionId], without changing its token.
+  @override
+  Future<void> releaseRunExecution(
+    String runId, {
+    required String executionId,
+  }) async {
+    await _send([
+      'EVAL',
+      _luaReleaseRunExecution,
+      '1',
+      _runKey(runId),
+      executionId,
+      _clock.now().toIso8601String(),
+    ]);
+  }
+
+  /// Atomically records a terminal failure for the current execution.
+  @override
+  Future<TerminalFailureResult> markFailedForExecution(
+    String runId, {
+    required String executionId,
+    required Object error,
+    required StackTrace stack,
+    bool terminal = true,
+  }) async {
+    final result = await _send([
+      'EVAL',
+      _luaMarkFailedForExecution,
+      '3',
+      _runKey(runId),
+      _watchersHashKey(),
+      _dueKey(),
+      executionId,
+      WorkflowStatus.failed.name,
+      WorkflowStatus.completed.name,
+      WorkflowStatus.cancelled.name,
+      runId,
+      jsonEncode({'error': error.toString(), 'stack': stack.toString()}),
+      _clock.now().toIso8601String(),
+      if (terminal) '1' else '0',
+    ]);
+    final code = result is int ? result : int.tryParse(result.toString());
+    return switch (code) {
+      0 => TerminalFailureResult.applied,
+      1 => TerminalFailureResult.alreadyFailedForExecution,
+      _ => TerminalFailureResult.superseded,
+    };
   }
 
   @override
@@ -906,6 +1106,8 @@ return 1
       '',
       'lease_expires_at',
       '',
+      'execution_id',
+      '',
       'updated_at',
       now.toIso8601String(),
     ]);
@@ -959,6 +1161,12 @@ return 1
       'wait_topic',
       '',
       'resume_at',
+      '',
+      'owner_id',
+      '',
+      'lease_expires_at',
+      '',
+      'execution_id',
       '',
       'suspension_data',
       jsonEncode({

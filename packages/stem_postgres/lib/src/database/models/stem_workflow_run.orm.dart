@@ -139,6 +139,18 @@ const FieldDefinition _$StemWorkflowRunOwnerIdField = FieldDefinition(
   autoIncrement: false,
 );
 
+const FieldDefinition _$StemWorkflowRunExecutionIdField = FieldDefinition(
+  name: 'executionId',
+  columnName: 'execution_id',
+  dartType: 'String',
+  resolvedType: 'String?',
+  isPrimaryKey: false,
+  isNullable: true,
+  isUnique: false,
+  isIndexed: false,
+  autoIncrement: false,
+);
+
 const FieldDefinition _$StemWorkflowRunLeaseExpiresAtField = FieldDefinition(
   name: 'leaseExpiresAt',
   columnName: 'lease_expires_at',
@@ -235,6 +247,10 @@ Map<String, Object?> _encodeStemWorkflowRunUntracked(
       m.suspensionData,
     ),
     'owner_id': registry.encodeField(_$StemWorkflowRunOwnerIdField, m.ownerId),
+    'execution_id': registry.encodeField(
+      _$StemWorkflowRunExecutionIdField,
+      m.executionId,
+    ),
     'lease_expires_at': registry.encodeField(
       _$StemWorkflowRunLeaseExpiresAtField,
       m.leaseExpiresAt,
@@ -274,6 +290,7 @@ final ModelDefinition<$StemWorkflowRun> _$StemWorkflowRunDefinition =
         _$StemWorkflowRunLastErrorField,
         _$StemWorkflowRunSuspensionDataField,
         _$StemWorkflowRunOwnerIdField,
+        _$StemWorkflowRunExecutionIdField,
         _$StemWorkflowRunLeaseExpiresAtField,
         _$StemWorkflowRunCancellationPolicyField,
         _$StemWorkflowRunCancellationDataField,
@@ -319,6 +336,7 @@ class StemWorkflowRuns {
       Model.findOrFail<$StemWorkflowRun>(id, connection: connection);
 
   static Future<List<$StemWorkflowRun>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemWorkflowRun>(connection: connection);
 
   static Future<int> count({String? connection}) =>
@@ -461,6 +479,10 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
         _$StemWorkflowRunOwnerIdField,
         model.ownerId,
       ),
+      'execution_id': registry.encodeField(
+        _$StemWorkflowRunExecutionIdField,
+        model.executionId,
+      ),
       'lease_expires_at': registry.encodeField(
         _$StemWorkflowRunLeaseExpiresAtField,
         model.leaseExpiresAt,
@@ -544,6 +566,11 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
       _$StemWorkflowRunOwnerIdField,
       data['owner_id'],
     );
+    final String? stemWorkflowRunExecutionIdValue = registry
+        .decodeField<String?>(
+          _$StemWorkflowRunExecutionIdField,
+          data['execution_id'],
+        );
     final DateTime? stemWorkflowRunLeaseExpiresAtValue = registry
         .decodeField<DateTime?>(
           _$StemWorkflowRunLeaseExpiresAtField,
@@ -589,6 +616,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
       lastError: stemWorkflowRunLastErrorValue,
       suspensionData: stemWorkflowRunSuspensionDataValue,
       ownerId: stemWorkflowRunOwnerIdValue,
+      executionId: stemWorkflowRunExecutionIdValue,
       leaseExpiresAt: stemWorkflowRunLeaseExpiresAtValue,
       cancellationPolicy: stemWorkflowRunCancellationPolicyValue,
       cancellationData: stemWorkflowRunCancellationDataValue,
@@ -605,6 +633,7 @@ class _$StemWorkflowRunCodec extends ModelCodec<$StemWorkflowRun> {
       'last_error': stemWorkflowRunLastErrorValue,
       'suspension_data': stemWorkflowRunSuspensionDataValue,
       'owner_id': stemWorkflowRunOwnerIdValue,
+      'execution_id': stemWorkflowRunExecutionIdValue,
       'lease_expires_at': stemWorkflowRunLeaseExpiresAtValue,
       'cancellation_policy': stemWorkflowRunCancellationPolicyValue,
       'cancellation_data': stemWorkflowRunCancellationDataValue,
@@ -631,6 +660,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
     this.lastError,
     this.suspensionData,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -648,6 +678,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
   final String? lastError;
   final String? suspensionData;
   final String? ownerId;
+  final String? executionId;
   final DateTime? leaseExpiresAt;
   final String? cancellationPolicy;
   final String? cancellationData;
@@ -668,6 +699,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
       if (lastError != null) 'last_error': lastError,
       if (suspensionData != null) 'suspension_data': suspensionData,
       if (ownerId != null) 'owner_id': ownerId,
+      if (executionId != null) 'execution_id': executionId,
       if (leaseExpiresAt != null) 'lease_expires_at': leaseExpiresAt,
       if (cancellationPolicy != null) 'cancellation_policy': cancellationPolicy,
       if (cancellationData != null) 'cancellation_data': cancellationData,
@@ -690,6 +722,7 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
     Object? lastError = _copyWithSentinel,
     Object? suspensionData = _copyWithSentinel,
     Object? ownerId = _copyWithSentinel,
+    Object? executionId = _copyWithSentinel,
     Object? leaseExpiresAt = _copyWithSentinel,
     Object? cancellationPolicy = _copyWithSentinel,
     Object? cancellationData = _copyWithSentinel,
@@ -728,6 +761,9 @@ class StemWorkflowRunInsertDto implements InsertDto<$StemWorkflowRun> {
       ownerId: identical(ownerId, _copyWithSentinel)
           ? this.ownerId
           : ownerId as String?,
+      executionId: identical(executionId, _copyWithSentinel)
+          ? this.executionId
+          : executionId as String?,
       leaseExpiresAt: identical(leaseExpiresAt, _copyWithSentinel)
           ? this.leaseExpiresAt
           : leaseExpiresAt as DateTime?,
@@ -767,6 +803,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
     this.lastError,
     this.suspensionData,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -784,6 +821,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
   final String? lastError;
   final String? suspensionData;
   final String? ownerId;
+  final String? executionId;
   final DateTime? leaseExpiresAt;
   final String? cancellationPolicy;
   final String? cancellationData;
@@ -804,6 +842,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
       if (lastError != null) 'last_error': lastError,
       if (suspensionData != null) 'suspension_data': suspensionData,
       if (ownerId != null) 'owner_id': ownerId,
+      if (executionId != null) 'execution_id': executionId,
       if (leaseExpiresAt != null) 'lease_expires_at': leaseExpiresAt,
       if (cancellationPolicy != null) 'cancellation_policy': cancellationPolicy,
       if (cancellationData != null) 'cancellation_data': cancellationData,
@@ -826,6 +865,7 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
     Object? lastError = _copyWithSentinel,
     Object? suspensionData = _copyWithSentinel,
     Object? ownerId = _copyWithSentinel,
+    Object? executionId = _copyWithSentinel,
     Object? leaseExpiresAt = _copyWithSentinel,
     Object? cancellationPolicy = _copyWithSentinel,
     Object? cancellationData = _copyWithSentinel,
@@ -864,6 +904,9 @@ class StemWorkflowRunUpdateDto implements UpdateDto<$StemWorkflowRun> {
       ownerId: identical(ownerId, _copyWithSentinel)
           ? this.ownerId
           : ownerId as String?,
+      executionId: identical(executionId, _copyWithSentinel)
+          ? this.executionId
+          : executionId as String?,
       leaseExpiresAt: identical(leaseExpiresAt, _copyWithSentinel)
           ? this.leaseExpiresAt
           : leaseExpiresAt as DateTime?,
@@ -903,6 +946,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
     this.lastError,
     this.suspensionData,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -927,6 +971,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
       lastError: row['last_error'] as String?,
       suspensionData: row['suspension_data'] as String?,
       ownerId: row['owner_id'] as String?,
+      executionId: row['execution_id'] as String?,
       leaseExpiresAt: row['lease_expires_at'] as DateTime?,
       cancellationPolicy: row['cancellation_policy'] as String?,
       cancellationData: row['cancellation_data'] as String?,
@@ -946,6 +991,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
   final String? lastError;
   final String? suspensionData;
   final String? ownerId;
+  final String? executionId;
   final DateTime? leaseExpiresAt;
   final String? cancellationPolicy;
   final String? cancellationData;
@@ -995,6 +1041,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
       lastError: lastError,
       suspensionData: suspensionData,
       ownerId: ownerId,
+      executionId: executionId,
       leaseExpiresAt: leaseExpiresAt,
       cancellationPolicy: cancellationPolicy,
       cancellationData: cancellationData,
@@ -1017,6 +1064,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
       if (lastError != null) 'last_error': lastError,
       if (suspensionData != null) 'suspension_data': suspensionData,
       if (ownerId != null) 'owner_id': ownerId,
+      if (executionId != null) 'execution_id': executionId,
       if (leaseExpiresAt != null) 'lease_expires_at': leaseExpiresAt,
       if (cancellationPolicy != null) 'cancellation_policy': cancellationPolicy,
       if (cancellationData != null) 'cancellation_data': cancellationData,
@@ -1039,6 +1087,7 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
     Object? lastError = _copyWithSentinel,
     Object? suspensionData = _copyWithSentinel,
     Object? ownerId = _copyWithSentinel,
+    Object? executionId = _copyWithSentinel,
     Object? leaseExpiresAt = _copyWithSentinel,
     Object? cancellationPolicy = _copyWithSentinel,
     Object? cancellationData = _copyWithSentinel,
@@ -1077,6 +1126,9 @@ class StemWorkflowRunPartial implements PartialEntity<$StemWorkflowRun> {
       ownerId: identical(ownerId, _copyWithSentinel)
           ? this.ownerId
           : ownerId as String?,
+      executionId: identical(executionId, _copyWithSentinel)
+          ? this.executionId
+          : executionId as String?,
       leaseExpiresAt: identical(leaseExpiresAt, _copyWithSentinel)
           ? this.leaseExpiresAt
           : leaseExpiresAt as DateTime?,
@@ -1126,6 +1178,7 @@ class $StemWorkflowRun extends StemWorkflowRun
     String? lastError,
     String? suspensionData,
     String? ownerId,
+    String? executionId,
     DateTime? leaseExpiresAt,
     String? cancellationPolicy,
     String? cancellationData,
@@ -1143,6 +1196,7 @@ class $StemWorkflowRun extends StemWorkflowRun
          lastError: lastError,
          suspensionData: suspensionData,
          ownerId: ownerId,
+         executionId: executionId,
          leaseExpiresAt: leaseExpiresAt,
          cancellationPolicy: cancellationPolicy,
          cancellationData: cancellationData,
@@ -1159,6 +1213,7 @@ class $StemWorkflowRun extends StemWorkflowRun
       'last_error': lastError,
       'suspension_data': suspensionData,
       'owner_id': ownerId,
+      'execution_id': executionId,
       'lease_expires_at': leaseExpiresAt,
       'cancellation_policy': cancellationPolicy,
       'cancellation_data': cancellationData,
@@ -1181,6 +1236,7 @@ class $StemWorkflowRun extends StemWorkflowRun
       lastError: model.lastError,
       suspensionData: model.suspensionData,
       ownerId: model.ownerId,
+      executionId: model.executionId,
       leaseExpiresAt: model.leaseExpiresAt,
       cancellationPolicy: model.cancellationPolicy,
       cancellationData: model.cancellationData,
@@ -1201,6 +1257,7 @@ class $StemWorkflowRun extends StemWorkflowRun
     String? lastError,
     String? suspensionData,
     String? ownerId,
+    String? executionId,
     DateTime? leaseExpiresAt,
     String? cancellationPolicy,
     String? cancellationData,
@@ -1219,6 +1276,7 @@ class $StemWorkflowRun extends StemWorkflowRun
       lastError: lastError ?? this.lastError,
       suspensionData: suspensionData ?? this.suspensionData,
       ownerId: ownerId ?? this.ownerId,
+      executionId: executionId ?? this.executionId,
       leaseExpiresAt: leaseExpiresAt ?? this.leaseExpiresAt,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       cancellationData: cancellationData ?? this.cancellationData,
@@ -1318,6 +1376,14 @@ class $StemWorkflowRun extends StemWorkflowRun
   /// Tracked setter for [ownerId].
   set ownerId(String? value) => setAttribute('owner_id', value);
 
+  /// Tracked getter for [executionId].
+  @override
+  String? get executionId =>
+      getAttribute<String?>('execution_id') ?? super.executionId;
+
+  /// Tracked setter for [executionId].
+  set executionId(String? value) => setAttribute('execution_id', value);
+
   /// Tracked getter for [leaseExpiresAt].
   @override
   DateTime? get leaseExpiresAt =>
@@ -1388,6 +1454,7 @@ extension StemWorkflowRunOrmExtension on StemWorkflowRun {
     Object? lastError = _copyWithSentinel,
     Object? suspensionData = _copyWithSentinel,
     Object? ownerId = _copyWithSentinel,
+    Object? executionId = _copyWithSentinel,
     Object? leaseExpiresAt = _copyWithSentinel,
     Object? cancellationPolicy = _copyWithSentinel,
     Object? cancellationData = _copyWithSentinel,
@@ -1430,6 +1497,9 @@ extension StemWorkflowRunOrmExtension on StemWorkflowRun {
       ownerId: identical(ownerId, _copyWithSentinel)
           ? this.ownerId
           : ownerId as String?,
+      executionId: identical(executionId, _copyWithSentinel)
+          ? this.executionId
+          : executionId as String?,
       leaseExpiresAt: identical(leaseExpiresAt, _copyWithSentinel)
           ? this.leaseExpiresAt
           : leaseExpiresAt as DateTime?,
@@ -1488,6 +1558,8 @@ extension StemWorkflowRunPredicateFields on PredicateBuilder<StemWorkflowRun> {
       PredicateField<StemWorkflowRun, String?>(this, 'suspensionData');
   PredicateField<StemWorkflowRun, String?> get ownerId =>
       PredicateField<StemWorkflowRun, String?>(this, 'ownerId');
+  PredicateField<StemWorkflowRun, String?> get executionId =>
+      PredicateField<StemWorkflowRun, String?>(this, 'executionId');
   PredicateField<StemWorkflowRun, DateTime?> get leaseExpiresAt =>
       PredicateField<StemWorkflowRun, DateTime?>(this, 'leaseExpiresAt');
   PredicateField<StemWorkflowRun, String?> get cancellationPolicy =>

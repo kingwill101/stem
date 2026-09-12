@@ -2874,12 +2874,16 @@ class TaskContext implements TaskExecutionContext {
     progress,
     this.cancellation = const TaskCancellationToken.none(),
     this.args = const {},
+    Map<String, Object?> terminalFailureContext = const {},
     this.enqueuer,
     this.workflows,
     this.workflowEvents,
   }) : _heartbeat = heartbeat,
        _extendLease = extendLease,
-       _progress = progress;
+       _progress = progress,
+       _terminalFailureContext = terminalFailureContext.isEmpty
+           ? const <String, Object?>{}
+           : Map<String, Object?>.unmodifiable(terminalFailureContext);
 
   /// The unique identifier of the task.
   @override
@@ -2899,6 +2903,22 @@ class TaskContext implements TaskExecutionContext {
   /// Metadata for the task.
   @override
   final Map<String, Object?> meta;
+
+  /// Handler-owned serializable data copied into terminal-failure markers.
+  ///
+  /// The returned map is immutable. Runtime integrations should use
+  /// [setTerminalFailureContext] rather than retaining mutable handler state.
+  Map<String, Object?> get terminalFailureContext => _terminalFailureContext;
+
+  Map<String, Object?> _terminalFailureContext;
+
+  /// Records trusted per-delivery terminal-failure context.
+  @internal
+  void setTerminalFailureContext(Map<String, Object?> value) {
+    _terminalFailureContext = value.isEmpty
+        ? const <String, Object?>{}
+        : Map<String, Object?>.unmodifiable(value);
+  }
 
   @override
   final TaskCancellationToken cancellation;

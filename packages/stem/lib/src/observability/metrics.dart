@@ -384,9 +384,10 @@ class DartasticMetricsExporter extends MetricsExporter {
 
 /// Metrics exporter that uses an already configured Dartastic SDK provider.
 ///
-/// This adapter never initializes, configures, flushes, or shuts down the
-/// process-wide SDK. Configure the SDK (including its OTLP HTTP/protobuf
-/// exporter) before constructing this exporter.
+/// This adapter never initializes, configures, or shuts down the process-wide
+/// SDK. Calling [flush] flushes the meter provider captured at construction.
+/// Configure the SDK (including its OTLP HTTP/protobuf exporter) before
+/// constructing this exporter.
 class DartasticSdkMetricsExporter extends MetricsExporter {
   /// Creates an adapter to the existing Dartastic meter provider.
   DartasticSdkMetricsExporter({String meterName = 'stem'})

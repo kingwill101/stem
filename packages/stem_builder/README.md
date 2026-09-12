@@ -20,7 +20,7 @@ JSON DTO adapters and stored schema-version formats remain unchanged.
 ## Install
 
 ```bash
-dart pub add stem_builder
+dart pub add --dev stem_builder build_runner
 ```
 
 Add the core runtime if you haven't already:
@@ -94,6 +94,26 @@ Conceptually:
 - script workflows: `run(...)` is the execution plan, and declared checkpoints
   are metadata for manifests/tooling
 
+For flows, the first step's business parameters define the workflow input
+contract. Later steps may read those parameters but must not introduce required
+inputs absent from that contract or require incompatible types. Use the injected
+context to read previous step results; a later parameter is not automatically
+bound to the previous result.
+Safe widening such as `int` to `num` or `String` to `String?` is accepted.
+Codec-backed parameters must also retain a compatible payload representation;
+type assignability alone does not make different DTO codecs interchangeable.
+
+Task functions may return a value synchronously, a `Future<T>`, or a
+`FutureOr<T>`; generated entrypoints normalize those forms to the runtime's
+asynchronous handler contract. Synchronous collection results retain their full
+types. Script entry methods and annotated script checkpoints retain their
+documented `Future<T>` / `FutureOr<T>` contract.
+
+Task names and workflow names must each be unique within a generated library.
+Across libraries, compose modules explicitly and retain runtime conflict checks.
+Use explicit `@WorkflowStep(name: ...)` identifiers when a Dart method may be
+renamed without changing its persisted checkpoint identity.
+
 Script workflows use one entry model:
 
 - start with a plain direct-call `run(String email, ...)`
@@ -132,13 +152,20 @@ Serializable parameter rules are enforced by the generator:
 
 - supported:
   - `String`, `bool`, `int`, `double`, `num`, `Object?`, `null`
-  - `List<T>` where `T` is serializable
-  - `Map<String, T>` where `T` is serializable
+  - `List<T>` and `Map<String, T>` whose elements are supported primitive values
+    or recursively supported lists/maps
 - supported DTOs:
-  - Dart classes with `toJson()` plus a named `fromJson(...)` constructor
+  - Non-generic Dart classes with `toJson()` plus a named `fromJson(...)` constructor
     taking `Map<String, Object?>`
 - unsupported directly:
   - optional/named business parameters on generated workflow/task entrypoints
+  - generic DTOs, collections of DTOs, and sets
+
+Accepting `Object?` does not make arbitrary Dart objects persistable. The actual
+value must satisfy the selected transport/backend contract. For unsupported
+generated DTO shapes or custom binary codecs, use the core typed definitions
+with an explicit standard Dart codec; the generator does not yet bind a host's
+codec registry automatically.
 
 Typed task results can use the same DTO convention.
 

@@ -174,6 +174,108 @@ WHERE key = ? AND namespace = ?
       }
     },
   );
+
+  test(
+    'workflow execution fencing migration retains legacy runs',
+    () async {
+      final migrations = buildMigrations();
+      final admin = PostgresDriverAdapter.fromUrl(connectionString);
+      final schema =
+          'stem_fencing_upgrade_${DateTime.now().microsecondsSinceEpoch}';
+      const runId = 'legacy-workflow-run';
+      await admin.createSchema(schema);
+      try {
+        final schemaUrl = _withSearchPath(connectionString, schema);
+        final oldAdapter = PostgresDriverAdapter.fromUrl(schemaUrl);
+        await oldAdapter.setCurrentSchema(schema);
+        await _createMigrationLedger(oldAdapter, schema);
+        final oldRunner = MigrationRunner(
+          schemaDriver: oldAdapter,
+          ledger: SqlMigrationLedger(oldAdapter, tableName: 'orm_migrations'),
+          migrations: migrations.take(migrations.length - 1).toList(),
+          defaultSchema: schema,
+          emitEvents: false,
+        );
+        await oldRunner.applyAll();
+        final now = DateTime.utc(2026);
+        await oldAdapter.executeRaw(
+          '''
+INSERT INTO stem_workflow_runs
+  (id, namespace, workflow, status, params, result, wait_topic,
+   resume_at, last_error, suspension_data, cancellation_policy,
+   cancellation_data, owner_id, lease_expires_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+''',
+          [
+            runId,
+            'stem',
+            'legacy.workflow',
+            WorkflowStatus.running.name,
+            '{}',
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now,
+          ],
+        );
+        await oldAdapter.close();
+
+        final currentAdapter = PostgresDriverAdapter.fromUrl(schemaUrl);
+        await currentAdapter.setCurrentSchema(schema);
+        final currentRunner = MigrationRunner(
+          schemaDriver: currentAdapter,
+          ledger: SqlMigrationLedger(
+            currentAdapter,
+            tableName: 'orm_migrations',
+          ),
+          migrations: migrations,
+          defaultSchema: schema,
+          emitEvents: false,
+        );
+        final upgrade = await currentRunner.applyAll();
+        expect(upgrade.actions, hasLength(1));
+        final row = (await currentAdapter.queryRaw(
+          'SELECT id, execution_id FROM stem_workflow_runs WHERE id = ?',
+          [runId],
+        )).single;
+        expect(row['id'], runId);
+        expect(row['execution_id'], isNull);
+        await currentAdapter.close();
+
+        final dataSource = createDataSource(connectionString: schemaUrl);
+        await dataSource.init();
+        final dataSourceDriver = dataSource.connection.driver as SchemaDriver;
+        await dataSourceDriver.setCurrentSchema(schema);
+        final store = await PostgresWorkflowStore.fromDataSource(
+          dataSource,
+          clock: FakeWorkflowClock(now),
+          runMigrations: false,
+        );
+        try {
+          final claim = await store.claimRunExecution(
+            runId,
+            ownerId: 'new-worker',
+          );
+          expect(claim, isNotNull);
+          expect(claim!.executionId, isNotEmpty);
+          expect((await store.get(runId))!.executionId, claim.executionId);
+        } finally {
+          await store.close();
+          await dataSource.dispose();
+        }
+      } finally {
+        await admin.dropSchemaIfExists(schema);
+        await admin.close();
+      }
+    },
+  );
 }
 
 String _withSearchPath(String url, String schema) {

@@ -27,6 +27,7 @@ class RunState {
     this.suspensionData,
     this.updatedAt,
     this.ownerId,
+    this.executionId,
     this.leaseExpiresAt,
     this.cancellationPolicy,
     this.cancellationData,
@@ -48,6 +49,7 @@ class RunState {
       suspensionData: (json['suspensionData'] as Map?)?.cast<String, Object?>(),
       updatedAt: _dateFromJson(json['updatedAt']),
       ownerId: json['ownerId']?.toString(),
+      executionId: json['executionId']?.toString(),
       leaseExpiresAt: _dateFromJson(json['leaseExpiresAt']),
       cancellationPolicy: WorkflowCancellationPolicy.fromJson(
         json['cancellationPolicy'],
@@ -212,6 +214,11 @@ class RunState {
 
   /// Identifier of the worker/runtime currently leasing this run, if any.
   final String? ownerId;
+
+  /// Identity of the latest fenced execution, retained after lease release.
+  ///
+  /// Null for legacy claims or after an explicit superseding resume/rewind.
+  final String? executionId;
 
   /// Timestamp when the current lease expires, if any.
   final DateTime? leaseExpiresAt;
@@ -432,6 +439,7 @@ class RunState {
     Object? suspensionData = _unset,
     DateTime? updatedAt,
     Object? ownerId = _unset,
+    Object? executionId = _unset,
     Object? leaseExpiresAt = _unset,
     WorkflowCancellationPolicy? cancellationPolicy,
     Map<String, Object?>? cancellationData,
@@ -452,6 +460,9 @@ class RunState {
     final resolvedLeaseExpiresAt = leaseExpiresAt == _unset
         ? this.leaseExpiresAt
         : leaseExpiresAt as DateTime?;
+    final resolvedExecutionId = executionId == _unset
+        ? this.executionId
+        : executionId as String?;
     return RunState(
       id: id,
       workflow: workflow,
@@ -466,6 +477,7 @@ class RunState {
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       ownerId: resolvedOwnerId,
+      executionId: resolvedExecutionId,
       leaseExpiresAt: resolvedLeaseExpiresAt,
       cancellationPolicy: cancellationPolicy ?? this.cancellationPolicy,
       cancellationData: cancellationData ?? this.cancellationData,
@@ -488,6 +500,7 @@ class RunState {
       'suspensionData': suspensionData,
       'updatedAt': updatedAt?.toIso8601String(),
       'ownerId': ownerId,
+      'executionId': executionId,
       'leaseExpiresAt': leaseExpiresAt?.toIso8601String(),
       'cancellationPolicy': cancellationPolicy?.toJson(),
       'cancellationData': cancellationData,

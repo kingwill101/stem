@@ -228,6 +228,96 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     },
     timeout: _migrationTestTimeout,
   );
+
+  test(
+    'workflow execution fencing migration retains legacy runs',
+    () async {
+      final migrations = buildMigrations();
+      final directory = await Directory.systemTemp.createTemp(
+        'stem-sqlite-fencing-upgrade-',
+      );
+      final file = File('${directory.path}/stem.db');
+      const runId = 'legacy-workflow-run';
+      try {
+        final oldAdapter = await _openMigrationAdapter(file);
+        final oldRunner = MigrationRunner(
+          schemaDriver: oldAdapter,
+          ledger: SqlMigrationLedger(oldAdapter, tableName: 'orm_migrations'),
+          migrations: migrations.take(migrations.length - 1).toList(),
+          emitEvents: false,
+        );
+        await oldRunner.applyAll();
+        final now = DateTime.utc(2026);
+        await oldAdapter.executeRaw(
+          '''
+INSERT INTO wf_runs
+  (id, namespace, workflow, status, params, result, wait_topic,
+   resume_at, last_error, suspension_data, cancellation_policy,
+   cancellation_data, owner_id, lease_expires_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+''',
+          [
+            runId,
+            'stem',
+            'legacy.workflow',
+            WorkflowStatus.running.name,
+            '{}',
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            now,
+            now,
+          ],
+        );
+        await oldAdapter.close();
+
+        final currentAdapter = await _openMigrationAdapter(file);
+        final currentRunner = MigrationRunner(
+          schemaDriver: currentAdapter,
+          ledger: SqlMigrationLedger(
+            currentAdapter,
+            tableName: 'orm_migrations',
+          ),
+          migrations: migrations,
+          emitEvents: false,
+        );
+        final upgrade = await currentRunner.applyAll();
+        expect(upgrade.actions, hasLength(1));
+        final row = (await currentAdapter.queryRaw(
+          'SELECT id, execution_id FROM wf_runs WHERE id = ?',
+          [runId],
+        )).single;
+        expect(row['id'], runId);
+        expect(row['execution_id'], isNull);
+        await currentAdapter.close();
+
+        final store = await SqliteWorkflowStore.open(
+          file,
+          clock: FakeWorkflowClock(now),
+        );
+        try {
+          final claim = await store.claimRunExecution(
+            runId,
+            ownerId: 'new-worker',
+          );
+          expect(claim, isNotNull);
+          expect(claim!.executionId, isNotEmpty);
+          expect((await store.get(runId))!.executionId, claim.executionId);
+        } finally {
+          await store.close();
+        }
+      } finally {
+        await directory.delete(recursive: true);
+      }
+    },
+    timeout: _migrationTestTimeout,
+  );
 }
 
 Future<SqliteDriverAdapter> _openMigrationAdapter(File file) async {

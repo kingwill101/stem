@@ -25,5 +25,9 @@ void main() {
     },
   );
   runWorkflowStoreContractTests(adapterName: 'redis', factory: redisFactory);
+  runWorkflowExecutionFenceContractTests(
+    adapterName: 'redis',
+    factory: redisFactory,
+  );
   runWorkflowScriptFacadeTests(adapterName: 'redis', factory: redisFactory);
 }

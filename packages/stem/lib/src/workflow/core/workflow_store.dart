@@ -160,3 +160,119 @@ abstract class WorkflowStore {
   /// Returns persisted step results for inspection/debugging.
   Future<List<WorkflowStepEntry>> listSteps(String runId);
 }
+
+/// Optional capability for stores that can fence workflow execution attempts.
+///
+/// A store implementing this interface must generate a fresh
+/// [WorkflowExecutionClaim.executionId] for
+/// every successful claim and require that id for lease mutation and terminal
+/// failure finalization. This prevents a stale delivery from mutating a newer
+/// execution owned by the same runtime.
+///
+/// A claim rejects any active lease, including one with the same logical owner.
+/// Release retains execution identity for failure recovery; a new claim or an
+/// explicit resume/rewind invalidates the old identity. Legacy owner-only lease
+/// operations must not renew or release tokenized executions.
+///
+/// This capability fences lease operations and terminal-failure finalization.
+/// It does not make every [WorkflowStore] mutation conditional or make external
+/// side effects exactly-once.
+abstract interface class FencedWorkflowStore {
+  /// Atomically claims [runId], returning its unique execution identity.
+  Future<WorkflowExecutionClaim?> claimRunExecution(
+    String runId, {
+    required String ownerId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  });
+
+  /// Renews a still-active, unexpired lease only when [executionId] is current.
+  Future<bool> renewRunExecution(
+    String runId, {
+    required String executionId,
+    Duration leaseDuration = const Duration(seconds: 30),
+  });
+
+  /// Releases a lease only when [executionId] is still current.
+  Future<void> releaseRunExecution(
+    String runId, {
+    required String executionId,
+  });
+
+  /// Records an error only if the captured execution is still current.
+  ///
+  /// With [terminal] false, only error metadata is changed; status and lease
+  /// remain unchanged so the worker's retry policy can decide the outcome.
+  /// With [terminal] true, the run transitions to failed and loses its lease.
+  Future<TerminalFailureResult> markFailedForExecution(
+    String runId, {
+    required String executionId,
+    required Object error,
+    required StackTrace stack,
+    bool terminal = true,
+  });
+}
+
+/// Identity returned by a fenced workflow claim.
+class WorkflowExecutionClaim {
+  /// Creates a workflow execution identity.
+  const WorkflowExecutionClaim({
+    required this.runId,
+    required this.executionId,
+    required this.ownerId,
+    required this.leaseExpiresAt,
+  });
+
+  /// Rehydrates a claim from a serialized map.
+  factory WorkflowExecutionClaim.fromJson(Map<String, Object?> json) {
+    String field(String key) {
+      final value = json[key];
+      if (value is! String || value.trim().isEmpty) {
+        throw FormatException('Invalid workflow execution claim field: $key');
+      }
+      return value;
+    }
+
+    final expiry = DateTime.tryParse(field('leaseExpiresAt'));
+    if (expiry == null) {
+      throw const FormatException('Invalid workflow execution claim expiry');
+    }
+    return WorkflowExecutionClaim(
+      runId: field('runId'),
+      executionId: field('executionId'),
+      ownerId: field('ownerId'),
+      leaseExpiresAt: expiry,
+    );
+  }
+
+  /// Workflow run whose execution was claimed.
+  final String runId;
+
+  /// Opaque identity of this particular claim, not merely its logical owner.
+  final String executionId;
+
+  /// Logical runtime or worker requesting the claim.
+  final String ownerId;
+
+  /// Lease deadline at claim time.
+  final DateTime leaseExpiresAt;
+
+  /// Serializes this claim for trusted task metadata.
+  Map<String, Object?> toJson() => {
+    'runId': runId,
+    'executionId': executionId,
+    'ownerId': ownerId,
+    'leaseExpiresAt': leaseExpiresAt.toIso8601String(),
+  };
+}
+
+/// Result of a fenced terminal-failure attempt.
+enum TerminalFailureResult {
+  /// The current execution's error update was applied.
+  applied,
+
+  /// The same execution had already transitioned the run.
+  alreadyFailedForExecution,
+
+  /// A newer execution or terminal state superseded this callback.
+  superseded,
+}

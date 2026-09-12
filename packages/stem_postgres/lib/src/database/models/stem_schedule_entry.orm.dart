@@ -424,6 +424,7 @@ class StemScheduleEntries {
   }) => Model.findOrFail<$StemScheduleEntry>(id, connection: connection);
 
   static Future<List<$StemScheduleEntry>> all({String? connection}) =>
+      // ignore: ormed/ormed_get_without_limit
       Model.all<$StemScheduleEntry>(connection: connection);
 
   static Future<int> count({String? connection}) =>

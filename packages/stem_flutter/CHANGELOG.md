@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Require Stem `>=0.5.0 <0.6.0` for the coordinated core release.
+
 ## 0.3.1
 
 - Recover the unpublished 0.3.0 release using the corrected publishing workflow.

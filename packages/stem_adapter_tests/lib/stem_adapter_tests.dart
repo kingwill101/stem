@@ -4,5 +4,6 @@ export 'src/lock_store_contract_suite.dart';
 export 'src/queue_events_contract_suite.dart';
 export 'src/result_backend_contract_suite.dart';
 export 'src/revoke_store_contract_suite.dart';
+export 'src/workflow_execution_fence_contract_suite.dart';
 export 'src/workflow_script_facade_suite.dart';
 export 'src/workflow_store_contract_suite.dart';
