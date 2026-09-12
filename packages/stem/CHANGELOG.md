@@ -2,6 +2,11 @@
 
 ## 0.5.0
 
+- Add typed `WorkflowHost` definitions and handles over the existing runtime,
+  with owned/borrowed app lifecycle, persisted-run reattachment, shared snapshot
+  observation, registry-backed codecs, durable sleep and typed event waits.
+  Distinguish event deadlines using runtime resume metadata rather than payload
+  fields, and verify nullable event checkpoint replay.
 - Add optional `FencedWorkflowStore` execution fencing for workflow leases and
   managed terminal-failure finalization. Each successful claim receives a fresh
   `executionId`; lease renew/release and failure recording require that captured

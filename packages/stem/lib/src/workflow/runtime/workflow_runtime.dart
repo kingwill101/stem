@@ -575,7 +575,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         if (await _maybeCancelForPolicy(state, now: now)) {
           continue;
         }
-        await _store.markResumed(runId, data: state.suspensionData);
+        await _store.markResumed(
+          runId,
+          data: state.dueResumeData,
+        );
         await _enqueueRun(
           runId,
           workflow: state.workflow,
@@ -1919,6 +1922,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
        _previousResult = previousResult,
        _stepIndex = initialStepIndex,
        _resumePayload = suspensionData?['payload'],
+       _eventDeadline = suspensionData?['resumeReason'] == 'eventDeadline',
        _suspensionStep =
            (suspensionData?['iterationStep'] ?? suspensionData?['step'])
                as String?,
@@ -1940,6 +1944,7 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
   String? _suspensionStep;
   int? _suspensionIteration;
   Object? _resumePayload;
+  final bool _eventDeadline;
 
   /// Whether a script checkpoint suspended the run.
   bool get wasSuspended => _wasSuspended;
@@ -2035,6 +2040,11 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       return decodedCached as T;
     }
 
+    final isResuming =
+        _suspensionStep == name &&
+        (!autoVersion ||
+            _suspensionIteration == null ||
+            _suspensionIteration == iteration);
     final resumeData = _takeResumePayload(name, autoVersion ? iteration : null);
     final stepMeta = runtime._stepMeta(
       runState: runState,
@@ -2048,6 +2058,8 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       stepIndex: _stepIndex,
       iteration: iteration,
       resumeData: resumeData,
+      isResuming: isResuming,
+      isEventTimeout: isResuming && _eventDeadline,
       enqueuer: runtime._stepEnqueuer(
         taskContext: taskContext,
         baseMeta: stepMeta,
@@ -2265,12 +2277,15 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
 }
 
 /// Workflow script checkpoint context used by script-defined workflows.
-class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
+class _WorkflowScriptStepContextImpl
+    implements WorkflowScriptStepContext, WorkflowScriptResumeDetails {
   _WorkflowScriptStepContextImpl({
     required this.execution,
     required String stepName,
     required int stepIndex,
     required int iteration,
+    required this.isResuming,
+    required this.isEventTimeout,
     Object? resumeData,
     this.enqueuer,
     this.workflows,
@@ -2285,6 +2300,12 @@ class _WorkflowScriptStepContextImpl implements WorkflowScriptStepContext {
   final int _iteration;
   _ScriptControl? _control;
   Object? _resumeData;
+
+  @override
+  final bool isResuming;
+
+  @override
+  final bool isEventTimeout;
 
   @override
   Future<String> enqueueValue<T>(

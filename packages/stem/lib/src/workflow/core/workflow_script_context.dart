@@ -10,6 +10,20 @@ import 'package:stem/src/workflow/core/workflow_execution_context.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
+/// Optional runtime-provided resume information for a script checkpoint.
+///
+/// Unlike [WorkflowScriptStepContext.takeResumeData], these flags describe
+/// control metadata rather than user event data. Consuming the payload does
+/// not clear them. Existing custom context implementations need not implement
+/// this capability.
+abstract interface class WorkflowScriptResumeDetails {
+  /// Whether this checkpoint is re-entering a persisted suspension.
+  bool get isResuming;
+
+  /// Whether an event watcher resumed because its deadline was due.
+  bool get isEventTimeout;
+}
+
 /// Runtime context exposed to workflow scripts. Implementations are provided by
 /// the workflow runtime so scripts can execute with durable semantics.
 abstract class WorkflowScriptContext {

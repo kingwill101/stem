@@ -524,7 +524,8 @@ class StemWorkflowApp
     final resumed = <String>[];
     for (final runId in due) {
       final state = await store.get(runId);
-      await store.markResumed(runId, data: state?.suspensionData);
+      if (state == null) continue;
+      await store.markResumed(runId, data: state.dueResumeData);
       resumed.add(runId);
     }
     return resumed;

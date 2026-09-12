@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Verify typed workflow host reattachment across database reopen, including
+  event suspension and replay without re-executing completed checkpoints.
 - Add the workflow execution-fencing migration and fenced lease/failure
   operations. Run the new migration before using multiple workers against an
   existing database; generated workflow run IDs now use UUIDs so independently

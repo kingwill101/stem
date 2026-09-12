@@ -21,6 +21,8 @@ export 'core/workflow_status.dart';
 export 'core/workflow_step_entry.dart';
 export 'core/workflow_store.dart';
 export 'core/workflow_watcher.dart';
+export 'host/hosted_workflow.dart';
+export 'host/workflow_host.dart';
 export 'runtime/workflow_introspection.dart';
 export 'runtime/workflow_manifest.dart';
 export 'runtime/workflow_registry.dart';
