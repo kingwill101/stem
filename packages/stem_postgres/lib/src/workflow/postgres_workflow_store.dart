@@ -690,7 +690,29 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
     bool terminal = true,
   }) async {
     final now = _clock.now().toUtc();
-    final updated = await _connections.runInTransaction((ctx) async {
+    return _connections.runInTransaction((ctx) async {
+      // Serialize the eligibility check, write, and outcome classification
+      // with concurrent run mutations. Keep the entire decision inside the
+      // transaction that owns this row lock.
+      final current = await ctx
+          .query<StemWorkflowRun>()
+          .whereEquals('id', runId)
+          .whereEquals('namespace', namespace)
+          .lock('FOR UPDATE')
+          .first();
+      if (current == null ||
+          current.executionId != executionId ||
+          ![
+            WorkflowStatus.running.name,
+            WorkflowStatus.suspended.name,
+          ].contains(current.status)) {
+        if (current?.executionId == executionId &&
+            current?.status == WorkflowStatus.failed.name) {
+          return TerminalFailureResult.alreadyFailedForExecution;
+        }
+        return TerminalFailureResult.superseded;
+      }
+
       final changed = await ctx
           .query<StemWorkflowRun>()
           .whereEquals('id', runId)
@@ -713,20 +735,10 @@ class PostgresWorkflowStore implements WorkflowStore, FencedWorkflowStore {
             'updatedAt': now,
           });
       if (changed > 0 && terminal) await _deleteWatcher(ctx, runId);
-      return changed;
-    });
-    if (updated > 0) return TerminalFailureResult.applied;
+      if (changed > 0) return TerminalFailureResult.applied;
 
-    final current = await _connections.context
-        .query<StemWorkflowRun>()
-        .whereEquals('id', runId)
-        .whereEquals('namespace', namespace)
-        .first();
-    if (current?.executionId == executionId &&
-        current?.status == WorkflowStatus.failed.name) {
-      return TerminalFailureResult.alreadyFailedForExecution;
-    }
-    return TerminalFailureResult.superseded;
+      return TerminalFailureResult.superseded;
+    });
   }
 
   @override
