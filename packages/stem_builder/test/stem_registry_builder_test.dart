@@ -1396,6 +1396,13 @@ class Codec<I, O> {}
       '@TaskDefn() Future<Foo?> example(Foo? value) async => value;',
       'parameter "value" must use a serializable or codec-backed DTO type',
     ),
+    (
+      'nullable codec declaration',
+      '@PayloadCodecDefn() Codec<Foo, Object?>? get nullable => '
+          'throw UnimplementedError();',
+      '@TaskDefn() Future<int> example() async => 1;',
+      'must annotate a Codec<T, Object?>',
+    ),
   ]) {
     test('rejects explicit codec binding: $label', () async {
       final input =
@@ -1520,6 +1527,176 @@ class TypedFlow {
       result.errors.join('\n'),
       allOf(contains('TypedFlow'), contains('second'), contains('value')),
     );
+  });
+
+  test('rejects custom codec to synthesized JSON flow input', () async {
+    const input = '''
+import 'dart:convert';
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {
+  Map<String, Object?> toJson() => const {};
+  Foo.fromJson(Map<String, Object?> json);
+}
+@PayloadCodecDefn()
+Codec<Foo, Object?> get fooCodec => throw UnimplementedError();
+@WorkflowDefn(name: 'representation.flow')
+class RepresentationFlow {
+  @WorkflowStep() Future<void> first(Foo value) async {}
+  @WorkflowStep() Future<void> later(Foo? value) async {}
+}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isFalse);
+    expect(
+      result.errors.join('\n'),
+      allOf(contains('custom codec "fooCodec"'), contains('synthesized JSON')),
+    );
+  });
+
+  test('accepts a synthesized JSON type with nullable widening', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {
+  Map<String, Object?> toJson() => const {};
+  Foo.fromJson(Map<String, Object?> json);
+}
+@WorkflowDefn(name: 'safe.json.flow')
+class SafeJsonFlow {
+  @WorkflowStep() Future<void> first(Foo value) async {}
+  @WorkflowStep() Future<void> later(Foo? value) async {}
+}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isTrue, reason: result.errors.join('\n'));
+  });
+
+  test('rejects synthesized JSON across distinct DTO types', () async {
+    const input = '''
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Base {
+  Map<String, Object?> toJson() => const {};
+  Base.fromJson(Map<String, Object?> json);
+}
+class Derived extends Base {
+  @override
+  Map<String, Object?> toJson() => const {};
+  Derived.fromJson(Map<String, Object?> json) : super.fromJson(json);
+}
+@WorkflowDefn(name: 'different.json.flow')
+class DifferentJsonFlow {
+  @WorkflowStep() Future<void> first(Derived value) async {}
+  @WorkflowStep() Future<void> later(Base value) async {}
+}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isFalse);
+    expect(
+      result.errors.join('\n'),
+      allOf(
+        contains('synthesized JSON'),
+        contains('#Derived'),
+        contains('#Base'),
+      ),
+    );
+  });
+
+  test('rejects nullable custom codec subclass declarations', () async {
+    const input = '''
+import 'dart:convert';
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {}
+class FooCodec extends Codec<Foo, Object?> {
+  @override Converter<Foo, Object?> get encoder => _Encoder();
+  @override Converter<Object?, Foo> get decoder => _Decoder();
+}
+class _Decoder extends Converter<Object?, Foo> {
+  @override Foo convert(Object? input) => Foo();
+}
+class _Encoder extends Converter<Foo, Object?> {
+  @override Object? convert(Foo input) => input;
+}
+@PayloadCodecDefn()
+FooCodec? get nullable => throw UnimplementedError();
+@TaskDefn() Future<int> example() async => 1;
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isFalse);
+    expect(
+      result.errors.join('\n'),
+      contains('must annotate a Codec<T, Object?>'),
+    );
+  });
+
+  test('accepts a codec whose value type is nullable', () async {
+    const input = '''
+import 'dart:convert';
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {}
+@PayloadCodecDefn()
+Codec<Foo?, Object?> get fooCodec => throw UnimplementedError();
+@TaskDefn() Future<int> example(Foo? value) async => 1;
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isTrue, reason: result.errors.join('\n'));
+  });
+
+  test('accepts the same custom codec across flow steps', () async {
+    const input = '''
+import 'dart:convert';
+import 'package:stem/stem.dart';
+part 'workflows.stem.g.dart';
+class Foo {}
+@PayloadCodecDefn()
+Codec<Foo, Object?> get fooCodec => throw UnimplementedError();
+@WorkflowDefn(name: 'same.codec.flow')
+class SameCodecFlow {
+  @WorkflowStep() Future<void> first(Foo value) async {}
+  @WorkflowStep() Future<void> later(Foo value) async {}
+}
+''';
+    final result = await testBuilder(
+      stemRegistryBuilder(BuilderOptions.empty),
+      {'stem_builder|lib/workflows.dart': input},
+      rootPackage: 'stem_builder',
+      readerWriter: TestReaderWriter(rootPackage: 'stem_builder')
+        ..testing.writeString(AssetId('stem', 'lib/stem.dart'), stubStem),
+    );
+    expect(result.succeeded, isTrue, reason: result.errors.join('\n'));
   });
 
   test(

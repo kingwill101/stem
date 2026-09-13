@@ -725,15 +725,16 @@ class StemRegistryBuilder implements Builder {
     _PayloadCodecBindings codecBindings,
   ) {
     final type = parameter.type;
-    final codecTypeCode = _payloadCodecTypeCode(type, codecBindings);
-    if (!_isSerializableValueType(type) && codecTypeCode == null) {
+    final codecInfo = _payloadCodecInfo(type, codecBindings);
+    if (!_isSerializableValueType(type) && codecInfo == null) {
       return null;
     }
     return _ValueParameterInfo(
       name: parameter.displayName,
       type: type,
       typeCode: _typeCode(type),
-      payloadCodecTypeCode: codecTypeCode,
+      payloadCodecTypeCode: codecInfo?.typeCode,
+      payloadRepresentation: codecInfo?.representation,
     );
   }
 
@@ -893,8 +894,23 @@ class StemRegistryBuilder implements Builder {
     DartType type,
     _PayloadCodecBindings codecBindings,
   ) {
+    return _payloadCodecInfo(type, codecBindings)?.typeCode;
+  }
+
+  static _PayloadCodecInfo? _payloadCodecInfo(
+    DartType type,
+    _PayloadCodecBindings codecBindings,
+  ) {
     final explicit = codecBindings.forType(type);
-    if (explicit != null) return _typeCode(type);
+    if (explicit != null) {
+      return _PayloadCodecInfo(
+        typeCode: _typeCode(type),
+        representation: _PayloadRepresentation.custom(
+          explicit,
+          _payloadTypeKey(type),
+        ),
+      );
+    }
     if (type is! InterfaceType) return null;
     if (type.isDartCoreMap || type.isDartCoreList || type.isDartCoreSet) {
       return null;
@@ -922,7 +938,12 @@ class StemRegistryBuilder implements Builder {
     if (fromJsonConstructor.isEmpty) {
       return null;
     }
-    return _typeCode(type);
+    return _PayloadCodecInfo(
+      typeCode: _typeCode(type),
+      representation: _PayloadRepresentation.autoJson(
+        _payloadBaseTypeKey(type),
+      ),
+    );
   }
 
   static bool _isStringKeyedMapLike(DartType type) {
@@ -1135,14 +1156,23 @@ void _validateFlowStepParameterContract(
             starterParameter.type,
             parameter.type,
           ) ||
-          _codecBaseType(starterParameter.payloadCodecTypeCode) !=
-              _codecBaseType(parameter.payloadCodecTypeCode)) {
+          !_compatiblePayloadRepresentations(
+            starterParameter.payloadRepresentation,
+            parameter.payloadRepresentation,
+          )) {
+        final representationMismatch =
+            starterParameter != null &&
+            !_compatiblePayloadRepresentations(
+              starterParameter.payloadRepresentation,
+              parameter.payloadRepresentation,
+            );
         throw InvalidGenerationSourceError(
           'Workflow ${classElement.displayName} step "${step.name}" '
           'parameter "${parameter.name}" is not present with a compatible '
           'type and payload representation in the first step '
-          '"${steps.first.name}". The flow starter '
-          'contract is defined by the first step parameters.',
+          '"${steps.first.name}".'
+          '${representationMismatch ? ' The first step uses ${starterParameter.payloadRepresentation?.description ?? 'raw JSON'}, but this step uses ${parameter.payloadRepresentation?.description ?? 'raw JSON'}.' : ''} '
+          'The flow starter contract is defined by the first step parameters.',
           element: classElement,
         );
       }
@@ -1150,8 +1180,15 @@ void _validateFlowStepParameterContract(
   }
 }
 
-String? _codecBaseType(String? typeCode) =>
-    typeCode?.replaceFirst(RegExp(r'\?$'), '');
+bool _compatiblePayloadRepresentations(
+  _PayloadRepresentation? first,
+  _PayloadRepresentation? next,
+) {
+  // Nullability widening is safe only for synthesized JSON. Custom codecs
+  // encode a particular Dart representation and must remain exact.
+  if (first == null || next == null) return first == next;
+  return first.sameAs(next);
+}
 
 Future<void> _diagnoseScriptCheckpointPatterns(
   BuildStep buildStep,
@@ -1386,12 +1423,50 @@ class _ValueParameterInfo {
     required this.type,
     required this.typeCode,
     required this.payloadCodecTypeCode,
+    required this.payloadRepresentation,
   });
 
   final String name;
   final DartType type;
   final String typeCode;
   final String? payloadCodecTypeCode;
+  final _PayloadRepresentation? payloadRepresentation;
+}
+
+class _PayloadCodecInfo {
+  const _PayloadCodecInfo({
+    required this.typeCode,
+    required this.representation,
+  });
+
+  final String typeCode;
+  final _PayloadRepresentation representation;
+}
+
+class _PayloadRepresentation {
+  const _PayloadRepresentation.custom(this.customCodecName, this.typeKey)
+    : autoJsonBaseTypeKey = null;
+
+  const _PayloadRepresentation.autoJson(this.autoJsonBaseTypeKey)
+    : customCodecName = null,
+      typeKey = null;
+
+  final String? customCodecName;
+  final String? typeKey;
+  final String? autoJsonBaseTypeKey;
+
+  bool get isAutoJson => customCodecName == null;
+
+  bool sameAs(_PayloadRepresentation? other) =>
+      other != null &&
+      other.customCodecName == customCodecName &&
+      (isAutoJson
+          ? other.autoJsonBaseTypeKey == autoJsonBaseTypeKey
+          : other.typeKey == typeKey);
+
+  String get description => isAutoJson
+      ? 'synthesized JSON for $autoJsonBaseTypeKey'
+      : 'custom codec "$customCodecName"';
 }
 
 class _InjectedContextParameter {
@@ -1441,7 +1516,8 @@ class _PayloadCodecBindings {
               orElse: () => type,
             )
           : null;
-      if (codecType == null ||
+      if (type.nullabilitySuffix != NullabilitySuffix.none ||
+          codecType == null ||
           !_isDartConvertCodec(codecType) ||
           codecType.typeArguments.length != 2 ||
           !codecType.typeArguments[1].isDartCoreObject ||
@@ -1497,6 +1573,14 @@ String _payloadTypeKey(DartType type) {
         '${type.nullabilitySuffix}';
   }
   return '${type.getDisplayString()}${type.nullabilitySuffix}';
+}
+
+String _payloadBaseTypeKey(DartType type) {
+  if (type is InterfaceType) {
+    final library = type.element.library;
+    return '${library.firstFragment.source.uri}#${type.element.name}';
+  }
+  return type.getDisplayString();
 }
 
 class _RegistryEmitter {

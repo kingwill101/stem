@@ -38,6 +38,12 @@ unsupported generated shapes therefore require an explicit binding. A codec
 owns its representation; map envelopes are still the runtime transport
 envelope and codec output must follow the selected backend's contract.
 
+The codec object itself must be non-nullable. `Codec<Order?, Object?>` can
+encode nullable payloads; `Codec<Order, Object?>?` is not a valid binding.
+Flow input widening must also preserve the codec representation: synthesized
+JSON may widen `Order` to `Order?` for the same DTO, but a custom binding cannot
+silently switch to synthesized JSON or a different custom binding.
+
 ## Install
 
 ```bash

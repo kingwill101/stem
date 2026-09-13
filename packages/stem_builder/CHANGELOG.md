@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Validate codec representation provenance across flow steps and reject nullable
+  codec declarations before emission. Nullable payload types remain supported.
 - Add `@PayloadCodecDefn()` bindings for library-local standard
   `Codec<T, Object?>` values and getters. Matching is exact, including
   nullability; duplicate, non-codec, and invalid output bindings are rejected.
