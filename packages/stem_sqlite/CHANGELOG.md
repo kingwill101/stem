@@ -2,6 +2,9 @@
 
 ## 0.3.0
 
+- Add a separate workflow journal table and atomic revision/execution checks
+  coupling checkpoint success with ordered compensation registration. Verify
+  retry and cleanup progress across database reopen and schema upgrades.
 - Guard completion, cancellation, and ordinary workflow state mutations against
   terminal-state replacement; add atomic terminal transition support and
   nullable hosted-result reopen coverage.
@@ -11,7 +14,8 @@
   operations. Run the new migration before using multiple workers against an
   existing database; generated workflow run IDs now use UUIDs so independently
   opened SQLite handles or reopened stores do not collide.
-- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+- Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
+  `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.3
 

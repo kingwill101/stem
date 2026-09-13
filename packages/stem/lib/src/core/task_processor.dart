@@ -494,7 +494,9 @@ class TaskProcessor {
     final policy = _resolveRetryPolicy(envelope, handler.options);
     final maxRetries = policy?.maxRetries ?? envelope.maxRetries;
     final canRetry = envelope.attempt < maxRetries;
-    if (canRetry && _shouldAutoRetry(policy, error)) {
+    if (canRetry &&
+        error is! TaskRetryVeto &&
+        _shouldAutoRetry(policy, error)) {
       final delay = _computeRetryDelay(
         envelope.attempt,
         error,

@@ -163,6 +163,50 @@ void main() {
   );
 
   test(
+    'stale context.step failure does not emit failed step introspection',
+    () async {
+      final store = _GatedFailureStore();
+      final fixture = _Fixture(store);
+      addTearDown(fixture.close);
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      final introspection = _RecordingIntrospection();
+      final runtime = fixture.runtime(
+        'step-owner',
+        introspectionSink: introspection,
+        definition: WorkflowScript<void>(
+          name: 'step-fails',
+          run: (script) => script.step<void>('actual-step', (context) async {
+            entered.complete();
+            await release.future;
+            throw StateError('stale step failure');
+          }),
+        ).definition,
+      );
+      final runId = await store.createRun(
+        workflow: 'step-fails',
+        params: const {},
+      );
+      final running = runtime.executeRun(runId);
+      await entered.future.timeout(const Duration(seconds: 2));
+      final oldToken = (await store.get(runId))!.executionId!;
+      await store.releaseRunExecution(runId, executionId: oldToken);
+      await store.claimRunExecution(runId, ownerId: 'replacement');
+      await store.markCompleted(runId, 'replacement success');
+      release.complete();
+
+      await expectLater(running, throwsStateError);
+      expect((await store.get(runId))!.result, 'replacement success');
+      expect(
+        introspection.events.where(
+          (event) => event.type == WorkflowStepEventType.failed,
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
     'unknown workflow terminal notification recovers on managed redelivery',
     () async {
       final store = InMemoryWorkflowStore();
@@ -299,6 +343,7 @@ class _Fixture {
   WorkflowRuntime runtime(
     String owner, {
     WorkflowIntrospectionSink? introspectionSink,
+    WorkflowDefinition? definition,
   }) {
     final runtime =
         WorkflowRuntime(
@@ -312,10 +357,11 @@ class _Fixture {
           runtimeId: owner,
           introspectionSink: introspectionSink,
         )..registerWorkflow(
-          WorkflowScript<void>(
-            name: 'fails',
-            run: (_) async => throw StateError('execution failed'),
-          ).definition,
+          definition ??
+              WorkflowScript<void>(
+                name: 'fails',
+                run: (_) async => throw StateError('execution failed'),
+              ).definition,
         );
     runtimes.add(runtime);
     return runtime;

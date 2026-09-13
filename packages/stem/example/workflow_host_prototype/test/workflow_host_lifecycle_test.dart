@@ -1,7 +1,19 @@
 import 'dart:async';
 
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
-import 'package:workflow_host_prototype/workflow_host.dart';
+
+Future<T> _withHost<T>({
+  required Iterable<HostedDefinition> workflows,
+  required Future<T> Function(WorkflowHost host) body,
+}) async {
+  final host = await WorkflowHost.inMemory(workflows: workflows);
+  try {
+    return await body(host);
+  } finally {
+    await host.close();
+  }
+}
 
 void main() {
   test(
@@ -53,7 +65,7 @@ void main() {
     final originalStack = StackTrace.fromString('original body stack');
     late WorkflowHost captured;
     try {
-      await WorkflowHost.run<void>(
+      await _withHost<void>(
         workflows: [],
         body: (host) async {
           captured = host;

@@ -135,6 +135,101 @@ void main() {
     },
   );
 
+  test(
+    'resumeDueRuns enqueues every resumed candidate before reporting failure',
+    () async {
+      final failingBroker = _FailFirstPublishBroker();
+      final failingRegistry = InMemoryTaskRegistry();
+      final failingRuntime = WorkflowRuntime(
+        stem: Stem(
+          broker: failingBroker,
+          registry: failingRegistry,
+          backend: backend,
+        ),
+        store: store,
+        eventBus: InMemoryEventBus(store),
+        clock: clock,
+      );
+      failingRegistry.register(failingRuntime.workflowRunnerHandler());
+      addTearDown(() async {
+        await failingRuntime.dispose();
+        await failingBroker.close();
+      });
+
+      final first = await store.createRun(
+        workflow: 'due.first',
+        params: const {},
+      );
+      final second = await store.createRun(
+        workflow: 'due.second',
+        params: const {},
+      );
+      final due = clock.now().subtract(const Duration(seconds: 1));
+      await store.suspendUntil(first, 'wait', due);
+      await store.suspendUntil(second, 'wait', due);
+
+      await expectLater(
+        failingRuntime.resumeDueRuns(now: clock.now()),
+        throwsA(isA<StateError>()),
+      );
+      expect(failingBroker.publishAttempts, 2);
+      expect((await store.get(first))!.status, WorkflowStatus.running);
+      expect((await store.get(second))!.status, WorkflowStatus.running);
+    },
+  );
+
+  test('resumeDueRuns can opt out of dispatch for manual execution', () async {
+    final runId = await store.createRun(
+      workflow: 'manual.due',
+      params: const {},
+    );
+    await store.suspendUntil(
+      runId,
+      'wait',
+      clock.now().subtract(const Duration(seconds: 1)),
+    );
+
+    final resumed = await runtime.resumeDueRuns(
+      now: clock.now(),
+      enqueue: false,
+    );
+
+    expect(resumed, [runId]);
+    expect((await store.get(runId))!.status, WorkflowStatus.running);
+    expect(await broker.pendingCount(runtime.continuationQueue), 0);
+  });
+
+  test(
+    'script entry performs one run mark and one checkpoint listing',
+    () async {
+      final countedStore = _CountingWorkflowStore(clock: clock);
+      final countedRuntime =
+          WorkflowRuntime(
+            stem: stem,
+            store: countedStore,
+            eventBus: InMemoryEventBus(countedStore),
+            clock: clock,
+          )..registerWorkflow(
+            WorkflowScript<String>(
+              name: 'counted.script',
+              checkpoints: [WorkflowCheckpoint(name: 'only')],
+              run: (script) => script.step<String>(
+                'only',
+                (context) async => 'done',
+              ),
+            ).definition,
+          );
+      addTearDown(countedRuntime.dispose);
+
+      final runId = await countedRuntime.startWorkflow('counted.script');
+      await countedRuntime.executeRun(runId);
+
+      expect(countedStore.markRunningCalls, 1);
+      expect(countedStore.stepRunningCalls, 1);
+      expect(countedStore.listStepsCalls, 1);
+    },
+  );
+
   test('flow context workflows starts typed child workflows', () async {
     final childRef = WorkflowRef<Map<String, Object?>, String>(
       name: 'child.runtime.flow',
@@ -1764,6 +1859,43 @@ void main() {
     expect(meta['stem.workflow.iteration'], 0);
     expect(meta['origin'], 'builder');
   });
+}
+
+class _FailFirstPublishBroker extends InMemoryBroker {
+  int publishAttempts = 0;
+
+  @override
+  Future<void> publish(Envelope envelope, {RoutingInfo? routing}) async {
+    publishAttempts++;
+    if (publishAttempts == 1) {
+      throw StateError('synthetic enqueue failure');
+    }
+    await super.publish(envelope, routing: routing);
+  }
+}
+
+class _CountingWorkflowStore extends InMemoryWorkflowStore {
+  _CountingWorkflowStore({required super.clock});
+
+  int markRunningCalls = 0;
+  int stepRunningCalls = 0;
+  int listStepsCalls = 0;
+
+  @override
+  Future<void> markRunning(String runId, {String? stepName}) async {
+    if (stepName == null) {
+      markRunningCalls++;
+    } else {
+      stepRunningCalls++;
+    }
+    await super.markRunning(runId, stepName: stepName);
+  }
+
+  @override
+  Future<List<WorkflowStepEntry>> listSteps(String runId) async {
+    listStepsCalls++;
+    return super.listSteps(runId);
+  }
 }
 
 class _RecordingWorkflowIntrospectionSink implements WorkflowIntrospectionSink {

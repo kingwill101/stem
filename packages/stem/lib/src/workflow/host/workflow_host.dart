@@ -7,6 +7,8 @@ import 'package:stem/src/bootstrap/workflow_app.dart';
 import 'package:stem/src/core/payload_codec_registry.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
+import 'package:stem/src/workflow/core/workflow_recovery_report.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/host/hosted_result.dart';
@@ -32,14 +34,17 @@ final class WorkflowHost {
   final PayloadCodecRegistry _codecs;
   final bool _ownsApp;
   final Set<Future<void>> _admitted = {};
+  final Set<Future<void>> _observerCleanup = {};
+  (Object, StackTrace)? _observerCleanupError;
   final Map<String, _RunObservation> _observations = {};
   Future<void>? _closing;
+  Future<WorkflowRecoveryReport>? _recovery;
   bool _closed = false;
 
   /// Observation deadline from first result access, not an execution limit.
   final Duration? resultTimeout;
 
-  /// Interval between shared store reads for active snapshot subscriptions.
+  /// Fallback poll interval when the store has no complete native change feed.
   final Duration pollInterval;
 
   /// Whether close has begun and new operations are rejected.
@@ -163,6 +168,35 @@ final class WorkflowHost {
   Future<R> execute<I, R>(HostedWorkflow<I, R> workflow, I input) async =>
       (await submit(workflow, input)).result;
 
+  /// Re-enqueues a bounded batch of registered runnable workflow runs.
+  ///
+  /// Useful after reconnect/restart when a persisted run has no delivery or
+  /// an execution lease expired. This never force-resumes a non-due suspension;
+  /// durable timers/events remain the app runtime's responsibility.
+  ///
+  /// Overlapping calls share the current scan and its limit. A later call
+  /// starts a fresh scan. Duplicate delivery is possible across hosts; normal
+  /// execution claims arbitrate it. Closing joins an admitted scan.
+  Future<WorkflowRecoveryReport> recover({int limit = 100}) {
+    _ensureOpen();
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    if (_recovery != null) return _recovery!;
+    late final Future<WorkflowRecoveryReport> recovery;
+    recovery =
+        _operation(
+          () => _app.runtime.recoverRunnableRuns(
+            limit: limit,
+            workflows: _definitions.keys.toSet(),
+          ),
+        ).whenComplete(() {
+          if (identical(_recovery, recovery)) _recovery = null;
+        });
+    _recovery = recovery;
+    return recovery;
+  }
+
   /// Reattaches to a persisted run without submitting another execution.
   ///
   /// Fresh equivalent definitions are accepted; registered callbacks and codecs
@@ -225,6 +259,26 @@ final class WorkflowHost {
     }
     await _read(id, workflow);
     await _app.runtime.cancelWorkflow(id);
+  });
+
+  Future<List<WorkflowJournalEntry>> _compensations(
+    String id,
+    String workflow,
+  ) => _operation(() async {
+    await _read(id, workflow);
+    return _app.runtime.compensationJournal(id);
+  });
+
+  Future<void> _retryCompensations(
+    String id,
+    String workflow,
+    int additionalAttempts,
+  ) => _operation(() async {
+    await _read(id, workflow);
+    await _app.runtime.retryCompensations(
+      id,
+      additionalAttempts: additionalAttempts,
+    );
   });
 
   Stream<WorkflowRunView> _watch(String id, String workflow) => Stream.multi(
@@ -333,7 +387,35 @@ final class WorkflowHost {
 
   Future<void> _drain() async {
     await Future.wait(_admitted.toList());
-    if (_ownsApp) await _app.close();
+    await Future.wait(_observerCleanup.toList());
+    try {
+      if (_ownsApp) await _app.close();
+    } on Object catch (error, stack) {
+      if (_observerCleanupError == null) rethrow;
+      developer.log(
+        'Owned app cleanup failed after observer cleanup.',
+        name: 'stem.workflow.host',
+        error: error,
+        stackTrace: stack,
+      );
+    }
+    final failure = _observerCleanupError;
+    if (failure != null) {
+      Error.throwWithStackTrace(failure.$1, failure.$2);
+    }
+  }
+
+  void _joinObserverCleanup(Future<void> cleanup) {
+    late final Future<void> settled;
+    settled = cleanup
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stack) {
+            _observerCleanupError ??= (error, stack);
+          },
+        )
+        .whenComplete(() => _observerCleanup.remove(settled));
+    _observerCleanup.add(settled);
   }
 
   static Map<String, HostedDefinition> _index(
@@ -379,24 +461,85 @@ class _RunObservation {
   bool stopped = false;
   Timer? _timer;
   Completer<void>? _wake;
+  // _stopNative cancels this subscription and joins cleanup through the host.
+  // ignore: cancel_subscriptions
+  StreamSubscription<void>? _changes;
+  bool _native = false;
+  bool _dirty = false;
 
   void listen(MultiStreamController<WorkflowRunView> listener) {
     listeners.add(listener);
     listener.onCancel = () {
       listeners.remove(listener);
-      if (listeners.isEmpty) _wakeUp();
+      if (listeners.isEmpty) {
+        final cleanup = _stopNative();
+        _wakeUp();
+        return cleanup;
+      }
     };
     listener.onResume = () {
       if (latest != null && !stopped) listener.add(latest!);
     };
     if (latest != null) listener.add(latest!);
+    if (_changes == null && host._app.store is WorkflowRunChanges) {
+      _startNative(host._app.store as WorkflowRunChanges);
+    }
     if (!polling) unawaited(_poll());
+  }
+
+  void _startNative(WorkflowRunChanges changes) {
+    _native = true;
+    try {
+      _changes = changes
+          .watchRunChanges(id)
+          .listen(
+            (_) {
+              if (stopped) return;
+              _dirty = true;
+              _wakeUp();
+            },
+            onError: _nativeError,
+            onDone: () {
+              unawaited(_stopNative());
+              _dirty = true;
+              _wakeUp();
+            },
+          );
+      if (!_native) unawaited(_stopNative());
+    } on Object catch (error, stack) {
+      _nativeError(error, stack);
+    }
+  }
+
+  void _nativeError(Object error, StackTrace stack) {
+    developer.log(
+      'Run change source failed; falling back to polling.',
+      name: 'stem.workflow.host',
+      error: error,
+      stackTrace: stack,
+    );
+    unawaited(_stopNative());
+    _dirty = true;
+    _wakeUp();
+  }
+
+  Future<void> _stopNative() {
+    _native = false;
+    final changes = _changes;
+    _changes = null;
+    if (changes != null) {
+      final cleanup = Future<void>.sync(changes.cancel);
+      host._joinObserverCleanup(cleanup);
+      return cleanup;
+    }
+    return Future<void>.value();
   }
 
   Future<void> _poll() async {
     polling = true;
     try {
       while (!host.isClosed && !stopped && listeners.isNotEmpty) {
+        _dirty = false;
         final view = await host._operation(() => host._read(id, workflow));
         if (host.isClosed || stopped) break;
         if (latest == null ||
@@ -414,9 +557,10 @@ class _RunObservation {
           break;
         }
         if (listeners.isEmpty) break;
+        if (_dirty) continue;
         final wake = Completer<void>();
         _wake = wake;
-        _timer = Timer(host.pollInterval, _wakeUp);
+        if (!_native) _timer = Timer(host.pollInterval, _wakeUp);
         await wake.future;
       }
     } on Object catch (error, stack) {
@@ -445,6 +589,7 @@ class _RunObservation {
   void close() {
     if (stopped) return;
     stopped = true;
+    unawaited(_stopNative());
     _wakeUp();
     for (final listener in listeners.toList()) {
       unawaited(listener.close());
@@ -489,12 +634,22 @@ final class HostedRun<R> {
 
   /// Observes snapshots, not a replayable lifecycle history.
   ///
-  /// Concurrent subscriptions share polling. Paused subscriptions may skip
+  /// Concurrent subscriptions share observation. Complete native store changes
+  /// are preferred; other stores use polling. Paused subscriptions may skip
   /// intermediate snapshots. Terminal state or host closure ends observation.
   Stream<WorkflowRunView> watch() => _host._watch(id, workflow);
 
   /// Requests durable cancellation without forcibly interrupting Dart code.
   Future<void> cancel() => _host._cancel(id, workflow);
+
+  /// Reads cleanup progress separately from the run's failed terminal status.
+  Future<List<WorkflowJournalEntry>> compensations() =>
+      _host._compensations(id, workflow);
+
+  /// Re-enqueues cleanup; an explicit positive budget extension allows an
+  /// exhausted handler to try again. Lifetime attempt counts are retained.
+  Future<void> retryCompensations({int additionalAttempts = 0}) =>
+      _host._retryCompensations(id, workflow, additionalAttempts);
 }
 
 /// A persisted terminal outcome other than successful completion.

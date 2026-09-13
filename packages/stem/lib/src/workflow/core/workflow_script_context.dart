@@ -7,6 +7,7 @@ import 'package:stem/src/core/payload_map.dart';
 import 'package:stem/src/workflow/core/flow_context.dart' show FlowContext;
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_execution_context.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 
@@ -44,6 +45,21 @@ abstract class WorkflowScriptContext {
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
+  });
+}
+
+/// Optional journal-backed checkpoint retry capability.
+// An optional runtime capability, not a free function on every legacy context.
+// ignore: one_member_abstracts
+abstract interface class WorkflowScriptJournalContext {
+  /// Executes a checkpoint with a retry budget persisted independently of
+  /// workflow task delivery attempts.
+  Future<T> stepWithRetry<T>(
+    String name,
+    FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    required WorkflowRetryPolicy retryPolicy,
+    bool autoVersion = false,
+    WorkflowCompensationRegistration? Function(T result)? compensationForResult,
   });
 }
 

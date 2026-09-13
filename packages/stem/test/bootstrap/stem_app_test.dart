@@ -1473,6 +1473,34 @@ void main() {
       }
     });
 
+    test('StemWorkflowApp.resumeDueRuns enqueues continuation tasks', () async {
+      final workflowApp = await StemWorkflowApp.inMemory();
+      await workflowApp.startRuntime();
+      try {
+        final runId = await workflowApp.store.createRun(
+          workflow: 'workflow.public.resume',
+          params: const {},
+        );
+        await workflowApp.store.suspendUntil(
+          runId,
+          'wait',
+          DateTime.now().subtract(const Duration(seconds: 1)),
+        );
+        final before = await workflowApp.app.broker.pendingCount(
+          workflowApp.runtime.continuationQueue,
+        );
+
+        expect(await workflowApp.resumeDueRuns(DateTime.now()), [runId]);
+
+        final after = await workflowApp.app.broker.pendingCount(
+          workflowApp.runtime.continuationQueue,
+        );
+        expect(after, before! + 1);
+      } finally {
+        await workflowApp.shutdown();
+      }
+    });
+
     test(
       'workflow codecs persist encoded checkpoints and decode typed results',
       () async {

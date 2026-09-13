@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:workflow_host_prototype/example_binary_codec.dart';
-import 'package:workflow_host_prototype/workflow_host.dart';
+import 'package:stem/stem.dart';
 
 Future<void> main() async {
   try {
@@ -28,17 +28,19 @@ Future<void> main() async {
         );
       },
     );
-    await WorkflowHost.run<void>(
+    final host = await WorkflowHost.inMemory(
       workflows: [greeting],
       codecs: PayloadCodecRegistry()..register<BinaryMessage>(codec),
-      body: (host) async {
-        final result = await host.execute(
-          greeting,
-          const BinaryMessage('Ada 🌱'),
-        );
-        print(result.text);
-      },
     );
+    try {
+      final result = await host.execute(
+        greeting,
+        const BinaryMessage('Ada 🌱'),
+      );
+      print(result.text);
+    } finally {
+      await host.close();
+    }
   } catch (error, stack) {
     stderr
       ..writeln(error)

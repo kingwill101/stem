@@ -232,7 +232,9 @@ void main() {
     final store = _CountingStore();
     final workflow = _waitingWorkflow('timer');
     final app = await StemWorkflowApp.create(
-      storeFactory: WorkflowStoreFactory(create: () async => store),
+      storeFactory: WorkflowStoreFactory(
+        create: () async => _PollingStore(store),
+      ),
       workflows: [workflow.bind(PayloadCodecRegistry())],
     );
     addTearDown(app.close);
@@ -330,4 +332,16 @@ class _CountingStore extends InMemoryWorkflowStore {
     reads++;
     return super.get(runId);
   }
+}
+
+class _PollingStore implements WorkflowStore {
+  _PollingStore(this.delegate);
+  final InMemoryWorkflowStore delegate;
+
+  @override
+  Future<RunState?> get(String runId) => delegate.get(runId);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('Unexpected polling-fixture store call.');
 }

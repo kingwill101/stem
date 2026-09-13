@@ -29,7 +29,7 @@ dev_dependencies:
   lints: ^6.0.0
   path: ^1.9.1
   property_testing: ^0.3.2
-  stem_adapter_tests: ^0.3.0
+  stem_adapter_tests: ">=0.3.0 <1.0.0"
   #  stem_cli: ^0.2.0
   #  stem_postgres: ^0.2.0
   #  stem_redis: ^0.2.0

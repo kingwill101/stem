@@ -1973,6 +1973,12 @@ class TaskOptions {
   }
 }
 
+/// Marker for errors whose own durable retry budget has already been exhausted.
+///
+/// Automatic transport retries must not restart an operation with this marker.
+/// Other errors retain the configured task retry policy and backoff.
+abstract interface class TaskRetryVeto {}
+
 /// Retry policy configuration for tasks and publish attempts.
 ///
 /// Apply via [TaskOptions.retryPolicy] or [TaskEnqueueOptions.retryPolicy].

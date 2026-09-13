@@ -2,6 +2,18 @@
 
 ## 0.5.0
 
+- Consolidate due-run resumption in the runtime. `StemWorkflowApp.resumeDueRuns`
+  now enqueues continuations; manual drivers can opt out through the runtime's
+  `enqueue: false` option. Share lifecycle bookkeeping and checkpoint writes,
+  and retire the example-only host implementation in favor of the core host.
+- Add journal-backed checkpoint retry policies and named, result-aware
+  compensation. Persist retry budgets/ETAs, lease cleanup independently, and
+  expose progress plus explicit exhausted-budget extension without resetting
+  lifetime attempts. Automatic cleanup follows terminal failure, not cancellation.
+- Add optional complete run-change notifications for native observation, with
+  in-memory support and polling fallback for other stores.
+- Add bounded, coalesced host recovery for registered runnable runs, with
+  immutable enqueue/skip/error reports and admitted-operation cleanup.
 - Preserve nullable hosted results through the configured codec using a
   versioned final-result envelope. Add atomic `WorkflowTerminalStore`
   completion/cancellation transitions and suppress rejected terminal signals.

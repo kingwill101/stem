@@ -45,16 +45,21 @@ import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_compensation.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
+import 'package:stem/src/workflow/core/workflow_recovery_report.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_result.dart';
 import 'package:stem/src/workflow/core/workflow_resume.dart';
 import 'package:stem/src/workflow/core/workflow_runtime_metadata.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
+import 'package:stem/src/workflow/core/workflow_step_entry.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
 import 'package:stem/src/workflow/runtime/workflow_introspection.dart';
+import 'package:stem/src/workflow/runtime/workflow_journal_controller.dart';
 import 'package:stem/src/workflow/runtime/workflow_manifest.dart';
 import 'package:stem/src/workflow/runtime/workflow_registry.dart';
 import 'package:stem/src/workflow/runtime/workflow_views.dart';
@@ -136,6 +141,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
   Timer? _timer;
   Future<void>? _activePoll;
+  Future<void> _dueTail = Future<void>.value();
   final Map<String, DateTime> _stepMetricStarts = {};
   late Future<void> _startFuture;
   int _pollGeneration = 0;
@@ -563,30 +569,73 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     });
   }
 
+  /// Resumes due runs using this runtime's clock, policy, and routing rules.
+  ///
+  /// Dispatch is enabled by default. Manual drivers may explicitly select
+  /// [enqueue] false and execute returned runs themselves. Calls on the same
+  /// runtime are serialized with polling, and disposal joins admitted work.
+  ///
+  /// Store resumption and broker publication are still separate operations.
+  /// Every candidate in a consumed batch is attempted before the first error
+  /// is rethrown; a successfully resumed but undispatched run can be repaired
+  /// by [recoverRunnableRuns].
+  Future<List<String>> resumeDueRuns({
+    DateTime? now,
+    int limit = 256,
+    bool enqueue = true,
+  }) {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final operation = _dueTail.then(
+      (_) => _resumeDueRuns(now ?? _clock.now(), limit, enqueue),
+    );
+    _dueTail = operation.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return operation;
+  }
+
+  Future<List<String>> _resumeDueRuns(
+    DateTime now,
+    int limit,
+    bool enqueue,
+  ) async {
+    final due = await _store.dueRuns(now, limit: limit);
+    final resumed = <String>[];
+    (Object, StackTrace)? failure;
+    for (final runId in due) {
+      try {
+        final state = await _store.get(runId);
+        if (state == null || state.status != WorkflowStatus.suspended) continue;
+        if (await _maybeCancelForPolicy(state, now: now)) continue;
+        await _store.markResumed(runId, data: state.dueResumeData);
+        final current = await _store.get(runId);
+        if (current == null || current.status != WorkflowStatus.running) {
+          continue;
+        }
+        if (enqueue) {
+          await _enqueueRun(
+            runId,
+            workflow: current.workflow,
+            continuation: true,
+            reason: WorkflowContinuationReason.due,
+            runtimeMetadata: current.runtimeMetadata,
+          );
+        }
+        resumed.add(runId);
+      } on Object catch (error, stack) {
+        failure ??= (error, stack);
+      }
+    }
+    if (failure != null) Error.throwWithStackTrace(failure.$1, failure.$2);
+    return resumed;
+  }
+
   Future<void> _pollDueRuns() async {
     try {
-      final now = _clock.now();
-      final due = await _store.dueRuns(now);
-      for (final runId in due) {
-        final state = await _store.get(runId);
-        if (state == null) {
-          continue;
-        }
-        if (await _maybeCancelForPolicy(state, now: now)) {
-          continue;
-        }
-        await _store.markResumed(
-          runId,
-          data: state.dueResumeData,
-        );
-        await _enqueueRun(
-          runId,
-          workflow: state.workflow,
-          continuation: true,
-          reason: WorkflowContinuationReason.due,
-          runtimeMetadata: state.runtimeMetadata,
-        );
-      }
+      await resumeDueRuns();
     } on Object catch (error, stack) {
       stemLogger.warning(
         'Workflow polling failed',
@@ -614,6 +663,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     _timer?.cancel();
     _timer = null;
     await _activePoll;
+    await _dueTail;
     _stepMetricStarts.clear();
   }
 
@@ -667,7 +717,65 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     return WorkflowRunDetailView(run: run, checkpoints: checkpoints);
   }
 
+  /// Re-enqueues one bounded batch of runnable, unleased workflow runs.
+  ///
+  /// This repairs missing deliveries without mutating workflow state or
+  /// bypassing execution claims. Existing deliveries may still exist, so
+  /// callers must not interpret the report as exactly-once dispatch.
+  /// Suspended runs are left to durable timer/event handling.
+  Future<WorkflowRecoveryReport> recoverRunnableRuns({
+    int limit = 100,
+    Set<String>? workflows,
+  }) async {
+    if (limit <= 0) {
+      throw ArgumentError.value(limit, 'limit', 'Must be positive.');
+    }
+    final candidates = await _store.listRunnableRuns(
+      now: _clock.now(),
+      limit: limit,
+    );
+    final enqueued = <String>[];
+    final skipped = <String>[];
+    final errors = <String, String>{};
+    for (final id in candidates) {
+      try {
+        final state = await _store.get(id);
+        final now = _clock.now();
+        if (state == null ||
+            state.status != WorkflowStatus.running ||
+            state.waitTopic != null ||
+            (state.leaseExpiresAt?.isAfter(now) ?? false) ||
+            _registry.lookup(state.workflow) == null ||
+            (workflows != null && !workflows.contains(state.workflow))) {
+          skipped.add(id);
+          continue;
+        }
+        if (await _maybeCancelForPolicy(state, now: now)) {
+          skipped.add(id);
+          continue;
+        }
+        await _enqueueRun(
+          id,
+          workflow: state.workflow,
+          continuation: true,
+          reason: WorkflowContinuationReason.manual,
+          runtimeMetadata: state.runtimeMetadata,
+        );
+        enqueued.add(id);
+      } on Object catch (error) {
+        errors[id] = error.toString();
+      }
+    }
+    return WorkflowRecoveryReport(
+      enqueuedRunIds: enqueued,
+      skippedRunIds: skipped,
+      errors: errors,
+    );
+  }
+
   /// Returns uniform run views filtered by workflow/status.
+  ///
+  /// Compensation journal inspection is available separately from run status.
   Future<List<WorkflowRunView>> listRunViews({
     String? workflow,
     WorkflowStatus? status,
@@ -832,7 +940,9 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
 
       final policy = runState.cancellationPolicy;
       final suspensionData = runState.suspensionData;
-      final completedIterations = await _loadCompletedIterations(runId);
+      final completedIterations = _completedIterationCounts(
+        await _store.listSteps(runId),
+      );
       var cursor = _computeCursor(definition, runState, completedIterations);
       Object? previousResult;
       if (cursor > 0) {
@@ -951,46 +1061,14 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         } on _WorkflowLeaseLost {
           return;
         } catch (error, stack) {
-          final failure = await _markFailed(
-            runId,
+          await _failAttempt(
+            runState,
             error,
             stack,
             executionClaim,
+            stepName: step.name,
+            failedIteration: iteration,
           );
-          if (failure != TerminalFailureResult.superseded) {
-            stemLogger.warning(
-              'Workflow {workflow} failed',
-              _runtimeLogContext(
-                workflow: runState.workflow,
-                runId: runId,
-                step: step.name,
-                extra: {
-                  'error': error.toString(),
-                  'stack': stack.toString(),
-                  'runtimeId': _runtimeId,
-                },
-              ),
-            );
-            await _recordStepEvent(
-              WorkflowStepEventType.failed,
-              runState,
-              step.name,
-              iteration: iteration,
-              error: error.toString(),
-            );
-            await _signals.workflowRunFailed(
-              WorkflowRunPayload(
-                runId: runId,
-                workflow: runState.workflow,
-                status: WorkflowRunStatus.failed,
-                step: step.name,
-                metadata: {
-                  'error': error.toString(),
-                  'stack': stack.toString(),
-                },
-              ),
-            );
-          }
           rethrow;
         }
         final control = context.takeControl();
@@ -1142,32 +1220,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       }
 
       final storedWorkflowResult = definition.encodeResult(previousResult);
-      if (!await _completeRun(runId, storedWorkflowResult)) return;
-      StemMetrics.instance.increment(
-        'stem.workflows.succeeded',
-        tags: {'workflow': runState.workflow},
-      );
-      StemMetrics.instance.recordDuration(
-        'stem.workflow.duration',
-        _clock.now().difference(runState.createdAt),
-        tags: {'workflow': runState.workflow},
-      );
-      stemLogger.debug(
-        'Workflow {workflow} completed',
-        _runtimeLogContext(
-          workflow: runState.workflow,
-          runId: runId,
-          extra: {'runtimeId': _runtimeId},
-        ),
-      );
-      await _signals.workflowRunCompleted(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.completed,
-          metadata: {'result': storedWorkflowResult},
-        ),
-      );
+      await _finishRun(runState, storedWorkflowResult);
     } on _WorkflowLeaseLost {
       return;
     } finally {
@@ -1194,27 +1247,9 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
       return;
     }
     final runId = runState.id;
-    final wasSuspended = runState.status == WorkflowStatus.suspended;
-    await _store.markRunning(runId);
-    if (wasSuspended) {
-      stemLogger.debug(
-        'Workflow {workflow} resumed',
-        _runtimeLogContext(
-          workflow: runState.workflow,
-          runId: runId,
-          extra: {'runtimeId': _runtimeId},
-        ),
-      );
-      await _signals.workflowRunResumed(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.running,
-        ),
-      );
-    }
+    // executeRun owns the run-entry transition for both flow and script kinds.
     final checkpoints = await _store.listSteps(runId);
-    final completedIterations = await _loadCompletedIterations(runId);
+    final completedIterations = _completedIterationCounts(checkpoints);
     Object? previousResult;
     if (checkpoints.isNotEmpty) {
       previousResult =
@@ -1242,67 +1277,23 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         return;
       }
       final storedWorkflowResult = definition.encodeResult(result);
-      if (!await _completeRun(runId, storedWorkflowResult)) return;
-      StemMetrics.instance.increment(
-        'stem.workflows.succeeded',
-        tags: {'workflow': runState.workflow},
-      );
-      StemMetrics.instance.recordDuration(
-        'stem.workflow.duration',
-        _clock.now().difference(runState.createdAt),
-        tags: {'workflow': runState.workflow},
-      );
-      stemLogger.debug(
-        'Workflow {workflow} completed',
-        _runtimeLogContext(
-          workflow: runState.workflow,
-          runId: runId,
-          extra: {'runtimeId': _runtimeId},
-        ),
-      );
-      await _signals.workflowRunCompleted(
-        WorkflowRunPayload(
-          runId: runId,
-          workflow: runState.workflow,
-          status: WorkflowRunStatus.completed,
-          metadata: {'result': storedWorkflowResult},
-        ),
-      );
+      await _finishRun(runState, storedWorkflowResult);
     } on _WorkflowLeaseLost {
       return;
     } on _WorkflowScriptSuspended {
       return;
+    } on WorkflowJournalConflict {
+      // A superseding execution owns the journal claim. Do not report the
+      // stale worker's control flow as a workflow failure.
+      return;
     } catch (error, stack) {
-      final failure = await _markFailed(
-        runId,
+      await _failAttempt(
+        runState,
         error,
         stack,
         executionClaim,
+        stepName: execution.lastStepName,
       );
-      if (failure != TerminalFailureResult.superseded) {
-        stemLogger.warning(
-          'Workflow {workflow} failed',
-          _runtimeLogContext(
-            workflow: runState.workflow,
-            runId: runId,
-            step: execution.lastStepName,
-            extra: {
-              'error': error.toString(),
-              'stack': stack.toString(),
-              'runtimeId': _runtimeId,
-            },
-          ),
-        );
-        await _signals.workflowRunFailed(
-          WorkflowRunPayload(
-            runId: runId,
-            workflow: runState.workflow,
-            status: WorkflowRunStatus.failed,
-            step: execution.lastStepName,
-            metadata: {'error': error.toString(), 'stack': stack.toString()},
-          ),
-        );
-      }
       rethrow;
     } finally {
       // Suspension exits the script before a completed/failed step can
@@ -1399,9 +1390,10 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     }
   }
 
-  /// Loads the latest iteration number for each step name.
-  Future<Map<String, int>> _loadCompletedIterations(String runId) async {
-    final entries = await _store.listSteps(runId);
+  /// Derives iteration counts from the same checkpoint snapshot as replay.
+  Map<String, int> _completedIterationCounts(
+    Iterable<WorkflowStepEntry> entries,
+  ) {
     final counts = <String, int>{};
     for (final entry in entries) {
       final base = _basePersistedNodeName(entry.name);
@@ -1511,13 +1503,86 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     await _extendLease(context);
   }
 
-  Future<bool> _completeRun(String runId, Object? result) async {
+  Future<void> _failAttempt(
+    RunState state,
+    Object error,
+    StackTrace stack,
+    WorkflowExecutionClaim? claim, {
+    String? stepName,
+    int? failedIteration,
+  }) async {
+    final outcome = await _markFailed(state.id, error, stack, claim);
+    if (outcome == TerminalFailureResult.superseded) return;
+    final metadata = {
+      'error': error.toString(),
+      'stack': stack.toString(),
+    };
+    stemLogger.warning(
+      'Workflow {workflow} failed',
+      _runtimeLogContext(
+        workflow: state.workflow,
+        runId: state.id,
+        step: stepName,
+        extra: {...metadata, 'runtimeId': _runtimeId},
+      ),
+    );
+    if (stepName != null && failedIteration != null) {
+      await _recordStepEvent(
+        WorkflowStepEventType.failed,
+        state,
+        stepName,
+        iteration: failedIteration,
+        error: error.toString(),
+      );
+    }
+    await _signals.workflowRunFailed(
+      WorkflowRunPayload(
+        runId: state.id,
+        workflow: state.workflow,
+        status: WorkflowRunStatus.failed,
+        step: stepName,
+        metadata: metadata,
+      ),
+    );
+  }
+
+  Future<void> _finishRun(RunState state, Object? result) async {
     final store = _store;
     if (store is WorkflowTerminalStore) {
-      return (store as WorkflowTerminalStore).completeIfActive(runId, result);
+      if (!await (store as WorkflowTerminalStore).completeIfActive(
+        state.id,
+        result,
+      )) {
+        return;
+      }
+    } else {
+      await store.markCompleted(state.id, result);
     }
-    await store.markCompleted(runId, result);
-    return true;
+    StemMetrics.instance.increment(
+      'stem.workflows.succeeded',
+      tags: {'workflow': state.workflow},
+    );
+    StemMetrics.instance.recordDuration(
+      'stem.workflow.duration',
+      _clock.now().difference(state.createdAt),
+      tags: {'workflow': state.workflow},
+    );
+    stemLogger.debug(
+      'Workflow {workflow} completed',
+      _runtimeLogContext(
+        workflow: state.workflow,
+        runId: state.id,
+        extra: {'runtimeId': _runtimeId},
+      ),
+    );
+    await _signals.workflowRunCompleted(
+      WorkflowRunPayload(
+        runId: state.id,
+        workflow: state.workflow,
+        status: WorkflowRunStatus.completed,
+        metadata: {'result': result},
+      ),
+    );
   }
 
   Future<bool> _cancelRun(String runId, {String? reason}) async {
@@ -1553,7 +1618,204 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
   }
 
   /// Generates a unique runtime identifier for workflow lease ownership.
+  ///
+  /// Compensation uses separate journal leases, not a new workflow run claim.
   static String _defaultRuntimeId() => 'workflow-runtime-${const Uuid().v7()}';
+
+  /// Reads registered cleanup progress without changing workflow status.
+  Future<List<WorkflowJournalEntry>> compensationJournal(String runId) {
+    final store = _store;
+    if (store is! WorkflowJournalStore) {
+      throw UnsupportedError('Compensation requires a workflow journal store.');
+    }
+    return (store as WorkflowJournalStore).listCompensations(runId);
+  }
+
+  /// Enqueues failed-run cleanup, optionally extending exhausted retry budgets.
+  ///
+  /// This is an explicit operator action. Lifetime attempt counts are retained.
+  /// Cancellation does not activate cleanup.
+  Future<void> retryCompensations(
+    String runId, {
+    int additionalAttempts = 0,
+  }) async {
+    if (additionalAttempts < 0) {
+      throw ArgumentError.value(additionalAttempts, 'additionalAttempts');
+    }
+    final state = await _store.get(runId);
+    if (state == null ||
+        state.status != WorkflowStatus.failed ||
+        state.executionId == null) {
+      throw StateError('Compensation requires a failed, fenced workflow run.');
+    }
+    final store = _store;
+    if (store is! WorkflowJournalStore) {
+      throw UnsupportedError('Compensation requires a workflow journal store.');
+    }
+    final journalStore = store as WorkflowJournalStore;
+    final journal = WorkflowJournalController(journalStore, _clock);
+    if (additionalAttempts > 0) {
+      for (final entry in await journalStore.listCompensations(runId)) {
+        if (entry.data['state'] == 'exhausted') {
+          await journal.extendCompensationBudget(
+            runId,
+            entry.name,
+            state.executionId!,
+            additionalAttempts,
+          );
+        }
+      }
+    }
+    await _enqueueCompensation(state, state.executionId!);
+  }
+
+  Future<void> _enqueueCompensation(RunState state, String executionId) async {
+    final store = _store;
+    if (store is! WorkflowJournalStore) return;
+    final entries = await (store as WorkflowJournalStore).listCompensations(
+      state.id,
+    );
+    if (!entries.any(
+      (entry) =>
+          entry.data['state'] != 'completed' &&
+          entry.data['state'] != 'exhausted',
+    )) {
+      return;
+    }
+    await _enqueueRun(
+      state.id,
+      workflow: state.workflow,
+      continuation: true,
+      reason: WorkflowContinuationReason.manual,
+      runtimeMetadata: state.runtimeMetadata,
+      compensationExecutionId: executionId,
+    );
+  }
+
+  Future<void> _executeCompensations(
+    String runId,
+    String executionId,
+  ) async {
+    final state = await _store.get(runId);
+    if (state == null ||
+        state.status != WorkflowStatus.failed ||
+        state.executionId != executionId) {
+      return;
+    }
+    final store = _store;
+    if (store is! WorkflowJournalStore) {
+      throw UnsupportedError('Compensation requires a workflow journal store.');
+    }
+    final definition = _registry.lookup(state.workflow);
+    if (definition == null) {
+      throw StateError(
+        'Workflow ${state.workflow} is not registered for cleanup.',
+      );
+    }
+    final journal = WorkflowJournalController(
+      store as WorkflowJournalStore,
+      _clock,
+    );
+    const lease = Duration(seconds: 30);
+    try {
+      while (true) {
+        final attempt = await journal.claimCompensation(
+          runId,
+          executionId,
+        );
+        if (attempt == null) return;
+        if (attempt.state == 'exhausted') {
+          throw WorkflowCompensationRetryExhausted(
+            runId,
+            attempt.entry.name,
+            attempt.attempts,
+            attempt.entry.data['lastError'],
+          );
+        }
+        if (!attempt.acquired) {
+          final delay = attempt.readyAt?.difference(_clock.now()) ?? lease;
+          throw TaskRetryRequest(
+            countdown: delay.isNegative ? Duration.zero : delay,
+            maxRetries: _leaseConflictMaxRetries,
+          );
+        }
+        final handlerId = attempt.entry.data['handler']! as String;
+        final handler = definition.compensationHandlers[handlerId];
+        final context = WorkflowCompensationContext(
+          runId: runId,
+          stepName: attempt.entry.name,
+          handler: handlerId,
+          attempt: attempt.attempts,
+          heartbeat: () => journal.renewCompensation(attempt, lease),
+        );
+        Future<void>? renewal;
+        final timer = Timer.periodic(const Duration(seconds: 10), (_) {
+          if (renewal != null) return;
+          renewal = context
+              .heartbeat()
+              .catchError((Object error, StackTrace stack) {
+                stemLogger.warning(
+                  'Compensation lease renewal failed',
+                  _runtimeLogContext(
+                    runId: runId,
+                    workflow: state.workflow,
+                    extra: {'error': error.toString()},
+                  ),
+                );
+              })
+              .whenComplete(() => renewal = null);
+        });
+        Object? failure;
+        StackTrace? failureStack;
+        StemMetrics.instance.increment(
+          'stem.workflow.compensations.started',
+          tags: {'workflow': state.workflow, 'handler': handlerId},
+        );
+        try {
+          if (handler == null) {
+            throw StateError(
+              'Compensation handler $handlerId is not registered.',
+            );
+          }
+          await handler(context, attempt.entry.data['input']);
+        } on Object catch (error, stack) {
+          failure = error;
+          failureStack = stack;
+        } finally {
+          timer.cancel();
+          await renewal;
+        }
+        if (failure != null) {
+          final failed = await journal.fail(attempt, failure, failureStack!);
+          StemMetrics.instance.increment(
+            'stem.workflow.compensations.failed',
+            tags: {'workflow': state.workflow, 'handler': handlerId},
+          );
+          if (failed.state == 'exhausted') {
+            throw WorkflowCompensationRetryExhausted(
+              runId,
+              failed.entry.name,
+              failed.attempts,
+              failed.entry.data['lastError'],
+            );
+          }
+          final delay = failed.readyAt!.difference(_clock.now());
+          throw TaskRetryRequest(
+            countdown: delay.isNegative ? Duration.zero : delay,
+            maxRetries: _leaseConflictMaxRetries,
+          );
+        }
+        await journal.completeCompensation(attempt);
+        StemMetrics.instance.increment(
+          'stem.workflow.compensations.completed',
+          tags: {'workflow': state.workflow, 'handler': handlerId},
+        );
+      }
+    } on WorkflowJournalConflict {
+      // A replacement cleanup claim or administrative rewind owns the work.
+      return;
+    }
+  }
 
   static String _resolveQueueName(String? raw, {required String fallback}) {
     final trimmed = raw?.trim();
@@ -1568,6 +1830,7 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     required WorkflowContinuationReason reason,
     String? workflow,
     WorkflowRunRuntimeMetadata? runtimeMetadata,
+    String? compensationExecutionId,
   }) async {
     final metadata =
         runtimeMetadata ??
@@ -1612,6 +1875,8 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
         'stem.workflow.id': metadata.workflowId,
       if (workflow != null && workflow.isNotEmpty)
         'stem.workflow.name': workflow,
+      if (compensationExecutionId != null)
+        'stem.workflow.phase': 'compensation',
     };
     await _recordRuntimeEvent(
       runId: runId,
@@ -1625,7 +1890,13 @@ class WorkflowRuntime implements WorkflowCaller, WorkflowEventEmitter {
     );
     await _stem.enqueue(
       workflowRunTaskName,
-      args: {'runId': runId},
+      args: {
+        'runId': runId,
+        if (compensationExecutionId != null) ...{
+          'phase': 'compensation',
+          'executionId': compensationExecutionId,
+        },
+      },
       meta: meta,
       options: TaskOptions(queue: targetQueue),
     );
@@ -1834,6 +2105,7 @@ class _WorkflowRunTaskHandler
 
   @override
   Future<void> onTerminalFailure(Envelope envelope, TaskStatus status) async {
+    if (envelope.args['phase'] == 'compensation') return;
     final runId = envelope.args['runId'] as String?;
     if (runId == null) return;
     final state = await runtime._store.get(runId);
@@ -1887,6 +2159,7 @@ class _WorkflowRunTaskHandler
         tags: {'workflow': state.workflow},
       );
     }
+    await runtime._enqueueCompensation(state, executionId);
     await runtime._signals.workflowRunFailed(
       WorkflowRunPayload(
         runId: runId,
@@ -1921,12 +2194,23 @@ class _WorkflowRunTaskHandler
     if (runId == null) {
       throw ArgumentError('workflow.run missing runId');
     }
+    if (args['phase'] == 'compensation') {
+      final executionId = args['executionId'];
+      if (executionId is! String || executionId.isEmpty) {
+        throw ArgumentError(
+          'Compensation task is missing its failure identity.',
+        );
+      }
+      await runtime._executeCompensations(runId, executionId);
+      return;
+    }
     await runtime.executeRun(runId, taskContext: context);
   }
 }
 
 /// Script-based workflow execution adapter with checkpointing and suspension.
-class _WorkflowScriptExecution implements WorkflowScriptContext {
+class _WorkflowScriptExecution
+    implements WorkflowScriptContext, WorkflowScriptJournalContext {
   _WorkflowScriptExecution({
     required this.runtime,
     required this.definition,
@@ -1986,6 +2270,33 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     String name,
     FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
     bool autoVersion = false,
+  }) => _step(
+    name,
+    handler,
+    autoVersion: autoVersion,
+  );
+
+  @override
+  Future<T> stepWithRetry<T>(
+    String name,
+    FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    required WorkflowRetryPolicy retryPolicy,
+    bool autoVersion = false,
+    WorkflowCompensationRegistration? Function(T result)? compensationForResult,
+  }) => _step(
+    name,
+    handler,
+    autoVersion: autoVersion,
+    retryPolicy: retryPolicy,
+    compensationForResult: compensationForResult,
+  );
+
+  Future<T> _step<T>(
+    String name,
+    FutureOr<T> Function(WorkflowScriptStepContext context) handler, {
+    bool autoVersion = false,
+    WorkflowRetryPolicy? retryPolicy,
+    WorkflowCompensationRegistration? Function(T result)? compensationForResult,
   }) async {
     /// Executes a script checkpoint with replay and suspension handling.
     _lastStepName = name;
@@ -2087,6 +2398,146 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
       ),
       workflows: _ChildWorkflowCaller(runtime: runtime, parentRunId: runId),
     );
+
+    final journalStore = retryPolicy == null
+        ? null
+        : runtime._store is WorkflowJournalStore
+        ? runtime._store as WorkflowJournalStore
+        : null;
+    if (retryPolicy != null) {
+      if (journalStore == null) {
+        throw StateError(
+          'stepWithRetry requires a WorkflowJournalStore-backed runtime.',
+        );
+      }
+      final claim = executionClaim;
+      if (claim == null) {
+        throw StateError(
+          'stepWithRetry requires a fenced workflow execution claim.',
+        );
+      }
+      final journal = WorkflowJournalController(journalStore, clock);
+      final attempt = await journal.claimStep(
+        runId,
+        checkpointName,
+        claim.executionId,
+        retryPolicy,
+      );
+      if (attempt.state == 'completed') {
+        final replayed =
+            declaredCheckpoint?.decodeValue(attempt.entry.data['value']) ??
+            attempt.entry.data['value'];
+        _previousResult = replayed;
+        _completedIterations[name] = autoVersion ? iteration + 1 : 1;
+        _stepIndex += 1;
+        return replayed as T;
+      }
+      if (attempt.state == 'exhausted') {
+        throw WorkflowStepRetryExhausted(
+          runId,
+          checkpointName,
+          attempt.attempts,
+          attempt.entry.data['lastError'],
+        );
+      }
+      if (!attempt.acquired) {
+        if (attempt.state == 'waiting' && attempt.readyAt != null) {
+          final delay = attempt.readyAt!.difference(clock.now());
+          await _suspend(
+            _ScriptControl.sleep(
+              delay.isNegative ? Duration.zero : delay,
+              null,
+            ),
+            name,
+            iteration,
+          );
+        } else if (attempt.state == 'running') {
+          // Another worker owns the durable body claim.
+          throw const _WorkflowLeaseLost();
+        }
+        throw const _WorkflowScriptSuspended();
+      }
+
+      late final T result;
+      late final Object? storedResult;
+      WorkflowCompensationRegistration? registration;
+      try {
+        result = await TaskEnqueueScope.run(
+          stepMeta,
+          () async => await handler(stepContext),
+        );
+        final control = stepContext.takeControl();
+        if (control != null && control.type != _ScriptControlType.continueRun) {
+          throw UnsupportedError(
+            'Place durable waits outside journaled action checkpoints.',
+          );
+        }
+        storedResult = declaredCheckpoint?.encodeValue(result) ?? result;
+        registration = compensationForResult?.call(result);
+      } on Object catch (error, stack) {
+        if (error is _WorkflowScriptSuspended ||
+            error is _WorkflowLeaseLost ||
+            error is WorkflowJournalConflict ||
+            error is WorkflowSuspensionSignal ||
+            error is WorkflowStepRetryExhausted) {
+          rethrow;
+        }
+        try {
+          final failed = await journal.fail(attempt, error, stack);
+          await runtime._recordStepEvent(
+            WorkflowStepEventType.failed,
+            runState,
+            name,
+            iteration: iteration,
+            error: error.toString(),
+          );
+          if (failed.state == 'exhausted') {
+            throw WorkflowStepRetryExhausted(
+              runId,
+              checkpointName,
+              failed.attempts,
+              failed.entry.data['lastError'],
+            );
+          }
+          final readyAt = failed.readyAt;
+          if (readyAt != null) {
+            final delay = readyAt.difference(clock.now());
+            await _suspend(
+              _ScriptControl.sleep(
+                delay.isNegative ? Duration.zero : delay,
+                null,
+              ),
+              name,
+              iteration,
+            );
+          }
+          throw const _WorkflowScriptSuspended();
+        } on WorkflowJournalConflict {
+          rethrow;
+        }
+      }
+      // Persistence/notification errors are not another user-action failure.
+      // A transport retry replays a committed checkpoint if the response was
+      // lost after the journal transaction succeeded.
+      await journal.completeStep(
+        attempt,
+        storedResult,
+        compensation: registration,
+      );
+      await runtime._extendLeases(taskContext, runId, executionClaim);
+      await runtime._recordStepEvent(
+        WorkflowStepEventType.completed,
+        runState,
+        name,
+        iteration: iteration,
+        result: storedResult,
+      );
+      _completedIterations[name] = autoVersion ? iteration + 1 : 1;
+      _previousResult = result;
+      _stepIndex += 1;
+      return result;
+    }
+
     late final T result;
     var suspendedBySignal = false;
     try {
@@ -2097,13 +2548,21 @@ class _WorkflowScriptExecution implements WorkflowScriptContext {
     } on WorkflowSuspensionSignal {
       suspendedBySignal = true;
     } catch (error, stack) {
-      await runtime._recordStepEvent(
-        WorkflowStepEventType.failed,
-        runState,
-        name,
-        iteration: iteration,
-        error: error.toString(),
+      final outcome = await runtime._markFailed(
+        runId,
+        error,
+        stack,
+        executionClaim,
       );
+      if (outcome != TerminalFailureResult.superseded) {
+        await runtime._recordStepEvent(
+          WorkflowStepEventType.failed,
+          runState,
+          name,
+          iteration: iteration,
+          error: error.toString(),
+        );
+      }
       Error.throwWithStackTrace(error, stack);
     }
 

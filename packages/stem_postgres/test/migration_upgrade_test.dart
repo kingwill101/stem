@@ -179,6 +179,12 @@ WHERE key = ? AND namespace = ?
     'workflow execution fencing migration retains legacy runs',
     () async {
       final migrations = buildMigrations();
+      final fencingIndex = migrations.indexWhere(
+        (migration) => migration.id.toString().contains(
+          'add_workflow_execution_fencing',
+        ),
+      );
+      expect(fencingIndex, greaterThan(0));
       final admin = PostgresDriverAdapter.fromUrl(connectionString);
       final schema =
           'stem_fencing_upgrade_${DateTime.now().microsecondsSinceEpoch}';
@@ -192,7 +198,7 @@ WHERE key = ? AND namespace = ?
         final oldRunner = MigrationRunner(
           schemaDriver: oldAdapter,
           ledger: SqlMigrationLedger(oldAdapter, tableName: 'orm_migrations'),
-          migrations: migrations.take(migrations.length - 1).toList(),
+          migrations: migrations.take(fencingIndex).toList(),
           defaultSchema: schema,
           emitEvents: false,
         );
@@ -240,7 +246,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           emitEvents: false,
         );
         final upgrade = await currentRunner.applyAll();
-        expect(upgrade.actions, hasLength(1));
+        expect(upgrade.actions, hasLength(migrations.length - fencingIndex));
         final row = (await currentAdapter.queryRaw(
           'SELECT id, execution_id FROM stem_workflow_runs WHERE id = ?',
           [runId],
@@ -266,6 +272,32 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           expect(claim, isNotNull);
           expect(claim!.executionId, isNotEmpty);
           expect((await store.get(runId))!.executionId, claim.executionId);
+          expect(
+            await store.commitJournal(
+              WorkflowJournalEntry(
+                runId: runId,
+                kind: WorkflowJournalKind.step,
+                name: 'migrated',
+                revision: 1,
+                data: const {'version': 1, 'state': 'completed', 'attempts': 1},
+              ),
+              expectedRevision: 0,
+              executionId: claim.executionId,
+              checkpoint: const WorkflowJournalCheckpoint(
+                value: 'preserved',
+                compensation: WorkflowCompensationRegistration(
+                  handler: 'undo',
+                  input: 'preserved',
+                ),
+              ),
+            ),
+            isTrue,
+          );
+          expect(await store.readStep<Object?>(runId, 'migrated'), 'preserved');
+          expect(
+            (await store.listCompensations(runId)).single.data['input'],
+            'preserved',
+          );
         } finally {
           await store.close();
           await dataSource.dispose();

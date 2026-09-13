@@ -1,7 +1,23 @@
 import 'dart:convert';
 
+import 'package:stem/stem.dart';
 import 'package:test/test.dart';
-import 'package:workflow_host_prototype/workflow_host.dart';
+
+Future<T> _withHost<T>({
+  required Iterable<HostedDefinition> workflows,
+  required Future<T> Function(WorkflowHost host) body,
+  PayloadCodecRegistry? codecs,
+}) async {
+  final host = await WorkflowHost.inMemory(
+    workflows: workflows,
+    codecs: codecs,
+  );
+  try {
+    return await body(host);
+  } finally {
+    await host.close();
+  }
+}
 
 class _Request {
   _Request(this.amount);
@@ -73,7 +89,7 @@ void main() {
           return result;
         },
       );
-      await WorkflowHost.run<void>(
+      await _withHost<void>(
         workflows: [workflow],
         codecs: _registry(),
         body: (host) async {
@@ -85,7 +101,7 @@ void main() {
     },
   );
 
-  test('same definition binds independently on separate hosts', () async {
+  test('host registration uses each host snapshot independently', () async {
     final workflow = HostedWorkflow<_Request, _Receipt>(
       name: 'independent',
       run: (_, input) async => _Receipt(input.amount),
@@ -169,7 +185,7 @@ void main() {
       name: 'invalid',
       run: (_, _) async => 'unused',
     );
-    await WorkflowHost.run<void>(
+    await _withHost<void>(
       workflows: [workflow],
       body: (host) async {
         await expectLater(

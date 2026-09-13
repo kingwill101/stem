@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:stem/src/core/payload_codec_registry.dart';
 import 'package:stem/src/workflow/core/workflow_definition.dart';
 import 'package:stem/src/workflow/core/workflow_event_ref.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
+import 'package:stem/src/workflow/host/hosted_compensation.dart';
 import 'package:stem/src/workflow/host/hosted_result.dart';
 
 /// Registration boundary for heterogeneous typed hosted workflows.
@@ -27,6 +29,7 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
     required this.run,
     this.inputCodec,
     this.resultCodec,
+    this.compensations = const [],
   });
 
   @override
@@ -38,6 +41,9 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
   /// Result codec, or the host registry's codec for [R].
   final Codec<R, Object?>? resultCodec;
 
+  /// Named cleanup handlers to reconstruct on every host startup.
+  final List<HostedCompensationDefinition> compensations;
+
   /// Workflow body. Side effects belong inside named checkpoints.
   final FutureOr<R> Function(HostedWorkflowContext context, I input) run;
 
@@ -46,6 +52,19 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
     final registry = codecs.snapshot();
     final input = inputCodec ?? registry.codecFor<I>();
     final result = resultCodec ?? registry.codecFor<R>();
+    final registrations = <String, HostedCompensationDefinition>{};
+    for (final compensation in compensations) {
+      if (compensation.name.trim().isEmpty ||
+          registrations.containsKey(compensation.name)) {
+        throw ArgumentError(
+          'Empty or duplicate compensation handler: ${compensation.name}',
+        );
+      }
+      registrations[compensation.name] = compensation;
+    }
+    final registered = Map<String, HostedCompensationDefinition>.unmodifiable(
+      registrations,
+    );
     // WorkflowDefinition.encodeResult intentionally preserves a raw null for
     // legacy definitions. Return a non-null host envelope so the selected
     // codec is still called for nullable terminal values.
@@ -58,7 +77,7 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
       return encodeHostedResult(
         result.encode(
           await run(
-            HostedWorkflowContext._(context, registry),
+            HostedWorkflowContext._(context, registry, registered),
             input.decode(context.params['input']),
           ),
         ),
@@ -68,16 +87,21 @@ final class HostedWorkflow<I, R> implements HostedDefinition {
     return WorkflowDefinition<Map<String, Object?>>.script(
       name: name,
       run: hostedBody,
+      compensationHandlers: {
+        for (final compensation in registered.values)
+          compensation.name: compensation.bind(registry),
+      },
     );
   }
 }
 
 /// Typed named checkpoints and durable waits, not remotely routed activities.
 final class HostedWorkflowContext {
-  HostedWorkflowContext._(this._script, this._codecs);
+  HostedWorkflowContext._(this._script, this._codecs, this._compensations);
 
   final WorkflowScriptContext _script;
   final PayloadCodecRegistry _codecs;
+  final Map<String, HostedCompensationDefinition> _compensations;
 
   /// Persisted run identifier.
   String get runId => _script.runId;
@@ -88,12 +112,56 @@ final class HostedWorkflowContext {
   /// Executes or replays a named checkpoint with an explicit value envelope.
   ///
   /// The envelope preserves encoded null values on checkpoint replay.
+  /// Opting into retry or compensation requires a journal-capable store.
   Future<T> step<T>(
     String name,
     FutureOr<T> Function() body, {
     Codec<T, Object?>? codec,
+    WorkflowRetryPolicy? retry,
+    HostedCompensation<T>? compensation,
   }) async {
     final selected = codec ?? _codecs.codecFor<T>();
+    if (retry != null || compensation != null) {
+      if (_script is! WorkflowScriptJournalContext) {
+        throw UnsupportedError(
+          'This runtime cannot execute journaled checkpoints.',
+        );
+      }
+      HostedCompensation<T>? registered;
+      if (compensation != null) {
+        final candidate = _compensations[compensation.name];
+        if (candidate is! HostedCompensation<T> ||
+            candidate.runtimeType != compensation.runtimeType) {
+          throw ArgumentError(
+            'Compensation ${compensation.name} is not registered for $T.',
+          );
+        }
+        registered = candidate;
+      }
+      WorkflowCompensationRegistration? registration;
+      final value = await (_script as WorkflowScriptJournalContext)
+          .stepWithRetry<Object?>(
+            name,
+            (_) async {
+              final result = await body();
+              if (registered != null) {
+                registration = WorkflowCompensationRegistration(
+                  handler: registered.name,
+                  input: (registered.codec ?? _codecs.codecFor<T>()).encode(
+                    result,
+                  ),
+                  retryPolicy: registered.retryPolicy,
+                );
+              }
+              return <String, Object?>{'value': selected.encode(result)};
+            },
+            retryPolicy: retry ?? const WorkflowRetryPolicy(),
+            compensationForResult: registered == null
+                ? null
+                : (_) => registration,
+          );
+      return selected.decode(_valueEnvelope(value, name));
+    }
     final stored = await _script.step<Object?>(
       name,
       (_) async => <String, Object?>{'value': selected.encode(await body())},

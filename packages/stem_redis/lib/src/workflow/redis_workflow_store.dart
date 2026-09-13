@@ -11,7 +11,11 @@ import 'package:uuid/uuid.dart';
 
 /// Redis-backed implementation of [WorkflowStore].
 class RedisWorkflowStore
-    implements WorkflowStore, WorkflowTerminalStore, FencedWorkflowStore {
+    implements
+        WorkflowStore,
+        WorkflowTerminalStore,
+        FencedWorkflowStore,
+        WorkflowJournalStore {
   RedisWorkflowStore._(
     this._connection,
     this._command, {
@@ -89,6 +93,12 @@ class RedisWorkflowStore
   String _runKey(String id) => '$namespace:wf:$id';
   String _stepsKey(String id) => '$namespace:wf:$id:steps';
   String _orderKey(String id) => '$namespace:wf:$id:order';
+  String _journalKey(String id, WorkflowJournalKind kind) =>
+      '$namespace:wf:$id:journal:${kind.name}';
+  String _compensationOrderKey(String id) =>
+      '$namespace:wf:$id:journal:compensation:order';
+  String _compensationSequenceKey(String id) =>
+      '$namespace:wf:$id:journal:compensation:sequence';
   String _topicKey(String topic) => '$namespace:wf:topic:$topic';
   String _dueKey() => '$namespace:wf:due';
   String _watchersHashKey() => '$namespace:wf:watchers';
@@ -225,29 +235,6 @@ end
 return results
 ''';
 
-  static const _luaRemoveWatcher = '''
-local watchersHash = KEYS[1]
-local dueKey = KEYS[2]
-
-local runId = ARGV[1]
-
-local existing = redis.call('HGET', watchersHash, runId)
-if not existing then
-  return 0
-end
-
-local watcher = cjson.decode(existing)
-redis.call('HDEL', watchersHash, runId)
-if watcher['watchersTopicKey'] then
-  redis.call('ZREM', watcher['watchersTopicKey'], runId)
-end
-if watcher['topicSetKey'] then
-  redis.call('SREM', watcher['topicSetKey'], runId)
-end
-redis.call('ZREM', dueKey, runId)
-return 1
-''';
-
   static const _luaCreateRun = '''
 local runKey = KEYS[1]
 local stepsKey = KEYS[2]
@@ -272,6 +259,119 @@ if ARGV[8] ~= '' then
   redis.call('HSET', runKey, 'cancellation_policy', ARGV[8])
 end
 
+return 1
+''';
+
+  // Shared by ordinary checkpoints and fenced journal commits.
+  static const _luaWriteCheckpoint = '''
+local function writeCheckpoint(stepsKey, orderKey, name, value)
+  redis.call('HSET', stepsKey, name, value)
+  if not redis.call('ZSCORE', orderKey, name) then
+    redis.call('ZADD', orderKey, redis.call('ZCARD', orderKey), name)
+  end
+end
+''';
+
+  static const _luaSaveStep = '''
+$_luaWriteCheckpoint
+if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
+writeCheckpoint(KEYS[2], KEYS[3], ARGV[1], ARGV[2])
+redis.call('HSET', KEYS[1], 'updated_at', ARGV[3])
+return 1
+''';
+
+  static const _luaCommitJournal = '''
+$_luaWriteCheckpoint
+local runKey = KEYS[1]
+local journalKey = KEYS[2]
+local compensationKey = KEYS[3]
+local compensationOrderKey = KEYS[4]
+local compensationSequenceKey = KEYS[5]
+local kind = ARGV[1]
+local name = ARGV[2]
+local expected = tonumber(ARGV[3])
+local newRevision = tonumber(ARGV[4])
+local executionId = ARGV[5]
+local data = ARGV[6]
+local checkpointValue = ARGV[7]
+local hasCheckpoint = ARGV[8] == '1'
+local hasCompensation = ARGV[9] == '1'
+local runningStatus = ARGV[10]
+local failedStatus = ARGV[11]
+local status = redis.call('HGET', runKey, 'status')
+if (kind == 'step' and status ~= runningStatus) or
+   (kind == 'compensation' and status ~= failedStatus) then return 0 end
+if redis.call('HGET', runKey, 'execution_id') ~= executionId then return 0 end
+local raw = redis.call('HGET', journalKey, name)
+local currentRevision = 0
+if raw then currentRevision = tonumber(cjson.decode(raw)['revision']) or 0 end
+if currentRevision ~= expected or newRevision ~= expected + 1 then return 0 end
+if kind == 'compensation' and not raw then return 0 end
+local record = cjson.decode(data)
+if kind == 'compensation' and raw then
+  record['position'] = cjson.decode(raw)['position']
+end
+redis.call('HSET', journalKey, name, cjson.encode(record))
+if kind == 'step' and hasCheckpoint then
+  writeCheckpoint(KEYS[6], KEYS[7], name, checkpointValue)
+end
+if kind == 'step' and hasCompensation then
+  if not redis.call('HGET', compensationKey, name) then
+    local position = redis.call('INCR', compensationSequenceKey)
+    local compensation = cjson.decode(ARGV[12])
+    compensation['position'] = position
+    redis.call('HSET', compensationKey, name, cjson.encode(compensation))
+    redis.call('ZADD', compensationOrderKey, position, name)
+  end
+end
+redis.call('HSET', runKey, 'updated_at', ARGV[13])
+return 1
+''';
+
+  static const _luaRewindJournal = '''
+local names = redis.call('ZRANGE', KEYS[3], 0, -1)
+local indices = {}
+local nextIndex = 0
+for _, name in ipairs(names) do
+  local hash = string.find(name, '#', 1, true)
+  local base = hash and string.sub(name, 1, hash - 1) or name
+  if indices[base] == nil then
+    indices[base] = nextIndex
+    nextIndex = nextIndex + 1
+  end
+end
+local target = indices[ARGV[1]]
+if target == nil then return 0 end
+local keep = {}
+for _, name in ipairs(names) do
+  local hash = string.find(name, '#', 1, true)
+  local base = hash and string.sub(name, 1, hash - 1) or name
+  if indices[base] < target then
+    keep[name] = true
+  else
+    redis.call('HDEL', KEYS[2], name)
+    redis.call('ZREM', KEYS[3], name)
+  end
+end
+for _, journalKey in ipairs({KEYS[4], KEYS[5]}) do
+  for _, name in ipairs(redis.call('HKEYS', journalKey)) do
+    if not keep[name] then
+      redis.call('HDEL', journalKey, name)
+      redis.call('ZREM', KEYS[6], name)
+    end
+  end
+end
+local watcher = redis.call('HGET', KEYS[7], ARGV[2])
+if watcher then
+  local parsed = cjson.decode(watcher)
+  redis.call('HDEL', KEYS[7], ARGV[2])
+  if parsed['watchersTopicKey'] then redis.call('ZREM', parsed['watchersTopicKey'], ARGV[2]) end
+  if parsed['topicSetKey'] then redis.call('SREM', parsed['topicSetKey'], ARGV[2]) end
+end
+redis.call('ZREM', KEYS[8], ARGV[2])
+redis.call('HSET', KEYS[1], 'status', ARGV[3], 'wait_topic', '',
+  'resume_at', '', 'owner_id', '', 'lease_expires_at', '',
+  'execution_id', '', 'suspension_data', ARGV[4])
 return 1
 ''';
 
@@ -699,14 +799,17 @@ return 1
   @override
   Future<void> saveStep<T>(String runId, String stepName, T value) async {
     final nowIso = _clock.now().toIso8601String();
-    await _send(['HSET', _stepsKey(runId), stepName, jsonEncode(value)]);
-    final score =
-        await _send(['ZSCORE', _orderKey(runId), stepName]) as String?;
-    if (score == null) {
-      final next = await _send(['ZCARD', _orderKey(runId)]) as int? ?? 0;
-      await _send(['ZADD', _orderKey(runId), next.toString(), stepName]);
-    }
-    await _send(['HSET', _runKey(runId), 'updated_at', nowIso]);
+    await _send([
+      'EVAL',
+      _luaSaveStep,
+      '3',
+      _runKey(runId),
+      _stepsKey(runId),
+      _orderKey(runId),
+      stepName,
+      jsonEncode(value),
+      nowIso,
+    ]);
   }
 
   @override
@@ -1232,59 +1335,117 @@ return 1
   }
 
   @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    final run = await get(runId);
+    if (run == null) return null;
+    final raw = await _send(['HGET', _journalKey(runId, kind), name]);
+    return WorkflowJournalSnapshot(
+      run: run,
+      entry: raw == null ? null : _journalEntry(_decode(raw as String)),
+    );
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final names =
+        await _send(['ZREVRANGE', _compensationOrderKey(runId), '0', '-1'])
+            as List? ??
+        const [];
+    final entries = <WorkflowJournalEntry>[];
+    for (final name in names.cast<String>()) {
+      final raw = await _send([
+        'HGET',
+        _journalKey(runId, WorkflowJournalKind.compensation),
+        name,
+      ]);
+      if (raw != null) entries.add(_journalEntry(_decode(raw as String)));
+    }
+    return entries;
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    if (entry.revision != expectedRevision + 1 || expectedRevision < 0) {
+      return false;
+    }
+    if (checkpoint != null && entry.kind != WorkflowJournalKind.step) {
+      return false;
+    }
+    final compensation = checkpoint?.compensation;
+    final response = await _send([
+      'EVAL',
+      _luaCommitJournal,
+      '7',
+      _runKey(entry.runId),
+      _journalKey(entry.runId, entry.kind),
+      _journalKey(entry.runId, WorkflowJournalKind.compensation),
+      _compensationOrderKey(entry.runId),
+      _compensationSequenceKey(entry.runId),
+      _stepsKey(entry.runId),
+      _orderKey(entry.runId),
+      entry.kind.name,
+      entry.name,
+      expectedRevision.toString(),
+      entry.revision.toString(),
+      executionId,
+      jsonEncode({
+        'runId': entry.runId,
+        'kind': entry.kind.name,
+        'name': entry.name,
+        'revision': entry.revision,
+        'data': entry.data,
+        'position': entry.position,
+      }),
+      if (checkpoint == null) '' else jsonEncode(checkpoint.value),
+      if (checkpoint == null) '0' else '1',
+      if (compensation == null) '0' else '1',
+      WorkflowStatus.running.name,
+      WorkflowStatus.failed.name,
+      if (compensation == null)
+        ''
+      else
+        jsonEncode({
+          'runId': entry.runId,
+          'kind': WorkflowJournalKind.compensation.name,
+          'name': entry.name,
+          'revision': 1,
+          'data': compensation.toJournalData(),
+          'position': null,
+        }),
+      _clock.now().toUtc().toIso8601String(),
+    ]);
+    return response == 1 || response == '1';
+  }
+
+  @override
   Future<void> rewindToStep(String runId, String stepName) async {
-    await _removeWatcher(runId);
-    final names = await _send(['ZRANGE', _orderKey(runId), '0', '-1']) as List?;
-    if (names == null) return;
-    final baseIndexMap = <String, int>{};
-    var nextIndex = 0;
-    final entryIndexes = <int>[];
-    final castNames = names.cast<String>();
-    for (final name in castNames) {
-      final base = _baseStepName(name);
-      baseIndexMap.putIfAbsent(base, () => nextIndex++);
-      entryIndexes.add(baseIndexMap[base]!);
-    }
-    final targetIndex = baseIndexMap[stepName];
-    if (targetIndex == null) return;
-
-    final keep = <String>{};
-    for (var i = 0; i < castNames.length; i++) {
-      final baseIndex = entryIndexes[i];
-      if (baseIndex < targetIndex) {
-        keep.add(castNames[i]);
-      } else {
-        break;
-      }
-    }
-
-    for (final name in castNames) {
-      if (!keep.contains(name)) {
-        await _send(['HDEL', _stepsKey(runId), name]);
-        await _send(['ZREM', _orderKey(runId), name]);
-      }
-    }
-
-    const iterations = 0;
     await _send([
-      'HSET',
+      'EVAL',
+      _luaRewindJournal,
+      '8',
       _runKey(runId),
-      'status',
+      _stepsKey(runId),
+      _orderKey(runId),
+      _journalKey(runId, WorkflowJournalKind.step),
+      _journalKey(runId, WorkflowJournalKind.compensation),
+      _compensationOrderKey(runId),
+      _watchersHashKey(),
+      _dueKey(),
+      stepName,
+      runId,
       WorkflowStatus.suspended.name,
-      'wait_topic',
-      '',
-      'resume_at',
-      '',
-      'owner_id',
-      '',
-      'lease_expires_at',
-      '',
-      'execution_id',
-      '',
-      'suspension_data',
       jsonEncode({
         'step': stepName,
-        'iteration': iterations,
+        'iteration': 0,
         'iterationStep': stepName,
       }),
     ]);
@@ -1409,17 +1570,6 @@ return 1
     await _connection.close();
   }
 
-  Future<void> _removeWatcher(String runId) async {
-    await _send([
-      'EVAL',
-      _luaRemoveWatcher,
-      '2',
-      _watchersHashKey(),
-      _dueKey(),
-      runId,
-    ]);
-  }
-
   Map<String, Object?> _decodeMap(String? value) {
     if (value == null || value.isEmpty) return const {};
     final decoded = jsonDecode(value);
@@ -1429,6 +1579,32 @@ return 1
   Object? _decode(String? value) {
     if (value == null || value.isEmpty) return null;
     return jsonDecode(value);
+  }
+
+  WorkflowJournalEntry _journalEntry(Object? value) {
+    if (value is! Map) {
+      throw const FormatException('Invalid workflow journal record.');
+    }
+    final map = value.cast<String, Object?>();
+    final kind = WorkflowJournalKind.values.firstWhere(
+      (candidate) => candidate.name == map['kind'],
+      orElse: () => throw const FormatException('Invalid journal kind.'),
+    );
+    final data = map['data'];
+    if (map['runId'] is! String ||
+        map['name'] is! String ||
+        map['revision'] is! int ||
+        data is! Map) {
+      throw const FormatException('Invalid workflow journal record.');
+    }
+    return WorkflowJournalEntry(
+      runId: map['runId']! as String,
+      kind: kind,
+      name: map['name']! as String,
+      revision: map['revision']! as int,
+      data: data.cast<String, Object?>(),
+      position: map['position'] as int?,
+    );
   }
 
   DateTime? _decodeMillis(String? value) {

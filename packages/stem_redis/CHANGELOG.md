@@ -2,13 +2,16 @@
 
 ## 0.3.0
 
+- Add separate Lua-backed workflow journals with atomic execution/revision CAS,
+  checkpoint ordering, compensation ordering, and atomic journal-aware rewind.
 - Add Lua-atomic first-terminal-wins completion/cancellation and prevent ordinary
   workflow mutations from resurrecting terminal runs.
 - Add Redis workflow execution fencing with a fresh `executionId` per claim,
   conditional lease renewal/release, and managed terminal-failure recording.
   Non-terminal error recording preserves the run status and lease for retry;
   terminal failure clears the lease only for the current execution.
-- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+- Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
+  `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.1
 

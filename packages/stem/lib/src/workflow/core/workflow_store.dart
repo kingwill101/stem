@@ -161,6 +161,20 @@ abstract class WorkflowStore {
   Future<List<WorkflowStepEntry>> listSteps(String runId);
 }
 
+/// Optional capability for observing mutations affecting one workflow run.
+///
+/// Notifications mean that the store's complete mutation domain for a run
+/// changed; they are not a lifecycle history and carry no event payload.
+/// Subscribers should establish a subscription before their initial read.
+/// Persistent adapters must not implement this capability with only
+/// partial/local notifications.
+// Optional backend capability: a free function cannot express its availability.
+// ignore: one_member_abstracts
+abstract interface class WorkflowRunChanges {
+  /// Watches complete change notifications for [runId].
+  Stream<void> watchRunChanges(String runId);
+}
+
 /// Optional atomic completion/cancellation capability.
 ///
 /// The first terminal transition wins. Implementations must atomically check

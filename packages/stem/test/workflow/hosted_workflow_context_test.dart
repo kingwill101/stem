@@ -41,8 +41,9 @@ void main() {
         final suspended = (await app.getRun(id))!;
         expect(suspended.status, WorkflowStatus.suspended);
         expect(
-          await app.resumeDueRuns(
-            suspended.resumeAt!.add(const Duration(seconds: 1)),
+          await app.runtime.resumeDueRuns(
+            now: suspended.resumeAt!.add(const Duration(seconds: 1)),
+            enqueue: false,
           ),
           [id],
         );

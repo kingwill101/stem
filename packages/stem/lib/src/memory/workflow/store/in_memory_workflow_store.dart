@@ -1,10 +1,12 @@
 // This package depends on Stem's core internals while avoiding `stem.dart`
 // import cycles created by the compatibility re-exports.
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:stem/src/workflow/core/run_state.dart';
 import 'package:stem/src/workflow/core/workflow_cancellation_policy.dart';
 import 'package:stem/src/workflow/core/workflow_clock.dart';
+import 'package:stem/src/workflow/core/workflow_journal.dart';
 import 'package:stem/src/workflow/core/workflow_status.dart';
 import 'package:stem/src/workflow/core/workflow_step_entry.dart';
 import 'package:stem/src/workflow/core/workflow_store.dart';
@@ -14,13 +16,19 @@ import 'package:stem/src/workflow/core/workflow_watcher.dart';
 ///
 /// Not safe for production as state is lost on process exit.
 class InMemoryWorkflowStore
-    implements WorkflowStore, FencedWorkflowStore, WorkflowTerminalStore {
+    implements
+        WorkflowStore,
+        WorkflowRunChanges,
+        FencedWorkflowStore,
+        WorkflowTerminalStore,
+        WorkflowJournalStore {
   /// Creates an in-memory workflow store using the provided [clock].
   InMemoryWorkflowStore({WorkflowClock clock = const SystemWorkflowClock()})
     : _clock = clock;
 
   final WorkflowClock _clock;
-  final _runs = <String, RunState>{};
+  late final _ObservableRuns _runs = _ObservableRuns(_notifyRunChanged);
+  final _runChangeControllers = <String, StreamController<void>>{};
   final _steps = <String, Map<String, Object?>>{};
   final _suspendedTopics = <String, Set<String>>{};
   final _due = SplayTreeMap<DateTime, Set<String>>();
@@ -28,6 +36,143 @@ class InMemoryWorkflowStore
   final _watchersByRun = <String, _WatcherRecord>{};
   int _counter = 0;
   int _executionCounter = 0;
+  final _journal =
+      <String, Map<(WorkflowJournalKind, String), WorkflowJournalEntry>>{};
+  final _journalOrder = <String, int>{};
+
+  @override
+  Stream<void> watchRunChanges(String runId) => Stream<void>.multi((listener) {
+    final controller = _runChangeControllers.putIfAbsent(
+      runId,
+      StreamController<void>.broadcast,
+    );
+    final subscription = controller.stream.listen(
+      listener.add,
+      onError: listener.addError,
+      onDone: () => unawaited(listener.close()),
+    );
+    listener.onCancel = () async {
+      await subscription.cancel();
+      if (!controller.hasListener &&
+          identical(_runChangeControllers[runId], controller)) {
+        _runChangeControllers.remove(runId);
+        await controller.close();
+      }
+    };
+  });
+
+  void _notifyRunChanged(String runId) {
+    final controller = _runChangeControllers[runId];
+    if (controller != null && !controller.isClosed) {
+      controller.add(null);
+    }
+  }
+
+  @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    final run = _readRunState(runId);
+    if (run == null) return null;
+    return WorkflowJournalSnapshot(
+      run: run,
+      entry: _journal[runId]?[(kind, name)],
+    );
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final entries =
+        (_journal[runId]?.values
+                  .where(
+                    (entry) => entry.kind == WorkflowJournalKind.compensation,
+                  )
+                  .toList() ??
+              <WorkflowJournalEntry>[])
+          ..sort((a, b) => b.position!.compareTo(a.position!));
+    return List.unmodifiable(entries);
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    if (entry.revision != expectedRevision + 1 ||
+        expectedRevision < 0 ||
+        entry.name.isEmpty ||
+        (checkpoint != null && entry.kind != WorkflowJournalKind.step)) {
+      throw ArgumentError('Invalid workflow journal write.');
+    }
+    final run = _runs[entry.runId];
+    final requiredStatus = entry.kind == WorkflowJournalKind.step
+        ? WorkflowStatus.running
+        : WorkflowStatus.failed;
+    if (run == null ||
+        run.status != requiredStatus ||
+        run.executionId != executionId ||
+        executionId.isEmpty) {
+      return false;
+    }
+    final key = (entry.kind, entry.name);
+    final records = _journal[entry.runId];
+    final previous = records?[key];
+    if ((previous?.revision ?? 0) != expectedRevision ||
+        (entry.kind == WorkflowJournalKind.compensation && previous == null)) {
+      return false;
+    }
+    // Validate/copy before publishing any part of the atomic mutation.
+    final data = _copyJournalValue(entry.data)! as Map<String, Object?>;
+    final value = _copyJournalValue(checkpoint?.value);
+    final registration = checkpoint?.compensation;
+    final registrationData = registration == null
+        ? null
+        : _copyJournalValue(registration.toJournalData())!
+              as Map<String, Object?>;
+    final target = _journal.putIfAbsent(entry.runId, () => {});
+    target[key] = WorkflowJournalEntry(
+      runId: entry.runId,
+      kind: entry.kind,
+      name: entry.name,
+      revision: entry.revision,
+      data: data,
+      position: previous?.position,
+    );
+    if (checkpoint != null) {
+      _steps.putIfAbsent(entry.runId, () => {})[entry.name] = value;
+      final compensationKey = (WorkflowJournalKind.compensation, entry.name);
+      if (registrationData != null && !target.containsKey(compensationKey)) {
+        final position = (_journalOrder[entry.runId] ?? 0) + 1;
+        _journalOrder[entry.runId] = position;
+        target[compensationKey] = WorkflowJournalEntry(
+          runId: entry.runId,
+          kind: WorkflowJournalKind.compensation,
+          name: entry.name,
+          revision: 1,
+          position: position,
+          data: registrationData,
+        );
+      }
+    }
+    _runs[entry.runId] = run.copyWith(updatedAt: _clock.now());
+    return true;
+  }
+
+  static Object? _copyJournalValue(Object? value) {
+    if (value is Map<String, Object?>) {
+      return Map<String, Object?>.unmodifiable(
+        value.map((key, item) => MapEntry(key, _copyJournalValue(item))),
+      );
+    }
+    if (value is List) {
+      return List<Object?>.unmodifiable(value.map(_copyJournalValue));
+    }
+    return value;
+  }
 
   Map<String, Object?> _prepareSuspensionData(
     Map<String, Object?>? source, {
@@ -128,7 +273,9 @@ class InMemoryWorkflowStore
 
   @override
   /// Returns the run state with an updated step cursor, if present.
-  Future<RunState?> get(String runId) async {
+  Future<RunState?> get(String runId) async => _readRunState(runId);
+
+  RunState? _readRunState(String runId) {
     final state = _runs[runId];
     if (state == null) return null;
     final steps = _steps[runId];
@@ -712,6 +859,10 @@ class InMemoryWorkflowStore
       }
     }
     _steps[runId] = LinkedHashMap.fromEntries(retained);
+    final retainedNames = retained.map((entry) => entry.key).toSet();
+    _journal[runId]?.removeWhere(
+      (_, entry) => !retainedNames.contains(entry.name),
+    );
     _runs[runId] = state.copyWith(
       status: WorkflowStatus.suspended,
       cursor: targetIndex,
@@ -797,6 +948,42 @@ class InMemoryWorkflowStore
       index += 1;
     }
     return entries;
+  }
+}
+
+/// A run map that makes every replacement/removal observable through one path.
+class _ObservableRuns extends MapBase<String, RunState> {
+  _ObservableRuns(this._onChange);
+
+  final void Function(String runId) _onChange;
+  final _values = <String, RunState>{};
+
+  @override
+  RunState? operator [](Object? key) => _values[key];
+
+  @override
+  void operator []=(String key, RunState value) {
+    _values[key] = value;
+    _onChange(key);
+  }
+
+  @override
+  void clear() {
+    final keys = _values.keys.toList(growable: false);
+    _values.clear();
+    keys.forEach(_onChange);
+  }
+
+  @override
+  Iterable<String> get keys => _values.keys;
+
+  @override
+  RunState? remove(Object? key) {
+    if (key is! String) return null;
+    if (!_values.containsKey(key)) return null;
+    final value = _values.remove(key)!;
+    _onChange(key);
+    return value;
   }
 }
 

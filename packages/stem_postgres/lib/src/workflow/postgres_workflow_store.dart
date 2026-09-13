@@ -12,7 +12,11 @@ import 'package:uuid/uuid.dart';
 
 /// PostgreSQL-backed [WorkflowStore] implementation using ormed ORM.
 class PostgresWorkflowStore
-    implements WorkflowStore, WorkflowTerminalStore, FencedWorkflowStore {
+    implements
+        WorkflowStore,
+        WorkflowTerminalStore,
+        FencedWorkflowStore,
+        WorkflowJournalStore {
   PostgresWorkflowStore._(
     this._connections, {
     required this.namespace,
@@ -142,6 +146,168 @@ class PostgresWorkflowStore
     return _readRunState(_connections.context, runId);
   }
 
+  @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    final run = await _readRunState(_connections.context, runId);
+    if (run == null) return null;
+    final rows = await _connections.context.driver.queryRaw(
+      '''
+SELECT revision, position, data
+FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ? AND kind = ? AND name = ?
+''',
+      [namespace, runId, kind.name, name],
+    );
+    return WorkflowJournalSnapshot(
+      run: run,
+      entry: rows.isEmpty
+          ? null
+          : _journalEntry(rows.single, runId, kind, name),
+    );
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final rows = await _connections.context.driver.queryRaw(
+      '''
+SELECT name, revision, position, data
+FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ? AND kind = 'compensation'
+ORDER BY position DESC
+''',
+      [namespace, runId],
+    );
+    return rows
+        .map(
+          (row) => _journalEntry(
+            row,
+            runId,
+            WorkflowJournalKind.compensation,
+            row['name']! as String,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    if (entry.revision != expectedRevision + 1) return false;
+    if (entry.runId.trim().isEmpty || entry.name.trim().isEmpty) return false;
+    if (checkpoint != null && entry.kind != WorkflowJournalKind.step) {
+      return false;
+    }
+    final requiredStatus = entry.kind == WorkflowJournalKind.step
+        ? WorkflowStatus.running
+        : WorkflowStatus.failed;
+
+    return _connections.runInTransaction((ctx) async {
+      // The guarded update both fences the caller and takes the run row lock.
+      final locked = await ctx.driver.queryRaw(
+        '''
+UPDATE stem_workflow_runs
+SET updated_at = updated_at
+WHERE namespace = ? AND id = ? AND execution_id = ? AND status = ?
+RETURNING id
+''',
+        [namespace, entry.runId, executionId, requiredStatus.name],
+      );
+      if (locked.isEmpty) return false;
+
+      final current = await ctx.driver.queryRaw(
+        '''
+SELECT revision, position
+FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ? AND kind = ? AND name = ?
+FOR UPDATE
+''',
+        [namespace, entry.runId, entry.kind.name, entry.name],
+      );
+      final actual = current.isEmpty ? 0 : _asInt(current.single['revision']);
+      if (actual != expectedRevision) return false;
+      // Compensation attempts advance an existing registration; they never
+      // create a new record or acquire a new completion position.
+      if (entry.kind == WorkflowJournalKind.compensation && current.isEmpty) {
+        return false;
+      }
+
+      final position = entry.kind == WorkflowJournalKind.step
+          ? null
+          : _asInt(current.single['position']);
+
+      await ctx.driver.executeRaw(
+        '''
+INSERT INTO stem_workflow_journal
+  (namespace, run_id, kind, name, revision, position, data)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (namespace, run_id, kind, name)
+DO UPDATE SET revision = EXCLUDED.revision, position = EXCLUDED.position,
+              data = EXCLUDED.data
+''',
+        [
+          namespace,
+          entry.runId,
+          entry.kind.name,
+          entry.name,
+          entry.revision,
+          position,
+          jsonEncode(entry.data),
+        ],
+      );
+
+      // Checkpoints remain ordinary workflow steps; this is deliberately
+      // performed in this transaction rather than calling public saveStep.
+      if (checkpoint != null) {
+        await _saveStepInTransaction(
+          ctx,
+          entry.runId,
+          entry.name,
+          checkpoint.value,
+        );
+        final registration = checkpoint.compensation;
+        if (registration != null) {
+          final next = await ctx.driver.queryRaw(
+            '''
+SELECT COALESCE(MAX(position), 0) + 1 AS position
+FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ? AND kind = 'compensation'
+''',
+            [namespace, entry.runId],
+          );
+          await ctx.driver.executeRaw(
+            '''
+INSERT INTO stem_workflow_journal
+  (namespace, run_id, kind, name, revision, position, data)
+VALUES (?, ?, 'compensation', ?, 1, ?, ?)
+ON CONFLICT (namespace, run_id, kind, name) DO NOTHING
+''',
+            [
+              namespace,
+              entry.runId,
+              entry.name,
+              _asInt(next.single['position']),
+              jsonEncode(registration.toJournalData()),
+            ],
+          );
+        }
+      }
+      await ctx.driver.executeRaw(
+        'UPDATE stem_workflow_runs SET updated_at = ? '
+        'WHERE namespace = ? AND id = ?',
+        [_clock.now().toUtc(), namespace, entry.runId],
+      );
+      return true;
+    }, operation: 'workflow.journal.commit');
+  }
+
   Future<RunState?> _readRunState(QueryContext ctx, String runId) async {
     final run = await ctx
         .query<$StemWorkflowRun>()
@@ -212,32 +378,7 @@ class PostgresWorkflowStore
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
-      final existing = await ctx
-          .query<StemWorkflowStep>()
-          .whereEquals('runId', runId)
-          .whereEquals('name', stepName)
-          .whereEquals('namespace', namespace)
-          .first();
-
-      if (existing != null) {
-        await ctx.repository<StemWorkflowStep>().update(
-          StemWorkflowStepUpdateDto(value: jsonEncode(value)),
-          where: StemWorkflowStepPartial(
-            runId: runId,
-            name: stepName,
-            namespace: namespace,
-          ),
-        );
-      } else {
-        await ctx.repository<StemWorkflowStep>().insert(
-          StemWorkflowStepInsertDto(
-            runId: runId,
-            name: stepName,
-            namespace: namespace,
-            value: jsonEncode(value),
-          ),
-        );
-      }
+      await _saveStepInTransaction(ctx, runId, stepName, value);
 
       // Update run's updatedAt
       final run = await ctx
@@ -253,6 +394,41 @@ class PostgresWorkflowStore
         );
       }
     });
+  }
+
+  Future<void> _saveStepInTransaction(
+    QueryContext ctx,
+    String runId,
+    String stepName,
+    Object? value,
+  ) async {
+    final encoded = jsonEncode(value);
+    final existing = await ctx
+        .query<StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('name', stepName)
+        .whereEquals('namespace', namespace)
+        .first();
+
+    if (existing != null) {
+      await ctx.repository<StemWorkflowStep>().update(
+        StemWorkflowStepUpdateDto(value: encoded),
+        where: StemWorkflowStepPartial(
+          runId: runId,
+          name: stepName,
+          namespace: namespace,
+        ),
+      );
+    } else {
+      await ctx.repository<StemWorkflowStep>().insert(
+        StemWorkflowStepInsertDto(
+          runId: runId,
+          name: stepName,
+          namespace: namespace,
+          value: encoded,
+        ),
+      );
+    }
   }
 
   @override
@@ -984,6 +1160,28 @@ class PostgresWorkflowStore
         await ctx.repository<StemWorkflowStep>().insertMany(keep);
       }
 
+      final keptNames = keep.map((step) => step.name).toSet();
+      final journalRows = await ctx.driver.queryRaw(
+        '''
+SELECT DISTINCT name
+FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ?
+''',
+        [namespace, runId],
+      );
+      for (final row in journalRows) {
+        final name = row['name']! as String;
+        if (!keptNames.contains(name)) {
+          await ctx.driver.executeRaw(
+            '''
+DELETE FROM stem_workflow_journal
+WHERE namespace = ? AND run_id = ? AND name = ?
+''',
+            [namespace, runId, name],
+          );
+        }
+      }
+
       // Update run status
       final run = await ctx
           .query<StemWorkflowRun>()
@@ -1131,6 +1329,28 @@ class PostgresWorkflowStore
       await ctx.repository<$StemWorkflowWatcher>().delete(watcher);
     }
   }
+
+  WorkflowJournalEntry _journalEntry(
+    Map<String, dynamic> row,
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) {
+    final decoded = _decodeValue(row['data']);
+    return WorkflowJournalEntry(
+      runId: runId,
+      kind: kind,
+      name: name,
+      revision: _asInt(row['revision']),
+      position: row['position'] == null ? null : _asInt(row['position']),
+      data: decoded is Map
+          ? decoded.map((key, value) => MapEntry(key.toString(), value))
+          : const {},
+    );
+  }
+
+  int _asInt(dynamic value) =>
+      value is int ? value : int.parse(value.toString());
 
   Map<String, Object?> _decodeMap(dynamic input) {
     if (input == null) return const {};

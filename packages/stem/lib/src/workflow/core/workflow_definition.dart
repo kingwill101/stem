@@ -61,6 +61,7 @@ import 'package:stem/src/workflow/core/flow.dart' show Flow;
 import 'package:stem/src/workflow/core/flow_context.dart';
 import 'package:stem/src/workflow/core/flow_step.dart';
 import 'package:stem/src/workflow/core/workflow_checkpoint.dart';
+import 'package:stem/src/workflow/core/workflow_compensation.dart';
 import 'package:stem/src/workflow/core/workflow_ref.dart';
 import 'package:stem/src/workflow/core/workflow_script_context.dart';
 import 'package:stem/src/workflow/workflow.dart' show Flow;
@@ -95,6 +96,7 @@ class WorkflowDefinition<T extends Object?> {
     this.description,
     Map<String, Object?>? metadata,
     this.scriptBody,
+    Map<String, WorkflowCompensationHandler> compensationHandlers = const {},
     Object? Function(Object? value)? resultEncoder,
     Object? Function(Object? payload)? resultDecoder,
   }) : _kind = kind,
@@ -103,6 +105,7 @@ class WorkflowDefinition<T extends Object?> {
        _edges = edges,
        _resultEncoder = resultEncoder,
        _resultDecoder = resultDecoder,
+       compensationHandlers = Map.unmodifiable(compensationHandlers),
        metadata = metadata == null ? null : Map.unmodifiable(metadata);
 
   /// Rehydrates a workflow definition from serialized JSON.
@@ -304,6 +307,7 @@ class WorkflowDefinition<T extends Object?> {
     required String name,
     required WorkflowScriptBody<T> run,
     Iterable<WorkflowCheckpoint> checkpoints = const [],
+    Map<String, WorkflowCompensationHandler> compensationHandlers = const {},
     String? version,
     String? description,
     Map<String, Object?>? metadata,
@@ -338,6 +342,7 @@ class WorkflowDefinition<T extends Object?> {
       description: description,
       metadata: metadata,
       scriptBody: run,
+      compensationHandlers: compensationHandlers,
       resultEncoder: resultEncoder,
       resultDecoder: resultDecoder,
     );
@@ -469,6 +474,11 @@ class WorkflowDefinition<T extends Object?> {
 
   /// Optional script body when using the script facade.
   final WorkflowScriptBody<T>? scriptBody;
+
+  /// Executable cleanup registry, reconstructed by application registration.
+  ///
+  /// Callbacks are intentionally not serialized by [toJson].
+  final Map<String, WorkflowCompensationHandler> compensationHandlers;
 
   final Object? Function(Object? value)? _resultEncoder;
   final Object? Function(Object? payload)? _resultDecoder;

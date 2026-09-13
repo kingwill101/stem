@@ -9,7 +9,11 @@ import 'package:uuid/uuid.dart';
 
 /// SQLite-backed implementation of [WorkflowStore].
 class SqliteWorkflowStore
-    implements WorkflowStore, WorkflowTerminalStore, FencedWorkflowStore {
+    implements
+        WorkflowStore,
+        WorkflowTerminalStore,
+        FencedWorkflowStore,
+        WorkflowJournalStore {
   SqliteWorkflowStore._(
     this._connections,
     this._clock, {
@@ -189,38 +193,195 @@ class SqliteWorkflowStore
     final now = _clock.now().toUtc();
 
     await _connections.runInTransaction((ctx) async {
-      final existing = await ctx
-          .query<StemWorkflowStep>()
-          .whereEquals('runId', runId)
-          .whereEquals('name', stepName)
-          .whereEquals('namespace', namespace)
-          .first();
-
-      if (existing != null) {
-        await ctx.repository<StemWorkflowStep>().update(
-          StemWorkflowStepUpdateDto(value: jsonEncode(value)),
-          where: StemWorkflowStepPartial(
-            runId: runId,
-            name: stepName,
-            namespace: namespace,
-          ),
-        );
-      } else {
-        await ctx.repository<StemWorkflowStep>().insert(
-          StemWorkflowStepInsertDto(
-            runId: runId,
-            name: stepName,
-            namespace: namespace,
-            value: jsonEncode(value),
-          ),
-        );
-      }
+      await _saveStepInTransaction(ctx, runId, stepName, value);
 
       await ctx.repository<StemWorkflowRun>().update(
         StemWorkflowRunUpdateDto(updatedAt: now),
         where: StemWorkflowRunPartial(id: runId, namespace: namespace),
       );
     });
+  }
+
+  @override
+  Future<WorkflowJournalSnapshot?> readJournal(
+    String runId,
+    WorkflowJournalKind kind,
+    String name,
+  ) async {
+    return _connections.runInTransaction((ctx) async {
+      final run = await _readRunState(ctx, runId);
+      if (run == null) {
+        return null;
+      }
+      final rows = await ctx.driver.queryRaw(
+        'SELECT * FROM wf_journal WHERE namespace = ? AND run_id = ? '
+        'AND kind = ? AND name = ?',
+        [namespace, runId, kind.name, name],
+      );
+      return WorkflowJournalSnapshot(
+        run: run,
+        entry: rows.isEmpty ? null : _journalEntry(rows.single),
+      );
+    });
+  }
+
+  @override
+  Future<List<WorkflowJournalEntry>> listCompensations(String runId) async {
+    final rows = await _context.driver.queryRaw(
+      'SELECT * FROM wf_journal WHERE namespace = ? AND run_id = ? '
+      'AND kind = ? ORDER BY position DESC',
+      [namespace, runId, WorkflowJournalKind.compensation.name],
+    );
+    return rows.map(_journalEntry).toList(growable: false);
+  }
+
+  WorkflowJournalEntry _journalEntry(Map<String, Object?> row) {
+    return WorkflowJournalEntry(
+      runId: row['run_id']! as String,
+      kind: WorkflowJournalKind.values.byName(row['kind']! as String),
+      name: row['name']! as String,
+      revision: (row['revision']! as num).toInt(),
+      data: _decodeMap(row['data']! as String),
+      position: (row['position'] as num?)?.toInt(),
+    );
+  }
+
+  @override
+  Future<bool> commitJournal(
+    WorkflowJournalEntry entry, {
+    required int expectedRevision,
+    required String executionId,
+    WorkflowJournalCheckpoint? checkpoint,
+  }) async {
+    if (entry.revision != expectedRevision + 1) return false;
+    return _connections.runInTransaction((ctx) async {
+      final status = entry.kind == WorkflowJournalKind.step
+          ? WorkflowStatus.running.name
+          : WorkflowStatus.failed.name;
+      await ctx.driver.executeRaw(
+        'UPDATE wf_runs SET updated_at = updated_at WHERE id = ? '
+        'AND namespace = ? AND execution_id = ? AND status = ?',
+        [entry.runId, namespace, executionId, status],
+      );
+      final fenced = await ctx.driver.queryRaw('SELECT changes() AS changed');
+      if (fenced.isEmpty || (fenced.single['changed']! as num) == 0) {
+        return false;
+      }
+      final rows = await ctx.driver.queryRaw(
+        'SELECT revision, position FROM wf_journal WHERE namespace = ? '
+        'AND run_id = ? AND kind = ? AND name = ?',
+        [namespace, entry.runId, entry.kind.name, entry.name],
+      );
+      final old = rows.isEmpty ? null : rows.single;
+      final revision = old == null ? 0 : (old['revision']! as num).toInt();
+      if (revision != expectedRevision ||
+          (entry.kind == WorkflowJournalKind.compensation && old == null)) {
+        return false;
+      }
+      final encoded = jsonEncode(entry.data);
+      if (old == null) {
+        await ctx.driver.executeRaw(
+          'INSERT INTO wf_journal '
+          '(namespace, run_id, kind, name, revision, data, position) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            namespace,
+            entry.runId,
+            entry.kind.name,
+            entry.name,
+            entry.revision,
+            encoded,
+            entry.position,
+          ],
+        );
+      } else {
+        await ctx.driver.executeRaw(
+          'UPDATE wf_journal SET revision = ?, data = ? '
+          'WHERE namespace = ? AND run_id = ? AND kind = ? AND name = ? '
+          'AND revision = ?',
+          [
+            entry.revision,
+            encoded,
+            namespace,
+            entry.runId,
+            entry.kind.name,
+            entry.name,
+            expectedRevision,
+          ],
+        );
+        final changed = await ctx.driver.queryRaw(
+          'SELECT changes() AS changed',
+        );
+        if (changed.isEmpty || (changed.single['changed']! as num) == 0) {
+          return false;
+        }
+      }
+      if (checkpoint != null && entry.kind == WorkflowJournalKind.step) {
+        await _saveStepInTransaction(
+          ctx,
+          entry.runId,
+          entry.name,
+          checkpoint.value,
+        );
+        final registration = checkpoint.compensation;
+        if (registration != null) {
+          final max = await ctx.driver.queryRaw(
+            'SELECT COALESCE(MAX(position), 0) + 1 AS next_position '
+            'FROM wf_journal WHERE namespace = ? AND run_id = ? AND kind = ?',
+            [namespace, entry.runId, WorkflowJournalKind.compensation.name],
+          );
+          await ctx.driver.executeRaw(
+            'INSERT INTO wf_journal '
+            '(namespace, run_id, kind, name, revision, data, position) '
+            'VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING',
+            [
+              namespace,
+              entry.runId,
+              WorkflowJournalKind.compensation.name,
+              entry.name,
+              jsonEncode(registration.toJournalData()),
+              (max.single['next_position']! as num).toInt(),
+            ],
+          );
+        }
+      }
+      return true;
+    });
+  }
+
+  Future<void> _saveStepInTransaction(
+    QueryContext ctx,
+    String runId,
+    String stepName,
+    Object? value,
+  ) async {
+    final encoded = jsonEncode(value);
+    final existing = await ctx
+        .query<StemWorkflowStep>()
+        .whereEquals('runId', runId)
+        .whereEquals('name', stepName)
+        .whereEquals('namespace', namespace)
+        .first();
+
+    if (existing != null) {
+      await ctx.repository<StemWorkflowStep>().update(
+        StemWorkflowStepUpdateDto(value: encoded),
+        where: StemWorkflowStepPartial(
+          runId: runId,
+          name: stepName,
+          namespace: namespace,
+        ),
+      );
+    } else {
+      await ctx.repository<StemWorkflowStep>().insert(
+        StemWorkflowStepInsertDto(
+          runId: runId,
+          name: stepName,
+          namespace: namespace,
+          value: encoded,
+        ),
+      );
+    }
   }
 
   @override
@@ -989,6 +1150,23 @@ class SqliteWorkflowStore
 
       if (keep.isNotEmpty) {
         await ctx.repository<StemWorkflowStep>().insertMany(keep);
+      }
+
+      // Rewind is administrative: discard journal state belonging to removed
+      // checkpoint names, while retaining all earlier checkpoint records.
+      final keepNames = keep.map((step) => step.name).toList();
+      if (keepNames.isEmpty) {
+        await ctx.driver.executeRaw(
+          'DELETE FROM wf_journal WHERE namespace = ? AND run_id = ?',
+          [namespace, runId],
+        );
+      } else {
+        final placeholders = List.filled(keepNames.length, '?').join(', ');
+        await ctx.driver.executeRaw(
+          'DELETE FROM wf_journal WHERE namespace = ? AND run_id = ? '
+          'AND name NOT IN ($placeholders)',
+          [namespace, runId, ...keepNames],
+        );
       }
 
       final updates = StemWorkflowRunUpdateDto(

@@ -2,13 +2,15 @@
 
 ## 0.3.0
 
+- Add workflow journal contracts for atomic checkpoint coupling, stale writes,
+  compensation order, failed-write rollback, and administrative rewind cleanup.
 - Add shared terminal transition contracts covering cancellation/completion
   races, immutable terminal outcomes, and suspension/watcher cleanup.
 - Add shared workflow execution-fencing contract coverage for fresh
   `executionId` claims, stale-claim rejection, conditional renewal/release and
   terminal-failure recording, including the distinction between `terminal:
   false` error recording and terminal failure.
-- Require Stem `>=0.5.0 <0.6.0` for the coordinated fencing release.
+- Require Stem `>=0.5.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.1
 

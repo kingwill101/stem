@@ -518,18 +518,12 @@ class StemWorkflowApp
     return store.listWatchers(topic);
   }
 
-  /// Marks all runs due at [now] as resumed and returns their ids.
-  Future<List<String>> resumeDueRuns([DateTime? now]) async {
-    final due = await store.dueRuns(now ?? DateTime.now());
-    final resumed = <String>[];
-    for (final runId in due) {
-      final state = await store.get(runId);
-      if (state == null) continue;
-      await store.markResumed(runId, data: state.dueResumeData);
-      resumed.add(runId);
-    }
-    return resumed;
-  }
+  /// Resumes and enqueues due runs through the runtime's policy/routing path.
+  ///
+  /// Manual drivers that do not want dispatch can call
+  /// `runtime.resumeDueRuns(now: now, enqueue: false)` explicitly.
+  Future<List<String>> resumeDueRuns([DateTime? now]) =>
+      runtime.resumeDueRuns(now: now);
 
   /// Polls the workflow store until the run reaches a terminal state.
   ///

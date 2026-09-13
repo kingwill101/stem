@@ -30,6 +30,10 @@ void main() {
     adapterName: 'sqlite',
     factory: sqliteFactory,
   );
+  runWorkflowJournalContractTests(
+    adapterName: 'sqlite',
+    factory: sqliteFactory,
+  );
   runWorkflowExecutionFenceContractTests(
     adapterName: 'sqlite',
     factory: sqliteFactory,

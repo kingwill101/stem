@@ -2,6 +2,8 @@
 
 ## 0.3.0
 
+- Add workflow journal persistence with run-row locking, record revision CAS,
+  atomic checkpoint/compensation writes, and ordered cleanup recovery.
 - Add atomic first-terminal-wins completion/cancellation and prevent ordinary
   workflow mutations from resurrecting terminal runs.
 - Add the additive workflow execution-fencing migration (`execution_id`) and
@@ -9,7 +11,8 @@
   workers or relying on stale-execution protection; `terminal: false` records
   error metadata without ending the run, while terminal failure is conditional
   on the captured execution identity.
-- Require Stem `>=0.5.0 <0.6.0` and the shared adapter contract 0.3.0.
+- Require Stem `>=0.5.0 <1.0.0` and the shared adapter contract
+  `>=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 
 ## 0.2.1
 
