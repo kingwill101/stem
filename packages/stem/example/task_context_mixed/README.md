@@ -10,7 +10,7 @@ enqueueing, progress reporting, workflow/event calls, and retry requests.
 
 ## Requirements
 
-- Dart 3.12+
+- Dart 3.13+
 
 ## Run
 

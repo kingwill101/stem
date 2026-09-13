@@ -2,6 +2,7 @@
 
 ## 0.4.0
 
+- Require Dart `>=3.13.0 <4.0.0` through a compatible Flutter SDK.
 - Require Stem `>=0.5.0 <1.0.0`, `stem_flutter >=0.4.0 <1.0.0`, and
   `stem_sqlite >=0.3.0 <1.0.0`, allowing later pre-1.0 releases.
 

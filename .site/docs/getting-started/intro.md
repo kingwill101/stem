@@ -80,7 +80,7 @@ keeps everything in a single file so you can see the moving parts together.
 
 ## Prerequisites
 
-- Dart **3.9.2+** installed (`dart --version`).
+- Dart **3.13.0+** installed (`dart --version`).
 - Access to the Dart pub cache (`dart pub ...`).
 - Optional but recommended: Docker Desktop or another container runtime for
   local Redis/Postgres instances.

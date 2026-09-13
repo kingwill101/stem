@@ -8,7 +8,7 @@ can be reused across brokers and backends.
 ## Prerequisites
 
 - Docker (for the bundled Postgres + Redis services)
-- Dart 3.12 or newer (`dart --version`)
+- Dart 3.13 or newer (`dart --version`)
 
 ## Run the demo
 

@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Require Dart `>=3.13.0 <4.0.0`.
 - Use shared journal argument validation and replace per-record rewind cleanup
   with one parameterized journal deletion.
 - Join same-data-source transactions without nested queue deadlocks. Drain

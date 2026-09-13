@@ -6,7 +6,7 @@ worker, and enqueues a few demo tasks.
 
 ## Prerequisites
 
-- Dart SDK 3.3 or newer
+- Dart SDK 3.13 or newer
 - Docker (for the sample Postgres instance)
 
 ## Option A: Docker Compose (Postgres + worker + enqueuer)

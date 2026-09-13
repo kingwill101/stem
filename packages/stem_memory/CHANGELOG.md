@@ -2,6 +2,7 @@
 
 ## 0.3.0
 
+- Require Dart `>=3.13.0 <4.0.0`.
 - Support the core workflow journal and complete in-memory run-change feed used
   by reactive host observation.
 - The re-exported in-memory workflow store supports atomic first-terminal-wins

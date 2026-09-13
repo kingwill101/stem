@@ -4,7 +4,7 @@ version: 0.3.0
 repository: https://github.com/kingwill101/stem
 resolution: workspace
 environment:
-  sdk: ">=3.12.0 <4.0.0"
+  sdk: ">=3.13.0 <4.0.0"
 
 dependencies:
   collection: ^1.19.1

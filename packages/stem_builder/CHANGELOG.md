@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- Require Dart `>=3.13.0 <4.0.0` and exercise primary-constructor DTOs in the
+  compiler-backed consumer fixture.
 - Validate codec representation provenance across flow steps and reject nullable
   codec declarations before emission. Nullable payload types remain supported.
 - Add `@PayloadCodecDefn()` bindings for library-local standard
