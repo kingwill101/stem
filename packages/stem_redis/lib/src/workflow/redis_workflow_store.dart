@@ -272,7 +272,8 @@ local function writeCheckpoint(stepsKey, orderKey, name, value)
 end
 ''';
 
-  static const _luaSaveStep = '''
+  static const _luaSaveStep =
+      '''
 $_luaWriteCheckpoint
 if redis.call('EXISTS', KEYS[1]) == 0 then return 0 end
 writeCheckpoint(KEYS[2], KEYS[3], ARGV[1], ARGV[2])
@@ -280,7 +281,8 @@ redis.call('HSET', KEYS[1], 'updated_at', ARGV[3])
 return 1
 ''';
 
-  static const _luaCommitJournal = '''
+  static const _luaCommitJournal =
+      '''
 $_luaWriteCheckpoint
 local runKey = KEYS[1]
 local journalKey = KEYS[2]

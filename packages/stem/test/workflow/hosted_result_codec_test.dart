@@ -29,13 +29,12 @@ final class _NullableResultCodec extends Codec<String?, Object?> {
   final decoded = <String>[];
 
   @override
-  Converter<String?, Object?> get encoder =>
-      _Converter((value) {
-        encoded.add(value ?? 'null');
-        return value == null
-            ? const {'sentinel': true}
-            : <String, Object?>{'value': value};
-      });
+  Converter<String?, Object?> get encoder => _Converter((value) {
+    encoded.add(value ?? 'null');
+    return value == null
+        ? const {'sentinel': true}
+        : <String, Object?>{'value': value};
+  });
 
   @override
   Converter<Object?, String?> get decoder => _Converter((value) {
