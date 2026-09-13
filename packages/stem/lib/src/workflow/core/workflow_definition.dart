@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Declarative workflow definitions and builders.
 ///
 /// This library provides the [WorkflowDefinition] class, which is used to

@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Observability and lifecycle signals for the Stem framework.
 ///
 /// This library defines the [StemSignals] registry, which contains all

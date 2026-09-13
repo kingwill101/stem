@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 // Public constructor names intentionally initialize private implementation
 // fields to preserve the package API.
 // ignore_for_file: prefer_initializing_formals

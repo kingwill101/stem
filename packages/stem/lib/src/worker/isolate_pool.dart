@@ -1,3 +1,6 @@
+// Copyright (c) 2025 Glenford Williams <hey@glenfordwilliams.com>
+// SPDX-License-Identifier: MIT
+
 /// Isolate pool management for concurrent task execution.
 ///
 /// This library provides a managed pool of isolates ([TaskIsolatePool]) that
