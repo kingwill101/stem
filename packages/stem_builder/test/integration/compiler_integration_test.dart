@@ -20,11 +20,13 @@ void main() {
       await _writeFixture(root, repo);
 
       await _run(root, 'pub', ['get', '--offline']);
-      await _run(root, 'run', [
-        'build_runner',
-        'build',
-        '--delete-conflicting-outputs',
-      ]);
+      // Cold bootstrap includes AOT compilation of the analyzer-backed builder.
+      await _run(
+        root,
+        'run',
+        ['build_runner', 'build', '--delete-conflicting-outputs'],
+        processTimeout: const Duration(minutes: 3),
+      );
       final generated = File(
         '${root.path}/lib/$_fixtureBasename.stem.g.dart',
       );
@@ -53,7 +55,7 @@ void main() {
       expect(result.stdout, contains('dto=Ada'));
       expect(result.stdout, contains('custom=Grace'));
     },
-    timeout: const Timeout(Duration(minutes: 3)),
+    timeout: const Timeout(Duration(minutes: 10)),
   );
 }
 
@@ -78,7 +80,7 @@ Future<void> _writeFixture(Directory root, String repo) async {
 name: compiler_fixture
 publish_to: none
 environment:
-  sdk: ">=3.12.0 <4.0.0"
+  sdk: ">=3.13.0 <4.0.0"
 dependencies:
   stem:
     path: ${jsonEncode('$repo/packages/stem')}
@@ -107,8 +109,9 @@ targets:
 Future<ProcessResult> _run(
   Directory directory,
   String executable,
-  List<String> arguments,
-) async {
+  List<String> arguments, {
+  Duration processTimeout = const Duration(seconds: 90),
+}) async {
   final process = await Process.start(
     Platform.resolvedExecutable,
     [executable, ...arguments],
@@ -123,7 +126,7 @@ Future<ProcessResult> _run(
     final completion = await Future.wait<Object?>([
       process.exitCode,
       drained,
-    ]).timeout(const Duration(seconds: 90));
+    ]).timeout(processTimeout);
     final exitCode = completion.first! as int;
     final result = ProcessResult(
       process.pid,
@@ -158,9 +161,7 @@ import 'package:stem/stem.dart';
 
 part r'fixture$quoted.stem.g.dart';
 
-class Person {
-  const Person(this.name);
-  final String name;
+class const Person(final String name) {
   Map<String, Object?> toJson() => {'name': name};
   factory Person.fromJson(Map<String, Object?> json) =>
       Person(json['name']! as String);
@@ -234,10 +235,7 @@ Codec<Person, Object?> get personCodec {
 @PayloadCodecDefn()
 Codec<List<Person>, Object?> get peopleCodec => const PeopleCodec();
 
-class Box<T> {
-  const Box(this.value);
-  final T value;
-}
+class const Box<T>(final T value);
 
 class IntBoxCodec extends Codec<Box<int>, Object?> {
   const IntBoxCodec();
